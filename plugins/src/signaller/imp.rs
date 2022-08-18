@@ -105,10 +105,11 @@ impl Signaller {
         } else {
             None
         };
-
         websocket_sender
-            .send(p::IncomingMessage::Register(p::RegisterMessage::Producer {
+            .send(p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+                roles: vec![p::PeerRole::Producer],
                 meta,
+                peer_id: None,
             }))
             .await?;
 
@@ -122,10 +123,7 @@ impl Signaller {
 
                             if let Ok(msg) = serde_json::from_str::<p::OutgoingMessage>(&msg) {
                                 match msg {
-                                    p::OutgoingMessage::Welcome { .. } => (),
-                                    p::OutgoingMessage::Registered(
-                                        p::RegisteredMessage::Producer { peer_id, .. },
-                                    ) => {
+                                    p::OutgoingMessage::Welcome { peer_id } => {
                                         gst::info!(
                                             CAT,
                                             obj: &element,
@@ -133,7 +131,6 @@ impl Signaller {
                                             peer_id
                                         );
                                     }
-                                    p::OutgoingMessage::Registered(_) => unreachable!(),
                                     p::OutgoingMessage::StartSession {
                                         session_id,
                                         peer_id,

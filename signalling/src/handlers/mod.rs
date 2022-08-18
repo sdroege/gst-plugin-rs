@@ -2,6 +2,7 @@ use anyhow::{anyhow, Error};
 use anyhow::{bail, Context};
 use futures::prelude::*;
 use futures::ready;
+use p::PeerStatus;
 use pin_project_lite::pin_project;
 use std::collections::{HashMap, VecDeque};
 use std::pin::Pin;
@@ -37,9 +38,7 @@ pin_project! {
         #[pin]
         stream: Pin<Box<dyn Stream<Item=(String, Option<p::IncomingMessage>)> + Send>>,
         items: VecDeque<(String, p::OutgoingMessage)>,
-        producers: HashMap<PeerId, Option<serde_json::Value>>,
-        consumers: HashMap<PeerId, Option<serde_json::Value>>,
-        listeners: HashMap<PeerId, Option<serde_json::Value>>,
+        peers: HashMap<PeerId, PeerStatus>,
         sessions: HashMap<String, Session>,
     }
 }
@@ -53,9 +52,7 @@ impl Handler {
         Self {
             stream,
             items: VecDeque::new(),
-            producers: Default::default(),
-            consumers: Default::default(),
-            listeners: Default::default(),
+            peers: Default::default(),
             sessions: Default::default(),
         }
     }
@@ -68,6 +65,7 @@ impl Handler {
     ) -> Result<(), Error> {
         match msg {
             p::IncomingMessage::NewPeer => {
+                self.peers.insert(peer_id.to_string(), Default::default());
                 self.items.push_back((
                     peer_id.into(),
                     p::OutgoingMessage::Welcome {
@@ -77,53 +75,7 @@ impl Handler {
 
                 Ok(())
             }
-            p::IncomingMessage::Register(message) => match message {
-                p::RegisterMessage::Producer { meta } => self.register_producer(peer_id, meta),
-                p::RegisterMessage::Consumer { meta } => self.register_consumer(peer_id, meta),
-                p::RegisterMessage::Listener { meta } => self.register_listener(peer_id, meta),
-            },
-            p::IncomingMessage::Unregister(message) => {
-                let answer = match message {
-                    p::UnregisterMessage::Producer => p::UnregisteredMessage::Producer {
-                        peer_id: peer_id.into(),
-                        meta: self.remove_producer_peer(peer_id),
-                    },
-                    p::UnregisterMessage::Consumer => p::UnregisteredMessage::Consumer {
-                        peer_id: peer_id.into(),
-                        meta: self.remove_consumer_peer(peer_id),
-                    },
-                    p::UnregisterMessage::Listener => p::UnregisteredMessage::Listener {
-                        peer_id: peer_id.into(),
-                        meta: self.remove_listener_peer(peer_id),
-                    },
-                };
-
-                self.items.push_back((
-                    peer_id.into(),
-                    p::OutgoingMessage::Unregistered(answer.clone()),
-                ));
-
-                // We don't notify listeners about listeners activity
-                match message {
-                    p::UnregisterMessage::Producer | p::UnregisterMessage::Consumer => {
-                        let mut messages = self
-                            .listeners
-                            .keys()
-                            .map(|listener_id| {
-                                (
-                                    listener_id.to_string(),
-                                    p::OutgoingMessage::Unregistered(answer.clone()),
-                                )
-                            })
-                            .collect::<VecDeque<(String, p::OutgoingMessage)>>();
-
-                        self.items.append(&mut messages);
-                    }
-                    _ => (),
-                }
-
-                Ok(())
-            }
+            p::IncomingMessage::SetPeerStatus(status) => self.set_peer_status(peer_id, &status),
             p::IncomingMessage::StartSession(message) => {
                 self.start_session(&message.peer_id, peer_id)
             }
@@ -144,13 +96,12 @@ impl Handler {
         if matches!(
             peermsg.peer_message,
             p::PeerMessageInner::Sdp(p::SdpMessage::Offer { .. })
-        ) {
-            if peer_id == session.consumer {
-                bail!(
-                    r#"cannot forward offer from "{peer_id}" to "{}" as "{peer_id}" is not the producer"#,
-                    session.producer,
-                );
-            }
+        ) && peer_id == session.consumer
+        {
+            bail!(
+                r#"cannot forward offer from "{peer_id}" to "{}" as "{peer_id}" is not the producer"#,
+                session.producer,
+            );
         }
 
         self.items.push_back((
@@ -164,23 +115,7 @@ impl Handler {
         Ok(())
     }
 
-    #[instrument(level = "debug", skip(self))]
-    fn remove_listener_peer(&mut self, peer_id: &str) -> Option<serde_json::Value> {
-        self.listeners.remove(peer_id).unwrap_or(None)
-    }
-
-    #[instrument(level = "debug", skip(self))]
-    /// Remove a peer, this can cause sessions to be ended
-    fn remove_peer(&mut self, peer_id: &str) {
-        info!(peer_id = %peer_id, "removing peer");
-
-        self.remove_listener_peer(peer_id);
-        self.remove_producer_peer(peer_id);
-        self.remove_consumer_peer(peer_id);
-    }
-
-    #[instrument(level = "debug", skip(self))]
-    fn remove_producer_peer(&mut self, peer_id: &str) -> Option<serde_json::Value> {
+    fn stop_producer(&mut self, peer_id: &str) {
         let sessions_to_end = self
             .sessions
             .iter()
@@ -198,45 +133,31 @@ impl Handler {
                 error!("Could not end session {session_id}: {e:?}");
             }
         });
-
-        let meta = self.producers.remove(peer_id);
-
-        for listener in self.listeners.keys() {
-            self.items.push_back((
-                listener.to_string(),
-                p::OutgoingMessage::ProducerRemoved {
-                    peer_id: peer_id.to_string(),
-                    meta: meta
-                        .as_ref()
-                        .map_or_else(Default::default, |meta| meta.clone()),
-                },
-            ));
-        }
-
-        meta.unwrap_or(None)
     }
 
     #[instrument(level = "debug", skip(self))]
-    fn remove_consumer_peer(&mut self, peer_id: &str) -> Option<serde_json::Value> {
-        let sessions_to_end = self
-            .sessions
-            .iter()
-            .filter_map(|(session_id, session)| {
-                if session.consumer == peer_id {
-                    Some(session_id.clone())
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<String>>();
+    /// Remove a peer, this can cause sessions to be ended
+    fn remove_peer(&mut self, peer_id: &str) {
+        info!(peer_id = %peer_id, "removing peer");
+        let peer_status = match self.peers.remove(peer_id) {
+            Some(peer_status) => peer_status,
+            _ => return,
+        };
 
-        sessions_to_end.iter().for_each(|session_id| {
-            if let Err(e) = self.end_session(peer_id, session_id) {
-                error!("Could not end session {session_id}: {e:?}");
+        self.stop_producer(peer_id);
+
+        for (id, p) in self.peers.iter() {
+            if !p.listening() {
+                continue;
             }
-        });
 
-        self.consumers.remove(peer_id).unwrap_or(None)
+            let message = p::OutgoingMessage::PeerStatusChanged(PeerStatus {
+                roles: Default::default(),
+                meta: peer_status.meta.clone(),
+                peer_id: Some(peer_id.to_string()),
+            });
+            self.items.push_back((id.to_string(), message));
+        }
     }
 
     #[instrument(level = "debug", skip(self))]
@@ -264,11 +185,13 @@ impl Handler {
             peer_id.to_string(),
             p::OutgoingMessage::List {
                 producers: self
-                    .producers
+                    .peers
                     .iter()
-                    .map(|(peer_id, meta)| p::Peer {
-                        id: peer_id.clone(),
-                        meta: meta.clone(),
+                    .filter_map(|(peer_id, peer)| {
+                        peer.producing().then_some(p::Peer {
+                            id: peer_id.clone(),
+                            meta: peer.meta.clone(),
+                        })
                     })
                     .collect(),
             },
@@ -279,87 +202,41 @@ impl Handler {
 
     /// Register peer as a producer
     #[instrument(level = "debug", skip(self))]
-    fn register_producer(
-        &mut self,
-        peer_id: &str,
-        meta: Option<serde_json::Value>,
-    ) -> Result<(), Error> {
-        if self.producers.contains_key(peer_id) {
-            Err(anyhow!("{} is already registered as a producer", peer_id))
-        } else {
-            self.producers.insert(peer_id.to_string(), meta.clone());
+    fn set_peer_status(&mut self, peer_id: &str, status: &p::PeerStatus) -> Result<(), Error> {
+        let old_status = self
+            .peers
+            .get(peer_id)
+            .context(anyhow!("Peer '{peer_id}' hasn't been welcomed"))?;
 
-            for listener in self.listeners.keys() {
-                self.items.push_back((
-                    listener.to_string(),
-                    p::OutgoingMessage::ProducerAdded {
-                        peer_id: peer_id.to_string(),
-                        meta: meta.clone(),
-                    },
-                ));
+        if status == old_status {
+            info!("Status for '{}' hasn't changed", peer_id);
+
+            return Ok(());
+        }
+
+        if old_status.producing() && !status.producing() {
+            self.stop_producer(peer_id);
+        }
+
+        let mut status = status.clone();
+        status.peer_id = Some(peer_id.to_string());
+        self.peers.insert(peer_id.to_string(), status.clone());
+        for (id, peer) in &self.peers {
+            if !peer.listening() {
+                continue;
             }
 
             self.items.push_back((
-                peer_id.to_string(),
-                p::OutgoingMessage::Registered(p::RegisteredMessage::Producer {
-                    peer_id: peer_id.to_string(),
-                    meta: meta,
+                id.to_string(),
+                p::OutgoingMessage::PeerStatusChanged(p::PeerStatus {
+                    peer_id: Some(peer_id.to_string()),
+                    roles: status.roles.clone(),
+                    meta: status.meta.clone(),
                 }),
             ));
-
-            info!(peer_id = %peer_id, "registered as a producer");
-
-            Ok(())
-        }
-    }
-
-    /// Register peer as a consumer
-    #[instrument(level = "debug", skip(self))]
-    fn register_consumer(
-        &mut self,
-        peer_id: &str,
-        meta: Option<serde_json::Value>,
-    ) -> Result<(), Error> {
-        if self.consumers.contains_key(peer_id) {
-            Err(anyhow!("{} is already registered as a consumer", peer_id))
-        } else {
-            self.consumers.insert(peer_id.to_string(), meta.clone());
-
-            self.items.push_back((
-                peer_id.to_string(),
-                p::OutgoingMessage::Registered(p::RegisteredMessage::Consumer {
-                    peer_id: peer_id.to_string(),
-                    meta: meta.clone(),
-                }),
-            ));
-
-            info!(peer_id = %peer_id, "registered as a consumer");
-
-            Ok(())
-        }
-    }
-
-    /// Register peer as a listener
-    #[instrument(level = "debug", skip(self))]
-    fn register_listener(
-        &mut self,
-        peer_id: &str,
-        meta: Option<serde_json::Value>,
-    ) -> Result<(), Error> {
-        if self.listeners.contains_key(peer_id) {
-            bail!("{} is already registered as a listener", peer_id);
         }
 
-        self.listeners.insert(peer_id.to_string(), meta.clone());
-        self.items.push_back((
-            peer_id.to_string(),
-            p::OutgoingMessage::Registered(p::RegisteredMessage::Listener {
-                peer_id: peer_id.to_string(),
-                meta: meta.clone(),
-            }),
-        ));
-
-        info!(peer_id = %peer_id, "registered as a listener");
+        info!(peer_id = %peer_id, "registered as a producer");
 
         Ok(())
     }
@@ -367,12 +244,24 @@ impl Handler {
     /// Start a session between two peers
     #[instrument(level = "debug", skip(self))]
     fn start_session(&mut self, producer_id: &str, consumer_id: &str) -> Result<(), Error> {
-        if !self.producers.contains_key(producer_id) {
-            return Err(anyhow!(
-                "Peer with id {} is not registered as a producer",
-                producer_id
-            ));
-        }
+        self.peers.get(producer_id).map_or_else(
+            || Err(anyhow!("Peer '{producer_id}' hasn't been welcomed")),
+            |peer| {
+                if !peer.producing() {
+                    Err(anyhow!(
+                        "Peer with id {} is not registered as a producer",
+                        producer_id
+                    ))
+                } else {
+                    Ok(peer)
+                }
+            },
+        )?;
+
+        self.peers.get(consumer_id).map_or_else(
+            || Err(anyhow!("Peer '{consumer_id}' hasn't been welcomed")),
+            Ok,
+        )?;
 
         let session_id = uuid::Uuid::new_v4().to_string();
         self.sessions.insert(
@@ -444,29 +333,44 @@ mod tests {
     use futures::channel::mpsc;
     use serde_json::json;
 
+    async fn new_peer(
+        tx: &mut mpsc::UnboundedSender<(String, Option<p::IncomingMessage>)>,
+        handler: &mut Handler,
+        peer_id: &str,
+    ) {
+        tx.send((peer_id.to_string(), Some(p::IncomingMessage::NewPeer)))
+            .await
+            .unwrap();
+
+        let res = handler.next().await.unwrap();
+        assert_eq!(
+            res,
+            (
+                peer_id.to_string(),
+                p::OutgoingMessage::Welcome {
+                    peer_id: peer_id.to_string()
+                }
+            )
+        );
+    }
+
     #[async_std::test]
     async fn test_register_producer() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
-            meta: Default::default(),
-        });
+        new_peer(&mut tx, &mut handler, "producer").await;
 
-        tx.send(("producer".to_string(), Some(message)))
-            .await
-            .unwrap();
-
-        let (peer_id, sent_message) = handler.next().await.unwrap();
-
-        assert_eq!(peer_id, "producer");
-        assert_eq!(
-            sent_message,
-            p::OutgoingMessage::Registered(p::RegisteredMessage::Producer {
-                peer_id: "producer".to_string(),
-                meta: Default::default(),
-            })
-        );
+        tx.send((
+            "producer".to_string(),
+            Some(p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+                roles: vec![p::PeerRole::Producer],
+                meta: None,
+                peer_id: None,
+            })),
+        ))
+        .await
+        .unwrap();
     }
 
     #[async_std::test]
@@ -474,18 +378,19 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
-            meta: Some(json!( {"display-name": "foobar".to_string() })),
+        new_peer(&mut tx, &mut handler, "producer").await;
+
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            meta: Some(json!({"display-name":"foobar".to_string()})),
+            roles: vec![p::PeerRole::Producer],
+            peer_id: None,
         });
 
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
 
-        let _ = handler.next().await.unwrap();
-
         let message = p::IncomingMessage::List;
-
         tx.send(("listener".to_string(), Some(message)))
             .await
             .unwrap();
@@ -496,7 +401,7 @@ mod tests {
         assert_eq!(
             sent_message,
             p::OutgoingMessage::List {
-                producers: vec![p::Peer::Producer {
+                producers: vec![p::Peer {
                     id: "producer".to_string(),
                     meta: Some(json!(
                         {"display-name": "foobar".to_string()
@@ -507,58 +412,11 @@ mod tests {
     }
 
     #[async_std::test]
-    async fn test_register_consumer() {
+    async fn test_welcome() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
-            meta: Default::default(),
-        });
-
-        tx.send(("consumer".to_string(), Some(message)))
-            .await
-            .unwrap();
-
-        let (peer_id, sent_message) = handler.next().await.unwrap();
-
-        assert_eq!(peer_id, "consumer");
-        assert_eq!(
-            sent_message,
-            p::OutgoingMessage::Registered(p::RegisteredMessage::Consumer {
-                peer_id: "consumer".to_string(),
-                meta: Default::default()
-            })
-        );
-    }
-
-    #[async_std::test]
-    async fn test_register_producer_twice() {
-        let (mut tx, rx) = mpsc::unbounded();
-        let mut handler = Handler::new(Box::pin(rx));
-
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
-            meta: Default::default(),
-        });
-        tx.send(("producer".to_string(), Some(message)))
-            .await
-            .unwrap();
-        let _ = handler.next().await.unwrap();
-
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
-            meta: Default::default(),
-        });
-        tx.send(("producer".to_string(), Some(message)))
-            .await
-            .unwrap();
-        let (peer_id, sent_message) = handler.next().await.unwrap();
-
-        assert_eq!(peer_id, "producer");
-        assert_eq!(
-            sent_message,
-            p::OutgoingMessage::Error {
-                details: "producer is already registered as a producer".into()
-            }
-        );
+        new_peer(&mut tx, &mut handler, "consumer").await;
     }
 
     #[async_std::test]
@@ -566,18 +424,26 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Listener {
-            meta: Default::default(),
+        new_peer(&mut tx, &mut handler, "producer").await;
+        new_peer(&mut tx, &mut handler, "listener").await;
+
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Listener],
+            meta: None,
+            peer_id: None,
         });
         tx.send(("listener".to_string(), Some(message)))
             .await
             .unwrap();
+
         let _ = handler.next().await.unwrap();
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Producer],
             meta: Some(json!({
                 "display-name": "foobar".to_string(),
             })),
+            peer_id: None,
         });
         tx.send(("producer".to_string(), Some(message)))
             .await
@@ -587,12 +453,14 @@ mod tests {
         assert_eq!(peer_id, "listener");
         assert_eq!(
             sent_message,
-            p::OutgoingMessage::ProducerAdded {
-                peer_id: "producer".to_string(),
+            p::OutgoingMessage::PeerStatusChanged(p::PeerStatus {
+                roles: vec![p::PeerRole::Producer],
+                peer_id: Some("producer".to_string()),
                 meta: Some(json!({
-                    "display-name": Some("foobar".to_string()),
-                }))
-            }
+                        "display-name": Some("foobar".to_string()),
+                    }
+                ))
+            })
         );
     }
 
@@ -601,21 +469,18 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
-            meta: Default::default(),
+        new_peer(&mut tx, &mut handler, "producer").await;
+
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Producer],
+            meta: None,
+            peer_id: None,
         });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
-        let _ = handler.next().await.unwrap();
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
-            meta: Default::default(),
-        });
-        tx.send(("consumer".to_string(), Some(message)))
-            .await
-            .unwrap();
-        let _ = handler.next().await.unwrap();
+        new_peer(&mut tx, &mut handler, "consumer").await;
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
@@ -634,7 +499,7 @@ mod tests {
                 assert_eq!(peer_id, "producer");
                 session_id.to_string()
             }
-            _ => panic!("SessionStarted message missing"),
+            _ => panic!("SessionStarted message missing {:?}", sent_message),
         };
 
         let (peer_id, sent_message) = handler.next().await.unwrap();
@@ -653,21 +518,18 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
-            meta: Default::default(),
+        new_peer(&mut tx, &mut handler, "producer").await;
+
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Producer],
+            meta: None,
+            peer_id: None,
         });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
-        let _ = handler.next().await.unwrap();
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
-            meta: Default::default(),
-        });
-        tx.send(("consumer".to_string(), Some(message)))
-            .await
-            .unwrap();
-        let _ = handler.next().await.unwrap();
+        new_peer(&mut tx, &mut handler, "consumer").await;
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
@@ -688,10 +550,23 @@ mod tests {
             _ => panic!("SessionStarted message missing"),
         };
 
-        let _ = handler.next().await.unwrap();
+        assert_eq!(
+            handler.next().await.unwrap(),
+            (
+                "producer".into(),
+                p::OutgoingMessage::StartSession {
+                    peer_id: "consumer".into(),
+                    session_id: session_id.clone()
+                }
+            )
+        );
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Listener {
-            meta: Default::default(),
+        new_peer(&mut tx, &mut handler, "listener").await;
+
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Listener],
+            meta: None,
+            peer_id: None,
         });
         tx.send(("listener".to_string(), Some(message)))
             .await
@@ -712,10 +587,11 @@ mod tests {
         assert_eq!(peer_id, "listener");
         assert_eq!(
             sent_message,
-            p::OutgoingMessage::ProducerRemoved {
-                peer_id: "producer".to_string(),
+            p::OutgoingMessage::PeerStatusChanged(PeerStatus {
+                roles: vec![],
+                peer_id: Some("producer".to_string()),
                 meta: Default::default()
-            }
+            })
         );
     }
 
@@ -724,21 +600,18 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
-            meta: Default::default(),
+        new_peer(&mut tx, &mut handler, "producer").await;
+
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Producer],
+            meta: None,
+            peer_id: None,
         });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
-        let _ = handler.next().await.unwrap();
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
-            meta: Default::default(),
-        });
-        tx.send(("consumer".to_string(), Some(message)))
-            .await
-            .unwrap();
-        let _ = handler.next().await.unwrap();
+        new_peer(&mut tx, &mut handler, "consumer").await;
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
@@ -784,21 +657,18 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
-            meta: Default::default(),
+        new_peer(&mut tx, &mut handler, "producer").await;
+
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Producer],
+            meta: None,
+            peer_id: None,
         });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
-        let _ = handler.next().await.unwrap();
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
-            meta: Default::default(),
-        });
-        tx.send(("consumer".to_string(), Some(message)))
-            .await
-            .unwrap();
-        let _ = handler.next().await.unwrap();
+        new_peer(&mut tx, &mut handler, "consumer").await;
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
@@ -841,21 +711,18 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
-            meta: Default::default(),
+        new_peer(&mut tx, &mut handler, "producer").await;
+
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Producer],
+            meta: None,
+            peer_id: None,
         });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
-        let _ = handler.next().await.unwrap();
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
-            meta: Default::default(),
-        });
-        tx.send(("consumer".to_string(), Some(message)))
-            .await
-            .unwrap();
-        let _ = handler.next().await.unwrap();
+        new_peer(&mut tx, &mut handler, "consumer").await;
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
@@ -918,21 +785,18 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
-            meta: Default::default(),
+        new_peer(&mut tx, &mut handler, "producer").await;
+
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Producer],
+            meta: None,
+            peer_id: None,
         });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
-        let _ = handler.next().await.unwrap();
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
-            meta: Default::default(),
-        });
-        tx.send(("consumer".to_string(), Some(message)))
-            .await
-            .unwrap();
-        let _ = handler.next().await.unwrap();
+        new_peer(&mut tx, &mut handler, "consumer").await;
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
@@ -983,21 +847,18 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
-            meta: Default::default(),
+        new_peer(&mut tx, &mut handler, "producer").await;
+
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Producer],
+            meta: None,
+            peer_id: None,
         });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
-        let _ = handler.next().await.unwrap();
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
-            meta: Default::default(),
-        });
-        tx.send(("consumer".to_string(), Some(message)))
-            .await
-            .unwrap();
-        let _ = handler.next().await.unwrap();
+        new_peer(&mut tx, &mut handler, "consumer").await;
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
@@ -1074,21 +935,18 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
-            meta: Default::default(),
+        new_peer(&mut tx, &mut handler, "producer").await;
+
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Producer],
+            meta: None,
+            peer_id: None,
         });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
-        let _ = handler.next().await.unwrap();
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
-            meta: Default::default(),
-        });
-        tx.send(("consumer".to_string(), Some(message)))
-            .await
-            .unwrap();
-        let _ = handler.next().await.unwrap();
+        new_peer(&mut tx, &mut handler, "consumer").await;
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
@@ -1120,13 +978,15 @@ mod tests {
         tx.send(("consumer".to_string(), Some(message)))
             .await
             .unwrap();
-        let (peer_id, sent_message) = handler.next().await.unwrap();
+        let response = handler.next().await.unwrap();
 
-        // assert_eq!(peer_id, "consumer");
-        assert_eq!(sent_message,
-            p::OutgoingMessage::Error {
-                details: r#"cannot forward offer from "consumer" to "producer" as "consumer" is not the producer"#.into()
-            }
+        assert_eq!(response,
+            (
+                "consumer".into(),
+                p::OutgoingMessage::Error {
+                    details: r#"cannot forward offer from "consumer" to "producer" as "consumer" is not the producer"#.into()
+                }
+            )
         );
     }
 
@@ -1135,13 +995,7 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
-            meta: Default::default(),
-        });
-        tx.send(("consumer".to_string(), Some(message)))
-            .await
-            .unwrap();
-        let _ = handler.next().await.unwrap();
+        new_peer(&mut tx, &mut handler, "consumer").await;
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
@@ -1155,31 +1009,28 @@ mod tests {
         assert_eq!(
             sent_message,
             p::OutgoingMessage::Error {
-                details: "Peer with id producer is not registered as a producer".into()
+                details: "Peer 'producer' hasn't been welcomed".into()
             }
         );
     }
 
     #[async_std::test]
-    async fn test_unregistering() {
+    async fn test_stop_producing() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
-            meta: Default::default(),
+        new_peer(&mut tx, &mut handler, "producer").await;
+
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Producer],
+            meta: None,
+            peer_id: None,
         });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
-        let _ = handler.next().await.unwrap();
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
-            meta: Default::default(),
-        });
-        tx.send(("consumer".to_string(), Some(message)))
-            .await
-            .unwrap();
-        let _ = handler.next().await.unwrap();
+        new_peer(&mut tx, &mut handler, "consumer").await;
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
@@ -1211,7 +1062,11 @@ mod tests {
             }
         );
 
-        let message = p::IncomingMessage::Unregister(p::UnregisterMessage::Producer);
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![],
+            meta: None,
+            peer_id: None,
+        });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
@@ -1223,17 +1078,6 @@ mod tests {
             sent_message,
             p::OutgoingMessage::EndSession(p::EndSessionMessage {
                 session_id: session_id.clone(),
-            })
-        );
-
-        let (peer_id, sent_message) = handler.next().await.unwrap();
-
-        assert_eq!(peer_id, "producer");
-        assert_eq!(
-            sent_message,
-            p::OutgoingMessage::Unregistered(p::UnregisteredMessage::Producer {
-                peer_id: "producer".into(),
-                meta: Default::default()
             })
         );
     }
@@ -1243,42 +1087,39 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Listener {
-            meta: Default::default(),
+        new_peer(&mut tx, &mut handler, "listener").await;
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Listener],
+            meta: None,
+            peer_id: None,
         });
         tx.send(("listener".to_string(), Some(message)))
             .await
             .unwrap();
-        let (l, _) = handler.next().await.unwrap();
-        assert_eq!(l, "listener");
+        let _ = handler.next().await.unwrap();
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
-            meta: Some(json!({"some": "meta"})),
+        new_peer(&mut tx, &mut handler, "producer").await;
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Producer],
+            meta: None,
+            peer_id: None,
         });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
+
         let (peer_id, sent_message) = handler.next().await.unwrap();
         assert_eq!(peer_id, "listener");
         assert_eq!(
             sent_message,
-            p::OutgoingMessage::ProducerAdded {
-                peer_id: "producer".to_string(),
-                meta: Some(json!({"some": "meta"})),
-            }
+            p::OutgoingMessage::PeerStatusChanged(PeerStatus {
+                roles: vec![p::PeerRole::Producer],
+                peer_id: Some("producer".to_string()),
+                meta: Default::default()
+            })
         );
 
-        let (peer_id, _msg) = handler.next().await.unwrap();
-        assert_eq!(peer_id, "producer");
-
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
-            meta: Default::default(),
-        });
-        tx.send(("consumer".to_string(), Some(message)))
-            .await
-            .unwrap();
-        let (peer_id, _msg) = handler.next().await.unwrap();
-        assert_eq!(peer_id, "consumer");
+        new_peer(&mut tx, &mut handler, "consumer").await;
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
@@ -1297,7 +1138,7 @@ mod tests {
                 assert_eq!(peer_id, "producer");
                 session_id.to_string()
             }
-            _ => panic!("SessionStarted message missing"),
+            _ => panic!("SessionStarted message missing {:?}", sent_message),
         };
 
         let (peer_id, sent_message) = handler.next().await.unwrap();
@@ -1311,47 +1152,35 @@ mod tests {
             }
         );
 
-        let message = p::IncomingMessage::Unregister(p::UnregisterMessage::Producer);
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![],
+            meta: None,
+            peer_id: None,
+        });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
 
-        let (peer_id, sent_message) = handler.next().await.unwrap();
-
-        assert_eq!(peer_id, "consumer");
         assert_eq!(
-            sent_message,
-            p::OutgoingMessage::EndSession(p::EndSessionMessage {
-                session_id: session_id.clone(),
-            })
+            handler.next().await.unwrap(),
+            (
+                "consumer".into(),
+                p::OutgoingMessage::EndSession(p::EndSessionMessage {
+                    session_id: session_id.clone(),
+                })
+            )
         );
 
-        let (peer_id, sent_message) = handler.next().await.unwrap();
-        assert_eq!(peer_id, "listener");
         assert_eq!(
-            sent_message,
-            p::OutgoingMessage::ProducerRemoved {
-                peer_id: "producer".into(),
-                meta: Some(json!({"some": "meta"}))
-            }
-        );
-        let (peer_id, sent_message) = handler.next().await.unwrap();
-        assert_eq!(peer_id, "producer");
-        assert_eq!(
-            sent_message,
-            p::OutgoingMessage::Unregistered(p::UnregisteredMessage::Producer {
-                peer_id: "producer".into(),
-                meta: Some(json!({"some": "meta"}))
-            })
-        );
-        let (peer_id, sent_message) = handler.next().await.unwrap();
-        assert_eq!(peer_id, "listener");
-        assert_eq!(
-            sent_message,
-            p::OutgoingMessage::Unregistered(p::UnregisteredMessage::Producer {
-                peer_id: "producer".into(),
-                meta: Some(json!({"some": "meta"})),
-            })
+            handler.next().await.unwrap(),
+            (
+                "listener".into(),
+                p::OutgoingMessage::PeerStatusChanged(PeerStatus {
+                    roles: vec![],
+                    peer_id: Some("producer".to_string()),
+                    meta: Default::default()
+                })
+            )
         );
     }
 
@@ -1360,13 +1189,15 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
-            meta: Default::default(),
+        new_peer(&mut tx, &mut handler, "producer").await;
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Producer],
+            meta: None,
+            peer_id: None,
         });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
-        let _ = handler.next().await.unwrap();
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
@@ -1380,7 +1211,7 @@ mod tests {
         assert_eq!(
             sent_message,
             p::OutgoingMessage::Error {
-                details: "Peer with id consumer is not registered as a consumer".into()
+                details: "Peer 'consumer' hasn't been welcomed".into()
             }
         );
     }
@@ -1390,21 +1221,17 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
-            meta: Default::default(),
+        new_peer(&mut tx, &mut handler, "producer").await;
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Producer],
+            meta: Some(json!( {"display-name": "foobar".to_string() })),
+            peer_id: None,
         });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
-        let _ = handler.next().await.unwrap();
 
-        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
-            meta: Default::default(),
-        });
-        tx.send(("consumer".to_string(), Some(message)))
-            .await
-            .unwrap();
-        let _ = handler.next().await.unwrap();
+        new_peer(&mut tx, &mut handler, "consumer").await;
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),

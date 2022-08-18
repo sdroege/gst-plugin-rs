@@ -385,16 +385,15 @@ function onServerMessage(event) {
         msg = JSON.parse(event.data);
     } catch (e) {
         if (e instanceof SyntaxError) {
-            this.handleIncomingError("Error parsing incoming JSON: " + event.data);
+            console.error("Error parsing incoming JSON: " + event.data);
         } else {
-            this.handleIncomingError("Unknown error parsing response: " + event.data);
+            console.error("Unknown error parsing response: " + event.data);
         }
         return;
     }
 
     if (msg.type == "welcome") {
         console.info(`Got welcomed with ID ${msg.peer_id}`);
-    } else if (msg.type == "registered") {
         ws_conn.send(JSON.stringify({
             "type": "list"
         }));
@@ -403,13 +402,18 @@ function onServerMessage(event) {
         for (i = 0; i < msg.producers.length; i++) {
             addPeer(msg.producers[i].id, msg.producers[i].meta);
         }
-    } else if (msg.type == "producerAdded") {
-        addPeer(msg.peerId, msg.meta);
-    } else if (msg.type == "producerRemoved") {
+    } else if (msg.type == "peerStatusChanged") {
         var li = document.getElementById("peer-" + msg.peerId);
-        li.parentNode.removeChild(li);
+        if (msg.roles.includes("producer")) {
+            if (li == null) {
+                console.error('Adding peer');
+                addPeer(msg.peerId, msg.meta);
+            }
+        } else if (li != null) {
+            li.parentNode.removeChild(li);
+        }
     } else {
-        this.handleIncomingError("Unsupported message: ", msg);
+        console.error("Unsupported message: ", msg);
     }
 };
 
@@ -448,8 +452,8 @@ function connect() {
     ws_conn = new WebSocket(ws_url);
     ws_conn.addEventListener('open', (event) => {
         ws_conn.send(JSON.stringify({
-            "type": "register",
-            "peerType": "listener"
+            "type": "setPeerStatus",
+            "roles": ["listener"]
         }));
     });
     ws_conn.addEventListener('error', onServerError);

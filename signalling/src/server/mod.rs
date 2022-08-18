@@ -172,7 +172,6 @@ impl Server {
                     warn!(this = %this_id_clone, "Error handling message: {:?}", err);
                 }
             }
-
             while let Some(msg) = ws_stream.next().await {
                 info!("Received message {msg:?}");
                 match msg {
