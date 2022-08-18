@@ -70,6 +70,8 @@ pub struct Peer {
 #[serde(rename_all = "camelCase")]
 /// Messages sent from the server to peers
 pub enum OutgoingMessage {
+    /// Welcoming message, sets the Peer ID linked to a new connection
+    Welcome { peer_id: String },
     /// Confirms registration
     Registered(RegisteredMessage),
     /// Confirms registration
@@ -210,6 +212,8 @@ pub struct EndSessionMessage {
 #[serde(rename_all = "camelCase")]
 /// Messages received by the server from peers
 pub enum IncomingMessage {
+    /// Register as a peer type
+    NewPeer,
     /// Register as a peer type
     Register(RegisterMessage),
     /// Unregister as a peer type

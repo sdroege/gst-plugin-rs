@@ -122,6 +122,7 @@ impl Signaller {
 
                             if let Ok(msg) = serde_json::from_str::<p::OutgoingMessage>(&msg) {
                                 match msg {
+                                    p::OutgoingMessage::Welcome { .. } => (),
                                     p::OutgoingMessage::Registered(
                                         p::RegisteredMessage::Producer { peer_id, .. },
                                     ) => {

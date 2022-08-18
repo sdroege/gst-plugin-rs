@@ -67,6 +67,16 @@ impl Handler {
         msg: p::IncomingMessage,
     ) -> Result<(), Error> {
         match msg {
+            p::IncomingMessage::NewPeer => {
+                self.items.push_back((
+                    peer_id.into(),
+                    p::OutgoingMessage::Welcome {
+                        peer_id: peer_id.to_string(),
+                    },
+                ));
+
+                Ok(())
+            }
             p::IncomingMessage::Register(message) => match message {
                 p::RegisterMessage::Producer { meta } => self.register_producer(peer_id, meta),
                 p::RegisterMessage::Consumer { meta } => self.register_consumer(peer_id, meta),
@@ -357,13 +367,6 @@ impl Handler {
     /// Start a session between two peers
     #[instrument(level = "debug", skip(self))]
     fn start_session(&mut self, producer_id: &str, consumer_id: &str) -> Result<(), Error> {
-        if !self.consumers.contains_key(consumer_id) {
-            return Err(anyhow!(
-                "Peer with id {} is not registered as a consumer",
-                consumer_id
-            ));
-        }
-
         if !self.producers.contains_key(producer_id) {
             return Err(anyhow!(
                 "Peer with id {} is not registered as a producer",

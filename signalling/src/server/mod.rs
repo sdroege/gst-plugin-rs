@@ -156,7 +156,25 @@ impl Server {
         let this_id_clone = this_id.clone();
         let state_clone = self.state.clone();
         let receive_task_handle = task::spawn(async move {
+            if let Some(tx) = tx.as_mut() {
+                if let Err(err) = tx
+                    .send((
+                        this_id_clone.clone(),
+                        Some(
+                            serde_json::json!({
+                                "type": "newPeer",
+                            })
+                            .to_string(),
+                        ),
+                    ))
+                    .await
+                {
+                    warn!(this = %this_id_clone, "Error handling message: {:?}", err);
+                }
+            }
+
             while let Some(msg) = ws_stream.next().await {
+                info!("Received message {msg:?}");
                 match msg {
                     Ok(WsMessage::Text(msg)) => {
                         if let Some(tx) = tx.as_mut() {

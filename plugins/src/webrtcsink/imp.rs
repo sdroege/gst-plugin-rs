@@ -665,6 +665,7 @@ impl State {
         session: &mut Session,
         signal: bool,
     ) {
+        gst::info!(CAT, "Ending session {}", session.id);
         session.pipeline.debug_to_dot_file_with_ts(
             gst::DebugGraphDetails::all(),
             format!("removing-peer-{}-", session.peer_id,),

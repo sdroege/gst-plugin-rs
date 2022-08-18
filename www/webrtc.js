@@ -220,11 +220,8 @@ function Session(our_id, peer_id, closed_callback) {
         this.ws_conn = new WebSocket(ws_url);
         /* When connected, immediately register with the server */
         this.ws_conn.addEventListener('open', (event) => {
-            this.ws_conn.send(JSON.stringify({
-                "type": "register",
-                "peerType": "consumer"
-            }));
-            this.setStatus("Registering with server");
+            this.setStatus("Connecting to the peer");
+            this.connectPeer();
         });
         this.ws_conn.addEventListener('error', this.onServerError.bind(this));
         this.ws_conn.addEventListener('message', this.onServerMessage.bind(this));
@@ -395,7 +392,9 @@ function onServerMessage(event) {
         return;
     }
 
-    if (msg.type == "registered") {
+    if (msg.type == "welcome") {
+        console.info(`Got welcomed with ID ${msg.peer_id}`);
+    } else if (msg.type == "registered") {
         ws_conn.send(JSON.stringify({
             "type": "list"
         }));
