@@ -257,7 +257,7 @@ impl Default for Settings {
             cc_info: CCInfo {
                 heuristic: WebRTCSinkCongestionControl::GoogleCongestionControl,
                 min_bitrate: DEFAULT_MIN_BITRATE,
-                max_bitrate: (DEFAULT_MAX_BITRATE as f64 * 1.5) as u32,
+                max_bitrate: DEFAULT_MAX_BITRATE as u32,
                 start_bitrate: DEFAULT_START_BITRATE,
             },
             do_fec: DEFAULT_DO_FEC,
@@ -937,7 +937,7 @@ impl Consumer {
                 WebRTCSinkCongestionControl::Disabled => {
                     // If congestion control is disabled, we simply use the highest
                     // known "safe" value for the bitrate.
-                    enc.set_bitrate(element, (self.cc_info.max_bitrate as f64 / 1.5) as i32);
+                    enc.set_bitrate(element, self.cc_info.max_bitrate as i32);
                     enc.transceiver.set_property("fec-percentage", 50u32);
                 }
                 WebRTCSinkCongestionControl::Homegrown => {
@@ -1348,13 +1348,13 @@ impl WebRTCSink {
 
         match settings.cc_info.heuristic {
             WebRTCSinkCongestionControl::GoogleCongestionControl => {
-                let cc_info = settings.cc_info;
                 webrtcbin.connect_closure(
                     "request-aux-sender",
                     false,
                     glib::closure!(@watch element, @strong peer_id
                             => move |_webrtcbin: gst::Element, _transport: gst::Object| {
 
+                        let settings = element.imp().settings.lock().unwrap();
                         let cc = match gst::ElementFactory::make("rtpgccbwe", None) {
                             Err(err) => {
                                 glib::g_warning!("webrtcsink",
@@ -1364,10 +1364,11 @@ impl WebRTCSink {
                                 return None;
                             },
                             Ok(e) => {
+                                let max_bitrate = (settings.cc_info.max_bitrate as f64 * if settings.do_fec { 1.5 } else { 1.}) as u32;
                                 e.set_properties(&[
-                                    ("min-bitrate", &cc_info.min_bitrate),
-                                    ("estimated-bitrate", &cc_info.start_bitrate),
-                                    ("max-bitrate", &cc_info.max_bitrate),
+                                    ("min-bitrate", &settings.cc_info.min_bitrate),
+                                    ("estimated-bitrate", &settings.cc_info.start_bitrate),
+                                    ("max-bitrate", &max_bitrate),
                                 ]);
 
                                 // TODO: Bind properties with @element's
@@ -1527,11 +1528,16 @@ impl WebRTCSink {
             webrtcbin.clone(),
             peer_id.clone(),
             match settings.cc_info.heuristic {
-                WebRTCSinkCongestionControl::Homegrown => Some(CongestionController::new(
-                    &peer_id,
-                    settings.cc_info.min_bitrate,
-                    settings.cc_info.max_bitrate,
-                )),
+                WebRTCSinkCongestionControl::Homegrown => {
+                    let max_bitrate = (settings.cc_info.max_bitrate as f64
+                        * if settings.do_fec { 1.5 } else { 1. })
+                        as u32;
+                    Some(CongestionController::new(
+                        &peer_id,
+                        settings.cc_info.min_bitrate,
+                        max_bitrate,
+                    ))
+                }
                 _ => None,
             },
             settings.cc_info,
@@ -2377,13 +2383,7 @@ impl ObjectImpl for WebRTCSink {
             }
             "max-bitrate" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.cc_info.max_bitrate = (value.get::<u32>().expect("type checked upstream")
-                    as f32
-                    * if settings.do_fec {
-                        settings.cc_info.max_bitrate as f32 * 1.5
-                    } else {
-                        1.
-                    }) as u32;
+                settings.cc_info.max_bitrate = value.get::<u32>().expect("type checked upstream");
             }
             "start-bitrate" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -2440,9 +2440,7 @@ impl ObjectImpl for WebRTCSink {
             }
             "max-bitrate" => {
                 let settings = self.settings.lock().unwrap();
-                ((settings.cc_info.max_bitrate as f32 / if settings.do_fec { 1.5 } else { 1. })
-                    as u32)
-                    .to_value()
+                settings.cc_info.max_bitrate.to_value()
             }
             "start-bitrate" => {
                 let settings = self.settings.lock().unwrap();
