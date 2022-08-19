@@ -31,14 +31,18 @@ gst::plugin_define!(
     env!("BUILD_REL_DATE")
 );
 
+#[cfg(feature = "clap")]
 use clap::Parser;
 
+#[cfg(feature = "clap")]
 #[derive(Parser, Debug)]
 #[clap(version)]
-#[clap(about = "Standalone pipeline threadshare runtime test")]
+#[clap(
+    about = "Standalone pipeline threadshare runtime test. Use `GST_DEBUG=ts-standalone*:4` for stats"
+)]
 struct Args {
     /// Parallel streams to process.
-    #[clap(short, long, default_value_t = 100)]
+    #[clap(short, long, default_value_t = 5000)]
     streams: u32,
 
     /// Threadshare groups.
@@ -49,13 +53,67 @@ struct Args {
     #[clap(short, long, default_value_t = 20)]
     wait: u32,
 
+    /// Buffer push period in ms.
+    #[clap(short, long, default_value_t = 20)]
+    push_period: u32,
+
     /// Number of buffers per stream to output before sending EOS (-1 = unlimited).
-    #[clap(short, long, default_value_t = 6000)]
+    #[clap(short, long, default_value_t = 5000)]
     num_buffers: i32,
 
-    /// Enables statistics logging (use GST_DEBUG=ts-standalone*:4).
+    /// Disables statistics logging.
     #[clap(short, long)]
-    log_stats: bool,
+    disable_stats_log: bool,
+}
+
+#[cfg(not(feature = "clap"))]
+#[derive(Debug)]
+struct Args {
+    streams: u32,
+    groups: u32,
+    wait: u32,
+    push_period: u32,
+    num_buffers: i32,
+    disable_stats_log: bool,
+}
+
+#[cfg(not(feature = "clap"))]
+impl Default for Args {
+    fn default() -> Self {
+        Args {
+            streams: 5000,
+            groups: 2,
+            wait: 20,
+            push_period: 20,
+            num_buffers: 5000,
+            disable_stats_log: false,
+        }
+    }
+}
+
+fn args() -> Args {
+    #[cfg(feature = "clap")]
+    let args = {
+        let args = Args::parse();
+        gst::info!(CAT, "{:?}", args);
+
+        args
+    };
+
+    #[cfg(not(feature = "clap"))]
+    let args = {
+        if std::env::args().len() > 1 {
+            gst::warning!(CAT, "Ignoring command line arguments");
+            gst::warning!(CAT, "Build with `--features=clap`");
+        }
+
+        let args = Args::default();
+        gst::warning!(CAT, "{:?}", args);
+
+        args
+    };
+
+    args
 }
 
 fn main() {
@@ -68,7 +126,7 @@ fn main() {
     #[cfg(debug_assertions)]
     gst::warning!(CAT, "RUNNING DEBUG BUILD");
 
-    let args = Args::parse();
+    let args = args();
 
     let pipeline = gst::Pipeline::new(None);
 
@@ -82,6 +140,7 @@ fn main() {
         .unwrap();
         src.set_property("context", &ctx_name);
         src.set_property("context-wait", args.wait);
+        src.set_property("push-period", args.push_period);
         src.set_property("num-buffers", args.num_buffers);
 
         let sink = gst::ElementFactory::make(
@@ -91,8 +150,27 @@ fn main() {
         .unwrap();
         sink.set_property("context", &ctx_name);
         sink.set_property("context-wait", args.wait);
-        if i == 0 && args.log_stats {
-            sink.set_property("must-log-stats", true);
+
+        if i == 0 {
+            src.set_property("raise-log-level", true);
+            sink.set_property("raise-log-level", true);
+
+            if !args.disable_stats_log {
+                // Don't use the last 5 secs in stats
+                // otherwise we get outliers when reaching EOS.
+                // Note that stats don't start before the 20 first seconds
+                // and we get 50 buffers per sec.
+                const BUFFERS_BEFORE_LOGS: i32 = 20 * 50;
+                const BUFFERS_TO_SKIP: i32 = BUFFERS_BEFORE_LOGS + 5 * 50;
+                if args.num_buffers > BUFFERS_TO_SKIP {
+                    sink.set_property("push-period", args.push_period);
+                    sink.set_property("logs-stats", true);
+                    let max_buffers = args.num_buffers - BUFFERS_TO_SKIP;
+                    sink.set_property("max-buffers", max_buffers);
+                } else {
+                    gst::warning!(CAT, "Not enough buffers to log, disabling stats");
+                }
+            }
         }
 
         let elements = &[&src, &sink];
@@ -109,11 +187,8 @@ fn main() {
         use gst::MessageView;
 
         match msg.view() {
-            MessageView::Eos(..) => {
-                gst::info!(CAT, "Shuting down");
-                let stop = Instant::now();
-                pipeline_clone.set_state(gst::State::Null).unwrap();
-                gst::info!(CAT, "Shuting down took {:.2?}", stop.elapsed());
+            MessageView::Eos(_) => {
+                gst::info!(CAT, "Received eos");
                 l_clone.quit();
             }
             MessageView::Error(err) => {
@@ -133,10 +208,25 @@ fn main() {
     })
     .expect("Failed to add bus watch");
 
-    gst::info!(CAT, "Starting");
+    gst::info!(CAT, "Switching to Ready");
+    let start = Instant::now();
+    pipeline.set_state(gst::State::Ready).unwrap();
+    gst::info!(CAT, "Switching to Ready took {:.2?}", start.elapsed());
+
+    gst::info!(CAT, "Switching to Playing");
     let start = Instant::now();
     pipeline.set_state(gst::State::Playing).unwrap();
-    gst::info!(CAT, "Starting took {:.2?}", start.elapsed());
+    gst::info!(CAT, "Switching to Playing took {:.2?}", start.elapsed());
 
     l.run();
+
+    gst::info!(CAT, "Switching to Ready");
+    let stop = Instant::now();
+    pipeline_clone.set_state(gst::State::Ready).unwrap();
+    gst::info!(CAT, "Switching to Ready took {:.2?}", stop.elapsed());
+
+    gst::info!(CAT, "Shutting down");
+    let stop = Instant::now();
+    pipeline_clone.set_state(gst::State::Null).unwrap();
+    gst::info!(CAT, "Shutting down took {:.2?}", stop.elapsed());
 }

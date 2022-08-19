@@ -54,9 +54,8 @@ name = "tcpclientsrc-benchmark-sender"
 path = "examples/tcpclientsrc_benchmark_sender.rs"
 
 [[example]]
-name = "standalone"
+name = "ts-standalone"
 path = "examples/standalone/main.rs"
-required-features = ["clap"]
 
 [build-dependencies]
 gst-plugin-version-helper = { path="../../version-helper" }

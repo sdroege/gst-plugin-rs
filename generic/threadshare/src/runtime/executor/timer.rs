@@ -83,6 +83,16 @@ impl Timer {
         Timer::interval_at(Instant::now() + period, period)
     }
 
+    /// Creates a timer that emits events periodically, starting after `delay`.
+    ///
+    /// When throttling is activated (i.e. when using a non-`0` `wait`
+    /// duration in `Context::acquire`), timer entries are assigned to
+    /// the nearest time frame, meaning that the delay might elapse
+    /// `wait` / 2 ms earlier or later than the expected instant.
+    pub fn interval_delayed_by(delay: Duration, period: Duration) -> Timer {
+        Timer::interval_at(Instant::now() + delay, period)
+    }
+
     /// Creates a timer that emits events periodically, starting at `start`.
     ///
     /// When throttling is activated (i.e. when using a non-`0` `wait`
