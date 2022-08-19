@@ -589,7 +589,6 @@ impl ElementImpl for OnvifMetadataParse {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
             let caps = gst::Caps::builder("application/x-onvif-metadata")
-                .field("encoding", "utf8")
                 .field("parsed", true)
                 .build();
             let src_pad_template = gst::PadTemplate::new(
@@ -600,9 +599,7 @@ impl ElementImpl for OnvifMetadataParse {
             )
             .unwrap();
 
-            let caps = gst::Caps::builder("application/x-onvif-metadata")
-                .field("encoding", "utf8")
-                .build();
+            let caps = gst::Caps::builder("application/x-onvif-metadata").build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,

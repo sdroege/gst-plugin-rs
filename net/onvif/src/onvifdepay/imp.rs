@@ -65,9 +65,7 @@ impl ElementImpl for OnvifDepay {
             )
             .unwrap();
 
-            let src_caps = gst::Caps::builder("application/x-onvif-metadata")
-                .field("encoding", "utf8")
-                .build();
+            let src_caps = gst::Caps::builder("application/x-onvif-metadata").build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,

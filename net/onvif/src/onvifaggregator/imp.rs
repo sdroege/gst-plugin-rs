@@ -96,7 +96,6 @@ impl ElementImpl for OnvifAggregator {
 
             let meta_caps = gst::Caps::builder("application/x-onvif-metadata")
                 .field("parsed", true)
-                .field("encoding", "utf8")
                 .build();
 
             let meta_sink_pad_template = gst::PadTemplate::with_gtype(

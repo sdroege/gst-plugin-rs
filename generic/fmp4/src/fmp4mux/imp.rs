@@ -2506,7 +2506,6 @@ impl ElementImpl for ONVIFFMP4Mux {
                         .field("bitrate", gst::List::new([16000i32, 24000, 32000, 40000]))
                         .build(),
                     gst::Structure::builder("application/x-onvif-metadata")
-                        .field("encoding", "utf8")
                         .field("parsed", true)
                         .build(),
                 ]
