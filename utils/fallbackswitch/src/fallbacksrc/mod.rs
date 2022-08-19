@@ -11,7 +11,6 @@ use gst::prelude::*;
 
 mod custom_source;
 mod imp;
-mod video_fallback;
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]

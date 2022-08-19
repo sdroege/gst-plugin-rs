@@ -1017,7 +1017,7 @@
         "elements": {
             "fallbacksrc": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
-                "description": "Live source with uridecodebin3 or custom source, and fallback image stream",
+                "description": "Live source with uridecodebin3 or custom source, and fallback stream",
                 "hierarchy": [
                     "FallbackSrc",
                     "GstBin",
@@ -1213,7 +1213,7 @@
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
-                        "default": "application/x-fallbacksrc-stats, num-retry=(guint64)0, last-retry-reason=(GstFallbackSourceRetryReason)none, buffering-percent=(int)100;",
+                        "default": "application/x-fallbacksrc-stats, num-retry=(guint64)0, num-fallback-retry=(guint64)0, last-retry-reason=(GstFallbackSourceRetryReason)none, last-fallback-retry-reason=(GstFallbackSourceRetryReason)none, buffering-percent=(int)100, fallback-buffering-percent=(int)100;",
                         "mutable": "null",
                         "readable": true,
                         "type": "GstStructure",
