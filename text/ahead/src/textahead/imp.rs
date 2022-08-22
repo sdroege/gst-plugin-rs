@@ -27,6 +27,7 @@ struct Settings {
     separator: String,
     current_attributes: String,
     ahead_attributes: String,
+    buffer_start_segment: bool,
 }
 
 impl Default for Settings {
@@ -36,6 +37,7 @@ impl Default for Settings {
             separator: "\n".to_string(),
             current_attributes: "size=\"larger\"".to_string(),
             ahead_attributes: "size=\"smaller\"".to_string(),
+            buffer_start_segment: false,
         }
     }
 }
@@ -50,6 +52,8 @@ struct Input {
 struct State {
     pending: Vec<Input>,
     done: bool,
+    /// Segment for which we should send a buffer with ahead text. Only set if `Settings.buffer_start_segment` is set.
+    pending_segment: Option<gst::FormattedSegment<gst::format::Time>>,
 }
 
 pub struct TextAhead {
@@ -128,6 +132,12 @@ impl ObjectImpl for TextAhead {
                     .default_value(Some(&default.ahead_attributes))
                     .mutable_playing()
                     .build(),
+                glib::ParamSpecBoolean::builder("buffer-start-segment")
+                    .nick("Buffer start segment")
+                    .blurb("Generate a buffer at the start of the segment with ahead text")
+                    .default_value(default.buffer_start_segment)
+                    .mutable_playing()
+                    .build(),
             ]
         });
 
@@ -156,6 +166,9 @@ impl ObjectImpl for TextAhead {
             "ahead-attributes" => {
                 settings.ahead_attributes = value.get().expect("type checked upstream");
             }
+            "buffer-start-segment" => {
+                settings.buffer_start_segment = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -168,6 +181,7 @@ impl ObjectImpl for TextAhead {
             "separator" => settings.separator.to_value(),
             "current-attributes" => settings.current_attributes.to_value(),
             "ahead-attributes" => settings.ahead_attributes.to_value(),
+            "buffer-start-segment" => settings.buffer_start_segment.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -305,6 +319,21 @@ impl TextAhead {
                 let _ = self.src_pad.push_event(gst::event::Caps::new(templ.caps()));
                 true
             }
+            gst::EventView::Segment(segment) => {
+                if let Ok(segment) = segment.segment().clone().downcast::<gst::format::Time>() {
+                    let buffer_start_segment = {
+                        let settings = self.settings.lock().unwrap();
+                        settings.buffer_start_segment
+                    };
+
+                    if buffer_start_segment {
+                        let mut state = self.state.lock().unwrap();
+                        state.pending_segment = Some(segment);
+                    }
+                }
+
+                pad.event_default(Some(element), event)
+            }
             _ => pad.event_default(Some(element), event),
         }
     }
@@ -320,14 +349,26 @@ impl TextAhead {
         }
         let settings = self.settings.lock().unwrap();
 
-        let first = state.pending.remove(0);
-        let mut text = if settings.current_attributes.is_empty() {
-            first.text
+        let (mut text, pts, duration) = if let Some(pending_segment) = state.pending_segment.take()
+        {
+            let duration = match (pending_segment.start(), state.pending[0].pts) {
+                (Some(start), Some(first_pts)) => Some(first_pts - start),
+                _ => None,
+            };
+
+            ("".to_string(), pending_segment.start(), duration)
         } else {
-            format!(
-                "<span {}>{}</span>",
-                settings.current_attributes, first.text
-            )
+            let first = state.pending.remove(0);
+            let text = if settings.current_attributes.is_empty() {
+                first.text
+            } else {
+                format!(
+                    "<span {}>{}</span>",
+                    settings.current_attributes, first.text
+                )
+            };
+
+            (text, first.pts, first.duration)
         };
 
         for input in state.pending.iter() {
@@ -349,14 +390,14 @@ impl TextAhead {
             }
         }
 
-        gst::log!(CAT, obj: element, "output {:?}: {}", first.pts, text);
+        gst::log!(CAT, obj: element, "output {:?}: {}", pts, text);
 
         let mut output = gst::Buffer::from_mut_slice(text.into_bytes());
         {
             let output = output.get_mut().unwrap();
 
-            output.set_pts(first.pts);
-            output.set_duration(first.duration);
+            output.set_pts(pts);
+            output.set_duration(duration);
         }
 
         self.src_pad.push(output)
