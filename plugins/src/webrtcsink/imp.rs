@@ -48,6 +48,9 @@ const DEFAULT_DO_FEC: bool = true;
 const DEFAULT_DO_RETRANSMISSION: bool = true;
 const DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION: bool = false;
 const DEFAULT_START_BITRATE: u32 = 2048000;
+/* Start adding some FEC when the bitrate > 2Mbps as we found experimentally
+ * that it is not worth it below that threshold */
+const DO_FEC_THRESHOLD: u32 = 2000000;
 
 #[derive(Debug, Clone, Copy)]
 struct CCInfo {
@@ -139,8 +142,12 @@ struct Session {
     webrtc_pads: HashMap<u32, WebRTCPad>,
     peer_id: String,
     encoders: Vec<VideoEncoder>,
-    // Our Homegrown controller
+
+    // Our Homegrown controller (if cc_info.heuristic == Homegrown)
     congestion_controller: Option<CongestionController>,
+    // Our BandwidthEstimator (if cc_info.heuristic == GoogleCongestionControl)
+    rtpgccbwe: Option<gst::Element>,
+
     sdp: Option<gst_sdp::SDPMessage>,
     stats: gst::Structure,
 
@@ -732,6 +739,7 @@ impl Session {
         webrtcbin: gst::Element,
         peer_id: String,
         congestion_controller: Option<CongestionController>,
+        rtpgccbwe: Option<gst::Element>,
         cc_info: CCInfo,
     ) -> Self {
         Self {
@@ -742,6 +750,7 @@ impl Session {
             cc_info,
             rtprtxsend: None,
             congestion_controller,
+            rtpgccbwe,
             stats: gst::Structure::new_empty("application/x-webrtc-stats"),
             sdp: None,
             webrtc_pads: HashMap::new(),
@@ -961,6 +970,11 @@ impl Session {
             }
 
             self.encoders.push(enc);
+
+            if let Some(ref rtpgccbwe) = self.rtpgccbwe.as_ref() {
+                let max_bitrate = self.cc_info.max_bitrate * (self.encoders.len() as u32);
+                rtpgccbwe.set_property("max-bitrate", max_bitrate);
+            }
         }
 
         let appsrc = appsrc.downcast::<gst_app::AppSrc>().unwrap();
@@ -1362,48 +1376,49 @@ impl WebRTCSink {
             webrtcbin.set_property("turn-server", turn_server);
         }
 
-        match settings.cc_info.heuristic {
+        let rtpgccbwe = match settings.cc_info.heuristic {
             WebRTCSinkCongestionControl::GoogleCongestionControl => {
-                webrtcbin.connect_closure(
-                    "request-aux-sender",
-                    false,
-                    glib::closure!(@watch element, @strong session_id
-                            => move |_webrtcbin: gst::Element, _transport: gst::Object| {
+                let rtpgccbwe = match gst::ElementFactory::make("rtpgccbwe", None) {
+                    Err(err) => {
+                        glib::g_warning!(
+                            "webrtcsink",
+                            "The `rtpgccbwe` element is not available \
+                            not doing any congestion control: {err:?}"
+                        );
+                        None
+                    }
+                    Ok(cc) => {
+                        webrtcbin.connect_closure(
+                            "request-aux-sender",
+                            false,
+                            glib::closure!(@watch element, @strong session_id, @weak-allow-none cc
+                                    => move |_webrtcbin: gst::Element, _transport: gst::Object| {
 
-                        let settings = element.imp().settings.lock().unwrap();
-                        let cc = match gst::ElementFactory::make("rtpgccbwe", None) {
-                            Err(err) => {
-                                glib::g_warning!("webrtcsink",
-                                    "The `rtpgccbwe` element is not available \
-                                    not doing any congestion control: {err:?}"
-                                );
-                                return None;
-                            },
-                            Ok(e) => {
-                                let max_bitrate = (settings.cc_info.max_bitrate as f64 * if settings.do_fec { 1.5 } else { 1.}) as u32;
-                                e.set_properties(&[
-                                    ("min-bitrate", &settings.cc_info.min_bitrate),
-                                    ("estimated-bitrate", &settings.cc_info.start_bitrate),
-                                    ("max-bitrate", &max_bitrate),
-                                ]);
+                                let cc = cc.unwrap();
+                                let settings = element.imp().settings.lock().unwrap();
 
                                 // TODO: Bind properties with @element's
+                                cc.set_properties(&[
+                                    ("min-bitrate", &settings.cc_info.min_bitrate),
+                                    ("estimated-bitrate", &settings.cc_info.start_bitrate),
+                                    ("max-bitrate", &settings.cc_info.max_bitrate),
+                                ]);
 
-                                e
-                            }
-                        };
+                                cc.connect_notify(Some("estimated-bitrate"),
+                                    glib::clone!(@weak element, @strong session_id
+                                        => move |bwe, pspec| {
+                                        element.imp().set_bitrate(&element, &session_id,
+                                            bwe.property::<u32>(pspec.name()));
+                                    }
+                                ));
 
-                        cc.connect_notify(Some("estimated-bitrate"),
-                            glib::clone!(@weak element, @strong session_id
-                                => move |bwe, pspec| {
-                                element.imp().set_bitrate(&element, &session_id,
-                                    bwe.property::<u32>(pspec.name()));
-                            }
-                        ));
+                                Some(cc)
+                            }),
+                        );
 
                         Some(cc)
-                    }),
-                );
+                    }
+                };
 
                 webrtcbin.connect_closure(
                     "deep-element-added",
@@ -1421,9 +1436,11 @@ impl WebRTCSink {
                         }
                     }),
                 );
+
+                rtpgccbwe
             }
-            _ => (),
-        }
+            _ => None,
+        };
 
         pipeline.add(&webrtcbin).unwrap();
 
@@ -1553,18 +1570,14 @@ impl WebRTCSink {
             webrtcbin.clone(),
             peer_id.clone(),
             match settings.cc_info.heuristic {
-                WebRTCSinkCongestionControl::Homegrown => {
-                    let max_bitrate = (settings.cc_info.max_bitrate as f64
-                        * if settings.do_fec { 1.5 } else { 1. })
-                        as u32;
-                    Some(CongestionController::new(
-                        &peer_id,
-                        settings.cc_info.min_bitrate,
-                        max_bitrate,
-                    ))
-                }
+                WebRTCSinkCongestionControl::Homegrown => Some(CongestionController::new(
+                    &peer_id,
+                    settings.cc_info.min_bitrate,
+                    settings.cc_info.max_bitrate,
+                )),
                 _ => None,
             },
+            rtpgccbwe,
             settings.cc_info,
         );
 
@@ -1589,7 +1602,7 @@ impl WebRTCSink {
 
                             session.stats_sigid = Some(rtp_session.connect_notify(Some("twcc-stats"),
                                 glib::clone!(@strong session_id_str, @weak webrtcbin, @weak element => @default-panic, move |sess, pspec| {
-                                    // Run the Loss-based control algortithm on new peer TWCC feedbacks
+                                    // Run the Loss-based control algorithm on new peer TWCC feedbacks
                                     element.imp().process_loss_stats(&element, &session_id_str, &sess.property::<gst::Structure>(pspec.name()));
                                 })
                             ));
@@ -1778,22 +1791,23 @@ impl WebRTCSink {
     }
 
     fn set_bitrate(&self, element: &super::WebRTCSink, peer_id: &str, bitrate: u32) {
+        let settings = element.imp().settings.lock().unwrap();
         let mut state = element.imp().state.lock().unwrap();
 
         if let Some(session) = state.sessions.get_mut(peer_id) {
             let fec_ratio = {
-                // Start adding some FEC when the bitrate > 2Mbps as we found experimentally
-                // that it is not worth it below that threshold
-                if bitrate <= 2_000_000 || session.cc_info.max_bitrate <= 2_000_000 {
-                    0f64
+                if settings.do_fec && bitrate > DO_FEC_THRESHOLD {
+                    (bitrate as f64 - DO_FEC_THRESHOLD as f64)
+                        / (session.cc_info.max_bitrate as f64 - DO_FEC_THRESHOLD as f64)
                 } else {
-                    (bitrate as f64 - 2_000_000.)
-                        / (session.cc_info.max_bitrate as f64 - 2_000_000.)
+                    0f64
                 }
             };
 
             let fec_percentage = fec_ratio * 50f64;
-            let encoders_bitrate = ((bitrate as f64) / (1. + (fec_percentage / 100.))) as i32;
+            let encoders_bitrate = ((bitrate as f64)
+                / (1. + (fec_percentage / 100.))
+                / (session.encoders.len() as f64)) as i32;
 
             if let Some(ref rtpxsend) = session.rtprtxsend.as_ref() {
                 rtpxsend.set_property("stuffing-kbps", (bitrate as f64 / 1000.) as i32);
