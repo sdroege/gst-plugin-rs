@@ -225,7 +225,12 @@ impl FMP4Mux {
             let running_time = match segment.to_running_time(buffer.dts_or_pts()) {
                 None => {
                     gst::trace!(CAT, obj: &stream.sinkpad, "Stream has no valid running time");
-                    if earliest_stream.is_none() {
+                    if earliest_stream
+                        .as_ref()
+                        .map_or(true, |(_, _, earliest_running_time)| {
+                            *earliest_running_time > gst::ClockTime::ZERO
+                        })
+                    {
                         earliest_stream = Some((idx, stream, gst::ClockTime::ZERO));
                     }
                     continue;
