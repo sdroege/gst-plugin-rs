@@ -10,6 +10,10 @@ include:
 variables:
   FDO_UPSTREAM_REPO: gstreamer/gst-plugins-rs
 
+  WINDOWS_BASE: "registry.freedesktop.org/gstreamer/gstreamer-rs/windows"
+  WINDOWS_RUST_MINIMUM_IMAGE: "$WINDOWS_BASE:$GST_RS_IMG_TAG-main-$GST_RS_MSRV"
+  WINDOWS_RUST_STABLE_IMAGE: "$WINDOWS_BASE:$GST_RS_IMG_TAG-main-$GST_RS_STABLE"
+
 workflow:
   rules:
     - if: $CI_MERGE_REQUEST_IID
@@ -255,6 +259,42 @@ gst-build:
     paths:
       - 'build/meson-logs/'
       - 'build-gst-full/meson-logs/'
+
+.msvc2019 build:
+  stage: 'test'
+  tags:
+    - 'docker'
+    - 'windows'
+    - '2022'
+  parallel:
+    matrix:
+      - FEATURES:
+        - "--no-default-features"
+        - "--all-features"
+        - ""
+  script:
+    - echo $env:FEATURES
+
+    # Set the code page to UTF-8
+    - chcp 65001
+
+    # We need to build each crate separately to choose that can build on windows
+    - cmd.exe /C "C:\BuildTools\Common7\Tools\VsDevCmd.bat -host_arch=amd64 -arch=amd64 &&
+      powershell ./ci/run_windows_tests.ps1"
+
+    - |
+      if (!$?) {
+        Write-Host "Tests Failed!"
+        Exit 1
+      }
+
+test windows msrv:
+  extends: '.msvc2019 build'
+  image: $WINDOWS_RUST_MINIMUM_IMAGE
+
+test windows stable:
+  extends: '.msvc2019 build'
+  image: "$WINDOWS_RUST_STABLE_IMAGE"
 
 rustfmt:
   extends: .img-stable
