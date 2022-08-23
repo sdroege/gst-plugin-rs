@@ -535,6 +535,21 @@ impl FallbackSwitch {
             .expect("Failed to wait async");
     }
 
+    fn sink_activatemode(
+        pad: &super::FallbackSwitchSinkPad,
+        _mode: gst::PadMode,
+        activate: bool,
+    ) -> Result<(), gst::LoggableError> {
+        let mut pad_state = pad.imp().state.lock();
+        if activate {
+            pad_state.reset();
+        } else {
+            pad_state.flush_start();
+        }
+
+        Ok(())
+    }
+
     fn sink_chain(
         &self,
         pad: &super::FallbackSwitchSinkPad,
@@ -1386,6 +1401,9 @@ impl ElementImpl for FallbackSwitch {
                 || false,
                 |fallbackswitch, element| fallbackswitch.sink_query(pad, element, query),
             )
+        })
+        .activatemode_function(|pad, _parent, mode, activate| {
+            Self::sink_activatemode(pad, mode, activate)
         })
         .build();
 
