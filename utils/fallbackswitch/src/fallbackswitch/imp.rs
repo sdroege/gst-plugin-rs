@@ -1418,6 +1418,12 @@ impl ElementImpl for FallbackSwitch {
     }
 
     fn release_pad(&self, element: &Self::Type, pad: &gst::Pad) {
+        let pad = pad.downcast_ref::<super::FallbackSwitchSinkPad>().unwrap();
+        let mut pad_state = pad.imp().state.lock();
+        pad_state.flush_start();
+        drop(pad_state);
+
+        let _ = pad.set_active(false);
         element.remove_pad(pad).unwrap();
 
         element.child_removed(pad, &pad.name());
