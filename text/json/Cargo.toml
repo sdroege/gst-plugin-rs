@@ -16,6 +16,7 @@ serde_json = { version = "1.0", features = ["raw_value"] }
 [dependencies.gst]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
 package="gstreamer"
+features=["ser_de"]
 
 [lib]
 name = "gstrsjson"
@@ -30,8 +31,7 @@ git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
 package="gstreamer-check"
 
 [features]
-default = ["gst/ser_de"]
-static = ["default"]
+static = []
 capi = []
 doc = ["gst/v1_18"]
 
