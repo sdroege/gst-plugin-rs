@@ -32,6 +32,7 @@ fn init() {
 }
 
 #[test]
+#[cfg(not(windows))]
 fn test_push() {
     init();
 

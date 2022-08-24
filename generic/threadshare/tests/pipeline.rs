@@ -43,6 +43,7 @@ fn init() {
 }
 
 #[test]
+#[cfg(not(windows))]
 fn multiple_contexts_queue() {
     use std::net;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -170,6 +171,7 @@ fn multiple_contexts_queue() {
 }
 
 #[test]
+#[cfg(not(windows))]
 fn multiple_contexts_proxy() {
     use std::net;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
