@@ -5,20 +5,20 @@ use gst_rtp::subclass::prelude::*;
 use once_cell::sync::Lazy;
 
 #[derive(Default)]
-pub struct OnvifPay {}
+pub struct OnvifMetadataPay {}
 
 #[glib::object_subclass]
-impl ObjectSubclass for OnvifPay {
-    const NAME: &'static str = "GstOnvifPay";
-    type Type = super::OnvifPay;
+impl ObjectSubclass for OnvifMetadataPay {
+    const NAME: &'static str = "GstOnvifMetadataPay";
+    type Type = super::OnvifMetadataPay;
     type ParentType = gst_rtp::RTPBasePayload;
 }
 
-impl ObjectImpl for OnvifPay {}
+impl ObjectImpl for OnvifMetadataPay {}
 
-impl GstObjectImpl for OnvifPay {}
+impl GstObjectImpl for OnvifMetadataPay {}
 
-impl ElementImpl for OnvifPay {
+impl ElementImpl for OnvifMetadataPay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
             gst::subclass::ElementMetadata::new(
@@ -64,7 +64,7 @@ impl ElementImpl for OnvifPay {
     }
 }
 
-impl RTPBasePayloadImpl for OnvifPay {
+impl RTPBasePayloadImpl for OnvifMetadataPay {
     fn handle_buffer(
         &self,
         element: &Self::Type,

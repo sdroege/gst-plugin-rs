@@ -16,7 +16,7 @@ struct State {
     current_media_buffer: Option<gst::Buffer>,
 }
 
-pub struct OnvifAggregator {
+pub struct OnvifMetadataCombiner {
     // Input media stream, can be anything with a reference timestamp meta
     media_sink_pad: gst_base::AggregatorPad,
     // Input metadata stream, must be complete VideoAnalytics XML documents
@@ -27,16 +27,16 @@ pub struct OnvifAggregator {
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "onvifaggregator",
+        "onvifmetadatacombiner",
         gst::DebugColorFlags::empty(),
-        Some("ONVIF metadata / video aggregator"),
+        Some("ONVIF metadata / video combiner"),
     )
 });
 
 #[glib::object_subclass]
-impl ObjectSubclass for OnvifAggregator {
-    const NAME: &'static str = "GstOnvifAggregator";
-    type Type = super::OnvifAggregator;
+impl ObjectSubclass for OnvifMetadataCombiner {
+    const NAME: &'static str = "GstOnvifMetadataCombiner";
+    type Type = super::OnvifMetadataCombiner;
     type ParentType = gst_base::Aggregator;
 
     fn with_class(klass: &Self::Class) -> Self {
@@ -57,7 +57,7 @@ impl ObjectSubclass for OnvifAggregator {
     }
 }
 
-impl ObjectImpl for OnvifAggregator {
+impl ObjectImpl for OnvifMetadataCombiner {
     fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
@@ -66,15 +66,15 @@ impl ObjectImpl for OnvifAggregator {
     }
 }
 
-impl GstObjectImpl for OnvifAggregator {}
+impl GstObjectImpl for OnvifMetadataCombiner {}
 
-impl ElementImpl for OnvifAggregator {
+impl ElementImpl for OnvifMetadataCombiner {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
             gst::subclass::ElementMetadata::new(
-                "ONVIF metadata aggregator",
-                "Aggregator",
-                "ONVIF metadata aggregator",
+                "ONVIF metadata combiner",
+                "Video/Metadata/Combiner/Muxer",
+                "ONVIF metadata combiner",
                 "Mathieu Duponchelle <mathieu@centricular.com>",
             )
         });
@@ -135,7 +135,7 @@ impl ElementImpl for OnvifAggregator {
         gst::error!(
             CAT,
             obj: element,
-            "onvifaggregator doesn't expose request pads"
+            "onvifmetadatacombiner doesn't expose request pads"
         );
 
         None
@@ -145,16 +145,16 @@ impl ElementImpl for OnvifAggregator {
         gst::error!(
             CAT,
             obj: element,
-            "onvifaggregator doesn't expose request pads"
+            "onvifmetadatacombiner doesn't expose request pads"
         );
     }
 }
 
-impl OnvifAggregator {
+impl OnvifMetadataCombiner {
     fn consume_meta(
         &self,
         state: &mut State,
-        element: &super::OnvifAggregator,
+        element: &super::OnvifMetadataCombiner,
         end: gst::ClockTime,
     ) -> Result<bool, gst::FlowError> {
         while let Some(buffer) = self.meta_sink_pad.peek_buffer() {
@@ -179,7 +179,7 @@ impl OnvifAggregator {
 
     fn media_buffer_duration(
         &self,
-        element: &super::OnvifAggregator,
+        element: &super::OnvifMetadataCombiner,
         current_media_buffer: &gst::Buffer,
         timeout: bool,
     ) -> Option<gst::ClockTime> {
@@ -239,7 +239,7 @@ impl OnvifAggregator {
     fn consume_media(
         &self,
         state: &mut State,
-        element: &super::OnvifAggregator,
+        element: &super::OnvifMetadataCombiner,
         timeout: bool,
     ) -> Result<Option<gst::Buffer>, gst::FlowError> {
         if let Some(current_media_buffer) = state
@@ -275,7 +275,7 @@ impl OnvifAggregator {
     }
 }
 
-impl AggregatorImpl for OnvifAggregator {
+impl AggregatorImpl for OnvifMetadataCombiner {
     fn aggregate(
         &self,
         element: &Self::Type,

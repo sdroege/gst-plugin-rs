@@ -4,14 +4,14 @@ use gst::prelude::*;
 mod imp;
 
 glib::wrapper! {
-    pub struct OnvifAggregator(ObjectSubclass<imp::OnvifAggregator>) @extends gst_base::Aggregator, gst::Element, gst::Object;
+    pub struct OnvifMetadataCombiner(ObjectSubclass<imp::OnvifMetadataCombiner>) @extends gst_base::Aggregator, gst::Element, gst::Object;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
-        "onvifaggregator",
+        "onvifmetadatacombiner",
         gst::Rank::Primary,
-        OnvifAggregator::static_type(),
+        OnvifMetadataCombiner::static_type(),
     )
 }

@@ -13,9 +13,9 @@ use minidom::Element;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "onvifoverlay",
+        "onvifmetadataoverlay",
         gst::DebugColorFlags::empty(),
-        Some("ONVIF overlay element"),
+        Some("ONVIF metadata overlay element"),
     )
 });
 
@@ -64,15 +64,18 @@ impl Default for Settings {
     }
 }
 
-pub struct OnvifOverlay {
+pub struct OnvifMetadataOverlay {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
     state: Mutex<State>,
     settings: Mutex<Settings>,
 }
 
-impl OnvifOverlay {
-    fn negotiate(&self, element: &super::OnvifOverlay) -> Result<gst::FlowSuccess, gst::FlowError> {
+impl OnvifMetadataOverlay {
+    fn negotiate(
+        &self,
+        element: &super::OnvifMetadataOverlay,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let video_info = {
             let state = self.state.lock().unwrap();
             match state.video_info.as_ref() {
@@ -288,7 +291,12 @@ impl OnvifOverlay {
     }
 
     // Update our overlay composition with a set of rectangles
-    fn overlay_shapes(&self, state: &mut State, element: &super::OnvifOverlay, shapes: Vec<Shape>) {
+    fn overlay_shapes(
+        &self,
+        state: &mut State,
+        element: &super::OnvifMetadataOverlay,
+        shapes: Vec<Shape>,
+    ) {
         if shapes.is_empty() {
             state.composition = None;
             return;
@@ -382,7 +390,7 @@ impl OnvifOverlay {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &super::OnvifOverlay,
+        element: &super::OnvifMetadataOverlay,
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::trace!(CAT, obj: pad, "Handling buffer {:?}", buffer);
@@ -684,7 +692,12 @@ impl OnvifOverlay {
         self.srcpad.push(buffer)
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &super::OnvifOverlay, event: gst::Event) -> bool {
+    fn sink_event(
+        &self,
+        pad: &gst::Pad,
+        element: &super::OnvifMetadataOverlay,
+        event: gst::Event,
+    ) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -714,23 +727,23 @@ impl OnvifOverlay {
 }
 
 #[glib::object_subclass]
-impl ObjectSubclass for OnvifOverlay {
-    const NAME: &'static str = "GstOnvifOverlay";
-    type Type = super::OnvifOverlay;
+impl ObjectSubclass for OnvifMetadataOverlay {
+    const NAME: &'static str = "GstOnvifMetadataOverlay";
+    type Type = super::OnvifMetadataOverlay;
     type ParentType = gst::Element;
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
-                OnvifOverlay::catch_panic_pad_function(
+                OnvifMetadataOverlay::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
                     |overlay, element| overlay.sink_chain(pad, element, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
-                OnvifOverlay::catch_panic_pad_function(
+                OnvifMetadataOverlay::catch_panic_pad_function(
                     parent,
                     || false,
                     |overlay, element| overlay.sink_event(pad, element, event),
@@ -755,7 +768,7 @@ impl ObjectSubclass for OnvifOverlay {
     }
 }
 
-impl ObjectImpl for OnvifOverlay {
+impl ObjectImpl for OnvifMetadataOverlay {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![glib::ParamSpecString::builder("font-desc")
@@ -802,13 +815,13 @@ impl ObjectImpl for OnvifOverlay {
     }
 }
 
-impl GstObjectImpl for OnvifOverlay {}
+impl GstObjectImpl for OnvifMetadataOverlay {}
 
-impl ElementImpl for OnvifOverlay {
+impl ElementImpl for OnvifMetadataOverlay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
             gst::subclass::ElementMetadata::new(
-                "ONVIF overlay",
+                "ONVIF Metadata overlay",
                 "Video/Overlay",
                 "Renders ONVIF analytics meta over raw video frames",
                 "Mathieu Duponchelle <mathieu@centricular.com>",

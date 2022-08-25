@@ -4,14 +4,14 @@ use gst::prelude::*;
 mod imp;
 
 glib::wrapper! {
-    pub struct OnvifDepay(ObjectSubclass<imp::OnvifDepay>) @extends gst_rtp::RTPBaseDepayload, gst::Element, gst::Object;
+    pub struct OnvifMetadataPay(ObjectSubclass<imp::OnvifMetadataPay>) @extends gst_rtp::RTPBasePayload, gst::Element, gst::Object;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
-        "rtponvifdepay",
+        "rtponvifmetadatapay",
         gst::Rank::Primary,
-        OnvifDepay::static_type(),
+        OnvifMetadataPay::static_type(),
     )
 }

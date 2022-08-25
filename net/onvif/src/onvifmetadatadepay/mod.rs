@@ -4,14 +4,14 @@ use gst::prelude::*;
 mod imp;
 
 glib::wrapper! {
-    pub struct OnvifOverlay(ObjectSubclass<imp::OnvifOverlay>) @extends gst::Element, gst::Object;
+    pub struct OnvifMetadataDepay(ObjectSubclass<imp::OnvifMetadataDepay>) @extends gst_rtp::RTPBaseDepayload, gst::Element, gst::Object;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
-        "onvifoverlay",
+        "rtponvifmetadatadepay",
         gst::Rank::Primary,
-        OnvifOverlay::static_type(),
+        OnvifMetadataDepay::static_type(),
     )
 }

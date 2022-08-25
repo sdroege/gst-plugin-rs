@@ -15,11 +15,11 @@
 use gst::glib;
 use once_cell::sync::Lazy;
 
-mod onvifaggregator;
-mod onvifdepay;
+mod onvifmetadatacombiner;
+mod onvifmetadatadepay;
+mod onvifmetadataoverlay;
 mod onvifmetadataparse;
-mod onvifoverlay;
-mod onvifpay;
+mod onvifmetadatapay;
 
 // Offset in nanoseconds from midnight 01-01-1900 (prime epoch) to
 // midnight 01-01-1970 (UNIX epoch)
@@ -106,10 +106,10 @@ pub(crate) fn iterate_video_analytics_frames(
 }
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    onvifpay::register(plugin)?;
-    onvifdepay::register(plugin)?;
-    onvifaggregator::register(plugin)?;
-    onvifoverlay::register(plugin)?;
+    onvifmetadatapay::register(plugin)?;
+    onvifmetadatadepay::register(plugin)?;
+    onvifmetadatacombiner::register(plugin)?;
+    onvifmetadataoverlay::register(plugin)?;
     onvifmetadataparse::register(plugin)?;
 
     gst::meta::CustomMeta::register("OnvifXMLFrameMeta", &[], |_, _, _, _| true);

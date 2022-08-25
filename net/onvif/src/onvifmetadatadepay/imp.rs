@@ -12,30 +12,30 @@ struct State {
 }
 
 #[derive(Default)]
-pub struct OnvifDepay {
+pub struct OnvifMetadataDepay {
     state: Mutex<State>,
 }
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "onvifdepay",
+        "rtponvifmetadatadepay",
         gst::DebugColorFlags::empty(),
         Some("ONVIF metadata depayloader"),
     )
 });
 
 #[glib::object_subclass]
-impl ObjectSubclass for OnvifDepay {
-    const NAME: &'static str = "GstOnvifDepay";
-    type Type = super::OnvifDepay;
+impl ObjectSubclass for OnvifMetadataDepay {
+    const NAME: &'static str = "GstOnvifMetadataDepay";
+    type Type = super::OnvifMetadataDepay;
     type ParentType = gst_rtp::RTPBaseDepayload;
 }
 
-impl ObjectImpl for OnvifDepay {}
+impl ObjectImpl for OnvifMetadataDepay {}
 
-impl GstObjectImpl for OnvifDepay {}
+impl GstObjectImpl for OnvifMetadataDepay {}
 
-impl ElementImpl for OnvifDepay {
+impl ElementImpl for OnvifMetadataDepay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
             gst::subclass::ElementMetadata::new(
@@ -81,7 +81,7 @@ impl ElementImpl for OnvifDepay {
     }
 }
 
-impl RTPBaseDepayloadImpl for OnvifDepay {
+impl RTPBaseDepayloadImpl for OnvifMetadataDepay {
     fn set_caps(&self, element: &Self::Type, _caps: &gst::Caps) -> Result<(), gst::LoggableError> {
         let src_pad = element.src_pad();
         let src_caps = src_pad.pad_template_caps();
