@@ -7,7 +7,13 @@
 // SPDX-License-Identifier: MPL-2.0
 #![allow(clippy::non_send_fields_in_send_ty)]
 
+/**
+ * plugin-hlssink3:
+ *
+ * Since: plugins-rs-0.8.0
+ */
 use glib::prelude::*;
+use gst::prelude::*;
 
 mod imp;
 mod playlist;
@@ -41,6 +47,9 @@ glib::wrapper! {
 }
 
 pub fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "doc")]
+    HlsSink3PlaylistType::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+
     gst::Element::register(
         Some(plugin),
         "hlssink3",

@@ -7,6 +7,12 @@
 //!
 //! [`runtime`]: runtime/index.html
 
+/**
+ * plugin-threadshare:
+ *
+ * Since: plugins-rs-0.4.0
+ */
+
 #[macro_use]
 pub mod runtime;
 

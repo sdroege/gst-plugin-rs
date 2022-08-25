@@ -1,0 +1,111 @@
+build_hotdoc = false
+
+if meson.is_cross_build()
+    if get_option('doc').enabled()
+        error('Documentation enabled but building the doc while cross building is not supported yet.')
+    endif
+
+    message('Documentation not built as building it while cross building is not supported yet.')
+    subdir_done()
+endif
+
+if static_build
+    if get_option('doc').enabled()
+        error('Documentation enabled but not supported when building statically.')
+    endif
+
+    message('Building statically, can\'t build the documentation')
+    subdir_done()
+endif
+
+required_hotdoc_extensions = ['gst-extension']
+if gst_dep.type_name() == 'internal'
+    gst_proj = subproject('gstreamer')
+    plugins_cache_generator = gst_proj.get_variable('plugins_cache_generator')
+else
+    plugins_cache_generator = find_program(join_paths(gst_dep.get_variable('libexecdir'), 'gstreamer-1.0' , 'gst-plugins-doc-cache-generator'),
+        required: false)
+    if not plugins_cache_generator.found()
+      plugins_cache_generator = find_program('gst-plugins-doc-cache-generator', required: false)
+    endif
+endif
+libs_doc = []
+plugins_cache = join_paths(meson.current_source_dir(), 'plugins', 'gst_plugins_cache.json')
+if plugins.length() == 0
+    message('All base plugins have been disabled')
+elif plugins_cache_generator.found()
+    plugins_paths = []
+    foreach plugin: plugins
+      plugins_paths += [plugin.full_path()]
+    endforeach
+    # We do not let gstreamer update our cache
+    _plugins_doc_dep = custom_target('rs-plugins-doc-cache',
+        command: [plugins_cache_generator, plugins_cache, '@OUTPUT@', plugins_paths],
+        input: plugins,
+        output: 'gst_plugins_cache.json',
+        build_always_stale: true,
+    )
+else
+    warning('GStreamer plugin inspector for documentation not found, can\'t update the cache')
+endif
+
+hotdoc_p = find_program('hotdoc', required: get_option('doc'))
+if not hotdoc_p.found()
+    message('Hotdoc not found, not building the documentation')
+    subdir_done()
+endif
+
+hotdoc_req = '>= 0.11.0'
+hotdoc_version = run_command(hotdoc_p, '--version', check: false).stdout()
+if not hotdoc_version.version_compare(hotdoc_req)
+    if get_option('doc').enabled()
+        error('Hotdoc version @0@ not found, got @1@'.format(hotdoc_req, hotdoc_version))
+    else
+        message('Hotdoc version @0@ not found, got @1@'.format(hotdoc_req, hotdoc_version))
+        subdir_done()
+    endif
+endif
+
+hotdoc = import('hotdoc')
+foreach extension: required_hotdoc_extensions
+    if not hotdoc.has_extensions(extension)
+        if get_option('doc').enabled()
+            error('Documentation enabled but @0@ missing'.format(extension))
+        endif
+
+        message('@0@ extension not found, not building documentation'.format(extension))
+        subdir_done()
+    endif
+endforeach
+
+build_hotdoc = true
+plugins_doc = []
+sitemap = 'all_index.md\n'
+
+list_plugin_res = run_command(python3, '-c',
+'''
+import sys
+import json
+
+with open("@0@") as f:
+    print(':'.join(json.load(f).keys()), end='')
+'''.format(plugins_cache),
+  check: true)
+foreach plugin_name: list_plugin_res.stdout().split(':')
+    plugins_doc += [hotdoc.generate_doc(plugin_name,
+        project_version: '1.0',
+        sitemap: 'plugins/sitemap.txt',
+        index: 'plugins/index.md',
+        gst_index: 'plugins/index.md',
+        gst_smart_index: true,
+        gst_c_sources: [
+          '../*/*/*/*.rs',
+          '../*/*/*/*/*.rs',
+        ],
+        dependencies: [gst_dep],
+        gst_order_generated_subpages: true,
+        gst_cache_file: plugins_cache,
+        gst_plugin_name: plugin_name,
+    )]
+    sitemap += '        @0@-doc.json\n'.format(plugin_name)
+endforeach

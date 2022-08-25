@@ -11,6 +11,11 @@
 
 use gst::glib;
 
+/**
+ * plugin-lewton:
+ *
+ * Since: plugins-rs-0.6.0
+ */
 mod lewtondec;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {

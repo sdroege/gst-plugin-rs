@@ -2,7 +2,7 @@ project('gst-plugins-rs',
         'rust',
         'c',
         version: '0.13.0',
-        meson_version : '>= 0.56')
+        meson_version : '>= 0.60')
 
 if get_option('debug')
   target = 'debug'
@@ -126,7 +126,8 @@ if get_option('default_library') == 'shared' or get_option('default_library') ==
   endforeach
 endif
 
-if get_option('default_library') == 'static' or get_option('default_library') == 'both'
+static_build = get_option('default_library') == 'static'
+if static_build or get_option('default_library') == 'both'
   extensions += [ext_static]
   foreach p, lib : plugins
     output += [lib + '.' + ext_static]
@@ -161,6 +162,7 @@ deps = [
 foreach d: deps
   dep = dependency(d[0], version : gst_req,
     fallback : [d[1], d[2]])
+  set_variable(d[2], dep)
   if dep.type_name() == 'internal'
     lib = subproject(d[1]).get_variable(d[3])
     depends += lib
@@ -179,6 +181,11 @@ extra_env_str = ','.join(extra_env_list)
 plugins_install_dir = get_option('libdir') / 'gstreamer-1.0'
 pkgconfig_install_dir = get_option('libdir') / 'pkgconfig'
 
+if get_option('doc').disabled()
+  disable_doc = ['--disable-doc']
+else
+  disable_doc = []
+endif
 
 python = import('python').find_installation()
 rs_plugins = custom_target('gst-plugins-rs',
@@ -201,9 +208,11 @@ rs_plugins = custom_target('gst-plugins-rs',
     get_option('libdir'),
     '--depfile', '@DEPFILE@',
     '--exts', extensions,
-  ])
+  ] + disable_doc)
 
 plugins = rs_plugins.to_list()
+
+subdir('docs')
 
 # We don't need to pass a command as we depends on the target above
 # but it is currently mandatory ( https://github.com/mesonbuild/meson/issues/8059 )
@@ -222,7 +231,7 @@ test('tests',
   args: ['test',
     meson.current_build_dir(),
     meson.current_source_dir(),
-    meson.build_root(),
+    meson.global_build_root(),
     target,
     include,
     extra_env_str,

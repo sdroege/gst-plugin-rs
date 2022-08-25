@@ -7,6 +7,11 @@
 // SPDX-License-Identifier: MPL-2.0
 #![allow(clippy::non_send_fields_in_send_ty)]
 
+/**
+ * plugin-rsaudiofx:
+ *
+ * Since: plugins-rs-0.1
+ */
 use gst::glib;
 
 mod audioecho;

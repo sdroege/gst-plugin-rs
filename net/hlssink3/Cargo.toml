@@ -32,6 +32,7 @@ path = "src/lib.rs"
 [features]
 static = []
 capi = []
+doc = ["gst/v1_18"]
 
 [package.metadata.capi]
 min_version = "0.8.0"

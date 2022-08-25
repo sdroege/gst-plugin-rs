@@ -8,6 +8,11 @@
 // SPDX-License-Identifier: MPL-2.0
 #![allow(clippy::non_send_fields_in_send_ty)]
 
+/**
+ * plugin-videofx:
+ *
+ * Since: plugins-rs-0.8.0
+ */
 mod border;
 mod colordetect;
 

@@ -8,6 +8,11 @@
 #![allow(clippy::non_send_fields_in_send_ty)]
 #![recursion_limit = "128"]
 
+/**
+ * plugin-rstextwrap:
+ *
+ * Since: plugins-rs-0.6.0
+ */
 use gst::glib;
 
 mod gsttextwrap;

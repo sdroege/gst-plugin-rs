@@ -7,6 +7,11 @@
 // SPDX-License-Identifier: MPL-2.0
 #![allow(clippy::non_send_fields_in_send_ty)]
 
+/**
+ * plugin-rsonvif:
+ *
+ * Since: plugins-rs-0.9.0
+ */
 use gst::glib;
 use once_cell::sync::Lazy;
 

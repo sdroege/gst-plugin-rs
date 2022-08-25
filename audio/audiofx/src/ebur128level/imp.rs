@@ -33,7 +33,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 #[glib::flags(name = "EbuR128LevelMode")]
-enum Mode {
+pub(crate) enum Mode {
     #[flags_value(name = "Calculate momentary loudness (400ms)", nick = "momentary")]
     MOMENTARY = 0b00000001,
     #[flags_value(name = "Calculate short-term loudness (3s)", nick = "short-term")]

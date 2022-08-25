@@ -28,6 +28,9 @@ glib::wrapper! {
 // the name "fallbackswitch" for being able to instantiate it via e.g.
 // gst::ElementFactory::make().
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "doc")]
+    FallbackSwitchSinkPad::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+
     gst::Element::register(
         Some(plugin),
         "fallbackswitch",

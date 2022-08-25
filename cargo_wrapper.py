@@ -23,6 +23,7 @@ PARSER.add_argument('libdir', type=P)
 PARSER.add_argument('--version', default=None)
 PARSER.add_argument('--exts', nargs="+", default=[])
 PARSER.add_argument('--depfile')
+PARSER.add_argument('--disable-doc', action="store_true", default=False)
 
 
 def generate_depfile_for(libfile):
@@ -76,6 +77,8 @@ if __name__ == "__main__":
         cargo_cmd = ['cargo', 'cbuild']
         if opts.target == 'release':
             cargo_cmd.append('--release')
+        if not opts.disable_doc:
+            cargo_cmd += ['--features', "doc"]
     elif opts.command == 'test':
         # cargo test
         cargo_cmd = ['cargo', 'ctest', '--no-fail-fast', '--color=always']

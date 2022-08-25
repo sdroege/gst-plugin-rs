@@ -9,6 +9,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 #![allow(clippy::non_send_fields_in_send_ty)]
 
+/**
+ * plugin-hsv:
+ *
+ * Since: plugins-rs-0.7.0
+ */
 use gst::glib;
 
 mod hsvdetector;

@@ -9,6 +9,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 #![allow(clippy::non_send_fields_in_send_ty)]
 
+/**
+ * plugin-ffv1:
+ *
+ * Since: plugins-rs-0.8.0
+ */
 mod ffv1dec;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), gst::glib::BoolError> {

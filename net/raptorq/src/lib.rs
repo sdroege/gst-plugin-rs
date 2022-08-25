@@ -7,6 +7,11 @@
 #![allow(clippy::non_send_fields_in_send_ty)]
 #![doc = include_str!("../README.md")]
 
+/**
+ * plugin-raptorq:
+ *
+ * Since: plugins-rs-0.9.0
+ */
 use gst::glib;
 
 mod fecscheme;

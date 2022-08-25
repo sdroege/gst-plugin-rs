@@ -32,6 +32,7 @@ package="gstreamer-check"
 [features]
 static = []
 capi = []
+doc = ["gst/v1_18"]
 
 [package.metadata.capi]
 min_version = "0.9.3"

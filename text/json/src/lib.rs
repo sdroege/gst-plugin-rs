@@ -8,6 +8,11 @@
 #![allow(clippy::non_send_fields_in_send_ty)]
 #![recursion_limit = "128"]
 
+/**
+ * plugin-rsjson:
+ *
+ * Since: plugins-rs-0.5.0
+ */
 use gst::glib;
 
 mod jsongstenc;

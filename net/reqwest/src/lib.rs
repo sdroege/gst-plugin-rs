@@ -9,6 +9,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 #![allow(clippy::non_send_fields_in_send_ty)]
 
+/**
+ * plugin-reqwest:
+ *
+ * Since: plugins-rs-0.1.0
+ */
 use gst::glib;
 
 mod reqwesthttpsrc;

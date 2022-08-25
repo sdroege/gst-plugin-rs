@@ -693,6 +693,8 @@ impl GstObjectImpl for FallbackSrc {}
 impl ElementImpl for FallbackSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            #[cfg(feature = "doc")]
+            Status::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
             gst::subclass::ElementMetadata::new(
                 "Fallback Source",
                 "Generic/Source",

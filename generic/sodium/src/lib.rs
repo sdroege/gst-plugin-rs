@@ -21,6 +21,11 @@
 // SPDX-License-Identifier: MIT
 #![allow(clippy::non_send_fields_in_send_ty)]
 
+/**
+ * plugin-sodium:
+ *
+ * Since: plugins-rs-0.5.0
+ */
 use gst::glib;
 
 const TYPEFIND_HEADER: &[u8; 12] = b"gst-sodium10";

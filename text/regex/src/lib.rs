@@ -8,6 +8,11 @@
 #![allow(clippy::non_send_fields_in_send_ty)]
 #![recursion_limit = "128"]
 
+/**
+ * plugin-rsregex:
+ *
+ * Since: plugins-rs-0.7.0
+ */
 use gst::glib;
 
 mod gstregex;

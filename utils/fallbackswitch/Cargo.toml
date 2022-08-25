@@ -39,6 +39,7 @@ gst-plugin-version-helper = { path="../../version-helper" }
 default = ["v1_20"]
 static = []
 capi = []
+doc = ["gst/v1_18"]
 v1_20 = ["gst/v1_20"]
 
 [package.metadata.capi]

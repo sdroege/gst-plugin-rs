@@ -16,6 +16,7 @@ glib::wrapper! {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(not(feature = "doc"))]
     gst::Element::register(
         Some(plugin),
         "rusotos3src",

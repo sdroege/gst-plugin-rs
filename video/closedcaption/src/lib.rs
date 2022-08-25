@@ -8,7 +8,13 @@
 #![allow(clippy::non_send_fields_in_send_ty)]
 #![recursion_limit = "128"]
 
+/**
+ * plugin-rsclosedcaption:
+ *
+ * Since: plugins-rs-0.4.0
+ */
 use gst::glib;
+use gst::prelude::*;
 
 #[allow(non_camel_case_types, non_upper_case_globals, unused)]
 #[allow(clippy::redundant_static_lifetimes, clippy::unreadable_literal)]
@@ -34,6 +40,8 @@ mod tttojson;
 mod ttutils;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "doc")]
+    ttutils::Cea608Mode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     mcc_parse::register(plugin)?;
     mcc_enc::register(plugin)?;
     scc_parse::register(plugin)?;

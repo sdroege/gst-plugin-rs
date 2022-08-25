@@ -506,6 +506,12 @@ impl ObjectImpl for AppSrc {
                         Some(appsrc.push_buffer(&element, buffer).to_value())
                     })
                     .build(),
+                /**
+                 * ts-appsrc::end-of-stream:
+                 * @self: A ts-appsrc
+                 *
+                 * Returns: %TRUE if the EOS could be queued, %FALSE otherwise
+                 */
                 glib::subclass::Signal::builder("end-of-stream")
                     .return_type::<bool>()
                     .action()
