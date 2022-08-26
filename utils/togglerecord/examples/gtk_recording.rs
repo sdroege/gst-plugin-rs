@@ -11,6 +11,7 @@ use gst::prelude::*;
 
 use gio::prelude::*;
 use gtk::prelude::*;
+use gtk::Inhibit;
 use std::cell::RefCell;
 
 fn create_pipeline() -> (
@@ -19,7 +20,6 @@ fn create_pipeline() -> (
     gst::Pad,
     gst::Element,
     gst::Element,
-    gtk::Widget,
 ) {
     let pipeline = gst::Pipeline::new(None);
 
@@ -37,18 +37,7 @@ fn create_pipeline() -> (
     let video_convert1 = gst::ElementFactory::make("videoconvert", None).unwrap();
     let video_convert2 = gst::ElementFactory::make("videoconvert", None).unwrap();
 
-    let (video_sink, video_widget) =
-        if let Ok(gtkglsink) = gst::ElementFactory::make("gtkglsink", None) {
-            let glsinkbin = gst::ElementFactory::make("glsinkbin", None).unwrap();
-            glsinkbin.set_property("sink", &gtkglsink);
-
-            let widget = gtkglsink.property::<gtk::Widget>("widget");
-            (glsinkbin, widget)
-        } else {
-            let sink = gst::ElementFactory::make("gtksink", None).unwrap();
-            let widget = sink.property::<gtk::Widget>("widget");
-            (sink, widget)
-        };
+    let video_sink = gst::ElementFactory::make("gtk4paintablesink", None).unwrap();
 
     let video_enc = gst::ElementFactory::make("x264enc", None).unwrap();
     video_enc.set_property("rc-lookahead", 10i32);
@@ -177,35 +166,41 @@ fn create_pipeline() -> (
         audio_queue2.static_pad("sink").unwrap(),
         togglerecord,
         video_sink,
-        video_widget,
     )
 }
 
 fn create_ui(app: &gtk::Application) {
-    let (pipeline, video_pad, audio_pad, togglerecord, video_sink, video_widget) =
-        create_pipeline();
+    let (pipeline, video_pad, audio_pad, togglerecord, video_sink) = create_pipeline();
 
-    let window = gtk::Window::new(gtk::WindowType::Toplevel);
+    let window = gtk::ApplicationWindow::new(app);
     window.set_default_size(320, 240);
-    let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    vbox.pack_start(&video_widget, true, true, 0);
 
-    let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    let vbox = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    let picture = gtk::Picture::new();
+    let paintable = video_sink.property::<gtk::gdk::Paintable>("paintable");
+    picture.set_paintable(Some(&paintable));
+    vbox.append(&picture);
+
+    let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    hbox.set_hexpand(true);
+    hbox.set_homogeneous(true);
     let position_label = gtk::Label::new(Some("Position: 00:00:00"));
-    hbox.pack_start(&position_label, true, true, 5);
+    hbox.append(&position_label);
     let recorded_duration_label = gtk::Label::new(Some("Recorded: 00:00:00"));
-    hbox.pack_start(&recorded_duration_label, true, true, 5);
-    vbox.pack_start(&hbox, false, false, 5);
+    hbox.append(&recorded_duration_label);
+    vbox.append(&hbox);
 
-    let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    hbox.set_hexpand(true);
+    hbox.set_homogeneous(true);
     let record_button = gtk::Button::with_label("Record");
-    hbox.pack_start(&record_button, true, true, 5);
+    hbox.append(&record_button);
     let finish_button = gtk::Button::with_label("Finish");
-    hbox.pack_start(&finish_button, true, true, 5);
-    vbox.pack_start(&hbox, false, false, 5);
+    hbox.append(&finish_button);
+    vbox.append(&hbox);
 
-    window.add(&vbox);
-    window.show_all();
+    window.set_child(Some(&vbox));
+    window.show();
 
     app.add_window(&window);
 
@@ -265,7 +260,7 @@ fn create_ui(app: &gtk::Application) {
     });
 
     let app_weak = app.downgrade();
-    window.connect_delete_event(move |_, _| {
+    window.connect_close_request(move |_| {
         let app = match app_weak.upgrade() {
             Some(app) => app,
             None => return Inhibit(false),
@@ -324,6 +319,7 @@ fn main() {
     gtk::init().unwrap();
 
     gsttogglerecord::plugin_register_static().expect("Failed to register togglerecord plugin");
+    gstgtk4::plugin_register_static().expect("Failed to register gtk4paintablesink plugin");
 
     let app = gtk::Application::new(None, gio::ApplicationFlags::FLAGS_NONE);
 
