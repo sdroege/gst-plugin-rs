@@ -13,7 +13,8 @@ gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/g
 gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gtk = { git = "https://github.com/gtk-rs/gtk3-rs", optional = true }
+gst-plugin-gtk4 = { path = "../../video/gtk4", optional = true }
+gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", optional = true }
 gio = { git = "https://github.com/gtk-rs/gtk-rs-core", optional = true }
 once_cell = "1.0"
 parking_lot = "0.12"
@@ -30,7 +31,8 @@ path = "src/lib.rs"
 [[example]]
 name = "gtk-fallbackswitch"
 path = "examples/gtk_fallbackswitch.rs"
-required-features = ["gtk", "gio"]
+required-features = ["gtk", "gio", "gst-plugin-gtk4"]
+
 
 [build-dependencies]
 gst-plugin-version-helper = { path="../../version-helper" }

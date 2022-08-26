@@ -12,6 +12,7 @@ use gst::glib;
 use gst::prelude::*;
 
 use gtk::prelude::*;
+use gtk::Inhibit;
 
 use std::cell::RefCell;
 
@@ -21,7 +22,7 @@ const FALLBACK_PIPELINE: &str = "videotestsrc is-live=true pattern=snow";
 //const MAIN_PIPELINE: &str = "videotestsrc is-live=true pattern=ball ! x264enc tune=zerolatency";
 //const FALLBACK_PIPELINE: &str = "videotestsrc is-live=true pattern=snow ! x264enc tune=zerolatency";
 
-fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element, gtk::Widget) {
+fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element) {
     let pipeline = gst::Pipeline::new(None);
 
     let video_src = gst::parse_bin_from_description(MAIN_PIPELINE, true)
@@ -49,19 +50,7 @@ fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element, gtk::Widget) {
         }
     });
 
-    let (video_sink, video_widget) =
-        //if let Some(gtkglsink) = gst::ElementFactory::make("gtkglsink", None) {
-        //    let glsinkbin = gst::ElementFactory::make("glsinkbin", None).unwrap();
-        //    glsinkbin.set_property("sink", &gtkglsink);
-
-        //    let widget = gtkglsink.property::<gtk::Widget>("widget");
-        //    (glsinkbin, widget)
-        //} else
-        {
-            let sink = gst::ElementFactory::make("gtksink", None).unwrap();
-            let widget = sink.property::<gtk::Widget>("widget");
-            (sink, widget)
-        };
+    let video_sink = gst::ElementFactory::make("gtk4paintablesink", None).unwrap();
 
     pipeline
         .add_many(&[
@@ -88,30 +77,28 @@ fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element, gtk::Widget) {
         .link_pads(Some("src"), &video_sink, Some("sink"))
         .unwrap();
 
-    (
-        pipeline,
-        video_src.static_pad("src").unwrap(),
-        video_sink,
-        video_widget,
-    )
+    (pipeline, video_src.static_pad("src").unwrap(), video_sink)
 }
 
 fn create_ui(app: &gtk::Application) {
-    let (pipeline, video_src_pad, video_sink, video_widget) = create_pipeline();
+    let (pipeline, video_src_pad, video_sink) = create_pipeline();
 
-    let window = gtk::Window::new(gtk::WindowType::Toplevel);
+    let window = gtk::ApplicationWindow::new(app);
     window.set_default_size(320, 240);
     let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    vbox.pack_start(&video_widget, true, true, 0);
+    let picture = gtk::Picture::new();
+    let paintable = video_sink.property::<gtk::gdk::Paintable>("paintable");
+    picture.set_paintable(Some(&paintable));
+    vbox.append(&picture);
 
     let position_label = gtk::Label::new(Some("Position: 00:00:00"));
-    vbox.pack_start(&position_label, true, true, 5);
+    vbox.append(&position_label);
 
     let drop_button = gtk::ToggleButton::with_label("Drop Signal");
-    vbox.pack_start(&drop_button, true, true, 5);
+    vbox.append(&drop_button);
 
-    window.add(&vbox);
-    window.show_all();
+    window.set_child(Some(&vbox));
+    window.show();
 
     app.add_window(&window);
 
@@ -151,7 +138,7 @@ fn create_ui(app: &gtk::Application) {
     });
 
     let app_weak = app.downgrade();
-    window.connect_delete_event(move |_, _| {
+    window.connect_close_request(move |_| {
         let app = match app_weak.upgrade() {
             Some(app) => app,
             None => return Inhibit(false),
@@ -210,6 +197,7 @@ fn main() {
     gtk::init().unwrap();
 
     gstfallbackswitch::plugin_register_static().expect("Failed to register fallbackswitch plugin");
+    gstgtk4::plugin_register_static().expect("Failed to register gtk4paintablesink plugin");
 
     let app = gtk::Application::new(None, gio::ApplicationFlags::FLAGS_NONE);
 
