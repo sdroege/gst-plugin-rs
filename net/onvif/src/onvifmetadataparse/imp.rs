@@ -36,8 +36,8 @@ struct State {
     pre_queued_buffers: Vec<gst::Buffer>,
     // Mapping of UTC time to PTS
     utc_time_pts_mapping: Option<(gst::ClockTime, gst::ClockTime)>,
-    // UTC time -> XML
-    queued_frames: BTreeMap<gst::ClockTime, Element>,
+    // UTC time -> (VideoAnalytics XML with Frames, other XML nodes)
+    queued_frames: BTreeMap<gst::ClockTime, (Element, Vec<Element>)>,
     // Configured latency
     configured_latency: gst::ClockTime,
 }
@@ -120,7 +120,7 @@ impl OnvifMetadataParse {
             }
         }
 
-        self.queue(element, &mut state, buffer)?;
+        self.queue(element, &mut state, buffer, pts)?;
         let buffers = self.drain(element, &mut state, Some(pts))?;
 
         if let Some(buffers) = buffers {
@@ -136,12 +136,16 @@ impl OnvifMetadataParse {
         element: &super::OnvifMetadataParse,
         state: &mut State,
         buffer: gst::Buffer,
+        pts: gst::ClockTime,
     ) -> Result<(), gst::FlowError> {
         let State {
             ref mut pre_queued_buffers,
             ref mut queued_frames,
+            ref utc_time_pts_mapping,
             ..
         } = &mut *state;
+
+        let utc_time_pts_mapping = utc_time_pts_mapping.unwrap();
 
         for buffer in pre_queued_buffers.drain(..).chain(std::iter::once(buffer)) {
             let root = crate::xml_from_buffer(&buffer).map_err(|err| {
@@ -167,11 +171,43 @@ impl OnvifMetadataParse {
                     dt_unix_ns
                 );
 
-                let xml = queued_frames.entry(dt_unix_ns).or_insert_with(|| {
-                    Element::bare("VideoAnalytics", "http://www.onvif.org/ver10/schema")
+                let (xml, _) = queued_frames.entry(dt_unix_ns).or_insert_with(|| {
+                    (
+                        Element::bare("VideoAnalytics", "http://www.onvif.org/ver10/schema"),
+                        Vec::new(),
+                    )
                 });
 
                 xml.append_child(el.clone());
+            }
+
+            let pts_diff = pts.saturating_sub(utc_time_pts_mapping.1);
+            let utc_time = utc_time_pts_mapping.0 + pts_diff;
+
+            for child in root.children() {
+                let (_, xmls) = queued_frames.entry(utc_time).or_insert_with(|| {
+                    (
+                        Element::bare("VideoAnalytics", "http://www.onvif.org/ver10/schema"),
+                        Vec::new(),
+                    )
+                });
+
+                if child.is("VideoAnalytics", "http://www.onvif.org/ver10/schema") {
+                    let mut element =
+                        Element::bare("VideoAnalytics", "http://www.onvif.org/ver10/schema");
+
+                    for subchild in child.children() {
+                        if subchild.is("Frame", "http://www.onvif.org/ver10/schema") {
+                            continue;
+                        }
+
+                        element.append_child(subchild.clone());
+                    }
+
+                    xmls.push(element);
+                } else {
+                    xmls.push(child.clone());
+                }
             }
         }
 
@@ -225,7 +261,7 @@ impl OnvifMetadataParse {
                 break;
             }
 
-            let frame = queued_frames.remove(&utc_time).unwrap();
+            let (frames, xmls) = queued_frames.remove(&utc_time).unwrap();
 
             gst::trace!(
                 CAT,
@@ -235,11 +271,17 @@ impl OnvifMetadataParse {
                 frame_pts
             );
 
-            let xml = Element::builder("MetadataStream", "http://www.onvif.org/ver10/schema")
+            let mut xml = Element::builder("MetadataStream", "http://www.onvif.org/ver10/schema")
                 .prefix(Some("tt".into()), "http://www.onvif.org/ver10/schema")
                 .unwrap()
-                .append(frame)
                 .build();
+
+            if frames.children().next().is_some() {
+                xml.append_child(frames);
+            }
+            for child in xmls {
+                xml.append_child(child);
+            }
 
             let mut vec = Vec::new();
             if let Err(err) = xml.write_to_decl(&mut vec) {
