@@ -17,7 +17,7 @@
 // Boston, MA 02110-1335, USA.
 //
 // SPDX-License-Identifier: LGPL-2.1-or-later
-#![allow(clippy::non_send_fields_in_send_ty)]
+#![allow(clippy::non_send_fields_in_send_ty, unused_doc_comments)]
 
 use futures::channel::mpsc;
 use futures::future::BoxFuture;

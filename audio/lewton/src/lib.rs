@@ -7,7 +7,7 @@
 // except according to those terms.
 //
 // SPDX-License-Identifier: MIT OR Apache-2.0
-#![allow(clippy::non_send_fields_in_send_ty)]
+#![allow(clippy::non_send_fields_in_send_ty, unused_doc_comments)]
 
 use gst::glib;
 

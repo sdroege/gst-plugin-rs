@@ -1,7 +1,7 @@
 // Copyright (C) 2018 Sebastian Dröge <sebastian@centricular.com>
 //
 // Take a look at the license at the top of the repository in the LICENSE file.
-#![allow(clippy::non_send_fields_in_send_ty)]
+#![allow(clippy::non_send_fields_in_send_ty, unused_doc_comments)]
 
 //! A collection of GStreamer plugins which leverage the `threadshare` [`runtime`].
 //!

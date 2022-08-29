@@ -19,7 +19,7 @@
 // IN THE SOFTWARE.
 //
 // SPDX-License-Identifier: MIT
-#![allow(clippy::non_send_fields_in_send_ty)]
+#![allow(clippy::non_send_fields_in_send_ty, unused_doc_comments)]
 
 /**
  * plugin-sodium:
