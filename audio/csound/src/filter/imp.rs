@@ -419,11 +419,11 @@ impl ObjectImpl for CsoundFilter {
                 let settings = self.settings.lock().unwrap();
                 settings.csd_text.to_value()
             }
-            "score_offset" => {
+            "score-offset" => {
                 let settings = self.settings.lock().unwrap();
                 settings.offset.to_value()
             }
-            _ => unimplemented!(),
+            name => panic!("No getter for {name}"),
         }
     }
 }
