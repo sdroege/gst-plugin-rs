@@ -670,6 +670,20 @@ impl ReqwestHttpSrc {
 impl ObjectImpl for ReqwestHttpSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            #[allow(unused_mut)]
+            let mut user_agent_pspec = glib::ParamSpecString::builder("user-agent")
+                .nick("User-Agent")
+                .blurb("Value of the User-Agent HTTP request header field")
+                .default_value("GStreamer reqwesthttpsrc".into())
+                .readwrite()
+                .readwrite()
+                .mutable_ready();
+
+            #[cfg(feature = "doc")]
+            {
+                user_agent_pspec = user_agent_pspec.doc_show_default();
+            }
+
             vec![
                 glib::ParamSpecString::builder("location")
                     .nick("Location")
@@ -677,13 +691,7 @@ impl ObjectImpl for ReqwestHttpSrc {
                     .readwrite()
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecString::builder("user-agent")
-                    .nick("User-Agent")
-                    .blurb("Value of the User-Agent HTTP request header field")
-                    .default_value(DEFAULT_USER_AGENT.into())
-                    .readwrite()
-                    .mutable_ready()
-                    .build(),
+                user_agent_pspec.build(),
                 glib::ParamSpecBoolean::builder("is-live")
                     .nick("Is Live")
                     .blurb("Act like a live source")
