@@ -368,7 +368,6 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
         match factory.name().as_str() {
             "vp8enc" | "vp9enc" => {
                 enc.set_property("deadline", 1i64);
-                enc.set_property("threads", 12i32);
                 enc.set_property("target-bitrate", start_bitrate as i32);
                 enc.set_property("cpu-used", -16i32);
                 enc.set_property("keyframe-max-dist", 2000i32);
