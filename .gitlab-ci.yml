@@ -43,7 +43,7 @@ stages:
 .debian:11-stable:
   extends: .debian:11
   variables:
-    FDO_DISTRIBUTION_TAG: '$GST_RS_STABLE-${GST_RS_IMG_TAG}_2022-07-19.0'
+    FDO_DISTRIBUTION_TAG: '$GST_RS_STABLE-${GST_RS_IMG_TAG}_2022-08-31.1'
     FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bullseye-slim:$GST_RS_STABLE-$GST_RS_IMG_TAG"
 
 .debian:11-msrv:
@@ -63,11 +63,12 @@ stages:
   - .fdo.container-build@debian
   stage: prep
   variables:
-    FDO_DISTRIBUTION_PACKAGES: "libcsound64-dev llvm clang nasm libsodium-dev"
+    FDO_DISTRIBUTION_PACKAGES: "libcsound64-dev llvm clang nasm libsodium-dev libwebp-dev python3-pip"
     FDO_DISTRIBUTION_EXEC: >-
       bash ci/install-dav1d.sh &&
       apt clean &&
-      bash ./ci/install-rust-ext.sh
+      bash ./ci/install-rust-ext.sh &&
+      pip install tomli
   rules:
     - if: '$UPDATE_IMG == null'
 
@@ -216,6 +217,22 @@ gst-build:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: 'manual'
       allow_failure: true
+  variables:
+    MESON_ARGS: >
+      -Domx=disabled
+      -Dpython=disabled
+      -Dlibav=disabled
+      -Dlibnice=disabled
+      -Dugly=disabled
+      -Dbad=disabled
+      -Ddevtools=disabled
+      -Dges=disabled
+      -Drtsp_server=disabled
+      -Dvaapi=disabled
+      -Dsharp=disabled
+      -Dgst-examples=disabled
+      -Drs=enabled
+      -Dgst-plugins-rs:sodium=system
   script:
     - P=$(pwd)
     - cd ..
@@ -223,13 +240,18 @@ gst-build:
     - git clone --depth 1 https://gitlab.freedesktop.org/gstreamer/gstreamer.git --branch main
     - cd gstreamer
     - ln -s $P subprojects/gst-plugins-rs
-    - meson build -Domx=disabled -Dpython=disabled -Dlibav=disabled -Dlibnice=disabled -Dugly=disabled -Dbad=disabled -Ddevtools=disabled -Dges=disabled -Drtsp_server=disabled -Dvaapi=disabled -Dsharp=disabled -Dgst-examples=disabled -Drs=enabled -Dgst-plugins-rs:sodium=system
+    - meson build $MESON_ARGS
     - ninja -C build
+    # Check static Rust plugins can be linked into gst-full
+    - meson build-gst-full --default-library=static $MESON_ARGS
+    - ninja -C build-gst-full
+    - meson devenv -C build-gst-full gst-inspect-1.0 rsaudiofx
   artifacts:
     expire_in: '7 days'
     when: always
     paths:
       - 'build/meson-logs/'
+      - 'build-gst-full/meson-logs/'
 
 rustfmt:
   extends: .img-stable

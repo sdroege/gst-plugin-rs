@@ -5,6 +5,7 @@ project('gst-plugins-rs',
         meson_version : '>= 0.60')
 
 python = import('python').find_installation()
+fs = import('fs')
 
 if get_option('debug')
   target = 'debug'
@@ -137,12 +138,6 @@ if static_build or get_option('default_library') == 'both'
   endforeach
 endif
 
-pc_files = []
-foreach p, lib : plugins
-  # skip the 'lib' prefix in plugin name
-  pc_files += [lib.substring(3) + '.pc']
-endforeach
-
 # Need to depends on all gstreamer-rs deps to ensure they are built
 # before gstreamer-rs when building with gst-build.
 # Custom targets can't depend on dependency() objects so we have to depend
@@ -164,10 +159,14 @@ deps = [
   ['gstreamer-webrtc-1.0', 'gst-plugins-bad', 'gstwebrtc_dep', 'gstwebrtc_dep'],
 ]
 
+# Used to not lookup the same dependency multiple times which clutters logs
+deps_cache = {}
+
 foreach d: deps
   dep = dependency(d[0], version : gst_req,
     fallback : [d[1], d[2]])
   set_variable(d[2], dep)
+  deps_cache += {d[0]: dep}
   if dep.type_name() == 'internal'
     lib = subproject(d[1]).get_variable(d[3])
     depends += lib
@@ -215,6 +214,38 @@ rs_plugins = custom_target('gst-plugins-rs',
   ] + disable_doc)
 
 plugins = rs_plugins.to_list()
+
+# This is used by GStreamer to static link Rust plugins into gst-full
+gst_plugins = []
+pc_files = []
+foreach plugin : plugins
+  # skip the 'lib' prefix and extension from plugin path
+  plugin_name = fs.stem(plugin.full_path()).substring(3)
+
+  # Extract plugin dependencies from their Cargo.toml file
+  plugin_deps = []
+  p = run_command('dependencies.py', meson.current_source_dir(), plugin_name,
+    capture: true,
+    check: true)
+  foreach dep_name : p.stdout().strip().split(',')
+    if deps_cache.has_key(dep_name)
+      plugin_deps += deps_cache[dep_name]
+    else
+      dep = dependency(dep_name, required: false)
+      plugin_deps += dep
+      deps_cache += {dep_name: dep}
+    endif
+  endforeach
+
+  dep = declare_dependency(
+    link_with: plugin,
+    dependencies: plugin_deps,
+    variables: {'full_path': plugin.full_path()},
+  )
+  meson.override_dependency(plugin_name, dep)
+  gst_plugins += dep
+  pc_files += [plugin_name + '.pc']
+endforeach
 
 subdir('docs')
 
