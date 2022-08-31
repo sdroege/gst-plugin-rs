@@ -1120,6 +1120,8 @@ impl BandwidthEstimator {
             } else {
                 let mut state = self.state.lock().unwrap();
                 state.flow_return = Err(gst::FlowError::Flushing);
+                drop(state);
+
                 self.srcpad.stop_task()?;
             }
 
