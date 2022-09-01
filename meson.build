@@ -4,6 +4,8 @@ project('gst-plugins-rs',
         version: '0.13.0',
         meson_version : '>= 0.60')
 
+python = import('python').find_installation()
+
 if get_option('debug')
   target = 'debug'
 else
@@ -92,8 +94,8 @@ csound_option = get_option('csound')
 csound_dep = dependency('', required: false)
 if not csound_dep.found() and not csound_option.disabled()
   # if csound isn't distributed with pkg-config then user needs to define CSOUND_LIB_DIR with its location
-  python3 = import('python').find_installation()
-  res = run_command(python3, '-c', 'import os; print(os.environ["CSOUND_LIB_DIR"])')
+
+  res = run_command(python, '-c', 'import os; print(os.environ["CSOUND_LIB_DIR"])')
   if res.returncode() == 0
     csound_libdir = res.stdout().strip()
     csound_dep = cc.find_library('csound64', dirs: csound_libdir, required: false)
@@ -190,7 +192,6 @@ else
   disable_doc = []
 endif
 
-python = import('python').find_installation()
 rs_plugins = custom_target('gst-plugins-rs',
   build_by_default: true,
   output: output,
