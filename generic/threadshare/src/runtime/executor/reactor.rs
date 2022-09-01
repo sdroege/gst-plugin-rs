@@ -1,7 +1,7 @@
 // This is based on https://github.com/smol-rs/async-io
 // with adaptations by:
 //
-// Copyright (C) 2021 François Laignel <fengalin@free.fr>
+// Copyright (C) 2021-2022 François Laignel <fengalin@free.fr>
 //
 // Take a look at the license at the top of the repository in the LICENSE file.
 
@@ -53,8 +53,17 @@ pub(super) struct Reactor {
     /// fresh "round" of `ReactorLock::react()`.
     ticker: AtomicUsize,
 
+    /// Time when timers have been checked in current time slice.
+    timers_check_instant: Instant,
+
+    /// Time limit when timers are being fired in current time slice.
+    time_slice_end: Instant,
+
     /// Half max throttling duration, needed to fire timers.
     half_max_throttling: Duration,
+
+    /// List of wakers to wake when reacting.
+    wakers: Vec<Waker>,
 
     /// Registered sources.
     sources: Slab<Arc<Source>>,
@@ -64,12 +73,21 @@ pub(super) struct Reactor {
     /// Holding a lock on this event list implies the exclusive right to poll I/O.
     events: Vec<Event>,
 
-    /// An ordered map of registered timers.
+    /// An ordered map of registered regular timers.
     ///
-    /// Timers are in the order in which they fire. The `usize` in this type is a timer ID used to
-    /// distinguish timers that fire at the same time. The `Waker` represents the task awaiting the
+    /// Timers are in the order in which they fire. The `RegularTimerId` distinguishes
+    /// timers that fire at the same time. The `Waker` represents the task awaiting the
     /// timer.
-    timers: BTreeMap<(Instant, usize), Waker>,
+    timers: BTreeMap<(Instant, RegularTimerId), Waker>,
+
+    /// An ordered map of registered after timers.
+    ///
+    /// These timers are guaranteed to fire no sooner than their expected time.
+    ///
+    /// Timers are in the order in which they fire. The `AfterTimerId` distinguishes
+    /// timers that fire at the same time. The `Waker` represents the task awaiting the
+    /// timer.
+    after_timers: BTreeMap<(Instant, AfterTimerId), Waker>,
 
     /// A queue of timer operations (insert and remove).
     ///
@@ -83,10 +101,14 @@ impl Reactor {
         Reactor {
             poller: Poller::new().expect("cannot initialize I/O event notification"),
             ticker: AtomicUsize::new(0),
-            half_max_throttling: max_throttling / 2 + Duration::from_nanos(1),
+            timers_check_instant: Instant::now(),
+            time_slice_end: Instant::now(),
+            half_max_throttling: max_throttling / 2,
+            wakers: Vec::new(),
             sources: Slab::new(),
             events: Vec::new(),
             timers: BTreeMap::new(),
+            after_timers: BTreeMap::new(),
             timer_ops: ConcurrentQueue::bounded(1000),
         }
     }
@@ -166,6 +188,14 @@ impl Reactor {
         self.half_max_throttling
     }
 
+    pub fn timers_check_instant(&self) -> Instant {
+        self.timers_check_instant
+    }
+
+    pub fn time_slice_end(&self) -> Instant {
+        self.time_slice_end
+    }
+
     /// Registers an I/O source in the reactor.
     pub fn insert_io(
         &mut self,
@@ -205,18 +235,40 @@ impl Reactor {
         self.poller.delete(source.raw)
     }
 
-    /// Registers a timer in the reactor.
+    /// Registers a regular timer in the reactor.
     ///
     /// Returns the inserted timer's ID.
-    pub fn insert_timer(&mut self, when: Instant, waker: &Waker) -> usize {
+    pub fn insert_regular_timer(&mut self, when: Instant, waker: &Waker) -> RegularTimerId {
         // Generate a new timer ID.
-        static ID_GENERATOR: AtomicUsize = AtomicUsize::new(1);
-        let id = ID_GENERATOR.fetch_add(1, Ordering::Relaxed);
+        static REGULAR_ID_GENERATOR: AtomicUsize = AtomicUsize::new(1);
+        let id = RegularTimerId(REGULAR_ID_GENERATOR.fetch_add(1, Ordering::Relaxed));
 
         // Push an insert operation.
         while self
             .timer_ops
-            .push(TimerOp::Insert(when, id, waker.clone()))
+            .push(TimerOp::Insert(when, id.into(), waker.clone()))
+            .is_err()
+        {
+            // If the queue is full, drain it and try again.
+            gst::warning!(RUNTIME_CAT, "react: timer_ops is full");
+            self.process_timer_ops();
+        }
+
+        id
+    }
+
+    /// Registers an after timer in the reactor.
+    ///
+    /// Returns the inserted timer's ID.
+    pub fn insert_after_timer(&mut self, when: Instant, waker: &Waker) -> AfterTimerId {
+        // Generate a new timer ID.
+        static AFTER_ID_GENERATOR: AtomicUsize = AtomicUsize::new(1);
+        let id = AfterTimerId(AFTER_ID_GENERATOR.fetch_add(1, Ordering::Relaxed));
+
+        // Push an insert operation.
+        while self
+            .timer_ops
+            .push(TimerOp::Insert(when, id.into(), waker.clone()))
             .is_err()
         {
             // If the queue is full, drain it and try again.
@@ -228,8 +280,9 @@ impl Reactor {
     }
 
     /// Deregisters a timer from the reactor.
-    pub fn remove_timer(&mut self, when: Instant, id: usize) {
+    pub fn remove_timer(&mut self, when: Instant, id: impl Into<TimerId>) {
         // Push a remove operation.
+        let id = id.into();
         while self.timer_ops.push(TimerOp::Remove(when, id)).is_err() {
             gst::warning!(RUNTIME_CAT, "react: timer_ops is full");
             // If the queue is full, drain it and try again.
@@ -238,26 +291,54 @@ impl Reactor {
     }
 
     /// Processes ready timers and extends the list of wakers to wake.
-    ///
-    /// Returns the duration until the next timer before this method was called.
-    fn process_timers(&mut self, wakers: &mut Vec<Waker>) {
+    fn process_timers(&mut self, now: Instant) {
         self.process_timer_ops();
 
-        let now = Instant::now();
+        self.timers_check_instant = now;
+        self.time_slice_end = now + self.half_max_throttling;
 
-        // Split timers into ready and pending timers.
+        // Split regular timers into ready and pending timers.
         //
-        // Careful to split just *after* `now`, so that a timer set for exactly `now` is considered
-        // ready.
-        let pending = self.timers.split_off(&(now + self.half_max_throttling, 0));
+        // Careful to split just *after* current time slice end,
+        // so that a timer set to fire in current time slice is
+        // considered ready.
+        let pending = self
+            .timers
+            .split_off(&(self.time_slice_end, RegularTimerId::NONE));
         let ready = mem::replace(&mut self.timers, pending);
 
         // Add wakers to the list.
         if !ready.is_empty() {
-            gst::trace!(RUNTIME_CAT, "process_timers: {} ready wakers", ready.len());
+            gst::trace!(
+                RUNTIME_CAT,
+                "process_timers (regular): {} ready wakers",
+                ready.len()
+            );
 
             for (_, waker) in ready {
-                wakers.push(waker);
+                self.wakers.push(waker);
+            }
+        }
+
+        // Split "at least" timers into ready and pending timers.
+        //
+        // Careful to split just *after* `now`,
+        // so that a timer set for exactly `now` is considered ready.
+        let pending = self
+            .after_timers
+            .split_off(&(self.timers_check_instant, AfterTimerId::NONE));
+        let ready = mem::replace(&mut self.after_timers, pending);
+
+        // Add wakers to the list.
+        if !ready.is_empty() {
+            gst::trace!(
+                RUNTIME_CAT,
+                "process_timers (after): {} ready wakers",
+                ready.len()
+            );
+
+            for (_, waker) in ready {
+                self.wakers.push(waker);
             }
         }
     }
@@ -268,11 +349,17 @@ impl Reactor {
         // forever.
         for _ in 0..self.timer_ops.capacity().unwrap() {
             match self.timer_ops.pop() {
-                Ok(TimerOp::Insert(when, id, waker)) => {
+                Ok(TimerOp::Insert(when, TimerId::Regular(id), waker)) => {
                     self.timers.insert((when, id), waker);
                 }
-                Ok(TimerOp::Remove(when, id)) => {
+                Ok(TimerOp::Insert(when, TimerId::After(id), waker)) => {
+                    self.after_timers.insert((when, id), waker);
+                }
+                Ok(TimerOp::Remove(when, TimerId::Regular(id))) => {
                     self.timers.remove(&(when, id));
+                }
+                Ok(TimerOp::Remove(when, TimerId::After(id))) => {
+                    self.after_timers.remove(&(when, id));
                 }
                 Err(_) => break,
             }
@@ -280,11 +367,11 @@ impl Reactor {
     }
 
     /// Processes new events.
-    pub fn react(&mut self) -> io::Result<()> {
-        let mut wakers = Vec::new();
+    pub fn react(&mut self, now: Instant) -> io::Result<()> {
+        debug_assert!(self.wakers.is_empty());
 
         // Process ready timers.
-        self.process_timers(&mut wakers);
+        self.process_timers(now);
 
         // Bump the ticker before polling I/O.
         let tick = self.ticker.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
@@ -306,7 +393,7 @@ impl Reactor {
                         for &(dir, emitted) in &[(WRITE, ev.writable), (READ, ev.readable)] {
                             if emitted {
                                 state[dir].tick = tick;
-                                state[dir].drain_into(&mut wakers);
+                                state[dir].drain_into(&mut self.wakers);
                             }
                         }
 
@@ -337,10 +424,10 @@ impl Reactor {
         };
 
         // Wake up ready tasks.
-        if !wakers.is_empty() {
-            gst::trace!(RUNTIME_CAT, "react: {} ready wakers", wakers.len());
+        if !self.wakers.is_empty() {
+            gst::trace!(RUNTIME_CAT, "react: {} ready wakers", self.wakers.len());
 
-            for waker in wakers {
+            for waker in self.wakers.drain(..) {
                 // Don't let a panicking waker blow everything up.
                 panic::catch_unwind(|| waker.wake()).ok();
             }
@@ -350,10 +437,44 @@ impl Reactor {
     }
 }
 
+/// Timer will fire in its time slice.
+/// This can happen before of after the expected time.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct RegularTimerId(usize);
+impl RegularTimerId {
+    const NONE: RegularTimerId = RegularTimerId(0);
+}
+
+/// Timer is guaranteed to fire after the expected time.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct AfterTimerId(usize);
+impl AfterTimerId {
+    const NONE: AfterTimerId = AfterTimerId(0);
+}
+
+/// Any Timer Ids.
+#[derive(Copy, Clone, Debug)]
+pub(crate) enum TimerId {
+    Regular(RegularTimerId),
+    After(AfterTimerId),
+}
+
+impl From<RegularTimerId> for TimerId {
+    fn from(id: RegularTimerId) -> Self {
+        TimerId::Regular(id)
+    }
+}
+
+impl From<AfterTimerId> for TimerId {
+    fn from(id: AfterTimerId) -> Self {
+        TimerId::After(id)
+    }
+}
+
 /// A single timer operation.
 enum TimerOp {
-    Insert(Instant, usize, Waker),
-    Remove(Instant, usize),
+    Insert(Instant, TimerId, Waker),
+    Remove(Instant, TimerId),
 }
 
 /// A registered source of I/O events.

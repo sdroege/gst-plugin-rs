@@ -178,15 +178,18 @@ impl Scheduler {
 
         let _guard = CallOnDrop::new(|| Scheduler::close(Arc::clone(&self.context_name)));
 
+        if let Poll::Ready(t) = future.as_mut().poll(cx) {
+            return Ok(t);
+        }
+
         let mut last;
         loop {
             last = Instant::now();
+            Reactor::with_mut(|reactor| reactor.react(last).ok());
 
             if let Poll::Ready(t) = future.as_mut().poll(cx) {
-                break Ok(t);
+                return Ok(t);
             }
-
-            Reactor::with_mut(|reactor| reactor.react().ok());
 
             while let Ok(runnable) = self.tasks.pop_runnable() {
                 panic::catch_unwind(|| runnable.run()).map_err(|err| {
@@ -447,11 +450,12 @@ impl PartialEq for Handle {
 
 #[cfg(test)]
 mod tests {
-    use super::super::Timer;
-    use super::*;
+    use super::super::*;
+    use std::time::Duration;
 
     #[test]
     fn block_on_task_join_handle() {
+        use futures::channel::oneshot;
         use std::sync::mpsc;
 
         let (join_sender, join_receiver) = mpsc::channel();
@@ -461,7 +465,7 @@ mod tests {
             let handle =
                 Scheduler::init("block_on_task_join_handle".into(), Duration::from_millis(2));
             let join_handle = handle.spawn(async {
-                Timer::after(Duration::from_millis(5)).await;
+                timer::delay_for(Duration::from_millis(5)).await;
                 42
             });
 
@@ -480,7 +484,7 @@ mod tests {
     #[test]
     fn block_on_timer() {
         let res = Scheduler::block_on(async {
-            Timer::after(Duration::from_millis(5)).await;
+            timer::delay_for(Duration::from_millis(5)).await;
             42
         });
 

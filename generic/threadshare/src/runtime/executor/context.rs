@@ -348,7 +348,7 @@ mod tests {
 
         let elapsed = crate::runtime::executor::block_on(async {
             let now = Instant::now();
-            crate::runtime::time::delay_for(DELAY).await;
+            crate::runtime::timer::delay_for(DELAY).await;
             now.elapsed()
         });
 
@@ -490,7 +490,7 @@ mod tests {
 
         let elapsed = crate::runtime::executor::block_on(context.spawn(async {
             let start = Instant::now();
-            crate::runtime::time::delay_for(DELAY).await;
+            crate::runtime::timer::delay_for(DELAY).await;
             start.elapsed()
         }))
         .unwrap();
@@ -507,7 +507,7 @@ mod tests {
 
         // Panic: attempt to `runtime::executor::block_on` within a `Context` thread
         let join_handle = context.spawn(async {
-            crate::runtime::executor::block_on(crate::runtime::time::delay_for(DELAY));
+            crate::runtime::executor::block_on(crate::runtime::timer::delay_for(DELAY));
         });
 
         // Panic: task has failed
@@ -533,7 +533,7 @@ mod tests {
             assert_eq!(bytes_sent, 10);
 
             let (start, timer) =
-                context.enter(|| (Instant::now(), crate::runtime::time::delay_for(DELAY)));
+                context.enter(|| (Instant::now(), crate::runtime::timer::delay_for(DELAY)));
             timer.await;
             start.elapsed()
         });
@@ -559,7 +559,7 @@ mod tests {
         assert_eq!(bytes_sent, 10);
 
         let (start, timer) =
-            context.enter(|| (Instant::now(), crate::runtime::time::delay_for(DELAY)));
+            context.enter(|| (Instant::now(), crate::runtime::timer::delay_for(DELAY)));
         let elapsed = crate::runtime::executor::block_on(async move {
             timer.await;
             start.elapsed()

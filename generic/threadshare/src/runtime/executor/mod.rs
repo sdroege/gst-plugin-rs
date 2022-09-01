@@ -41,7 +41,6 @@ mod task;
 pub use task::{SubTaskOutput, TaskId};
 
 pub mod timer;
-pub use timer::Timer;
 
 struct CallOnDrop<F: FnOnce()>(Option<F>);
 

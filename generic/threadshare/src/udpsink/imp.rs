@@ -679,7 +679,7 @@ impl UdpSinkTask {
 
         if let Ok(Some(delay)) = running_time.opt_checked_sub(now) {
             gst::trace!(CAT, obj: &self.element, "sync: waiting {}", delay);
-            runtime::time::delay_for(delay.into()).await;
+            runtime::timer::delay_for(delay.into()).await;
         }
     }
 }

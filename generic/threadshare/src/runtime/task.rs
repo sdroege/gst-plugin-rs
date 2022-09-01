@@ -2354,7 +2354,7 @@ mod tests {
                 async move {
                     gst::debug!(RUNTIME_CAT, "pause_from_loop: entering handle_item");
 
-                    crate::runtime::time::delay_for(Duration::from_millis(50)).await;
+                    crate::runtime::timer::delay_for(Duration::from_millis(50)).await;
 
                     gst::debug!(RUNTIME_CAT, "pause_from_loop: pause from handle_item");
                     match self.task.pause() {
@@ -2818,12 +2818,14 @@ mod tests {
 
     #[test]
     fn start_timer() {
+        use crate::runtime::timer;
+
         // Purpose: make sure a Timer initialized in a transition is
         // available when iterating in the loop.
         gst::init().unwrap();
 
         struct TaskTimerTest {
-            timer: Option<crate::runtime::Timer>,
+            timer: Option<timer::Oneshot>,
             timer_elapsed_sender: Option<oneshot::Sender<()>>,
         }
 
@@ -2832,7 +2834,7 @@ mod tests {
 
             fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    self.timer = Some(crate::runtime::time::delay_for(Duration::from_millis(50)));
+                    self.timer = Some(crate::runtime::timer::delay_for(Duration::from_millis(50)));
                     gst::debug!(RUNTIME_CAT, "start_timer: started");
                     Ok(())
                 }

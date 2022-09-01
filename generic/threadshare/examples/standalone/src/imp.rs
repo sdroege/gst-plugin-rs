@@ -19,7 +19,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use gstthreadshare::runtime::prelude::*;
-use gstthreadshare::runtime::{Context, PadSrc, Task, Timer};
+use gstthreadshare::runtime::{timer, Context, PadSrc, Task};
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -65,7 +65,7 @@ impl PadSrcHandler for TestSrcPadHandler {
 struct SrcTask {
     element: super::TestSrc,
     buffer_pool: gst::BufferPool,
-    timer: Option<Timer>,
+    timer: Option<timer::Interval>,
     raise_log_level: bool,
     push_period: gst::ClockTime,
     need_initial_events: bool,
@@ -128,11 +128,14 @@ impl TaskImpl for SrcTask {
                 gst::trace!(CAT, obj: &self.element, "Starting Task");
             }
 
-            self.timer = Some(Timer::interval_delayed_by(
-                // Delay first buffer push so as to let others start.
-                Duration::from_secs(2),
-                self.push_period.into(),
-            ));
+            self.timer = Some(
+                timer::interval_delayed_by(
+                    // Delay first buffer push so as to let others start.
+                    Duration::from_secs(2),
+                    self.push_period.into(),
+                )
+                .expect("push period must be greater than 0"),
+            );
             self.buffer_count = 0;
             self.buffer_pool.set_active(true).unwrap();
             Ok(())

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 François Laignel <fengalin@free.fr>
+// Copyright (C) 2019-2022 François Laignel <fengalin@free.fr>
 //
 // Take a look at the license at the top of the repository in the LICENSE file.
 
@@ -31,7 +31,7 @@
 //! [`PadSink`]: pad/struct.PadSink.html
 
 pub mod executor;
-pub use executor::{Async, Context, JoinHandle, SubTaskOutput, Timer};
+pub use executor::{timer, Async, Context, JoinHandle, SubTaskOutput};
 
 pub mod pad;
 pub use pad::{PadSink, PadSinkRef, PadSinkWeak, PadSrc, PadSrcRef, PadSrcWeak};
@@ -43,9 +43,6 @@ pub mod prelude {
     pub use super::pad::{PadSinkHandler, PadSrcHandler};
     pub use super::task::TaskImpl;
 }
-
-pub mod time;
-pub use time::{delay_for, delay_for_at_least};
 
 use once_cell::sync::Lazy;
 
