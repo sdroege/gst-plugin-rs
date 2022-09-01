@@ -190,6 +190,7 @@ meson shared:
     expire_in: "7 days"
     paths:
     - plugins-cache-diffs/
+    - 'build/meson-logs/'
 
 meson static:
   extends: .meson
@@ -201,6 +202,11 @@ meson static:
     - PKG_CONFIG_PATH=$PKG_CONFIG_PATH:$(pwd)/../install/lib/x86_64-linux-gnu/pkgconfig meson build
     - ninja -C build
     - ./build/test-gst-static
+  artifacts:
+    when: always
+    expire_in: "7 days"
+    paths:
+    - 'build/meson-logs/'
 
 # build gst-plugins-rs as a gst-build subproject
 gst-build:
@@ -219,6 +225,11 @@ gst-build:
     - ln -s $P subprojects/gst-plugins-rs
     - meson build -Domx=disabled -Dpython=disabled -Dlibav=disabled -Dlibnice=disabled -Dugly=disabled -Dbad=disabled -Ddevtools=disabled -Dges=disabled -Drtsp_server=disabled -Dvaapi=disabled -Dsharp=disabled -Dgst-examples=disabled -Drs=enabled -Dgst-plugins-rs:sodium=system
     - ninja -C build
+  artifacts:
+    expire_in: '7 days'
+    when: always
+    paths:
+      - 'build/meson-logs/'
 
 rustfmt:
   extends: .img-stable
