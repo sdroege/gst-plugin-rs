@@ -20,6 +20,9 @@ workflow:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH
 
+default:
+  interruptible: true
+
 stages:
   - "prep"
   - "lint"
