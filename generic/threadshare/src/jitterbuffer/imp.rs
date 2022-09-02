@@ -1475,7 +1475,7 @@ impl ObjectImpl for JitterBuffer {
         match pspec.name() {
             "latency" => {
                 let settings = self.settings.lock().unwrap();
-                settings.latency.mseconds().to_value()
+                (settings.latency.mseconds() as u32).to_value()
             }
             "do-lost" => {
                 let settings = self.settings.lock().unwrap();
