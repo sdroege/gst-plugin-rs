@@ -243,7 +243,13 @@ foreach plugin : plugins
     variables: {'full_path': plugin.full_path()},
   )
   meson.override_dependency(plugin_name, dep)
-  gst_plugins += dep
+
+  if static_build and plugin_name in ['gstcsound', 'gstthreadshare']
+    warning('Static plugin @0@ is known to fail. It will not be included in libgstreamer-full.'.format(plugin_name))
+  else
+    gst_plugins += dep
+  endif
+
   pc_files += [plugin_name + '.pc']
 endforeach
 
