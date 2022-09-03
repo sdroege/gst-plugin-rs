@@ -155,8 +155,8 @@ deps = [
   ['gstreamer-net-1.0', 'gstreamer', 'gst_net_dep', 'gst_net'],
   ['gstreamer-rtp-1.0', 'gst-plugins-base', 'rtp_dep', 'gst_rtp'],
   ['gstreamer-video-1.0', 'gst-plugins-base', 'video_dep', 'gstvideo'],
-  ['gstreamer-sdp-1.0', 'gst-plugins-base', 'sdp_dep', 'gstsdp_dep'],
-  ['gstreamer-webrtc-1.0', 'gst-plugins-bad', 'gstwebrtc_dep', 'gstwebrtc_dep'],
+  ['gstreamer-sdp-1.0', 'gst-plugins-base', 'sdp_dep', 'gstsdp'],
+  ['gstreamer-webrtc-1.0', 'gst-plugins-bad', 'gstwebrtc_dep', 'gstwebrtc'],
 ]
 
 # Used to not lookup the same dependency multiple times which clutters logs
