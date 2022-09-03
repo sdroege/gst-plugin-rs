@@ -33,6 +33,7 @@ RENAMES = {
     'rstracers': 'tracers',
     'rsclosedcaption': 'closedcaption',
     'rsdav1d': 'dav1d',
+    'webrtchttp': 'webrtc-http',
 }
 
 
