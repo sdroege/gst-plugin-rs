@@ -123,9 +123,22 @@ impl Reactor {
         })
     }
 
-    pub fn close() {
+    /// Clears the `Reactor`.
+    ///
+    /// It will be ready for reuse on current thread without reallocating.
+    pub fn clear() {
         let _ = CURRENT_REACTOR.try_with(|cur_reactor| {
-            *cur_reactor.borrow_mut() = None;
+            cur_reactor.borrow_mut().as_mut().map(|reactor| {
+                reactor.ticker = AtomicUsize::new(0);
+                reactor.wakers.clear();
+                reactor.sources.clear();
+                reactor.events.clear();
+                reactor.timers.clear();
+                reactor.after_timers.clear();
+                while !reactor.timer_ops.is_empty() {
+                    let _ = reactor.timer_ops.pop();
+                }
+            })
         });
     }
 

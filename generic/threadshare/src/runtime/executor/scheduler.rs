@@ -242,7 +242,7 @@ impl Scheduler {
             context_name,
         );
 
-        Reactor::close();
+        Reactor::clear();
 
         let _ = CURRENT_SCHEDULER.try_with(|cur_scheduler| {
             *cur_scheduler.borrow_mut() = None;
