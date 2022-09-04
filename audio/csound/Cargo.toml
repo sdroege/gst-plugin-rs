@@ -5,7 +5,7 @@ authors = ["Natanael Mojica <neithanmo@gmail.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
 edition = "2021"
-rust-version = "1.57"
+rust-version = "1.63"
 description = "An Audio filter plugin based on Csound"
 
 [dependencies]

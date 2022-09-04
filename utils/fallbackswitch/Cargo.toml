@@ -5,7 +5,7 @@ authors = ["Sebastian Dröge <sebastian@centricular.com>", "Jan Schmidt <jan@cen
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
 edition = "2021"
-rust-version = "1.57"
+rust-version = "1.63"
 description = "Fallback Switcher Plugin"
 
 [dependencies]

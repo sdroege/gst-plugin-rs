@@ -5,7 +5,7 @@ authors = ["Julien Bardagi <julien.bardagi@gmail.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT OR Apache-2.0"
 edition = "2021"
-rust-version = "1.57"
+rust-version = "1.63"
 description = "HSV manipulation elements, written in Rust"
 
 [dependencies]

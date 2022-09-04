@@ -10,7 +10,7 @@ license = "MIT"
 homepage = "https://gstreamer.freedesktop.org"
 keywords = ["gstreamer", "multimedia", "cargo"]
 edition = "2021"
-rust-version = "1.57"
+rust-version = "1.63"
 
 [dependencies]
 chrono = { version = "0.4.19", default-features = false, features = ["std", "clock"] }

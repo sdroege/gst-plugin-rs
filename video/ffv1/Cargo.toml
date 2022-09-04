@@ -6,7 +6,7 @@ repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT OR Apache-2.0"
 description = "FFV1 Decoder Plugin"
 edition = "2021"
-rust-version = "1.57"
+rust-version = "1.63"
 
 [dependencies]
 byte-slice-cast = "1"
