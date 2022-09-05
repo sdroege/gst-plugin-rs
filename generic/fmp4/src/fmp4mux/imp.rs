@@ -1550,10 +1550,9 @@ impl ObjectImpl for FMP4Mux {
                     .default_value(DEFAULT_FRAGMENT_DURATION.nseconds())
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecEnum::builder("header-update-mode", super::HeaderUpdateMode::static_type())
+                glib::ParamSpecEnum::builder::<super::HeaderUpdateMode>("header-update-mode", DEFAULT_HEADER_UPDATE_MODE)
                     .nick("Header update mode")
                     .blurb("Mode for updating the header at the end of the stream")
-                    .default_value(DEFAULT_HEADER_UPDATE_MODE as i32)
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecBoolean::builder("write-mfra")

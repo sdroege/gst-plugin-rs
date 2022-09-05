@@ -404,7 +404,7 @@ impl ObjectImpl for HrtfRender {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecBoxed::builder("hrir-raw", glib::Bytes::static_type())
+                glib::ParamSpecBoxed::builder::<glib::Bytes>("hrir-raw")
                     .nick("Head Transform Impulse Response")
                     .blurb("Head Transform Impulse Response raw bytes")
                     .mutable_ready()
@@ -430,13 +430,10 @@ impl ObjectImpl for HrtfRender {
                     .build(),
                 gst::ParamSpecArray::builder("spatial-objects")
                     .element_spec(
-                        &glib::ParamSpecBoxed::builder(
-                            "spatial-object",
-                            gst::Structure::static_type(),
-                        )
-                        .nick("Spatial Object")
-                        .blurb("Spatial Object Metadata")
-                        .build(),
+                        &glib::ParamSpecBoxed::builder::<gst::Structure>("spatial-object")
+                            .nick("Spatial Object")
+                            .blurb("Spatial Object Metadata")
+                            .build(),
                     )
                     .nick("Spatial Objects")
                     .blurb("Spatial object Metadata to apply on input channels")

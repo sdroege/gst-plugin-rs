@@ -116,20 +116,20 @@ impl ObjectImpl for TextAhead {
                 glib::ParamSpecString::builder("separator")
                     .nick("Separator")
                     .blurb("Text inserted between each text buffers")
-                    .default_value(Some(&default.separator))
+                    .default_value(&*default.separator)
                     .mutable_playing()
                     .build(),
                 // See https://developer.gimp.org/api/2.0/pango/PangoMarkupFormat.html for pango attributes
                 glib::ParamSpecString::builder("current-attributes")
                     .nick("Current attributes")
                     .blurb("Pango span attributes to set on the text from the current buffer")
-                    .default_value(Some(&default.current_attributes))
+                    .default_value(&*default.current_attributes)
                     .mutable_playing()
                     .build(),
                 glib::ParamSpecString::builder("ahead-attributes")
                     .nick("Ahead attributes")
                     .blurb("Pango span attributes to set on the ahead text")
-                    .default_value(Some(&default.ahead_attributes))
+                    .default_value(&*default.ahead_attributes)
                     .mutable_playing()
                     .build(),
                 glib::ParamSpecBoolean::builder("buffer-start-segment")

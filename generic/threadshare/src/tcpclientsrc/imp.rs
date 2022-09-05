@@ -543,7 +543,7 @@ impl ObjectImpl for TcpClientSrc {
                     .maximum(u16::MAX as i32)
                     .default_value(DEFAULT_PORT)
                     .build(),
-                glib::ParamSpecBoxed::builder("caps", gst::Caps::static_type())
+                glib::ParamSpecBoxed::builder::<gst::Caps>("caps")
                     .nick("Caps")
                     .blurb("Caps to use")
                     .build(),

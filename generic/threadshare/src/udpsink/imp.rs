@@ -1003,20 +1003,20 @@ impl ObjectImpl for UdpSink {
                     .maximum(u16::MAX as i32)
                     .default_value(DEFAULT_BIND_PORT_V6)
                     .build(),
-                glib::ParamSpecObject::builder("socket", gio::Socket::static_type())
+                glib::ParamSpecObject::builder::<gio::Socket>("socket")
                     .nick("Socket")
                     .blurb("Socket to use for UDP transmission. (None == allocate)")
                     .build(),
-                glib::ParamSpecObject::builder("used-socket", gio::Socket::static_type())
+                glib::ParamSpecObject::builder::<gio::Socket>("used-socket")
                     .nick("Used Socket")
                     .blurb("Socket currently in use for UDP transmission. (None = no socket)")
                     .read_only()
                     .build(),
-                glib::ParamSpecObject::builder("socket-v6", gio::Socket::static_type())
+                glib::ParamSpecObject::builder::<gio::Socket>("socket-v6")
                     .nick("Socket V6")
                     .blurb("IPV6 Socket to use for UDP transmission. (None == allocate)")
                     .build(),
-                glib::ParamSpecObject::builder("used-socket-v6", gio::Socket::static_type())
+                glib::ParamSpecObject::builder::<gio::Socket>("used-socket-v6")
                     .nick("Used Socket V6")
                     .blurb("V6 Socket currently in use for UDP transmission. (None = no socket)")
                     .read_only()

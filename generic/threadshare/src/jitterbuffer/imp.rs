@@ -1393,7 +1393,7 @@ impl ObjectImpl for JitterBuffer {
                     .blurb("The maximum time (milliseconds) of misordered packets tolerated.")
                     .default_value(DEFAULT_MAX_MISORDER_TIME)
                     .build(),
-                glib::ParamSpecBoxed::builder("stats", gst::Structure::static_type())
+                glib::ParamSpecBoxed::builder::<gst::Structure>("stats")
                     .nick("Statistics")
                     .blurb("Various statistics")
                     .read_only()

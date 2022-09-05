@@ -481,7 +481,7 @@ impl ObjectImpl for MccEnc {
                     .blurb("UUID for the output file")
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecBoxed::builder("creation-date", glib::DateTime::static_type())
+                glib::ParamSpecBoxed::builder::<glib::DateTime>("creation-date")
                     .nick("Creation Date")
                     .blurb("Creation date for the output file")
                     .mutable_ready()

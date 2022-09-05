@@ -636,14 +636,12 @@ mod imp_sink {
     impl ObjectImpl for ElementSinkTest {
         fn properties() -> &'static [glib::ParamSpec] {
             static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-                vec![
-                    glib::ParamSpecBoxed::builder("sender", ItemSender::static_type())
-                        .nick("Sender")
-                        .blurb("Channel sender to forward the incoming items to")
-                        .write_only()
-                        .construct_only()
-                        .build(),
-                ]
+                vec![glib::ParamSpecBoxed::builder::<ItemSender>("sender")
+                    .nick("Sender")
+                    .blurb("Channel sender to forward the incoming items to")
+                    .write_only()
+                    .construct_only()
+                    .build()]
             });
 
             PROPERTIES.as_ref()

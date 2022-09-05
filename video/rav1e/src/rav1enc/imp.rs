@@ -319,10 +319,9 @@ impl ObjectImpl for Rav1Enc {
                     .default_value(DEFAULT_RDO_LOOKAHEAD_FRAMES)
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecEnum::builder("tune", Tune::static_type())
+                glib::ParamSpecEnum::builder::<Tune>("tune", DEFAULT_TUNE)
                     .nick("Tune")
                     .blurb("Tune")
-                    .default_value(DEFAULT_TUNE as i32)
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecInt::builder("reservoir-frame-delay")

@@ -145,7 +145,7 @@ impl ObjectImpl for RegEx {
                 .nick("Commands")
                 .blurb("A set of commands to apply on input text")
                 .element_spec(
-                    &glib::ParamSpecBoxed::builder("command", gst::Structure::static_type())
+                    &glib::ParamSpecBoxed::builder::<gst::Structure>("command")
                         .nick("Command")
                         .blurb("A command to apply on input text")
                         .build(),

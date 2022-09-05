@@ -701,15 +701,14 @@ impl ObjectImpl for S3Sink {
                     .blurb("AWS temporary Session Token from STS")
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecBoxed::builder("metadata", gst::Structure::static_type())
+                glib::ParamSpecBoxed::builder::<gst::Structure>("metadata")
                     .nick("Metadata")
                     .blurb("A map of metadata to store with the object in S3; field values need to be convertible to strings.")
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecEnum::builder("on-error", OnError::static_type())
+                glib::ParamSpecEnum::builder::<OnError>("on-error", DEFAULT_MULTIPART_UPLOAD_ON_ERROR)
                     .nick("Whether to upload or complete the multipart upload on error")
                     .blurb("Do nothing, abort or complete a multipart upload request on error")
-                    .default_value(DEFAULT_MULTIPART_UPLOAD_ON_ERROR as i32)
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecUInt::builder("retry-attempts")

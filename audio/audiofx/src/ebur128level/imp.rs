@@ -144,10 +144,10 @@ impl ObjectImpl for EbuR128Level {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecFlags::builder("mode", Mode::static_type())
+                glib::ParamSpecFlags::builder::<Mode>("mode")
                     .nick("Mode")
                     .blurb("Selection of metrics to calculate")
-                    .default_value(DEFAULT_MODE.bits() as u32)
+                    .default_value(DEFAULT_MODE)
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecBoolean::builder("post-messages")

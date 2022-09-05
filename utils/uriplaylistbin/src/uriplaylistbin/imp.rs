@@ -737,7 +737,7 @@ impl ObjectImpl for UriPlaylistBin {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecBoxed::builder("uris", Vec::<String>::static_type())
+                glib::ParamSpecBoxed::builder::<Vec<String>>("uris")
                     .nick("URIs")
                     .blurb("URIs of the medias to play")
                     .mutable_ready()

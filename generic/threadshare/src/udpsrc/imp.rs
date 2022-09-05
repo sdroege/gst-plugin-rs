@@ -676,7 +676,7 @@ impl ObjectImpl for UdpSrc {
                     .blurb("Allow reuse of the port")
                     .default_value(DEFAULT_REUSE)
                     .build(),
-                glib::ParamSpecBoxed::builder("caps", gst::Caps::static_type())
+                glib::ParamSpecBoxed::builder::<gst::Caps>("caps")
                     .nick("Caps")
                     .blurb("Caps to use")
                     .build(),
@@ -696,13 +696,13 @@ impl ObjectImpl for UdpSrc {
             #[cfg(not(windows))]
             {
                 properties.push(
-                    glib::ParamSpecObject::builder("socket", gio::Socket::static_type())
+                    glib::ParamSpecObject::builder::<gio::Socket>("socket")
                         .nick("Socket")
                         .blurb("Socket to use for UDP reception. (None == allocate)")
                         .build(),
                 );
                 properties.push(
-                    glib::ParamSpecObject::builder("used-socket", gio::Socket::static_type())
+                    glib::ParamSpecObject::builder::<gio::Socket>("used-socket")
                         .nick("Used Socket")
                         .blurb("Socket currently in use for UDP reception. (None = no socket)")
                         .read_only()

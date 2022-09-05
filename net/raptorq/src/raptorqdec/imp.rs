@@ -677,7 +677,7 @@ impl ObjectImpl for RaptorqDec {
                     .default_value(DEFAULT_MEDIA_PACKETS_RESET_THRESHOLD)
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecBoxed::builder("stats", gst::Structure::static_type())
+                glib::ParamSpecBoxed::builder::<gst::Structure>("stats")
                     .nick("Statistics")
                     .blurb("Various statistics")
                     .read_only()

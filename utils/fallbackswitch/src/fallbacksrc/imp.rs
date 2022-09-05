@@ -215,7 +215,7 @@ impl ObjectImpl for FallbackSrc {
                     .blurb("URI to use")
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecObject::builder("source", gst::Element::static_type())
+                glib::ParamSpecObject::builder::<gst::Element>("source")
                     .nick("Source")
                     .blurb("Source to use instead of the URI")
                     .mutable_ready()
@@ -252,10 +252,9 @@ impl ObjectImpl for FallbackSrc {
                     .default_value(false)
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecEnum::builder("status", Status::static_type())
+                glib::ParamSpecEnum::builder::<Status>("status", Status::Stopped)
                     .nick("Status")
                     .blurb("Current source status")
-                    .default_value(Status::Stopped as i32)
                     .read_only()
                     .build(),
                 glib::ParamSpecUInt64::builder("min-latency")
@@ -274,7 +273,7 @@ impl ObjectImpl for FallbackSrc {
                     .default_value(-1)
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecBoxed::builder("statistics", gst::Structure::static_type())
+                glib::ParamSpecBoxed::builder::<gst::Structure>("statistics")
                     .nick("Statistics")
                     .blurb("Various statistics")
                     .read_only()
@@ -291,12 +290,12 @@ impl ObjectImpl for FallbackSrc {
                     .default_value(false)
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecBoxed::builder("fallback-video-caps", gst::Caps::static_type())
+                glib::ParamSpecBoxed::builder::<gst::Caps>("fallback-video-caps")
                     .nick("Fallback Video Caps")
                     .blurb("Raw video caps for fallback stream")
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecBoxed::builder("fallback-audio-caps", gst::Caps::static_type())
+                glib::ParamSpecBoxed::builder::<gst::Caps>("fallback-audio-caps")
                     .nick("Fallback Audio Caps")
                     .blurb("Raw audio caps for fallback stream")
                     .mutable_ready()

@@ -674,7 +674,7 @@ impl ObjectImpl for ReqwestHttpSrc {
             let mut user_agent_pspec = glib::ParamSpecString::builder("user-agent")
                 .nick("User-Agent")
                 .blurb("Value of the User-Agent HTTP request header field")
-                .default_value("GStreamer reqwesthttpsrc".into())
+                .default_value("GStreamer reqwesthttpsrc")
                 .readwrite()
                 .readwrite()
                 .mutable_ready();
@@ -726,13 +726,13 @@ impl ObjectImpl for ReqwestHttpSrc {
                     .readwrite()
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecBoxed::builder("extra-headers", gst::Structure::static_type())
+                glib::ParamSpecBoxed::builder::<gst::Structure>("extra-headers")
                     .nick("Extra Headers")
                     .blurb("Extra headers to append to the HTTP request")
                     .readwrite()
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecBoxed::builder("cookies", Vec::<String>::static_type())
+                glib::ParamSpecBoxed::builder::<Vec<String>>("cookies")
                     .nick("Cookies")
                     .nick("HTTP request cookies")
                     .readwrite()

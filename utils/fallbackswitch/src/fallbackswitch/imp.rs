@@ -1068,7 +1068,7 @@ impl ObjectImpl for FallbackSwitch {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecObject::builder(PROP_ACTIVE_PAD, gst::Pad::static_type())
+                glib::ParamSpecObject::builder::<gst::Pad>(PROP_ACTIVE_PAD)
                     .nick("Active Pad")
                     .blurb("Currently active pad")
                     .mutable_playing()

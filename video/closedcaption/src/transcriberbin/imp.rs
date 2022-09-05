@@ -616,28 +616,26 @@ impl ObjectImpl for TranscriberBin {
                     .default_value(DEFAULT_ACCUMULATE.mseconds() as u32)
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecEnum::builder("mode", Cea608Mode::static_type())
+                glib::ParamSpecEnum::builder::<Cea608Mode>("mode", DEFAULT_MODE)
                     .nick("Mode")
                     .blurb("Which closed caption mode to operate in")
-                    .default_value(DEFAULT_MODE as i32)
                     .mutable_playing()
                     .build(),
-                glib::ParamSpecBoxed::builder("cc-caps", gst::Caps::static_type())
+                glib::ParamSpecBoxed::builder::<gst::Caps>("cc-caps")
                     .nick("Closed Caption caps")
                     .blurb("The expected format of the closed captions")
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecObject::builder("transcriber", gst::Element::static_type())
+                glib::ParamSpecObject::builder::<gst::Element>("transcriber")
                     .nick("Transcriber")
                     .blurb("The transcriber element to use")
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecEnum::builder("caption-source", CaptionSource::static_type())
+                glib::ParamSpecEnum::builder::<CaptionSource>("caption-source", DEFAULT_CAPTION_SOURCE)
                     .nick("Caption source")
                     .blurb("Caption source to use. \
                     If \"Transcription\" or \"Inband\" is selected, the caption meta \
                     of the other source will be dropped by transcriberbin")
-                    .default_value(DEFAULT_CAPTION_SOURCE as i32)
                     .mutable_playing()
                     .build(),
             ]

@@ -176,16 +176,17 @@ impl ObjectImpl for PngEncoder {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecEnum::builder("compression-level", CompressionLevel::static_type())
-                    .nick("Compression level")
-                    .blurb("Selects the compression algorithm to use")
-                    .default_value(DEFAULT_COMPRESSION_LEVEL as i32)
-                    .mutable_ready()
-                    .build(),
-                glib::ParamSpecEnum::builder("filter", FilterType::static_type())
+                glib::ParamSpecEnum::builder::<CompressionLevel>(
+                    "compression-level",
+                    DEFAULT_COMPRESSION_LEVEL,
+                )
+                .nick("Compression level")
+                .blurb("Selects the compression algorithm to use")
+                .mutable_ready()
+                .build(),
+                glib::ParamSpecEnum::builder::<FilterType>("filter", DEFAULT_FILTER_TYPE)
                     .nick("Filter")
                     .blurb("Selects the filter type to applied")
-                    .default_value(DEFAULT_FILTER_TYPE as i32)
                     .mutable_ready()
                     .build(),
             ]

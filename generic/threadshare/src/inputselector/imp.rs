@@ -419,7 +419,7 @@ impl ObjectImpl for InputSelector {
                     .default_value(DEFAULT_CONTEXT_WAIT.as_millis() as u32)
                     .readwrite()
                     .build(),
-                glib::ParamSpecObject::builder("active-pad", gst::Pad::static_type())
+                glib::ParamSpecObject::builder::<gst::Pad>("active-pad")
                     .nick("Active Pad")
                     .blurb("Currently active pad")
                     .readwrite()

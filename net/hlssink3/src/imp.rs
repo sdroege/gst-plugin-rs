@@ -456,10 +456,9 @@ impl ObjectImpl for HlsSink3 {
                     .blurb("Length of HLS playlist. To allow players to conform to section 6.3.3 of the HLS specification, this should be at least 3. If set to 0, the playlist will be infinite.")
                     .default_value(DEFAULT_PLAYLIST_LENGTH)
                     .build(),
-                glib::ParamSpecEnum::builder("playlist-type", HlsSink3PlaylistType::static_type())
+                glib::ParamSpecEnum::builder::<HlsSink3PlaylistType>("playlist-type", DEFAULT_PLAYLIST_TYPE)
                     .nick("Playlist Type")
                     .blurb("The type of the playlist to use. When VOD type is set, the playlist will be live until the pipeline ends execution.")
-                    .default_value(DEFAULT_PLAYLIST_TYPE as i32)
                     .build(),
                 glib::ParamSpecBoolean::builder("send-keyframe-requests")
                     .nick("Send Keyframe Requests")

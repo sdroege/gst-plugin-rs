@@ -476,7 +476,7 @@ impl ObjectImpl for AppSrc {
                     .minimum(1)
                     .default_value(DEFAULT_MAX_BUFFERS)
                     .build(),
-                glib::ParamSpecBoxed::builder("caps", gst::Caps::static_type())
+                glib::ParamSpecBoxed::builder::<gst::Caps>("caps")
                     .nick("Caps")
                     .blurb("Caps to use")
                     .build(),

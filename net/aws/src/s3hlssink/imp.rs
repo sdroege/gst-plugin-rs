@@ -463,7 +463,7 @@ impl ObjectImpl for S3HlsSink {
                     .blurb("The AWS region for the S3 bucket (e.g. eu-west-2).")
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecObject::builder("hlssink", gst::Element::static_type())
+                glib::ParamSpecObject::builder::<gst::Element>("hlssink")
                     .nick("HLS Sink")
                     .blurb("The underlying HLS sink being used")
                     .read_only()

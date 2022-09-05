@@ -1210,10 +1210,9 @@ impl ObjectImpl for Transcriber {
                     .blurb("The ID of the transcription session, must be length 36")
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecEnum::builder("results-stability", AwsTranscriberResultStability::static_type())
+                glib::ParamSpecEnum::builder::<AwsTranscriberResultStability>("results-stability", DEFAULT_STABILITY)
                     .nick("Results stability")
                     .blurb("Defines how fast results should stabilize")
-                    .default_value(DEFAULT_STABILITY as i32)
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecString::builder("access-key")
@@ -1238,10 +1237,9 @@ impl ObjectImpl for Transcriber {
                         for more information")
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecEnum::builder("vocabulary-filter-method", AwsTranscriberVocabularyFilterMethod::static_type())
+                glib::ParamSpecEnum::builder::<AwsTranscriberVocabularyFilterMethod>("vocabulary-filter-method", DEFAULT_VOCABULARY_FILTER_METHOD)
                     .nick("Vocabulary Filter Method")
                     .blurb("Defines how filtered words will be edited, has no effect when vocabulary-filter-name isn't set")
-                    .default_value(DEFAULT_VOCABULARY_FILTER_METHOD as i32)
                     .mutable_ready()
                     .build(),
             ]
