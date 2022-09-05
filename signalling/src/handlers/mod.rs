@@ -1083,7 +1083,7 @@ mod tests {
     }
 
     #[async_std::test]
-    async fn test_unregistering_with_listenners() {
+    async fn test_unregistering_with_listeners() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
