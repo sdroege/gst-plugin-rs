@@ -58,6 +58,7 @@ pub(crate) enum FilterType {
 }
 
 impl From<CompressionLevel> for png::Compression {
+    #[allow(deprecated)]
     fn from(value: CompressionLevel) -> Self {
         match value {
             CompressionLevel::Default => png::Compression::Default,
