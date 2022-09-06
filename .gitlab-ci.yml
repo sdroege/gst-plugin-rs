@@ -245,7 +245,7 @@ gst-build:
     # Check static Rust plugins can be linked into gst-full
     - meson build-gst-full --default-library=static $MESON_ARGS
     - ninja -C build-gst-full
-    - meson devenv -C build-gst-full gst-inspect-1.0 rsaudiofx
+    - meson devenv -C build-gst-full ./gst-inspect-1.0 rsaudiofx
   artifacts:
     expire_in: '7 days'
     when: always
