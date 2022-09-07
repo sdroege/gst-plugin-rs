@@ -39,29 +39,14 @@ pub static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 fn main() {
     gst::init().unwrap();
-
-    #[cfg(debug_assertions)]
-    {
-        use std::path::Path;
-
-        let mut path = Path::new("target/debug");
-        if !path.exists() {
-            path = Path::new("../../target/debug");
-        }
-
-        gst::Registry::get().scan_path(path);
-    }
-    #[cfg(not(debug_assertions))]
-    {
-        use std::path::Path;
-
-        let mut path = Path::new("target/release");
-        if !path.exists() {
-            path = Path::new("../../target/release");
-        }
-
-        gst::Registry::get().scan_path(path);
-    }
+    // Register the plugins statically:
+    // - The executable can be run from anywhere.
+    // - No risk of running against a previous version.
+    // - `main` can use features that rely on `static`s or `thread_local`
+    //   such as `Context::acquire` which otherwise don't point to
+    //   the same `static` or `thread_local`, probably because
+    //   the shared object uses its owns and the executable, others.
+    gstthreadshare::plugin_register_static().unwrap();
 
     let args = env::args().collect::<Vec<_>>();
     assert!(args.len() > 4);
@@ -71,7 +56,7 @@ fn main() {
     let wait: u32 = args[4].parse().unwrap();
 
     // Nb buffers to await before stopping.
-    let max_buffers: Option<u64> = if args.len() > 5 {
+    let max_buffers: Option<f32> = if args.len() > 5 {
         args[5].parse().ok()
     } else {
         None
@@ -243,15 +228,24 @@ fn main() {
 
     let l_clone = l.clone();
     thread::spawn(move || {
-        let throughput_factor = 1_000f32 / (n_streams as f32);
-        let mut prev_reset_instant: Option<Instant> = None;
-        let mut count;
-        let mut reset_instant;
+        let n_streams_f32 = n_streams as f32;
+
+        let mut total_count = 0.0;
+        let mut ramp_up_complete_instant: Option<Instant> = None;
+
+        #[cfg(feature = "tuning")]
+        let ctx_0 = gstthreadshare::runtime::Context::acquire(
+            "context-0",
+            Duration::from_millis(wait as u64),
+        )
+        .unwrap();
+        #[cfg(feature = "tuning")]
+        let mut parked_init = Duration::ZERO;
 
         loop {
-            count = counter.fetch_and(0, Ordering::SeqCst);
+            total_count += counter.fetch_and(0, Ordering::SeqCst) as f32 / n_streams_f32;
             if let Some(max_buffers) = max_buffers {
-                if count > max_buffers {
+                if total_count > max_buffers {
                     gst::info!(CAT, "Stopping");
                     let stopping_instant = Instant::now();
                     pipeline.set_state(gst::State::Ready).unwrap();
@@ -263,22 +257,34 @@ fn main() {
                 }
             }
 
-            reset_instant = Instant::now();
-
-            if let Some(prev_reset_instant) = prev_reset_instant {
+            if let Some(init) = ramp_up_complete_instant {
+                let elapsed = init.elapsed();
                 gst::info!(
                     CAT,
                     "{:>6.2} / s / stream",
-                    (count as f32) * throughput_factor
-                        / ((reset_instant - prev_reset_instant).as_millis() as f32)
+                    total_count * 1_000.0 / elapsed.as_millis() as f32
                 );
+
+                #[cfg(feature = "tuning")]
+                gst::info!(
+                    CAT,
+                    "{:>6.2}% parked",
+                    (ctx_0.parked_duration() - parked_init).as_nanos() as f32 * 100.0
+                        / elapsed.as_nanos() as f32
+                );
+            } else {
+                // Ramp up 30s worth of buffers before following parked
+                if total_count > 50.0 * 30.0 {
+                    total_count = 0.0;
+                    ramp_up_complete_instant = Some(Instant::now());
+                    #[cfg(feature = "tuning")]
+                    {
+                        parked_init = ctx_0.parked_duration();
+                    }
+                }
             }
 
-            if let Some(sleep_duration) = THROUGHPUT_PERIOD.checked_sub(reset_instant.elapsed()) {
-                thread::sleep(sleep_duration);
-            }
-
-            prev_reset_instant = Some(reset_instant);
+            thread::sleep(THROUGHPUT_PERIOD);
         }
     });
 

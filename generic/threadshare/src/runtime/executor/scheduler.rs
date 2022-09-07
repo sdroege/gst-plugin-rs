@@ -11,6 +11,8 @@ use gio::glib::clone::Downgrade;
 use std::cell::RefCell;
 use std::future::Future;
 use std::panic;
+#[cfg(feature = "tuning")]
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc as sync_mpsc;
 use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::task::Poll;
@@ -34,6 +36,8 @@ pub(super) struct Scheduler {
     tasks: TaskQueue,
     must_unpark: Mutex<bool>,
     must_unpark_cvar: Condvar,
+    #[cfg(feature = "tuning")]
+    parked_duration: AtomicU64,
 }
 
 impl Scheduler {
@@ -104,6 +108,8 @@ impl Scheduler {
                 tasks: TaskQueue::new(context_name),
                 must_unpark: Mutex::new(false),
                 must_unpark_cvar: Condvar::new(),
+                #[cfg(feature = "tuning")]
+                parked_duration: AtomicU64::new(0),
             }));
 
             *cur_scheduler = Some(handle.downgrade());
@@ -201,11 +207,15 @@ impl Scheduler {
                     break;
                 }
 
-                if let Some(wait_duration) = self.max_throttling.checked_sub(last.elapsed()) {
+                if let Some(parking_duration) = self.max_throttling.checked_sub(last.elapsed()) {
                     let result = self
                         .must_unpark_cvar
-                        .wait_timeout(must_unpark, wait_duration)
+                        .wait_timeout(must_unpark, parking_duration)
                         .unwrap();
+
+                    #[cfg(feature = "tuning")]
+                    self.parked_duration
+                        .fetch_add(parking_duration.subsec_nanos() as u64, Ordering::Relaxed);
 
                     must_unpark = result.0;
                 } else {
@@ -358,6 +368,11 @@ impl Handle {
 
     pub fn max_throttling(&self) -> Duration {
         self.0.scheduler.max_throttling
+    }
+
+    #[cfg(feature = "tuning")]
+    pub fn parked_duration(&self) -> Duration {
+        Duration::from_nanos(self.0.scheduler.parked_duration.load(Ordering::Relaxed))
     }
 
     /// Executes the provided function relatively to this [`Scheduler`]'s [`Reactor`].

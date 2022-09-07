@@ -189,6 +189,8 @@ struct Stats {
     interval_late_warn: Duration,
     interval_late_count: f32,
     interval_late_count_delta: f32,
+    #[cfg(feature = "tuning")]
+    parked_duration_init: Duration,
 }
 
 impl Stats {
@@ -238,6 +240,11 @@ impl Stats {
             gst::info!(CAT, "Ramp up complete. Stats logs in {:2?}", LOG_PERIOD);
             self.log_start_instant = Some(Instant::now());
             self.last_delta_instant = self.log_start_instant;
+
+            #[cfg(feature = "tuning")]
+            {
+                self.parked_duration_init = Context::current().unwrap().parked_duration();
+            }
         }
 
         use std::cmp::Ordering::*;
@@ -304,102 +311,115 @@ impl Stats {
 
         self.last_delta_instant = Some(Instant::now());
 
-        if self.buffer_count_delta > 1.0 {
-            gst::info!(CAT, "Delta stats:");
+        gst::info!(CAT, "Delta stats:");
+        let interval_mean = self.interval_sum_delta / self.buffer_count_delta;
+        let interval_std_dev = f32::sqrt(
+            self.interval_square_sum_delta / self.buffer_count_delta - interval_mean.powi(2),
+        );
 
-            let interval_mean = self.interval_sum_delta / self.buffer_count_delta;
-            let interval_std_dev = f32::sqrt(
-                self.interval_square_sum_delta / self.buffer_count_delta - interval_mean.powi(2),
-            );
+        gst::info!(
+            CAT,
+            "o interval: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
+            Duration::from_nanos(interval_mean as u64),
+            Duration::from_nanos(interval_std_dev as u64),
+            self.interval_min_delta,
+            self.interval_max_delta,
+        );
 
-            gst::info!(
+        if self.interval_late_count_delta > f32::EPSILON {
+            gst::warning!(
                 CAT,
-                "o interval: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
-                Duration::from_nanos(interval_mean as u64),
-                Duration::from_nanos(interval_std_dev as u64),
-                self.interval_min_delta,
-                self.interval_max_delta,
+                "o {:5.2}% late buffers",
+                100f32 * self.interval_late_count_delta / self.buffer_count_delta
             );
-
-            if self.interval_late_count_delta > 1.0 {
-                gst::warning!(
-                    CAT,
-                    "o {:5.2}% late buffers",
-                    100f32 * self.interval_late_count_delta / self.buffer_count_delta
-                );
-            }
-
-            self.interval_sum_delta = 0.0;
-            self.interval_square_sum_delta = 0.0;
-            self.interval_min_delta = Duration::MAX;
-            self.interval_max_delta = Duration::ZERO;
-            self.interval_late_count_delta = 0.0;
-
-            let latency_mean = self.latency_sum_delta / self.buffer_count_delta;
-            let latency_std_dev = f32::sqrt(
-                self.latency_square_sum_delta / self.buffer_count_delta - latency_mean.powi(2),
-            );
-
-            gst::info!(
-                CAT,
-                "o latency: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
-                Duration::from_nanos(latency_mean as u64),
-                Duration::from_nanos(latency_std_dev as u64),
-                self.latency_min_delta,
-                self.latency_max_delta,
-            );
-
-            self.latency_sum_delta = 0.0;
-            self.latency_square_sum_delta = 0.0;
-            self.latency_min_delta = Duration::MAX;
-            self.latency_max_delta = Duration::ZERO;
         }
+
+        self.interval_sum_delta = 0.0;
+        self.interval_square_sum_delta = 0.0;
+        self.interval_min_delta = Duration::MAX;
+        self.interval_max_delta = Duration::ZERO;
+        self.interval_late_count_delta = 0.0;
+
+        let latency_mean = self.latency_sum_delta / self.buffer_count_delta;
+        let latency_std_dev = f32::sqrt(
+            self.latency_square_sum_delta / self.buffer_count_delta - latency_mean.powi(2),
+        );
+
+        gst::info!(
+            CAT,
+            "o latency: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
+            Duration::from_nanos(latency_mean as u64),
+            Duration::from_nanos(latency_std_dev as u64),
+            self.latency_min_delta,
+            self.latency_max_delta,
+        );
+
+        self.latency_sum_delta = 0.0;
+        self.latency_square_sum_delta = 0.0;
+        self.latency_min_delta = Duration::MAX;
+        self.latency_max_delta = Duration::ZERO;
 
         self.buffer_count_delta = 0.0;
     }
 
     fn log_global(&mut self) {
-        if self.log_start_instant.is_none() {
+        if self.buffer_count < 1.0 {
             return;
         }
 
-        if self.buffer_count > 1.0 {
-            gst::info!(CAT, "Global stats:");
+        let _log_start = if let Some(log_start) = self.log_start_instant {
+            log_start
+        } else {
+            return;
+        };
 
-            let interval_mean = self.interval_sum / self.buffer_count;
-            let interval_std_dev =
-                f32::sqrt(self.interval_square_sum / self.buffer_count - interval_mean.powi(2));
+        gst::info!(CAT, "Global stats:");
 
+        #[cfg(feature = "tuning")]
+        {
+            let duration = _log_start.elapsed();
+            let parked_duration =
+                Context::current().unwrap().parked_duration() - self.parked_duration_init;
             gst::info!(
                 CAT,
-                "o interval: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
-                Duration::from_nanos(interval_mean as u64),
-                Duration::from_nanos(interval_std_dev as u64),
-                self.interval_min,
-                self.interval_max,
-            );
-
-            if self.interval_late_count > f32::EPSILON {
-                gst::warning!(
-                    CAT,
-                    "o {:5.2}% late buffers",
-                    100f32 * self.interval_late_count / self.buffer_count
-                );
-            }
-
-            let latency_mean = self.latency_sum / self.buffer_count;
-            let latency_std_dev =
-                f32::sqrt(self.latency_square_sum / self.buffer_count - latency_mean.powi(2));
-
-            gst::info!(
-                CAT,
-                "o latency: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
-                Duration::from_nanos(latency_mean as u64),
-                Duration::from_nanos(latency_std_dev as u64),
-                self.latency_min,
-                self.latency_max,
+                "o parked: {parked_duration:4.2?} ({:5.2?}%)",
+                (parked_duration.as_nanos() as f32 * 100.0 / duration.as_nanos() as f32)
             );
         }
+
+        let interval_mean = self.interval_sum / self.buffer_count;
+        let interval_std_dev =
+            f32::sqrt(self.interval_square_sum / self.buffer_count - interval_mean.powi(2));
+
+        gst::info!(
+            CAT,
+            "o interval: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
+            Duration::from_nanos(interval_mean as u64),
+            Duration::from_nanos(interval_std_dev as u64),
+            self.interval_min,
+            self.interval_max,
+        );
+
+        if self.interval_late_count > f32::EPSILON {
+            gst::warning!(
+                CAT,
+                "o {:5.2}% late buffers",
+                100f32 * self.interval_late_count / self.buffer_count
+            );
+        }
+
+        let latency_mean = self.latency_sum / self.buffer_count;
+        let latency_std_dev =
+            f32::sqrt(self.latency_square_sum / self.buffer_count - latency_mean.powi(2));
+
+        gst::info!(
+            CAT,
+            "o latency: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
+            Duration::from_nanos(latency_mean as u64),
+            Duration::from_nanos(latency_std_dev as u64),
+            self.latency_min,
+            self.latency_max,
+        );
     }
 }
 

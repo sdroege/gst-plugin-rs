@@ -187,6 +187,14 @@ impl Context {
         self.0.max_throttling()
     }
 
+    /// Total duration the scheduler spent parked.
+    ///
+    /// This is only useful for performance evaluation.
+    #[cfg(feature = "tuning")]
+    pub fn parked_duration(&self) -> Duration {
+        self.0.parked_duration()
+    }
+
     /// Returns `true` if a `Context` is running on current thread.
     pub fn is_context_thread() -> bool {
         Scheduler::is_scheduler_thread()

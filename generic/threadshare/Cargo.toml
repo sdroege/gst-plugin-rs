@@ -65,6 +65,8 @@ pkg-config = "0.3.15"
 [features]
 static = []
 capi = []
+# Adds performance counters used by benchmarking tools.
+tuning = []
 doc = ["gst/v1_18"]
 
 [package.metadata.capi]
