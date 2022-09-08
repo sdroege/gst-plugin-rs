@@ -82,7 +82,7 @@ build_hotdoc = true
 plugins_doc = []
 sitemap = 'all_index.md\n'
 
-list_plugin_res = run_command(python3, '-c',
+list_plugin_res = run_command(python, '-c',
 '''
 import sys
 import json
