@@ -945,19 +945,19 @@ impl Transcriber {
         if let Some(ref vocabulary_filter) = settings.vocabulary_filter {
             query_params
                 .push_str(format!("&vocabulary-filter-name={}", vocabulary_filter).as_str());
-        }
 
-        query_params.push_str(
-            format!(
-                "&vocabulary-filter-method={}",
-                match settings.vocabulary_filter_method {
-                    AwsTranscriberVocabularyFilterMethod::Mask => "mask",
-                    AwsTranscriberVocabularyFilterMethod::Remove => "remove",
-                    AwsTranscriberVocabularyFilterMethod::Tag => "tag",
-                }
-            )
-            .as_str(),
-        );
+            query_params.push_str(
+                format!(
+                    "&vocabulary-filter-method={}",
+                    match settings.vocabulary_filter_method {
+                        AwsTranscriberVocabularyFilterMethod::Mask => "mask",
+                        AwsTranscriberVocabularyFilterMethod::Remove => "remove",
+                        AwsTranscriberVocabularyFilterMethod::Tag => "tag",
+                    }
+                )
+                .as_str(),
+            );
+        }
 
         if let Some(ref session_id) = settings.session_id {
             gst::debug!(CAT, obj: element, "Using session ID: {}", session_id);
