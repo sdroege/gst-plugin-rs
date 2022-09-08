@@ -73,7 +73,7 @@ impl ElementImpl for OnvifMetadataCombiner {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
             gst::subclass::ElementMetadata::new(
                 "ONVIF metadata combiner",
-                "Video/Metadata/Combiner/Muxer",
+                "Video/Metadata/Combiner",
                 "ONVIF metadata combiner",
                 "Mathieu Duponchelle <mathieu@centricular.com>",
             )

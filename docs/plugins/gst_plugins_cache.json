@@ -4415,7 +4415,7 @@
                     "GInitiallyUnowned",
                     "GObject"
                 ],
-                "klass": "Video/Metadata/Combiner/Muxer",
+                "klass": "Video/Metadata/Combiner",
                 "long-name": "ONVIF metadata combiner",
                 "pad-templates": {
                     "media": {
