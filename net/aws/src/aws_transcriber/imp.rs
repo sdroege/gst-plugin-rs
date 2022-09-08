@@ -1264,7 +1264,7 @@ impl ObjectImpl for Transcriber {
         pspec: &glib::ParamSpec,
     ) {
         match pspec.name() {
-            "language_code" => {
+            "language-code" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.language_code = value.get().expect("type checked upstream");
             }
