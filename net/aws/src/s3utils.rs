@@ -99,10 +99,6 @@ pub fn wait_stream(
 pub fn timeout_config(request_timeout: Duration) -> timeout::Config {
     timeout::Config::new().with_api_timeouts(
         timeout::Api::new()
-            // This timeout acts at the "Request to a service" level. When the SDK makes a request to a
-            // service, that "request" can contain several HTTP requests. This way, you can retry
-            // failures that are likely spurious, or refresh credentials.
-            .with_call_timeout(TriState::Set(request_timeout))
             // This timeout acts at the "HTTP request" level and sets a separate timeout for each
             // HTTP request made as part of a "service request."
             .with_call_attempt_timeout(TriState::Set(request_timeout)),
