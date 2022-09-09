@@ -852,7 +852,7 @@ impl ObjectImpl for S3Sink {
                 let retry_attempts = if value > request_timeout {
                     value / request_timeout
                 } else {
-                    request_timeout / value
+                    1
                 };
                 settings.retry_attempts = retry_attempts as u32;
             }
