@@ -268,12 +268,12 @@ gst-build:
     - '2022'
   parallel:
     matrix:
-      - FEATURES:
+      - CI_CARGO_FEATURES:
         - "--no-default-features"
         - "--all-features"
         - ""
   script:
-    - echo $env:FEATURES
+    - echo $env:CI_CARGO_FEATURES
 
     # Set the code page to UTF-8
     - chcp 65001
