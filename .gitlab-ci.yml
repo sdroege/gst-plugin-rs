@@ -128,16 +128,19 @@ update-nightly:
   extends:
     - .dist-debian-container
     - .debian:11-stable
+  needs: ['build-stable']
 
 .img-msrv:
   extends:
     - .dist-debian-container
     - .debian:11-msrv
+  needs: ['build-msrv']
 
 .img-nightly:
   extends:
     - .dist-debian-container
     - .debian:11-nightly
+  needs: ['build-nightly']
 
 .cargo test:
   stage: "test"
@@ -264,6 +267,7 @@ gst-build:
 
 .msvc2019 build:
   stage: 'test'
+  needs: []
   tags:
     - 'docker'
     - 'windows'
