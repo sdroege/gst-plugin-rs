@@ -5910,6 +5910,7 @@
                 "description": "Spotify source",
                 "hierarchy": [
                     "GstSpotifyAudioSrc",
+                    "GstPushSrc",
                     "GstBaseSrc",
                     "GstElement",
                     "GstObject",

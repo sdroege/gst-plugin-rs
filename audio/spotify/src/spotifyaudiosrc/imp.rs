@@ -82,7 +82,7 @@ pub struct SpotifyAudioSrc {
 impl ObjectSubclass for SpotifyAudioSrc {
     const NAME: &'static str = "GstSpotifyAudioSrc";
     type Type = super::SpotifyAudioSrc;
-    type ParentType = gst_base::BaseSrc;
+    type ParentType = gst_base::PushSrc;
     type Interfaces = (gst::URIHandler,);
 }
 
@@ -258,12 +258,12 @@ impl BaseSrcImpl for SpotifyAudioSrc {
 
         Ok(())
     }
+}
 
+impl PushSrcImpl for SpotifyAudioSrc {
     fn create(
         &self,
-        _offset: u64,
         _buffer: Option<&mut gst::BufferRef>,
-        _length: u32,
     ) -> Result<CreateSuccess, gst::FlowError> {
         let state = self.state.lock().unwrap();
         let state = state.as_ref().unwrap();
