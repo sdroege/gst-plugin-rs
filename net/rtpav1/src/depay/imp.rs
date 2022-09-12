@@ -164,14 +164,7 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
             rtp.buffer().size(),
         );
 
-        let payload = rtp
-            .payload_buffer()
-            .map_err(err_opt!(element, payload_buf))
-            .ok()?;
-        let payload_map = payload
-            .map_readable()
-            .map_err(err_opt!(element, payload_map))
-            .ok()?;
+        let payload = rtp.payload().map_err(err_opt!(element, payload_buf)).ok()?;
 
         let mut state = self.state.lock().unwrap();
 
@@ -182,7 +175,7 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
 
         // number of bytes that can be used in the next outgoing buffer
         let mut bytes_ready = 0;
-        let mut reader = Cursor::new(payload_map.as_ref());
+        let mut reader = Cursor::new(payload);
         let mut ready_obus = Buffer::new();
 
         let aggr_header = {
