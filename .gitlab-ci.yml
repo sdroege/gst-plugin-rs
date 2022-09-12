@@ -272,15 +272,7 @@ gst-build:
     - 'docker'
     - 'windows'
     - '2022'
-  parallel:
-    matrix:
-      - CI_CARGO_FEATURES:
-        - "--no-default-features"
-        - "--all-features"
-        - ""
   script:
-    - echo $env:CI_CARGO_FEATURES
-
     # Set the code page to UTF-8
     - chcp 65001
 
