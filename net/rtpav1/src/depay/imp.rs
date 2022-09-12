@@ -21,7 +21,7 @@ use gst_rtp::{
 use std::{
     cmp::Ordering,
     io::{Cursor, Read, Seek, SeekFrom},
-    sync::{Mutex, MutexGuard},
+    sync::Mutex,
 };
 
 use bitstream_io::{BitReader, BitWriter};
@@ -62,14 +62,10 @@ static CAT: Lazy<DebugCategory> = Lazy::new(|| {
 static TEMPORAL_DELIMITER: Lazy<Memory> = Lazy::new(|| Memory::from_slice(&[0b0001_0010, 0]));
 
 impl RTPAv1Depay {
-    fn reset<'s>(
-        &'s self,
-        element: &<Self as ObjectSubclass>::Type,
-        state: &mut MutexGuard<'s, State>,
-    ) {
+    fn reset(&self, element: &<Self as ObjectSubclass>::Type, state: &mut State) {
         gst::debug!(CAT, obj: element, "resetting state");
 
-        **state = State::default()
+        *state = State::default()
     }
 }
 

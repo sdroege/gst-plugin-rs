@@ -101,11 +101,7 @@ impl Default for State {
 }
 
 impl RTPAv1Pay {
-    fn reset<'s>(
-        &'s self,
-        element: &<Self as ObjectSubclass>::Type,
-        state: &mut MutexGuard<'s, State>,
-    ) {
+    fn reset(&self, element: &<Self as ObjectSubclass>::Type, state: &mut State) {
         gst::debug!(CAT, obj: element, "resetting state");
 
         state.obus.clear();
@@ -205,10 +201,10 @@ impl RTPAv1Pay {
     ///
     /// If `true` is passed for `force`, packets of any size will be accepted,
     /// which is used in flushing the last OBUs after receiving an EOS for example.
-    fn consider_new_packet<'s>(
-        &'s self,
+    fn consider_new_packet(
+        &self,
         element: &<Self as ObjectSubclass>::Type,
-        state: &mut MutexGuard<'s, State>,
+        state: &mut State,
         force: bool,
     ) -> Option<PacketOBUData> {
         gst::trace!(
