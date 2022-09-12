@@ -872,9 +872,11 @@ impl SrcHandler {
             return (now, None);
         }
 
-        let next_wakeup = state
-            .earliest_pts
-            .map(|earliest_pts| earliest_pts + latency - state.packet_spacing - context_wait / 2);
+        let next_wakeup = state.earliest_pts.map(|earliest_pts| {
+            (earliest_pts + latency)
+                .saturating_sub(state.packet_spacing)
+                .saturating_sub(context_wait / 2)
+        });
 
         let delay = next_wakeup
             .opt_saturating_sub(now)
