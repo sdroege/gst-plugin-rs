@@ -128,19 +128,31 @@ update-nightly:
   extends:
     - .dist-debian-container
     - .debian:11-stable
-  needs: ['build-stable']
+  needs:
+    - job: 'build-stable'
+      optional: true
+    - job: 'update-stable'
+      optional: true
 
 .img-msrv:
   extends:
     - .dist-debian-container
     - .debian:11-msrv
-  needs: ['build-msrv']
+  needs:
+    - job: 'build-msrv'
+      optional: true
+    - job: 'update-msrv'
+      optional: true
 
 .img-nightly:
   extends:
     - .dist-debian-container
     - .debian:11-nightly
-  needs: ['build-nightly']
+  needs:
+    - job: 'build-nightly'
+      optional: true
+    - job: 'update-nightly'
+      optional: true
 
 .cargo test:
   stage: "test"
