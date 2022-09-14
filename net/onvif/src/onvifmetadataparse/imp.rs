@@ -202,49 +202,59 @@ impl OnvifMetadataParse {
         if state.utc_time_running_time_mapping.is_none() {
             let utc_time = crate::lookup_reference_timestamp(&buffer);
             if let Some(utc_time) = utc_time {
-                let initial_running_time = state
-                    .pre_queued_buffers
-                    .iter()
-                    .find_map(|o| {
-                        if let TimedBufferOrEvent::Buffer(running_time, _) = o {
-                            Some(*running_time)
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap_or(running_time);
+                let (initial_utc_time, initial_running_time) = loop {
+                    let (idx, initial_running_time) = state
+                        .pre_queued_buffers
+                        .iter()
+                        .enumerate()
+                        .find_map(|(idx, o)| {
+                            if let TimedBufferOrEvent::Buffer(running_time, _) = o {
+                                Some((Some(idx), *running_time))
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or((None, running_time));
 
-                let diff = match running_time.checked_sub(initial_running_time) {
-                    Some(diff) => diff,
-                    None => {
-                        gst::error!(
+                    let diff = match running_time.checked_sub(initial_running_time) {
+                        Some(diff) => diff,
+                        None => {
+                            gst::error!(
                             CAT,
                             obj: pad,
                             "Too big running time difference between initial running time {:?} and current running time {:?}",
                             initial_running_time,
                             running_time,
                         );
-                        return Err(gst::FlowError::Error);
-                    }
-                };
+                            return Err(gst::FlowError::Error);
+                        }
+                    };
 
-                let initial_utc_time = match gst::Signed::Positive(utc_time).checked_sub(diff) {
-                    Some(gst::Signed::Positive(initial_utc_time)) => initial_utc_time,
-                    Some(gst::Signed::Negative(initial_utc_time)) => {
-                        // XXX: Optionally just skip the first buffers over it
-                        gst::error!(
-                            CAT,
-                            obj: pad,
-                            "Initial UTC time is negative: -{}",
-                            initial_utc_time
-                        );
-                        return Err(gst::FlowError::Error);
-                    }
-                    None => {
-                        // XXX: Optionally just skip the first buffers over it
-                        gst::error!(CAT, obj: pad, "Can't calculate initial UTC time");
-                        return Err(gst::FlowError::Error);
-                    }
+                    let initial_utc_time = match gst::Signed::Positive(utc_time).checked_sub(diff) {
+                        Some(gst::Signed::Positive(initial_utc_time)) => initial_utc_time,
+                        Some(gst::Signed::Negative(initial_utc_time)) => {
+                            gst::warning!(
+                                CAT,
+                                obj: pad,
+                                "Initial UTC time is negative: -{}, dropping buffer",
+                                initial_utc_time
+                            );
+
+                            state.pre_queued_buffers.remove(idx.unwrap());
+                            continue;
+                        }
+                        None => {
+                            gst::warning!(
+                                CAT,
+                                obj: pad,
+                                "Can't calculate initial UTC time, dropping buffer"
+                            );
+                            state.pre_queued_buffers.remove(idx.unwrap());
+                            continue;
+                        }
+                    };
+
+                    break (initial_utc_time, initial_running_time);
                 };
 
                 gst::info!(
