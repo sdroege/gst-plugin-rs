@@ -271,24 +271,28 @@ impl OnvifMetadataParse {
                     .pre_queued_buffers
                     .push(TimedBufferOrEvent::Buffer(running_time, buffer));
 
-                if let Some(front_running_time) = state.pre_queued_buffers.iter().find_map(|o| {
-                    if let TimedBufferOrEvent::Buffer(running_time, _) = o {
-                        Some(*running_time)
-                    } else {
-                        None
-                    }
-                }) {
+                if let Some((idx, front_running_time)) = state
+                    .pre_queued_buffers
+                    .iter()
+                    .enumerate()
+                    .find_map(|(idx, o)| {
+                        if let TimedBufferOrEvent::Buffer(running_time, _) = o {
+                            Some((idx, *running_time))
+                        } else {
+                            None
+                        }
+                    })
+                {
                     if running_time.saturating_sub(front_running_time)
                         >= gst::Signed::Positive(state.configured_latency)
                     {
-                        // XXX: Optionally discard, error or just output anyway
-                        gst::error!(
+                        gst::warning!(
                             CAT,
                             obj: pad,
                             "Received no UTC time in the first {}",
                             state.configured_latency
                         );
-                        return Err(gst::FlowError::Error);
+                        state.pre_queued_buffers.remove(idx);
                     }
                 }
 
