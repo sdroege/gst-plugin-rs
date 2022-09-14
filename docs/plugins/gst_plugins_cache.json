@@ -4516,6 +4516,20 @@
                         "readable": true,
                         "type": "guint64",
                         "writable": true
+                    },
+                    "max-lateness": {
+                        "blurb": "Drop metadata that delayed by more than this",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "200000000",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
                     }
                 },
                 "rank": "none"
