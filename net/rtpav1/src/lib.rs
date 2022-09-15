@@ -6,7 +6,13 @@
 // <https://mozilla.org/MPL/2.0/>.
 //
 // SPDX-License-Identifier: MPL-2.0
+#![allow(unused_doc_comments)]
 
+/**
+ * plugin-rtpav1:
+ *
+ * Since: plugins-rs-0.9.0
+ */
 use gst::glib;
 
 mod common;
