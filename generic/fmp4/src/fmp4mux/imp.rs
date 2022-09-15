@@ -889,6 +889,15 @@ impl FMP4Mux {
             }
         }
 
+        // Remove all GAP buffers before processing them further
+        for buffers in &mut drain_buffers {
+            buffers.retain(|buf| {
+                !buf.buffer.flags().contains(gst::BufferFlags::GAP)
+                    || !buf.buffer.flags().contains(gst::BufferFlags::DROPPABLE)
+                    || buf.buffer.size() != 0
+            });
+        }
+
         let mut max_end_utc_time = None;
         // For ONVIF, replace all timestamps with timestamps based on UTC times.
         if class.as_ref().variant == super::Variant::ONVIF {
@@ -1196,13 +1205,6 @@ impl FMP4Mux {
         if interleaved_buffers.is_empty() {
             assert!(timeout || at_eos);
         } else {
-            // Remove all GAP buffers before writing them out
-            interleaved_buffers.retain(|buf| {
-                !buf.buffer.flags().contains(gst::BufferFlags::GAP)
-                    || !buf.buffer.flags().contains(gst::BufferFlags::DROPPABLE)
-                    || buf.buffer.size() != 0
-            });
-
             let min_earliest_pts_position = min_earliest_pts_position.unwrap();
             let min_earliest_pts = min_earliest_pts.unwrap();
             let max_end_pts = max_end_pts.unwrap();
