@@ -158,6 +158,15 @@ impl OnvifMetadataCombiner {
         end: gst::ClockTime,
     ) -> Result<bool, gst::FlowError> {
         while let Some(buffer) = self.meta_sink_pad.peek_buffer() {
+            // Skip over gap buffers
+            if buffer.flags().contains(gst::BufferFlags::GAP)
+                && buffer.flags().contains(gst::BufferFlags::DROPPABLE)
+                && buffer.size() == 0
+            {
+                self.meta_sink_pad.pop_buffer().unwrap();
+                continue;
+            }
+
             let meta_ts = crate::lookup_reference_timestamp(&buffer).ok_or_else(|| {
                 gst::element_error!(
                     element,
