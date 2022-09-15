@@ -244,27 +244,22 @@ documentation:
   image: $GSTREAMER_DOC_IMAGE
   variables:
     MESON_ARGS: >
+      -Ddoc=enabled
       -Domx=disabled
       -Dpython=disabled
       -Dlibav=disabled
       -Dlibnice=disabled
-      -Dugly=disabled
-      -Dbad=disabled
-      -Dgood=disabled
       -Ddevtools=disabled
       -Dges=disabled
-      -Drtsp_server=disabled
-      -Dvaapi=disabled
       -Dsharp=disabled
       -Dgst-examples=disabled
       -Drs=enabled
       -Dgst-plugins-rs:sodium=system
       -Dgst-docs:fatal_warnings=true
-      -Ddoc=enabled
-      -Dbase=disabled
-      -Dbase=disabled
       -Dorc=disabled
   script:
+    - export PATH=/usr/local/cargo/bin/:/usr/local/bin/:$PATH
+    - export RUSTUP_HOME='/usr/local/rustup'
     - P=$(pwd)
     - cd ..
     - rm -rf gstreamer
@@ -273,7 +268,7 @@ documentation:
     - ln -s $P subprojects/gst-plugins-rs
     - meson build $MESON_ARGS
     - ./gst-env.py ninja -C build subprojects/gst-docs/GStreamer-doc
-    - mv build/subprojects/gst-docs/GStreamer-doc/html documentation/
+    - mv build/subprojects/gst-docs/GStreamer-doc/html $P/documentation/
   artifacts:
     expire_in: '7 days'
     when: always

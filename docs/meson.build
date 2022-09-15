@@ -80,7 +80,7 @@ endforeach
 
 build_hotdoc = true
 plugins_doc = []
-sitemap = 'all_index.md\n'
+
 
 list_plugin_res = run_command(python, '-c',
 '''
@@ -107,5 +107,4 @@ foreach plugin_name: list_plugin_res.stdout().split(':')
         gst_cache_file: plugins_cache,
         gst_plugin_name: plugin_name,
     )]
-    sitemap += '        @0@-doc.json\n'.format(plugin_name)
 endforeach
