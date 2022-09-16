@@ -31,6 +31,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 const CUDA_MEMORY_FEATURE: &str = "memory:CUDAMemory";
 const GL_MEMORY_FEATURE: &str = "memory:GLMemory";
+const NVMM_MEMORY_FEATURE: &str = "memory:NVMM";
 
 const RTP_TWCC_URI: &str =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
@@ -325,6 +326,16 @@ fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error
                 gst::Element::link_many(&[&glupload, &glconvert, &glscale])?;
 
                 (glupload, glscale)
+            } else if feature.contains(NVMM_MEMORY_FEATURE) {
+                let queue = make_element("queue", None)?;
+                let nvconvert = make_element("nvvideoconvert", None)?;
+                nvconvert.set_property("compute-hw", 0);
+                nvconvert.set_property("nvbuf-memory-type", 0);
+
+                ret.add_many(&[&queue, &nvconvert])?;
+                gst::Element::link_many(&[&queue, &nvconvert])?;
+
+                (queue, nvconvert)
             } else {
                 let convert = make_element("videoconvert", None)?;
                 let scale = make_element("videoscale", None)?;
@@ -406,6 +417,23 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
                 enc.set_property("bitrate", start_bitrate / 1000);
                 enc.set_property("keyframe-period", 2560u32);
                 enc.set_property_from_str("rate-control", "cbr");
+            }
+            "nvv4l2h264enc" => {
+                enc.set_property("bitrate", start_bitrate);
+                enc.set_property_from_str("preset-level", "UltraFastPreset");
+                enc.set_property("maxperf-enable", true);
+                enc.set_property("insert-vui", true);
+                enc.set_property("idrinterval", 256u32);
+                enc.set_property("insert-sps-pps", true);
+                enc.set_property("insert-aud", true);
+                enc.set_property_from_str("control-rate", "constant_bitrate");
+            }
+            "nvv4l2vp8enc" => {
+                enc.set_property("bitrate", start_bitrate);
+                enc.set_property_from_str("preset-level", "UltraFastPreset");
+                enc.set_property("maxperf-enable", true);
+                enc.set_property("idrinterval", 256u32);
+                enc.set_property_from_str("control-rate", "constant_bitrate");
             }
             _ => (),
         }
@@ -561,6 +589,9 @@ impl VideoEncoder {
             "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" => {
                 (self.element.property::<u32>("bitrate") * 1000) as i32
             }
+            "nvv4l2h264enc" | "nvv4l2vp8enc" => {
+                (self.element.property::<u32>("bitrate")) as i32
+            }            
             factory => unimplemented!("Factory {} is currently not supported", factory),
         }
     }
@@ -585,6 +616,9 @@ impl VideoEncoder {
             "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" => self
                 .element
                 .set_property("bitrate", (bitrate / 1000) as u32),
+            "nvv4l2h264enc" | "nvv4l2vp8enc" => self
+                .element
+                .set_property("bitrate", bitrate as u32),
             factory => unimplemented!("Factory {} is currently not supported", factory),
         }
 
@@ -2645,6 +2679,10 @@ impl ElementImpl for WebRTCSink {
                 .structure_with_features(
                     gst::Structure::builder("video/x-raw").build(),
                     gst::CapsFeatures::new(&[GL_MEMORY_FEATURE]),
+                )
+                .structure_with_features(
+                    gst::Structure::builder("video/x-raw").build(),
+                    gst::CapsFeatures::new(&[NVMM_MEMORY_FEATURE]),
                 )
                 .build();
             let video_pad_template = gst::PadTemplate::new(
