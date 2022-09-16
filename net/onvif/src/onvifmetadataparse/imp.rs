@@ -230,7 +230,7 @@ impl OnvifMetadataParse {
                         }
                     };
 
-                    let initial_utc_time = match gst::Signed::Positive(utc_time).checked_sub(diff) {
+                    let initial_utc_time = match utc_time.into_positive().checked_sub(diff) {
                         Some(gst::Signed::Positive(initial_utc_time)) => initial_utc_time,
                         Some(gst::Signed::Negative(initial_utc_time)) => {
                             gst::warning!(
@@ -283,9 +283,7 @@ impl OnvifMetadataParse {
                         }
                     })
                 {
-                    if running_time.saturating_sub(front_running_time)
-                        >= gst::Signed::Positive(state.configured_latency)
-                    {
+                    if running_time.saturating_sub(front_running_time) >= state.configured_latency {
                         gst::warning!(
                             CAT,
                             obj: pad,
@@ -950,9 +948,7 @@ impl OnvifMetadataParse {
                 if let Some(utc_time_running_time_mapping) = utc_time_running_time_mapping {
                     let current_running_time = in_segment
                         .to_running_time_full(in_segment.position())
-                        .unwrap_or(gst::Signed::Negative(gst::ClockTime::from_nseconds(
-                            u64::MAX,
-                        )));
+                        .unwrap_or(gst::Signed::Negative(gst::ClockTime::MAX));
                     let current_utc_time = running_time_to_utc_time(
                         *utc_time_running_time_mapping,
                         current_running_time,
@@ -1320,7 +1316,7 @@ impl OnvifMetadataParse {
                         now
                     };
 
-                    drain_running_time = Some(gst::Signed::Positive(now));
+                    drain_running_time = Some(now.into_positive());
                 }
             } else {
                 let current_running_time = state
