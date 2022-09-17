@@ -43,15 +43,14 @@ members = [
 
 # Only plugins without external dependencies
 default-members = [
-    "tutorial",
     "version-helper",
     "audio/audiofx",
     "audio/claxon",
     "audio/lewton",
-    "generic/file",
     "generic/fmp4",
     "generic/threadshare",
     "net/aws",
+    "net/hlssink3",
     "net/onvif",
     "net/raptorq",
     "net/reqwest",
@@ -67,7 +66,6 @@ default-members = [
     "utils/uriplaylistbin",
     "video/cdg",
     "video/ffv1",
-    "video/flavors",
     "video/gif",
     "video/hsv",
     "video/rav1e",
