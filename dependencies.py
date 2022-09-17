@@ -6,6 +6,8 @@
 
 from argparse import ArgumentParser
 from pathlib import Path
+import sys
+
 
 try:
     # Python11 stdlib
@@ -40,14 +42,19 @@ RENAMES = {
 if __name__ == "__main__":
     opts = PARSER.parse_args()
 
+    with (opts.src_dir / 'Cargo.toml').open('rb') as f:
+        crates = tomllib.load(f)['workspace']['members']
     deps = set()
     for p in opts.plugins:
         assert p.startswith('gst')
         name = p[3:]
         name = RENAMES.get(name, name)
-        files = list(opts.src_dir.glob(f'**/{name}/Cargo.toml'))
-        assert len(files) == 1
-        with files[0].open('rb') as f:
+        crate_path = None
+        for crate in crates:
+            if Path(crate).name == name:
+                crate_path = opts.src_dir / crate / 'Cargo.toml'
+        assert crate_path
+        with crate_path.open('rb') as f:
             data = tomllib.load(f)
             try:
                 requires = data['package']['metadata']['capi']['pkg_config']['requires_private']
