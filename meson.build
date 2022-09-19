@@ -77,7 +77,7 @@ if dependency('pangocairo', required : get_option('closedcaption')).found()
   plugins += {'gst-plugin-closedcaption' : 'libgstrsclosedcaption',}
 endif
 
-if dependency('dav1d', required : get_option('dav1d')).found()
+if dependency('dav1d', version : '>= 1.0.0', required : get_option('dav1d')).found()
   plugins += {'gst-plugin-dav1d' : 'libgstrsdav1d'}
 endif
 
