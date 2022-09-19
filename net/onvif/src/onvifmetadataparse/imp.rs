@@ -20,10 +20,8 @@ fn utc_time_to_pts(
     utc_time_running_time_mapping: (gst::ClockTime, gst::Signed<gst::ClockTime>),
     utc_time: gst::ClockTime,
 ) -> Option<gst::ClockTime> {
-    let running_time = match utc_time_to_running_time(utc_time_running_time_mapping, utc_time)? {
-        gst::Signed::Positive(running_time) => running_time,
-        _ => return None,
-    };
+    let running_time =
+        utc_time_to_running_time(utc_time_running_time_mapping, utc_time)?.positive()?;
     segment.position_from_running_time(running_time)
 }
 
@@ -46,9 +44,10 @@ fn running_time_to_utc_time(
 ) -> Option<gst::ClockTime> {
     let diff = running_time.checked_sub(utc_time_running_time_mapping.1)?;
 
+    use gst::Signed::*;
     match diff {
-        gst::Signed::Positive(diff) => utc_time_running_time_mapping.0.checked_add(diff),
-        gst::Signed::Negative(diff) => utc_time_running_time_mapping.0.checked_sub(diff),
+        Positive(diff) => utc_time_running_time_mapping.0.checked_add(diff),
+        Negative(diff) => utc_time_running_time_mapping.0.checked_sub(diff),
     }
 }
 
@@ -230,9 +229,10 @@ impl OnvifMetadataParse {
                         }
                     };
 
+                    use gst::Signed::*;
                     let initial_utc_time = match utc_time.into_positive().checked_sub(diff) {
-                        Some(gst::Signed::Positive(initial_utc_time)) => initial_utc_time,
-                        Some(gst::Signed::Negative(initial_utc_time)) => {
+                        Some(Positive(initial_utc_time)) => initial_utc_time,
+                        Some(Negative(initial_utc_time)) => {
                             gst::warning!(
                                 CAT,
                                 obj: pad,
@@ -494,7 +494,7 @@ impl OnvifMetadataParse {
             .and_then(|(current_running_time, earliest_running_time)| {
                 current_running_time.checked_sub(earliest_running_time)
             })
-            .and_then(|queued_time| queued_time.positive_or(()).ok())
+            .and_then(|queued_time| queued_time.positive())
             .unwrap_or(gst::ClockTime::ZERO);
 
         gst::trace!(
@@ -546,7 +546,7 @@ impl OnvifMetadataParse {
                 earliest_running_time
                     .checked_add_unsigned(base_time + min_latency + state.configured_latency)
             })
-            .and_then(|earliest_clock_time| earliest_clock_time.positive_or(()).ok())
+            .and_then(|earliest_clock_time| earliest_clock_time.positive())
         {
             if state
                 .clock_wait
@@ -563,7 +563,7 @@ impl OnvifMetadataParse {
                     earliest_clock_time,
                     earliest_running_time
                         .unwrap()
-                        .positive_or(())
+                        .positive()
                         .unwrap_or(gst::ClockTime::ZERO)
                         .display(),
                     clock.time().display(),
@@ -609,7 +609,7 @@ impl OnvifMetadataParse {
                     utc_time_running_time_mapping,
                     drain_utc_time
                 ))
-                .and_then(|running_time| running_time.positive_or(()).ok())
+                .and_then(|running_time| running_time.positive())
                 .display(),
             out_segment.position().display(),
             out_segment
@@ -948,7 +948,7 @@ impl OnvifMetadataParse {
                 if let Some(utc_time_running_time_mapping) = utc_time_running_time_mapping {
                     let current_running_time = in_segment
                         .to_running_time_full(in_segment.position())
-                        .unwrap_or(gst::Signed::Negative(gst::ClockTime::MAX));
+                        .unwrap_or(gst::ClockTime::MIN_SIGNED);
                     let current_utc_time = running_time_to_utc_time(
                         *utc_time_running_time_mapping,
                         current_running_time,
@@ -960,7 +960,7 @@ impl OnvifMetadataParse {
                         obj: element,
                         "Queueing event with UTC time {} / running time {}",
                         current_utc_time,
-                        current_running_time.positive_or(()).ok().display(),
+                        current_running_time.positive().display(),
                     );
 
                     let frame = queued_frames
@@ -986,15 +986,13 @@ impl OnvifMetadataParse {
 
                     let current_running_time = in_segment
                         .to_running_time_full(in_segment.position())
-                        .unwrap_or(gst::Signed::Negative(gst::ClockTime::from_nseconds(
-                            u64::MAX,
-                        )));
+                        .unwrap_or(gst::ClockTime::MIN_SIGNED);
 
                     gst::trace!(
                         CAT,
                         obj: element,
                         "Pre-queueing event with running time {}",
-                        current_running_time.positive_or(()).ok().display()
+                        current_running_time.positive().display()
                     );
 
                     pre_queued_buffers.push(TimedBufferOrEvent::Event(current_running_time, event));
