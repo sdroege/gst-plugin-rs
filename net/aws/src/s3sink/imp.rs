@@ -514,7 +514,7 @@ impl S3Sink {
         };
 
         let config_builder = config::Builder::from(&sdk_config)
-            .retry_config(RetryConfig::new().with_max_attempts(settings.retry_attempts));
+            .retry_config(RetryConfig::standard().with_max_attempts(settings.retry_attempts));
 
         let config = if let Some(uri) = endpoint_uri {
             config_builder

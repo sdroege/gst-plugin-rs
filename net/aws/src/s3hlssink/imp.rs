@@ -368,7 +368,7 @@ fn s3client_from_settings(element: &super::S3HlsSink) -> Client {
 
     let config_builder = config::Builder::from(sdk_config)
         .region(settings.s3_region.clone())
-        .retry_config(RetryConfig::new().with_max_attempts(settings.retry_attempts));
+        .retry_config(RetryConfig::standard().with_max_attempts(settings.retry_attempts));
 
     let config = if let Some(uri) = endpoint_uri {
         config_builder
