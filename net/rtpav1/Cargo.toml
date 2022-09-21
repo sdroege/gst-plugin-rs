@@ -19,7 +19,7 @@ once_cell = "1.0"
 gst-check = { package = "gstreamer-check",  git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_20"] }
 
 [build-dependencies]
-gst-plugin-version-helper = { git = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs" }
+gst-plugin-version-helper = { path = "../../version-helper" }
 
 [lib]
 name = "gstrtpav1"
