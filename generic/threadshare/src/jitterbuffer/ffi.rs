@@ -109,7 +109,7 @@ extern "C" {
         time_ms: c_int,
     ) -> c_uint;
     #[allow(dead_code)]
-    pub fn gst_rtp_packet_rate_ctx_get_max_disorder(
+    pub fn gst_rtp_packet_rate_ctx_get_max_misorder(
         ctx: *mut RTPPacketRateCtx,
         time_ms: c_int,
     ) -> c_uint;

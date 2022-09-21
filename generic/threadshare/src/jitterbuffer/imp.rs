@@ -402,7 +402,7 @@ impl SinkHandler {
         inner.packet_rate_ctx.update(seq, rtptime);
 
         let max_dropout = inner.packet_rate_ctx.max_dropout(max_dropout_time as i32);
-        let max_misorder = inner.packet_rate_ctx.max_dropout(max_misorder_time as i32);
+        let max_misorder = inner.packet_rate_ctx.max_misorder(max_misorder_time as i32);
 
         pts = state
             .jbuf
