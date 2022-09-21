@@ -117,9 +117,7 @@ impl StartedState {
     }
 
     fn fragment_duration_since(&self, fragment_closed: gst::ClockTime) -> f32 {
-        assert!(self.fragment_opened_at.is_some());
-        let fragment_opened_at = &self.fragment_opened_at.unwrap();
-        let segment_duration = fragment_closed - fragment_opened_at;
+        let segment_duration = fragment_closed - self.fragment_opened_at.unwrap();
         segment_duration.mseconds() as f32 / 1_000f32
     }
 }

@@ -192,13 +192,13 @@ impl RaptorqEnc {
         for (target_time, repair_packet) in Iterator::zip(
             delays
                 .iter()
-                .map(|delay| base_time.opt_add(running_time).opt_add(delay)),
+                .map(|&delay| base_time.opt_add(running_time).opt_add(delay)),
             encoder
                 .repair_packets(0, repair_symbols as u32)
                 .chunks_exact(state.symbols_per_packet)
                 .enumerate()
                 .zip(&delays)
-                .map(|((n, packets), delay)| {
+                .map(|((n, packets), &delay)| {
                     let esi = packets[0].payload_id().encoding_symbol_id();
 
                     let payload_id = RepairPayloadId {
