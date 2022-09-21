@@ -1408,15 +1408,21 @@ impl ObjectImpl for JitterBuffer {
 
     fn signals() -> &'static [glib::subclass::Signal] {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
-            vec![glib::subclass::Signal::builder("clear-pt-map")
-                .action()
-                .class_handler(|_, args| {
-                    let element = args[0].get::<super::JitterBuffer>().expect("signal arg");
-                    let jb = element.imp();
-                    jb.clear_pt_map(&element);
-                    None
-                })
-                .build()]
+            vec![
+                glib::subclass::Signal::builder("clear-pt-map")
+                    .action()
+                    .class_handler(|_, args| {
+                        let element = args[0].get::<super::JitterBuffer>().expect("signal arg");
+                        let jb = element.imp();
+                        jb.clear_pt_map(&element);
+                        None
+                    })
+                    .build(),
+                glib::subclass::Signal::builder("request-pt-map")
+                    .param_types([u32::static_type()])
+                    .return_type::<gst::Caps>()
+                    .build(),
+            ]
         });
 
         SIGNALS.as_ref()

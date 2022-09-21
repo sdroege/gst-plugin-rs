@@ -5720,6 +5720,16 @@
                         "args": [],
                         "return-type": "void",
                         "when": "last"
+                    },
+                    "request-pt-map": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "guint"
+                            }
+                        ],
+                        "return-type": "GstCaps",
+                        "when": "last"
                     }
                 }
             },
