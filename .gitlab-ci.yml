@@ -5,17 +5,21 @@ include:
     ref: *templates_sha
     file: '/templates/debian.yml'
 
-  - remote: "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs/-/raw/main/ci/images_template.yml"
+  - project: 'gstreamer/gstreamer-rs'
+    ref: main
+    file: '/ci/images_template.yml'
+
+  - project: 'gstreamer/gstreamer'
+    ref: main
+    file: '/.gitlab-image-tags.yml'
 
 variables:
   FDO_UPSTREAM_REPO: gstreamer/gst-plugins-rs
 
   # We use GStreamer image to build the documentation as it is the simplest way
   # to ensure that we are testing against the same thing as GStreamer itself.
-  #
-  # This shouldn't be updated so often, only when big updates happen in
-  # GStreamer itself
-  GSTREAMER_DOC_IMAGE: registry.freedesktop.org/gstreamer/gstreamer/amd64/fedora:2022-09-22.0-main
+  # The tag name is included above from the main repo.
+  GSTREAMER_DOC_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer/amd64/fedora:$FEDORA_TAG-main"
   WINDOWS_BASE: "registry.freedesktop.org/gstreamer/gstreamer-rs/windows"
   WINDOWS_RUST_MINIMUM_IMAGE: "$WINDOWS_BASE:$GST_RS_IMG_TAG-main-$GST_RS_MSRV"
   WINDOWS_RUST_STABLE_IMAGE: "$WINDOWS_BASE:$GST_RS_IMG_TAG-main-$GST_RS_STABLE"
