@@ -859,6 +859,11 @@ impl OnvifMetadataParse {
                 let mut state = self.state.lock().unwrap();
 
                 match ev {
+                    gst::EventView::StreamStart(_) => {
+                        // Start task again if needed in case we previously went EOS and paused the
+                        // task because of that.
+                        let _ = Self::src_start_task(element, &self.srcpad);
+                    }
                     gst::EventView::Segment(ev) => {
                         match ev.segment().downcast_ref::<gst::ClockTime>().cloned() {
                             Some(mut segment) => {
