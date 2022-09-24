@@ -6,41 +6,44 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-/// This tracer provides an easy way to collect lateness of each buffer when it is pushed out of a
-/// pad in live pipelines.
-///
-/// Example:
-///
-/// ```console
-/// $ GST_TRACERS='buffer-lateness(file="/tmp/buffer_lateness.log")' gst-launch-1.0 audiotestsrc is-live=true ! queue ! fakesink
-/// ```
-///
-/// The generated file is a CSV file of the format
-///
-/// ```csv
-/// timestamp,element:pad name,pad pointer,buffer clock time,pipeline clock time,lateness,min latency
-/// ```
-///
-/// ## Parameters
-///
-/// ### `file`
-///
-/// Specifies the path to the file that will collect the CSV file with the buffer lateness.
-///
-/// By default the file is written to `/tmp/buffer_lateness.log`.
-///
-/// ### `include-filter`
-///
-/// Specifies a regular expression for the `element:pad` names that should be included.
-///
-/// By default this is not set.
-///
-/// ### `exclude-filter`
-///
-/// Specifies a regular expression for the `element:pad` names that should **not** be included.
-///
-/// By default this is not set.
-///
+/**
+ * tracer-buffer-lateness:
+ *
+ * This tracer provides an easy way to collect lateness of each buffer when it is pushed out of a
+ * pad in live pipelines.
+ *
+ * Example:
+ *
+ * ```console
+ * $ GST_TRACERS='buffer-lateness(file="/tmp/buffer_lateness.log")' gst-launch-1.0 audiotestsrc is-live=true ! queue ! fakesink
+ * ```
+ *
+ * The generated file is a CSV file of the format
+ *
+ * ```csv
+ * timestamp,element:pad name,pad pointer,buffer clock time,pipeline clock time,lateness,min latency
+ * ```
+ *
+ * ## Parameters
+ *
+ * ### `file`
+ *
+ * Specifies the path to the file that will collect the CSV file with the buffer lateness.
+ *
+ * By default the file is written to `/tmp/buffer_lateness.log`.
+ *
+ * ### `include-filter`
+ *
+ * Specifies a regular expression for the `element:pad` names that should be included.
+ *
+ * By default this is not set.
+ *
+ * ### `exclude-filter`
+ *
+ * Specifies a regular expression for the `element:pad` names that should **not** be included.
+ *
+ * By default this is not set.
+ */
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;

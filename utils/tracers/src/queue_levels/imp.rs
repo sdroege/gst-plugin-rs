@@ -6,40 +6,44 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-/// This tracer provides an easy way to collect queue levels over time of all queues inside a
-/// pipeline.
-///
-/// Example:
-///
-/// ```console
-/// $ GST_TRACERS='queue-levels(file="/tmp/queue_levels.log")' gst-launch-1.0 audiotestsrc ! queue ! fakesink
-/// ```
-///
-/// The generated file is a CSV file of the format
-///
-/// ```csv
-/// timestamp,queue name,queue pointer,cur-level-bytes,cur-level-time,cur-level-buffers,max-size-bytes,max-size-time,max-size-buffers
-/// ```
-///
-/// ## Parameters
-///
-/// ### `file`
-///
-/// Specifies the path to the file that will collect the CSV file with the queue levels.
-///
-/// By default the file is written to `/tmp/queue_levels.log`.
-///
-/// ### `include-filter`
-///
-/// Specifies a regular expression for the queue object names that should be included.
-///
-/// By default this is not set.
-///
-/// ### `exclude-filter`
-///
-/// Specifies a regular expression for the queue object names that should **not** be included.
-///
-/// By default this is not set.
+/**
+ * tracer-queue-levels:
+ *
+ * This tracer provides an easy way to collect queue levels over time of all queues inside a
+ * pipeline.
+ *
+ * Example:
+ *
+ * ```console
+ * $ GST_TRACERS='queue-levels(file="/tmp/queue_levels.log")' gst-launch-1.0 audiotestsrc ! queue ! fakesink
+ * ```
+ *
+ * The generated file is a CSV file of the format
+ *
+ * ```csv
+ * timestamp,queue name,queue pointer,cur-level-bytes,cur-level-time,cur-level-buffers,max-size-bytes,max-size-time,max-size-buffers
+ * ```
+ *
+ * ## Parameters
+ *
+ * ### `file`
+ *
+ * Specifies the path to the file that will collect the CSV file with the queue levels.
+ *
+ * By default the file is written to `/tmp/queue_levels.log`.
+ *
+ * ### `include-filter`
+ *
+ * Specifies a regular expression for the queue object names that should be included.
+ *
+ * By default this is not set.
+ *
+ * ### `exclude-filter`
+ *
+ * Specifies a regular expression for the queue object names that should **not** be included.
+ *
+ * By default this is not set.
+ */
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;

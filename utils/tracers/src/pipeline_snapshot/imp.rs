@@ -6,33 +6,37 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-/// This tracer provides an easy way to take a snapshot of all the pipelines without
-/// having to modify the application.
-/// One just have to load the tracer and send the `SIGUSR1` UNIX signal to take snapshots.
-/// It currently only works on UNIX systems.
-///
-/// When taking a snapshot pipelines are saved to DOT files, but the tracer may be
-/// extended in the future to dump more information.
-///
-/// Example:
-///
-/// ```console
-/// $ GST_TRACERS="pipeline-snapshot" GST_DEBUG_DUMP_DOT_DIR=. gst-launch-1.0 audiotestsrc ! fakesink
-/// ```
-/// You can then trigger a snapshot using:
-/// ```console
-/// $ kill -SIGUSR1 $(pidof gst-launch-1.0)
-/// ```
-///
-/// Parameters can be passed to configure the tracer:
-/// - `dot-prefix` (string, default: "pipeline-snapshot-"): when dumping pipelines to a `dot` file each file is named `$prefix$pipeline_name.dot`.
-/// - `dot-ts` (boolean, default: "true"): if the current timestamp should be added as a prefix to each pipeline `dot` file.
-///
-/// Example:
-///
-/// ```console
-/// $ GST_TRACERS="pipeline-snapshot(dot-prefix="badger-",dot-ts=false)" GST_DEBUG_DUMP_DOT_DIR=. gst-launch-1.0 audiotestsrc ! fakesink
-/// ```
+/**
+ * tracer-pipeline-snapshot:
+ *
+ * This tracer provides an easy way to take a snapshot of all the pipelines without
+ * having to modify the application.
+ * One just have to load the tracer and send the `SIGUSR1` UNIX signal to take snapshots.
+ * It currently only works on UNIX systems.
+ *
+ * When taking a snapshot pipelines are saved to DOT files, but the tracer may be
+ * extended in the future to dump more information.
+ *
+ * Example:
+ *
+ * ```console
+ * $ GST_TRACERS="pipeline-snapshot" GST_DEBUG_DUMP_DOT_DIR=. gst-launch-1.0 audiotestsrc ! fakesink
+ * ```
+ * You can then trigger a snapshot using:
+ * ```console
+ * $ kill -SIGUSR1 $(pidof gst-launch-1.0)
+ * ```
+ *
+ * Parameters can be passed to configure the tracer:
+ * - `dot-prefix` (string, default: "pipeline-snapshot-"): when dumping pipelines to a `dot` file each file is named `$prefix$pipeline_name.dot`.
+ * - `dot-ts` (boolean, default: "true"): if the current timestamp should be added as a prefix to each pipeline `dot` file.
+ *
+ * Example:
+ *
+ * ```console
+ * $ GST_TRACERS="pipeline-snapshot(dot-prefix="badger-",dot-ts=false)" GST_DEBUG_DUMP_DOT_DIR=. gst-launch-1.0 audiotestsrc ! fakesink
+ * ```
+ */
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
