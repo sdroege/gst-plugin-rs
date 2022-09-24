@@ -13,6 +13,9 @@ gst.workspace = true
 anyhow = "1"
 regex = "1"
 once_cell.workspace = true
+atomic_refcell = "0.1"
+pcap-file = "1.1.1"
+etherparse = "0.14.0"
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3"

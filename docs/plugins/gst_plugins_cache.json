@@ -9603,6 +9603,7 @@
         "tracers": {
             "buffer-lateness": {},
             "pad-push-timings": {},
+            "pcap-writer": {},
             "pipeline-snapshot": {},
             "queue-levels": {}
         },
