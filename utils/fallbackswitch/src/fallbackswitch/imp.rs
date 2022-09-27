@@ -759,12 +759,19 @@ impl FallbackSwitch {
             return Ok(gst::FlowSuccess::Ok);
         }
 
+        // Lock order: First stream lock then state lock!
+        let _stream_lock = MutexGuard::unlocked(&mut state, || self.src_pad.stream_lock());
+
+        is_active = self.active_sinkpad.lock().as_ref() == Some(pad);
+        if !is_active {
+            log!(CAT, obj: pad, "Dropping {:?} on inactive pad", buffer);
+            return Ok(gst::FlowSuccess::Ok);
+        }
+
         let switched_pad = state.switched_pad;
         let discont_pending = state.discont_pending;
         state.switched_pad = false;
         state.discont_pending = false;
-
-        let _stream_lock = self.src_pad.stream_lock();
         drop(state);
 
         if switched_pad {
@@ -855,7 +862,6 @@ impl FallbackSwitch {
         }
 
         let mut state = self.state.lock();
-        let forward = self.active_sinkpad.lock().as_ref() == Some(pad);
 
         let mut pad_state = pad.imp().state.lock();
 
@@ -901,30 +907,43 @@ impl FallbackSwitch {
             _ => {}
         }
 
-        let fwd_sticky = if forward && state.switched_pad && event.is_serialized() {
+        drop(pad_state);
+
+        let mut is_active = self.active_sinkpad.lock().as_ref() == Some(pad);
+        if !is_active {
+            log!(CAT, obj: pad, "Dropping {:?} on inactive pad", event);
+            return true;
+        }
+
+        // Lock order: First stream lock then state lock!
+        let stream_lock_for_serialized = event
+            .is_serialized()
+            .then(|| MutexGuard::unlocked(&mut state, || self.src_pad.stream_lock()));
+
+        is_active = self.active_sinkpad.lock().as_ref() == Some(pad);
+        if !is_active {
+            log!(CAT, obj: pad, "Dropping {:?} on inactive pad", event);
+            return true;
+        }
+
+        let fwd_sticky = if state.switched_pad && stream_lock_for_serialized.is_some() {
             state.switched_pad = false;
             true
         } else {
             false
         };
-
-        drop(pad_state);
-        let _stream_lock = forward.then(|| self.src_pad.stream_lock());
         drop(state);
 
-        if forward {
-            if fwd_sticky {
-                let _ = pad.push_event(gst::event::Reconfigure::new());
-                pad.sticky_events_foreach(|event| {
-                    self.src_pad.push_event(event.clone());
-                    std::ops::ControlFlow::Continue(gst::EventForeachAction::Keep)
-                });
+        if fwd_sticky {
+            let _ = pad.push_event(gst::event::Reconfigure::new());
+            pad.sticky_events_foreach(|event| {
+                self.src_pad.push_event(event.clone());
+                std::ops::ControlFlow::Continue(gst::EventForeachAction::Keep)
+            });
 
-                element.notify(PROP_ACTIVE_PAD);
-            }
-            self.src_pad.push_event(event);
+            element.notify(PROP_ACTIVE_PAD);
         }
-        true
+        self.src_pad.push_event(event)
     }
 
     fn sink_query(
