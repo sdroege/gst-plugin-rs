@@ -12,13 +12,14 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use clap::Parser;
 use gst::prelude::*;
-use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "playlist", about = "An example of uriplaylistbin usage.")]
+#[derive(Debug, Parser)]
+#[clap(version, author)]
+#[clap(about = "An example of uriplaylistbin usage.")]
 struct Opt {
-    #[structopt(default_value = "1", short = "i", long = "iterations")]
+    #[clap(short, default_value = "1", action)]
     iterations: u32,
     uris: Vec<String>,
 }
@@ -82,7 +83,7 @@ fn main() -> anyhow::Result<()> {
     gst::init().unwrap();
     gsturiplaylistbin::plugin_register_static().expect("Failed to register uriplaylistbin plugin");
 
-    let opt = Opt::from_args();
+    let opt = Opt::parse();
     if opt.uris.is_empty() {
         anyhow::bail!("Need at least one URI to play");
     }

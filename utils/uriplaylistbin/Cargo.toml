@@ -12,10 +12,10 @@ rust-version = "1.63"
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 once_cell = "1.0"
 anyhow = "1"
+clap = { version = "3.2", optional = true, features = ["derive"] }
 
 [dev-dependencies]
 gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-structopt = "0.3"
 url = "2.2"
 more-asserts = "0.3"
 
@@ -27,6 +27,7 @@ path = "src/lib.rs"
 [[example]]
 name = "playlist"
 path = "examples/playlist.rs"
+required-features = ["clap"]
 
 [build-dependencies]
 gst-plugin-version-helper = { path="../../version-helper" }
