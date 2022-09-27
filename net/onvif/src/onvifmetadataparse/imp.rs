@@ -561,11 +561,7 @@ impl OnvifMetadataParse {
                     obj: element,
                     "Scheduling timer for {} / running time {}, now {}",
                     earliest_clock_time,
-                    earliest_running_time
-                        .unwrap()
-                        .positive()
-                        .unwrap_or(gst::ClockTime::ZERO)
-                        .display(),
+                    earliest_running_time.unwrap().display(),
                     clock.time().display(),
                 );
                 state.clock_wait = Some(clock.new_single_shot_id(earliest_clock_time));
@@ -965,7 +961,7 @@ impl OnvifMetadataParse {
                         obj: element,
                         "Queueing event with UTC time {} / running time {}",
                         current_utc_time,
-                        current_running_time.positive().display(),
+                        current_running_time.display(),
                     );
 
                     let frame = queued_frames
@@ -997,7 +993,7 @@ impl OnvifMetadataParse {
                         CAT,
                         obj: element,
                         "Pre-queueing event with running time {}",
-                        current_running_time.positive().display()
+                        current_running_time.display()
                     );
 
                     pre_queued_buffers.push(TimedBufferOrEvent::Event(current_running_time, event));
