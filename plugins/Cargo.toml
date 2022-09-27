@@ -9,9 +9,9 @@ repository = "https://github.com/centricular/webrtcsink/"
 build = "build.rs"
 
 [dependencies]
-gst = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer", features = ["v1_20", "ser_de"] }
+gst = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer", features = ["v1_20", "serde"] }
 gst-app = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-app", features = ["v1_20"] }
-gst-video = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-video", features = ["v1_20", "ser_de"] }
+gst-video = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-video", features = ["v1_20", "serde"] }
 gst-webrtc = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-webrtc", features = ["v1_20"] }
 gst-sdp = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-sdp", features = ["v1_20"] }
 gst-rtp = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-rtp", features = ["v1_20"] }
