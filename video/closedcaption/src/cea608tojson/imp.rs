@@ -746,6 +746,8 @@ impl State {
             | ffi::eia608_control_t_eia608_tab_offset_2
             | ffi::eia608_control_t_eia608_tab_offset_3 => {
                 self.cursor.col += (cmd - ffi::eia608_control_t_eia608_tab_offset_0) as usize;
+                // C.13 Right Margin Limitation
+                self.cursor.col = std::cmp::min(self.cursor.col, 31);
             }
             // TODO
             ffi::eia608_control_t_eia608_control_alarm_off
