@@ -7,14 +7,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use gst::{
-    glib,
-    subclass::{prelude::*, ElementMetadata},
-    Buffer, BufferFlags, Caps, ClockTime, DebugCategory, DebugColorFlags, Event, FlowError,
-    FlowSuccess, IntRange, LoggableError, PadDirection, PadPresence, PadTemplate, ResourceError,
-    StateChange, StateChangeError, StateChangeSuccess,
-};
-use gst_rtp::{prelude::*, rtp_buffer::RTPBuffer, subclass::prelude::*, RTPBasePayload};
+use gst::{glib, subclass::prelude::*};
+use gst_rtp::{prelude::*, subclass::prelude::*};
 use std::{
     io::{Cursor, Read, Seek, SeekFrom, Write},
     sync::Mutex,
@@ -27,10 +21,10 @@ use crate::common::{
     err_flow, leb128_size, write_leb128, ObuType, SizedObu, CLOCK_RATE, ENDIANNESS,
 };
 
-static CAT: Lazy<DebugCategory> = Lazy::new(|| {
-    DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "rtpav1pay",
-        DebugColorFlags::empty(),
+        gst::DebugColorFlags::empty(),
         Some("RTP AV1 Payloader"),
     )
 });
@@ -62,8 +56,8 @@ struct TempPacketData {
 struct ObuData {
     info: SizedObu,
     bytes: Vec<u8>,
-    dts: Option<ClockTime>,
-    pts: Option<ClockTime>,
+    dts: Option<gst::ClockTime>,
+    pts: Option<gst::ClockTime>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -114,9 +108,9 @@ impl RTPAv1Pay {
         element: &<Self as ObjectSubclass>::Type,
         state: &mut State,
         data: &[u8],
-        dts: Option<ClockTime>,
-        pts: Option<ClockTime>,
-    ) -> Result<gst::BufferList, FlowError> {
+        dts: Option<gst::ClockTime>,
+        pts: Option<gst::ClockTime>,
+    ) -> Result<gst::BufferList, gst::FlowError> {
         let mut reader = Cursor::new(data);
 
         while reader.position() < data.len() as u64 {
@@ -142,10 +136,10 @@ impl RTPAv1Pay {
                     if obu.size != 0 {
                         gst::element_error!(
                             element,
-                            ResourceError::Read,
+                            gst::ResourceError::Read,
                             ["temporal delimiter OBUs should have empty payload"]
                         );
-                        return Err(FlowError::Error);
+                        return Err(gst::FlowError::Error);
                     }
                     state.obus.push(ObuData {
                         info: obu,
@@ -222,7 +216,7 @@ impl RTPAv1Pay {
 
         let mut data = state.temp_packet_data.take().unwrap_or_else(|| {
             TempPacketData {
-                payload_limit: RTPBuffer::calc_payload_len(element.mtu(), 0, 0),
+                payload_limit: gst_rtp::RTPBuffer::calc_payload_len(element.mtu(), 0, 0),
                 packet: PacketOBUData {
                     payload_size: 1, // 1 byte is used for the aggregation header
                     omit_last_size_field: true,
@@ -341,7 +335,7 @@ impl RTPAv1Pay {
         element: &<Self as ObjectSubclass>::Type,
         state: &mut State,
         packet: PacketOBUData,
-    ) -> Result<gst::Buffer, FlowError> {
+    ) -> Result<gst::Buffer, gst::FlowError> {
         gst::log!(
             CAT,
             obj: element,
@@ -350,15 +344,16 @@ impl RTPAv1Pay {
         );
 
         // prepare the outgoing buffer
-        let mut outbuf = Buffer::new_rtp_with_sizes(packet.payload_size, 0, 0).map_err(|err| {
-            gst::element_error!(
-                element,
-                ResourceError::Write,
-                ["Failed to allocate output buffer: {}", err]
-            );
+        let mut outbuf =
+            gst::Buffer::new_rtp_with_sizes(packet.payload_size, 0, 0).map_err(|err| {
+                gst::element_error!(
+                    element,
+                    gst::ResourceError::Write,
+                    ["Failed to allocate output buffer: {}", err]
+                );
 
-            FlowError::Error
-        })?;
+                gst::FlowError::Error
+            })?;
 
         {
             // this block enforces that outbuf_mut is dropped before pushing outbuf
@@ -368,8 +363,8 @@ impl RTPAv1Pay {
             outbuf_mut.set_dts(state.obus[0].dts);
             outbuf_mut.set_pts(state.obus[0].pts);
 
-            let mut rtp =
-                RTPBuffer::from_buffer_writable(outbuf_mut).expect("Failed to create RTPBuffer");
+            let mut rtp = gst_rtp::RTPBuffer::from_buffer_writable(outbuf_mut)
+                .expect("Failed to create RTPBuffer");
             rtp.set_marker(packet.ends_temporal_unit);
 
             let payload = rtp
@@ -478,7 +473,7 @@ impl RTPAv1Pay {
 impl ObjectSubclass for RTPAv1Pay {
     const NAME: &'static str = "GstRtpAv1Pay";
     type Type = super::RTPAv1Pay;
-    type ParentType = RTPBasePayload;
+    type ParentType = gst_rtp::RTPBasePayload;
 }
 
 impl ObjectImpl for RTPAv1Pay {}
@@ -486,9 +481,9 @@ impl ObjectImpl for RTPAv1Pay {}
 impl GstObjectImpl for RTPAv1Pay {}
 
 impl ElementImpl for RTPAv1Pay {
-    fn metadata() -> Option<&'static ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<ElementMetadata> = Lazy::new(|| {
-            ElementMetadata::new(
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
                 "RTP AV1 payloader",
                 "Codec/Payloader/Network/RTP",
                 "Payload AV1 as RTP packets",
@@ -499,13 +494,13 @@ impl ElementImpl for RTPAv1Pay {
         Some(&*ELEMENT_METADATA)
     }
 
-    fn pad_templates() -> &'static [PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<PadTemplate>> = Lazy::new(|| {
-            let sink_pad_template = PadTemplate::new(
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let sink_pad_template = gst::PadTemplate::new(
                 "sink",
-                PadDirection::Sink,
-                PadPresence::Always,
-                &Caps::builder("video/x-av1")
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &gst::Caps::builder("video/x-av1")
                     .field("parsed", true)
                     .field("stream-format", "obu-stream")
                     .field("alignment", "obu")
@@ -513,13 +508,13 @@ impl ElementImpl for RTPAv1Pay {
             )
             .unwrap();
 
-            let src_pad_template = PadTemplate::new(
+            let src_pad_template = gst::PadTemplate::new(
                 "src",
-                PadDirection::Src,
-                PadPresence::Always,
-                &Caps::builder("application/x-rtp")
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &gst::Caps::builder("application/x-rtp")
                     .field("media", "video")
-                    .field("payload", IntRange::new(96, 127))
+                    .field("payload", gst::IntRange::new(96, 127))
                     .field("clock-rate", CLOCK_RATE as i32)
                     .field("encoding-name", "AV1")
                     .build(),
@@ -535,18 +530,18 @@ impl ElementImpl for RTPAv1Pay {
     fn change_state(
         &self,
         element: &Self::Type,
-        transition: StateChange,
-    ) -> Result<StateChangeSuccess, StateChangeError> {
+        transition: gst::StateChange,
+    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst::debug!(CAT, obj: element, "changing state: {}", transition);
 
-        if matches!(transition, StateChange::ReadyToPaused) {
+        if matches!(transition, gst::StateChange::ReadyToPaused) {
             let mut state = self.state.lock().unwrap();
             self.reset(element, &mut state);
         }
 
         let ret = self.parent_change_state(element, transition);
 
-        if matches!(transition, StateChange::PausedToReady) {
+        if matches!(transition, gst::StateChange::PausedToReady) {
             let mut state = self.state.lock().unwrap();
             self.reset(element, &mut state);
         }
@@ -556,7 +551,7 @@ impl ElementImpl for RTPAv1Pay {
 }
 
 impl RTPBasePayloadImpl for RTPAv1Pay {
-    fn set_caps(&self, element: &Self::Type, _caps: &Caps) -> Result<(), LoggableError> {
+    fn set_caps(&self, element: &Self::Type, _caps: &gst::Caps) -> Result<(), gst::LoggableError> {
         element.set_options("video", true, "AV1", CLOCK_RATE);
 
         gst::debug!(CAT, obj: element, "setting caps");
@@ -567,8 +562,8 @@ impl RTPBasePayloadImpl for RTPAv1Pay {
     fn handle_buffer(
         &self,
         element: &Self::Type,
-        buffer: Buffer,
-    ) -> Result<FlowSuccess, FlowError> {
+        buffer: gst::Buffer,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::trace!(
             CAT,
             obj: element,
@@ -578,7 +573,7 @@ impl RTPBasePayloadImpl for RTPAv1Pay {
 
         let mut state = self.state.lock().unwrap();
 
-        if buffer.flags().contains(BufferFlags::DISCONT) {
+        if buffer.flags().contains(gst::BufferFlags::DISCONT) {
             gst::debug!(CAT, obj: element, "buffer discontinuity");
             self.reset(element, &mut state);
         }
@@ -589,11 +584,11 @@ impl RTPBasePayloadImpl for RTPAv1Pay {
         let buffer = buffer.into_mapped_buffer_readable().map_err(|_| {
             gst::element_error!(
                 element,
-                ResourceError::Read,
+                gst::ResourceError::Read,
                 ["Failed to map buffer readable"]
             );
 
-            FlowError::Error
+            gst::FlowError::Error
         })?;
 
         let list = self.handle_new_obus(element, &mut state, buffer.as_slice(), dts, pts)?;
@@ -606,7 +601,7 @@ impl RTPBasePayloadImpl for RTPAv1Pay {
         }
     }
 
-    fn sink_event(&self, element: &Self::Type, event: Event) -> bool {
+    fn sink_event(&self, element: &Self::Type, event: gst::Event) -> bool {
         gst::log!(CAT, obj: element, "sink event: {}", event.type_());
 
         match event.view() {

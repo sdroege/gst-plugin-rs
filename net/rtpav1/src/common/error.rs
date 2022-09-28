@@ -10,14 +10,14 @@
 macro_rules! err_flow {
     ($element:ident, read, $msg:literal) => {
         |err| {
-            gst::element_error!($element, ResourceError::Read, [$msg, err]);
-            FlowError::Error
+            gst::element_error!($element, gst::ResourceError::Read, [$msg, err]);
+            gst::FlowError::Error
         }
     };
     ($element:ident, write, $msg:literal) => {
         |err| {
-            gst::element_error!($element, ResourceError::Write, [$msg, err]);
-            FlowError::Error
+            gst::element_error!($element, gst::ResourceError::Write, [$msg, err]);
+            gst::FlowError::Error
         }
     };
 
@@ -53,13 +53,13 @@ macro_rules! err_flow {
 macro_rules! err_opt {
     ($element:ident, read, $msg:literal) => {
         |err| {
-            gst::element_error!($element, ResourceError::Read, [$msg, err]);
+            gst::element_error!($element, gst::ResourceError::Read, [$msg, err]);
             Option::<()>::None
         }
     };
     ($element:ident, write, $msg:literal) => {
         |err| {
-            gst::element_error!($element, ResourceError::Write, [$msg, err]);
+            gst::element_error!($element, gst::ResourceError::Write, [$msg, err]);
             Option::<()>::None
         }
     };

@@ -8,7 +8,6 @@
 // SPDX-License-Identifier: MPL-2.0
 #![allow(clippy::new_without_default)]
 
-use glib::Object;
 use gst::glib;
 use gst::prelude::*;
 
@@ -21,7 +20,7 @@ glib::wrapper! {
 
 impl RTPAv1Pay {
     pub fn new() -> Self {
-        Object::new(&[]).expect("Failed to create AV1 payloader")
+        glib::Object::new(&[]).expect("Failed to create AV1 payloader")
     }
 }
 

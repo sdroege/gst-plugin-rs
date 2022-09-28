@@ -7,17 +7,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use gst::{
-    glib,
-    subclass::{prelude::*, ElementMetadata},
-    Buffer, BufferFlags, Caps, DebugCategory, DebugColorFlags, IntRange, Memory, PadDirection,
-    PadPresence, PadTemplate, ResourceError, StateChange, StateChangeError, StateChangeSuccess,
-};
-use gst_base::UniqueAdapter;
-use gst_rtp::{
-    rtp_buffer::{RTPBuffer, Readable},
-    subclass::prelude::*,
-};
+use gst::{glib, subclass::prelude::*};
+use gst_rtp::subclass::prelude::*;
 use std::{
     cmp::Ordering,
     io::{Cursor, Read, Seek, SeekFrom},
@@ -37,7 +28,7 @@ use crate::common::{
 #[derive(Debug, Default)]
 struct State {
     /// used to store outgoing OBUs until the TU is complete
-    adapter: UniqueAdapter,
+    adapter: gst_base::UniqueAdapter,
 
     last_timestamp: Option<u32>,
     /// if true, the last packet of a temporal unit has been received
@@ -51,15 +42,16 @@ pub struct RTPAv1Depay {
     state: Mutex<State>,
 }
 
-static CAT: Lazy<DebugCategory> = Lazy::new(|| {
-    DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "rtpav1depay",
-        DebugColorFlags::empty(),
+        gst::DebugColorFlags::empty(),
         Some("RTP AV1 Depayloader"),
     )
 });
 
-static TEMPORAL_DELIMITER: Lazy<Memory> = Lazy::new(|| Memory::from_slice(&[0b0001_0010, 0]));
+static TEMPORAL_DELIMITER: Lazy<gst::Memory> =
+    Lazy::new(|| gst::Memory::from_slice(&[0b0001_0010, 0]));
 
 impl RTPAv1Depay {
     fn reset(&self, element: &<Self as ObjectSubclass>::Type, state: &mut State) {
@@ -81,8 +73,8 @@ impl ObjectImpl for RTPAv1Depay {}
 impl GstObjectImpl for RTPAv1Depay {}
 
 impl ElementImpl for RTPAv1Depay {
-    fn metadata() -> Option<&'static ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<ElementMetadata> = Lazy::new(|| {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RTP AV1 Depayloader",
                 "Codec/Depayloader/Network/RTP",
@@ -94,26 +86,26 @@ impl ElementImpl for RTPAv1Depay {
         Some(&*ELEMENT_METADATA)
     }
 
-    fn pad_templates() -> &'static [PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<PadTemplate>> = Lazy::new(|| {
-            let sink_pad_template = PadTemplate::new(
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let sink_pad_template = gst::PadTemplate::new(
                 "sink",
-                PadDirection::Sink,
-                PadPresence::Always,
-                &Caps::builder("application/x-rtp")
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &gst::Caps::builder("application/x-rtp")
                     .field("media", "video")
-                    .field("payload", IntRange::new(96, 127))
+                    .field("payload", gst::IntRange::new(96, 127))
                     .field("clock-rate", CLOCK_RATE as i32)
                     .field("encoding-name", "AV1")
                     .build(),
             )
             .unwrap();
 
-            let src_pad_template = PadTemplate::new(
+            let src_pad_template = gst::PadTemplate::new(
                 "src",
-                PadDirection::Src,
-                PadPresence::Always,
-                &Caps::builder("video/x-av1")
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &gst::Caps::builder("video/x-av1")
                     .field("parsed", true)
                     .field("stream-format", "obu-stream")
                     .field("alignment", "tu")
@@ -130,18 +122,18 @@ impl ElementImpl for RTPAv1Depay {
     fn change_state(
         &self,
         element: &Self::Type,
-        transition: StateChange,
-    ) -> Result<StateChangeSuccess, StateChangeError> {
+        transition: gst::StateChange,
+    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst::debug!(CAT, obj: element, "changing state: {}", transition);
 
-        if matches!(transition, StateChange::ReadyToPaused) {
+        if matches!(transition, gst::StateChange::ReadyToPaused) {
             let mut state = self.state.lock().unwrap();
             self.reset(element, &mut state);
         }
 
         let ret = self.parent_change_state(element, transition);
 
-        if matches!(transition, StateChange::PausedToReady) {
+        if matches!(transition, gst::StateChange::PausedToReady) {
             let mut state = self.state.lock().unwrap();
             self.reset(element, &mut state);
         }
@@ -166,8 +158,8 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
     fn process_rtp_packet(
         &self,
         element: &Self::Type,
-        rtp: &RTPBuffer<Readable>,
-    ) -> Option<Buffer> {
+        rtp: &gst_rtp::RTPBuffer<gst_rtp::rtp_buffer::Readable>,
+    ) -> Option<gst::Buffer> {
         gst::log!(
             CAT,
             obj: element,
@@ -180,7 +172,7 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
 
         let mut state = self.state.lock().unwrap();
 
-        if rtp.buffer().flags().contains(BufferFlags::DISCONT) {
+        if rtp.buffer().flags().contains(gst::BufferFlags::DISCONT) {
             gst::debug!(CAT, obj: element, "buffer discontinuity");
             self.reset(element, &mut state);
         }
@@ -188,7 +180,7 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
         // number of bytes that can be used in the next outgoing buffer
         let mut bytes_ready = 0;
         let mut reader = Cursor::new(payload);
-        let mut ready_obus = Buffer::new();
+        let mut ready_obus = gst::Buffer::new();
 
         let aggr_header = {
             let mut byte = [0; 1];
@@ -363,7 +355,7 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
 /// and will be at the first byte past the element's size field afterwards.
 fn find_element_info(
     element: &<RTPAv1Depay as ObjectSubclass>::Type,
-    rtp: &RTPBuffer<Readable>,
+    rtp: &gst_rtp::RTPBuffer<gst_rtp::rtp_buffer::Readable>,
     reader: &mut Cursor<&[u8]>,
     aggr_header: &AggregationHeader,
     index: u32,
@@ -410,8 +402,8 @@ fn translate_obu(
     element: &<RTPAv1Depay as ObjectSubclass>::Type,
     reader: &mut Cursor<&[u8]>,
     obu: &SizedObu,
-) -> Option<Buffer> {
-    let mut bytes = Buffer::with_size(obu.full_size() as usize)
+) -> Option<gst::Buffer> {
+    let mut bytes = gst::Buffer::with_size(obu.full_size() as usize)
         .map_err(err_opt!(element, buf_alloc))
         .ok()?
         .into_mapped_buffer_writable()
@@ -457,9 +449,8 @@ fn translate_obu(
 #[rustfmt::skip]
 mod tests {
     use super::*;
+    use gst_rtp::prelude::*;
     use std::io::Cursor;
-    use gst::buffer::Buffer;
-    use gst_rtp::rtp_buffer::RTPBufferExt;
 
     #[test]
     fn test_translate_obu() {
@@ -565,8 +556,8 @@ mod tests {
             aggr_header,
         )) in test_data.into_iter().enumerate() {
             println!("running test {}...", idx);
-            let buffer = Buffer::new_rtp_with_sizes(payload_size, 0, 0).unwrap();
-            let rtp = RTPBuffer::from_buffer_readable(&buffer).unwrap();
+            let buffer = gst::Buffer::new_rtp_with_sizes(payload_size, 0, 0).unwrap();
+            let rtp = gst_rtp::RTPBuffer::from_buffer_readable(&buffer).unwrap();
             let mut reader = Cursor::new(rtp_bytes.as_slice());
 
             let mut element_size = 0;
