@@ -151,6 +151,18 @@ impl ElementImpl for RTPAv1Depay {
 }
 
 impl RTPBaseDepayloadImpl for RTPAv1Depay {
+    fn handle_event(&self, element: &Self::Type, event: gst::Event) -> bool {
+        match event.view() {
+            gst::EventView::Eos(_) | gst::EventView::FlushStop(_) => {
+                let mut state = self.state.lock().unwrap();
+                self.reset(element, &mut state);
+            }
+            _ => (),
+        }
+
+        self.parent_handle_event(element, event)
+    }
+
     fn process_rtp_packet(
         &self,
         element: &Self::Type,

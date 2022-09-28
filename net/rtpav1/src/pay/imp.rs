@@ -10,9 +10,9 @@
 use gst::{
     glib,
     subclass::{prelude::*, ElementMetadata},
-    Buffer, BufferFlags, Caps, ClockTime, DebugCategory, DebugColorFlags, Event, EventType,
-    FlowError, FlowSuccess, IntRange, LoggableError, PadDirection, PadPresence, PadTemplate,
-    ResourceError, StateChange, StateChangeError, StateChangeSuccess,
+    Buffer, BufferFlags, Caps, ClockTime, DebugCategory, DebugColorFlags, Event, FlowError,
+    FlowSuccess, IntRange, LoggableError, PadDirection, PadPresence, PadTemplate, ResourceError,
+    StateChange, StateChangeError, StateChangeSuccess,
 };
 use gst_rtp::{prelude::*, rtp_buffer::RTPBuffer, subclass::prelude::*, RTPBasePayload};
 use std::{
@@ -104,7 +104,7 @@ impl RTPAv1Pay {
     fn reset(&self, element: &<Self as ObjectSubclass>::Type, state: &mut State) {
         gst::debug!(CAT, obj: element, "resetting state");
 
-        state.obus.clear();
+        *state = State::default();
     }
 
     /// Parses new OBUs, stores them in the state,
@@ -609,23 +609,34 @@ impl RTPBasePayloadImpl for RTPAv1Pay {
     fn sink_event(&self, element: &Self::Type, event: Event) -> bool {
         gst::log!(CAT, obj: element, "sink event: {}", event.type_());
 
-        if matches!(event.type_(), EventType::Eos) {
-            // flush all remaining OBUs
-            let mut list = gst::BufferList::new();
-            {
-                let mut state = self.state.lock().unwrap();
-                let list = list.get_mut().unwrap();
+        match event.view() {
+            gst::EventView::Eos(_) => {
+                // flush all remaining OBUs
+                let mut list = gst::BufferList::new();
+                {
+                    let mut state = self.state.lock().unwrap();
+                    let list = list.get_mut().unwrap();
 
-                while let Some(packet_data) = self.consider_new_packet(element, &mut state, true) {
-                    match self.generate_new_packet(element, &mut state, packet_data) {
-                        Ok(buffer) => list.add(buffer),
-                        Err(_) => break,
+                    while let Some(packet_data) =
+                        self.consider_new_packet(element, &mut state, true)
+                    {
+                        match self.generate_new_packet(element, &mut state, packet_data) {
+                            Ok(buffer) => list.add(buffer),
+                            Err(_) => break,
+                        }
                     }
+
+                    self.reset(element, &mut state);
+                }
+                if !list.is_empty() {
+                    let _ = element.push_list(list);
                 }
             }
-            if !list.is_empty() {
-                let _ = element.push_list(list);
+            gst::EventView::FlushStop(_) => {
+                let mut state = self.state.lock().unwrap();
+                self.reset(element, &mut state);
             }
+            _ => (),
         }
 
         self.parent_sink_event(element, event)
