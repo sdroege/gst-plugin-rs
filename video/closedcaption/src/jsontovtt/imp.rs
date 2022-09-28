@@ -121,14 +121,21 @@ impl State {
     fn create_vtt_buffer(
         timestamp: gst::ClockTime,
         duration: gst::ClockTime,
-        text: String,
-    ) -> gst::Buffer {
+        text: &str,
+    ) -> Option<gst::Buffer> {
         use std::fmt::Write;
 
         let mut data = String::new();
 
         let (h1, m1, s1, ms1) = Self::split_time(timestamp);
         let (h2, m2, s2, ms2) = Self::split_time(timestamp + duration);
+
+        // Rounding up to the millisecond and clamping to fragment duration
+        // might result in zero-duration cues, which we skip as some players
+        // interpret those in a special way
+        if h1 == h2 && m1 == m2 && s1 == s2 && ms1 == ms2 {
+            return None;
+        }
 
         writeln!(
             &mut data,
@@ -146,7 +153,7 @@ impl State {
             buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
         }
 
-        buffer
+        Some(buffer)
     }
 
     fn check_initial_header(&mut self, pts: gst::ClockTime) -> Option<gst::Buffer> {
@@ -223,11 +230,18 @@ impl State {
 
                 // No need to output an explicit cue for eg clear buffers
                 if !output_text.is_empty() {
-                    buffers.push(Self::create_vtt_buffer(
-                        lines.pts,
-                        lines.duration,
-                        output_text,
-                    ));
+                    let mut buf = Self::create_vtt_buffer(lines.pts, lines.duration, &output_text);
+
+                    if let Some(buf) = buf.take() {
+                        buffers.push(buf);
+                    } else {
+                        gst::debug!(
+                            CAT,
+                            "Dropping empty duration cue, pts: {}, text: {}",
+                            lines.pts,
+                            output_text
+                        );
+                    }
                 }
             }
 
