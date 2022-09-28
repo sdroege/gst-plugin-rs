@@ -468,6 +468,7 @@ fn setup_encoding(
         .with_context(|| format!("Creating payloader {}", codec.payloader.name()))?;
     let parse_filter = make_element("capsfilter", None)?;
 
+    pay.set_property("mtu", 1200 as u32);
     pay.set_property("pt", codec.payload as u32);
 
     if let Some(ssrc) = ssrc {
