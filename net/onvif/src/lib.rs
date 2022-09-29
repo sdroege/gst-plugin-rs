@@ -112,7 +112,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     onvifmetadataoverlay::register(plugin)?;
     onvifmetadataparse::register(plugin)?;
 
-    gst::meta::CustomMeta::register("OnvifXMLFrameMeta", &[], |_, _, _, _| true);
+    gst::meta::CustomMeta::register("OnvifXMLFrameMeta", &[]);
 
     Ok(())
 }
