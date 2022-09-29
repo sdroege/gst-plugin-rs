@@ -1327,4 +1327,70 @@ mod tests {
 
         assert_ne!(session0_id, session1_id);
     }
+
+    #[async_std::test]
+    async fn test_start_session_stop_producing() {
+        let (mut tx, rx) = mpsc::unbounded();
+        let mut handler = Handler::new(Box::pin(rx));
+
+        new_peer(&mut tx, &mut handler, "producer").await;
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Producer, p::PeerRole::Listener],
+            meta: None,
+            peer_id: None,
+        });
+        tx.send(("producer".to_string(), Some(message)))
+            .await
+            .unwrap();
+        let _ = handler.next().await.unwrap();
+
+        new_peer(&mut tx, &mut handler, "producer-consumer").await;
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Producer],
+            ..Default::default()
+        });
+        tx.send(("producer-consumer".to_string(), Some(message)))
+            .await
+            .unwrap();
+        handler.next().await.unwrap();
+
+        let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
+            peer_id: "producer".to_string(),
+        });
+        tx.send(("producer-consumer".to_string(), Some(message)))
+            .await
+            .unwrap();
+        let (peer_id, sent_message) = handler.next().await.unwrap();
+        assert_eq!(peer_id, "producer-consumer");
+        let session0_id = match sent_message {
+            p::OutgoingMessage::SessionStarted {
+                ref peer_id,
+                ref session_id,
+            } => {
+                assert_eq!(peer_id, "producer");
+                session_id.to_string()
+            }
+            _ => panic!("SessionStarted message missing"),
+        };
+
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Listener],
+            ..Default::default()
+        });
+        tx.send(("producer-consumer".to_string(), Some(message)))
+            .await
+            .unwrap();
+        handler.next().await.unwrap();
+
+        let message = p::IncomingMessage::List;
+        tx.send(("producer-consumer".to_string(), Some(message)))
+            .await
+            .unwrap();
+
+        handler.next().await.unwrap();
+        handler
+            .sessions
+            .get(&session0_id)
+            .expect("Session should remain");
+    }
 }
