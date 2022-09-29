@@ -27,7 +27,7 @@ socket2 = {features = ["all"], version = "0.4"}
 waker-fn = "1.1"
 
 # Used by examples
-clap = { version = "3.2", features = ["derive"], optional = true }
+clap = { version = "4", features = ["derive"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["winsock2", "processthreadsapi"] }

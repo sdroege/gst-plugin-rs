@@ -29,15 +29,18 @@ use std::fs::File;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
-#[clap(version, author)]
-#[clap(about = "Generate a pair of Sodium's crypto_box_curve25519xsalsa20poly1305 keys.")]
+#[clap(
+    version,
+    author,
+    about = "Generate a pair of Sodium's crypto_box_curve25519xsalsa20poly1305 keys."
+)]
 struct Args {
     /// Path to write the Keys
-    #[clap(short, long, action)]
+    #[clap(short, long)]
     path: PathBuf,
 
     /// Write a JSON file instead of a key.prv/key.pub pair
-    #[clap(short, long, action)]
+    #[clap(short, long)]
     json: bool,
 }
 

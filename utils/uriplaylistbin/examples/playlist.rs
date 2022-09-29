@@ -16,10 +16,9 @@ use clap::Parser;
 use gst::prelude::*;
 
 #[derive(Debug, Parser)]
-#[clap(version, author)]
-#[clap(about = "An example of uriplaylistbin usage.")]
+#[clap(version, author, about = "An example of uriplaylistbin usage.")]
 struct Opt {
-    #[clap(short, default_value = "1", action)]
+    #[clap(short, default_value = "1")]
     iterations: u32,
     uris: Vec<String>,
 }

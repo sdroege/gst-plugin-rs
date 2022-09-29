@@ -34,15 +34,18 @@ use clap::Parser;
 use serde::{Deserialize, Serialize};
 
 #[derive(Parser, Debug)]
-#[clap(version, author)]
-#[clap(about = "Encrypt a file with in the gstsodium10 format")]
+#[clap(
+    version,
+    author,
+    about = "Encrypt a file with in the gstsodium10 format"
+)]
 struct Args {
     /// File to encrypt
-    #[clap(short, long, action)]
+    #[clap(short, long)]
     input: String,
 
     /// File to decrypt
-    #[clap(short, long, action)]
+    #[clap(short, long)]
     output: String,
 }
 
