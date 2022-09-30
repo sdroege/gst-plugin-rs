@@ -4,7 +4,7 @@ use futures::prelude::*;
 use futures::ready;
 use p::PeerStatus;
 use pin_project_lite::pin_project;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::pin::Pin;
 use std::task::{Context as TaskContext, Poll};
 use tracing::log::error;
@@ -40,6 +40,8 @@ pin_project! {
         items: VecDeque<(String, p::OutgoingMessage)>,
         peers: HashMap<PeerId, PeerStatus>,
         sessions: HashMap<String, Session>,
+        consumer_sessions: HashMap<String, HashSet<String>>,
+        producer_sessions: HashMap<String, HashSet<String>>,
     }
 }
 
@@ -54,6 +56,8 @@ impl Handler {
             items: VecDeque::new(),
             peers: Default::default(),
             sessions: Default::default(),
+            consumer_sessions: Default::default(),
+            producer_sessions: Default::default(),
         }
     }
 
@@ -116,23 +120,23 @@ impl Handler {
     }
 
     fn stop_producer(&mut self, peer_id: &str) {
-        let sessions_to_end = self
-            .sessions
-            .iter()
-            .filter_map(|(session_id, session)| {
-                if session.producer == peer_id || session.consumer == peer_id {
-                    Some(session_id.clone())
-                } else {
-                    None
+        if let Some(session_ids) = self.producer_sessions.remove(peer_id) {
+            for session_id in session_ids {
+                if let Err(e) = self.end_session(peer_id, &session_id) {
+                    error!("Could not end session {session_id}: {e:?}");
                 }
-            })
-            .collect::<Vec<String>>();
-
-        sessions_to_end.iter().for_each(|session_id| {
-            if let Err(e) = self.end_session(peer_id, session_id) {
-                error!("Could not end session {session_id}: {e:?}");
             }
-        });
+        }
+    }
+
+    fn stop_consumer(&mut self, peer_id: &str) {
+        if let Some(session_ids) = self.consumer_sessions.remove(peer_id) {
+            for session_id in session_ids {
+                if let Err(e) = self.end_session(peer_id, &session_id) {
+                    error!("Could not end session {session_id}: {e:?}");
+                }
+            }
+        }
     }
 
     #[instrument(level = "debug", skip(self))]
@@ -145,6 +149,7 @@ impl Handler {
         };
 
         self.stop_producer(peer_id);
+        self.stop_consumer(peer_id);
 
         for (id, p) in self.peers.iter() {
             if !p.listening() {
@@ -167,6 +172,18 @@ impl Handler {
             .sessions
             .remove(session_id)
             .with_context(|| format!("Session {session_id} doesn't exist"))?;
+
+        self.consumer_sessions
+            .entry(session.consumer.clone())
+            .and_modify(|sessions| {
+                sessions.remove(session_id);
+            });
+
+        self.producer_sessions
+            .entry(session.producer.clone())
+            .and_modify(|sessions| {
+                sessions.remove(session_id);
+            });
 
         self.items.push_back((
             session.other_peer_id(peer_id)?.to_string(),
@@ -272,6 +289,14 @@ impl Handler {
                 producer: producer_id.to_string(),
             },
         );
+        self.consumer_sessions
+            .entry(consumer_id.to_string())
+            .or_insert(HashSet::new())
+            .insert(session_id.clone());
+        self.producer_sessions
+            .entry(producer_id.to_string())
+            .or_insert(HashSet::new())
+            .insert(session_id.clone());
         self.items.push_back((
             consumer_id.to_string(),
             p::OutgoingMessage::SessionStarted {
