@@ -589,9 +589,7 @@ impl VideoEncoder {
             "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" => {
                 (self.element.property::<u32>("bitrate") * 1000) as i32
             }
-            "nvv4l2h264enc" | "nvv4l2vp8enc" => {
-                (self.element.property::<u32>("bitrate")) as i32
-            }            
+            "nvv4l2h264enc" | "nvv4l2vp8enc" => (self.element.property::<u32>("bitrate")) as i32,
             factory => unimplemented!("Factory {} is currently not supported", factory),
         }
     }
@@ -616,9 +614,9 @@ impl VideoEncoder {
             "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" => self
                 .element
                 .set_property("bitrate", (bitrate / 1000) as u32),
-            "nvv4l2h264enc" | "nvv4l2vp8enc" => self
-                .element
-                .set_property("bitrate", bitrate as u32),
+            "nvv4l2h264enc" | "nvv4l2vp8enc" => {
+                self.element.set_property("bitrate", bitrate as u32)
+            }
             factory => unimplemented!("Factory {} is currently not supported", factory),
         }
 
