@@ -91,12 +91,14 @@ impl Default for Settings {
     }
 }
 
+#[derive(Debug)]
 struct GopBuffer {
     buffer: gst::Buffer,
     pts: gst::ClockTime,
     dts: Option<gst::ClockTime>,
 }
 
+#[derive(Debug)]
 struct Gop {
     // Running times
     start_pts: gst::ClockTime,
@@ -139,8 +141,6 @@ struct Stream {
     // going backwards when draining a fragment.
     // UNIX epoch.
     current_utc_time: gst::ClockTime,
-
-    last_force_keyunit_time: Option<gst::ClockTime>,
 }
 
 #[derive(Default)]
@@ -163,6 +163,8 @@ struct State {
 
     // Start PTS of the current fragment
     fragment_start_pts: Option<gst::ClockTime>,
+    // Additional timeout delay in case GOPs are bigger than the fragment duration
+    timeout_delay: gst::ClockTime,
 
     // In ONVIF mode the UTC time corresponding to the beginning of the stream
     // UNIX epoch.
@@ -604,92 +606,29 @@ impl FMP4Mux {
         Ok(())
     }
 
-    fn create_initial_force_keyunit_event(
-        &self,
-        _element: &super::FMP4Mux,
-        stream: &mut Stream,
-        settings: &Settings,
-        earliest_pts: gst::ClockTime,
-    ) -> Result<Option<gst::Event>, gst::FlowError> {
-        assert!(stream.last_force_keyunit_time.is_none());
-
-        // If we never sent a force-keyunit event then send one now.
-        let fku_running_time = earliest_pts + settings.fragment_duration;
-        gst::debug!(
-            CAT,
-            obj: &stream.sinkpad,
-            "Sending first force-keyunit event for running time {}",
-            fku_running_time
-        );
-        stream.last_force_keyunit_time = Some(fku_running_time);
-
-        return Ok(Some(
-            gst_video::UpstreamForceKeyUnitEvent::builder()
-                .running_time(fku_running_time)
-                .all_headers(true)
-                .build(),
-        ));
-    }
-
-    fn create_force_keyunit_event(
-        &self,
-        _element: &super::FMP4Mux,
-        stream: &mut Stream,
-        settings: &Settings,
-        segment: &gst::FormattedSegment<gst::ClockTime>,
-        pts: gst::ClockTime,
-    ) -> Result<Option<gst::Event>, gst::FlowError> {
-        // If we never sent a force-keyunit event then wait until the earliest PTS of the first GOP
-        // is known and send it then.
-        //
-        // Otherwise if the current PTS is a fragment duration in the future, send the next one
-        // now.
-
-        let last_force_keyunit_time = match stream.last_force_keyunit_time {
-            None => return Ok(None),
-            Some(last_force_keyunit_time) => last_force_keyunit_time,
-        };
-
-        let pts = segment.to_running_time(pts);
-        if pts.opt_lt(last_force_keyunit_time).unwrap_or(true) {
-            return Ok(None);
-        }
-
-        let fku_running_time = last_force_keyunit_time + settings.fragment_duration;
-        gst::debug!(
-            CAT,
-            obj: &stream.sinkpad,
-            "Sending force-keyunit event for running time {}",
-            fku_running_time
-        );
-        stream.last_force_keyunit_time = Some(fku_running_time);
-
-        Ok(Some(
-            gst_video::UpstreamForceKeyUnitEvent::builder()
-                .running_time(fku_running_time)
-                .all_headers(true)
-                .build(),
-        ))
-    }
-
     #[allow(clippy::type_complexity)]
     fn drain_buffers(
         &self,
-        _element: &super::FMP4Mux,
+        element: &super::FMP4Mux,
         state: &mut State,
         settings: &Settings,
         timeout: bool,
         at_eos: bool,
     ) -> Result<
         (
+            // Drained streams
             Vec<(
                 gst::Caps,
                 Option<super::FragmentTimingInfo>,
                 VecDeque<Buffer>,
             )>,
+            // Minimum earliest PTS position of all streams
             Option<gst::ClockTime>,
+            // Minimum earliest PTS of all streams
             Option<gst::ClockTime>,
+            // Minimum start DTS position of all streams (if any stream has DTS)
             Option<gst::ClockTime>,
+            // End PTS of this drained fragment, i.e. start PTS of the next fragment
             Option<gst::ClockTime>,
         ),
         gst::FlowError,
@@ -699,7 +638,24 @@ impl FMP4Mux {
         let mut min_earliest_pts_position = None;
         let mut min_earliest_pts = None;
         let mut min_start_dts_position = None;
-        let mut max_end_pts = None;
+        let mut fragment_end_pts = None;
+
+        // The first stream decides how much can be dequeued, if anything at all.
+        //
+        // All complete GOPs (or at EOS everything) up to the fragment duration will be dequeued
+        // but on timeout in live pipelines it might happen that the first stream does not have a
+        // complete GOP queued. In that case nothing is dequeued for any of the streams and the
+        // timeout is advanced by 1s until at least one complete GOP can be dequeued.
+        //
+        // If the first stream is already EOS then the next stream that is not EOS yet will be
+        // taken in its place.
+        let fragment_start_pts = state.fragment_start_pts.unwrap();
+        gst::info!(
+            CAT,
+            obj: element,
+            "Starting to drain at {}",
+            fragment_start_pts
+        );
 
         for (idx, stream) in state.streams.iter_mut().enumerate() {
             assert!(
@@ -709,28 +665,73 @@ impl FMP4Mux {
                     || stream.queued_gops.get(1).map(|gop| gop.final_earliest_pts) == Some(true)
             );
 
-            // At EOS, finalize all GOPs and drain them out. Otherwise if the queued duration is
-            // equal to the fragment duration then drain out all complete GOPs, otherwise all
-            // except for the newest complete GOP.
-            let gops = if at_eos || stream.sinkpad.is_eos() {
-                stream.queued_gops.drain(..).rev().collect::<Vec<_>>()
-            } else {
-                let mut gops = vec![];
+            // Drain all complete GOPs until at most one fragment duration was dequeued for the
+            // first stream, or until the dequeued duration of the first stream.
+            let mut gops = Vec::with_capacity(stream.queued_gops.len());
+            let dequeue_end_pts =
+                fragment_end_pts.unwrap_or(fragment_start_pts + settings.fragment_duration);
+            gst::trace!(
+                CAT,
+                obj: &stream.sinkpad,
+                "Draining up to end PTS {} / duration {}",
+                dequeue_end_pts,
+                dequeue_end_pts - fragment_start_pts
+            );
 
-                let fragment_start_pts = state.fragment_start_pts.unwrap();
-                while let Some(gop) = stream.queued_gops.pop_back() {
-                    assert!(timeout || gop.final_end_pts);
-
-                    let end_pts = gop.end_pts;
-                    gops.push(gop);
-                    if end_pts.saturating_sub(fragment_start_pts) >= settings.fragment_duration {
-                        break;
-                    }
+            while let Some(gop) = stream.queued_gops.back() {
+                // If this GOP is not complete then we can't pop it yet.
+                //
+                // If there was no complete GOP at all yet then it might be bigger than the
+                // fragment duration. In this case we might not be able to handle the latency
+                // requirements in a live pipeline.
+                if !gop.final_end_pts && !at_eos && !stream.sinkpad.is_eos() {
+                    break;
                 }
 
-                gops
-            };
+                // If this GOP starts after the fragment end then don't dequeue it yet unless this is
+                // the first stream and no GOPs were dequeued at all yet. This would mean that the
+                // GOP is bigger than the fragment duration.
+                if gop.end_pts > dequeue_end_pts && (fragment_end_pts.is_some() || !gops.is_empty())
+                {
+                    break;
+                }
+
+                gops.push(stream.queued_gops.pop_back().unwrap());
+            }
             stream.fragment_filled = false;
+
+            // If we don't have a next fragment start PTS then this is the first stream as above.
+            if fragment_end_pts.is_none() {
+                if let Some(last_gop) = gops.last() {
+                    // Dequeued something so let's take the end PTS of the last GOP
+                    fragment_end_pts = Some(last_gop.end_pts);
+                    gst::info!(
+                        CAT,
+                        obj: &stream.sinkpad,
+                        "Draining up to PTS {} for this fragment",
+                        last_gop.end_pts,
+                    );
+                } else {
+                    // If nothing was dequeued for the first stream then this is OK if we're at
+                    // EOS: we just consider the next stream as first stream then.
+                    if at_eos || stream.sinkpad.is_eos() {
+                        // This is handled below generally if nothing was dequeued
+                    } else {
+                        // Otherwise this can only really happen on timeout in live pipelines.
+                        assert!(timeout);
+
+                        gst::warning!(
+                            CAT,
+                            obj: &stream.sinkpad,
+                            "Don't have a complete GOP for the first stream on timeout in a live pipeline",
+                        );
+
+                        // In this case we advance the timeout by 1s and hope that things are
+                        // better then.
+                        return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
+                    }
+                }
+            }
 
             if gops.is_empty() {
                 gst::info!(
@@ -742,6 +743,8 @@ impl FMP4Mux {
                 drained_streams.push((stream.caps.clone(), None, VecDeque::new()));
                 continue;
             }
+
+            assert!(fragment_end_pts.is_some());
 
             let first_gop = gops.first().unwrap();
             let last_gop = gops.last().unwrap();
@@ -768,9 +771,6 @@ impl FMP4Mux {
                 {
                     min_start_dts_position = Some(start_dts_position);
                 }
-            }
-            if max_end_pts.opt_lt(end_pts).unwrap_or(true) {
-                max_end_pts = Some(end_pts);
             }
 
             gst::info!(
@@ -892,7 +892,7 @@ impl FMP4Mux {
             min_earliest_pts_position,
             min_earliest_pts,
             min_start_dts_position,
-            max_end_pts,
+            fragment_end_pts,
         ))
     }
 
@@ -1229,6 +1229,7 @@ impl FMP4Mux {
         settings: &Settings,
         timeout: bool,
         at_eos: bool,
+        upstream_events: &mut Vec<(gst_base::AggregatorPad, gst::Event)>,
     ) -> Result<(Option<gst::Caps>, Option<gst::BufferList>), gst::FlowError> {
         if at_eos {
             gst::info!(CAT, obj: element, "Draining at EOS");
@@ -1248,7 +1249,7 @@ impl FMP4Mux {
             min_earliest_pts_position,
             min_earliest_pts,
             min_start_dts_position,
-            max_end_pts,
+            fragment_end_pts,
         ) = self.drain_buffers(element, state, settings, timeout, at_eos)?;
 
         // For ONVIF, replace all timestamps with timestamps based on UTC times.
@@ -1279,13 +1280,13 @@ impl FMP4Mux {
 
         let mut buffer_list = None;
         if interleaved_buffers.is_empty() {
-            assert!(timeout || at_eos);
+            assert!(at_eos);
         } else {
             // If there are actual buffers to output then create headers as needed and create a
             // bufferlist for all buffers that have to be output.
             let min_earliest_pts_position = min_earliest_pts_position.unwrap();
             let min_earliest_pts = min_earliest_pts.unwrap();
-            let max_end_pts = max_end_pts.unwrap();
+            let fragment_end_pts = fragment_end_pts.unwrap();
 
             let mut fmp4_header = None;
             if !state.sent_headers {
@@ -1334,7 +1335,7 @@ impl FMP4Mux {
                 let buffer = fmp4_fragment_header.get_mut().unwrap();
                 buffer.set_pts(min_earliest_pts_position);
                 buffer.set_dts(min_start_dts_position);
-                buffer.set_duration(max_end_pts.checked_sub(min_earliest_pts));
+                buffer.set_duration(fragment_end_pts.checked_sub(min_earliest_pts));
 
                 // Fragment header is HEADER
                 buffer.set_flags(gst::BufferFlags::HEADER);
@@ -1386,22 +1387,37 @@ impl FMP4Mux {
                     offset: moof_offset,
                 });
             }
-            state.end_pts = Some(max_end_pts);
+
+            state.end_pts = Some(fragment_end_pts);
             state.end_utc_time = max_end_utc_time;
 
             // Update for the start PTS of the next fragment
-            state.fragment_start_pts = state.fragment_start_pts.map(|start| {
-                let new_fragment_start = start + settings.fragment_duration;
+            gst::info!(
+                CAT,
+                obj: element,
+                "Starting new fragment at {}",
+                fragment_end_pts,
+            );
+            state.fragment_start_pts = Some(fragment_end_pts);
 
-                gst::info!(
-                    CAT,
-                    obj: element,
-                    "Starting new fragment at {}",
-                    new_fragment_start
-                );
+            gst::debug!(
+                CAT,
+                obj: element,
+                "Sending force-keyunit events for running time {}",
+                fragment_end_pts + settings.fragment_duration,
+            );
 
-                new_fragment_start
-            });
+            let fku = gst_video::UpstreamForceKeyUnitEvent::builder()
+                .running_time(fragment_end_pts + settings.fragment_duration)
+                .all_headers(true)
+                .build();
+
+            for stream in &state.streams {
+                upstream_events.push((stream.sinkpad.clone(), fku.clone()));
+            }
+
+            // Reset timeout delay now that we've output an actual fragment
+            state.timeout_delay = gst::ClockTime::ZERO;
         }
 
         if settings.write_mfra && at_eos {
@@ -1491,7 +1507,6 @@ impl FMP4Mux {
                 dts_offset: None,
                 current_position: gst::ClockTime::ZERO,
                 current_utc_time: gst::ClockTime::ZERO,
-                last_force_keyunit_time: None,
             });
         }
 
@@ -1801,7 +1816,7 @@ impl ElementImpl for FMP4Mux {
 impl AggregatorImpl for FMP4Mux {
     fn next_time(&self, _aggregator: &Self::Type) -> Option<gst::ClockTime> {
         let state = self.state.lock().unwrap();
-        state.fragment_start_pts
+        state.fragment_start_pts.opt_add(state.timeout_delay)
     }
 
     fn sink_query(
@@ -1938,7 +1953,6 @@ impl AggregatorImpl for FMP4Mux {
             stream.dts_offset = None;
             stream.current_position = gst::ClockTime::ZERO;
             stream.current_utc_time = gst::ClockTime::ZERO;
-            stream.last_force_keyunit_time = None;
             stream.fragment_filled = false;
         }
 
@@ -2030,20 +2044,8 @@ impl AggregatorImpl for FMP4Mux {
                     }
                 };
 
-                let pts = buffer.pts();
-
                 // Queue up the buffer and update GOP tracking state
                 self.queue_gops(aggregator, idx, stream, &segment, buffer)?;
-
-                // If we have a PTS with this buffer, check if a new force-keyunit event for the next
-                // fragment start has to be created
-                if let Some(pts) = pts {
-                    if let Some(event) = self
-                        .create_force_keyunit_event(aggregator, stream, &settings, &segment, pts)?
-                    {
-                        upstream_events.push((stream.sinkpad.clone(), event));
-                    }
-                }
 
                 // Check if this stream is filled enough now.
                 if let Some((queued_end_pts, fragment_start_pts)) = Option::zip(
@@ -2093,15 +2095,20 @@ impl AggregatorImpl for FMP4Mux {
                     state.earliest_pts = Some(earliest_pts);
                     state.fragment_start_pts = Some(earliest_pts);
 
+                    gst::debug!(
+                        CAT,
+                        obj: aggregator,
+                        "Sending first force-keyunit event for running time {}",
+                        earliest_pts + settings.fragment_duration,
+                    );
+
+                    let fku = gst_video::UpstreamForceKeyUnitEvent::builder()
+                        .running_time(earliest_pts + settings.fragment_duration)
+                        .all_headers(true)
+                        .build();
+
                     for stream in &mut state.streams {
-                        if let Some(event) = self.create_initial_force_keyunit_event(
-                            aggregator,
-                            stream,
-                            &settings,
-                            earliest_pts,
-                        )? {
-                            upstream_events.push((stream.sinkpad.clone(), event));
-                        }
+                        upstream_events.push((stream.sinkpad.clone(), fku.clone()));
 
                         // Check if this stream is filled enough now.
                         if let Some(queued_end_pts) = stream
@@ -2127,7 +2134,31 @@ impl AggregatorImpl for FMP4Mux {
             }
 
             // If enough GOPs were queued, drain and create the output fragment
-            self.drain(aggregator, &mut state, &settings, timeout, all_eos)?
+            match self.drain(
+                aggregator,
+                &mut state,
+                &settings,
+                timeout,
+                all_eos,
+                &mut upstream_events,
+            ) {
+                Ok(res) => res,
+                Err(gst_base::AGGREGATOR_FLOW_NEED_DATA) => {
+                    gst::element_warning!(
+                        aggregator,
+                        gst::StreamError::Format,
+                        ["Longer GOPs than fragment duration"]
+                    );
+                    state.timeout_delay += gst::ClockTime::from_seconds(1);
+
+                    drop(state);
+                    for (sinkpad, event) in upstream_events {
+                        sinkpad.push_event(event);
+                    }
+                    return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
+                }
+                Err(err) => return Err(err),
+            }
         };
 
         for (sinkpad, event) in upstream_events {
