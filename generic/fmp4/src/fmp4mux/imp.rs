@@ -1252,10 +1252,6 @@ impl FMP4Mux {
             fragment_end_pts,
         ) = self.drain_buffers(element, state, settings, timeout, at_eos)?;
 
-        // For ONVIF, replace all timestamps with timestamps based on UTC times.
-        let max_end_utc_time =
-            self.preprocess_drained_streams_onvif(element, state, &mut drained_streams)?;
-
         // Remove all GAP buffers before processing them further
         for (_, _, buffers) in &mut drained_streams {
             buffers.retain(|buf| {
@@ -1264,6 +1260,10 @@ impl FMP4Mux {
                     || buf.buffer.size() != 0
             });
         }
+
+        // For ONVIF, replace all timestamps with timestamps based on UTC times.
+        let max_end_utc_time =
+            self.preprocess_drained_streams_onvif(element, state, &mut drained_streams)?;
 
         // Create header now if it was not created before and return the caps
         let mut caps = None;
