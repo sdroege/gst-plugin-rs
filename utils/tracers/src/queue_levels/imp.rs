@@ -334,7 +334,12 @@ impl TracerImpl for QueueLevels {
     }
 
     #[cfg(not(feature = "v1_22"))]
-    fn pad_push_post(&self, ts: u64, pad: &gst::Pad, _result: gst::FlowReturn) {
+    fn pad_push_post(
+        &self,
+        ts: u64,
+        pad: &gst::Pad,
+        _result: Result<gst::FlowSuccess, gst::FlowError>,
+    ) {
         if let Some(peer) = pad.peer() {
             if let Some(parent) = peer
                 .parent()
@@ -348,7 +353,12 @@ impl TracerImpl for QueueLevels {
     }
 
     #[cfg(not(feature = "v1_22"))]
-    fn pad_push_list_post(&self, ts: u64, pad: &gst::Pad, _result: gst::FlowReturn) {
+    fn pad_push_list_post(
+        &self,
+        ts: u64,
+        pad: &gst::Pad,
+        _result: Result<gst::FlowSuccess, gst::FlowError>,
+    ) {
         if let Some(peer) = pad.peer() {
             if let Some(parent) = peer
                 .parent()
@@ -362,7 +372,12 @@ impl TracerImpl for QueueLevels {
     }
 
     #[cfg(feature = "v1_22")]
-    fn pad_chain_post(&self, ts: u64, pad: &gst::Pad, _result: gst::FlowReturn) {
+    fn pad_chain_post(
+        &self,
+        ts: u64,
+        pad: &gst::Pad,
+        _result: Result<gst::FlowSuccess, gst::FlowError>,
+    ) {
         if let Some(parent) = pad.parent().and_then(|p| p.downcast::<gst::Element>().ok()) {
             if is_queue_type(parent.type_()) {
                 self.log(&parent, Some(pad), ts);
@@ -371,7 +386,12 @@ impl TracerImpl for QueueLevels {
     }
 
     #[cfg(feature = "v1_22")]
-    fn pad_chain_list_post(&self, ts: u64, pad: &gst::Pad, _result: gst::FlowReturn) {
+    fn pad_chain_list_post(
+        &self,
+        ts: u64,
+        pad: &gst::Pad,
+        _result: Result<gst::FlowSuccess, gst::FlowError>,
+    ) {
         if let Some(parent) = pad.parent().and_then(|p| p.downcast::<gst::Element>().ok()) {
             if is_queue_type(parent.type_()) {
                 self.log(&parent, Some(pad), ts);
@@ -384,7 +404,7 @@ impl TracerImpl for QueueLevels {
         ts: u64,
         element: &gst::Element,
         change: gst::StateChange,
-        _result: gst::StateChangeReturn,
+        _result: Result<gst::StateChangeSuccess, gst::StateChangeError>,
     ) {
         if change.next() != gst::State::Null {
             return;
