@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 description = "Dav1d Plugin"
 
 [dependencies]
-dav1d = "0.8"
+dav1d = "0.9"
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
