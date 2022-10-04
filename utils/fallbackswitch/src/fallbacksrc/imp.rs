@@ -2732,6 +2732,7 @@ impl FallbackSrc {
                 drop(state_guard);
                 element.notify("status");
                 element.notify("statistics");
+                return true;
             }
         }
 
