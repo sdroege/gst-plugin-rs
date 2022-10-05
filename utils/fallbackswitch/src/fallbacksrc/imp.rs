@@ -1866,13 +1866,28 @@ impl FallbackSrc {
 
                     if is_image {
                         gst::PadProbeReturn::Ok
-                    } else if state.settings.restart_on_eos {
+                    } else if state.settings.restart_on_eos || fallback_source {
                         src.handle_source_error(&element, state, RetryReason::Eos, fallback_source);
                         drop(state_guard);
                         element.notify("statistics");
 
                         gst::PadProbeReturn::Drop
                     } else {
+                        // Send EOS to all sinkpads of the fallbackswitch and also to the other
+                        // stream's fallbackswitch if it doesn't have a main branch.
+                        let mut sinkpads = vec![];
+
+                        if let Some(stream) = {
+                            if is_video {
+                                state.video_stream.as_ref()
+                            } else {
+                                state.audio_stream.as_ref()
+                            }
+                        } {
+                            sinkpads
+                                .extend(stream.switch.sink_pads().into_iter().filter(|p| p != pad));
+                        }
+
                         if let Some(other_stream) = {
                             if is_video {
                                 state.audio_stream.as_ref()
@@ -1881,12 +1896,22 @@ impl FallbackSrc {
                             }
                         } {
                             if other_stream.main_branch.is_none() {
-                                let sinkpad = other_stream.switch.static_pad("sink").unwrap();
-                                element.call_async(move |_| {
-                                    sinkpad.send_event(gst::event::Eos::new());
-                                });
+                                sinkpads.extend(
+                                    other_stream
+                                        .switch
+                                        .sink_pads()
+                                        .into_iter()
+                                        .filter(|p| p != pad),
+                                );
                             }
                         }
+
+                        let event = ev.clone();
+                        element.call_async(move |_| {
+                            for sinkpad in sinkpads {
+                                sinkpad.send_event(event.clone());
+                            }
+                        });
 
                         gst::PadProbeReturn::Ok
                     }
