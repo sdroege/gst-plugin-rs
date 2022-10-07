@@ -23,7 +23,7 @@ glib::wrapper! {
 
 impl SinkPaintable {
     pub fn new() -> Self {
-        glib::Object::new(&[]).expect("Failed to create a SinkPaintable")
+        glib::Object::new(&[])
     }
 }
 

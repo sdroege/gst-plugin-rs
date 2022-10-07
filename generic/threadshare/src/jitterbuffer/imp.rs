@@ -382,11 +382,7 @@ impl SinkHandler {
             if state.clock_rate.is_none() {
                 drop(state);
                 let caps = element
-                    .try_emit_by_name::<Option<gst::Caps>>("request-pt-map", &[&(pt as u32)])
-                    .map_err(|err| {
-                        gst::error!(CAT, obj: pad, "Emitting 'request-pt-map': {}", err);
-                        gst::FlowError::Error
-                    })?
+                    .emit_by_name::<Option<gst::Caps>>("request-pt-map", &[&(pt as u32)])
                     .ok_or_else(|| {
                         gst::error!(CAT, obj: pad, "Signal 'request-pt-map' retuned None");
                         gst::FlowError::Error

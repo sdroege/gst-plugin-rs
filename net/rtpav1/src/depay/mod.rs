@@ -20,7 +20,7 @@ glib::wrapper! {
 
 impl RTPAv1Depay {
     pub fn new() -> Self {
-        glib::Object::new(&[]).expect("Failed to create AV1 depayloader")
+        glib::Object::new(&[])
     }
 }
 

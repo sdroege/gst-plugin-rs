@@ -35,7 +35,7 @@ glib::wrapper! {
 
 impl PaintableSink {
     pub fn new(name: Option<&str>) -> Self {
-        glib::Object::new(&[("name", &name)]).expect("Failed to create a GTK4Sink")
+        glib::Object::new(&[("name", &name)])
     }
 
     fn pending_frame(&self) -> Option<Frame> {

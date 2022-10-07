@@ -20,7 +20,7 @@ glib::wrapper! {
 
 impl RTPAv1Pay {
     pub fn new() -> Self {
-        glib::Object::new(&[]).expect("Failed to create AV1 payloader")
+        glib::Object::new(&[])
     }
 }
 
