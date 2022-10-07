@@ -75,7 +75,7 @@ struct Settings {
 }
 
 /// Represents a codec we can offer
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Codec {
     encoder: gst::ElementFactory,
     payloader: gst::ElementFactory,
@@ -1858,6 +1858,7 @@ impl WebRTCSink {
     fn on_remote_description_set(&self, element: &super::WebRTCSink, session_id: String) {
         let mut state = self.state.lock().unwrap();
         let mut remove = false;
+        let codecs = state.codecs.clone();
 
         if let Some(mut session) = state.sessions.remove(&session_id) {
             for webrtc_pad in session.webrtc_pads.clone().values() {
@@ -1874,10 +1875,11 @@ impl WebRTCSink {
                 if let Some(producer) = state
                     .streams
                     .get(&webrtc_pad.stream_name)
-                    .and_then(|stream| stream.producer.as_ref())
+                    .and_then(|stream| stream.producer.clone())
                 {
+                    drop(state);
                     if let Err(err) =
-                        session.connect_input_stream(element, producer, webrtc_pad, &state.codecs)
+                        session.connect_input_stream(element, &producer, webrtc_pad, &codecs)
                     {
                         gst::error!(
                             CAT,
@@ -1888,8 +1890,10 @@ impl WebRTCSink {
                             err
                         );
                         remove = true;
+                        state = self.state.lock().unwrap();
                         break;
                     }
+                    state = self.state.lock().unwrap();
                 } else {
                     gst::error!(
                         CAT,
