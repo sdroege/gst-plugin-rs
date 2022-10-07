@@ -1726,6 +1726,7 @@ impl WebRTCSink {
         state.sessions.insert(session_id.to_string(), session);
 
         drop(state);
+        drop(settings);
 
         // This is intentionally emitted with the pipeline in the Ready state,
         // so that application code can create data channels at the correct
