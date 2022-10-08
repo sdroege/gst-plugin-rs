@@ -14,6 +14,7 @@
  * Since: plugins-rs-0.4.0
  */
 use gst::glib;
+#[cfg(feature = "doc")]
 use gst::prelude::*;
 
 #[allow(non_camel_case_types, non_upper_case_globals, unused)]

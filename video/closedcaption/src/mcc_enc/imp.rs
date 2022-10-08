@@ -407,11 +407,11 @@ impl MccEnc {
         match query.view_mut() {
             QueryViewMut::Seeking(q) => {
                 // We don't support any seeking at all
-                let fmt = q.format();
+                let format = q.format();
                 q.set(
                     false,
-                    gst::GenericFormattedValue::Other(fmt, -1),
-                    gst::GenericFormattedValue::Other(fmt, -1),
+                    gst::GenericFormattedValue::none_for_format(format),
+                    gst::GenericFormattedValue::none_for_format(format),
                 );
                 true
             }

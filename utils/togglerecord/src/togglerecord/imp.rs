@@ -1620,8 +1620,8 @@ impl ToggleRecord {
                 let format = q.format();
                 q.set(
                     false,
-                    gst::GenericFormattedValue::new(format, -1),
-                    gst::GenericFormattedValue::new(format, -1),
+                    gst::GenericFormattedValue::none_for_format(format),
+                    gst::GenericFormattedValue::none_for_format(format),
                 );
 
                 gst::log!(CAT, obj: pad, "Returning {:?}", q.query_mut());
