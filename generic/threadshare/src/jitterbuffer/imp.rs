@@ -1279,16 +1279,16 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 impl JitterBuffer {
-    fn clear_pt_map(&self, element: &super::JitterBuffer) {
-        gst::debug!(CAT, obj: element, "Clearing PT map");
+    fn clear_pt_map(&self) {
+        gst::debug!(CAT, imp: self, "Clearing PT map");
 
         let mut state = self.state.lock().unwrap();
         state.clock_rate = None;
         state.jbuf.reset_skew();
     }
 
-    fn prepare(&self, element: &super::JitterBuffer) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, obj: element, "Preparing");
+    fn prepare(&self) -> Result<(), gst::ErrorMessage> {
+        gst::debug!(CAT, imp: self, "Preparing");
 
         let context = {
             let settings = self.settings.lock().unwrap();
@@ -1297,33 +1297,37 @@ impl JitterBuffer {
 
         self.task
             .prepare(
-                JitterBufferTask::new(element, &self.src_pad_handler, &self.sink_pad_handler),
+                JitterBufferTask::new(
+                    &*self.instance(),
+                    &self.src_pad_handler,
+                    &self.sink_pad_handler,
+                ),
                 context,
             )
             .block_on()?;
 
-        gst::debug!(CAT, obj: element, "Prepared");
+        gst::debug!(CAT, imp: self, "Prepared");
 
         Ok(())
     }
 
-    fn unprepare(&self, element: &super::JitterBuffer) {
-        gst::debug!(CAT, obj: element, "Unpreparing");
+    fn unprepare(&self) {
+        gst::debug!(CAT, imp: self, "Unpreparing");
         self.task.unprepare().block_on().unwrap();
-        gst::debug!(CAT, obj: element, "Unprepared");
+        gst::debug!(CAT, imp: self, "Unprepared");
     }
 
-    fn start(&self, element: &super::JitterBuffer) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, obj: element, "Starting");
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
+        gst::debug!(CAT, imp: self, "Starting");
         self.task.start().block_on()?;
-        gst::debug!(CAT, obj: element, "Started");
+        gst::debug!(CAT, imp: self, "Started");
         Ok(())
     }
 
-    fn stop(&self, element: &super::JitterBuffer) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, obj: element, "Stopping");
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
+        gst::debug!(CAT, imp: self, "Stopping");
         self.task.stop().block_on()?;
-        gst::debug!(CAT, obj: element, "Stopped");
+        gst::debug!(CAT, imp: self, "Stopped");
         Ok(())
     }
 }
@@ -1410,7 +1414,7 @@ impl ObjectImpl for JitterBuffer {
                     .class_handler(|_, args| {
                         let element = args[0].get::<super::JitterBuffer>().expect("signal arg");
                         let jb = element.imp();
-                        jb.clear_pt_map(&element);
+                        jb.clear_pt_map();
                         None
                     })
                     .build(),
@@ -1424,13 +1428,7 @@ impl ObjectImpl for JitterBuffer {
         SIGNALS.as_ref()
     }
 
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "latency" => {
                 let latency = {
@@ -1444,7 +1442,11 @@ impl ObjectImpl for JitterBuffer {
                 let state = self.state.lock().unwrap();
                 state.jbuf.set_delay(latency);
 
-                let _ = obj.post_message(gst::message::Latency::builder().src(obj).build());
+                let _ = self.instance().post_message(
+                    gst::message::Latency::builder()
+                        .src(&*self.instance())
+                        .build(),
+                );
             }
             "do-lost" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -1475,7 +1477,7 @@ impl ObjectImpl for JitterBuffer {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "latency" => {
                 let settings = self.settings.lock().unwrap();
@@ -1514,9 +1516,10 @@ impl ObjectImpl for JitterBuffer {
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(self.sink_pad.gst_pad()).unwrap();
         obj.add_pad(self.src_pad.gst_pad()).unwrap();
         obj.set_element_flags(gst::ElementFlags::PROVIDE_CLOCK | gst::ElementFlags::REQUIRE_CLOCK);
@@ -1567,32 +1570,31 @@ impl ElementImpl for JitterBuffer {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {
-                self.prepare(element).map_err(|err| {
-                    element.post_error_message(err);
+                self.prepare().map_err(|err| {
+                    self.post_error_message(err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::PausedToReady => {
-                self.stop(element).map_err(|_| gst::StateChangeError)?;
+                self.stop().map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                self.unprepare(element);
+                self.unprepare();
             }
             _ => (),
         }
 
-        let mut success = self.parent_change_state(element, transition)?;
+        let mut success = self.parent_change_state(transition)?;
 
         match transition {
             gst::StateChange::ReadyToPaused => {
-                self.start(element).map_err(|_| gst::StateChangeError)?;
+                self.start().map_err(|_| gst::StateChangeError)?;
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PlayingToPaused => {
@@ -1604,7 +1606,7 @@ impl ElementImpl for JitterBuffer {
         Ok(success)
     }
 
-    fn provide_clock(&self, _element: &Self::Type) -> Option<gst::Clock> {
+    fn provide_clock(&self) -> Option<gst::Clock> {
         Some(gst::SystemClock::obtain())
     }
 }

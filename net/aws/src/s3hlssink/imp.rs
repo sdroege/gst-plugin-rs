@@ -17,8 +17,7 @@ use std::sync::Mutex;
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 
-use gio::prelude::{Cast, ToValue};
-use gst::{element_error, glib, prelude::ObjectExt, prelude::*, subclass::prelude::*};
+use gst::{element_imp_error, glib, prelude::*, subclass::prelude::*};
 
 use aws_sdk_s3::config;
 use aws_sdk_s3::model::ObjectCannedAcl;
@@ -217,190 +216,186 @@ impl Drop for S3Upload {
     }
 }
 
-fn s3_request(element: super::S3HlsSink, rxc: Receiver<S3RequestControl>, rx: Receiver<S3Request>) {
-    let bin = element.imp();
-    loop {
-        match rxc.try_recv() {
-            Ok(S3RequestControl::Continue) => (),
-            Ok(S3RequestControl::Pause) => {
-                gst::debug!(CAT, obj: &element, "Pausing S3 request thread.");
-                match rxc.recv() {
-                    Ok(S3RequestControl::Continue) => {
-                        gst::debug!(CAT, obj: &element, "Continuing S3 request thread.")
+impl S3HlsSink {
+    fn s3_request(&self, rxc: Receiver<S3RequestControl>, rx: Receiver<S3Request>) {
+        loop {
+            match rxc.try_recv() {
+                Ok(S3RequestControl::Continue) => (),
+                Ok(S3RequestControl::Pause) => {
+                    gst::debug!(CAT, imp: self, "Pausing S3 request thread.");
+                    match rxc.recv() {
+                        Ok(S3RequestControl::Continue) => {
+                            gst::debug!(CAT, imp: self, "Continuing S3 request thread.")
+                        }
+                        // We do not expect another pause request here.
+                        Ok(S3RequestControl::Pause) => unreachable!(),
+                        Err(_) => (),
                     }
-                    // We do not expect another pause request here.
-                    Ok(S3RequestControl::Pause) => unreachable!(),
-                    Err(_) => (),
+                }
+                /*
+                 * We are not concerned with `Empty` and since we close the control
+                 * channel ourselves when required, `Disconnected` will be expected.
+                 */
+                Err(_) => (),
+            };
+
+            match rx.recv() {
+                Ok(S3Request::Upload(data)) => {
+                    let s3_client = data.s3_client.clone();
+                    let s3_bucket = data.s3_bucket.clone();
+                    let s3_key = data.s3_key.clone();
+                    let s3_acl = data.s3_acl;
+                    let s3_data_len = data.s3_data.len();
+
+                    gst::debug!(CAT, imp: self, "Uploading key {}", s3_key);
+
+                    let put_object_req = s3_client
+                        .put_object()
+                        .set_bucket(Some(s3_bucket))
+                        .set_key(Some(s3_key.clone()))
+                        .set_body(Some(ByteStream::from(data.s3_data)))
+                        .set_acl(Some(s3_acl));
+                    let put_object_req_future = put_object_req.send();
+                    let result = s3utils::wait(&self.canceller, put_object_req_future);
+
+                    if let Err(err) = result {
+                        gst::error!(
+                            CAT,
+                            imp: self,
+                            "Put object request for S3 key {} of data length {} failed with error {:?}",
+                            s3_key,
+                            s3_data_len,
+                            err,
+                        );
+                        element_imp_error!(
+                            self,
+                            gst::ResourceError::Write,
+                            ["Put object request failed"]
+                        );
+                        break;
+                    };
+                }
+                Ok(S3Request::Delete(data)) => {
+                    let s3_client = data.s3_client.clone();
+                    let s3_bucket = data.s3_bucket.clone();
+                    let s3_key = data.s3_key.clone();
+
+                    gst::debug!(CAT, imp: self, "Deleting key {}", s3_key);
+
+                    let delete_object_req = s3_client
+                        .delete_object()
+                        .set_bucket(Some(s3_bucket))
+                        .set_key(Some(s3_key.clone()));
+                    let delete_object_req_future = delete_object_req.send();
+                    let result = s3utils::wait(&self.canceller, delete_object_req_future);
+
+                    if let Err(err) = result {
+                        gst::error!(
+                            CAT,
+                            imp: self,
+                            "Delete object request for S3 key {} failed with error {:?}",
+                            s3_key,
+                            err
+                        );
+                        element_imp_error!(
+                            self,
+                            gst::ResourceError::Write,
+                            ["Delete object request failed"]
+                        );
+                        break;
+                    };
+                }
+                Ok(S3Request::Stop) => break,
+                Err(err) => {
+                    gst::error!(CAT, imp: self, "S3 channel error: {}", err);
+                    element_imp_error!(self, gst::ResourceError::Write, ["S3 channel error"]);
+                    break;
                 }
             }
-            /*
-             * We are not concerned with `Empty` and since we close the control
-             * channel ourselves when required, `Disconnected` will be expected.
-             */
-            Err(_) => (),
-        };
-
-        match rx.recv() {
-            Ok(S3Request::Upload(data)) => {
-                let s3_client = data.s3_client.clone();
-                let s3_bucket = data.s3_bucket.clone();
-                let s3_key = data.s3_key.clone();
-                let s3_acl = data.s3_acl;
-                let s3_data_len = data.s3_data.len();
-
-                gst::debug!(CAT, obj: &element, "Uploading key {}", s3_key);
-
-                let put_object_req = s3_client
-                    .put_object()
-                    .set_bucket(Some(s3_bucket))
-                    .set_key(Some(s3_key.clone()))
-                    .set_body(Some(ByteStream::from(data.s3_data)))
-                    .set_acl(Some(s3_acl));
-                let put_object_req_future = put_object_req.send();
-                let result = s3utils::wait(&bin.canceller, put_object_req_future);
-
-                if let Err(err) = result {
-                    gst::error!(
-                        CAT,
-                        obj: &element,
-                        "Put object request for S3 key {} of data length {} failed with error {:?}",
-                        s3_key,
-                        s3_data_len,
-                        err,
-                    );
-                    element_error!(
-                        element,
-                        gst::ResourceError::Write,
-                        ["Put object request failed"]
-                    );
-                    break;
-                };
-            }
-            Ok(S3Request::Delete(data)) => {
-                let s3_client = data.s3_client.clone();
-                let s3_bucket = data.s3_bucket.clone();
-                let s3_key = data.s3_key.clone();
-
-                gst::debug!(CAT, obj: &element, "Deleting key {}", s3_key);
-
-                let delete_object_req = s3_client
-                    .delete_object()
-                    .set_bucket(Some(s3_bucket))
-                    .set_key(Some(s3_key.clone()));
-                let delete_object_req_future = delete_object_req.send();
-                let result = s3utils::wait(&bin.canceller, delete_object_req_future);
-
-                if let Err(err) = result {
-                    gst::error!(
-                        CAT,
-                        obj: &element,
-                        "Delete object request for S3 key {} failed with error {:?}",
-                        s3_key,
-                        err
-                    );
-                    element_error!(
-                        element,
-                        gst::ResourceError::Write,
-                        ["Delete object request failed"]
-                    );
-                    break;
-                };
-            }
-            Ok(S3Request::Stop) => break,
-            Err(err) => {
-                gst::error!(CAT, obj: &element, "S3 channel error: {}", err);
-                element_error!(element, gst::ResourceError::Write, ["S3 channel error"]);
-                break;
-            }
         }
+
+        gst::info!(CAT, imp: self, "Exiting S3 request thread",);
     }
 
-    gst::info!(CAT, obj: &element, "Exiting S3 request thread",);
-}
+    fn s3client_from_settings(&self) -> Client {
+        let mut settings = self.settings.lock().unwrap();
 
-fn s3client_from_settings(element: &super::S3HlsSink) -> Client {
-    let bin = element.imp();
-    let mut settings = bin.settings.lock().unwrap();
+        if settings.config.is_none() {
+            let timeout_config = s3utils::timeout_config(settings.request_timeout);
+            let access_key = settings.access_key.as_ref();
+            let secret_access_key = settings.secret_access_key.as_ref();
+            let session_token = settings.session_token.clone();
 
-    if settings.config.is_none() {
-        let timeout_config = s3utils::timeout_config(settings.request_timeout);
-        let access_key = settings.access_key.as_ref();
-        let secret_access_key = settings.secret_access_key.as_ref();
-        let session_token = settings.session_token.clone();
+            let cred = match (access_key, secret_access_key) {
+                (Some(access), Some(secret_access)) => Some(Credentials::new(
+                    access,
+                    secret_access,
+                    session_token,
+                    None,
+                    "s3-hlssink",
+                )),
+                _ => None,
+            };
 
-        let cred = match (access_key, secret_access_key) {
-            (Some(access), Some(secret_access)) => Some(Credentials::new(
-                access,
-                secret_access,
-                session_token,
-                None,
-                "s3-hlssink",
-            )),
-            _ => None,
+            let sdk_config = s3utils::wait_config(
+                &self.canceller,
+                settings.s3_region.clone(),
+                timeout_config,
+                cred,
+            )
+            .expect("Failed to get SDK config");
+
+            settings.config = Some(sdk_config);
+        }
+
+        let sdk_config = settings.config.as_ref().expect("SDK config must be set");
+        let endpoint_uri = match &settings.endpoint_uri {
+            Some(endpoint) => match endpoint.parse::<Uri>() {
+                Ok(uri) => Some(uri),
+                Err(e) => {
+                    element_imp_error!(
+                        self,
+                        gst::ResourceError::Settings,
+                        ["Invalid S3 endpoint uri. Error: {}", e]
+                    );
+                    None
+                }
+            },
+            None => None,
         };
 
-        let sdk_config = s3utils::wait_config(
-            &bin.canceller,
-            settings.s3_region.clone(),
-            timeout_config,
-            cred,
-        )
-        .expect("Failed to get SDK config");
+        let config_builder = config::Builder::from(sdk_config)
+            .region(settings.s3_region.clone())
+            .retry_config(RetryConfig::standard().with_max_attempts(settings.retry_attempts));
 
-        settings.config = Some(sdk_config);
+        let config = if let Some(uri) = endpoint_uri {
+            config_builder
+                .endpoint_resolver(Endpoint::mutable(uri))
+                .build()
+        } else {
+            config_builder.build()
+        };
+
+        Client::from_conf(config)
     }
 
-    let sdk_config = settings.config.as_ref().expect("SDK config must be set");
-    let endpoint_uri = match &settings.endpoint_uri {
-        Some(endpoint) => match endpoint.parse::<Uri>() {
-            Ok(uri) => Some(uri),
-            Err(e) => {
-                element_error!(
-                    element,
-                    gst::ResourceError::Settings,
-                    ["Invalid S3 endpoint uri. Error: {}", e]
-                );
-                None
-            }
-        },
-        None => None,
-    };
-
-    let config_builder = config::Builder::from(sdk_config)
-        .region(settings.s3_region.clone())
-        .retry_config(RetryConfig::standard().with_max_attempts(settings.retry_attempts));
-
-    let config = if let Some(uri) = endpoint_uri {
-        config_builder
-            .endpoint_resolver(Endpoint::mutable(uri))
-            .build()
-    } else {
-        config_builder.build()
-    };
-
-    Client::from_conf(config)
-}
-
-impl S3HlsSink {
     fn stop(&self) {
-        let bin = self.instance();
-
         let mut settings = self.settings.lock().unwrap();
         let s3_handle = settings.s3_upload_handle.take();
         let s3_tx = settings.s3_tx.clone();
 
         if let (Some(handle), Some(tx)) = (s3_handle, s3_tx) {
-            gst::info!(CAT, obj: &bin, "Stopping S3 request thread");
+            gst::info!(CAT, imp: self, "Stopping S3 request thread");
             match tx.send(S3Request::Stop) {
                 Ok(_) => {
-                    gst::info!(CAT, obj: &bin, "Joining S3 request thread");
+                    gst::info!(CAT, imp: self, "Joining S3 request thread");
                     if let Err(err) = handle.join() {
-                        gst::error!(CAT, obj: &bin, "S3 upload thread failed to exit: {:?}", err);
+                        gst::error!(CAT, imp: self, "S3 upload thread failed to exit: {:?}", err);
                     }
                     drop(tx);
                 }
                 Err(err) => {
-                    gst::error!(CAT, obj: &bin, "Failed to stop S3 request thread: {}", err)
+                    gst::error!(CAT, imp: self, "Failed to stop S3 request thread: {}", err)
                 }
             };
         };
@@ -499,18 +494,12 @@ impl ObjectImpl for S3HlsSink {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         let mut settings = self.settings.lock().unwrap();
 
         gst::debug!(
             CAT,
-            obj: obj,
+            imp: self,
             "Setting property '{}' to '{:?}'",
             pspec.name(),
             value
@@ -560,7 +549,7 @@ impl ObjectImpl for S3HlsSink {
         }
     }
 
-    fn property(&self, _: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
 
         match pspec.name() {
@@ -579,10 +568,10 @@ impl ObjectImpl for S3HlsSink {
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
-        obj.add(&self.hlssink).unwrap();
+        self.instance().add(&self.hlssink).unwrap();
 
         let mut settings = self.settings.lock().unwrap();
 
@@ -595,28 +584,27 @@ impl ObjectImpl for S3HlsSink {
         let playlist_tx = tx.clone();
         let fragment_tx = tx.clone();
         let delete_tx = tx;
-        let element = obj.clone();
 
-        let handle = spawn(move || s3_request(element, rxc, rx));
+        let self_ = self.ref_counted();
+        let handle = spawn(move || self_.s3_request(rxc, rx));
 
         settings.s3_upload_handle = Some(handle);
         settings.s3_tx = Some(s3_tx);
         settings.s3_txc = Some(txc);
         drop(settings);
 
-        gst::info!(CAT, obj: obj, "Constructed");
+        gst::info!(CAT, imp: self, "Constructed");
 
         self.hlssink.connect("get-playlist-stream", false, {
-            let element_weak = obj.downgrade();
+            let self_weak = self.downgrade();
             move |args| -> Option<glib::Value> {
-                let element = match element_weak.upgrade() {
-                    Some(element) => element,
+                let self_ = match self_weak.upgrade() {
+                    Some(self_) => self_,
                     None => return None,
                 };
 
-                let s3hlssink = element.imp();
-                let s3client = s3client_from_settings(&element);
-                let settings = s3hlssink.settings.lock().unwrap();
+                let s3client = self_.s3client_from_settings();
+                let settings = self_.settings.lock().unwrap();
 
                 let s3_location = args[1].get::<&str>().unwrap();
                 let upload = S3Upload::new(
@@ -626,7 +614,7 @@ impl ObjectImpl for S3HlsSink {
                     playlist_tx.clone(),
                 );
 
-                gst::debug!(CAT, obj: &element, "New upload for {}", s3_location);
+                gst::debug!(CAT, imp: self_, "New upload for {}", s3_location);
 
                 Some(
                     gio::WriteOutputStream::new(upload)
@@ -637,16 +625,15 @@ impl ObjectImpl for S3HlsSink {
         });
 
         self.hlssink.connect("get-fragment-stream", false, {
-            let element_weak = obj.downgrade();
+            let self_weak = self.downgrade();
             move |args| -> Option<glib::Value> {
-                let element = match element_weak.upgrade() {
-                    Some(element) => element,
+                let self_ = match self_weak.upgrade() {
+                    Some(self_) => self_,
                     None => return None,
                 };
 
-                let s3hlssink = element.imp();
-                let s3client = s3client_from_settings(&element);
-                let settings = s3hlssink.settings.lock().unwrap();
+                let s3client = self_.s3client_from_settings();
+                let settings = self_.settings.lock().unwrap();
 
                 let s3_location = args[1].get::<&str>().unwrap();
                 let upload = S3Upload::new(
@@ -656,7 +643,7 @@ impl ObjectImpl for S3HlsSink {
                     fragment_tx.clone(),
                 );
 
-                gst::debug!(CAT, obj: &element, "New upload for {}", s3_location);
+                gst::debug!(CAT, imp: self_, "New upload for {}", s3_location);
 
                 Some(
                     gio::WriteOutputStream::new(upload)
@@ -667,17 +654,16 @@ impl ObjectImpl for S3HlsSink {
         });
 
         self.hlssink.connect("delete-fragment", false, {
-            let element_weak = obj.downgrade();
-            move |args| {
-                let element = match element_weak.upgrade() {
-                    Some(element) => element,
+            let self_weak = self.downgrade();
+            move |args| -> Option<glib::Value> {
+                let self_ = match self_weak.upgrade() {
+                    Some(self_) => self_,
                     None => return None,
                 };
 
-                let s3hlssink = element.imp();
-                let s3_client = s3client_from_settings(&element);
+                let s3_client = self_.s3client_from_settings();
+                let settings = self_.settings.lock().unwrap();
 
-                let settings = s3hlssink.settings.lock().unwrap();
                 let s3_bucket = settings.s3_bucket.as_ref().unwrap().clone();
                 let s3_location = args[1].get::<String>().unwrap();
 
@@ -688,7 +674,7 @@ impl ObjectImpl for S3HlsSink {
                     s3_location.to_string()
                 };
 
-                gst::debug!(CAT, obj: &element, "Deleting {}", s3_location);
+                gst::debug!(CAT, imp: self_, "Deleting {}", s3_location);
 
                 let delete = S3DeleteReq {
                     s3_client,
@@ -700,13 +686,13 @@ impl ObjectImpl for S3HlsSink {
 
                 // The signature on delete-fragment signal is different for
                 // hlssink2 and hlssink3.
-                if s3hlssink.hlssink.name().contains("hlssink3") {
+                if self_.hlssink.name().contains("hlssink3") {
                     if res.is_ok() {
                         Some(true.to_value())
                     } else {
-                        gst::error!(CAT, obj: &element, "Failed deleting {}", s3_location);
-                        element_error!(
-                            element,
+                        gst::error!(CAT, imp: self_, "Failed deleting {}", s3_location);
+                        element_imp_error!(
+                            self_,
                             gst::ResourceError::Write,
                             ["Failed to delete fragment"]
                         );
@@ -764,10 +750,9 @@ impl ElementImpl for S3HlsSink {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        let ret = self.parent_change_state(element, transition)?;
+        let ret = self.parent_change_state(transition)?;
         /*
          * The settings lock must not be taken before the parent state change.
          * Parent state change will result in the callback getting called which
@@ -781,13 +766,13 @@ impl ElementImpl for S3HlsSink {
                 if let Some(tx) = s3_txc {
                     gst::debug!(
                         CAT,
-                        obj: element,
+                        imp: self,
                         "Sending pause request to S3 request thread."
                     );
                     if settings.s3_upload_handle.is_some()
                         && tx.send(S3RequestControl::Pause).is_err()
                     {
-                        gst::error!(CAT, obj: element, "Could not send pause request.");
+                        gst::error!(CAT, imp: self, "Could not send pause request.");
                     }
                 }
             }
@@ -796,11 +781,11 @@ impl ElementImpl for S3HlsSink {
                 if let Some(tx) = s3_txc {
                     gst::debug!(
                         CAT,
-                        obj: element,
+                        imp: self,
                         "Sending continue request to S3 request thread."
                     );
                     if tx.send(S3RequestControl::Continue).is_err() {
-                        gst::error!(CAT, obj: element, "Could not send continue request.");
+                        gst::error!(CAT, imp: self, "Could not send continue request.");
                     }
                 }
             }
@@ -820,7 +805,6 @@ impl ElementImpl for S3HlsSink {
 
     fn request_new_pad(
         &self,
-        element: &Self::Type,
         templ: &gst::PadTemplate,
         _name: Option<String>,
         _caps: Option<&gst::Caps>,
@@ -831,7 +815,7 @@ impl ElementImpl for S3HlsSink {
                 if settings.audio_sink {
                     gst::debug!(
                         CAT,
-                        obj: element,
+                        imp: self,
                         "requested_new_pad: audio pad is already set"
                     );
                     return None;
@@ -841,7 +825,7 @@ impl ElementImpl for S3HlsSink {
                 let sink_pad =
                     gst::GhostPad::from_template_with_target(templ, Some("audio"), &audio_pad)
                         .unwrap();
-                element.add_pad(&sink_pad).unwrap();
+                self.instance().add_pad(&sink_pad).unwrap();
                 sink_pad.set_active(true).unwrap();
                 settings.audio_sink = true;
 
@@ -851,7 +835,7 @@ impl ElementImpl for S3HlsSink {
                 if settings.video_sink {
                     gst::debug!(
                         CAT,
-                        obj: element,
+                        imp: self,
                         "requested_new_pad: video pad is already set"
                     );
                     return None;
@@ -861,14 +845,14 @@ impl ElementImpl for S3HlsSink {
                 let sink_pad =
                     gst::GhostPad::from_template_with_target(templ, Some("video"), &video_pad)
                         .unwrap();
-                element.add_pad(&sink_pad).unwrap();
+                self.instance().add_pad(&sink_pad).unwrap();
                 sink_pad.set_active(true).unwrap();
                 settings.video_sink = true;
 
                 Some(sink_pad.upcast())
             }
             _ => {
-                gst::debug!(CAT, obj: element, "requested_new_pad is not audio or video");
+                gst::debug!(CAT, imp: self, "requested_new_pad is not audio or video");
                 None
             }
         }
@@ -876,7 +860,7 @@ impl ElementImpl for S3HlsSink {
 }
 
 impl BinImpl for S3HlsSink {
-    fn handle_message(&self, bin: &Self::Type, message: gst::Message) {
+    fn handle_message(&self, message: gst::Message) {
         use gst::MessageView;
         match message.view() {
             MessageView::Eos(_) | MessageView::Error(_) => {
@@ -890,13 +874,13 @@ impl BinImpl for S3HlsSink {
                      * unblock the S3 request thread from waiting for a Continue request
                      * on the control channel.
                      */
-                    gst::debug!(CAT, obj: bin, "Got EOS, dropping control channel");
+                    gst::debug!(CAT, imp: self, "Got EOS, dropping control channel");
                     drop(txc);
                 }
                 drop(settings);
-                self.parent_handle_message(bin, message)
+                self.parent_handle_message(message)
             }
-            _ => self.parent_handle_message(bin, message),
+            _ => self.parent_handle_message(message),
         }
     }
 }

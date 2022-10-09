@@ -88,39 +88,39 @@ impl ElementImpl for CdgDec {
 }
 
 impl VideoDecoderImpl for CdgDec {
-    fn start(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
         let mut out_info = self.output_info.lock().unwrap();
         *out_info = None;
 
-        self.parent_start(element)
+        self.parent_start()
     }
 
-    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         {
             let mut cdg_inter = self.cdg_inter.lock().unwrap();
             cdg_inter.reset(true);
         }
-        self.parent_stop(element)
+        self.parent_stop()
     }
 
     fn handle_frame(
         &self,
-        element: &Self::Type,
         mut frame: gst_video::VideoCodecFrame,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         {
             let mut out_info = self.output_info.lock().unwrap();
             if out_info.is_none() {
-                let output_state = element.set_output_state(
+                let instance = self.instance();
+                let output_state = instance.set_output_state(
                     gst_video::VideoFormat::Rgba,
                     CDG_WIDTH,
                     CDG_HEIGHT,
                     None,
                 )?;
 
-                element.negotiate(output_state)?;
+                instance.negotiate(output_state)?;
 
-                let out_state = element.output_state().unwrap();
+                let out_state = instance.output_state().unwrap();
                 *out_info = Some(out_state.info());
             }
         }
@@ -128,8 +128,8 @@ impl VideoDecoderImpl for CdgDec {
         let cmd = {
             let input = frame.input_buffer().unwrap();
             let map = input.map_readable().map_err(|_| {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::CoreError::Failed,
                     ["Failed to map input buffer readable"]
                 );
@@ -144,7 +144,7 @@ impl VideoDecoderImpl for CdgDec {
             Some(cmd) => cmd,
             None => {
                 // Not a CDG command
-                element.release_frame(frame);
+                self.instance().release_frame(frame);
                 return Ok(gst::FlowSuccess::Ok);
             }
         };
@@ -152,7 +152,7 @@ impl VideoDecoderImpl for CdgDec {
         let mut cdg_inter = self.cdg_inter.lock().unwrap();
         cdg_inter.handle_cmd(cmd);
 
-        element.allocate_output_frame(&mut frame, None)?;
+        self.instance().allocate_output_frame(&mut frame, None)?;
         {
             let output = frame.output_buffer_mut().unwrap();
             let info = self.output_info.lock().unwrap();
@@ -160,8 +160,8 @@ impl VideoDecoderImpl for CdgDec {
             let mut out_frame =
                 gst_video::VideoFrameRef::from_buffer_ref_writable(output, info.as_ref().unwrap())
                     .map_err(|_| {
-                        gst::element_error!(
-                            element,
+                        gst::element_imp_error!(
+                            self,
                             gst::CoreError::Failed,
                             ["Failed to map output buffer writable"]
                         );
@@ -188,19 +188,13 @@ impl VideoDecoderImpl for CdgDec {
             }
         }
 
-        gst::debug!(
-            CAT,
-            obj: element,
-            "Finish frame pts={}",
-            frame.pts().display()
-        );
+        gst::debug!(CAT, imp: self, "Finish frame pts={}", frame.pts().display());
 
-        element.finish_frame(frame)
+        self.instance().finish_frame(frame)
     }
 
     fn decide_allocation(
         &self,
-        element: &Self::Type,
         query: &mut gst::query::Allocation,
     ) -> Result<(), gst::LoggableError> {
         if query
@@ -216,11 +210,11 @@ impl VideoDecoderImpl for CdgDec {
             }
         }
 
-        self.parent_decide_allocation(element, query)
+        self.parent_decide_allocation(query)
     }
 
-    fn flush(&self, element: &Self::Type) -> bool {
-        gst::debug!(CAT, obj: element, "flushing, reset CDG interpreter");
+    fn flush(&self) -> bool {
+        gst::debug!(CAT, imp: self, "flushing, reset CDG interpreter");
 
         let mut cdg_inter = self.cdg_inter.lock().unwrap();
         cdg_inter.reset(false);

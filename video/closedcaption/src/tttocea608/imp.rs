@@ -151,7 +151,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 static SPACE: Lazy<u16> = Lazy::new(|| eia608_from_utf8_1(&[0x20, 0, 0, 0, 0]));
 
 fn cc_data_buffer(
-    element: &super::TtToCea608,
+    imp: &TtToCea608,
     cc_data: u16,
     pts: gst::ClockTime,
     duration: gst::ClockTime,
@@ -163,14 +163,14 @@ fn cc_data_buffer(
     if cc_data != 0x8080 {
         gst::log!(
             CAT,
-            obj: element,
+            imp: imp,
             "{} -> {}: {}",
             pts,
             pts + duration,
             eia608_to_text(cc_data)
         );
     } else {
-        gst::trace!(CAT, obj: element, "{} -> {}: padding", pts, pts + duration);
+        gst::trace!(CAT, imp: imp, "{} -> {}: padding", pts, pts + duration);
     }
 
     buf_mut.copy_from_slice(0, &data).unwrap();
@@ -183,7 +183,7 @@ fn cc_data_buffer(
 impl State {
     fn check_erase_display(
         &mut self,
-        element: &super::TtToCea608,
+        imp: &TtToCea608,
         bufferlist: &mut gst::BufferListRef,
     ) -> bool {
         if let Some(erase_display_frame_no) = self.erase_display_frame_no {
@@ -191,7 +191,7 @@ impl State {
                 self.erase_display_frame_no = None;
                 self.column = 0;
                 self.send_roll_up_preamble = true;
-                self.erase_display_memory(element, bufferlist);
+                self.erase_display_memory(imp, bufferlist);
                 return true;
             }
         }
@@ -199,13 +199,8 @@ impl State {
         false
     }
 
-    fn cc_data(
-        &mut self,
-        element: &super::TtToCea608,
-        bufferlist: &mut gst::BufferListRef,
-        cc_data: u16,
-    ) {
-        self.check_erase_display(element, bufferlist);
+    fn cc_data(&mut self, imp: &TtToCea608, bufferlist: &mut gst::BufferListRef, cc_data: u16) {
+        self.check_erase_display(imp, bufferlist);
 
         let (fps_n, fps_d) = (self.framerate.numer() as u64, self.framerate.denom() as u64);
 
@@ -216,7 +211,7 @@ impl State {
         if self.last_frame_no < self.max_frame_no {
             self.last_frame_no += 1;
         } else {
-            gst::debug!(CAT, obj: element, "More text than bandwidth!");
+            gst::debug!(CAT, imp: imp, "More text than bandwidth!");
         }
 
         let next_pts = (self.last_frame_no * gst::ClockTime::SECOND)
@@ -225,122 +220,96 @@ impl State {
 
         let duration = next_pts - pts;
 
-        bufferlist.insert(-1, cc_data_buffer(element, cc_data, pts, duration));
+        bufferlist.insert(-1, cc_data_buffer(imp, cc_data, pts, duration));
     }
 
-    fn pad(
-        &mut self,
-        element: &super::TtToCea608,
-        bufferlist: &mut gst::BufferListRef,
-        frame_no: u64,
-    ) {
+    fn pad(&mut self, imp: &TtToCea608, bufferlist: &mut gst::BufferListRef, frame_no: u64) {
         while self.last_frame_no < frame_no {
-            if !self.check_erase_display(element, bufferlist) {
-                self.cc_data(element, bufferlist, 0x8080);
+            if !self.check_erase_display(imp, bufferlist) {
+                self.cc_data(imp, bufferlist, 0x8080);
             }
         }
     }
 
-    fn resume_caption_loading(
-        &mut self,
-        element: &super::TtToCea608,
-        bufferlist: &mut gst::BufferListRef,
-    ) {
+    fn resume_caption_loading(&mut self, imp: &TtToCea608, bufferlist: &mut gst::BufferListRef) {
         self.cc_data(
-            element,
+            imp,
             bufferlist,
             eia608_control_command(ffi::eia608_control_t_eia608_control_resume_caption_loading),
         )
     }
 
-    fn resume_direct_captioning(
-        &mut self,
-        element: &super::TtToCea608,
-        bufferlist: &mut gst::BufferListRef,
-    ) {
+    fn resume_direct_captioning(&mut self, imp: &TtToCea608, bufferlist: &mut gst::BufferListRef) {
         self.cc_data(
-            element,
+            imp,
             bufferlist,
             eia608_control_command(ffi::eia608_control_t_eia608_control_resume_direct_captioning),
         )
     }
 
-    fn delete_to_end_of_row(
-        &mut self,
-        element: &super::TtToCea608,
-        bufferlist: &mut gst::BufferListRef,
-    ) {
+    fn delete_to_end_of_row(&mut self, imp: &TtToCea608, bufferlist: &mut gst::BufferListRef) {
         self.cc_data(
-            element,
+            imp,
             bufferlist,
             eia608_control_command(ffi::eia608_control_t_eia608_control_delete_to_end_of_row),
         )
     }
 
-    fn roll_up_2(&mut self, element: &super::TtToCea608, bufferlist: &mut gst::BufferListRef) {
+    fn roll_up_2(&mut self, imp: &TtToCea608, bufferlist: &mut gst::BufferListRef) {
         self.cc_data(
-            element,
+            imp,
             bufferlist,
             eia608_control_command(ffi::eia608_control_t_eia608_control_roll_up_2),
         )
     }
 
-    fn roll_up_3(&mut self, element: &super::TtToCea608, bufferlist: &mut gst::BufferListRef) {
+    fn roll_up_3(&mut self, imp: &TtToCea608, bufferlist: &mut gst::BufferListRef) {
         self.cc_data(
-            element,
+            imp,
             bufferlist,
             eia608_control_command(ffi::eia608_control_t_eia608_control_roll_up_3),
         )
     }
 
-    fn roll_up_4(&mut self, element: &super::TtToCea608, bufferlist: &mut gst::BufferListRef) {
+    fn roll_up_4(&mut self, imp: &TtToCea608, bufferlist: &mut gst::BufferListRef) {
         self.cc_data(
-            element,
+            imp,
             bufferlist,
             eia608_control_command(ffi::eia608_control_t_eia608_control_roll_up_4),
         )
     }
 
-    fn carriage_return(
-        &mut self,
-        element: &super::TtToCea608,
-        bufferlist: &mut gst::BufferListRef,
-    ) {
+    fn carriage_return(&mut self, imp: &TtToCea608, bufferlist: &mut gst::BufferListRef) {
         self.cc_data(
-            element,
+            imp,
             bufferlist,
             eia608_control_command(ffi::eia608_control_t_eia608_control_carriage_return),
         )
     }
 
-    fn end_of_caption(&mut self, element: &super::TtToCea608, bufferlist: &mut gst::BufferListRef) {
+    fn end_of_caption(&mut self, imp: &TtToCea608, bufferlist: &mut gst::BufferListRef) {
         self.cc_data(
-            element,
+            imp,
             bufferlist,
             eia608_control_command(ffi::eia608_control_t_eia608_control_end_of_caption),
         )
     }
 
-    fn tab_offset(
-        &mut self,
-        element: &super::TtToCea608,
-        bufferlist: &mut gst::BufferListRef,
-        offset: u32,
-    ) {
+    fn tab_offset(&mut self, imp: &TtToCea608, bufferlist: &mut gst::BufferListRef, offset: u32) {
         match offset {
             0 => (),
             1 => self.cc_data(
-                element,
+                imp,
                 bufferlist,
                 eia608_control_command(ffi::eia608_control_t_eia608_tab_offset_1),
             ),
             2 => self.cc_data(
-                element,
+                imp,
                 bufferlist,
                 eia608_control_command(ffi::eia608_control_t_eia608_tab_offset_2),
             ),
             3 => self.cc_data(
-                element,
+                imp,
                 bufferlist,
                 eia608_control_command(ffi::eia608_control_t_eia608_tab_offset_3),
             ),
@@ -350,14 +319,14 @@ impl State {
 
     fn preamble_indent(
         &mut self,
-        element: &super::TtToCea608,
+        imp: &TtToCea608,
         bufferlist: &mut gst::BufferListRef,
         row: i32,
         col: i32,
         underline: bool,
     ) {
         self.cc_data(
-            element,
+            imp,
             bufferlist,
             eia608_row_column_preamble(row, col, underline),
         )
@@ -365,14 +334,14 @@ impl State {
 
     fn preamble_style(
         &mut self,
-        element: &super::TtToCea608,
+        imp: &TtToCea608,
         bufferlist: &mut gst::BufferListRef,
         row: i32,
         style: u32,
         underline: bool,
     ) {
         self.cc_data(
-            element,
+            imp,
             bufferlist,
             eia608_row_style_preamble(row, style, underline),
         )
@@ -380,31 +349,21 @@ impl State {
 
     fn midrow_change(
         &mut self,
-        element: &super::TtToCea608,
+        imp: &TtToCea608,
         bufferlist: &mut gst::BufferListRef,
         style: u32,
         underline: bool,
     ) {
-        self.cc_data(element, bufferlist, eia608_midrow_change(style, underline))
+        self.cc_data(imp, bufferlist, eia608_midrow_change(style, underline))
     }
 
-    fn bna(
-        &mut self,
-        element: &super::TtToCea608,
-        bufferlist: &mut gst::BufferListRef,
-        bna1: u16,
-        bna2: u16,
-    ) {
-        self.cc_data(element, bufferlist, eia608_from_basicna(bna1, bna2))
+    fn bna(&mut self, imp: &TtToCea608, bufferlist: &mut gst::BufferListRef, bna1: u16, bna2: u16) {
+        self.cc_data(imp, bufferlist, eia608_from_basicna(bna1, bna2))
     }
 
-    fn erase_display_memory(
-        &mut self,
-        element: &super::TtToCea608,
-        bufferlist: &mut gst::BufferListRef,
-    ) {
+    fn erase_display_memory(&mut self, imp: &TtToCea608, bufferlist: &mut gst::BufferListRef) {
         self.cc_data(
-            element,
+            imp,
             bufferlist,
             eia608_control_command(ffi::eia608_control_t_eia608_control_erase_display_memory),
         )
@@ -423,14 +382,13 @@ pub struct TtToCea608 {
 impl TtToCea608 {
     fn open_chunk(
         &self,
-        element: &super::TtToCea608,
         state: &mut State,
         chunk: &Chunk,
         bufferlist: &mut gst::BufferListRef,
         col: u32,
     ) -> bool {
         if (chunk.style != state.style || chunk.underline != state.underline) && col < 31 {
-            state.midrow_change(element, bufferlist, chunk.style as u32, chunk.underline);
+            state.midrow_change(self, bufferlist, chunk.style as u32, chunk.underline);
             state.style = chunk.style;
             state.underline = chunk.underline;
             true
@@ -442,7 +400,6 @@ impl TtToCea608 {
     #[allow(clippy::too_many_arguments)]
     fn open_line(
         &self,
-        element: &super::TtToCea608,
         state: &mut State,
         settings: &Settings,
         chunk: &Chunk,
@@ -459,7 +416,7 @@ impl TtToCea608 {
                 if let Some(carriage_return) = carriage_return {
                     if carriage_return {
                         *col = settings.origin_column;
-                        state.carriage_return(element, bufferlist);
+                        state.carriage_return(self, bufferlist);
                         true
                     } else {
                         state.send_roll_up_preamble
@@ -475,20 +432,14 @@ impl TtToCea608 {
 
         if do_preamble {
             match state.mode {
-                Cea608Mode::RollUp2 => state.roll_up_2(element, bufferlist),
-                Cea608Mode::RollUp3 => state.roll_up_3(element, bufferlist),
-                Cea608Mode::RollUp4 => state.roll_up_4(element, bufferlist),
+                Cea608Mode::RollUp2 => state.roll_up_2(self, bufferlist),
+                Cea608Mode::RollUp3 => state.roll_up_3(self, bufferlist),
+                Cea608Mode::RollUp4 => state.roll_up_4(self, bufferlist),
                 _ => (),
             }
 
             if chunk.style != TextStyle::White && indent == 0 {
-                state.preamble_style(
-                    element,
-                    bufferlist,
-                    row,
-                    chunk.style as u32,
-                    chunk.underline,
-                );
+                state.preamble_style(self, bufferlist, row, chunk.style as u32, chunk.underline);
                 state.style = chunk.style;
             } else {
                 if chunk.style != TextStyle::White {
@@ -502,20 +453,14 @@ impl TtToCea608 {
                 }
 
                 state.style = TextStyle::White;
-                state.preamble_indent(
-                    element,
-                    bufferlist,
-                    row,
-                    (indent * 4) as i32,
-                    chunk.underline,
-                );
+                state.preamble_indent(self, bufferlist, row, (indent * 4) as i32, chunk.underline);
             }
 
             if state.mode == Cea608Mode::PaintOn {
-                state.delete_to_end_of_row(element, bufferlist);
+                state.delete_to_end_of_row(self, bufferlist);
             }
 
-            state.tab_offset(element, bufferlist, offset);
+            state.tab_offset(self, bufferlist, offset);
 
             state.underline = chunk.underline;
             state.send_roll_up_preamble = false;
@@ -524,7 +469,7 @@ impl TtToCea608 {
             ret = false;
         }
 
-        if self.open_chunk(element, state, chunk, bufferlist, *col) {
+        if self.open_chunk(state, chunk, bufferlist, *col) {
             *col += 1;
             ret = false
         }
@@ -540,7 +485,6 @@ impl TtToCea608 {
         &self,
         mut state: &mut State,
         settings: &Settings,
-        element: &super::TtToCea608,
         pts: gst::ClockTime,
         duration: gst::ClockTime,
         lines: Lines,
@@ -564,7 +508,7 @@ impl TtToCea608 {
         let frame_no = pts.mul_div_round(fps_n, fps_d).unwrap().seconds();
 
         if state.last_frame_no == 0 {
-            gst::debug!(CAT, obj: element, "Initial skip to frame no {}", frame_no);
+            gst::debug!(CAT, imp: self, "Initial skip to frame no {}", frame_no);
             state.last_frame_no = pts.mul_div_floor(fps_n, fps_d).unwrap().seconds();
         }
 
@@ -573,7 +517,7 @@ impl TtToCea608 {
             .unwrap()
             .seconds();
 
-        state.pad(element, mut_list, frame_no);
+        state.pad(self, mut_list, frame_no);
 
         let mut cleared = false;
         if let Some(mode) = lines.mode {
@@ -581,7 +525,7 @@ impl TtToCea608 {
                 /* Always erase the display when going to or from pop-on */
                 if state.mode == Cea608Mode::PopOn || mode == Cea608Mode::PopOn {
                     state.erase_display_frame_no = None;
-                    state.erase_display_memory(element, mut_list);
+                    state.erase_display_memory(self, mut_list);
                     cleared = true;
                 }
 
@@ -598,7 +542,7 @@ impl TtToCea608 {
         if let Some(clear) = lines.clear {
             if clear && !cleared {
                 state.erase_display_frame_no = None;
-                state.erase_display_memory(element, mut_list);
+                state.erase_display_memory(self, mut_list);
                 if state.mode != Cea608Mode::PopOn && state.mode != Cea608Mode::PaintOn {
                     state.send_roll_up_preamble = true;
                 }
@@ -607,28 +551,23 @@ impl TtToCea608 {
         }
 
         if state.mode == Cea608Mode::PopOn {
-            state.resume_caption_loading(element, mut_list);
-            state.cc_data(element, mut_list, erase_non_displayed_memory());
+            state.resume_caption_loading(self, mut_list);
+            state.cc_data(self, mut_list, erase_non_displayed_memory());
         } else if state.mode == Cea608Mode::PaintOn {
-            state.resume_direct_captioning(element, mut_list);
+            state.resume_direct_captioning(self, mut_list);
         }
 
         let mut prev_char = 0;
 
         for line in &lines.lines {
-            gst::log!(CAT, obj: element, "Processing {:?}", line);
+            gst::log!(CAT, imp: self, "Processing {:?}", line);
 
             if let Some(line_row) = line.row {
                 row = line_row;
             }
 
             if row > 14 {
-                gst::warning!(
-                    CAT,
-                    obj: element,
-                    "Dropping line after 15th row: {:?}",
-                    line
-                );
+                gst::warning!(CAT, imp: self, "Dropping line after 15th row: {:?}", line);
                 continue;
             }
 
@@ -644,13 +583,12 @@ impl TtToCea608 {
             for (j, chunk) in line.chunks.iter().enumerate() {
                 let mut prepend_space = true;
                 if prev_char != 0 {
-                    state.cc_data(element, mut_list, prev_char);
+                    state.cc_data(self, mut_list, prev_char);
                     prev_char = 0;
                 }
 
                 if j == 0 {
                     prepend_space = self.open_line(
-                        element,
                         state,
                         settings,
                         chunk,
@@ -659,7 +597,7 @@ impl TtToCea608 {
                         row as i32,
                         line.carriage_return,
                     );
-                } else if self.open_chunk(element, state, chunk, mut_list, col) {
+                } else if self.open_chunk(state, chunk, mut_list, col) {
                     prepend_space = false;
                     col += 1;
                 }
@@ -690,36 +628,36 @@ impl TtToCea608 {
                     let mut cc_data = eia608_from_utf8_1(&encoded);
 
                     if cc_data == 0 {
-                        gst::warning!(CAT, obj: element, "Not translating UTF8: {}", c);
+                        gst::warning!(CAT, imp: self, "Not translating UTF8: {}", c);
                         cc_data = *SPACE;
                     }
 
                     if is_basicna(prev_char) {
                         if is_basicna(cc_data) {
-                            state.bna(element, mut_list, prev_char, cc_data);
+                            state.bna(self, mut_list, prev_char, cc_data);
                         } else if is_westeu(cc_data) {
                             // extended characters overwrite the previous character,
                             // so insert a dummy char then write the extended char
-                            state.bna(element, mut_list, prev_char, *SPACE);
-                            state.cc_data(element, mut_list, cc_data);
+                            state.bna(self, mut_list, prev_char, *SPACE);
+                            state.cc_data(self, mut_list, cc_data);
                         } else {
-                            state.cc_data(element, mut_list, prev_char);
-                            state.cc_data(element, mut_list, cc_data);
+                            state.cc_data(self, mut_list, prev_char);
+                            state.cc_data(self, mut_list, cc_data);
                         }
                         prev_char = 0;
                     } else if is_westeu(cc_data) {
                         // extended characters overwrite the previous character,
                         // so insert a dummy char then write the extended char
-                        state.cc_data(element, mut_list, *SPACE);
-                        state.cc_data(element, mut_list, cc_data);
+                        state.cc_data(self, mut_list, *SPACE);
+                        state.cc_data(self, mut_list, cc_data);
                     } else if is_basicna(cc_data) {
                         prev_char = cc_data;
                     } else {
-                        state.cc_data(element, mut_list, cc_data);
+                        state.cc_data(self, mut_list, cc_data);
                     }
 
                     if is_specialna(cc_data) {
-                        state.resume_caption_loading(element, mut_list);
+                        state.resume_caption_loading(self, mut_list);
                     }
 
                     col += 1;
@@ -742,12 +680,11 @@ impl TtToCea608 {
                             || col > 31
                         {
                             if prev_char != 0 {
-                                state.cc_data(element, mut_list, prev_char);
+                                state.cc_data(self, mut_list, prev_char);
                                 prev_char = 0;
                             }
 
                             self.open_line(
-                                element,
                                 state,
                                 settings,
                                 chunk,
@@ -761,7 +698,7 @@ impl TtToCea608 {
                         if chars.peek().is_some() {
                             gst::warning!(
                                 CAT,
-                                obj: element,
+                                imp: self,
                                 "Dropping characters after 32nd column: {}",
                                 c
                             );
@@ -773,7 +710,7 @@ impl TtToCea608 {
 
             if state.mode == Cea608Mode::PopOn || state.mode == Cea608Mode::PaintOn {
                 if prev_char != 0 {
-                    state.cc_data(element, mut_list, prev_char);
+                    state.cc_data(self, mut_list, prev_char);
                     prev_char = 0;
                 }
                 row += 1;
@@ -781,13 +718,13 @@ impl TtToCea608 {
         }
 
         if prev_char != 0 {
-            state.cc_data(element, mut_list, prev_char);
+            state.cc_data(self, mut_list, prev_char);
         }
 
         if state.mode == Cea608Mode::PopOn {
             /* No need to erase the display at this point, end_of_caption will be equivalent */
             state.erase_display_frame_no = None;
-            state.end_of_caption(element, mut_list);
+            state.end_of_caption(self, mut_list);
         }
 
         state.column = col;
@@ -800,7 +737,7 @@ impl TtToCea608 {
                 Some(state.last_frame_no + timeout.mul_div_round(fps_n, fps_d).unwrap().seconds());
         }
 
-        state.pad(element, mut_list, state.max_frame_no);
+        state.pad(self, mut_list, state.max_frame_no);
 
         Ok(bufferlist)
     }
@@ -808,14 +745,13 @@ impl TtToCea608 {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &super::TtToCea608,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj: element, "Handling {:?}", buffer);
+        gst::log!(CAT, imp: self, "Handling {:?}", buffer);
 
         let pts = buffer.pts().ok_or_else(|| {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::StreamError::Format,
                 ["Stream with timestamped buffers required"]
             );
@@ -823,8 +759,8 @@ impl TtToCea608 {
         })?;
 
         let duration = buffer.duration().ok_or_else(|| {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::StreamError::Format,
                 ["Buffers of stream need to have a duration"]
             );
@@ -890,7 +826,7 @@ impl TtToCea608 {
             }
         }
 
-        let bufferlist = self.generate(&mut state, &settings, element, pts, duration, lines)?;
+        let bufferlist = self.generate(&mut state, &settings, pts, duration, lines)?;
 
         drop(settings);
         drop(state);
@@ -898,7 +834,7 @@ impl TtToCea608 {
         self.srcpad.push_list(bufferlist)
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &super::TtToCea608, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
 
         use gst::EventView;
@@ -954,7 +890,7 @@ impl TtToCea608 {
 
                     gst::debug!(
                         CAT,
-                        obj: element,
+                        imp: self,
                         "Initial skip to frame no {}",
                         state.last_frame_no
                     );
@@ -969,7 +905,7 @@ impl TtToCea608 {
                 let mut bufferlist = gst::BufferList::new();
                 let mut_list = bufferlist.get_mut().unwrap();
 
-                state.pad(element, mut_list, frame_no);
+                state.pad(self, mut_list, frame_no);
 
                 drop(state);
 
@@ -984,7 +920,7 @@ impl TtToCea608 {
                     let mut_list = bufferlist.get_mut().unwrap();
 
                     state.max_frame_no = erase_display_frame_no;
-                    state.pad(element, mut_list, erase_display_frame_no);
+                    state.pad(self, mut_list, erase_display_frame_no);
 
                     drop(state);
 
@@ -993,7 +929,7 @@ impl TtToCea608 {
                     drop(state);
                 }
 
-                pad.event_default(Some(element), event)
+                pad.event_default(Some(&*self.instance()), event)
             }
             EventView::FlushStop(_) => {
                 let mut state = self.state.lock().unwrap();
@@ -1010,9 +946,9 @@ impl TtToCea608 {
                 drop(settings);
                 drop(state);
 
-                pad.event_default(Some(element), event)
+                pad.event_default(Some(&*self.instance()), event)
             }
-            _ => pad.event_default(Some(element), event),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 }
@@ -1030,14 +966,14 @@ impl ObjectSubclass for TtToCea608 {
                 TtToCea608::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |this, element| this.sink_chain(pad, element, buffer),
+                    |this| this.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
                 TtToCea608::catch_panic_pad_function(
                     parent,
                     || false,
-                    |this, element| this.sink_event(pad, element, event),
+                    |this| this.sink_event(pad, event),
                 )
             })
             .flags(gst::PadFlags::FIXED_CAPS)
@@ -1093,20 +1029,15 @@ impl ObjectImpl for TtToCea608 {
         PROPERTIES.as_ref()
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "mode" => {
                 let mut state = self.state.lock().unwrap();
@@ -1141,7 +1072,7 @@ impl ObjectImpl for TtToCea608 {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "mode" => {
                 let settings = self.settings.lock().unwrap();
@@ -1235,10 +1166,9 @@ impl ElementImpl for TtToCea608 {
     #[allow(clippy::single_match)]
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {
@@ -1255,7 +1185,7 @@ impl ElementImpl for TtToCea608 {
             _ => (),
         }
 
-        let ret = self.parent_change_state(element, transition)?;
+        let ret = self.parent_change_state(transition)?;
 
         match transition {
             gst::StateChange::PausedToReady => {

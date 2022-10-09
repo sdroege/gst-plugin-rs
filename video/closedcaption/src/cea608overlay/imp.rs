@@ -96,17 +96,13 @@ impl Cea608Overlay {
     // https://blogs.gnome.org/mclasen/2019/07/27/more-text-rendering-updates/
     //
     // TODO: switch to the API presented in this post once it's been exposed
-    fn recalculate_layout(
-        &self,
-        element: &super::Cea608Overlay,
-        state: &mut State,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn recalculate_layout(&self, state: &mut State) -> Result<gst::FlowSuccess, gst::FlowError> {
         let video_info = state.video_info.as_ref().unwrap();
         let fontmap = match pangocairo::FontMap::new() {
             Some(fontmap) => Ok(fontmap),
             None => {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::LibraryError::Failed,
                     ["Failed to create pangocairo font map"]
                 );
@@ -116,8 +112,8 @@ impl Cea608Overlay {
         let context = match fontmap.create_context() {
             Some(context) => Ok(context),
             None => {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::LibraryError::Failed,
                     ["Failed to create font map context"]
                 );
@@ -163,7 +159,7 @@ impl Cea608Overlay {
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn overlay_text(&self, element: &super::Cea608Overlay, text: &str, state: &mut State) {
+    fn overlay_text(&self, text: &str, state: &mut State) {
         let video_info = state.video_info.as_ref().unwrap();
         let layout = state.layout.as_ref().unwrap();
         layout.set_text(text);
@@ -251,7 +247,7 @@ impl Cea608Overlay {
         let buffer = match render_buffer() {
             Some(buffer) => buffer,
             None => {
-                gst::error!(CAT, obj: element, "Failed to render buffer");
+                gst::error!(CAT, imp: self, "Failed to render buffer");
                 state.composition = None;
                 return;
             }
@@ -272,16 +268,12 @@ impl Cea608Overlay {
         };
     }
 
-    fn negotiate(
-        &self,
-        element: &super::Cea608Overlay,
-        state: &mut State,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn negotiate(&self, state: &mut State) -> Result<gst::FlowSuccess, gst::FlowError> {
         let video_info = match state.video_info.as_ref() {
             Some(video_info) => Ok(video_info),
             None => {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::CoreError::Negotiation,
                     ["Element hasn't received valid video caps at negotiation time"]
                 );
@@ -322,14 +314,7 @@ impl Cea608Overlay {
         }
     }
 
-    fn decode_cc_data(
-        &self,
-        pad: &gst::Pad,
-        element: &super::Cea608Overlay,
-        state: &mut State,
-        data: &[u8],
-        pts: gst::ClockTime,
-    ) {
+    fn decode_cc_data(&self, pad: &gst::Pad, state: &mut State, data: &[u8], pts: gst::ClockTime) {
         if data.len() % 3 != 0 {
             gst::warning!(CAT, "cc_data length is not a multiple of 3, truncating");
         }
@@ -342,12 +327,7 @@ impl Cea608Overlay {
                 if cc_type == 0x00 || cc_type == 0x01 {
                     if state.selected_field.is_none() {
                         state.selected_field = Some(cc_type);
-                        gst::info!(
-                            CAT,
-                            obj: element,
-                            "Selected field {} automatically",
-                            cc_type
-                        );
+                        gst::info!(CAT, imp: self, "Selected field {} automatically", cc_type);
                     }
 
                     if Some(cc_type) == state.selected_field {
@@ -368,10 +348,10 @@ impl Cea608Overlay {
                                     }
                                 };
 
-                                self.overlay_text(element, &text, state);
+                                self.overlay_text(&text, state);
                             }
                             Ok(Status::Clear) => {
-                                self.overlay_text(element, "", state);
+                                self.overlay_text("", state);
                             }
                             Ok(Status::Ok) => (),
                             Err(err) => {
@@ -393,14 +373,7 @@ impl Cea608Overlay {
         }
     }
 
-    fn decode_s334_1a(
-        &self,
-        pad: &gst::Pad,
-        element: &super::Cea608Overlay,
-        state: &mut State,
-        data: &[u8],
-        pts: gst::ClockTime,
-    ) {
+    fn decode_s334_1a(&self, pad: &gst::Pad, state: &mut State, data: &[u8], pts: gst::ClockTime) {
         if data.len() % 3 != 0 {
             gst::warning!(CAT, "cc_data length is not a multiple of 3, truncating");
         }
@@ -409,12 +382,7 @@ impl Cea608Overlay {
             let cc_type = triple[0] & 0x01;
             if state.selected_field.is_none() {
                 state.selected_field = Some(cc_type);
-                gst::info!(
-                    CAT,
-                    obj: element,
-                    "Selected field {} automatically",
-                    cc_type
-                );
+                gst::info!(CAT, imp: self, "Selected field {} automatically", cc_type);
             }
 
             if Some(cc_type) == state.selected_field {
@@ -430,7 +398,7 @@ impl Cea608Overlay {
                         }
                     };
 
-                    self.overlay_text(element, &text, state);
+                    self.overlay_text(&text, state);
                 }
 
                 self.reset_timeout(state, pts);
@@ -445,7 +413,6 @@ impl Cea608Overlay {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &super::Cea608Overlay,
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
@@ -458,28 +425,28 @@ impl Cea608Overlay {
         let mut state = self.state.lock().unwrap();
 
         if self.srcpad.check_reconfigure() {
-            self.negotiate(element, &mut state)?;
+            self.negotiate(&mut state)?;
         }
 
         if state.layout.is_none() {
-            self.recalculate_layout(element, &mut state)?;
+            self.recalculate_layout(&mut state)?;
         }
 
         for meta in buffer.iter_meta::<gst_video::VideoCaptionMeta>() {
             if meta.caption_type() == gst_video::VideoCaptionType::Cea708Cdp {
                 match extract_cdp(meta.data()) {
                     Ok(data) => {
-                        self.decode_cc_data(pad, element, &mut state, data, pts);
+                        self.decode_cc_data(pad, &mut state, data, pts);
                     }
                     Err(e) => {
                         gst::warning!(CAT, "{}", &e.to_string());
-                        gst::element_warning!(element, gst::StreamError::Decode, [&e.to_string()]);
+                        gst::element_imp_warning!(self, gst::StreamError::Decode, [&e.to_string()]);
                     }
                 }
             } else if meta.caption_type() == gst_video::VideoCaptionType::Cea708Raw {
-                self.decode_cc_data(pad, element, &mut state, meta.data(), pts);
+                self.decode_cc_data(pad, &mut state, meta.data(), pts);
             } else if meta.caption_type() == gst_video::VideoCaptionType::Cea608S3341a {
-                self.decode_s334_1a(pad, element, &mut state, meta.data(), pts);
+                self.decode_s334_1a(pad, &mut state, meta.data(), pts);
             } else if meta.caption_type() == gst_video::VideoCaptionType::Cea608Raw {
                 let data = meta.data();
                 assert!(data.len() % 2 == 0);
@@ -500,7 +467,7 @@ impl Cea608Overlay {
                             }
                         };
 
-                        self.overlay_text(element, &text, &mut state);
+                        self.overlay_text(&text, &mut state);
                     }
 
                     self.reset_timeout(&mut state, pts);
@@ -511,7 +478,7 @@ impl Cea608Overlay {
         if let Some(timeout) = self.settings.lock().unwrap().timeout {
             if let Some(interval) = pts.opt_saturating_sub(state.last_cc_pts) {
                 if interval > timeout {
-                    gst::info!(CAT, obj: element, "Reached timeout, clearing overlay");
+                    gst::info!(CAT, imp: self, "Reached timeout, clearing overlay");
                     state.composition.take();
                     state.last_cc_pts.take();
                 }
@@ -539,12 +506,7 @@ impl Cea608Overlay {
         self.srcpad.push(buffer)
     }
 
-    fn sink_event(
-        &self,
-        pad: &gst::Pad,
-        element: &super::Cea608Overlay,
-        event: gst::Event,
-    ) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -553,7 +515,7 @@ impl Cea608Overlay {
                 let mut state = self.state.lock().unwrap();
                 state.video_info = gst_video::VideoInfo::from_caps(c.caps()).ok();
                 self.srcpad.check_reconfigure();
-                match self.negotiate(element, &mut state) {
+                match self.negotiate(&mut state) {
                     Ok(_) => true,
                     Err(_) => {
                         self.srcpad.mark_reconfigure();
@@ -565,9 +527,9 @@ impl Cea608Overlay {
                 let mut state = self.state.lock().unwrap();
                 state.caption_frame = CaptionFrame::default();
                 state.composition = None;
-                pad.event_default(Some(element), event)
+                pad.event_default(Some(&*self.instance()), event)
             }
-            _ => pad.event_default(Some(element), event),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 }
@@ -585,14 +547,14 @@ impl ObjectSubclass for Cea608Overlay {
                 Cea608Overlay::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |overlay, element| overlay.sink_chain(pad, element, buffer),
+                    |overlay| overlay.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
                 Cea608Overlay::catch_panic_pad_function(
                     parent,
                     || false,
-                    |overlay, element| overlay.sink_event(pad, element, event),
+                    |overlay| overlay.sink_event(pad, event),
                 )
             })
             .flags(gst::PadFlags::PROXY_CAPS)
@@ -645,13 +607,7 @@ impl ObjectImpl for Cea608Overlay {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "field" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -684,7 +640,7 @@ impl ObjectImpl for Cea608Overlay {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "field" => {
                 let settings = self.settings.lock().unwrap();
@@ -705,9 +661,10 @@ impl ObjectImpl for Cea608Overlay {
             _ => unimplemented!(),
         }
     }
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
@@ -760,10 +717,9 @@ impl ElementImpl for Cea608Overlay {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused | gst::StateChange::PausedToReady => {
@@ -779,6 +735,6 @@ impl ElementImpl for Cea608Overlay {
             _ => (),
         }
 
-        self.parent_change_state(element, transition)
+        self.parent_change_state(transition)
     }
 }

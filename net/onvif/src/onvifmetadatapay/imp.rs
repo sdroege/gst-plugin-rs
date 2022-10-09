@@ -65,18 +65,14 @@ impl ElementImpl for OnvifMetadataPay {
 }
 
 impl RTPBasePayloadImpl for OnvifMetadataPay {
-    fn handle_buffer(
-        &self,
-        element: &Self::Type,
-        buffer: gst::Buffer,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn handle_buffer(&self, buffer: gst::Buffer) -> Result<gst::FlowSuccess, gst::FlowError> {
         let pts = buffer.pts();
         let dts = buffer.dts();
 
         // Input buffer must be readable
         let buffer = buffer.into_mapped_buffer_readable().map_err(|_| {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::ResourceError::Read,
                 ["Failed to map buffer readable"]
             );
@@ -86,8 +82,8 @@ impl RTPBasePayloadImpl for OnvifMetadataPay {
 
         // Input buffer must be valid UTF-8
         let utf8 = std::str::from_utf8(buffer.as_ref()).map_err(|err| {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::StreamError::Format,
                 ["Failed to decode buffer as UTF-8: {}", err]
             );
@@ -120,8 +116,8 @@ impl RTPBasePayloadImpl for OnvifMetadataPay {
                         }
                     },
                     Err(err) => {
-                        gst::element_error!(
-                            element,
+                        gst::element_imp_error!(
+                            self,
                             gst::StreamError::Format,
                             ["Invalid XML: {}", err]
                         );
@@ -135,8 +131,8 @@ impl RTPBasePayloadImpl for OnvifMetadataPay {
         };
 
         if !process {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::StreamError::Format,
                 ["document must start with tt:MetadataStream element"]
             );
@@ -144,7 +140,7 @@ impl RTPBasePayloadImpl for OnvifMetadataPay {
             return Err(gst::FlowError::Error);
         }
 
-        let mtu = element.mtu();
+        let mtu = self.instance().mtu();
         let payload_size = gst_rtp::RTPBuffer::<()>::calc_payload_len(mtu, 0, 0) as usize;
 
         let mut chunks = utf8.as_bytes().chunks(payload_size).peekable();
@@ -156,8 +152,8 @@ impl RTPBasePayloadImpl for OnvifMetadataPay {
             while let Some(chunk) = chunks.next() {
                 let mut outbuf = gst::Buffer::new_rtp_with_sizes(chunk.len() as u32, 0, 0)
                     .map_err(|err| {
-                        gst::element_error!(
-                            element,
+                        gst::element_imp_error!(
+                            self,
                             gst::ResourceError::Write,
                             ["Failed to allocate output buffer: {}", err]
                         );
@@ -184,11 +180,12 @@ impl RTPBasePayloadImpl for OnvifMetadataPay {
             }
         }
 
-        element.push_list(buflist)
+        self.instance().push_list(buflist)
     }
 
-    fn set_caps(&self, element: &Self::Type, _caps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        element.set_options("application", true, "VND.ONVIF.METADATA", 90000);
+    fn set_caps(&self, _caps: &gst::Caps) -> Result<(), gst::LoggableError> {
+        self.instance()
+            .set_options("application", true, "VND.ONVIF.METADATA", 90000);
 
         Ok(())
     }

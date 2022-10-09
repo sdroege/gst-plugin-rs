@@ -183,7 +183,6 @@ pub(crate) struct FMP4Mux {
 impl FMP4Mux {
     fn find_earliest_stream<'a>(
         &self,
-        element: &super::FMP4Mux,
         state: &'a mut State,
         timeout: bool,
     ) -> Result<Option<(usize, &'a mut Stream)>, gst::FlowError> {
@@ -255,21 +254,21 @@ impl FMP4Mux {
         if !timeout && !all_have_data_or_eos {
             gst::trace!(
                 CAT,
-                obj: element,
+                imp: self,
                 "No timeout and not all streams have a buffer or are EOS"
             );
             Ok(None)
         } else if let Some((idx, stream, earliest_running_time)) = earliest_stream {
             gst::trace!(
                 CAT,
-                obj: element,
+                imp: self,
                 "Stream {} is earliest stream with running time {}",
                 stream.sinkpad.name(),
                 earliest_running_time
             );
             Ok(Some((idx, stream)))
         } else {
-            gst::trace!(CAT, obj: element, "No streams have data queued currently");
+            gst::trace!(CAT, imp: self, "No streams have data queued currently");
             Ok(None)
         }
     }
@@ -277,7 +276,6 @@ impl FMP4Mux {
     // Queue incoming buffers as individual GOPs.
     fn queue_gops(
         &self,
-        element: &super::FMP4Mux,
         _idx: usize,
         stream: &mut Stream,
         segment: &gst::FormattedSegment<gst::ClockTime>,
@@ -439,7 +437,8 @@ impl FMP4Mux {
         // If this is a multi-stream element then we need to update the PTS/DTS positions according
         // to the output segment, specifically to re-timestamp them with the running time and
         // adjust for the segment shift to compensate for negative DTS.
-        let class = element.class();
+        let aggregator = self.instance();
+        let class = aggregator.class();
         let (pts_position, dts_position) = if class.as_ref().variant.is_single_stream() {
             (pts_position, dts_position)
         } else {
@@ -609,7 +608,6 @@ impl FMP4Mux {
     #[allow(clippy::type_complexity)]
     fn drain_buffers(
         &self,
-        element: &super::FMP4Mux,
         state: &mut State,
         settings: &Settings,
         timeout: bool,
@@ -652,7 +650,7 @@ impl FMP4Mux {
         let fragment_start_pts = state.fragment_start_pts.unwrap();
         gst::info!(
             CAT,
-            obj: element,
+            imp: self,
             "Starting to drain at {}",
             fragment_start_pts
         );
@@ -898,7 +896,6 @@ impl FMP4Mux {
 
     fn preprocess_drained_streams_onvif(
         &self,
-        element: &super::FMP4Mux,
         state: &mut State,
         drained_streams: &mut [(
             gst::Caps,
@@ -906,7 +903,8 @@ impl FMP4Mux {
             VecDeque<Buffer>,
         )],
     ) -> Result<Option<gst::ClockTime>, gst::FlowError> {
-        if element.class().as_ref().variant != super::Variant::ONVIF {
+        let aggregator = self.instance();
+        if aggregator.class().as_ref().variant != super::Variant::ONVIF {
             return Ok(None);
         }
 
@@ -1007,7 +1005,7 @@ impl FMP4Mux {
 
             gst::debug!(
                 CAT,
-                obj: element,
+                imp: self,
                 "Configuring start UTC time {}",
                 start_utc_time.unwrap()
             );
@@ -1150,7 +1148,6 @@ impl FMP4Mux {
     #[allow(clippy::type_complexity)]
     fn interleave_buffers(
         &self,
-        _element: &super::FMP4Mux,
         settings: &Settings,
         mut drained_streams: Vec<(
             gst::Caps,
@@ -1224,7 +1221,6 @@ impl FMP4Mux {
 
     fn drain(
         &self,
-        element: &super::FMP4Mux,
         state: &mut State,
         settings: &Settings,
         timeout: bool,
@@ -1232,9 +1228,9 @@ impl FMP4Mux {
         upstream_events: &mut Vec<(gst_base::AggregatorPad, gst::Event)>,
     ) -> Result<(Option<gst::Caps>, Option<gst::BufferList>), gst::FlowError> {
         if at_eos {
-            gst::info!(CAT, obj: element, "Draining at EOS");
+            gst::info!(CAT, imp: self, "Draining at EOS");
         } else if timeout {
-            gst::info!(CAT, obj: element, "Draining at timeout");
+            gst::info!(CAT, imp: self, "Draining at timeout");
         } else {
             for stream in &state.streams {
                 if !stream.fragment_filled && !stream.sinkpad.is_eos() {
@@ -1250,7 +1246,7 @@ impl FMP4Mux {
             min_earliest_pts,
             min_start_dts_position,
             fragment_end_pts,
-        ) = self.drain_buffers(element, state, settings, timeout, at_eos)?;
+        ) = self.drain_buffers(state, settings, timeout, at_eos)?;
 
         // Remove all GAP buffers before processing them further
         for (_, _, buffers) in &mut drained_streams {
@@ -1263,20 +1259,18 @@ impl FMP4Mux {
 
         // For ONVIF, replace all timestamps with timestamps based on UTC times.
         let max_end_utc_time =
-            self.preprocess_drained_streams_onvif(element, state, &mut drained_streams)?;
+            self.preprocess_drained_streams_onvif(state, &mut drained_streams)?;
 
         // Create header now if it was not created before and return the caps
         let mut caps = None;
         if state.stream_header.is_none() {
-            let (_, new_caps) = self
-                .update_header(element, state, settings, false)?
-                .unwrap();
+            let (_, new_caps) = self.update_header(state, settings, false)?.unwrap();
             caps = Some(new_caps);
         }
 
         // Interleave buffers according to the settings into a single vec
         let (mut interleaved_buffers, streams) =
-            self.interleave_buffers(element, settings, drained_streams)?;
+            self.interleave_buffers(settings, drained_streams)?;
 
         let mut buffer_list = None;
         if interleaved_buffers.is_empty() {
@@ -1316,7 +1310,7 @@ impl FMP4Mux {
             state.sequence_number += 1;
             let (mut fmp4_fragment_header, moof_offset) =
                 boxes::create_fmp4_fragment_header(super::FragmentHeaderConfiguration {
-                    variant: element.class().as_ref().variant,
+                    variant: self.instance().class().as_ref().variant,
                     sequence_number,
                     streams: streams.as_slice(),
                     buffers: interleaved_buffers.as_slice(),
@@ -1324,7 +1318,7 @@ impl FMP4Mux {
                 .map_err(|err| {
                     gst::error!(
                         CAT,
-                        obj: element,
+                        imp: self,
                         "Failed to create FMP4 fragment header: {}",
                         err
                     );
@@ -1394,7 +1388,7 @@ impl FMP4Mux {
             // Update for the start PTS of the next fragment
             gst::info!(
                 CAT,
-                obj: element,
+                imp: self,
                 "Starting new fragment at {}",
                 fragment_end_pts,
             );
@@ -1402,7 +1396,7 @@ impl FMP4Mux {
 
             gst::debug!(
                 CAT,
-                obj: element,
+                imp: self,
                 "Sending force-keyunit events for running time {}",
                 fragment_end_pts + settings.fragment_duration,
             );
@@ -1435,7 +1429,7 @@ impl FMP4Mux {
                     buffer_list.as_mut().unwrap().get_mut().unwrap().add(mfra);
                 }
                 Err(err) => {
-                    gst::error!(CAT, obj: element, "Failed to create mfra box: {}", err);
+                    gst::error!(CAT, imp: self, "Failed to create mfra box: {}", err);
                 }
             }
         }
@@ -1446,12 +1440,9 @@ impl FMP4Mux {
         Ok((caps, buffer_list))
     }
 
-    fn create_streams(
-        &self,
-        element: &super::FMP4Mux,
-        state: &mut State,
-    ) -> Result<(), gst::FlowError> {
-        for pad in element
+    fn create_streams(&self, state: &mut State) -> Result<(), gst::FlowError> {
+        for pad in self
+            .instance()
             .sink_pads()
             .into_iter()
             .map(|pad| pad.downcast::<gst_base::AggregatorPad>().unwrap())
@@ -1511,7 +1502,7 @@ impl FMP4Mux {
         }
 
         if state.streams.is_empty() {
-            gst::error!(CAT, obj: element, "No streams available");
+            gst::error!(CAT, imp: self, "No streams available");
             return Err(gst::FlowError::Error);
         }
 
@@ -1546,12 +1537,12 @@ impl FMP4Mux {
 
     fn update_header(
         &self,
-        element: &super::FMP4Mux,
         state: &mut State,
         settings: &Settings,
         at_eos: bool,
     ) -> Result<Option<(gst::BufferList, gst::Caps)>, gst::FlowError> {
-        let class = element.class();
+        let aggregator = self.instance();
+        let class = aggregator.class();
         let variant = class.as_ref().variant;
 
         if settings.header_update_mode == super::HeaderUpdateMode::None && at_eos {
@@ -1591,7 +1582,7 @@ impl FMP4Mux {
                 .map(|unix| unix.nseconds() / 100 + UNIX_1601_OFFSET * 10_000_000),
         })
         .map_err(|err| {
-            gst::error!(CAT, obj: element, "Failed to create FMP4 header: {}", err);
+            gst::error!(CAT, imp: self, "Failed to create FMP4 header: {}", err);
             gst::FlowError::Error
         })?;
 
@@ -1680,13 +1671,7 @@ impl ObjectImpl for FMP4Mux {
         &*PROPERTIES
     }
 
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "fragment-duration" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -1694,7 +1679,7 @@ impl ObjectImpl for FMP4Mux {
                 if settings.fragment_duration != fragment_duration {
                     settings.fragment_duration = fragment_duration;
                     drop(settings);
-                    obj.set_latency(fragment_duration, None);
+                    self.instance().set_latency(fragment_duration, None);
                 }
             }
 
@@ -1733,7 +1718,7 @@ impl ObjectImpl for FMP4Mux {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "fragment-duration" => {
                 let settings = self.settings.lock().unwrap();
@@ -1769,9 +1754,10 @@ impl ObjectImpl for FMP4Mux {
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         let class = obj.class();
         for templ in class.pad_template_list().filter(|templ| {
             templ.presence() == gst::PadPresence::Always
@@ -1794,7 +1780,6 @@ impl GstObjectImpl for FMP4Mux {}
 impl ElementImpl for FMP4Mux {
     fn request_new_pad(
         &self,
-        element: &Self::Type,
         templ: &gst::PadTemplate,
         name: Option<String>,
         caps: Option<&gst::Caps>,
@@ -1803,25 +1788,24 @@ impl ElementImpl for FMP4Mux {
         if state.stream_header.is_some() {
             gst::error!(
                 CAT,
-                obj: element,
+                imp: self,
                 "Can't request new pads after header was generated"
             );
             return None;
         }
 
-        self.parent_request_new_pad(element, templ, name, caps)
+        self.parent_request_new_pad(templ, name, caps)
     }
 }
 
 impl AggregatorImpl for FMP4Mux {
-    fn next_time(&self, _aggregator: &Self::Type) -> Option<gst::ClockTime> {
+    fn next_time(&self) -> Option<gst::ClockTime> {
         let state = self.state.lock().unwrap();
         state.fragment_start_pts.opt_add(state.timeout_delay)
     }
 
     fn sink_query(
         &self,
-        aggregator: &Self::Type,
         aggregator_pad: &gst_base::AggregatorPad,
         query: &mut gst::QueryRef,
     ) -> bool {
@@ -1845,13 +1829,12 @@ impl AggregatorImpl for FMP4Mux {
 
                 true
             }
-            _ => self.parent_sink_query(aggregator, aggregator_pad, query),
+            _ => self.parent_sink_query(aggregator_pad, query),
         }
     }
 
     fn sink_event_pre_queue(
         &self,
-        aggregator: &Self::Type,
         aggregator_pad: &gst_base::AggregatorPad,
         mut event: gst::Event,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -1872,18 +1855,13 @@ impl AggregatorImpl for FMP4Mux {
                         .seqnum(event.seqnum())
                         .build();
                 }
-                self.parent_sink_event_pre_queue(aggregator, aggregator_pad, event)
+                self.parent_sink_event_pre_queue(aggregator_pad, event)
             }
-            _ => self.parent_sink_event_pre_queue(aggregator, aggregator_pad, event),
+            _ => self.parent_sink_event_pre_queue(aggregator_pad, event),
         }
     }
 
-    fn sink_event(
-        &self,
-        aggregator: &Self::Type,
-        aggregator_pad: &gst_base::AggregatorPad,
-        event: gst::Event,
-    ) -> bool {
+    fn sink_event(&self, aggregator_pad: &gst_base::AggregatorPad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::trace!(CAT, obj: aggregator_pad, "Handling event {:?}", event);
@@ -1901,26 +1879,27 @@ impl AggregatorImpl for FMP4Mux {
                 // Only forward the segment event verbatim if this is a single stream variant.
                 // Otherwise we have to produce a default segment and re-timestamp all buffers
                 // with their running time.
+                let aggregator = self.instance();
                 let class = aggregator.class();
                 if class.as_ref().variant.is_single_stream() {
                     aggregator.update_segment(&segment);
                 }
 
-                self.parent_sink_event(aggregator, aggregator_pad, event)
+                self.parent_sink_event(aggregator_pad, event)
             }
             EventView::Tag(_ev) => {
                 // TODO: Maybe store for putting into the headers of the next fragment?
 
-                self.parent_sink_event(aggregator, aggregator_pad, event)
+                self.parent_sink_event(aggregator_pad, event)
             }
-            _ => self.parent_sink_event(aggregator, aggregator_pad, event),
+            _ => self.parent_sink_event(aggregator_pad, event),
         }
     }
 
-    fn src_query(&self, aggregator: &Self::Type, query: &mut gst::QueryRef) -> bool {
+    fn src_query(&self, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
-        gst::trace!(CAT, obj: aggregator, "Handling query {:?}", query);
+        gst::trace!(CAT, imp: self, "Handling query {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Seeking(q) => {
@@ -1928,23 +1907,23 @@ impl AggregatorImpl for FMP4Mux {
                 q.set(false, gst::ClockTime::ZERO, gst::ClockTime::NONE);
                 true
             }
-            _ => self.parent_src_query(aggregator, query),
+            _ => self.parent_src_query(query),
         }
     }
 
-    fn src_event(&self, aggregator: &Self::Type, event: gst::Event) -> bool {
+    fn src_event(&self, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::trace!(CAT, obj: aggregator, "Handling event {:?}", event);
+        gst::trace!(CAT, imp: self, "Handling event {:?}", event);
 
         match event.view() {
             EventView::Seek(_ev) => false,
-            _ => self.parent_src_event(aggregator, event),
+            _ => self.parent_src_event(event),
         }
     }
 
-    fn flush(&self, aggregator: &Self::Type) -> Result<gst::FlowSuccess, gst::FlowError> {
-        self.parent_flush(aggregator)?;
+    fn flush(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
+        self.parent_flush()?;
 
         let mut state = self.state.lock().unwrap();
 
@@ -1962,23 +1941,24 @@ impl AggregatorImpl for FMP4Mux {
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn stop(&self, aggregator: &Self::Type) -> Result<(), gst::ErrorMessage> {
-        gst::trace!(CAT, obj: aggregator, "Stopping");
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
+        gst::trace!(CAT, imp: self, "Stopping");
 
-        let _ = self.parent_stop(aggregator);
+        let _ = self.parent_stop();
 
         *self.state.lock().unwrap() = State::default();
 
         Ok(())
     }
 
-    fn start(&self, aggregator: &Self::Type) -> Result<(), gst::ErrorMessage> {
-        gst::trace!(CAT, obj: aggregator, "Starting");
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
+        gst::trace!(CAT, imp: self, "Starting");
 
-        self.parent_start(aggregator)?;
+        self.parent_start()?;
 
         // For non-single-stream variants configure a default segment that allows for negative
         // DTS so that we can correctly re-timestamp buffers with their running times.
+        let aggregator = self.instance();
         let class = aggregator.class();
         if !class.as_ref().variant.is_single_stream() {
             let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
@@ -1992,15 +1972,11 @@ impl AggregatorImpl for FMP4Mux {
         Ok(())
     }
 
-    fn negotiate(&self, _aggregator: &Self::Type) -> bool {
+    fn negotiate(&self) -> bool {
         true
     }
 
-    fn aggregate(
-        &self,
-        aggregator: &Self::Type,
-        timeout: bool,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn aggregate(&self, timeout: bool) -> Result<gst::FlowSuccess, gst::FlowError> {
         let settings = self.settings.lock().unwrap().clone();
 
         let mut upstream_events = vec![];
@@ -2011,7 +1987,7 @@ impl AggregatorImpl for FMP4Mux {
 
             // Create streams
             if state.streams.is_empty() {
-                self.create_streams(aggregator, &mut state)?;
+                self.create_streams(&mut state)?;
             }
 
             // Queue buffers from all streams that are not filled for the current fragment yet
@@ -2020,9 +1996,7 @@ impl AggregatorImpl for FMP4Mux {
             // fill-level at all sinkpads in sync.
             let fragment_start_pts = state.fragment_start_pts;
 
-            while let Some((idx, stream)) =
-                self.find_earliest_stream(aggregator, &mut state, timeout)?
-            {
+            while let Some((idx, stream)) = self.find_earliest_stream(&mut state, timeout)? {
                 // Can only happen if the stream was flushed in the meantime
                 let buffer = match stream.sinkpad.pop_buffer() {
                     Some(buffer) => buffer,
@@ -2045,7 +2019,7 @@ impl AggregatorImpl for FMP4Mux {
                 };
 
                 // Queue up the buffer and update GOP tracking state
-                self.queue_gops(aggregator, idx, stream, &segment, buffer)?;
+                self.queue_gops(idx, stream, &segment, buffer)?;
 
                 // Check if this stream is filled enough now.
                 if let Some((queued_end_pts, fragment_start_pts)) = Option::zip(
@@ -2091,13 +2065,13 @@ impl AggregatorImpl for FMP4Mux {
                 }
 
                 if let Some(earliest_pts) = earliest_pts {
-                    gst::info!(CAT, obj: aggregator, "Got earliest PTS {}", earliest_pts);
+                    gst::info!(CAT, imp: self, "Got earliest PTS {}", earliest_pts);
                     state.earliest_pts = Some(earliest_pts);
                     state.fragment_start_pts = Some(earliest_pts);
 
                     gst::debug!(
                         CAT,
-                        obj: aggregator,
+                        imp: self,
                         "Sending first force-keyunit event for running time {}",
                         earliest_pts + settings.fragment_duration,
                     );
@@ -2130,12 +2104,11 @@ impl AggregatorImpl for FMP4Mux {
 
             all_eos = state.streams.iter().all(|stream| stream.sinkpad.is_eos());
             if all_eos {
-                gst::debug!(CAT, obj: aggregator, "All streams are EOS now");
+                gst::debug!(CAT, imp: self, "All streams are EOS now");
             }
 
             // If enough GOPs were queued, drain and create the output fragment
             match self.drain(
-                aggregator,
                 &mut state,
                 &settings,
                 timeout,
@@ -2144,8 +2117,8 @@ impl AggregatorImpl for FMP4Mux {
             ) {
                 Ok(res) => res,
                 Err(gst_base::AGGREGATOR_FLOW_NEED_DATA) => {
-                    gst::element_warning!(
-                        aggregator,
+                    gst::element_imp_warning!(
+                        self,
                         gst::StreamError::Format,
                         ["Longer GOPs than fragment duration"]
                     );
@@ -2166,38 +2139,30 @@ impl AggregatorImpl for FMP4Mux {
         }
 
         if let Some(caps) = caps {
-            gst::debug!(
-                CAT,
-                obj: aggregator,
-                "Setting caps on source pad: {:?}",
-                caps
-            );
-            aggregator.set_src_caps(&caps);
+            gst::debug!(CAT, imp: self, "Setting caps on source pad: {:?}", caps);
+            self.instance().set_src_caps(&caps);
         }
 
         if let Some(buffers) = buffers {
-            gst::trace!(CAT, obj: aggregator, "Pushing buffer list {:?}", buffers);
-            aggregator.finish_buffer_list(buffers)?;
+            gst::trace!(CAT, imp: self, "Pushing buffer list {:?}", buffers);
+            self.instance().finish_buffer_list(buffers)?;
         }
 
         if all_eos {
-            gst::debug!(CAT, obj: aggregator, "Doing EOS handling");
+            gst::debug!(CAT, imp: self, "Doing EOS handling");
 
             if settings.header_update_mode != super::HeaderUpdateMode::None {
-                let updated_header = self.update_header(
-                    aggregator,
-                    &mut self.state.lock().unwrap(),
-                    &settings,
-                    true,
-                );
+                let updated_header =
+                    self.update_header(&mut self.state.lock().unwrap(), &settings, true);
                 match updated_header {
                     Ok(Some((buffer_list, caps))) => {
                         match settings.header_update_mode {
                             super::HeaderUpdateMode::None => unreachable!(),
                             super::HeaderUpdateMode::Rewrite => {
-                                let src_pad = aggregator.src_pad();
                                 let mut q = gst::query::Seeking::new(gst::Format::Bytes);
-                                if src_pad.peer_query(&mut q) && q.result().0 {
+                                if self.instance().src_pad().peer_query(&mut q) && q.result().0 {
+                                    let aggregator = self.instance();
+
                                     aggregator.set_src_caps(&caps);
 
                                     // Seek to the beginning with a default bytes segment
@@ -2209,7 +2174,7 @@ impl AggregatorImpl for FMP4Mux {
                                     if let Err(err) = aggregator.finish_buffer_list(buffer_list) {
                                         gst::error!(
                                             CAT,
-                                            obj: aggregator,
+                                            imp: self,
                                             "Failed pushing updated header buffer downstream: {:?}",
                                             err,
                                         );
@@ -2217,17 +2182,19 @@ impl AggregatorImpl for FMP4Mux {
                                 } else {
                                     gst::error!(
                                         CAT,
-                                        obj: aggregator,
+                                        imp: self,
                                         "Can't rewrite header because downstream is not seekable"
                                     );
                                 }
                             }
                             super::HeaderUpdateMode::Update => {
+                                let aggregator = self.instance();
+
                                 aggregator.set_src_caps(&caps);
                                 if let Err(err) = aggregator.finish_buffer_list(buffer_list) {
                                     gst::error!(
                                         CAT,
-                                        obj: aggregator,
+                                        imp: self,
                                         "Failed pushing updated header buffer downstream: {:?}",
                                         err,
                                     );
@@ -2239,7 +2206,7 @@ impl AggregatorImpl for FMP4Mux {
                     Err(err) => {
                         gst::error!(
                             CAT,
-                            obj: aggregator,
+                            imp: self,
                             "Failed to generate updated header: {:?}",
                             err
                         );

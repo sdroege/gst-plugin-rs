@@ -92,8 +92,8 @@ impl InputSelectorPadSinkHandler {
 
     async fn handle_item(
         &self,
-        pad: &PadSinkRef<'_>,
         element: &super::InputSelector,
+        pad: &PadSinkRef<'_>,
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let inputselector = element.imp();
@@ -173,7 +173,7 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
         let pad_weak = pad.downgrade();
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
-            this.handle_item(&pad, &element, buffer).await
+            this.handle_item(&element, &pad, buffer).await
         }
         .boxed()
     }
@@ -193,7 +193,7 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
             gst::log!(CAT, obj: pad.gst_pad(), "Handling buffer list {:?}", list);
             // TODO: Ideally we would keep the list intact and forward it in one go
             for buffer in list.iter_owned() {
-                this.handle_item(&pad, &element, buffer).await?;
+                this.handle_item(&element, &pad, buffer).await?;
             }
 
             Ok(gst::FlowSuccess::Ok)
@@ -377,11 +377,11 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 impl InputSelector {
-    fn unprepare(&self, element: &super::InputSelector) {
+    fn unprepare(&self) {
         let mut state = self.state.lock().unwrap();
-        gst::debug!(CAT, obj: element, "Unpreparing");
+        gst::debug!(CAT, imp: self, "Unpreparing");
         *state = State::default();
-        gst::debug!(CAT, obj: element, "Unprepared");
+        gst::debug!(CAT, imp: self, "Unprepared");
     }
 }
 
@@ -433,13 +433,7 @@ impl ObjectImpl for InputSelector {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "context" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -488,7 +482,7 @@ impl ObjectImpl for InputSelector {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "context" => {
                 let settings = self.settings.lock().unwrap();
@@ -507,9 +501,10 @@ impl ObjectImpl for InputSelector {
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(self.src_pad.gst_pad()).unwrap();
         obj.set_element_flags(gst::ElementFlags::PROVIDE_CLOCK | gst::ElementFlags::REQUIRE_CLOCK);
     }
@@ -558,16 +553,15 @@ impl ElementImpl for InputSelector {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         if let gst::StateChange::ReadyToNull = transition {
-            self.unprepare(element);
+            self.unprepare();
         }
 
-        let mut success = self.parent_change_state(element, transition)?;
+        let mut success = self.parent_change_state(transition)?;
 
         match transition {
             gst::StateChange::ReadyToPaused => {
@@ -584,7 +578,6 @@ impl ElementImpl for InputSelector {
 
     fn request_new_pad(
         &self,
-        element: &Self::Type,
         templ: &gst::PadTemplate,
         _name: Option<String>,
         _caps: Option<&gst::Caps>,
@@ -595,7 +588,7 @@ impl ElementImpl for InputSelector {
             gst::Pad::from_template(templ, Some(format!("sink_{}", pads.pad_serial).as_str()));
         pads.pad_serial += 1;
         sink_pad.set_active(true).unwrap();
-        element.add_pad(&sink_pad).unwrap();
+        self.instance().add_pad(&sink_pad).unwrap();
         let sink_pad = PadSink::new(sink_pad, InputSelectorPadSinkHandler::default());
         let ret = sink_pad.gst_pad().clone();
 
@@ -608,22 +601,30 @@ impl ElementImpl for InputSelector {
         drop(pads);
         drop(state);
 
-        let _ = element.post_message(gst::message::Latency::builder().src(element).build());
+        let _ = self.instance().post_message(
+            gst::message::Latency::builder()
+                .src(&*self.instance())
+                .build(),
+        );
 
         Some(ret)
     }
 
-    fn release_pad(&self, element: &Self::Type, pad: &gst::Pad) {
+    fn release_pad(&self, pad: &gst::Pad) {
         let mut pads = self.pads.lock().unwrap();
         let sink_pad = pads.sink_pads.remove(pad).unwrap();
         drop(sink_pad);
-        element.remove_pad(pad).unwrap();
+        self.instance().remove_pad(pad).unwrap();
         drop(pads);
 
-        let _ = element.post_message(gst::message::Latency::builder().src(element).build());
+        let _ = self.instance().post_message(
+            gst::message::Latency::builder()
+                .src(&*self.instance())
+                .build(),
+        );
     }
 
-    fn provide_clock(&self, _element: &Self::Type) -> Option<gst::Clock> {
+    fn provide_clock(&self) -> Option<gst::Clock> {
         Some(gst::SystemClock::obtain())
     }
 }

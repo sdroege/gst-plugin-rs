@@ -132,13 +132,7 @@ impl ObjectImpl for AudioEcho {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "max-delay" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -164,7 +158,7 @@ impl ObjectImpl for AudioEcho {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "max-delay" => {
                 let settings = self.settings.lock().unwrap();
@@ -236,11 +230,7 @@ impl BaseTransformImpl for AudioEcho {
     const PASSTHROUGH_ON_SAME_CAPS: bool = false;
     const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
 
-    fn transform_ip(
-        &self,
-        _element: &Self::Type,
-        buf: &mut gst::BufferRef,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn transform_ip(&self, buf: &mut gst::BufferRef) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut settings = *self.settings.lock().unwrap();
         settings.delay = cmp::min(settings.max_delay, settings.delay);
 
@@ -264,12 +254,7 @@ impl BaseTransformImpl for AudioEcho {
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn set_caps(
-        &self,
-        _element: &Self::Type,
-        incaps: &gst::Caps,
-        outcaps: &gst::Caps,
-    ) -> Result<(), gst::LoggableError> {
+    fn set_caps(&self, incaps: &gst::Caps, outcaps: &gst::Caps) -> Result<(), gst::LoggableError> {
         if incaps != outcaps {
             return Err(gst::loggable_error!(
                 CAT,
@@ -291,7 +276,7 @@ impl BaseTransformImpl for AudioEcho {
         Ok(())
     }
 
-    fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         // Drop state
         let _ = self.state.lock().unwrap().take();
 

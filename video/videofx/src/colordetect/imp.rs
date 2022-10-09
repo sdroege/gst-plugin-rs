@@ -57,12 +57,11 @@ pub struct ColorDetect {
 impl ColorDetect {
     fn detect_color(
         &self,
-        element: &super::ColorDetect,
         buf: &mut gst::BufferRef,
     ) -> Result<Option<(String, Vec<Color>)>, gst::FlowError> {
         let mut state_guard = self.state.borrow_mut();
         let state = state_guard.as_mut().ok_or_else(|| {
-            gst::element_error!(element, gst::CoreError::Negotiation, ["Have no state yet"]);
+            gst::element_imp_error!(self, gst::CoreError::Negotiation, ["Have no state yet"]);
             gst::FlowError::NotNegotiated
         })?;
 
@@ -93,15 +92,10 @@ impl ColorDetect {
         Ok(None)
     }
 
-    fn color_changed(
-        &self,
-        element: &super::ColorDetect,
-        dominant_color_name: &str,
-        palette: Vec<Color>,
-    ) {
+    fn color_changed(&self, dominant_color_name: &str, palette: Vec<Color>) {
         gst::debug!(
             CAT,
-            obj: element,
+            imp: self,
             "Dominant color changed to {}",
             dominant_color_name
         );
@@ -111,7 +105,7 @@ impl ColorDetect {
                 .map(|c| ((c.r as u32) << 16) | ((c.g as u32) << 8) | (c.b as u32)),
         );
 
-        element
+        self.instance()
             .post_message(
                 gst::message::Element::builder(
                     gst::structure::Structure::builder("colordetect")
@@ -157,13 +151,7 @@ impl ObjectImpl for ColorDetect {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "quality" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -171,7 +159,7 @@ impl ObjectImpl for ColorDetect {
                 if settings.quality != quality {
                     gst::info!(
                         CAT,
-                        obj: obj,
+                        imp: self,
                         "Changing quality from {} to {}",
                         settings.quality,
                         quality
@@ -185,7 +173,7 @@ impl ObjectImpl for ColorDetect {
                 if settings.max_colors != max_colors {
                     gst::info!(
                         CAT,
-                        obj: obj,
+                        imp: self,
                         "Changing max_colors from {} to {}",
                         settings.max_colors,
                         max_colors
@@ -197,7 +185,7 @@ impl ObjectImpl for ColorDetect {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "quality" => {
                 let settings = self.settings.lock().unwrap();
@@ -268,18 +256,13 @@ impl BaseTransformImpl for ColorDetect {
     const PASSTHROUGH_ON_SAME_CAPS: bool = false;
     const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
 
-    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         *self.state.borrow_mut() = None;
-        gst::info!(CAT, obj: element, "Stopped");
+        gst::info!(CAT, imp: self, "Stopped");
         Ok(())
     }
 
-    fn set_caps(
-        &self,
-        element: &Self::Type,
-        incaps: &gst::Caps,
-        outcaps: &gst::Caps,
-    ) -> Result<(), gst::LoggableError> {
+    fn set_caps(&self, incaps: &gst::Caps, outcaps: &gst::Caps) -> Result<(), gst::LoggableError> {
         let in_info = match gst_video::VideoInfo::from_caps(incaps) {
             Err(_) => return Err(gst::loggable_error!(CAT, "Failed to parse input caps")),
             Ok(info) => info,
@@ -292,7 +275,7 @@ impl BaseTransformImpl for ColorDetect {
 
         gst::debug!(
             CAT,
-            obj: element,
+            imp: self,
             "Configured for caps {} to {}",
             incaps,
             outcaps
@@ -320,13 +303,9 @@ impl BaseTransformImpl for ColorDetect {
         Ok(())
     }
 
-    fn transform_ip(
-        &self,
-        element: &Self::Type,
-        buf: &mut gst::BufferRef,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        if let Some((dominant_color_name, palette)) = self.detect_color(element, buf)? {
-            self.color_changed(element, &dominant_color_name, palette);
+    fn transform_ip(&self, buf: &mut gst::BufferRef) -> Result<gst::FlowSuccess, gst::FlowError> {
+        if let Some((dominant_color_name, palette)) = self.detect_color(buf)? {
+            self.color_changed(&dominant_color_name, palette);
         }
 
         Ok(gst::FlowSuccess::Ok)

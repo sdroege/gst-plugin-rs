@@ -166,7 +166,6 @@ impl Encrypter {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &super::Encrypter,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
@@ -196,7 +195,7 @@ impl Encrypter {
 
         for buffer in buffers {
             self.srcpad.push(buffer).map_err(|err| {
-                gst::error!(CAT, obj: element, "Failed to push buffer {:?}", err);
+                gst::error!(CAT, imp: self, "Failed to push buffer {:?}", err);
                 err
             })?;
         }
@@ -204,7 +203,7 @@ impl Encrypter {
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &super::Encrypter, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -239,34 +238,29 @@ impl Encrypter {
 
                 for buffer in buffers {
                     if let Err(err) = self.srcpad.push(buffer) {
-                        gst::error!(CAT, obj: element, "Failed to push buffer at EOS {:?}", err);
+                        gst::error!(CAT, imp: self, "Failed to push buffer at EOS {:?}", err);
                         return false;
                     }
                 }
 
-                pad.event_default(Some(element), event)
+                pad.event_default(Some(&*self.instance()), event)
             }
-            _ => pad.event_default(Some(element), event),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 
-    fn src_event(&self, pad: &gst::Pad, element: &super::Encrypter, event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
 
         match event.view() {
             EventView::Seek(_) => false,
-            _ => pad.event_default(Some(element), event),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 
-    fn src_query(
-        &self,
-        pad: &gst::Pad,
-        element: &super::Encrypter,
-        query: &mut gst::QueryRef,
-    ) -> bool {
+    fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
         gst::log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -284,7 +278,7 @@ impl Encrypter {
             }
             QueryViewMut::Duration(q) => {
                 if q.format() != gst::Format::Bytes {
-                    return pad.query_default(Some(element), query);
+                    return pad.query_default(Some(&*self.instance()), query);
                 }
 
                 /* First let's query the bytes duration upstream */
@@ -325,7 +319,7 @@ impl Encrypter {
 
                 true
             }
-            _ => pad.query_default(Some(element), query),
+            _ => pad.query_default(Some(&*self.instance()), query),
         }
     }
 }
@@ -343,14 +337,14 @@ impl ObjectSubclass for Encrypter {
                 Encrypter::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |encrypter, element| encrypter.sink_chain(pad, element, buffer),
+                    |encrypter| encrypter.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
                 Encrypter::catch_panic_pad_function(
                     parent,
                     || false,
-                    |encrypter, element| encrypter.sink_event(pad, element, event),
+                    |encrypter| encrypter.sink_event(pad, event),
                 )
             })
             .build();
@@ -361,14 +355,14 @@ impl ObjectSubclass for Encrypter {
                 Encrypter::catch_panic_pad_function(
                     parent,
                     || false,
-                    |encrypter, element| encrypter.src_query(pad, element, query),
+                    |encrypter| encrypter.src_query(pad, query),
                 )
             })
             .event_function(|pad, parent, event| {
                 Encrypter::catch_panic_pad_function(
                     parent,
                     || false,
-                    |encrypter, element| encrypter.src_event(pad, element, event),
+                    |encrypter| encrypter.src_event(pad, event),
                 )
             })
             .build();
@@ -410,20 +404,15 @@ impl ObjectImpl for Encrypter {
         PROPERTIES.as_ref()
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "sender-key" => {
                 let mut props = self.props.lock().unwrap();
@@ -444,7 +433,7 @@ impl ObjectImpl for Encrypter {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "receiver-key" => {
                 let props = self.props.lock().unwrap();
@@ -504,10 +493,9 @@ impl ElementImpl for Encrypter {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::debug!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::debug!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {
@@ -516,7 +504,7 @@ impl ElementImpl for Encrypter {
                 // Create an internal state struct from the provided properties or
                 // refuse to change state
                 let state_ = State::from_props(&props).map_err(|err| {
-                    element.post_error_message(err);
+                    self.post_error_message(err);
                     gst::StateChangeError
                 })?;
 
@@ -529,7 +517,7 @@ impl ElementImpl for Encrypter {
             _ => (),
         }
 
-        let success = self.parent_change_state(element, transition)?;
+        let success = self.parent_change_state(transition)?;
 
         if transition == gst::StateChange::ReadyToNull {
             let _ = self.state.lock().unwrap().take();

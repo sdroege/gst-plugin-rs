@@ -130,13 +130,7 @@ impl ObjectImpl for SpotifyAudioSrc {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "username" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -166,7 +160,7 @@ impl ObjectImpl for SpotifyAudioSrc {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "username" => {
                 let settings = self.settings.lock().unwrap();
@@ -233,7 +227,7 @@ impl ElementImpl for SpotifyAudioSrc {
 }
 
 impl BaseSrcImpl for SpotifyAudioSrc {
-    fn start(&self, src: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
         {
             let state = self.state.lock().unwrap();
             if state.is_some() {
@@ -244,17 +238,17 @@ impl BaseSrcImpl for SpotifyAudioSrc {
 
         if let Err(err) = RUNTIME.block_on(async move { self.setup().await }) {
             let details = format!("{:?}", err);
-            gst::error!(CAT, obj: src, "failed to start: {}", details);
-            gst::element_error!(src, gst::ResourceError::Settings, [&details]);
+            gst::error!(CAT, imp: self, "failed to start: {}", details);
+            gst::element_imp_error!(self, gst::ResourceError::Settings, [&details]);
             return Err(gst::error_msg!(gst::ResourceError::Settings, [&details]));
         }
 
         Ok(())
     }
 
-    fn stop(&self, src: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         if let Some(state) = self.state.lock().unwrap().take() {
-            gst::debug!(CAT, obj: src, "stopping");
+            gst::debug!(CAT, imp: self, "stopping");
             state.player.stop();
             state.player_channel_handle.abort();
             // FIXME: not sure why this is needed to unblock BufferSink::write(), dropping State should drop the receiver
@@ -266,7 +260,6 @@ impl BaseSrcImpl for SpotifyAudioSrc {
 
     fn create(
         &self,
-        src: &Self::Type,
         _offset: u64,
         _buffer: Option<&mut gst::BufferRef>,
         _length: u32,
@@ -276,17 +269,17 @@ impl BaseSrcImpl for SpotifyAudioSrc {
 
         match state.receiver.recv().unwrap() {
             Message::Buffer(buffer) => {
-                gst::log!(CAT, obj: src, "got buffer of size {}", buffer.size());
+                gst::log!(CAT, imp: self, "got buffer of size {}", buffer.size());
                 Ok(CreateSuccess::NewBuffer(buffer))
             }
             Message::Eos => {
-                gst::debug!(CAT, obj: src, "eos");
+                gst::debug!(CAT, imp: self, "eos");
                 Err(gst::FlowError::Eos)
             }
             Message::Unavailable => {
-                gst::error!(CAT, obj: src, "track is not available");
-                gst::element_error!(
-                    src,
+                gst::error!(CAT, imp: self, "track is not available");
+                gst::element_imp_error!(
+                    self,
                     gst::ResourceError::NotFound,
                     ["track is not available"]
                 );
@@ -298,8 +291,6 @@ impl BaseSrcImpl for SpotifyAudioSrc {
 
 impl SpotifyAudioSrc {
     async fn setup(&self) -> anyhow::Result<()> {
-        let src = self.instance();
-
         let (credentials, cache, track) = {
             let settings = self.settings.lock().unwrap();
 
@@ -325,11 +316,11 @@ impl SpotifyAudioSrc {
 
             let credentials = match cache.credentials() {
                 Some(cached_cred) => {
-                    gst::debug!(CAT, obj: &src, "reuse credentials from cache",);
+                    gst::debug!(CAT, imp: self, "reuse credentials from cache",);
                     cached_cred
                 }
                 None => {
-                    gst::debug!(CAT, obj: &src, "credentials not in cache",);
+                    gst::debug!(CAT, imp: self, "credentials not in cache",);
 
                     if settings.username.is_empty() {
                         bail!("username is not set and credentials are not in cache");

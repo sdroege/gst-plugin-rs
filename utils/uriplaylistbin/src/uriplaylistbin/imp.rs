@@ -192,20 +192,20 @@ impl State {
             .cloned()
     }
 
-    fn unblock_item(&mut self, element: &super::UriPlaylistBin) {
+    fn unblock_item(&mut self, imp: &UriPlaylistBin) {
         if let Some(blocked) = self.blocked.take() {
             let (messages, channels) = blocked.set_streaming(self.streams_topology.n_streams());
 
             gst::log!(
                 CAT,
-                obj: element,
+                imp: imp,
                 "send pending message of item #{} and unblock its pads",
                 blocked.index()
             );
 
             // send pending messages then unblock pads
             for msg in messages {
-                let _ = element.post_message(msg);
+                let _ = imp.instance().post_message(msg);
             }
 
             channels.send(true);
@@ -764,20 +764,14 @@ impl ObjectImpl for UriPlaylistBin {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "uris" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing uris from {:?} to {:?}",
                     settings.uris,
                     new_value,
@@ -789,7 +783,7 @@ impl ObjectImpl for UriPlaylistBin {
                 let new_value = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing iterations from {:?} to {:?}",
                     settings.iterations,
                     new_value,
@@ -800,7 +794,7 @@ impl ObjectImpl for UriPlaylistBin {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "uris" => {
                 let settings = self.settings.lock().unwrap();
@@ -830,9 +824,10 @@ impl ObjectImpl for UriPlaylistBin {
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.set_suppressed_flags(gst::ElementFlags::SOURCE | gst::ElementFlags::SINK);
         obj.set_element_flags(gst::ElementFlags::SOURCE);
     }
@@ -841,24 +836,23 @@ impl ObjectImpl for UriPlaylistBin {
 impl GstObjectImpl for UriPlaylistBin {}
 
 impl BinImpl for UriPlaylistBin {
-    fn handle_message(&self, element: &Self::Type, msg: gst::Message) {
+    fn handle_message(&self, msg: gst::Message) {
         match msg.view() {
             gst::MessageView::StreamCollection(stream_collection_msg) => {
-                if let Err(e) = self.handle_stream_collection(element, stream_collection_msg) {
-                    self.failed(element, e);
+                if let Err(e) = self.handle_stream_collection(stream_collection_msg) {
+                    self.failed(e);
                 }
                 // stream collection will be send when the item starts streaming
                 return;
             }
             gst::MessageView::StreamsSelected(stream_selected) => {
-                if !self.handle_stream_selected(element, stream_selected) {
+                if !self.handle_stream_selected(stream_selected) {
                     return;
                 }
             }
             gst::MessageView::Error(error) => {
                 // find item which raised the error
-                let imp = element.imp();
-                let mut state_guard = imp.state.lock().unwrap();
+                let mut state_guard = self.state.lock().unwrap();
                 let state = state_guard.as_mut().unwrap();
 
                 let src = error.src().unwrap();
@@ -869,25 +863,22 @@ impl BinImpl for UriPlaylistBin {
                 if let Some(item) = item {
                     // handle the error message so we can add the failing uri as error details
 
-                    self.failed(
-                        element,
-                        PlaylistError::ItemFailed {
-                            error: anyhow::anyhow!(
-                                "Error when processing item #{} ({}): {}",
-                                item.index(),
-                                item.uri(),
-                                error.error().to_string()
-                            ),
-                            item,
-                        },
-                    );
+                    self.failed(PlaylistError::ItemFailed {
+                        error: anyhow::anyhow!(
+                            "Error when processing item #{} ({}): {}",
+                            item.index(),
+                            item.uri(),
+                            error.error().to_string()
+                        ),
+                        item,
+                    });
                     return;
                 }
             }
             _ => (),
         }
 
-        self.parent_handle_message(element, msg)
+        self.parent_handle_message(msg)
     }
 }
 
@@ -943,12 +934,11 @@ impl ElementImpl for UriPlaylistBin {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         if transition == gst::StateChange::NullToReady {
-            if let Err(e) = self.start(element) {
-                self.failed(element, e);
+            if let Err(e) = self.start() {
+                self.failed(e);
                 return Err(gst::StateChangeError);
             }
         }
@@ -973,13 +963,13 @@ impl ElementImpl for UriPlaylistBin {
             }
         }
 
-        self.parent_change_state(element, transition)
+        self.parent_change_state(transition)
     }
 }
 
 impl UriPlaylistBin {
-    fn start(&self, element: &super::UriPlaylistBin) -> Result<(), PlaylistError> {
-        gst::debug!(CAT, obj: element, "Starting");
+    fn start(&self) -> Result<(), PlaylistError> {
+        gst::debug!(CAT, imp: self, "Starting");
         {
             let mut state_guard = self.state.lock().unwrap();
             assert!(state_guard.is_none());
@@ -988,7 +978,7 @@ impl UriPlaylistBin {
                 gst::ElementFactory::make("streamsynchronizer", Some("playlist-streamsync"))
                     .map_err(|e| PlaylistError::PluginMissing { error: e.into() })?;
 
-            element.add(&streamsynchronizer).unwrap();
+            self.instance().add(&streamsynchronizer).unwrap();
 
             let settings = self.settings.lock().unwrap();
 
@@ -999,19 +989,19 @@ impl UriPlaylistBin {
             ));
         }
 
-        self.start_next_item(element)?;
+        self.start_next_item()?;
 
         Ok(())
     }
 
-    fn start_next_item(&self, element: &super::UriPlaylistBin) -> Result<(), PlaylistError> {
+    fn start_next_item(&self) -> Result<(), PlaylistError> {
         let mut state_guard = self.state.lock().unwrap();
         let state = state_guard.as_mut().unwrap();
 
         // clean up done items, so uridecodebin elements and concat sink pads don't pile up in the pipeline
         while let Some(done) = state.done.pop() {
             let uridecodebin = done.uridecodebin();
-            gst::log!(CAT, obj: element, "remove {} from bin", uridecodebin.name());
+            gst::log!(CAT, imp: self, "remove {} from bin", uridecodebin.name());
 
             for (concat, sink_pad) in done.concat_sink_pads() {
                 // calling release_request_pad() while holding the pad stream lock would deadlock
@@ -1021,12 +1011,11 @@ impl UriPlaylistBin {
             }
 
             // can't change state from the streaming thread
-            let uridecodebin_clone = uridecodebin.clone();
-            element.call_async(move |_element| {
-                let _ = uridecodebin_clone.set_state(gst::State::Null);
+            uridecodebin.call_async(move |uridecodebin| {
+                let _ = uridecodebin.set_state(gst::State::Null);
             });
 
-            element.remove(&uridecodebin).unwrap();
+            self.instance().remove(&uridecodebin).unwrap();
         }
 
         if state.waiting_for_stream_collection.is_some()
@@ -1041,7 +1030,7 @@ impl UriPlaylistBin {
         if n_streaming >= MAX_STREAMING_ITEMS {
             gst::log!(
                 CAT,
-                obj: element,
+                imp: self,
                 "Too many items streaming ({}), wait before starting the next one",
                 n_streaming
             );
@@ -1052,10 +1041,10 @@ impl UriPlaylistBin {
         let item = match state.playlist.next()? {
             Some(item) => item,
             None => {
-                gst::debug!(CAT, obj: element, "no more item to queue",);
+                gst::debug!(CAT, imp: self, "no more item to queue",);
 
                 // unblock last item
-                state.unblock_item(element);
+                state.unblock_item(self);
 
                 self.update_current(state_guard);
 
@@ -1065,7 +1054,7 @@ impl UriPlaylistBin {
 
         gst::debug!(
             CAT,
-            obj: element,
+            imp: self,
             "start decoding item #{}: {}",
             item.index(),
             item.uri()
@@ -1073,16 +1062,17 @@ impl UriPlaylistBin {
 
         let uridecodebin = item.uridecodebin();
 
-        element.add(&uridecodebin).unwrap();
-
-        let element_weak = element.downgrade();
+        self.instance().add(&uridecodebin).unwrap();
 
         let item_clone = item.clone();
         assert!(state.waiting_for_stream_collection.is_none());
         state.waiting_for_stream_collection = Some(item);
 
-        uridecodebin.connect_pad_added(move |_uridecodebin, src_pad| {
-            let element = match element_weak.upgrade() {
+        uridecodebin.connect_pad_added(move |uridecodebin, src_pad| {
+            let element = match uridecodebin
+                .parent()
+                .and_then(|p| p.downcast::<super::UriPlaylistBin>().ok())
+            {
                 Some(element) => element,
                 None => return,
             };
@@ -1092,33 +1082,34 @@ impl UriPlaylistBin {
 
             if let Some(item) = state.waiting_for_ss_eos.as_ref() {
                 // block pad until streamsynchronizer is eos
-                let element_weak = element.downgrade();
+                let imp_weak = imp.downgrade();
                 let receiver = Mutex::new(item.receiver());
 
                 gst::debug!(
                     CAT,
-                    obj: &element,
+                    imp: imp,
                     "Block pad {} until streamsynchronizer is flushed",
                     src_pad.name(),
                 );
 
                 src_pad.add_probe(gst::PadProbeType::BLOCK_DOWNSTREAM, move |pad, _info| {
-                    let element = match element_weak.upgrade() {
-                        Some(element) => element,
+                    let imp = match imp_weak.upgrade() {
+                        Some(imp) => imp,
                         None => return gst::PadProbeReturn::Remove,
                     };
-                    let parent = pad.parent().unwrap();
 
-                    let receiver = receiver.lock().unwrap();
-                    let _ = receiver.recv();
+                    if let Some(parent) = pad.parent() {
+                        let receiver = receiver.lock().unwrap();
+                        let _ = receiver.recv();
 
-                    gst::log!(
-                        CAT,
-                        obj: &element,
-                        "pad {}:{} has been unblocked",
-                        parent.name(),
-                        pad.name()
-                    );
+                        gst::log!(
+                            CAT,
+                            imp: imp,
+                            "pad {}:{} has been unblocked",
+                            parent.name(),
+                            pad.name()
+                        );
+                    }
 
                     gst::PadProbeReturn::Remove
                 });
@@ -1144,7 +1135,6 @@ impl UriPlaylistBin {
 
     fn handle_stream_collection(
         &self,
-        element: &super::UriPlaylistBin,
         stream_collection_msg: &gst::message::StreamCollection,
     ) -> Result<(), PlaylistError> {
         let mut state_guard = self.state.lock().unwrap();
@@ -1160,7 +1150,7 @@ impl UriPlaylistBin {
 
                 gst::debug!(
                     CAT,
-                    obj: element,
+                    imp: self,
                     "got stream collection from {}: {:?}",
                     src.name(),
                     topology
@@ -1175,7 +1165,7 @@ impl UriPlaylistBin {
                 if state.streams_topology != topology {
                     gst::debug!(
                     CAT,
-                    obj: element, "streams topoly changed ('{:?}' -> '{:?}'), waiting for streamsynchronize to be flushed",
+                    imp: self, "streams topoly changed ('{:?}' -> '{:?}'), waiting for streamsynchronize to be flushed",
                     state.streams_topology, topology);
                     item.set_waiting_for_ss_eos(
                         state.streams_topology.n_streams(),
@@ -1184,7 +1174,7 @@ impl UriPlaylistBin {
                     state.waiting_for_ss_eos = Some(item);
 
                     // unblock previous item as we need it to be flushed out of streamsynchronizer
-                    state.unblock_item(element);
+                    state.unblock_item(self);
                 } else {
                     item.set_waiting_for_pads(topology.n_streams(), stream_collection_msg);
                     state.waiting_for_pads = Some(item);
@@ -1199,11 +1189,7 @@ impl UriPlaylistBin {
     }
 
     // return true if the message can be forwarded
-    fn handle_stream_selected(
-        &self,
-        element: &super::UriPlaylistBin,
-        stream_selected_msg: &gst::message::StreamsSelected,
-    ) -> bool {
+    fn handle_stream_selected(&self, stream_selected_msg: &gst::message::StreamsSelected) -> bool {
         let mut state_guard = self.state.lock().unwrap();
         let state = state_guard.as_mut().unwrap();
         let src = stream_selected_msg.src().unwrap();
@@ -1215,7 +1201,7 @@ impl UriPlaylistBin {
                 // stream-selected message is from the blocked item, queue the message until it's unblocked
                 gst::debug!(
                     CAT,
-                    obj: element,
+                    imp: self,
                     "queue stream-selected message from {} as item is currently blocked",
                     src.name(),
                 );
@@ -1253,7 +1239,7 @@ impl UriPlaylistBin {
             let (stream_type, stream_index) = match stream_type_from_pad_name(&pad_name) {
                 Ok((stream_type, stream_index)) => (stream_type, stream_index),
                 Err(e) => {
-                    gst::warning!(CAT, obj: &element, "Ignoring pad {}: {}", pad_name, e);
+                    gst::warning!(CAT, imp: self, "Ignoring pad {}: {}", pad_name, e);
                     return;
                 }
             };
@@ -1269,7 +1255,7 @@ impl UriPlaylistBin {
                 None => {
                     gst::debug!(
                         CAT,
-                        obj: &element,
+                        imp: self,
                         "stream {} from item #{}: creating concat element",
                         pad_name,
                         item.index()
@@ -1286,12 +1272,9 @@ impl UriPlaylistBin {
                         Ok(concat) => concat,
                         Err(_) => {
                             drop(state_guard);
-                            self.failed(
-                                &element,
-                                PlaylistError::PluginMissing {
-                                    error: anyhow::anyhow!("element 'concat' missing"),
-                                },
-                            );
+                            self.failed(PlaylistError::PluginMissing {
+                                error: anyhow::anyhow!("element 'concat' missing"),
+                            });
                             return;
                         }
                     };
@@ -1336,8 +1319,8 @@ impl UriPlaylistBin {
 
                                 if let Some(item) = item {
                                     if item.dec_waiting_eos_ss() {
-                                        gst::debug!(CAT, obj: &element, "streamsynchronizer has been flushed, reorganize pipeline to fit new streams topology and unblock item");
-                                        imp.handle_topology_change(&element);
+                                        gst::debug!(CAT, imp: imp, "streamsynchronizer has been flushed, reorganize pipeline to fit new streams topology and unblock item");
+                                        imp.handle_topology_change();
                                         gst::PadProbeReturn::Drop
                                     } else {
                                         gst::PadProbeReturn::Drop
@@ -1367,13 +1350,14 @@ impl UriPlaylistBin {
                         ghost.set_event_function(|pad, parent, event| match event.view() {
                             gst::EventView::SelectStreams(_) => {
                                 // TODO: handle select-streams event
-                                let element = parent.unwrap();
-                                gst::fixme!(
-                                    CAT,
-                                    obj: element,
-                                    "select-streams event not supported ('{:?}')",
-                                    event
-                                );
+                                if let Some(element) = parent {
+                                    gst::fixme!(
+                                        CAT,
+                                        obj: element,
+                                        "select-streams event not supported ('{:?}')",
+                                        event
+                                    );
+                                }
                                 false
                             }
                             _ => pad.event_default(parent, event),
@@ -1400,7 +1384,7 @@ impl UriPlaylistBin {
                 Some(concat) => {
                     gst::debug!(
                         CAT,
-                        obj: &element,
+                        imp: self,
                         "stream {} from item #{}: re-using concat element {}",
                         pad_name,
                         item.index(),
@@ -1494,8 +1478,8 @@ impl UriPlaylistBin {
                                     }
                                 }
 
-                                if let Err(e) = imp.start_next_item(&element) {
-                                    imp.failed(&element, e);
+                                if let Err(e) = imp.start_next_item() {
+                                    imp.failed(e);
                                 }
                             }
 
@@ -1510,13 +1494,13 @@ impl UriPlaylistBin {
                 // we got all the pads
                 gst::debug!(
                     CAT,
-                    obj: &element,
+                    imp: self,
                     "got all the pads for item #{}",
                     item.index()
                 );
 
                 // all pads have been linked to concat, unblock previous item
-                state.unblock_item(&element);
+                state.unblock_item(self);
 
                 state.waiting_for_pads = None;
                 // block item until the next one is fully linked to concat
@@ -1532,14 +1516,10 @@ impl UriPlaylistBin {
         };
 
         if start_next {
-            gst::debug!(
-                CAT,
-                obj: &element,
-                "got all pending streams, queue next item"
-            );
+            gst::debug!(CAT, imp: self, "got all pending streams, queue next item");
 
-            if let Err(e) = self.start_next_item(&element) {
-                self.failed(&element, e);
+            if let Err(e) = self.start_next_item() {
+                self.failed(e);
             }
         }
     }
@@ -1547,7 +1527,7 @@ impl UriPlaylistBin {
     /// called when all previous items have been flushed from streamsynchronizer
     /// and so the elements can reorganize itself to handle a pending changes in
     /// streams topology.
-    fn handle_topology_change(&self, element: &super::UriPlaylistBin) {
+    fn handle_topology_change(&self) {
         let (pending_pads, channels) = {
             let mut state_guard = self.state.lock().unwrap();
             let state = state_guard.as_mut().unwrap();
@@ -1563,15 +1543,15 @@ impl UriPlaylistBin {
             // remove now useless concat elements, missing ones will be added when handling src pads from decodebin
 
             fn remove_useless_concat(
+                imp: &UriPlaylistBin,
                 n_stream: usize,
                 concats: &mut Vec<gst::Element>,
-                element: &super::UriPlaylistBin,
                 streamsynchronizer: &gst::Element,
             ) {
                 while n_stream < concats.len() {
                     // need to remove concat elements
                     let concat = concats.pop().unwrap();
-                    gst::log!(CAT, obj: element, "remove {}", concat.name());
+                    gst::log!(CAT, imp: imp, "remove {}", concat.name());
 
                     let concat_src = concat.static_pad("src").unwrap();
                     let ss_sink = concat_src.peer().unwrap();
@@ -1581,7 +1561,7 @@ impl UriPlaylistBin {
                     streamsynchronizer.release_request_pad(&ss_sink);
 
                     // remove associated ghost pad
-                    let src_pads = element.src_pads();
+                    let src_pads = imp.instance().src_pads();
                     let ghost = src_pads
                         .iter()
                         .find(|pad| {
@@ -1589,29 +1569,29 @@ impl UriPlaylistBin {
                             ghost.target().is_none()
                         })
                         .unwrap();
-                    element.remove_pad(ghost).unwrap();
+                    imp.instance().remove_pad(ghost).unwrap();
 
-                    element.remove(&concat).unwrap();
+                    imp.instance().remove(&concat).unwrap();
                     let _ = concat.set_state(gst::State::Null);
                 }
             }
 
             remove_useless_concat(
+                self,
                 topology.audio as usize,
                 &mut state.concat_audio,
-                element,
                 &state.streamsynchronizer,
             );
             remove_useless_concat(
+                self,
                 topology.video as usize,
                 &mut state.concat_video,
-                element,
                 &state.streamsynchronizer,
             );
             remove_useless_concat(
+                self,
                 topology.text as usize,
                 &mut state.concat_text,
-                element,
                 &state.streamsynchronizer,
             );
 
@@ -1628,7 +1608,7 @@ impl UriPlaylistBin {
         channels.send(true);
     }
 
-    fn failed(&self, element: &super::UriPlaylistBin, error: PlaylistError) {
+    fn failed(&self, error: PlaylistError) {
         {
             let mut state_guard = self.state.lock().unwrap();
             let state = state_guard.as_mut().unwrap();
@@ -1644,11 +1624,11 @@ impl UriPlaylistBin {
             }
         }
         let error_msg = error.to_string();
-        gst::error!(CAT, obj: element, "{}", error_msg);
+        gst::error!(CAT, imp: self, "{}", error_msg);
 
         match error {
             PlaylistError::PluginMissing { .. } => {
-                gst::element_error!(element, gst::CoreError::MissingPlugin, [&error_msg]);
+                gst::element_imp_error!(self, gst::CoreError::MissingPlugin, [&error_msg]);
             }
             PlaylistError::ItemFailed { item, .. } => {
                 // remove failing uridecodebin
@@ -1656,13 +1636,13 @@ impl UriPlaylistBin {
                 uridecodebin.call_async(move |uridecodebin| {
                     let _ = uridecodebin.set_state(gst::State::Null);
                 });
-                let _ = element.remove(&uridecodebin);
+                let _ = self.instance().remove(&uridecodebin);
 
                 let details = gst::Structure::builder("details");
                 let details = details.field("uri", item.uri());
 
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::LibraryError::Failed,
                     [&error_msg],
                     details: details.build()
@@ -1693,7 +1673,6 @@ impl UriPlaylistBin {
                 }
 
                 let element = self.instance();
-
                 if current_iteration != state.current_iteration {
                     state.current_iteration = current_iteration;
                     element.notify("current-iteration");

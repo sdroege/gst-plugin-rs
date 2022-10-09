@@ -157,7 +157,7 @@ impl S3Src {
         Ok(Client::from_conf(config))
     }
 
-    fn set_uri(self: &S3Src, _: &super::S3Src, url_str: Option<&str>) -> Result<(), glib::Error> {
+    fn set_uri(self: &S3Src, url_str: Option<&str>) -> Result<(), glib::Error> {
         let state = self.state.lock().unwrap();
 
         if let StreamingState::Started { .. } = *state {
@@ -187,12 +187,7 @@ impl S3Src {
         }
     }
 
-    fn head(
-        self: &S3Src,
-        src: &super::S3Src,
-        client: &Client,
-        url: &GstS3Url,
-    ) -> Result<u64, gst::ErrorMessage> {
+    fn head(self: &S3Src, client: &Client, url: &GstS3Url) -> Result<u64, gst::ErrorMessage> {
         let head_object = client
             .head_object()
             .set_bucket(Some(url.bucket.clone()))
@@ -216,7 +211,7 @@ impl S3Src {
 
         gst::info!(
             CAT,
-            obj: src,
+            imp: self,
             "HEAD success, content length = {}",
             output.content_length
         );
@@ -225,12 +220,7 @@ impl S3Src {
     }
 
     /* Returns the bytes, Some(error) if one occured, or a None error if interrupted */
-    fn get(
-        self: &S3Src,
-        src: &super::S3Src,
-        offset: u64,
-        length: u64,
-    ) -> Result<Bytes, Option<gst::ErrorMessage>> {
+    fn get(self: &S3Src, offset: u64, length: u64) -> Result<Bytes, Option<gst::ErrorMessage>> {
         let state = self.state.lock().unwrap();
 
         let (url, client) = match *state {
@@ -256,7 +246,7 @@ impl S3Src {
 
         gst::debug!(
             CAT,
-            obj: src,
+            imp: self,
             "Requesting range: {}-{}",
             offset,
             offset + length - 1
@@ -273,7 +263,7 @@ impl S3Src {
                 WaitError::Cancelled => None,
             })?;
 
-        gst::debug!(CAT, obj: src, "Read {} bytes", output.content_length);
+        gst::debug!(CAT, imp: self, "Read {} bytes", output.content_length);
 
         s3utils::wait_stream(&self.canceller, &mut output.body).map_err(|err| match err {
             WaitError::FutureError(err) => Some(gst::error_msg!(
@@ -346,19 +336,13 @@ impl ObjectImpl for S3Src {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         let mut settings = self.settings.lock().unwrap();
 
         match pspec.name() {
             "uri" => {
                 drop(settings);
-                let _ = self.set_uri(obj, value.get().expect("type checked upstream"));
+                let _ = self.set_uri(value.get().expect("type checked upstream"));
             }
             "access-key" => {
                 settings.access_key = value.get().expect("type checked upstream");
@@ -399,7 +383,7 @@ impl ObjectImpl for S3Src {
         }
     }
 
-    fn property(&self, _: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
 
         match pspec.name() {
@@ -425,9 +409,10 @@ impl ObjectImpl for S3Src {
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.set_format(gst::Format::Bytes);
         /* Set a larger default blocksize to make read more efficient */
         obj.set_blocksize(256 * 1024);
@@ -475,23 +460,23 @@ impl URIHandlerImpl for S3Src {
         &["s3"]
     }
 
-    fn uri(&self, _: &Self::Type) -> Option<String> {
+    fn uri(&self) -> Option<String> {
         let settings = self.settings.lock().unwrap();
 
         settings.url.as_ref().map(|s| s.to_string())
     }
 
-    fn set_uri(&self, element: &Self::Type, uri: &str) -> Result<(), glib::Error> {
-        self.set_uri(element, Some(uri))
+    fn set_uri(&self, uri: &str) -> Result<(), glib::Error> {
+        self.set_uri(Some(uri))
     }
 }
 
 impl BaseSrcImpl for S3Src {
-    fn is_seekable(&self, _: &Self::Type) -> bool {
+    fn is_seekable(&self) -> bool {
         true
     }
 
-    fn size(&self, _: &Self::Type) -> Option<u64> {
+    fn size(&self) -> Option<u64> {
         let state = self.state.lock().unwrap();
         match *state {
             StreamingState::Stopped => None,
@@ -499,7 +484,7 @@ impl BaseSrcImpl for S3Src {
         }
     }
 
-    fn start(&self, src: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
 
         if let StreamingState::Started { .. } = *state {
@@ -519,7 +504,7 @@ impl BaseSrcImpl for S3Src {
         drop(settings);
 
         if let Ok(s3client) = self.connect(&s3url) {
-            let size = self.head(src, &s3client, &s3url)?;
+            let size = self.head(&s3client, &s3url)?;
 
             *state = StreamingState::Started {
                 url: s3url,
@@ -536,7 +521,7 @@ impl BaseSrcImpl for S3Src {
         }
     }
 
-    fn stop(&self, _: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         // First, stop any asynchronous tasks if we're running, as they will have the state lock
         self.cancel();
 
@@ -551,7 +536,7 @@ impl BaseSrcImpl for S3Src {
         Ok(())
     }
 
-    fn query(&self, src: &Self::Type, query: &mut gst::QueryRef) -> bool {
+    fn query(&self, query: &mut gst::QueryRef) -> bool {
         if let gst::QueryViewMut::Scheduling(q) = query.view_mut() {
             q.set(
                 gst::SchedulingFlags::SEQUENTIAL | gst::SchedulingFlags::BANDWIDTH_LIMITED,
@@ -563,18 +548,17 @@ impl BaseSrcImpl for S3Src {
             return true;
         }
 
-        BaseSrcImplExt::parent_query(self, src, query)
+        BaseSrcImplExt::parent_query(self, query)
     }
 
     fn create(
         &self,
-        src: &Self::Type,
         offset: u64,
         buffer: Option<&mut gst::BufferRef>,
         length: u32,
     ) -> Result<CreateSuccess, gst::FlowError> {
         // FIXME: sanity check on offset and length
-        let data = self.get(src, offset, u64::from(length));
+        let data = self.get(offset, u64::from(length));
 
         match data {
             /* Got data */
@@ -592,18 +576,18 @@ impl BaseSrcImpl for S3Src {
             Err(None) => Err(gst::FlowError::Flushing),
             /* Actual Error */
             Err(Some(err)) => {
-                gst::error!(CAT, obj: src, "Could not GET: {}", err);
+                gst::error!(CAT, imp: self, "Could not GET: {}", err);
                 Err(gst::FlowError::Error)
             }
         }
     }
 
     /* FIXME: implement */
-    fn do_seek(&self, _: &Self::Type, _: &mut gst::Segment) -> bool {
+    fn do_seek(&self, _: &mut gst::Segment) -> bool {
         true
     }
 
-    fn unlock(&self, _: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn unlock(&self) -> Result<(), gst::ErrorMessage> {
         self.cancel();
         Ok(())
     }

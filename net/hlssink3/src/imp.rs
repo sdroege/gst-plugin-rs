@@ -134,15 +134,15 @@ impl Default for State {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct HlsSink3 {
     settings: Arc<Mutex<Settings>>,
     state: Arc<Mutex<State>>,
 }
 
 impl HlsSink3 {
-    fn start(&self, element: &super::HlsSink3) {
-        gst::info!(CAT, obj: element, "Starting");
+    fn start(&self) {
+        gst::info!(CAT, imp: self, "Starting");
 
         let (target_duration, playlist_type) = {
             let settings = self.settings.lock().unwrap();
@@ -158,14 +158,10 @@ impl HlsSink3 {
         }
     }
 
-    fn on_format_location(
-        &self,
-        element: &super::HlsSink3,
-        fragment_id: u32,
-    ) -> Result<String, String> {
+    fn on_format_location(&self, fragment_id: u32) -> Result<String, String> {
         gst::info!(
             CAT,
-            obj: element,
+            imp: self,
             "Starting the formatting of the fragment-id: {}",
             fragment_id
         );
@@ -181,14 +177,15 @@ impl HlsSink3 {
         let segment_file_location = settings.segment_formatter.segment(fragment_id);
         gst::trace!(
             CAT,
-            obj: element,
+            imp: self,
             "Segment location formatted: {}",
             segment_file_location
         );
 
         state.current_segment_location = Some(segment_file_location.clone());
 
-        let fragment_stream = element
+        let fragment_stream = self
+            .instance()
             .emit_by_name::<Option<gio::OutputStream>>(
                 SIGNAL_GET_FRAGMENT_STREAM,
                 &[&segment_file_location],
@@ -201,18 +198,14 @@ impl HlsSink3 {
 
         gst::info!(
             CAT,
-            obj: element,
+            imp: self,
             "New segment location: {:?}",
             state.current_segment_location.as_ref()
         );
         Ok(segment_file_location)
     }
 
-    fn new_file_stream<P>(
-        &self,
-        element: &super::HlsSink3,
-        location: &P,
-    ) -> Result<gio::OutputStream, String>
+    fn new_file_stream<P>(&self, location: &P) -> Result<gio::OutputStream, String>
     where
         P: AsRef<path::Path>,
     {
@@ -225,20 +218,20 @@ impl HlsSink3 {
                     err.to_string(),
                 ]
             );
-            element.post_error_message(error_msg);
+            self.post_error_message(error_msg);
             err.to_string()
         })?;
         Ok(gio::WriteOutputStream::new(file).upcast())
     }
 
-    fn delete_fragment<P>(&self, element: &super::HlsSink3, location: &P)
+    fn delete_fragment<P>(&self, location: &P)
     where
         P: AsRef<path::Path>,
     {
         let _ = fs::remove_file(location).map_err(|err| {
             gst::warning!(
                 CAT,
-                obj: element,
+                imp: self,
                 "Could not delete segment file: {}",
                 err.to_string()
             );
@@ -247,10 +240,9 @@ impl HlsSink3 {
 
     fn write_playlist(
         &self,
-        element: &super::HlsSink3,
         fragment_closed_at: Option<gst::ClockTime>,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::info!(CAT, obj: element, "Preparing to write new playlist");
+        gst::info!(CAT, imp: self, "Preparing to write new playlist");
 
         let mut state_guard = self.state.lock().unwrap();
         let state = match &mut *state_guard {
@@ -258,7 +250,7 @@ impl HlsSink3 {
             State::Started(s) => s,
         };
 
-        gst::info!(CAT, obj: element, "COUNT {}", state.playlist.len());
+        gst::info!(CAT, imp: self, "COUNT {}", state.playlist.len());
 
         // Only add fragment if it's complete.
         if let Some(fragment_closed) = fragment_closed_at {
@@ -283,7 +275,8 @@ impl HlsSink3 {
 
         // Acquires the playlist file handle so we can update it with new content. By default, this
         // is expected to be the same file every time.
-        let mut playlist_stream = element
+        let mut playlist_stream = self
+            .instance()
             .emit_by_name::<Option<gio::OutputStream>>(
                 SIGNAL_GET_PLAYLIST_STREAM,
                 &[&playlist_location],
@@ -291,7 +284,7 @@ impl HlsSink3 {
             .ok_or_else(|| {
                 gst::error!(
                     CAT,
-                    obj: element,
+                    imp: self,
                     "Could not get stream to write playlist content",
                 );
                 gst::StateChangeError
@@ -304,7 +297,7 @@ impl HlsSink3 {
             .map_err(|err| {
                 gst::error!(
                     CAT,
-                    obj: element,
+                    imp: self,
                     "Could not write new playlist: {}",
                     err.to_string()
                 );
@@ -313,7 +306,7 @@ impl HlsSink3 {
         playlist_stream.flush().map_err(|err| {
             gst::error!(
                 CAT,
-                obj: element,
+                imp: self,
                 "Could not flush playlist: {}",
                 err.to_string()
             );
@@ -325,16 +318,17 @@ impl HlsSink3 {
             if state.old_segment_locations.len() > max_num_segments {
                 for _ in 0..state.old_segment_locations.len() - max_num_segments {
                     let old_segment_location = state.old_segment_locations.remove(0);
-                    if !element
+                    if !self
+                        .instance()
                         .emit_by_name::<bool>(SIGNAL_DELETE_FRAGMENT, &[&old_segment_location])
                     {
-                        gst::error!(CAT, obj: element, "Could not delete fragment");
+                        gst::error!(CAT, imp: self, "Could not delete fragment");
                     }
                 }
             }
         }
 
-        gst::debug!(CAT, obj: element, "Wrote new playlist file!");
+        gst::debug!(CAT, imp: self, "Wrote new playlist file!");
         Ok(gst::StateChangeSuccess::Success)
     }
 
@@ -350,23 +344,20 @@ impl HlsSink3 {
         }
     }
 
-    fn write_final_playlist(
-        &self,
-        element: &super::HlsSink3,
-    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::debug!(CAT, obj: element, "Preparing to write final playlist");
-        self.write_playlist(element, None)
+    fn write_final_playlist(&self) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
+        gst::debug!(CAT, imp: self, "Preparing to write final playlist");
+        self.write_playlist(None)
     }
 
-    fn stop(&self, element: &super::HlsSink3) {
-        gst::debug!(CAT, obj: element, "Stopping");
+    fn stop(&self) {
+        gst::debug!(CAT, imp: self, "Stopping");
 
         let mut state = self.state.lock().unwrap();
         if let State::Started(_) = *state {
             *state = State::Stopped;
         }
 
-        gst::debug!(CAT, obj: element, "Stopped");
+        gst::debug!(CAT, imp: self, "Stopped");
     }
 }
 
@@ -379,7 +370,7 @@ impl ObjectSubclass for HlsSink3 {
 
 impl BinImpl for HlsSink3 {
     #[allow(clippy::single_match)]
-    fn handle_message(&self, element: &Self::Type, msg: gst::Message) {
+    fn handle_message(&self, msg: gst::Message) {
         use gst::MessageView;
 
         match msg.view() {
@@ -410,14 +401,13 @@ impl BinImpl for HlsSink3 {
                     "splitmuxsink-fragment-closed" => {
                         let s = msg.structure().unwrap();
                         if let Ok(fragment_closed_at) = s.get::<gst::ClockTime>("running-time") {
-                            self.write_playlist(element, Some(fragment_closed_at))
-                                .unwrap();
+                            self.write_playlist(Some(fragment_closed_at)).unwrap();
                         }
                     }
                     _ => {}
                 }
             }
-            _ => self.parent_handle_message(element, msg),
+            _ => self.parent_handle_message(msg),
         }
     }
 }
@@ -469,13 +459,7 @@ impl ObjectImpl for HlsSink3 {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         let mut settings = self.settings.lock().unwrap();
         match pspec.name() {
             "location" => {
@@ -531,7 +515,7 @@ impl ObjectImpl for HlsSink3 {
         };
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
         match pspec.name() {
             "location" => settings.location.to_value(),
@@ -568,7 +552,7 @@ impl ObjectImpl for HlsSink3 {
 
                         Some(
                             hlssink3
-                                .new_file_stream(&element, &playlist_location)
+                                .new_file_stream(&playlist_location)
                                 .ok()?
                                 .to_value(),
                         )
@@ -592,7 +576,7 @@ impl ObjectImpl for HlsSink3 {
 
                         Some(
                             hlssink3
-                                .new_file_stream(&element, &fragment_location)
+                                .new_file_stream(&fragment_location)
                                 .ok()?
                                 .to_value(),
                         )
@@ -611,7 +595,7 @@ impl ObjectImpl for HlsSink3 {
                         let fragment_location = args[1].get::<String>().expect("signal arg");
                         let hlssink3 = element.imp();
 
-                        hlssink3.delete_fragment(&element, &fragment_location);
+                        hlssink3.delete_fragment(&fragment_location);
                         Some(true.to_value())
                     })
                     .accumulator(|_hint, ret, value| {
@@ -626,9 +610,10 @@ impl ObjectImpl for HlsSink3 {
         SIGNALS.as_ref()
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.set_element_flags(gst::ElementFlags::SINK);
         obj.set_suppressed_flags(gst::ElementFlags::SINK | gst::ElementFlags::SOURCE);
 
@@ -653,22 +638,20 @@ impl ObjectImpl for HlsSink3 {
         obj.add(&settings.splitmuxsink).unwrap();
 
         settings.splitmuxsink.connect("format-location", false, {
-            let element_weak = obj.downgrade();
+            let self_weak = self.downgrade();
             move |args| {
-                let element = match element_weak.upgrade() {
-                    Some(element) => element,
+                let self_ = match self_weak.upgrade() {
+                    Some(self_) => self_,
                     None => return Some(None::<String>.to_value()),
                 };
-                let hlssink3 = element.imp();
-
                 let fragment_id = args[1].get::<u32>().unwrap();
 
-                gst::info!(CAT, obj: &element, "Got fragment-id: {}", fragment_id);
+                gst::info!(CAT, imp: self_, "Got fragment-id: {}", fragment_id);
 
-                match hlssink3.on_format_location(&element, fragment_id) {
+                match self_.on_format_location(fragment_id) {
                     Ok(segment_location) => Some(segment_location.to_value()),
                     Err(err) => {
-                        gst::error!(CAT, obj: &element, "on format-location handler: {}", err);
+                        gst::error!(CAT, imp: self_, "on format-location handler: {}", err);
                         Some("unknown_segment".to_value())
                     }
                 }
@@ -723,14 +706,13 @@ impl ElementImpl for HlsSink3 {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         if let gst::StateChange::NullToReady = transition {
-            self.start(element);
+            self.start();
         }
 
-        let ret = self.parent_change_state(element, transition)?;
+        let ret = self.parent_change_state(transition)?;
 
         match transition {
             gst::StateChange::PausedToReady => {
@@ -750,11 +732,11 @@ impl ElementImpl for HlsSink3 {
                 };
 
                 if write_final {
-                    self.write_final_playlist(element)?;
+                    self.write_final_playlist()?;
                 }
             }
             gst::StateChange::ReadyToNull => {
-                self.stop(element);
+                self.stop();
             }
             _ => (),
         }
@@ -764,7 +746,6 @@ impl ElementImpl for HlsSink3 {
 
     fn request_new_pad(
         &self,
-        element: &Self::Type,
         templ: &gst::PadTemplate,
         _name: Option<String>,
         _caps: Option<&gst::Caps>,
@@ -775,7 +756,7 @@ impl ElementImpl for HlsSink3 {
                 if settings.audio_sink {
                     gst::debug!(
                         CAT,
-                        obj: element,
+                        imp: self,
                         "requested_new_pad: audio pad is already set"
                     );
                     return None;
@@ -785,7 +766,7 @@ impl ElementImpl for HlsSink3 {
                 let sink_pad =
                     gst::GhostPad::from_template_with_target(templ, Some("audio"), &peer_pad)
                         .unwrap();
-                element.add_pad(&sink_pad).unwrap();
+                self.instance().add_pad(&sink_pad).unwrap();
                 sink_pad.set_active(true).unwrap();
                 settings.audio_sink = true;
 
@@ -795,7 +776,7 @@ impl ElementImpl for HlsSink3 {
                 if settings.video_sink {
                     gst::debug!(
                         CAT,
-                        obj: element,
+                        imp: self,
                         "requested_new_pad: video pad is already set"
                     );
                     return None;
@@ -805,7 +786,7 @@ impl ElementImpl for HlsSink3 {
                 let sink_pad =
                     gst::GhostPad::from_template_with_target(templ, Some("video"), &peer_pad)
                         .unwrap();
-                element.add_pad(&sink_pad).unwrap();
+                self.instance().add_pad(&sink_pad).unwrap();
                 sink_pad.set_active(true).unwrap();
                 settings.video_sink = true;
 
@@ -814,7 +795,7 @@ impl ElementImpl for HlsSink3 {
             other_name => {
                 gst::debug!(
                     CAT,
-                    obj: element,
+                    imp: self,
                     "requested_new_pad: name \"{}\" is not audio or video",
                     other_name
                 );
@@ -823,7 +804,7 @@ impl ElementImpl for HlsSink3 {
         }
     }
 
-    fn release_pad(&self, element: &Self::Type, pad: &gst::Pad) {
+    fn release_pad(&self, pad: &gst::Pad) {
         let mut settings = self.settings.lock().unwrap();
 
         if !settings.audio_sink && !settings.video_sink {
@@ -836,7 +817,7 @@ impl ElementImpl for HlsSink3 {
         }
 
         pad.set_active(false).unwrap();
-        element.remove_pad(pad).unwrap();
+        self.instance().remove_pad(pad).unwrap();
 
         if "audio" == ghost_pad.name() {
             settings.audio_sink = false;

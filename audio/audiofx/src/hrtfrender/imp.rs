@@ -10,6 +10,7 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
+use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
 use hrtf::{HrirSphere, HrtfContext, HrtfProcessor, Vec3};
@@ -216,7 +217,6 @@ impl ObjectSubclass for HrtfRender {
 impl HrtfRender {
     fn process(
         &self,
-        element: &super::HrtfRender,
         outbuf: &mut gst::BufferRef,
         state: &mut State,
         settings: &Settings,
@@ -224,7 +224,7 @@ impl HrtfRender {
         let mut outbuf =
             gst_audio::AudioBufferRef::from_buffer_ref_writable(outbuf, &state.outinfo).map_err(
                 |err| {
-                    gst::error!(CAT, obj: element, "Failed to map buffer : {}", err);
+                    gst::error!(CAT, imp: self, "Failed to map buffer : {}", err);
                     gst::FlowError::Error
                 },
             )?;
@@ -248,13 +248,13 @@ impl HrtfRender {
 
         while state.adapter.available() >= inblksz {
             let inbuf = state.adapter.take_buffer(inblksz).map_err(|_| {
-                gst::error!(CAT, obj: element, "Failed to map buffer");
+                gst::error!(CAT, imp: self, "Failed to map buffer");
                 gst::FlowError::Error
             })?;
 
             let inbuf = gst_audio::AudioBuffer::from_buffer_readable(inbuf, &state.ininfo)
                 .map_err(|_| {
-                    gst::error!(CAT, obj: element, "Failed to map buffer");
+                    gst::error!(CAT, imp: self, "Failed to map buffer");
                     gst::FlowError::Error
                 })?;
 
@@ -326,7 +326,7 @@ impl HrtfRender {
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn drain(&self, element: &super::HrtfRender) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn drain(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
         let settings = &self.settings.lock().unwrap();
 
         let mut state_guard = self.state.lock().unwrap();
@@ -384,19 +384,17 @@ impl HrtfRender {
         let mut outbuf = gst::Buffer::with_size(outblksz).map_err(|_| gst::FlowError::Error)?;
         let outbuf_mut = outbuf.get_mut().unwrap();
 
-        self.process(element, outbuf_mut, state, settings)?;
+        self.process(outbuf_mut, state, settings)?;
 
         outbuf_mut.set_size(outputsz);
         outbuf_mut.set_pts(pts);
         outbuf_mut.set_offset(offset);
         outbuf_mut.set_duration(duration);
 
-        let srcpad = element.static_pad("src").unwrap();
-
         state.reset_processors();
 
         drop(state_guard);
-        srcpad.push(outbuf)
+        self.instance().src_pad().push(outbuf)
     }
 }
 
@@ -445,13 +443,7 @@ impl ObjectImpl for HrtfRender {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "hrir-raw" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -502,7 +494,7 @@ impl ObjectImpl for HrtfRender {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "hrir-raw" => {
                 let settings = self.settings.lock().unwrap();
@@ -600,7 +592,6 @@ impl BaseTransformImpl for HrtfRender {
 
     fn transform(
         &self,
-        element: &Self::Type,
         inbuf: &gst::Buffer,
         outbuf: &mut gst::BufferRef,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -612,7 +603,7 @@ impl BaseTransformImpl for HrtfRender {
         state.adapter.push(inbuf.clone());
 
         if state.adapter.available() >= state.input_block_size() {
-            return self.process(element, outbuf, state, settings);
+            return self.process(outbuf, state, settings);
         }
 
         Ok(gst::FlowSuccess::Ok)
@@ -620,7 +611,6 @@ impl BaseTransformImpl for HrtfRender {
 
     fn transform_size(
         &self,
-        element: &Self::Type,
         _direction: gst::PadDirection,
         _caps: &gst::Caps,
         size: usize,
@@ -638,7 +628,7 @@ impl BaseTransformImpl for HrtfRender {
 
         gst::log!(
             CAT,
-            obj: element,
+            imp: self,
             "Adapter size: {}, input size {}, transformed size {}",
             state.adapter.available(),
             size,
@@ -650,7 +640,6 @@ impl BaseTransformImpl for HrtfRender {
 
     fn transform_caps(
         &self,
-        element: &Self::Type,
         direction: gst::PadDirection,
         caps: &gst::Caps,
         filter: Option<&gst::Caps>,
@@ -685,7 +674,7 @@ impl BaseTransformImpl for HrtfRender {
 
         gst::debug!(
             CAT,
-            obj: element,
+            imp: self,
             "Transformed caps from {} to {} in direction {:?}",
             caps,
             other_caps,
@@ -695,12 +684,7 @@ impl BaseTransformImpl for HrtfRender {
         Some(other_caps)
     }
 
-    fn set_caps(
-        &self,
-        element: &Self::Type,
-        incaps: &gst::Caps,
-        outcaps: &gst::Caps,
-    ) -> Result<(), gst::LoggableError> {
+    fn set_caps(&self, incaps: &gst::Caps, outcaps: &gst::Caps) -> Result<(), gst::LoggableError> {
         let ininfo = gst_audio::AudioInfo::from_caps(incaps)
             .map_err(|_| gst::loggable_error!(CAT, "Failed to parse input caps"))?;
 
@@ -761,15 +745,15 @@ impl BaseTransformImpl for HrtfRender {
             adapter: gst_base::UniqueAdapter::new(),
         });
 
-        gst::debug!(CAT, obj: element, "Configured for caps {}", incaps);
+        gst::debug!(CAT, imp: self, "Configured for caps {}", incaps);
 
         Ok(())
     }
 
-    fn sink_event(&self, element: &Self::Type, event: gst::Event) -> bool {
+    fn sink_event(&self, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::debug!(CAT, "Handling event {:?}", event);
+        gst::debug!(CAT, imp: self, "Handling event {:?}", event);
 
         match event.view() {
             EventView::FlushStop(_) => {
@@ -782,10 +766,10 @@ impl BaseTransformImpl for HrtfRender {
                 }
             }
             EventView::Eos(_) => {
-                if self.drain(element).is_err() {
+                if self.drain().is_err() {
                     gst::warning!(CAT, "Failed to drain internal buffer");
-                    gst::element_warning!(
-                        element,
+                    gst::element_imp_warning!(
+                        self,
                         gst::CoreError::Event,
                         ["Failed to drain internal buffer"]
                     );
@@ -794,10 +778,10 @@ impl BaseTransformImpl for HrtfRender {
             _ => {}
         }
 
-        self.parent_sink_event(element, event)
+        self.parent_sink_event(event)
     }
 
-    fn start(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
         // get global thread pool
         let mut thread_pool_g = THREAD_POOL.lock().unwrap();
         let mut thread_pool = self.thread_pool.lock().unwrap();
@@ -821,7 +805,7 @@ impl BaseTransformImpl for HrtfRender {
         Ok(())
     }
 
-    fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         // Drop state
         let _ = self.state.lock().unwrap().take();
         // Drop thread pool

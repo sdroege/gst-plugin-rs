@@ -65,11 +65,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 impl FileSink {
-    fn set_location(
-        &self,
-        element: &super::FileSink,
-        location: Option<FileLocation>,
-    ) -> Result<(), glib::Error> {
+    fn set_location(&self, location: Option<FileLocation>) -> Result<(), glib::Error> {
         let state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
             return Err(glib::Error::new(
@@ -85,20 +81,20 @@ impl FileSink {
                     Some(ref location_cur) => {
                         gst::info!(
                             CAT,
-                            obj: element,
+                            imp: self,
                             "Changing `location` from {:?} to {}",
                             location_cur,
                             location,
                         );
                     }
                     None => {
-                        gst::info!(CAT, obj: element, "Setting `location` to {}", location,);
+                        gst::info!(CAT, imp: self, "Setting `location` to {}", location,);
                     }
                 }
                 Some(location)
             }
             None => {
-                gst::info!(CAT, obj: element, "Resetting `location` to None",);
+                gst::info!(CAT, imp: self, "Resetting `location` to None",);
                 None
             }
         };
@@ -127,31 +123,25 @@ impl ObjectImpl for FileSink {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "location" => {
                 let res = match value.get::<Option<String>>() {
                     Ok(Some(location)) => FileLocation::try_from_path_str(location)
-                        .and_then(|file_location| self.set_location(obj, Some(file_location))),
-                    Ok(None) => self.set_location(obj, None),
+                        .and_then(|file_location| self.set_location(Some(file_location))),
+                    Ok(None) => self.set_location(None),
                     Err(_) => unreachable!("type checked upstream"),
                 };
 
                 if let Err(err) = res {
-                    gst::error!(CAT, obj: obj, "Failed to set property `location`: {}", err);
+                    gst::error!(CAT, imp: self, "Failed to set property `location`: {}", err);
                 }
             }
             _ => unimplemented!(),
         };
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "location" => {
                 let settings = self.settings.lock().unwrap();
@@ -202,7 +192,7 @@ impl ElementImpl for FileSink {
 }
 
 impl BaseSinkImpl for FileSink {
-    fn start(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
             unreachable!("FileSink already started");
@@ -226,15 +216,15 @@ impl BaseSinkImpl for FileSink {
                 ]
             )
         })?;
-        gst::debug!(CAT, obj: element, "Opened file {:?}", file);
+        gst::debug!(CAT, imp: self, "Opened file {:?}", file);
 
         *state = State::Started { file, position: 0 };
-        gst::info!(CAT, obj: element, "Started");
+        gst::info!(CAT, imp: self, "Started");
 
         Ok(())
     }
 
-    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         if let State::Stopped = *state {
             return Err(gst::error_msg!(
@@ -244,18 +234,14 @@ impl BaseSinkImpl for FileSink {
         }
 
         *state = State::Stopped;
-        gst::info!(CAT, obj: element, "Stopped");
+        gst::info!(CAT, imp: self, "Stopped");
 
         Ok(())
     }
 
     // TODO: implement seek in BYTES format
 
-    fn render(
-        &self,
-        element: &Self::Type,
-        buffer: &gst::Buffer,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn render(&self, buffer: &gst::Buffer) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
         let (file, position) = match *state {
             State::Started {
@@ -263,20 +249,20 @@ impl BaseSinkImpl for FileSink {
                 ref mut position,
             } => (file, position),
             State::Stopped => {
-                gst::element_error!(element, gst::CoreError::Failed, ["Not started yet"]);
+                gst::element_imp_error!(self, gst::CoreError::Failed, ["Not started yet"]);
                 return Err(gst::FlowError::Error);
             }
         };
 
-        gst::trace!(CAT, obj: element, "Rendering {:?}", buffer);
+        gst::trace!(CAT, imp: self, "Rendering {:?}", buffer);
         let map = buffer.map_readable().map_err(|_| {
-            gst::element_error!(element, gst::CoreError::Failed, ["Failed to map buffer"]);
+            gst::element_imp_error!(self, gst::CoreError::Failed, ["Failed to map buffer"]);
             gst::FlowError::Error
         })?;
 
         file.write_all(map.as_ref()).map_err(|err| {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::ResourceError::Write,
                 ["Failed to write buffer: {}", err]
             );
@@ -296,7 +282,7 @@ impl URIHandlerImpl for FileSink {
         &["file"]
     }
 
-    fn uri(&self, _element: &Self::Type) -> Option<String> {
+    fn uri(&self) -> Option<String> {
         let settings = self.settings.lock().unwrap();
 
         // Conversion to Url already checked while building the `FileLocation`
@@ -307,13 +293,13 @@ impl URIHandlerImpl for FileSink {
         })
     }
 
-    fn set_uri(&self, element: &Self::Type, uri: &str) -> Result<(), glib::Error> {
+    fn set_uri(&self, uri: &str) -> Result<(), glib::Error> {
         // Special case for "file://" as this is used by some applications to test
         // with `gst_element_make_from_uri` if there's an element that supports the URI protocol
 
         if uri != "file://" {
             let file_location = FileLocation::try_from_uri_str(uri)?;
-            self.set_location(element, Some(file_location))
+            self.set_location(Some(file_location))
         } else {
             Ok(())
         }

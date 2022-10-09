@@ -218,7 +218,7 @@ impl State {
     // Drains all full frames that are currently in the adapter
     fn drain_full_frames(
         &mut self,
-        element: &super::AudioLoudNorm,
+        imp: &AudioLoudNorm,
     ) -> Result<Vec<gst::Buffer>, gst::FlowError> {
         let mut outbufs = vec![];
         while self.adapter.available() >= self.info.bpf() as usize * self.current_samples_per_frame
@@ -241,7 +241,7 @@ impl State {
                 .as_slice_of::<f64>()
                 .map_err(|_| gst::FlowError::Error)?;
 
-            let (mut outbuf, pts) = self.process(element, src, pts)?;
+            let (mut outbuf, pts) = self.process(imp, src, pts)?;
 
             {
                 let outbuf = outbuf.get_mut().unwrap();
@@ -263,8 +263,8 @@ impl State {
     }
 
     // Drains everything
-    fn drain(&mut self, element: &super::AudioLoudNorm) -> Result<gst::Buffer, gst::FlowError> {
-        gst::debug!(CAT, obj: element, "Draining");
+    fn drain(&mut self, imp: &AudioLoudNorm) -> Result<gst::Buffer, gst::FlowError> {
+        gst::debug!(CAT, imp: imp, "Draining");
 
         let (pts, distance) = self.adapter.prev_pts();
         let distance_samples = distance / self.info.bpf() as u64;
@@ -299,11 +299,11 @@ impl State {
             self.frame_type = FrameType::Final;
         } else if src.is_empty() {
             // Nothing to drain at all
-            gst::debug!(CAT, obj: element, "No data to drain");
+            gst::debug!(CAT, imp: imp, "No data to drain");
             return Err(gst::FlowError::Eos);
         }
 
-        let (mut outbuf, pts) = self.process(element, src, pts)?;
+        let (mut outbuf, pts) = self.process(imp, src, pts)?;
 
         {
             let outbuf = outbuf.get_mut().unwrap();
@@ -321,10 +321,7 @@ impl State {
         Ok(outbuf)
     }
 
-    fn process_first_frame_is_last(
-        &mut self,
-        element: &super::AudioLoudNorm,
-    ) -> Result<(), gst::FlowError> {
+    fn process_first_frame_is_last(&mut self, imp: &AudioLoudNorm) -> Result<(), gst::FlowError> {
         // Calculated loudness in LUFS
         let global = self
             .r128_in
@@ -345,7 +342,7 @@ impl State {
 
         gst::debug!(
             CAT,
-            obj: element,
+            imp: imp,
             "Calculated global loudness for first frame {} with peak {}",
             global,
             true_peak
@@ -371,7 +368,7 @@ impl State {
 
     fn process_first_frame(
         &mut self,
-        element: &super::AudioLoudNorm,
+        imp: &AudioLoudNorm,
         src: &[f64],
         pts: impl Into<Option<gst::ClockTime>>,
     ) -> Result<(gst::Buffer, Option<gst::ClockTime>), gst::FlowError> {
@@ -399,7 +396,7 @@ impl State {
         self.prev_delta = self.delta[self.index];
         gst::debug!(
             CAT,
-            obj: element,
+            imp: imp,
             "Initializing for first frame with gain adjustment of {}",
             self.prev_delta
         );
@@ -430,7 +427,7 @@ impl State {
                 .as_mut_slice_of::<f64>()
                 .map_err(|_| gst::FlowError::Error)?;
             // This now consumes the first 100ms of limiter_buf for the output.
-            self.true_peak_limiter(element, dst);
+            self.true_peak_limiter(imp, dst);
             self.r128_out
                 .add_frames_f64(dst)
                 .map_err(|_| gst::FlowError::Error)?;
@@ -445,7 +442,7 @@ impl State {
         Ok((outbuf, pts.into()))
     }
 
-    fn process_fill_inner_frame(&mut self, element: &super::AudioLoudNorm, src: &[f64]) {
+    fn process_fill_inner_frame(&mut self, imp: &AudioLoudNorm, src: &[f64]) {
         // Get gain for this and the next 100ms frame based the delta array
         // and smoothened with a gaussian filter.
         let gain = self.gaussian_filter(if self.index + 10 < 30 {
@@ -461,7 +458,7 @@ impl State {
 
         gst::debug!(
             CAT,
-            obj: element,
+            imp: imp,
             "Applying gain adjustment {}-{}",
             gain,
             gain_next
@@ -517,7 +514,7 @@ impl State {
 
     fn process_update_gain_inner_frame(
         &mut self,
-        element: &super::AudioLoudNorm,
+        imp: &AudioLoudNorm,
     ) -> Result<(), gst::FlowError> {
         // Calculate global, shortterm loudness and relative threshold in LUFS.
         let global = self
@@ -535,7 +532,7 @@ impl State {
 
         gst::debug!(
             CAT,
-            obj: element,
+            imp: imp,
             "Calculated global loudness {}, short term loudness {} and relative threshold {}",
             global,
             shortterm,
@@ -558,7 +555,7 @@ impl State {
                 self.above_threshold = true;
                 gst::debug!(
                     CAT,
-                    obj: element,
+                    imp: imp,
                     "Above threshold now ({} >= {}, {} > -70)",
                     shortterm_out,
                     self.target_i,
@@ -586,7 +583,7 @@ impl State {
         self.prev_delta = self.delta[self.index];
         gst::debug!(
             CAT,
-            obj: element,
+            imp: imp,
             "Calculated new gain adjustment {}",
             self.prev_delta
         );
@@ -601,13 +598,13 @@ impl State {
 
     fn process_inner_frame(
         &mut self,
-        element: &super::AudioLoudNorm,
+        imp: &AudioLoudNorm,
         src: &[f64],
         pts: impl Into<Option<gst::ClockTime>>,
     ) -> Result<(gst::Buffer, Option<gst::ClockTime>), gst::FlowError> {
         // Fill in these 100ms and adjust its gain according to previous measurements, and
         // at the same time copy 100ms over to the limiter_buf.
-        self.process_fill_inner_frame(element, src);
+        self.process_fill_inner_frame(imp, src);
 
         // limiter_buf_index was 100ms advanced above, which brings us to exactly the
         // position where we have to start consuming 100ms for the output now, and exactly
@@ -625,13 +622,13 @@ impl State {
                 .as_mut_slice_of::<f64>()
                 .map_err(|_| gst::FlowError::Error)?;
             // This now consumes the next 100ms of limiter_buf for the output.
-            self.true_peak_limiter(element, dst);
+            self.true_peak_limiter(imp, dst);
             self.r128_out
                 .add_frames_f64(dst)
                 .map_err(|_| gst::FlowError::Error)?;
         }
 
-        self.process_update_gain_inner_frame(element)?;
+        self.process_update_gain_inner_frame(imp)?;
 
         // PTS is 2.9s seconds before the input PTS as we buffer 3s of samples and just
         // outputted here the first 100ms of that.
@@ -641,12 +638,7 @@ impl State {
         Ok((outbuf, pts))
     }
 
-    fn process_fill_final_frame(
-        &mut self,
-        _element: &super::AudioLoudNorm,
-        idx: usize,
-        num_samples: usize,
-    ) {
+    fn process_fill_final_frame(&mut self, _imp: &AudioLoudNorm, idx: usize, num_samples: usize) {
         let channels = self.info.channels() as usize;
 
         // Get gain for this and the next 100ms frame based the delta array
@@ -696,7 +688,7 @@ impl State {
 
     fn process_final_frame(
         &mut self,
-        element: &super::AudioLoudNorm,
+        imp: &AudioLoudNorm,
         src: &[f64],
         pts: impl Into<Option<gst::ClockTime>>,
     ) -> Result<(gst::Buffer, Option<gst::ClockTime>), gst::FlowError> {
@@ -706,14 +698,14 @@ impl State {
         // First process any new/leftover data we get passed. This is the same
         // as for inner frames. After this we will have done all gain adjustments
         // and all samples we ever output are in buf or limiter_buf.
-        self.process_fill_inner_frame(element, src);
+        self.process_fill_inner_frame(imp, src);
 
         // If we got passed less than 100ms in src then limiter_buf_index is now
         // not yet at the correct read position! Adjust accordingly here so that all
         // further reads come from the right position by copying over the next samples
         // from buf.
         if num_samples != FRAME_SIZE {
-            self.process_fill_final_frame(element, num_samples, FRAME_SIZE);
+            self.process_fill_final_frame(imp, num_samples, FRAME_SIZE);
         }
 
         // Now repeatadly run the limiter, output the output gain, update the gains, copy further
@@ -744,7 +736,7 @@ impl State {
                 //    self.limiter_buf_index += FRAME_SIZE - num_samples;
                 //}
 
-                self.true_peak_limiter(element, dst);
+                self.true_peak_limiter(imp, dst);
 
                 smp_cnt += frame_size;
                 if smp_cnt == out_num_samples {
@@ -755,11 +747,11 @@ impl State {
                 self.r128_out
                     .add_frames_f64(dst)
                     .map_err(|_| gst::FlowError::Error)?;
-                self.process_update_gain_inner_frame(element)?;
+                self.process_update_gain_inner_frame(imp)?;
 
                 // And now copy over the next block of samples from buf to limiter_buf
                 let next_frame_size = std::cmp::min(out_num_samples - smp_cnt, FRAME_SIZE);
-                self.process_fill_final_frame(element, 0, next_frame_size);
+                self.process_fill_final_frame(imp, 0, next_frame_size);
 
                 // Now for the very last frame we need to update the limiter buffer index by the
                 // amount of samples the last frame is short to reach the correct read position.
@@ -782,7 +774,7 @@ impl State {
 
     fn process_linear_frame(
         &mut self,
-        element: &super::AudioLoudNorm,
+        imp: &AudioLoudNorm,
         src: &[f64],
         pts: impl Into<Option<gst::ClockTime>>,
     ) -> Result<(gst::Buffer, Option<gst::ClockTime>), gst::FlowError> {
@@ -790,7 +782,7 @@ impl State {
 
         gst::debug!(
             CAT,
-            obj: element,
+            imp: imp,
             "Applying linear gain adjustment of {}",
             self.offset
         );
@@ -819,7 +811,7 @@ impl State {
 
     fn process(
         &mut self,
-        element: &super::AudioLoudNorm,
+        imp: &AudioLoudNorm,
         src: &[f64],
         pts: impl Into<Option<gst::ClockTime>>,
     ) -> Result<(gst::Buffer, Option<gst::ClockTime>), gst::FlowError> {
@@ -833,20 +825,20 @@ impl State {
         if self.frame_type == FrameType::First
             && (src.len() / self.info.channels() as usize) < self.current_samples_per_frame as usize
         {
-            self.process_first_frame_is_last(element)?;
+            self.process_first_frame_is_last(imp)?;
         }
 
         match self.frame_type {
-            FrameType::First => self.process_first_frame(element, src, pts),
-            FrameType::Inner => self.process_inner_frame(element, src, pts),
-            FrameType::Final => self.process_final_frame(element, src, pts),
-            FrameType::Linear => self.process_linear_frame(element, src, pts),
+            FrameType::First => self.process_first_frame(imp, src, pts),
+            FrameType::Inner => self.process_inner_frame(imp, src, pts),
+            FrameType::Final => self.process_final_frame(imp, src, pts),
+            FrameType::Linear => self.process_linear_frame(imp, src, pts),
         }
     }
 
     fn true_peak_limiter_out(
         &mut self,
-        element: &super::AudioLoudNorm,
+        imp: &AudioLoudNorm,
         mut smp_cnt: usize,
         nb_samples: usize,
     ) -> usize {
@@ -869,7 +861,7 @@ impl State {
 
             gst::debug!(
                            CAT,
-                           obj: element,
+                           imp: imp,
                            "Found peak {} at sample {}, going to attack state at sample {} (gain reduction {}-{})",
                            peak_value,
                            smp_cnt + LIMITER_ATTACK_WINDOW,
@@ -887,7 +879,7 @@ impl State {
 
     fn true_peak_limiter_attack(
         &mut self,
-        element: &super::AudioLoudNorm,
+        imp: &AudioLoudNorm,
         mut smp_cnt: usize,
         nb_samples: usize,
     ) -> usize {
@@ -1006,7 +998,7 @@ impl State {
 
                     gst::debug!(
                                     CAT,
-                                    obj: element,
+                                    imp: imp,
                                     "Found new peak {} at sample {}, restarting attack state at sample {} (gain reduction {}-{})",
                                     peak_value,
                                     smp_cnt + LIMITER_ATTACK_WINDOW,
@@ -1055,7 +1047,7 @@ impl State {
 
                     gst::debug!(
                                     CAT,
-                                    obj: element,
+                                    imp: imp,
                                     "Found new peak {} at sample {}, adjusting attack state at sample {} (gain reduction {}-{})",
                                     peak_value,
                                     smp_cnt + LIMITER_ATTACK_WINDOW,
@@ -1070,7 +1062,7 @@ impl State {
                 // to ensure that we at least sustain it for that long afterwards.
                 gst::debug!(
                     CAT,
-                    obj: element,
+                    imp: imp,
                     "Found new low peak {} at sample {} in attack state at sample {}",
                     peak_value,
                     smp_cnt + LIMITER_ATTACK_WINDOW,
@@ -1086,7 +1078,7 @@ impl State {
             // If we reached the target gain reduction, go into sustain state.
             gst::debug!(
                 CAT,
-                obj: element,
+                imp: imp,
                 "Going to sustain state at sample {} (gain reduction {})",
                 smp_cnt,
                 self.gain_reduction[1]
@@ -1100,7 +1092,7 @@ impl State {
 
     fn true_peak_limiter_sustain(
         &mut self,
-        element: &super::AudioLoudNorm,
+        imp: &AudioLoudNorm,
         mut smp_cnt: usize,
         nb_samples: usize,
     ) -> usize {
@@ -1165,7 +1157,7 @@ impl State {
 
                     gst::debug!(
                                     CAT,
-                                    obj: element,
+                                    imp: imp,
                                     "Found new peak {} at sample {}, going back to attack state at sample {} (gain reduction {}-{})",
                                     peak_value,
                                     smp_cnt + LIMITER_ATTACK_WINDOW,
@@ -1176,7 +1168,7 @@ impl State {
                 } else {
                     gst::debug!(
                                     CAT,
-                                    obj: element,
+                                    imp: imp,
                                     "Found new peak {} at sample {}, going sustain further at sample {} (gain reduction {})",
                                     peak_value,
                                     smp_cnt + LIMITER_ATTACK_WINDOW,
@@ -1203,7 +1195,7 @@ impl State {
 
             gst::debug!(
                 CAT,
-                obj: element,
+                imp: imp,
                 "Going to release state for sample {} at sample {} (gain reduction {}-1.0)",
                 smp_cnt + LIMITER_RELEASE_WINDOW,
                 smp_cnt,
@@ -1216,7 +1208,7 @@ impl State {
 
     fn true_peak_limiter_release(
         &mut self,
-        element: &super::AudioLoudNorm,
+        imp: &AudioLoudNorm,
         mut smp_cnt: usize,
         nb_samples: usize,
     ) -> usize {
@@ -1273,7 +1265,7 @@ impl State {
 
                 gst::debug!(
                                CAT,
-                               obj: element,
+                               imp: imp,
                                "Found new peak {} at sample {}, going back to attack state at sample {} (gain reduction {}-{})",
                                peak_value,
                                smp_cnt + LIMITER_ATTACK_WINDOW,
@@ -1285,7 +1277,7 @@ impl State {
                 self.gain_reduction[1] = current_gain_reduction;
                 gst::debug!(
                                 CAT,
-                                obj: element,
+                                imp: imp,
                                 "Going from release to sustain state at sample {} because of low peak {} at sample {} (gain reduction {})",
                                 smp_cnt,
                                 peak_value,
@@ -1326,7 +1318,7 @@ impl State {
             self.limiter_state = LimiterState::Out;
             gst::debug!(
                 CAT,
-                obj: element,
+                imp: imp,
                 "Leaving release state and going to out state at sample {}",
                 smp_cnt,
             );
@@ -1335,7 +1327,7 @@ impl State {
         smp_cnt
     }
 
-    fn true_peak_limiter_first_frame(&mut self, element: &super::AudioLoudNorm) {
+    fn true_peak_limiter_first_frame(&mut self, imp: &AudioLoudNorm) {
         let channels = self.info.channels() as usize;
 
         assert_eq!(self.limiter_buf_index, 0);
@@ -1364,7 +1356,7 @@ impl State {
             self.gain_reduction[1] = self.target_tp / max;
             gst::debug!(
                 CAT,
-                obj: element,
+                imp: imp,
                 "Reducing gain for start of first frame by {} ({} > {}) and going to sustain state",
                 self.gain_reduction[1],
                 max,
@@ -1376,38 +1368,33 @@ impl State {
         }
     }
 
-    fn true_peak_limiter(&mut self, element: &super::AudioLoudNorm, dst: &mut [f64]) {
+    fn true_peak_limiter(&mut self, imp: &AudioLoudNorm, dst: &mut [f64]) {
         let channels = self.info.channels() as usize;
         let nb_samples = dst.len() / channels;
 
-        gst::debug!(
-            CAT,
-            obj: element,
-            "Running limiter for {} samples",
-            nb_samples
-        );
+        gst::debug!(CAT, imp: imp, "Running limiter for {} samples", nb_samples);
 
         // For the first frame we can't adjust the gain before it smoothly anymore so instead
         // apply the gain reduction immediately if we get above the threshold and move to sustain
         // state directly.
         if self.frame_type == FrameType::First {
-            self.true_peak_limiter_first_frame(element);
+            self.true_peak_limiter_first_frame(imp);
         }
 
         let mut smp_cnt = 0;
         while smp_cnt < nb_samples {
             match self.limiter_state {
                 LimiterState::Out => {
-                    smp_cnt = self.true_peak_limiter_out(element, smp_cnt, nb_samples);
+                    smp_cnt = self.true_peak_limiter_out(imp, smp_cnt, nb_samples);
                 }
                 LimiterState::Attack => {
-                    smp_cnt = self.true_peak_limiter_attack(element, smp_cnt, nb_samples);
+                    smp_cnt = self.true_peak_limiter_attack(imp, smp_cnt, nb_samples);
                 }
                 LimiterState::Sustain => {
-                    smp_cnt = self.true_peak_limiter_sustain(element, smp_cnt, nb_samples);
+                    smp_cnt = self.true_peak_limiter_sustain(imp, smp_cnt, nb_samples);
                 }
                 LimiterState::Release => {
-                    smp_cnt = self.true_peak_limiter_release(element, smp_cnt, nb_samples);
+                    smp_cnt = self.true_peak_limiter_release(imp, smp_cnt, nb_samples);
                 }
             }
         }
@@ -1552,15 +1539,14 @@ impl AudioLoudNorm {
     fn sink_chain(
         &self,
         _pad: &gst::Pad,
-        element: &super::AudioLoudNorm,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj: element, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, imp: self, "Handling buffer {:?}", buffer);
 
         let mut state_guard = self.state.borrow_mut();
         let state = match *state_guard {
             None => {
-                gst::error!(CAT, obj: element, "Not negotiated yet");
+                gst::error!(CAT, imp: self, "Not negotiated yet");
                 return Err(gst::FlowError::NotNegotiated);
             }
             Some(ref mut state) => state,
@@ -1568,8 +1554,8 @@ impl AudioLoudNorm {
 
         let mut outbufs = vec![];
         if buffer.flags().contains(gst::BufferFlags::DISCONT) {
-            gst::debug!(CAT, obj: element, "Draining on discontinuity");
-            match state.drain(element) {
+            gst::debug!(CAT, imp: self, "Draining on discontinuity");
+            match state.drain(self) {
                 Ok(outbuf) => {
                     outbufs.push(outbuf);
                 }
@@ -1582,23 +1568,18 @@ impl AudioLoudNorm {
         }
 
         state.adapter.push(buffer);
-        outbufs.append(&mut state.drain_full_frames(element)?);
+        outbufs.append(&mut state.drain_full_frames(self)?);
         drop(state_guard);
 
         for buffer in outbufs {
-            gst::log!(CAT, obj: element, "Outputting buffer {:?}", buffer);
+            gst::log!(CAT, imp: self, "Outputting buffer {:?}", buffer);
             self.srcpad.push(buffer)?;
         }
 
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn sink_event(
-        &self,
-        pad: &gst::Pad,
-        element: &super::AudioLoudNorm,
-        event: gst::Event,
-    ) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -1619,7 +1600,7 @@ impl AudioLoudNorm {
                 let mut state = self.state.borrow_mut();
                 let mut outbuf = None;
                 if let Some(ref mut state) = &mut *state {
-                    outbuf = match state.drain(element) {
+                    outbuf = match state.drain(self) {
                         Ok(outbuf) => Some(outbuf),
                         Err(gst::FlowError::Eos) => None,
                         Err(_) => return false,
@@ -1629,9 +1610,9 @@ impl AudioLoudNorm {
                 drop(state);
 
                 if let Some(outbuf) = outbuf {
-                    gst::log!(CAT, obj: element, "Outputting buffer {:?}", outbuf);
+                    gst::log!(CAT, imp: self, "Outputting buffer {:?}", outbuf);
                     if let Err(err) = self.srcpad.push(outbuf) {
-                        gst::error!(CAT, obj: element, "Failed to push drained data: {}", err);
+                        gst::error!(CAT, imp: self, "Failed to push drained data: {}", err);
 
                         return false;
                     }
@@ -1641,7 +1622,7 @@ impl AudioLoudNorm {
                 let mut state = self.state.borrow_mut();
                 let mut outbuf = None;
                 if let Some(ref mut state) = &mut *state {
-                    outbuf = match state.drain(element) {
+                    outbuf = match state.drain(self) {
                         Ok(outbuf) => Some(outbuf),
                         Err(gst::FlowError::Eos) => None,
                         Err(_) => return false,
@@ -1651,11 +1632,11 @@ impl AudioLoudNorm {
                 drop(state);
 
                 if let Some(outbuf) = outbuf {
-                    gst::log!(CAT, obj: element, "Outputting buffer {:?}", outbuf);
+                    gst::log!(CAT, imp: self, "Outputting buffer {:?}", outbuf);
                     if let Err(err) = self.srcpad.push(outbuf) {
                         gst::error!(
                             CAT,
-                            obj: element,
+                            imp: self,
                             "Failed to push drained data on EOS: {}",
                             err
                         );
@@ -1678,16 +1659,11 @@ impl AudioLoudNorm {
             _ => (),
         }
 
-        pad.event_default(Some(element), event)
+        pad.event_default(Some(&*self.instance()), event)
     }
 
     #[allow(clippy::single_match)]
-    fn src_query(
-        &self,
-        pad: &gst::Pad,
-        element: &super::AudioLoudNorm,
-        query: &mut gst::QueryRef,
-    ) -> bool {
+    fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
         gst::log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -1706,7 +1682,7 @@ impl AudioLoudNorm {
                     false
                 }
             }
-            _ => pad.query_default(Some(element), query),
+            _ => pad.query_default(Some(&*self.instance()), query),
         }
     }
 }
@@ -1724,15 +1700,11 @@ impl ObjectSubclass for AudioLoudNorm {
                 Self::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |this, element| this.sink_chain(pad, element, buffer),
+                    |this| this.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
-                Self::catch_panic_pad_function(
-                    parent,
-                    || false,
-                    |this, element| this.sink_event(pad, element, event),
-                )
+                Self::catch_panic_pad_function(parent, || false, |this| this.sink_event(pad, event))
             })
             .flags(gst::PadFlags::PROXY_CAPS)
             .build();
@@ -1740,11 +1712,7 @@ impl ObjectSubclass for AudioLoudNorm {
         let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
             .query_function(|pad, parent, query| {
-                Self::catch_panic_pad_function(
-                    parent,
-                    || false,
-                    |this, element| this.src_query(pad, element, query),
-                )
+                Self::catch_panic_pad_function(parent, || false, |this| this.src_query(pad, query))
             })
             .flags(gst::PadFlags::PROXY_CAPS)
             .build();
@@ -1800,20 +1768,15 @@ impl ObjectImpl for AudioLoudNorm {
         PROPERTIES.as_ref()
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "loudness-target" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -1835,7 +1798,7 @@ impl ObjectImpl for AudioLoudNorm {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "loudness-target" => {
                 let settings = self.settings.lock().unwrap();
@@ -1905,10 +1868,9 @@ impl ElementImpl for AudioLoudNorm {
     #[allow(clippy::single_match)]
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        let res = self.parent_change_state(element, transition);
+        let res = self.parent_change_state(transition);
 
         match transition {
             gst::StateChange::PausedToReady => {

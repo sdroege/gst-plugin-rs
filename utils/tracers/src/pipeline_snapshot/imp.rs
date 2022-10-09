@@ -89,22 +89,22 @@ impl Default for Settings {
 }
 
 impl Settings {
-    fn update_from_params(&mut self, obj: &super::PipelineSnapshot, params: String) {
+    fn update_from_params(&mut self, imp: &PipelineSnapshot, params: String) {
         let s = match gst::Structure::from_str(&format!("pipeline-snapshot,{}", params)) {
             Ok(s) => s,
             Err(err) => {
-                gst::warning!(CAT, obj: obj, "failed to parse tracer parameters: {}", err);
+                gst::warning!(CAT, imp: imp, "failed to parse tracer parameters: {}", err);
                 return;
             }
         };
 
         if let Ok(dot_prefix) = s.get("dot-prefix") {
-            gst::log!(CAT, obj: obj, "dot-prefix = {}", dot_prefix);
+            gst::log!(CAT, imp: imp, "dot-prefix = {}", dot_prefix);
             self.dot_prefix = dot_prefix;
         }
 
         if let Ok(dot_ts) = s.get("dot-ts") {
-            gst::log!(CAT, obj: obj, "dot-ts = {}", dot_ts);
+            gst::log!(CAT, imp: imp, "dot-ts = {}", dot_ts);
             self.dot_ts = dot_ts;
         }
     }
@@ -130,23 +130,23 @@ impl ObjectSubclass for PipelineSnapshot {
 }
 
 impl ObjectImpl for PipelineSnapshot {
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
         let mut settings = Settings::default();
-        if let Some(params) = obj.property::<Option<String>>("params") {
-            settings.update_from_params(obj, params);
+        if let Some(params) = self.instance().property::<Option<String>>("params") {
+            settings.update_from_params(self, params);
         }
 
         self.register_hook(TracerHook::ElementNew);
         self.register_hook(TracerHook::ObjectDestroyed);
 
         if let Err(err) = self.setup_signal(settings) {
-            gst::warning!(CAT, obj: obj, "failed to setup UNIX signals: {}", err);
+            gst::warning!(CAT, imp: self, "failed to setup UNIX signals: {}", err);
         }
     }
 
-    fn dispose(&self, _obj: &Self::Type) {
+    fn dispose(&self) {
         let mut handles = self.handles.lock().unwrap();
         if let Some(handles) = handles.take() {
             #[cfg(unix)]
@@ -161,8 +161,7 @@ impl GstObjectImpl for PipelineSnapshot {}
 impl TracerImpl for PipelineSnapshot {
     fn element_new(&self, _ts: u64, element: &gst::Element) {
         if element.is::<gst::Pipeline>() {
-            let tracer = self.instance();
-            gst::debug!(CAT, obj: &tracer, "new pipeline: {}", element.name());
+            gst::debug!(CAT, imp: self, "new pipeline: {}", element.name());
 
             let weak = element.downgrade();
             let mut pipelines = self.pipelines.lock().unwrap();

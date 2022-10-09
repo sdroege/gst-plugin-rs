@@ -52,7 +52,6 @@ impl JsonGstEnc {
     fn sink_chain(
         &self,
         _pad: &gst::Pad,
-        element: &super::JsonGstEnc,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let pts = buffer.pts();
@@ -66,8 +65,8 @@ impl JsonGstEnc {
             };
 
             let mut json = serde_json::to_string(&line).map_err(|err| {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::ResourceError::Write,
                     ["Failed to serialize as json {}", err]
                 );
@@ -92,8 +91,8 @@ impl JsonGstEnc {
         }
 
         let map = buffer.map_readable().map_err(|_| {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::ResourceError::Read,
                 ["Failed to map buffer readable"]
             );
@@ -102,8 +101,8 @@ impl JsonGstEnc {
         })?;
 
         let text = std::str::from_utf8(map.as_slice()).map_err(|err| {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::ResourceError::Read,
                 ["Failed to map decode as utf8: {}", err]
             );
@@ -112,8 +111,8 @@ impl JsonGstEnc {
         })?;
 
         let data: &serde_json::value::RawValue = serde_json::from_str(text).map_err(|err| {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::ResourceError::Read,
                 ["Failed to parse input as json: {}", err]
             );
@@ -128,8 +127,8 @@ impl JsonGstEnc {
         };
 
         let mut json = serde_json::to_string(&line).map_err(|err| {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::ResourceError::Write,
                 ["Failed to serialize as json {}", err]
             );
@@ -149,7 +148,7 @@ impl JsonGstEnc {
         self.srcpad.push(buf)
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &super::JsonGstEnc, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -170,8 +169,8 @@ impl JsonGstEnc {
                 let caps = gst::Caps::builder("application/x-json").build();
                 self.srcpad.push_event(gst::event::Caps::new(&caps))
             }
-            EventView::Eos(_) => pad.event_default(Some(element), event),
-            _ => pad.event_default(Some(element), event),
+            EventView::Eos(_) => pad.event_default(Some(&*self.instance()), event),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 }
@@ -189,14 +188,14 @@ impl ObjectSubclass for JsonGstEnc {
                 JsonGstEnc::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |enc, element| enc.sink_chain(pad, element, buffer),
+                    |enc| enc.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
                 JsonGstEnc::catch_panic_pad_function(
                     parent,
                     || false,
-                    |enc, element| enc.sink_event(pad, element, event),
+                    |enc| enc.sink_event(pad, event),
                 )
             })
             .build();
@@ -213,9 +212,10 @@ impl ObjectSubclass for JsonGstEnc {
 }
 
 impl ObjectImpl for JsonGstEnc {
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
@@ -266,10 +266,9 @@ impl ElementImpl for JsonGstEnc {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused | gst::StateChange::PausedToReady => {
@@ -280,6 +279,6 @@ impl ElementImpl for JsonGstEnc {
             _ => (),
         }
 
-        self.parent_change_state(element, transition)
+        self.parent_change_state(transition)
     }
 }

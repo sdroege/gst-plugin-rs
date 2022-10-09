@@ -58,9 +58,10 @@ impl ObjectSubclass for OnvifMetadataCombiner {
 }
 
 impl ObjectImpl for OnvifMetadataCombiner {
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.media_sink_pad).unwrap();
         obj.add_pad(&self.meta_sink_pad).unwrap();
     }
@@ -127,36 +128,30 @@ impl ElementImpl for OnvifMetadataCombiner {
 
     fn request_new_pad(
         &self,
-        element: &Self::Type,
         _templ: &gst::PadTemplate,
         _name: Option<String>,
         _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
         gst::error!(
             CAT,
-            obj: element,
+            imp: self,
             "onvifmetadatacombiner doesn't expose request pads"
         );
 
         None
     }
 
-    fn release_pad(&self, element: &Self::Type, _pad: &gst::Pad) {
+    fn release_pad(&self, _pad: &gst::Pad) {
         gst::error!(
             CAT,
-            obj: element,
+            imp: self,
             "onvifmetadatacombiner doesn't expose request pads"
         );
     }
 }
 
 impl OnvifMetadataCombiner {
-    fn consume_meta(
-        &self,
-        state: &mut State,
-        element: &super::OnvifMetadataCombiner,
-        end: gst::ClockTime,
-    ) -> Result<bool, gst::FlowError> {
+    fn consume_meta(&self, state: &mut State, end: gst::ClockTime) -> Result<bool, gst::FlowError> {
         while let Some(buffer) = self.meta_sink_pad.peek_buffer() {
             // Skip over gap buffers
             if buffer.flags().contains(gst::BufferFlags::GAP)
@@ -168,8 +163,8 @@ impl OnvifMetadataCombiner {
             }
 
             let meta_ts = crate::lookup_reference_timestamp(&buffer).ok_or_else(|| {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::ResourceError::Read,
                     ["Parsed metadata buffer should hold reference timestamp"]
                 );
@@ -188,7 +183,6 @@ impl OnvifMetadataCombiner {
 
     fn media_buffer_duration(
         &self,
-        element: &super::OnvifMetadataCombiner,
         current_media_buffer: &gst::Buffer,
         timeout: bool,
     ) -> Option<gst::ClockTime> {
@@ -196,7 +190,7 @@ impl OnvifMetadataCombiner {
             Some(duration) => {
                 gst::log!(
                     CAT,
-                    obj: element,
+                    imp: self,
                     "Current media buffer has a duration, using it: {}",
                     duration
                 );
@@ -210,7 +204,7 @@ impl OnvifMetadataCombiner {
 
                             gst::log!(
                                 CAT,
-                                obj: element,
+                                imp: self,
                                 "calculated duration for current media buffer from next buffer: {}",
                                 duration
                             );
@@ -220,7 +214,7 @@ impl OnvifMetadataCombiner {
                         None => {
                             gst::log!(
                                 CAT,
-                                obj: element,
+                                imp: self,
                                 "could not calculate duration for current media buffer"
                             );
                             Some(gst::ClockTime::from_nseconds(0))
@@ -229,14 +223,14 @@ impl OnvifMetadataCombiner {
                 } else if timeout {
                     gst::log!(
                         CAT,
-                        obj: element,
+                        imp: self,
                         "could not calculate duration for current media buffer"
                     );
                     Some(gst::ClockTime::from_nseconds(0))
                 } else {
                     gst::trace!(
                         CAT,
-                        obj: element,
+                        imp: self,
                         "No next buffer to peek at yet to calculate duration"
                     );
                     None
@@ -248,7 +242,6 @@ impl OnvifMetadataCombiner {
     fn consume_media(
         &self,
         state: &mut State,
-        element: &super::OnvifMetadataCombiner,
         timeout: bool,
     ) -> Result<Option<gst::Buffer>, gst::FlowError> {
         if let Some(current_media_buffer) = state
@@ -259,11 +252,11 @@ impl OnvifMetadataCombiner {
             if let Some(current_media_start) =
                 crate::lookup_reference_timestamp(&current_media_buffer)
             {
-                match self.media_buffer_duration(element, &current_media_buffer, timeout) {
+                match self.media_buffer_duration(&current_media_buffer, timeout) {
                     Some(duration) => {
                         let end = current_media_start + duration;
 
-                        if self.consume_meta(state, element, end)? {
+                        if self.consume_meta(state, end)? {
                             Ok(Some(current_media_buffer))
                         } else {
                             state.current_media_buffer = Some(current_media_buffer);
@@ -285,16 +278,12 @@ impl OnvifMetadataCombiner {
 }
 
 impl AggregatorImpl for OnvifMetadataCombiner {
-    fn aggregate(
-        &self,
-        element: &Self::Type,
-        timeout: bool,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::trace!(CAT, obj: element, "aggregate, timeout: {}", timeout);
+    fn aggregate(&self, timeout: bool) -> Result<gst::FlowSuccess, gst::FlowError> {
+        gst::trace!(CAT, imp: self, "aggregate, timeout: {}", timeout);
 
         let mut state = self.state.lock().unwrap();
 
-        if let Some(mut buffer) = self.consume_media(&mut state, element, timeout)? {
+        if let Some(mut buffer) = self.consume_media(&mut state, timeout)? {
             let mut buflist = gst::BufferList::new();
 
             {
@@ -321,11 +310,11 @@ impl AggregatorImpl for OnvifMetadataCombiner {
                     .unwrap_or_else(|| gst::ClockTime::from_nseconds(0)),
             );
 
-            gst::log!(CAT, obj: element, "Updating position: {:?}", position);
+            gst::log!(CAT, imp: self, "Updating position: {:?}", position);
 
-            element.set_position(position);
+            self.instance().set_position(position);
 
-            self.finish_buffer(element, buffer)
+            self.finish_buffer(buffer)
         } else if self.media_sink_pad.is_eos() {
             Err(gst::FlowError::Eos)
         } else {
@@ -333,7 +322,7 @@ impl AggregatorImpl for OnvifMetadataCombiner {
         }
     }
 
-    fn src_query(&self, aggregator: &Self::Type, query: &mut gst::QueryRef) -> bool {
+    fn src_query(&self, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
         match query.view_mut() {
@@ -344,6 +333,7 @@ impl AggregatorImpl for OnvifMetadataCombiner {
             | QueryViewMut::Allocation(..) => self.media_sink_pad.peer_query(query),
             QueryViewMut::AcceptCaps(q) => {
                 let caps = q.caps_owned();
+                let aggregator = self.instance();
                 let class = aggregator.class();
                 let templ = class.pad_template("media").unwrap();
                 let templ_caps = templ.caps();
@@ -352,40 +342,34 @@ impl AggregatorImpl for OnvifMetadataCombiner {
 
                 true
             }
-            _ => self.parent_src_query(aggregator, query),
+            _ => self.parent_src_query(query),
         }
     }
 
-    fn sink_event(
-        &self,
-        aggregator: &Self::Type,
-        aggregator_pad: &gst_base::AggregatorPad,
-        event: gst::Event,
-    ) -> bool {
+    fn sink_event(&self, aggregator_pad: &gst_base::AggregatorPad, event: gst::Event) -> bool {
         use gst::EventView;
 
         match event.view() {
             EventView::Caps(e) => {
                 if aggregator_pad.upcast_ref::<gst::Pad>() == &self.media_sink_pad {
-                    gst::info!(CAT, obj: aggregator, "Pushing caps {}", e.caps());
-                    aggregator.set_src_caps(&e.caps_owned());
+                    gst::info!(CAT, imp: self, "Pushing caps {}", e.caps());
+                    self.instance().set_src_caps(&e.caps_owned());
                 }
 
                 true
             }
             EventView::Segment(e) => {
                 if aggregator_pad.upcast_ref::<gst::Pad>() == &self.media_sink_pad {
-                    aggregator.update_segment(e.segment());
+                    self.instance().update_segment(e.segment());
                 }
-                self.parent_sink_event(aggregator, aggregator_pad, event)
+                self.parent_sink_event(aggregator_pad, event)
             }
-            _ => self.parent_sink_event(aggregator, aggregator_pad, event),
+            _ => self.parent_sink_event(aggregator_pad, event),
         }
     }
 
     fn sink_query(
         &self,
-        aggregator: &Self::Type,
         aggregator_pad: &gst_base::AggregatorPad,
         query: &mut gst::QueryRef,
     ) -> bool {
@@ -397,18 +381,17 @@ impl AggregatorImpl for OnvifMetadataCombiner {
             | QueryViewMut::Uri(..)
             | QueryViewMut::Allocation(..) => {
                 if aggregator_pad == &self.media_sink_pad {
-                    let srcpad = aggregator.src_pad();
-                    srcpad.peer_query(query)
+                    self.instance().src_pad().peer_query(query)
                 } else {
-                    self.parent_sink_query(aggregator, aggregator_pad, query)
+                    self.parent_sink_query(aggregator_pad, query)
                 }
             }
             QueryViewMut::Caps(q) => {
                 if aggregator_pad == &self.media_sink_pad {
-                    let srcpad = aggregator.src_pad();
-                    srcpad.peer_query(query)
+                    self.instance().src_pad().peer_query(query)
                 } else {
                     let filter = q.filter_owned();
+                    let aggregator = self.instance();
                     let class = aggregator.class();
                     let templ = class.pad_template("meta").unwrap();
                     let templ_caps = templ.caps();
@@ -426,10 +409,10 @@ impl AggregatorImpl for OnvifMetadataCombiner {
             }
             QueryViewMut::AcceptCaps(q) => {
                 if aggregator_pad.upcast_ref::<gst::Pad>() == &self.media_sink_pad {
-                    let srcpad = aggregator.src_pad();
-                    srcpad.peer_query(query);
+                    self.instance().src_pad().peer_query(query);
                 } else {
                     let caps = q.caps_owned();
+                    let aggregator = self.instance();
                     let class = aggregator.class();
                     let templ = class.pad_template("meta").unwrap();
                     let templ_caps = templ.caps();
@@ -439,15 +422,15 @@ impl AggregatorImpl for OnvifMetadataCombiner {
 
                 true
             }
-            _ => self.parent_src_query(aggregator, query),
+            _ => self.parent_src_query(query),
         }
     }
 
-    fn next_time(&self, aggregator: &Self::Type) -> Option<gst::ClockTime> {
-        aggregator.simple_get_next_time()
+    fn next_time(&self) -> Option<gst::ClockTime> {
+        self.instance().simple_get_next_time()
     }
 
-    fn negotiate(&self, _aggregator: &Self::Type) -> bool {
+    fn negotiate(&self) -> bool {
         true
     }
 }

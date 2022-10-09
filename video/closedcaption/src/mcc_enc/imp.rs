@@ -246,7 +246,6 @@ impl MccEnc {
 
     fn generate_caption(
         &self,
-        element: &super::MccEnc,
         state: &State,
         buffer: &gst::Buffer,
         outbuf: &mut Vec<u8>,
@@ -254,8 +253,8 @@ impl MccEnc {
         let meta = buffer
             .meta::<gst_video::VideoTimeCodeMeta>()
             .ok_or_else(|| {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::StreamError::Format,
                     ["Stream with timecodes on each buffer required"]
                 );
@@ -266,8 +265,8 @@ impl MccEnc {
         let _ = write!(outbuf, "{}\t", meta.tc());
 
         let map = buffer.map_readable().map_err(|_| {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::StreamError::Format,
                 ["Failed to map buffer readable"]
             );
@@ -277,8 +276,8 @@ impl MccEnc {
 
         let len = map.len();
         if len >= 256 {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::StreamError::Format,
                 ["Too big buffer: {}", map.len()]
             );
@@ -314,7 +313,6 @@ impl MccEnc {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &super::MccEnc,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
@@ -327,7 +325,7 @@ impl MccEnc {
             self.generate_headers(&*state, &mut outbuf)?;
         }
 
-        self.generate_caption(element, &*state, &buffer, &mut outbuf)?;
+        self.generate_caption(&*state, &buffer, &mut outbuf)?;
 
         let mut buf = gst::Buffer::from_mut_slice(outbuf);
         buffer
@@ -338,7 +336,7 @@ impl MccEnc {
         self.srcpad.push(buf)
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &super::MccEnc, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -377,11 +375,11 @@ impl MccEnc {
                     .build();
                 self.srcpad.push_event(gst::event::Caps::new(&caps))
             }
-            _ => pad.event_default(Some(element), event),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 
-    fn src_event(&self, pad: &gst::Pad, element: &super::MccEnc, event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -390,16 +388,11 @@ impl MccEnc {
                 gst::log!(CAT, obj: pad, "Dropping seek event");
                 false
             }
-            _ => pad.event_default(Some(element), event),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 
-    fn src_query(
-        &self,
-        pad: &gst::Pad,
-        element: &super::MccEnc,
-        query: &mut gst::QueryRef,
-    ) -> bool {
+    fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
         gst::log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -415,7 +408,7 @@ impl MccEnc {
                 );
                 true
             }
-            _ => pad.query_default(Some(element), query),
+            _ => pad.query_default(Some(&*self.instance()), query),
         }
     }
 }
@@ -433,33 +426,21 @@ impl ObjectSubclass for MccEnc {
                 MccEnc::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |enc, element| enc.sink_chain(pad, element, buffer),
+                    |enc| enc.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
-                MccEnc::catch_panic_pad_function(
-                    parent,
-                    || false,
-                    |enc, element| enc.sink_event(pad, element, event),
-                )
+                MccEnc::catch_panic_pad_function(parent, || false, |enc| enc.sink_event(pad, event))
             })
             .build();
 
         let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
             .event_function(|pad, parent, event| {
-                MccEnc::catch_panic_pad_function(
-                    parent,
-                    || false,
-                    |enc, element| enc.src_event(pad, element, event),
-                )
+                MccEnc::catch_panic_pad_function(parent, || false, |enc| enc.src_event(pad, event))
             })
             .query_function(|pad, parent, query| {
-                MccEnc::catch_panic_pad_function(
-                    parent,
-                    || false,
-                    |enc, element| enc.src_query(pad, element, query),
-                )
+                MccEnc::catch_panic_pad_function(parent, || false, |enc| enc.src_query(pad, query))
             })
             .build();
 
@@ -492,13 +473,7 @@ impl ObjectImpl for MccEnc {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "uuid" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -512,7 +487,7 @@ impl ObjectImpl for MccEnc {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "uuid" => {
                 let settings = self.settings.lock().unwrap();
@@ -526,9 +501,10 @@ impl ObjectImpl for MccEnc {
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
@@ -603,10 +579,9 @@ impl ElementImpl for MccEnc {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused | gst::StateChange::PausedToReady => {
@@ -617,6 +592,6 @@ impl ElementImpl for MccEnc {
             _ => (),
         }
 
-        self.parent_change_state(element, transition)
+        self.parent_change_state(transition)
     }
 }

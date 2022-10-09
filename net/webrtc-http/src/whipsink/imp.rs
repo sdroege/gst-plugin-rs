@@ -127,7 +127,6 @@ impl ElementImpl for WhipSink {
 
     fn request_new_pad(
         &self,
-        element: &Self::Type,
         templ: &gst::PadTemplate,
         name: Option<String>,
         caps: Option<&gst::Caps>,
@@ -136,17 +135,16 @@ impl ElementImpl for WhipSink {
         let sink_pad = gst::GhostPad::new(Some(&wb_sink_pad.name()), gst::PadDirection::Sink);
 
         sink_pad.set_target(Some(&wb_sink_pad)).unwrap();
-        element.add_pad(&sink_pad).unwrap();
+        self.instance().add_pad(&sink_pad).unwrap();
 
         Some(sink_pad.upcast())
     }
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        let ret = self.parent_change_state(element, transition);
+        let ret = self.parent_change_state(transition);
         if transition == gst::StateChange::PausedToReady {
             // Interrupt requests in progress, if any
             if let Some(canceller) = &*self.canceller.lock().unwrap() {
@@ -193,13 +191,7 @@ impl ObjectImpl for WhipSink {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "whip-endpoint" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -219,7 +211,7 @@ impl ObjectImpl for WhipSink {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "whip-endpoint" => {
                 let settings = self.settings.lock().unwrap();
@@ -237,8 +229,10 @@ impl ObjectImpl for WhipSink {
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
+
+        let obj = self.instance();
         obj.set_suppressed_flags(gst::ElementFlags::SINK | gst::ElementFlags::SOURCE);
         obj.set_element_flags(gst::ElementFlags::SINK);
         obj.add(&self.webrtcbin).unwrap();

@@ -36,6 +36,6 @@ impl Default for SinkPaintable {
 impl SinkPaintable {
     pub(crate) fn handle_frame_changed(&self, frame: Option<Frame>) {
         let imp = self.imp();
-        imp.handle_frame_changed(self, frame);
+        imp.handle_frame_changed(frame);
     }
 }

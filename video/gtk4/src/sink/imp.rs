@@ -80,18 +80,18 @@ impl ObjectImpl for PaintableSink {
         PROPERTIES.as_ref()
     }
 
-    fn property(&self, obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "paintable" => {
                 let mut paintable = self.paintable.lock().unwrap();
                 if paintable.is_none() {
-                    obj.initialize_paintable(&mut paintable);
+                    self.instance().initialize_paintable(&mut paintable);
                 }
 
                 let paintable = match &*paintable {
                     Some(ref paintable) => paintable,
                     None => {
-                        gst::error!(CAT, obj: obj, "Failed to create paintable");
+                        gst::error!(CAT, imp: self, "Failed to create paintable");
                         return None::<&gtk::gdk::Paintable>.to_value();
                     }
                 };
@@ -102,7 +102,7 @@ impl ObjectImpl for PaintableSink {
                     Err(_) => {
                         gst::error!(
                             CAT,
-                            obj: obj,
+                            imp: self,
                             "Can't retrieve Paintable from non-main thread"
                         );
                         None::<&gtk::gdk::Paintable>.to_value()
@@ -177,25 +177,24 @@ impl ElementImpl for PaintableSink {
     #[allow(clippy::single_match)]
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         match transition {
             gst::StateChange::NullToReady => {
                 let mut paintable = self.paintable.lock().unwrap();
                 if paintable.is_none() {
-                    element.initialize_paintable(&mut paintable);
+                    self.instance().initialize_paintable(&mut paintable);
                 }
 
                 if paintable.is_none() {
-                    gst::error!(CAT, obj: element, "Failed to create paintable");
+                    gst::error!(CAT, imp: self, "Failed to create paintable");
                     return Err(gst::StateChangeError);
                 }
             }
             _ => (),
         }
 
-        let res = self.parent_change_state(element, transition);
+        let res = self.parent_change_state(transition);
 
         match transition {
             gst::StateChange::PausedToReady => {
@@ -210,8 +209,8 @@ impl ElementImpl for PaintableSink {
 }
 
 impl BaseSinkImpl for PaintableSink {
-    fn set_caps(&self, element: &Self::Type, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        gst::debug!(CAT, obj: element, "Setting caps {:?}", caps);
+    fn set_caps(&self, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
+        gst::debug!(CAT, imp: self, "Setting caps {:?}", caps);
 
         let video_info = gst_video::VideoInfo::from_caps(caps)
             .map_err(|_| gst::loggable_error!(CAT, "Invalid caps"))?;
@@ -223,7 +222,6 @@ impl BaseSinkImpl for PaintableSink {
 
     fn propose_allocation(
         &self,
-        element: &Self::Type,
         query: &mut gst::query::Allocation,
     ) -> Result<(), gst::LoggableError> {
         query.add_allocation_meta::<gst_video::VideoMeta>(None);
@@ -231,38 +229,34 @@ impl BaseSinkImpl for PaintableSink {
         // TODO: Provide a preferred "window size" here for higher-resolution rendering
         query.add_allocation_meta::<gst_video::VideoOverlayCompositionMeta>(None);
 
-        self.parent_propose_allocation(element, query)
+        self.parent_propose_allocation(query)
     }
 }
 
 impl VideoSinkImpl for PaintableSink {
-    fn show_frame(
-        &self,
-        element: &Self::Type,
-        buffer: &gst::Buffer,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::trace!(CAT, obj: element, "Rendering buffer {:?}", buffer);
+    fn show_frame(&self, buffer: &gst::Buffer) -> Result<gst::FlowSuccess, gst::FlowError> {
+        gst::trace!(CAT, imp: self, "Rendering buffer {:?}", buffer);
 
         let info = self.info.lock().unwrap();
         let info = info.as_ref().ok_or_else(|| {
-            gst::error!(CAT, obj: element, "Received no caps yet");
+            gst::error!(CAT, imp: self, "Received no caps yet");
             gst::FlowError::NotNegotiated
         })?;
 
         let frame = Frame::new(buffer, info).map_err(|err| {
-            gst::error!(CAT, obj: element, "Failed to map video frame");
+            gst::error!(CAT, imp: self, "Failed to map video frame");
             err
         })?;
         self.pending_frame.lock().unwrap().replace(frame);
 
         let sender = self.sender.lock().unwrap();
         let sender = sender.as_ref().ok_or_else(|| {
-            gst::error!(CAT, obj: element, "Have no main thread sender");
+            gst::error!(CAT, imp: self, "Have no main thread sender");
             gst::FlowError::Error
         })?;
 
         sender.send(SinkEvent::FrameChanged).map_err(|_| {
-            gst::error!(CAT, obj: element, "Have main thread receiver shut down");
+            gst::error!(CAT, imp: self, "Have main thread receiver shut down");
             gst::FlowError::Error
         })?;
 

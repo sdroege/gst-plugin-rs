@@ -398,8 +398,9 @@ impl PadSrc {
                                 "Panic in PadSrc activate"
                             ))
                         },
-                        move |imp, element| {
+                        move |imp| {
                             let this_ref = PadSrcRef::new(inner_arc);
+                            let element = imp.instance();
                             handler.src_activate(
                                 &this_ref,
                                 imp,
@@ -424,8 +425,9 @@ impl PadSrc {
                                 "Panic in PadSrc activatemode"
                             ))
                         },
-                        move |imp, element| {
+                        move |imp| {
                             let this_ref = PadSrcRef::new(inner_arc);
+                            let element = imp.instance();
                             this_ref.activate_mode_hook(mode, active)?;
                             handler.src_activatemode(
                                 &this_ref,
@@ -449,8 +451,9 @@ impl PadSrc {
                     H::ElementImpl::catch_panic_pad_function(
                         parent,
                         || Err(FlowError::Error),
-                        move |imp, element| {
+                        move |imp| {
                             let this_ref = PadSrcRef::new(inner_arc);
+                            let element = imp.instance();
                             handler.src_event_full(
                                 &this_ref,
                                 imp,
@@ -469,8 +472,9 @@ impl PadSrc {
                 H::ElementImpl::catch_panic_pad_function(
                     parent,
                     || false,
-                    move |imp, element| {
+                    move |imp| {
                         let this_ref = PadSrcRef::new(inner_arc);
+                            let element = imp.instance();
                         if !query.is_serialized() {
                             handler.src_query(&this_ref, imp, element.dynamic_cast_ref::<gst::Element>().unwrap(), query)
                         } else {
@@ -807,8 +811,9 @@ impl PadSink {
                                 "Panic in PadSink activate"
                             ))
                         },
-                        move |imp, element| {
+                        move |imp| {
                             let this_ref = PadSinkRef::new(inner_arc);
+                            let element = imp.instance();
                             handler.sink_activate(
                                 &this_ref,
                                 imp,
@@ -833,8 +838,9 @@ impl PadSink {
                                 "Panic in PadSink activatemode"
                             ))
                         },
-                        move |imp, element| {
+                        move |imp| {
                             let this_ref = PadSinkRef::new(inner_arc);
+                            let element = imp.instance();
                             this_ref.activate_mode_hook(mode, active)?;
 
                             handler.sink_activatemode(
@@ -857,7 +863,8 @@ impl PadSink {
                     H::ElementImpl::catch_panic_pad_function(
                         parent,
                         || Err(FlowError::Error),
-                        move |imp, element| {
+                        move |imp| {
+                            let element = imp.instance();
                             if let Some((ctx, task_id)) = Context::current_task() {
                                 let this_weak = PadSinkWeak(Arc::downgrade(&inner_arc));
                                 let handler = handler.clone();
@@ -898,7 +905,8 @@ impl PadSink {
                     H::ElementImpl::catch_panic_pad_function(
                         parent,
                         || Err(FlowError::Error),
-                        move |imp, element| {
+                        move |imp| {
+                            let element = imp.instance();
                             if let Some((ctx, task_id)) = Context::current_task() {
                                 let this_weak = PadSinkWeak(Arc::downgrade(&inner_arc));
                                 let handler = handler.clone();
@@ -943,7 +951,8 @@ impl PadSink {
                     H::ElementImpl::catch_panic_pad_function(
                         parent,
                         || Err(FlowError::Error),
-                        move |imp, element| {
+                        move |imp| {
+                            let element = imp.instance();
                             if event.is_serialized() {
                                 if let Some((ctx, task_id)) = Context::current_task() {
                                     let this_weak = PadSinkWeak(Arc::downgrade(&inner_arc));
@@ -1001,8 +1010,9 @@ impl PadSink {
                 H::ElementImpl::catch_panic_pad_function(
                     parent,
                     || false,
-                    move |imp, element| {
+                    move |imp| {
                         let this_ref = PadSinkRef::new(inner_arc);
+                        let element = imp.instance();
                         if !query.is_serialized() {
                             handler.sink_query(&this_ref, imp, element.dynamic_cast_ref::<gst::Element>().unwrap(), query)
                         } else {

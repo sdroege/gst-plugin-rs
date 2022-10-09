@@ -99,14 +99,14 @@ impl State {
     // retrieval
     fn decrypt_into_adapter(
         &mut self,
-        element: &super::Decrypter,
+        imp: &Decrypter,
         pad: &gst::Pad,
         buffer: &gst::Buffer,
         chunk_index: u64,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let map = buffer.map_readable().map_err(|_| {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                imp,
                 gst::StreamError::Format,
                 ["Failed to map buffer readable"]
             );
@@ -122,8 +122,8 @@ impl State {
         for subbuffer in map.chunks(block_size) {
             let plain =
                 box_::open_precomputed(subbuffer, &nonce, &self.precomputed_key).map_err(|_| {
-                    gst::element_error!(
-                        element,
+                    gst::element_imp_error!(
+                        imp,
                         gst::StreamError::Format,
                         ["Failed to decrypt buffer"]
                     );
@@ -255,7 +255,6 @@ impl Decrypter {
     fn src_activatemode_function(
         &self,
         _pad: &gst::Pad,
-        element: &super::Decrypter,
         mode: gst::PadMode,
         active: bool,
     ) -> Result<(), gst::LoggableError> {
@@ -267,7 +266,7 @@ impl Decrypter {
 
                 // Set the nonce and block size from the headers
                 // right after we activate the pad
-                self.check_headers(element)
+                self.check_headers()
             }
             gst::PadMode::Push => Err(gst::loggable_error!(CAT, "Push mode not supported")),
             _ => Err(gst::loggable_error!(
@@ -278,12 +277,7 @@ impl Decrypter {
         }
     }
 
-    fn src_query(
-        &self,
-        pad: &gst::Pad,
-        element: &super::Decrypter,
-        query: &mut gst::QueryRef,
-    ) -> bool {
+    fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
         gst::log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -306,7 +300,7 @@ impl Decrypter {
             }
             QueryViewMut::Duration(q) => {
                 if q.format() != gst::Format::Bytes {
-                    return pad.query_default(Some(element), query);
+                    return pad.query_default(Some(&*self.instance()), query);
                 }
 
                 /* First let's query the bytes duration upstream */
@@ -348,11 +342,11 @@ impl Decrypter {
 
                 true
             }
-            _ => pad.query_default(Some(element), query),
+            _ => pad.query_default(Some(&*self.instance()), query),
         }
     }
 
-    fn check_headers(&self, element: &super::Decrypter) -> Result<(), gst::LoggableError> {
+    fn check_headers(&self) -> Result<(), gst::LoggableError> {
         let is_none = {
             let mutex_state = self.state.lock().unwrap();
             let state = mutex_state.as_ref().unwrap();
@@ -372,26 +366,22 @@ impl Decrypter {
                     "Failed to pull nonce from the stream, reason: {:?}",
                     err
                 );
-                err.log_with_object(element);
                 err
             })?;
 
         if buffer.size() != crate::HEADERS_SIZE {
             let err = gst::loggable_error!(CAT, "Headers buffer has wrong size");
-            err.log_with_object(element);
             return Err(err);
         }
 
         let map = buffer.map_readable().map_err(|_| {
             let err = gst::loggable_error!(CAT, "Failed to map buffer readable");
-            err.log_with_object(element);
             err
         })?;
 
         let sodium_header_slice = &map[..crate::TYPEFIND_HEADER_SIZE];
         if sodium_header_slice != crate::TYPEFIND_HEADER {
             let err = gst::loggable_error!(CAT, "Buffer has wrong typefind header");
-            err.log_with_object(element);
             return Err(err);
         }
 
@@ -400,7 +390,6 @@ impl Decrypter {
         assert_eq!(nonce_slice.len(), box_::NONCEBYTES);
         let nonce = box_::Nonce::from_slice(nonce_slice).ok_or_else(|| {
             let err = gst::loggable_error!(CAT, "Failed to create nonce from buffer");
-            err.log_with_object(&self.srcpad);
             err
         })?;
 
@@ -416,9 +405,9 @@ impl Decrypter {
         let state = state.as_mut().unwrap();
 
         state.initial_nonce = Some(nonce);
-        gst::debug!(CAT, obj: element, "Setting nonce to: {:?}", nonce.0);
+        gst::debug!(CAT, imp: self, "Setting nonce to: {:?}", nonce.0);
         state.block_size = Some(block_size);
-        gst::debug!(CAT, obj: element, "Setting block size to: {}", block_size);
+        gst::debug!(CAT, imp: self, "Setting block size to: {}", block_size);
 
         Ok(())
     }
@@ -426,7 +415,6 @@ impl Decrypter {
     fn pull_requested_buffer(
         &self,
         pad: &gst::Pad,
-        element: &super::Decrypter,
         requested_size: u32,
         block_size: u32,
         chunk_index: u64,
@@ -441,8 +429,8 @@ impl Decrypter {
         // calculate how many chunks are needed, if we need something like 3.2
         // round the number to 4 and cut the buffer afterwards.
         let checked = requested_size.checked_add(block_size).ok_or_else(|| {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::LibraryError::Failed,
                 [
                     "Addition overflow when adding requested pull size and block size: {} + {}",
@@ -459,8 +447,8 @@ impl Decrypter {
 
         // Pull a buffer of all the chunks we will need
         let checked_size = total_chunks.checked_mul(block_size).ok_or_else(|| {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::LibraryError::Failed,
                 [
                     "Overflowed trying to calculate the buffer size to pull: {} * {}",
@@ -494,7 +482,6 @@ impl Decrypter {
     fn range(
         &self,
         pad: &gst::Pad,
-        element: &super::Decrypter,
         offset: u64,
         buffer: Option<&mut gst::BufferRef>,
         requested_size: u32,
@@ -519,20 +506,15 @@ impl Decrypter {
         assert!(pull_offset <= std::u32::MAX as u64);
         let pull_offset = pull_offset as u32;
 
-        let pulled_buffer = self.pull_requested_buffer(
-            pad,
-            element,
-            requested_size + pull_offset,
-            block_size,
-            chunk_index,
-        )?;
+        let pulled_buffer =
+            self.pull_requested_buffer(pad, requested_size + pull_offset, block_size, chunk_index)?;
 
         let mut state = self.state.lock().unwrap();
         // This will only be run after READY state,
         // and will be guaranted to be initialized
         let state = state.as_mut().unwrap();
 
-        state.decrypt_into_adapter(element, &self.srcpad, &pulled_buffer, chunk_index)?;
+        state.decrypt_into_adapter(self, &self.srcpad, &pulled_buffer, chunk_index)?;
 
         let adapter_offset = pull_offset as usize;
         state.requested_buffer(&self.srcpad, buffer, requested_size, adapter_offset)
@@ -555,7 +537,7 @@ impl ObjectSubclass for Decrypter {
                 Decrypter::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |decrypter, element| decrypter.range(pad, element, offset, buffer, size),
+                    |decrypter| decrypter.range(pad, offset, buffer, size),
                 )
             })
             .activatemode_function(|pad, parent, mode, active| {
@@ -567,16 +549,14 @@ impl ObjectSubclass for Decrypter {
                             "Panic activating srcpad with mode"
                         ))
                     },
-                    |decrypter, element| {
-                        decrypter.src_activatemode_function(pad, element, mode, active)
-                    },
+                    |decrypter| decrypter.src_activatemode_function(pad, mode, active),
                 )
             })
             .query_function(|pad, parent, query| {
                 Decrypter::catch_panic_pad_function(
                     parent,
                     || false,
-                    |decrypter, element| decrypter.src_query(pad, element, query),
+                    |decrypter| decrypter.src_query(pad, query),
                 )
             })
             .build();
@@ -612,20 +592,15 @@ impl ObjectImpl for Decrypter {
         PROPERTIES.as_ref()
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "sender-key" => {
                 let mut props = self.props.lock().unwrap();
@@ -641,7 +616,7 @@ impl ObjectImpl for Decrypter {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "receiver-key" => {
                 let props = self.props.lock().unwrap();
@@ -696,10 +671,9 @@ impl ElementImpl for Decrypter {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::debug!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::debug!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {
@@ -708,7 +682,7 @@ impl ElementImpl for Decrypter {
                 // Create an internal state struct from the provided properties or
                 // refuse to change state
                 let state_ = State::from_props(&props).map_err(|err| {
-                    element.post_error_message(err);
+                    self.post_error_message(err);
                     gst::StateChangeError
                 })?;
 
@@ -721,7 +695,7 @@ impl ElementImpl for Decrypter {
             _ => (),
         }
 
-        let success = self.parent_change_state(element, transition)?;
+        let success = self.parent_change_state(transition)?;
 
         if transition == gst::StateChange::ReadyToNull {
             let _ = self.state.lock().unwrap().take();

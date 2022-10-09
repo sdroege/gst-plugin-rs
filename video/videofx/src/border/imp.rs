@@ -289,13 +289,7 @@ impl ObjectImpl for RoundedCorners {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "border-radius-px" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -304,20 +298,20 @@ impl ObjectImpl for RoundedCorners {
                     settings.changed = true;
                     gst::info!(
                         CAT,
-                        obj: obj,
+                        imp: self,
                         "Changing border radius from {} to {}",
                         settings.border_radius_px,
                         border_radius
                     );
                     settings.border_radius_px = border_radius;
-                    obj.reconfigure_src();
+                    self.instance().reconfigure_src();
                 }
             }
             _ => unimplemented!(),
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "border-radius-px" => {
                 let settings = self.settings.lock().unwrap();
@@ -381,17 +375,16 @@ impl BaseTransformImpl for RoundedCorners {
     const PASSTHROUGH_ON_SAME_CAPS: bool = false;
     const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
 
-    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         let _ = self.state.lock().unwrap().take();
 
-        gst::info!(CAT, obj: element, "Stopped");
+        gst::info!(CAT, imp: self, "Stopped");
 
         Ok(())
     }
 
     fn transform_caps(
         &self,
-        element: &Self::Type,
         direction: gst::PadDirection,
         caps: &gst::Caps,
         filter: Option<&gst::Caps>,
@@ -438,7 +431,7 @@ impl BaseTransformImpl for RoundedCorners {
 
         gst::debug!(
             CAT,
-            obj: element,
+            imp: self,
             "Transformed caps from {} to {} in direction {:?}",
             caps,
             other_caps,
@@ -452,12 +445,7 @@ impl BaseTransformImpl for RoundedCorners {
         }
     }
 
-    fn set_caps(
-        &self,
-        element: &Self::Type,
-        incaps: &gst::Caps,
-        outcaps: &gst::Caps,
-    ) -> Result<(), gst::LoggableError> {
+    fn set_caps(&self, incaps: &gst::Caps, outcaps: &gst::Caps) -> Result<(), gst::LoggableError> {
         let mut settings = self.settings.lock().unwrap();
 
         let out_info = match gst_video::VideoInfo::from_caps(outcaps) {
@@ -467,17 +455,17 @@ impl BaseTransformImpl for RoundedCorners {
 
         gst::debug!(
             CAT,
-            obj: element,
+            imp: self,
             "Configured for caps {} to {}",
             incaps,
             outcaps
         );
 
         if out_info.format() == VideoFormat::I420 {
-            element.set_passthrough(true);
+            self.instance().set_passthrough(true);
             return Ok(());
         } else {
-            element.set_passthrough(false);
+            self.instance().set_passthrough(false);
         }
 
         // See "A420" planar 4:4:2:0 AYUV section
@@ -497,10 +485,9 @@ impl BaseTransformImpl for RoundedCorners {
 
     fn prepare_output_buffer(
         &self,
-        element: &Self::Type,
         inbuf: InputBuffer,
     ) -> Result<PrepareOutputBufferSuccess, gst::FlowError> {
-        if element.is_passthrough() {
+        if self.instance().is_passthrough() {
             return Ok(PrepareOutputBufferSuccess::InputBuffer);
         }
 
@@ -509,12 +496,12 @@ impl BaseTransformImpl for RoundedCorners {
             settings.changed = false;
             gst::debug!(
                 CAT,
-                obj: element,
+                imp: self,
                 "Caps or border radius changed, generating alpha mask"
             );
             let state_guard = self.state.lock().unwrap();
             let state = state_guard.as_ref().ok_or_else(|| {
-                gst::element_error!(element, gst::CoreError::Negotiation, ["Have no state yet"]);
+                gst::element_imp_error!(self, gst::CoreError::Negotiation, ["Have no state yet"]);
                 gst::FlowError::NotNegotiated
             })?;
 
@@ -523,8 +510,8 @@ impl BaseTransformImpl for RoundedCorners {
                 VideoFormat::A420 => {
                     drop(state_guard);
                     if self.generate_alpha_mask(settings.border_radius_px).is_err() {
-                        gst::element_error!(
-                            element,
+                        gst::element_imp_error!(
+                            self,
                             gst::CoreError::Negotiation,
                             ["Failed to generate alpha mask"]
                         );
@@ -537,7 +524,7 @@ impl BaseTransformImpl for RoundedCorners {
 
         let mut state_guard = self.state.lock().unwrap();
         let state = state_guard.as_mut().ok_or_else(|| {
-            gst::element_error!(element, gst::CoreError::Negotiation, ["Have no state yet"]);
+            gst::element_imp_error!(self, gst::CoreError::Negotiation, ["Have no state yet"]);
             gst::FlowError::NotNegotiated
         })?;
 
@@ -549,7 +536,7 @@ impl BaseTransformImpl for RoundedCorners {
             InputBuffer::Writable(outbuf) => {
                 gst::log!(
                     CAT,
-                    obj: element,
+                    imp: self,
                     "Received writable input buffer of size: {}",
                     outbuf.size()
                 );
@@ -561,7 +548,7 @@ impl BaseTransformImpl for RoundedCorners {
             InputBuffer::Readable(buf) => {
                 gst::log!(
                     CAT,
-                    obj: element,
+                    imp: self,
                     "Received readable input buffer of size: {}",
                     buf.size()
                 );
@@ -575,21 +562,16 @@ impl BaseTransformImpl for RoundedCorners {
         }
     }
 
-    fn transform_ip(
-        &self,
-        _element: &Self::Type,
-        _buf: &mut gst::BufferRef,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn transform_ip(&self, _buf: &mut gst::BufferRef) -> Result<gst::FlowSuccess, gst::FlowError> {
         Ok(gst::FlowSuccess::Ok)
     }
 
     fn propose_allocation(
         &self,
-        element: &Self::Type,
         decide_query: Option<&gst::query::Allocation>,
         query: &mut gst::query::Allocation,
     ) -> Result<(), gst::LoggableError> {
         query.add_allocation_meta::<gst_video::VideoMeta>(None);
-        self.parent_propose_allocation(element, decide_query, query)
+        self.parent_propose_allocation(decide_query, query)
     }
 }

@@ -215,20 +215,14 @@ impl ObjectImpl for HsvDetector {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "hue-ref" => {
                 let mut settings = self.settings.lock().unwrap();
                 let hue_ref = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing hue-ref from {} to {}",
                     settings.hue_ref,
                     hue_ref
@@ -240,7 +234,7 @@ impl ObjectImpl for HsvDetector {
                 let hue_var = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing hue-var from {} to {}",
                     settings.hue_var,
                     hue_var
@@ -252,7 +246,7 @@ impl ObjectImpl for HsvDetector {
                 let saturation_ref = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing saturation-ref from {} to {}",
                     settings.saturation_ref,
                     saturation_ref
@@ -264,7 +258,7 @@ impl ObjectImpl for HsvDetector {
                 let saturation_var = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing saturation-var from {} to {}",
                     settings.saturation_var,
                     saturation_var
@@ -276,7 +270,7 @@ impl ObjectImpl for HsvDetector {
                 let value_ref = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing value-ref from {} to {}",
                     settings.value_ref,
                     value_ref
@@ -288,7 +282,7 @@ impl ObjectImpl for HsvDetector {
                 let value_var = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing value-var from {} to {}",
                     settings.value_var,
                     value_var
@@ -301,7 +295,7 @@ impl ObjectImpl for HsvDetector {
 
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "hue-ref" => {
                 let settings = self.settings.lock().unwrap();
@@ -390,7 +384,6 @@ impl BaseTransformImpl for HsvDetector {
 
     fn transform_caps(
         &self,
-        element: &Self::Type,
         direction: gst::PadDirection,
         caps: &gst::Caps,
         filter: Option<&gst::Caps>,
@@ -408,7 +401,7 @@ impl BaseTransformImpl for HsvDetector {
 
         gst::debug!(
             CAT,
-            obj: element,
+            imp: self,
             "Transformed caps from {} to {} in direction {:?}",
             caps,
             other_caps,
@@ -428,7 +421,6 @@ impl BaseTransformImpl for HsvDetector {
 impl VideoFilterImpl for HsvDetector {
     fn transform_frame(
         &self,
-        _element: &Self::Type,
         in_frame: &gst_video::VideoFrameRef<&gst::BufferRef>,
         out_frame: &mut gst_video::VideoFrameRef<&mut gst::BufferRef>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {

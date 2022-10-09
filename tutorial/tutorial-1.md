@@ -416,7 +416,6 @@ Whenever input/output caps are configured on our element, the `set_caps` virtual
 impl BaseTransformImpl for Rgb2Gray {
     fn set_caps(
         &self,
-        element: &Self::Type,
         incaps: &gst::Caps,
         outcaps: &gst::Caps,
     ) -> Result<(), gst::LoggableError> {
@@ -431,7 +430,7 @@ impl BaseTransformImpl for Rgb2Gray {
 
         gst::debug!(
             CAT,
-            obj: element,
+            imp: self,
             "Configured for caps {} to {}",
             incaps,
             outcaps
@@ -442,11 +441,11 @@ impl BaseTransformImpl for Rgb2Gray {
         Ok(())
     }
 
-    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         // Drop state
         let _ = self.state.lock().unwrap().take();
 
-        gst::info!(CAT, obj: element, "Stopped");
+        gst::info!(CAT, imp: self, "Stopped");
 
         Ok(())
     }
@@ -459,7 +458,7 @@ Next we have to provide information to the `BaseTransform` base class about the 
 
 ```rust
 impl BaseTransformImpl for Rgb2Gray {
-    fn get_unit_size(&self, _element: &Self::Type, caps: &gst::Caps) -> Option<usize> {
+    fn get_unit_size(&self, caps: &gst::Caps) -> Option<usize> {
         gst_video::VideoInfo::from_caps(caps).map(|info| info.size())
     }
 }
@@ -479,7 +478,6 @@ This has to be implemented in the `transform_caps` virtual method, and looks as 
 impl BaseTransformImpl for Rgb2Gray {
     fn transform_caps(
         &self,
-        element: &Self::Type,
         direction: gst::PadDirection,
         caps: &gst::Caps,
         filter: Option<&gst::Caps>,
@@ -511,7 +509,7 @@ impl BaseTransformImpl for Rgb2Gray {
 
         gst::debug!(
             CAT,
-            obj: element,
+            imp: self,
             "Transformed caps from {} to {} in direction {:?}",
             caps,
             other_caps,
@@ -569,21 +567,20 @@ Afterwards we have to actually call this function on every pixel. For this the t
 impl BaseTransformImpl for Rgb2Gray {
     fn transform(
         &self,
-        element: &Self::Type,
         inbuf: &gst::Buffer,
         outbuf: &mut gst::BufferRef,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state_guard = self.state.lock().unwrap();
         let state = state_guard.as_mut().ok_or_else(|| {
-            gst::element_error!(element, gst::CoreError::Negotiation, ["Have no state yet"]);
+            gst::element_imp_error!(self, gst::CoreError::Negotiation, ["Have no state yet"]);
             gst::FlowError::NotNegotiated
         })?;
 
         let in_frame =
             gst_video::VideoFrameRef::from_buffer_ref_readable(inbuf.as_ref(), &state.in_info)
                 .ok_or_else(|| {
-                    gst::element_error!(
-                        element,
+                    gst::element_imp_error!(
+                        self,
                         gst::CoreError::Failed,
                         ["Failed to map input buffer readable"]
                     );
@@ -593,8 +590,8 @@ impl BaseTransformImpl for Rgb2Gray {
         let mut out_frame =
             gst_video::VideoFrameRef::from_buffer_ref_writable(outbuf, &state.out_info)
                 .ok_or_else(|| {
-                    gst::element_error!(
-                        element,
+                    gst::element_imp_error!(
+                        self,
                         gst::CoreError::Failed,
                         ["Failed to map output buffer writable"]
                     );
@@ -761,14 +758,14 @@ In the next step we have to implement functions that are called whenever a prope
 impl ObjectImpl for Rgb2Gray {
     [...]
 
-    fn set_property(&self, obj: &Self::Type, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.get_name() {
             "invert" => {
                 let mut settings = self.settings.lock().unwrap();
                 let invert = value.get_some().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing invert from {} to {}",
                     settings.invert,
                     invert
@@ -780,7 +777,7 @@ impl ObjectImpl for Rgb2Gray {
                 let shift = value.get_some().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing shift from {} to {}",
                     settings.shift,
                     shift
@@ -791,7 +788,7 @@ impl ObjectImpl for Rgb2Gray {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn get_property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.get_name() {
             "invert" => {
                 let settings = self.settings.lock().unwrap();
@@ -840,7 +837,6 @@ impl Rgb2Gray {
 impl BaseTransformImpl for Rgb2Gray {
     fn transform(
         &self,
-        element: &Self::Type,
         inbuf: &gst::Buffer,
         outbuf: &mut gst::BufferRef,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {

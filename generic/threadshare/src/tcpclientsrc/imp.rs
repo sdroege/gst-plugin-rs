@@ -408,8 +408,8 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 impl TcpClientSrc {
-    fn prepare(&self, element: &super::TcpClientSrc) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, obj: element, "Preparing");
+    fn prepare(&self) -> Result<(), gst::ErrorMessage> {
+        gst::debug!(CAT, imp: self, "Preparing");
         let settings = self.settings.lock().unwrap().clone();
 
         let context =
@@ -459,40 +459,40 @@ impl TcpClientSrc {
         let _ = self
             .task
             .prepare(
-                TcpClientSrcTask::new(element.clone(), saddr, buffer_pool),
+                TcpClientSrcTask::new(self.instance().clone(), saddr, buffer_pool),
                 context,
             )
             .check()?;
 
-        gst::debug!(CAT, obj: element, "Preparing asynchronously");
+        gst::debug!(CAT, imp: self, "Preparing asynchronously");
 
         Ok(())
     }
 
-    fn unprepare(&self, element: &super::TcpClientSrc) {
-        gst::debug!(CAT, obj: element, "Unpreparing");
+    fn unprepare(&self) {
+        gst::debug!(CAT, imp: self, "Unpreparing");
         self.task.unprepare().block_on().unwrap();
-        gst::debug!(CAT, obj: element, "Unprepared");
+        gst::debug!(CAT, imp: self, "Unprepared");
     }
 
-    fn stop(&self, element: &super::TcpClientSrc) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, obj: element, "Stopping");
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
+        gst::debug!(CAT, imp: self, "Stopping");
         self.task.stop().block_on()?;
-        gst::debug!(CAT, obj: element, "Stopped");
+        gst::debug!(CAT, imp: self, "Stopped");
         Ok(())
     }
 
-    fn start(&self, element: &super::TcpClientSrc) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, obj: element, "Starting");
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
+        gst::debug!(CAT, imp: self, "Starting");
         self.task.start().block_on()?;
-        gst::debug!(CAT, obj: element, "Started");
+        gst::debug!(CAT, imp: self, "Started");
         Ok(())
     }
 
-    fn pause(&self, element: &super::TcpClientSrc) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, obj: element, "Pausing");
+    fn pause(&self) -> Result<(), gst::ErrorMessage> {
+        gst::debug!(CAT, imp: self, "Pausing");
         self.task.pause().block_on()?;
-        gst::debug!(CAT, obj: element, "Paused");
+        gst::debug!(CAT, imp: self, "Paused");
         Ok(())
     }
 }
@@ -558,13 +558,7 @@ impl ObjectImpl for TcpClientSrc {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         let mut settings = self.settings.lock().unwrap();
         match pspec.name() {
             "host" => {
@@ -594,7 +588,7 @@ impl ObjectImpl for TcpClientSrc {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
         match pspec.name() {
             "host" => settings.host.to_value(),
@@ -607,12 +601,12 @@ impl ObjectImpl for TcpClientSrc {
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(self.src_pad.gst_pad()).unwrap();
-
-        crate::set_element_flags(obj, gst::ElementFlags::SOURCE);
+        obj.set_element_flags(gst::ElementFlags::SOURCE);
     }
 }
 
@@ -651,41 +645,40 @@ impl ElementImpl for TcpClientSrc {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {
-                self.prepare(element).map_err(|err| {
-                    element.post_error_message(err);
+                self.prepare().map_err(|err| {
+                    self.post_error_message(err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::PlayingToPaused => {
-                self.pause(element).map_err(|_| gst::StateChangeError)?;
+                self.pause().map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                self.unprepare(element);
+                self.unprepare();
             }
             _ => (),
         }
 
-        let mut success = self.parent_change_state(element, transition)?;
+        let mut success = self.parent_change_state(transition)?;
 
         match transition {
             gst::StateChange::ReadyToPaused => {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToPlaying => {
-                self.start(element).map_err(|_| gst::StateChangeError)?;
+                self.start().map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::PlayingToPaused => {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToReady => {
-                self.stop(element).map_err(|_| gst::StateChangeError)?;
+                self.stop().map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }

@@ -119,20 +119,14 @@ impl ObjectImpl for Rgb2Gray {
 
     // Called whenever a value of a property is changed. It can be called
     // at any time from any thread.
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "invert" => {
                 let mut settings = self.settings.lock().unwrap();
                 let invert = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing invert from {} to {}",
                     settings.invert,
                     invert
@@ -144,7 +138,7 @@ impl ObjectImpl for Rgb2Gray {
                 let shift = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing shift from {} to {}",
                     settings.shift,
                     shift
@@ -157,7 +151,7 @@ impl ObjectImpl for Rgb2Gray {
 
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "invert" => {
                 let settings = self.settings.lock().unwrap();
@@ -281,7 +275,6 @@ impl BaseTransformImpl for Rgb2Gray {
     // In our case that means that:
     fn transform_caps(
         &self,
-        element: &Self::Type,
         direction: gst::PadDirection,
         caps: &gst::Caps,
         filter: Option<&gst::Caps>,
@@ -320,7 +313,7 @@ impl BaseTransformImpl for Rgb2Gray {
 
         gst::debug!(
             CAT,
-            obj: element,
+            imp: self,
             "Transformed caps from {} to {} in direction {:?}",
             caps,
             other_caps,
@@ -341,7 +334,6 @@ impl VideoFilterImpl for Rgb2Gray {
     // Does the actual transformation of the input buffer to the output buffer
     fn transform_frame(
         &self,
-        _element: &Self::Type,
         in_frame: &gst_video::VideoFrameRef<&gst::BufferRef>,
         out_frame: &mut gst_video::VideoFrameRef<&mut gst::BufferRef>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {

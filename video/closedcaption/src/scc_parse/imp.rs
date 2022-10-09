@@ -10,7 +10,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{element_error, loggable_error};
 
 use std::cmp;
 use std::sync::{Mutex, MutexGuard};
@@ -38,10 +37,12 @@ struct PullState {
 }
 
 impl PullState {
-    fn new(element: &super::SccParse, pad: &gst::Pad) -> Self {
+    fn new(imp: &SccParse, pad: &gst::Pad) -> Self {
         Self {
             need_stream_start: true,
-            stream_id: pad.create_stream_id(element, Some("src")).to_string(),
+            stream_id: pad
+                .create_stream_id(&*imp.instance(), Some("src"))
+                .to_string(),
             offset: 0,
             duration: gst::ClockTime::NONE,
         }
@@ -142,7 +143,7 @@ impl State {
         &mut self,
         tc: &TimeCode,
         framerate: gst::Fraction,
-        element: &super::SccParse,
+        imp: &SccParse,
     ) -> Result<gst_video::ValidVideoTimeCode, gst::FlowError> {
         match parse_timecode(framerate, tc) {
             Ok(timecode) => Ok(timecode),
@@ -152,8 +153,8 @@ impl State {
                         .as_ref()
                         .map(Clone::clone)
                         .ok_or_else(|| {
-                            element_error!(
-                                element,
+                            gst::element_imp_error!(
+                                imp,
                                 gst::StreamError::Decode,
                                 ["Invalid first timecode {:?}", err]
                             );
@@ -163,7 +164,7 @@ impl State {
 
                 gst::warning!(
                     CAT,
-                    obj: element,
+                    imp: imp,
                     "Invalid timecode {:?}, using previous {:?}",
                     err,
                     last_timecode
@@ -176,11 +177,7 @@ impl State {
 
     /// Calculate a timestamp from the timecode and make sure to
     /// not produce timestamps jumping backwards
-    fn update_timestamp(
-        &mut self,
-        timecode: &gst_video::ValidVideoTimeCode,
-        element: &super::SccParse,
-    ) {
+    fn update_timestamp(&mut self, timecode: &gst_video::ValidVideoTimeCode, imp: &SccParse) {
         let nsecs = timecode.time_since_daily_jam();
 
         if self
@@ -191,7 +188,7 @@ impl State {
         } else {
             gst::fixme!(
                 CAT,
-                obj: element,
+                imp: imp,
                 "New position {} < last position {}",
                 nsecs,
                 self.last_position.display(),
@@ -204,12 +201,12 @@ impl State {
         buffer: &mut gst::buffer::Buffer,
         timecode: &gst_video::ValidVideoTimeCode,
         framerate: gst::Fraction,
-        element: &super::SccParse,
+        imp: &SccParse,
     ) {
         let buffer = buffer.get_mut().unwrap();
         gst_video::VideoTimeCodeMeta::add(buffer, timecode);
 
-        self.update_timestamp(timecode, element);
+        self.update_timestamp(timecode, imp);
 
         buffer.set_pts(self.last_position);
         buffer.set_duration(
@@ -219,7 +216,7 @@ impl State {
 
     fn create_events(
         &mut self,
-        element: &super::SccParse,
+        imp: &SccParse,
         framerate: Option<gst::Fraction>,
     ) -> Vec<gst::Event> {
         let mut events = Vec::new();
@@ -253,7 +250,7 @@ impl State {
                 self.framerate = Some(framerate);
 
                 events.push(gst::event::Caps::new(&caps));
-                gst::info!(CAT, obj: element, "Caps changed to {:?}", &caps);
+                gst::info!(CAT, imp: imp, "Caps changed to {:?}", &caps);
             }
         }
 
@@ -282,15 +279,14 @@ pub struct SccParse {
 impl SccParse {
     fn handle_buffer(
         &self,
-        element: &super::SccParse,
         buffer: Option<gst::Buffer>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
 
         let drain = if let Some(buffer) = buffer {
             let buffer = buffer.into_mapped_buffer_readable().map_err(|_| {
-                element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::ResourceError::Read,
                     ["Failed to map buffer readable"]
                 );
@@ -308,14 +304,14 @@ impl SccParse {
             let line = state.line(drain);
             match line {
                 Ok(Some(SccLine::Caption(tc, data))) => {
-                    state = self.handle_line(tc, data, element, state)?;
+                    state = self.handle_line(tc, data, state)?;
                 }
                 Ok(Some(line)) => {
-                    gst::debug!(CAT, obj: element, "Got line '{:?}'", line);
+                    gst::debug!(CAT, imp: self, "Got line '{:?}'", line);
                 }
                 Err((line, err)) => {
-                    element_error!(
-                        element,
+                    gst::element_imp_error!(
+                        self,
                         gst::StreamError::Decode,
                         ["Couldn't parse line '{:?}': {:?}", line, err]
                     );
@@ -336,12 +332,11 @@ impl SccParse {
         &self,
         tc: TimeCode,
         data: Vec<u8>,
-        element: &super::SccParse,
         mut state: MutexGuard<State>,
     ) -> Result<MutexGuard<State>, gst::FlowError> {
         gst::trace!(
             CAT,
-            obj: element,
+            imp: self,
             "Got caption buffer with timecode {:?} and size {}",
             tc,
             data.len()
@@ -355,7 +350,7 @@ impl SccParse {
             gst::Fraction::new(30, 1)
         };
 
-        let mut timecode = state.handle_timecode(&tc, framerate, element)?;
+        let mut timecode = state.handle_timecode(&tc, framerate, self)?;
         let start_time = timecode.time_since_daily_jam();
         let segment_start = state.segment.start();
         let clip_buffers = if state.seeking {
@@ -369,7 +364,7 @@ impl SccParse {
 
             gst::trace!(
                 CAT,
-                obj: element,
+                imp: self,
                 "Checking inside of segment, line start {} line stop {} segment start {} num bufs {}",
                 start_time,
                 stop_time,
@@ -408,18 +403,13 @@ impl SccParse {
                 buf_mut.copy_from_slice(0, d).unwrap();
             }
 
-            state.add_buffer_metadata(&mut buffer, &timecode, framerate, element);
+            state.add_buffer_metadata(&mut buffer, &timecode, framerate, self);
             timecode.increment_frame();
 
             if clip_buffers {
                 let end_time = buffer.pts().opt_add(buffer.duration());
                 if end_time.opt_lt(segment_start).unwrap_or(false) {
-                    gst::trace!(
-                        CAT,
-                        obj: element,
-                        "Skip segment clipped buffer {:?}",
-                        buffer,
-                    );
+                    gst::trace!(CAT, imp: self, "Skip segment clipped buffer {:?}", buffer,);
 
                     continue;
                 }
@@ -443,19 +433,19 @@ impl SccParse {
         // Update the last_timecode to the current one
         state.last_timecode = Some(timecode);
 
-        let events = state.create_events(element, Some(framerate));
+        let events = state.create_events(self, Some(framerate));
 
         // Drop our state mutex while we push out buffers or events
         drop(state);
 
         for event in events {
-            gst::debug!(CAT, obj: element, "Pushing event {:?}", event);
+            gst::debug!(CAT, imp: self, "Pushing event {:?}", event);
             self.srcpad.push_event(event);
         }
 
         self.srcpad.push_list(buffers).map_err(|err| {
             if err != gst::FlowError::Flushing && err != gst::FlowError::Eos {
-                gst::error!(CAT, obj: element, "Pushing buffer returned {:?}", err);
+                gst::error!(CAT, imp: self, "Pushing buffer returned {:?}", err);
             }
             err
         })?;
@@ -467,11 +457,7 @@ impl SccParse {
         Ok(self.state.lock().unwrap())
     }
 
-    fn sink_activate(
-        &self,
-        pad: &gst::Pad,
-        element: &super::SccParse,
-    ) -> Result<(), gst::LoggableError> {
+    fn sink_activate(&self, pad: &gst::Pad) -> Result<(), gst::LoggableError> {
         let mode = {
             let mut query = gst::query::Scheduling::new();
             let mut state = self.state.lock().unwrap();
@@ -486,7 +472,7 @@ impl SccParse {
             {
                 gst::debug!(CAT, obj: pad, "Activating in Pull mode");
 
-                state.pull = Some(PullState::new(element, &self.srcpad));
+                state.pull = Some(PullState::new(self, &self.srcpad));
 
                 gst::PadMode::Pull
             } else {
@@ -499,25 +485,13 @@ impl SccParse {
         Ok(())
     }
 
-    fn start_task(&self, element: &super::SccParse) -> Result<(), gst::LoggableError> {
-        let element_weak = element.downgrade();
-        let pad_weak = self.sinkpad.downgrade();
+    fn start_task(&self) -> Result<(), gst::LoggableError> {
+        let imp = self.ref_counted();
         let res = self.sinkpad.start_task(move || {
-            let element = match element_weak.upgrade() {
-                Some(element) => element,
-                None => {
-                    if let Some(pad) = pad_weak.upgrade() {
-                        let _ = pad.pause_task();
-                    }
-                    return;
-                }
-            };
-
-            let parse = element.imp();
-            parse.loop_fn(&element);
+            imp.loop_fn();
         });
         if res.is_err() {
-            return Err(loggable_error!(CAT, "Failed to start pad task"));
+            return Err(gst::loggable_error!(CAT, "Failed to start pad task"));
         }
         Ok(())
     }
@@ -525,13 +499,12 @@ impl SccParse {
     fn sink_activatemode(
         &self,
         _pad: &gst::Pad,
-        element: &super::SccParse,
         mode: gst::PadMode,
         active: bool,
     ) -> Result<(), gst::LoggableError> {
         if mode == gst::PadMode::Pull {
             if active {
-                self.start_task(element)?;
+                self.start_task()?;
             } else {
                 let _ = self.sinkpad.stop_task();
             }
@@ -540,23 +513,26 @@ impl SccParse {
         Ok(())
     }
 
-    fn scan_duration(
-        &self,
-        element: &super::SccParse,
-    ) -> Result<Option<gst_video::ValidVideoTimeCode>, gst::LoggableError> {
-        gst::debug!(CAT, obj: element, "Scanning duration");
+    fn scan_duration(&self) -> Result<Option<gst_video::ValidVideoTimeCode>, gst::LoggableError> {
+        gst::debug!(CAT, imp: self, "Scanning duration");
 
         /* First let's query the bytes duration upstream */
         let mut q = gst::query::Duration::new(gst::Format::Bytes);
 
         if !self.sinkpad.peer_query(&mut q) {
-            return Err(loggable_error!(CAT, "Failed to query upstream duration"));
+            return Err(gst::loggable_error!(
+                CAT,
+                "Failed to query upstream duration"
+            ));
         }
 
         let size = match q.result().try_into().unwrap() {
             Some(gst::format::Bytes(size)) => size,
             None => {
-                return Err(loggable_error!(CAT, "Failed to query upstream duration"));
+                return Err(gst::loggable_error!(
+                    CAT,
+                    "Failed to query upstream duration"
+                ));
             }
         };
 
@@ -574,7 +550,7 @@ impl SccParse {
                     buffers.push(buffer);
                 }
                 Err(flow) => {
-                    return Err(loggable_error!(
+                    return Err(gst::loggable_error!(
                         CAT,
                         "Failed to pull buffer while scanning duration: {:?}",
                         flow
@@ -589,7 +565,7 @@ impl SccParse {
                 let buf = buf
                     .clone()
                     .into_mapped_buffer_readable()
-                    .map_err(|_| loggable_error!(CAT, "Failed to map buffer readable"))?;
+                    .map_err(|_| gst::loggable_error!(CAT, "Failed to map buffer readable"))?;
 
                 reader.push(buf);
             }
@@ -613,25 +589,20 @@ impl SccParse {
             }
 
             if last_tc.is_some() || offset == 0 {
-                gst::debug!(
-                    CAT,
-                    obj: element,
-                    "Duration scan done, last_tc: {:?}",
-                    last_tc
-                );
+                gst::debug!(CAT, imp: self, "Duration scan done, last_tc: {:?}", last_tc);
                 break (Ok(last_tc));
             }
         }
     }
 
-    fn push_eos(&self, element: &super::SccParse) {
+    fn push_eos(&self) {
         let mut state = self.state.lock().unwrap();
 
         if state.seeking {
             state.need_flush_stop = true;
         }
 
-        let mut events = state.create_events(element, None);
+        let mut events = state.create_events(self, None);
         let mut eos_event = gst::event::Eos::builder();
 
         if let Some(seek_seqnum) = state.seek_seqnum {
@@ -644,12 +615,12 @@ impl SccParse {
         drop(state);
 
         for event in events {
-            gst::debug!(CAT, obj: element, "Pushing event {:?}", event);
+            gst::debug!(CAT, imp: self, "Pushing event {:?}", event);
             self.srcpad.push_event(event);
         }
     }
 
-    fn loop_fn(&self, element: &super::SccParse) {
+    fn loop_fn(&self) {
         let mut state = self.state.lock().unwrap();
         let State {
             ref framerate,
@@ -676,8 +647,8 @@ impl SccParse {
             Err(flow) => {
                 gst::error!(CAT, obj: &self.sinkpad, "Failed to pull, reason: {:?}", flow);
 
-                element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::StreamError::Failed,
                     ["Streaming stopped, failed to pull buffer"]
                 );
@@ -687,10 +658,10 @@ impl SccParse {
             }
         };
 
-        match self.handle_buffer(element, buffer) {
+        match self.handle_buffer(buffer) {
             Ok(_) => {
                 if scan_duration {
-                    match self.scan_duration(element) {
+                    match self.scan_duration() {
                         Ok(Some(tc)) => {
                             let mut state = self.state.lock().unwrap();
                             let mut pull = state.pull.as_mut().unwrap();
@@ -704,8 +675,8 @@ impl SccParse {
                         Err(err) => {
                             err.log();
 
-                            element_error!(
-                                element,
+                            gst::element_imp_error!(
+                                self,
                                 gst::StreamError::Decode,
                                 ["Failed to scan duration"]
                             );
@@ -718,20 +689,20 @@ impl SccParse {
             Err(flow) => {
                 match flow {
                     gst::FlowError::Flushing => {
-                        gst::debug!(CAT, obj: element, "Pausing after flow {:?}", flow);
+                        gst::debug!(CAT, imp: self, "Pausing after flow {:?}", flow);
                     }
                     gst::FlowError::Eos => {
-                        self.push_eos(element);
+                        self.push_eos();
 
-                        gst::debug!(CAT, obj: element, "Pausing after flow {:?}", flow);
+                        gst::debug!(CAT, imp: self, "Pausing after flow {:?}", flow);
                     }
                     _ => {
-                        self.push_eos(element);
+                        self.push_eos();
 
-                        gst::error!(CAT, obj: element, "Pausing after flow {:?}", flow);
+                        gst::error!(CAT, imp: self, "Pausing after flow {:?}", flow);
 
-                        element_error!(
-                            element,
+                        gst::element_imp_error!(
+                            self,
                             gst::StreamError::Failed,
                             ["Streaming stopped, reason: {:?}", flow]
                         );
@@ -746,12 +717,11 @@ impl SccParse {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &super::SccParse,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
 
-        self.handle_buffer(element, Some(buffer))
+        self.handle_buffer(Some(buffer))
     }
 
     fn flush(&self, mut state: MutexGuard<State>) -> MutexGuard<State> {
@@ -771,7 +741,7 @@ impl SccParse {
         self.state.lock().unwrap()
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &super::SccParse, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -792,14 +762,14 @@ impl SccParse {
                 let state = self.flush(state);
                 drop(state);
 
-                pad.event_default(Some(element), event)
+                pad.event_default(Some(&*self.instance()), event)
             }
             EventView::Eos(_) => {
                 gst::log!(CAT, obj: pad, "Draining");
-                if let Err(err) = self.handle_buffer(element, None) {
+                if let Err(err) = self.handle_buffer(None) {
                     gst::error!(CAT, obj: pad, "Failed to drain parser: {:?}", err);
                 }
-                pad.event_default(Some(element), event)
+                pad.event_default(Some(&*self.instance()), event)
             }
             _ => {
                 if event.is_sticky()
@@ -811,15 +781,15 @@ impl SccParse {
                     state.pending_events.push(event);
                     true
                 } else {
-                    pad.event_default(Some(element), event)
+                    pad.event_default(Some(&*self.instance()), event)
                 }
             }
         }
     }
 
-    fn perform_seek(&self, event: &gst::event::Seek, element: &super::SccParse) -> bool {
+    fn perform_seek(&self, event: &gst::event::Seek) -> bool {
         if self.state.lock().unwrap().pull.is_none() {
-            gst::error!(CAT, obj: element, "seeking is only supported in pull mode");
+            gst::error!(CAT, imp: self, "seeking is only supported in pull mode");
             return false;
         }
 
@@ -828,7 +798,7 @@ impl SccParse {
         let mut start: Option<gst::ClockTime> = match start.try_into() {
             Ok(start) => start,
             Err(_) => {
-                gst::error!(CAT, obj: element, "seek has invalid format");
+                gst::error!(CAT, imp: self, "seek has invalid format");
                 return false;
             }
         };
@@ -836,18 +806,18 @@ impl SccParse {
         let mut stop: Option<gst::ClockTime> = match stop.try_into() {
             Ok(stop) => stop,
             Err(_) => {
-                gst::error!(CAT, obj: element, "seek has invalid format");
+                gst::error!(CAT, imp: self, "seek has invalid format");
                 return false;
             }
         };
 
         if !flags.contains(gst::SeekFlags::FLUSH) {
-            gst::error!(CAT, obj: element, "only flushing seeks are supported");
+            gst::error!(CAT, imp: self, "only flushing seeks are supported");
             return false;
         }
 
         if start_type == gst::SeekType::End || stop_type == gst::SeekType::End {
-            gst::error!(CAT, obj: element, "Relative seeks are not supported");
+            gst::error!(CAT, imp: self, "Relative seeks are not supported");
             return false;
         }
 
@@ -857,14 +827,14 @@ impl SccParse {
             .seqnum(seek_seqnum)
             .build();
 
-        gst::debug!(CAT, obj: element, "Sending event {:?} upstream", event);
+        gst::debug!(CAT, imp: self, "Sending event {:?} upstream", event);
         self.sinkpad.push_event(event);
 
         let event = gst::event::FlushStart::builder()
             .seqnum(seek_seqnum)
             .build();
 
-        gst::debug!(CAT, obj: element, "Pushing event {:?}", event);
+        gst::debug!(CAT, imp: self, "Pushing event {:?}", event);
         self.srcpad.push_event(event);
 
         let _ = self.sinkpad.pause_task();
@@ -892,7 +862,7 @@ impl SccParse {
         /* Drop our state while we push a serialized event upstream */
         drop(state);
 
-        gst::debug!(CAT, obj: element, "Sending event {:?} upstream", event);
+        gst::debug!(CAT, imp: self, "Sending event {:?} upstream", event);
         self.sinkpad.push_event(event);
 
         state = self.state.lock().unwrap();
@@ -901,7 +871,7 @@ impl SccParse {
             .segment
             .do_seek(rate, flags, start_type, start, stop_type, stop);
 
-        match self.start_task(element) {
+        match self.start_task() {
             Err(error) => {
                 error.log();
                 false
@@ -910,22 +880,17 @@ impl SccParse {
         }
     }
 
-    fn src_event(&self, pad: &gst::Pad, element: &super::SccParse, event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
         match event.view() {
-            EventView::Seek(e) => self.perform_seek(e, element),
-            _ => pad.event_default(Some(element), event),
+            EventView::Seek(e) => self.perform_seek(e),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 
-    fn src_query(
-        &self,
-        pad: &gst::Pad,
-        element: &super::SccParse,
-        query: &mut gst::QueryRef,
-    ) -> bool {
+    fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
         gst::log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -975,7 +940,7 @@ impl SccParse {
                     self.sinkpad.peer_query(query)
                 }
             }
-            _ => pad.query_default(Some(element), query),
+            _ => pad.query_default(Some(&*self.instance()), query),
         }
     }
 }
@@ -992,29 +957,34 @@ impl ObjectSubclass for SccParse {
             .activate_function(|pad, parent| {
                 SccParse::catch_panic_pad_function(
                     parent,
-                    || Err(loggable_error!(CAT, "Panic activating sink pad")),
-                    |parse, element| parse.sink_activate(pad, element),
+                    || Err(gst::loggable_error!(CAT, "Panic activating sink pad")),
+                    |parse| parse.sink_activate(pad),
                 )
             })
             .activatemode_function(|pad, parent, mode, active| {
                 SccParse::catch_panic_pad_function(
                     parent,
-                    || Err(loggable_error!(CAT, "Panic activating sink pad with mode")),
-                    |parse, element| parse.sink_activatemode(pad, element, mode, active),
+                    || {
+                        Err(gst::loggable_error!(
+                            CAT,
+                            "Panic activating sink pad with mode"
+                        ))
+                    },
+                    |parse| parse.sink_activatemode(pad, mode, active),
                 )
             })
             .chain_function(|pad, parent, buffer| {
                 SccParse::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |parse, element| parse.sink_chain(pad, element, buffer),
+                    |parse| parse.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
                 SccParse::catch_panic_pad_function(
                     parent,
                     || false,
-                    |parse, element| parse.sink_event(pad, element, event),
+                    |parse| parse.sink_event(pad, event),
                 )
             })
             .build();
@@ -1025,14 +995,14 @@ impl ObjectSubclass for SccParse {
                 SccParse::catch_panic_pad_function(
                     parent,
                     || false,
-                    |parse, element| parse.src_event(pad, element, event),
+                    |parse| parse.src_event(pad, event),
                 )
             })
             .query_function(|pad, parent, query| {
                 SccParse::catch_panic_pad_function(
                     parent,
                     || false,
-                    |parse, element| parse.src_query(pad, element, query),
+                    |parse| parse.src_query(pad, query),
                 )
             })
             .build();
@@ -1046,9 +1016,10 @@ impl ObjectSubclass for SccParse {
 }
 
 impl ObjectImpl for SccParse {
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
@@ -1104,10 +1075,9 @@ impl ElementImpl for SccParse {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused | gst::StateChange::PausedToReady => {
@@ -1118,6 +1088,6 @@ impl ElementImpl for SccParse {
             _ => (),
         }
 
-        self.parent_change_state(element, transition)
+        self.parent_change_state(transition)
     }
 }

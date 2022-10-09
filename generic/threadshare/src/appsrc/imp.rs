@@ -319,24 +319,24 @@ pub struct AppSrc {
 }
 
 impl AppSrc {
-    fn push_buffer(&self, element: &super::AppSrc, mut buffer: gst::Buffer) -> bool {
+    fn push_buffer(&self, mut buffer: gst::Buffer) -> bool {
         let state = self.task.lock_state();
         if *state != TaskState::Started && *state != TaskState::Paused {
-            gst::debug!(CAT, obj: element, "Rejecting buffer due to element state");
+            gst::debug!(CAT, imp: self, "Rejecting buffer due to element state");
             return false;
         }
 
         let do_timestamp = self.settings.lock().unwrap().do_timestamp;
         if do_timestamp {
-            if let Some(clock) = element.clock() {
-                let base_time = element.base_time();
+            if let Some(clock) = self.instance().clock() {
+                let base_time = self.instance().base_time();
                 let now = clock.time();
 
                 let buffer = buffer.make_mut();
                 buffer.set_dts(now.opt_checked_sub(base_time).ok().flatten());
                 buffer.set_pts(None);
             } else {
-                gst::error!(CAT, obj: element, "Don't have a clock yet");
+                gst::error!(CAT, imp: self, "Don't have a clock yet");
                 return false;
             }
         }
@@ -349,13 +349,13 @@ impl AppSrc {
         {
             Ok(_) => true,
             Err(err) => {
-                gst::error!(CAT, obj: element, "Failed to queue buffer: {}", err);
+                gst::error!(CAT, imp: self, "Failed to queue buffer: {}", err);
                 false
             }
         }
     }
 
-    fn end_of_stream(&self, element: &super::AppSrc) -> bool {
+    fn end_of_stream(&self) -> bool {
         let mut sender = self.sender.lock().unwrap();
         let sender = match sender.as_mut() {
             Some(sender) => sender,
@@ -365,14 +365,14 @@ impl AppSrc {
         match sender.try_send(StreamItem::Event(gst::event::Eos::new())) {
             Ok(_) => true,
             Err(err) => {
-                gst::error!(CAT, obj: element, "Failed to queue EOS: {}", err);
+                gst::error!(CAT, imp: self, "Failed to queue EOS: {}", err);
                 false
             }
         }
     }
 
-    fn prepare(&self, element: &super::AppSrc) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, obj: element, "Preparing");
+    fn prepare(&self) -> Result<(), gst::ErrorMessage> {
+        gst::debug!(CAT, imp: self, "Preparing");
 
         let settings = self.settings.lock().unwrap();
         let context =
@@ -396,41 +396,41 @@ impl AppSrc {
         *self.sender.lock().unwrap() = Some(sender);
 
         self.task
-            .prepare(AppSrcTask::new(element.clone(), receiver), context)
+            .prepare(AppSrcTask::new(self.instance().clone(), receiver), context)
             .block_on()?;
 
-        gst::debug!(CAT, obj: element, "Prepared");
+        gst::debug!(CAT, imp: self, "Prepared");
 
         Ok(())
     }
 
-    fn unprepare(&self, element: &super::AppSrc) {
-        gst::debug!(CAT, obj: element, "Unpreparing");
+    fn unprepare(&self) {
+        gst::debug!(CAT, imp: self, "Unpreparing");
 
         *self.sender.lock().unwrap() = None;
         self.task.unprepare().block_on().unwrap();
 
-        gst::debug!(CAT, obj: element, "Unprepared");
+        gst::debug!(CAT, imp: self, "Unprepared");
     }
 
-    fn stop(&self, element: &super::AppSrc) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, obj: element, "Stopping");
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
+        gst::debug!(CAT, imp: self, "Stopping");
         self.task.stop().block_on()?;
-        gst::debug!(CAT, obj: element, "Stopped");
+        gst::debug!(CAT, imp: self, "Stopped");
         Ok(())
     }
 
-    fn start(&self, element: &super::AppSrc) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, obj: element, "Starting");
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
+        gst::debug!(CAT, imp: self, "Starting");
         self.task.start().block_on()?;
-        gst::debug!(CAT, obj: element, "Started");
+        gst::debug!(CAT, imp: self, "Started");
         Ok(())
     }
 
-    fn pause(&self, element: &super::AppSrc) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, obj: element, "Pausing");
+    fn pause(&self) -> Result<(), gst::ErrorMessage> {
+        gst::debug!(CAT, imp: self, "Pausing");
         self.task.pause().block_on()?;
-        gst::debug!(CAT, obj: element, "Paused");
+        gst::debug!(CAT, imp: self, "Paused");
         Ok(())
     }
 }
@@ -503,7 +503,7 @@ impl ObjectImpl for AppSrc {
                         let buffer = args[1].get::<gst::Buffer>().expect("signal arg");
                         let appsrc = element.imp();
 
-                        Some(appsrc.push_buffer(&element, buffer).to_value())
+                        Some(appsrc.push_buffer(buffer).to_value())
                     })
                     .build(),
                 /**
@@ -519,7 +519,7 @@ impl ObjectImpl for AppSrc {
                         let element = args[0].get::<super::AppSrc>().expect("signal arg");
                         let appsrc = element.imp();
 
-                        Some(appsrc.end_of_stream(&element).to_value())
+                        Some(appsrc.end_of_stream().to_value())
                     })
                     .build(),
             ]
@@ -528,13 +528,7 @@ impl ObjectImpl for AppSrc {
         SIGNALS.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         let mut settings = self.settings.lock().unwrap();
         match pspec.name() {
             "context" => {
@@ -561,7 +555,7 @@ impl ObjectImpl for AppSrc {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
         match pspec.name() {
             "context" => settings.context.to_value(),
@@ -573,12 +567,12 @@ impl ObjectImpl for AppSrc {
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(self.src_pad.gst_pad()).unwrap();
-
-        crate::set_element_flags(obj, gst::ElementFlags::SOURCE);
+        obj.set_element_flags(gst::ElementFlags::SOURCE);
     }
 }
 
@@ -617,41 +611,40 @@ impl ElementImpl for AppSrc {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {
-                self.prepare(element).map_err(|err| {
-                    element.post_error_message(err);
+                self.prepare().map_err(|err| {
+                    self.post_error_message(err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::PlayingToPaused => {
-                self.pause(element).map_err(|_| gst::StateChangeError)?;
+                self.pause().map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                self.unprepare(element);
+                self.unprepare();
             }
             _ => (),
         }
 
-        let mut success = self.parent_change_state(element, transition)?;
+        let mut success = self.parent_change_state(transition)?;
 
         match transition {
             gst::StateChange::ReadyToPaused => {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToPlaying => {
-                self.start(element).map_err(|_| gst::StateChangeError)?;
+                self.start().map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::PlayingToPaused => {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToReady => {
-                self.stop(element).map_err(|_| gst::StateChangeError)?;
+                self.stop().map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }

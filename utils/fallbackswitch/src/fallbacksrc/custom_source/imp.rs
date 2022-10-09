@@ -68,26 +68,21 @@ impl ObjectImpl for CustomSource {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "source" => {
                 let source = value.get::<gst::Element>().unwrap();
                 self.source.set(source.clone()).unwrap();
-                obj.add(&source).unwrap();
+                self.instance().add(&source).unwrap();
             }
             _ => unreachable!(),
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.set_suppressed_flags(gst::ElementFlags::SOURCE | gst::ElementFlags::SINK);
         obj.set_element_flags(gst::ElementFlags::SOURCE);
         obj.set_bin_flags(gst::BinFlags::STREAMS_AWARE);
@@ -124,21 +119,20 @@ impl ElementImpl for CustomSource {
     #[allow(clippy::single_match)]
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         match transition {
             gst::StateChange::NullToReady => {
-                self.start(element)?;
+                self.start()?;
             }
             _ => (),
         }
 
-        let res = self.parent_change_state(element, transition)?;
+        let res = self.parent_change_state(transition)?;
 
         match transition {
             gst::StateChange::ReadyToNull | gst::StateChange::NullToNull => {
-                self.stop(element);
+                self.stop();
             }
             _ => (),
         }
@@ -149,7 +143,7 @@ impl ElementImpl for CustomSource {
 
 impl BinImpl for CustomSource {
     #[allow(clippy::single_match)]
-    fn handle_message(&self, bin: &Self::Type, msg: gst::Message) {
+    fn handle_message(&self, msg: gst::Message) {
         use gst::MessageView;
 
         match msg.view() {
@@ -157,19 +151,16 @@ impl BinImpl for CustomSource {
                 // TODO: Drop stream collection message for now, we only create a simple custom
                 // one here so that fallbacksrc can know about our streams. It is never
                 // forwarded.
-                self.handle_source_no_more_pads(bin);
+                self.handle_source_no_more_pads();
             }
-            _ => self.parent_handle_message(bin, msg),
+            _ => self.parent_handle_message(msg),
         }
     }
 }
 
 impl CustomSource {
-    fn start(
-        &self,
-        element: &super::CustomSource,
-    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::debug!(CAT, obj: element, "Starting");
+    fn start(&self) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
+        gst::debug!(CAT, imp: self, "Starting");
         let source = self.source.get().unwrap();
 
         let templates = source.pad_template_list();
@@ -178,9 +169,9 @@ impl CustomSource {
             .iter()
             .any(|templ| templ.presence() == gst::PadPresence::Request)
         {
-            gst::error!(CAT, obj: element, "Request pads not supported");
-            gst::element_error!(
-                element,
+            gst::error!(CAT, imp: self, "Request pads not supported");
+            gst::element_imp_error!(
+                self,
                 gst::LibraryError::Settings,
                 ["Request pads not supported"]
             );
@@ -193,49 +184,55 @@ impl CustomSource {
 
         // Handle all source pads that already exist
         for pad in source.src_pads() {
-            if let Err(msg) = self.handle_source_pad_added(element, &pad) {
-                element.post_error_message(msg);
+            if let Err(msg) = self.handle_source_pad_added(&pad) {
+                self.post_error_message(msg);
                 return Err(gst::StateChangeError);
             }
         }
 
         if !has_sometimes_pads {
-            self.handle_source_no_more_pads(element);
+            self.handle_source_no_more_pads();
         } else {
-            gst::debug!(CAT, obj: element, "Found sometimes pads");
+            gst::debug!(CAT, imp: self, "Found sometimes pads");
 
-            let element_weak = element.downgrade();
-            let pad_added_sig_id = source.connect_pad_added(move |_, pad| {
-                let element = match element_weak.upgrade() {
-                    None => return,
+            let pad_added_sig_id = source.connect_pad_added(move |source, pad| {
+                let element = match source
+                    .parent()
+                    .and_then(|p| p.downcast::<super::CustomSource>().ok())
+                {
                     Some(element) => element,
+                    None => return,
                 };
                 let src = element.imp();
 
-                if let Err(msg) = src.handle_source_pad_added(&element, pad) {
+                if let Err(msg) = src.handle_source_pad_added(pad) {
                     element.post_error_message(msg);
                 }
             });
-            let element_weak = element.downgrade();
-            let pad_removed_sig_id = source.connect_pad_removed(move |_, pad| {
-                let element = match element_weak.upgrade() {
-                    None => return,
+            let pad_removed_sig_id = source.connect_pad_removed(move |source, pad| {
+                let element = match source
+                    .parent()
+                    .and_then(|p| p.downcast::<super::CustomSource>().ok())
+                {
                     Some(element) => element,
+                    None => return,
                 };
                 let src = element.imp();
 
-                src.handle_source_pad_removed(&element, pad);
+                src.handle_source_pad_removed(pad);
             });
 
-            let element_weak = element.downgrade();
-            let no_more_pads_sig_id = source.connect_no_more_pads(move |_| {
-                let element = match element_weak.upgrade() {
-                    None => return,
+            let no_more_pads_sig_id = source.connect_no_more_pads(move |source| {
+                let element = match source
+                    .parent()
+                    .and_then(|p| p.downcast::<super::CustomSource>().ok())
+                {
                     Some(element) => element,
+                    None => return,
                 };
                 let src = element.imp();
 
-                src.handle_source_no_more_pads(&element);
+                src.handle_source_no_more_pads();
             });
 
             let mut state = self.state.lock().unwrap();
@@ -247,12 +244,8 @@ impl CustomSource {
         Ok(gst::StateChangeSuccess::Success)
     }
 
-    fn handle_source_pad_added(
-        &self,
-        element: &super::CustomSource,
-        pad: &gst::Pad,
-    ) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, obj: element, "Source added pad {}", pad.name());
+    fn handle_source_pad_added(&self, pad: &gst::Pad) -> Result<(), gst::ErrorMessage> {
+        gst::debug!(CAT, imp: self, "Source added pad {}", pad.name());
 
         let mut state = self.state.lock().unwrap();
 
@@ -268,7 +261,7 @@ impl CustomSource {
             let caps = match pad.current_caps().unwrap_or_else(|| pad.query_caps(None)) {
                 caps if !caps.is_any() && !caps.is_empty() => caps,
                 _ => {
-                    gst::error!(CAT, obj: element, "Pad {} had no caps", pad.name());
+                    gst::error!(CAT, imp: self, "Pad {} had no caps", pad.name());
                     return Err(gst::error_msg!(
                         gst::CoreError::Negotiation,
                         ["Pad had no caps"]
@@ -292,11 +285,11 @@ impl CustomSource {
         let (templ, name) = if stream_type.contains(gst::StreamType::AUDIO) {
             let name = format!("audio_{}", state.num_audio);
             state.num_audio += 1;
-            (element.pad_template("audio_%u").unwrap(), name)
+            (self.instance().pad_template("audio_%u").unwrap(), name)
         } else {
             let name = format!("video_{}", state.num_video);
             state.num_video += 1;
-            (element.pad_template("video_%u").unwrap(), name)
+            (self.instance().pad_template("video_%u").unwrap(), name)
         };
 
         let ghost_pad = gst::GhostPad::builder_with_template(&templ, Some(&name))
@@ -313,13 +306,13 @@ impl CustomSource {
         drop(state);
 
         ghost_pad.set_active(true).unwrap();
-        element.add_pad(&ghost_pad).unwrap();
+        self.instance().add_pad(&ghost_pad).unwrap();
 
         Ok(())
     }
 
-    fn handle_source_pad_removed(&self, element: &super::CustomSource, pad: &gst::Pad) {
-        gst::debug!(CAT, obj: element, "Source removed pad {}", pad.name());
+    fn handle_source_pad_removed(&self, pad: &gst::Pad) {
+        gst::debug!(CAT, imp: self, "Source removed pad {}", pad.name());
 
         let mut state = self.state.lock().unwrap();
         let (i, stream) = match state
@@ -338,11 +331,11 @@ impl CustomSource {
 
         ghost_pad.set_active(false).unwrap();
         let _ = ghost_pad.set_target(None::<&gst::Pad>);
-        let _ = element.remove_pad(&ghost_pad);
+        let _ = self.instance().remove_pad(&ghost_pad);
     }
 
-    fn handle_source_no_more_pads(&self, element: &super::CustomSource) {
-        gst::debug!(CAT, obj: element, "Source signalled no-more-pads");
+    fn handle_source_no_more_pads(&self) {
+        gst::debug!(CAT, imp: self, "Source signalled no-more-pads");
 
         let state = self.state.lock().unwrap();
         let streams = state
@@ -355,17 +348,17 @@ impl CustomSource {
             .build();
         drop(state);
 
-        element.no_more_pads();
+        self.instance().no_more_pads();
 
-        let _ = element.post_message(
+        let _ = self.instance().post_message(
             gst::message::StreamsSelected::builder(&collection)
-                .src(element)
+                .src(&*self.instance())
                 .build(),
         );
     }
 
-    fn stop(&self, element: &super::CustomSource) {
-        gst::debug!(CAT, obj: element, "Stopping");
+    fn stop(&self) {
+        gst::debug!(CAT, imp: self, "Stopping");
 
         let mut state = self.state.lock().unwrap();
         let source = self.source.get().unwrap();
@@ -388,7 +381,7 @@ impl CustomSource {
 
         for pad in pads {
             let _ = pad.ghost_pad.set_target(None::<&gst::Pad>);
-            let _ = element.remove_pad(&pad.ghost_pad);
+            let _ = self.instance().remove_pad(&pad.ghost_pad);
         }
     }
 }

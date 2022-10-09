@@ -76,7 +76,7 @@ impl State {
 
     fn generate_caption(
         &mut self,
-        element: &super::SccEnc,
+        imp: &SccEnc,
         buffer: gst::Buffer,
     ) -> Result<Option<gst::Buffer>, gst::FlowError> {
         // Arbitrary number that was chosen to keep in order
@@ -86,8 +86,8 @@ impl State {
         assert!(self.internal_buffer.len() < MAXIMUM_PACKETES_PER_LINE);
 
         if buffer.size() != 2 {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                imp,
                 gst::StreamError::Format,
                 ["Wrongly sized CEA608 packet: {}", buffer.size()]
             );
@@ -97,8 +97,8 @@ impl State {
 
         if !self.settings.output_padding {
             let map = buffer.map_readable().map_err(|_| {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    imp,
                     gst::StreamError::Format,
                     ["Failed to map buffer readable"]
                 );
@@ -116,8 +116,8 @@ impl State {
         let mut timecode = buffer
             .meta::<gst_video::VideoTimeCodeMeta>()
             .ok_or_else(|| {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    imp,
                     gst::StreamError::Format,
                     ["Stream with timecodes on each buffer required"]
                 );
@@ -140,7 +140,7 @@ impl State {
         // flush the previous line into the buffer, and push
         // the new packet to the, now empty, internal buffer
         if Some(&timecode) != self.expected_timecode.as_ref() {
-            let outbuf = self.write_line(element)?;
+            let outbuf = self.write_line(imp)?;
 
             assert!(self.internal_buffer.is_empty());
             self.internal_buffer.push(buffer);
@@ -156,17 +156,14 @@ impl State {
         self.internal_buffer.push(buffer);
 
         if self.internal_buffer.len() == MAXIMUM_PACKETES_PER_LINE {
-            return self.write_line(element);
+            return self.write_line(imp);
         }
 
         Ok(None)
     }
 
     // Flush the internal buffers into a line
-    fn write_line(
-        &mut self,
-        element: &super::SccEnc,
-    ) -> Result<Option<gst::Buffer>, gst::FlowError> {
+    fn write_line(&mut self, imp: &SccEnc) -> Result<Option<gst::Buffer>, gst::FlowError> {
         let mut outbuf = Vec::new();
         let mut line_start = true;
 
@@ -181,8 +178,8 @@ impl State {
         let first_buf = self.internal_buffer.first().unwrap();
         for buffer in self.internal_buffer.iter() {
             let map = buffer.map_readable().map_err(|_| {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    imp,
                     gst::StreamError::Format,
                     ["Failed to map buffer readable"]
                 );
@@ -251,13 +248,12 @@ impl SccEnc {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &super::SccEnc,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
 
         let mut state = self.state.lock().unwrap();
-        let res = state.generate_caption(element, buffer)?;
+        let res = state.generate_caption(self, buffer)?;
 
         if let Some(outbuf) = res {
             gst::trace!(CAT, obj: pad, "Pushing buffer {:?} to the pad", &outbuf);
@@ -269,7 +265,7 @@ impl SccEnc {
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &super::SccEnc, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -297,7 +293,7 @@ impl SccEnc {
             EventView::Eos(_) => {
                 let mut state = self.state.lock().unwrap();
 
-                let outbuf = state.write_line(element);
+                let outbuf = state.write_line(self);
 
                 if let Ok(Some(buffer)) = outbuf {
                     gst::trace!(CAT, obj: pad, "Pushing buffer {:?} to the pad", &buffer);
@@ -311,13 +307,13 @@ impl SccEnc {
                     gst::error!(CAT, obj: pad, "Failed to write a line after EOS: {:?}", err);
                     return false;
                 }
-                pad.event_default(Some(element), event)
+                pad.event_default(Some(&*self.instance()), event)
             }
-            _ => pad.event_default(Some(element), event),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 
-    fn src_event(&self, pad: &gst::Pad, element: &super::SccEnc, event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -326,16 +322,11 @@ impl SccEnc {
                 gst::log!(CAT, obj: pad, "Dropping seek event");
                 false
             }
-            _ => pad.event_default(Some(element), event),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 
-    fn src_query(
-        &self,
-        pad: &gst::Pad,
-        element: &super::SccEnc,
-        query: &mut gst::QueryRef,
-    ) -> bool {
+    fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
         gst::log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -351,7 +342,7 @@ impl SccEnc {
                 );
                 true
             }
-            _ => pad.query_default(Some(element), query),
+            _ => pad.query_default(Some(&*self.instance()), query),
         }
     }
 }
@@ -369,33 +360,21 @@ impl ObjectSubclass for SccEnc {
                 SccEnc::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |enc, element| enc.sink_chain(pad, element, buffer),
+                    |enc| enc.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
-                SccEnc::catch_panic_pad_function(
-                    parent,
-                    || false,
-                    |enc, element| enc.sink_event(pad, element, event),
-                )
+                SccEnc::catch_panic_pad_function(parent, || false, |enc| enc.sink_event(pad, event))
             })
             .build();
 
         let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
             .event_function(|pad, parent, event| {
-                SccEnc::catch_panic_pad_function(
-                    parent,
-                    || false,
-                    |enc, element| enc.src_event(pad, element, event),
-                )
+                SccEnc::catch_panic_pad_function(parent, || false, |enc| enc.src_event(pad, event))
             })
             .query_function(|pad, parent, query| {
-                SccEnc::catch_panic_pad_function(
-                    parent,
-                    || false,
-                    |enc, element| enc.src_query(pad, element, query),
-                )
+                SccEnc::catch_panic_pad_function(parent, || false, |enc| enc.src_query(pad, query))
             })
             .build();
 
@@ -409,9 +388,10 @@ impl ObjectSubclass for SccEnc {
 }
 
 impl ObjectImpl for SccEnc {
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
@@ -433,13 +413,7 @@ impl ObjectImpl for SccEnc {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "output-padding" => {
                 self.settings.lock().unwrap().output_padding =
@@ -449,7 +423,7 @@ impl ObjectImpl for SccEnc {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "output-padding" => {
                 let settings = self.settings.lock().unwrap();
@@ -509,10 +483,9 @@ impl ElementImpl for SccEnc {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {
@@ -529,6 +502,6 @@ impl ElementImpl for SccEnc {
             _ => (),
         }
 
-        self.parent_change_state(element, transition)
+        self.parent_change_state(transition)
     }
 }

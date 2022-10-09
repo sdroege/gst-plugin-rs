@@ -82,7 +82,8 @@ impl ElementImpl for OnvifMetadataDepay {
 }
 
 impl RTPBaseDepayloadImpl for OnvifMetadataDepay {
-    fn set_caps(&self, element: &Self::Type, _caps: &gst::Caps) -> Result<(), gst::LoggableError> {
+    fn set_caps(&self, _caps: &gst::Caps) -> Result<(), gst::LoggableError> {
+        let element = self.instance();
         let src_pad = element.src_pad();
         let src_caps = src_pad.pad_template_caps();
         src_pad.push_event(gst::event::Caps::builder(&src_caps).build());
@@ -92,15 +93,14 @@ impl RTPBaseDepayloadImpl for OnvifMetadataDepay {
 
     fn process_rtp_packet(
         &self,
-        element: &Self::Type,
         rtp_buffer: &gst_rtp::RTPBuffer<gst_rtp::rtp_buffer::Readable>,
     ) -> Option<gst::Buffer> {
         // Retrieve the payload subbuffer
         let payload_buffer = match rtp_buffer.payload_buffer() {
             Ok(buffer) => buffer,
             Err(..) => {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::ResourceError::Read,
                     ["Failed to retrieve RTP buffer payload"]
                 );
@@ -116,7 +116,7 @@ impl RTPBaseDepayloadImpl for OnvifMetadataDepay {
             .flags()
             .contains(gst::BufferFlags::DISCONT)
         {
-            gst::debug!(CAT, obj: element, "processing discont RTP buffer");
+            gst::debug!(CAT, imp: self, "processing discont RTP buffer");
             state.adapter.clear();
         }
 
@@ -132,8 +132,8 @@ impl RTPBaseDepayloadImpl for OnvifMetadataDepay {
         let buffer = match state.adapter.take_buffer(available) {
             Ok(buffer) => buffer,
             Err(err) => {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::ResourceError::Read,
                     ["Failed to empty adapter: {}", err]
                 );
@@ -148,12 +148,7 @@ impl RTPBaseDepayloadImpl for OnvifMetadataDepay {
         let utf8 = match std::str::from_utf8(map.as_ref()) {
             Ok(s) => s,
             Err(err) => {
-                gst::warning!(
-                    CAT,
-                    obj: element,
-                    "Failed to decode payload as UTF-8: {}",
-                    err
-                );
+                gst::warning!(CAT, imp: self, "Failed to decode payload as UTF-8: {}", err);
 
                 return None;
             }
@@ -183,7 +178,7 @@ impl RTPBaseDepayloadImpl for OnvifMetadataDepay {
                         }
                     },
                     Err(err) => {
-                        gst::warning!(CAT, obj: element, "Invalid XML in payload: {}", err);
+                        gst::warning!(CAT, imp: self, "Invalid XML in payload: {}", err);
 
                         return None;
                     }
@@ -197,7 +192,7 @@ impl RTPBaseDepayloadImpl for OnvifMetadataDepay {
         if !forward {
             gst::warning!(
                 CAT,
-                obj: element,
+                imp: self,
                 "document must start with tt:MetadataStream element",
             );
 

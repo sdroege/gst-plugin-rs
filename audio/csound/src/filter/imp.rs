@@ -9,7 +9,8 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{element_error, error_msg, loggable_error};
+use gst::{element_imp_error, error_msg, loggable_error};
+use gst_base::prelude::*;
 use gst_base::subclass::base_transform::GenerateOutputSuccess;
 use gst_base::subclass::prelude::*;
 
@@ -170,7 +171,7 @@ impl CsoundFilter {
         }
     }
 
-    fn drain(&self, element: &super::CsoundFilter) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn drain(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
         let csound = self.csound.lock().unwrap();
         let mut state_lock = self.state.lock().unwrap();
         let state = state_lock.as_mut().unwrap();
@@ -191,12 +192,7 @@ impl CsoundFilter {
             (avail / state.in_info.channels() as usize) * state.out_info.channels() as usize;
 
         let mut buffer = gst::Buffer::with_size(out_bytes).map_err(|e| {
-            gst::error!(
-                CAT,
-                obj: element,
-                "Failed to allocate buffer at EOS {:?}",
-                e
-            );
+            gst::error!(CAT, imp: self, "Failed to allocate buffer at EOS {:?}", e);
             gst::FlowError::Flushing
         })?;
 
@@ -207,8 +203,6 @@ impl CsoundFilter {
 
         buffer_mut.set_pts(pts);
         buffer_mut.set_duration(duration);
-
-        let srcpad = element.static_pad("src").unwrap();
 
         let adapter_map = state.adapter.map(avail).unwrap();
         let data = adapter_map
@@ -236,14 +230,10 @@ impl CsoundFilter {
         drop(state_lock);
         drop(csound);
 
-        srcpad.push(buffer)
+        self.instance().src_pad().push(buffer)
     }
 
-    fn generate_output(
-        &self,
-        element: &super::CsoundFilter,
-        state: &mut State,
-    ) -> Result<GenerateOutputSuccess, gst::FlowError> {
+    fn generate_output(&self, state: &mut State) -> Result<GenerateOutputSuccess, gst::FlowError> {
         let output_size = state.max_output_size(state.adapter.available());
 
         let mut output = gst::Buffer::with_size(output_size).map_err(|_| gst::FlowError::Error)?;
@@ -257,7 +247,7 @@ impl CsoundFilter {
 
         gst::log!(
             CAT,
-            obj: element,
+            imp: self,
             "Generating output at: {} - duration: {}",
             pts.display(),
             duration.display(),
@@ -367,13 +357,7 @@ impl ObjectImpl for CsoundFilter {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "loop" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -405,7 +389,7 @@ impl ObjectImpl for CsoundFilter {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "loop" => {
                 let settings = self.settings.lock().unwrap();
@@ -478,7 +462,7 @@ impl BaseTransformImpl for CsoundFilter {
     const PASSTHROUGH_ON_SAME_CAPS: bool = false;
     const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
 
-    fn start(&self, _element: &Self::Type) -> std::result::Result<(), gst::ErrorMessage> {
+    fn start(&self) -> std::result::Result<(), gst::ErrorMessage> {
         self.compile_score()?;
 
         let csound = self.csound.lock().unwrap();
@@ -492,32 +476,31 @@ impl BaseTransformImpl for CsoundFilter {
         Ok(())
     }
 
-    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         let csound = self.csound.lock().unwrap();
         csound.stop();
         csound.reset();
         let _ = self.state.lock().unwrap().take();
 
-        gst::info!(CAT, obj: element, "Stopped");
+        gst::info!(CAT, imp: self, "Stopped");
 
         Ok(())
     }
 
-    fn sink_event(&self, element: &Self::Type, event: gst::Event) -> bool {
+    fn sink_event(&self, event: gst::Event) -> bool {
         use gst::EventView;
 
         if let EventView::Eos(_) = event.view() {
-            gst::log!(CAT, obj: element, "Handling Eos");
-            if self.drain(element).is_err() {
+            gst::log!(CAT, imp: self, "Handling Eos");
+            if self.drain().is_err() {
                 return false;
             }
         }
-        self.parent_sink_event(element, event)
+        self.parent_sink_event(event)
     }
 
     fn transform_caps(
         &self,
-        element: &Self::Type,
         direction: gst::PadDirection,
         caps: &gst::Caps,
         filter: Option<&gst::Caps>,
@@ -553,7 +536,7 @@ impl BaseTransformImpl for CsoundFilter {
 
         gst::debug!(
             CAT,
-            obj: element,
+            imp: self,
             "Transformed caps from {} to {} in direction {:?}",
             caps,
             other_caps,
@@ -567,15 +550,10 @@ impl BaseTransformImpl for CsoundFilter {
         Some(other_caps)
     }
 
-    fn set_caps(
-        &self,
-        element: &Self::Type,
-        incaps: &gst::Caps,
-        outcaps: &gst::Caps,
-    ) -> Result<(), gst::LoggableError> {
+    fn set_caps(&self, incaps: &gst::Caps, outcaps: &gst::Caps) -> Result<(), gst::LoggableError> {
         // Flush previous state
         if self.state.lock().unwrap().is_some() {
-            self.drain(element)
+            self.drain()
                 .map_err(|e| loggable_error!(CAT, "Error flusing previous state data {:?}", e))?;
         }
 
@@ -626,22 +604,19 @@ impl BaseTransformImpl for CsoundFilter {
         Ok(())
     }
 
-    fn generate_output(
-        &self,
-        element: &Self::Type,
-    ) -> Result<GenerateOutputSuccess, gst::FlowError> {
+    fn generate_output(&self) -> Result<GenerateOutputSuccess, gst::FlowError> {
         // Check if there are enough data in the queued buffer and adapter,
         // if it is not the case, just notify the parent class to not generate
         // an output
         if let Some(buffer) = self.take_queued_buffer() {
             if buffer.flags().contains(gst::BufferFlags::DISCONT) {
-                self.drain(element)?;
+                self.drain()?;
             }
 
             let mut state_guard = self.state.lock().unwrap();
             let state = state_guard.as_mut().ok_or_else(|| {
-                element_error!(
-                    element,
+                element_imp_error!(
+                    self,
                     gst::CoreError::Negotiation,
                     ["Can not generate an output without State"]
                 );
@@ -650,7 +625,7 @@ impl BaseTransformImpl for CsoundFilter {
 
             state.adapter.push(buffer);
             if !state.needs_more_data() {
-                return self.generate_output(element, state);
+                return self.generate_output(state);
             }
         }
         gst::log!(CAT, "No enough data to generate output");

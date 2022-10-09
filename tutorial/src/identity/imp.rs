@@ -40,7 +40,6 @@ impl Identity {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        _element: &super::Identity,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
@@ -54,7 +53,7 @@ impl Identity {
     //
     // See the documentation of gst::Event and gst::EventRef to see what can be done with
     // events, and especially the gst::EventView type for inspecting events.
-    fn sink_event(&self, pad: &gst::Pad, _element: &super::Identity, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
         self.srcpad.push_event(event)
     }
@@ -68,12 +67,7 @@ impl Identity {
     //
     // See the documentation of gst::Query and gst::QueryRef to see what can be done with
     // queries, and especially the gst::QueryView type for inspecting and modifying queries.
-    fn sink_query(
-        &self,
-        pad: &gst::Pad,
-        _element: &super::Identity,
-        query: &mut gst::QueryRef,
-    ) -> bool {
+    fn sink_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         gst::log!(CAT, obj: pad, "Handling query {:?}", query);
         self.srcpad.peer_query(query)
     }
@@ -86,7 +80,7 @@ impl Identity {
     //
     // See the documentation of gst::Event and gst::EventRef to see what can be done with
     // events, and especially the gst::EventView type for inspecting events.
-    fn src_event(&self, pad: &gst::Pad, _element: &super::Identity, event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
         self.sinkpad.push_event(event)
     }
@@ -100,12 +94,7 @@ impl Identity {
     //
     // See the documentation of gst::Query and gst::QueryRef to see what can be done with
     // queries, and especially the gst::QueryView type for inspecting and modifying queries.
-    fn src_query(
-        &self,
-        pad: &gst::Pad,
-        _element: &super::Identity,
-        query: &mut gst::QueryRef,
-    ) -> bool {
+    fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         gst::log!(CAT, obj: pad, "Handling query {:?}", query);
         self.sinkpad.peer_query(query)
     }
@@ -139,21 +128,21 @@ impl ObjectSubclass for Identity {
                 Identity::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |identity, element| identity.sink_chain(pad, element, buffer),
+                    |identity| identity.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
                 Identity::catch_panic_pad_function(
                     parent,
                     || false,
-                    |identity, element| identity.sink_event(pad, element, event),
+                    |identity| identity.sink_event(pad, event),
                 )
             })
             .query_function(|pad, parent, query| {
                 Identity::catch_panic_pad_function(
                     parent,
                     || false,
-                    |identity, element| identity.sink_query(pad, element, query),
+                    |identity| identity.sink_query(pad, query),
                 )
             })
             .build();
@@ -164,14 +153,14 @@ impl ObjectSubclass for Identity {
                 Identity::catch_panic_pad_function(
                     parent,
                     || false,
-                    |identity, element| identity.src_event(pad, element, event),
+                    |identity| identity.src_event(pad, event),
                 )
             })
             .query_function(|pad, parent, query| {
                 Identity::catch_panic_pad_function(
                     parent,
                     || false,
-                    |identity, element| identity.src_query(pad, element, query),
+                    |identity| identity.src_query(pad, query),
                 )
             })
             .build();
@@ -186,12 +175,13 @@ impl ObjectSubclass for Identity {
 // Implementation of glib::Object virtual methods
 impl ObjectImpl for Identity {
     // Called right after construction of a new instance
-    fn constructed(&self, obj: &Self::Type) {
+    fn constructed(&self) {
         // Call the parent class' ::constructed() implementation first
-        self.parent_constructed(obj);
+        self.parent_constructed();
 
         // Here we actually add the pads we created in Identity::new() to the
         // element so that GStreamer is aware of their existence.
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
@@ -255,12 +245,11 @@ impl ElementImpl for Identity {
     // the element again.
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         // Call the parent class' implementation of ::change_state()
-        self.parent_change_state(element, transition)
+        self.parent_change_state(transition)
     }
 }

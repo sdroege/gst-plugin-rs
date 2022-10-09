@@ -8,7 +8,7 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{element_error, error_msg};
+use gst::{element_imp_error, error_msg};
 use serde_derive::Deserialize;
 
 use once_cell::sync::Lazy;
@@ -81,7 +81,6 @@ impl TranscribeParse {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        _element: &super::TranscribeParse,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
@@ -218,12 +217,7 @@ impl TranscribeParse {
         Ok(())
     }
 
-    fn sink_event(
-        &self,
-        pad: &gst::Pad,
-        element: &super::TranscribeParse,
-        event: gst::Event,
-    ) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -231,14 +225,14 @@ impl TranscribeParse {
             EventView::FlushStop(..) => {
                 let mut state = self.state.lock().unwrap();
                 *state = State::default();
-                pad.event_default(Some(element), event)
+                pad.event_default(Some(&*self.instance()), event)
             }
             EventView::Eos(..) => match self.drain() {
-                Ok(()) => pad.event_default(Some(element), event),
+                Ok(()) => pad.event_default(Some(&*self.instance()), event),
                 Err(err) => {
-                    gst::error!(CAT, obj: element, "failed to drain on EOS: {}", err);
-                    element_error!(
-                        element,
+                    gst::error!(CAT, imp: self, "failed to drain on EOS: {}", err);
+                    element_imp_error!(
+                        self,
                         gst::StreamError::Failed,
                         ["Streaming failed: {}", err]
                     );
@@ -247,7 +241,7 @@ impl TranscribeParse {
                 }
             },
             EventView::Segment(..) | EventView::Caps(..) => true,
-            _ => pad.event_default(Some(element), event),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 }
@@ -265,14 +259,14 @@ impl ObjectSubclass for TranscribeParse {
                 TranscribeParse::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |parse, element| parse.sink_chain(pad, element, buffer),
+                    |parse| parse.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
                 TranscribeParse::catch_panic_pad_function(
                     parent,
                     || false,
-                    |parse, element| parse.sink_event(pad, element, event),
+                    |parse| parse.sink_event(pad, event),
                 )
             })
             .build();
@@ -289,9 +283,10 @@ impl ObjectSubclass for TranscribeParse {
 }
 
 impl ObjectImpl for TranscribeParse {
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
@@ -343,10 +338,9 @@ impl ElementImpl for TranscribeParse {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused | gst::StateChange::PausedToReady => {
@@ -357,6 +351,6 @@ impl ElementImpl for TranscribeParse {
             _ => (),
         }
 
-        self.parent_change_state(element, transition)
+        self.parent_change_state(transition)
     }
 }

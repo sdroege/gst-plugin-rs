@@ -61,7 +61,6 @@ impl Cea608ToTt {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        _element: &super::Cea608ToTt,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
@@ -267,7 +266,7 @@ impl Cea608ToTt {
         buffer
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &super::Cea608ToTt, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -368,7 +367,7 @@ impl Cea608ToTt {
             _ => (),
         }
 
-        pad.event_default(Some(element), event)
+        pad.event_default(Some(&*self.instance()), event)
     }
 }
 
@@ -385,14 +384,14 @@ impl ObjectSubclass for Cea608ToTt {
                 Cea608ToTt::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |this, element| this.sink_chain(pad, element, buffer),
+                    |this| this.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
                 Cea608ToTt::catch_panic_pad_function(
                     parent,
                     || false,
-                    |this, element| this.sink_event(pad, element, event),
+                    |this| this.sink_event(pad, event),
                 )
             })
             .flags(gst::PadFlags::FIXED_CAPS)
@@ -412,9 +411,10 @@ impl ObjectSubclass for Cea608ToTt {
 }
 
 impl ObjectImpl for Cea608ToTt {
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
@@ -486,10 +486,9 @@ impl ElementImpl for Cea608ToTt {
     #[allow(clippy::single_match)]
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {
@@ -499,7 +498,7 @@ impl ElementImpl for Cea608ToTt {
             _ => (),
         }
 
-        let ret = self.parent_change_state(element, transition)?;
+        let ret = self.parent_change_state(transition)?;
 
         match transition {
             gst::StateChange::PausedToReady => {

@@ -71,11 +71,7 @@ impl Dav1dDec {
         }
     }
 
-    fn gst_video_format_from_dav1d_picture(
-        &self,
-        element: &super::Dav1dDec,
-        pic: &dav1d::Picture,
-    ) -> gst_video::VideoFormat {
+    fn gst_video_format_from_dav1d_picture(&self, pic: &dav1d::Picture) -> gst_video::VideoFormat {
         let bpc = pic.bits_per_component();
         let format_desc = match (pic.pixel_layout(), bpc) {
             (dav1d::PixelLayout::I400, Some(dav1d::BitsPerComponent(8))) => "GRAY8",
@@ -91,7 +87,7 @@ impl Dav1dDec {
             (layout, bpc) => {
                 gst::warning!(
                     CAT,
-                    obj: element,
+                    imp: self,
                     "Unsupported dav1d format {:?}/{:?}",
                     layout,
                     bpc
@@ -119,20 +115,19 @@ impl Dav1dDec {
             }
         };
         f.parse::<gst_video::VideoFormat>().unwrap_or_else(|_| {
-            gst::warning!(CAT, obj: element, "Unsupported dav1d format: {}", f);
+            gst::warning!(CAT, imp: self, "Unsupported dav1d format: {}", f);
             gst_video::VideoFormat::Unknown
         })
     }
 
     fn handle_resolution_change<'s>(
         &'s self,
-        element: &super::Dav1dDec,
         mut state_guard: MutexGuard<'s, Option<State>>,
         pic: &dav1d::Picture,
     ) -> Result<MutexGuard<'s, Option<State>>, gst::FlowError> {
         let state = state_guard.as_ref().unwrap();
 
-        let format = self.gst_video_format_from_dav1d_picture(element, pic);
+        let format = self.gst_video_format_from_dav1d_picture(pic);
         if format == gst_video::VideoFormat::Unknown {
             return Err(gst::FlowError::NotNegotiated);
         }
@@ -152,7 +147,7 @@ impl Dav1dDec {
 
         gst::info!(
             CAT,
-            obj: element,
+            imp: self,
             "Negotiating format {:?} picture dimensions {}x{}",
             format,
             pic.width(),
@@ -162,10 +157,11 @@ impl Dav1dDec {
         let input_state = state.input_state.clone();
         drop(state_guard);
 
+        let instance = self.instance();
         let output_state =
-            element.set_output_state(format, pic.width(), pic.height(), Some(&input_state))?;
-        element.negotiate(output_state)?;
-        let out_state = element.output_state().unwrap();
+            instance.set_output_state(format, pic.width(), pic.height(), Some(&input_state))?;
+        instance.negotiate(output_state)?;
+        let out_state = instance.output_state().unwrap();
 
         state_guard = self.state.lock().unwrap();
         let state = state_guard.as_mut().unwrap();
@@ -174,22 +170,21 @@ impl Dav1dDec {
         Ok(state_guard)
     }
 
-    fn flush_decoder(&self, element: &super::Dav1dDec, state: &mut State) {
-        gst::info!(CAT, obj: element, "Flushing decoder");
+    fn flush_decoder(&self, state: &mut State) {
+        gst::info!(CAT, imp: self, "Flushing decoder");
 
         state.decoder.flush();
     }
 
     fn send_data(
         &self,
-        element: &super::Dav1dDec,
         state_guard: &mut MutexGuard<Option<State>>,
         input_buffer: gst::Buffer,
         frame: gst_video::VideoCodecFrame,
     ) -> Result<std::ops::ControlFlow<(), ()>, gst::FlowError> {
         gst::trace!(
             CAT,
-            obj: element,
+            imp: self,
             "Sending data to decoder for frame {}",
             frame.system_frame_number()
         );
@@ -210,18 +205,18 @@ impl Dav1dDec {
             .send_data(input_data, frame_number, timestamp, duration)
         {
             Ok(()) => {
-                gst::trace!(CAT, obj: element, "Decoder returned OK");
+                gst::trace!(CAT, imp: self, "Decoder returned OK");
                 Ok(std::ops::ControlFlow::Break(()))
             }
             Err(err) if err.is_again() => {
-                gst::trace!(CAT, obj: element, "Decoder returned EAGAIN");
+                gst::trace!(CAT, imp: self, "Decoder returned EAGAIN");
                 Ok(std::ops::ControlFlow::Continue(()))
             }
             Err(err) => {
                 gst::error!(CAT, "Sending data failed (error code: {})", err);
-                element.release_frame(frame);
+                self.instance().release_frame(frame);
                 gst_video::video_decoder_error!(
-                    element,
+                    &*self.instance(),
                     1,
                     gst::StreamError::Decode,
                     ["Sending data failed (error code {})", err]
@@ -233,26 +228,25 @@ impl Dav1dDec {
 
     fn send_pending_data(
         &self,
-        element: &super::Dav1dDec,
         state_guard: &mut MutexGuard<Option<State>>,
     ) -> Result<std::ops::ControlFlow<(), ()>, gst::FlowError> {
-        gst::trace!(CAT, obj: element, "Sending pending data to decoder");
+        gst::trace!(CAT, imp: self, "Sending pending data to decoder");
 
         let state = state_guard.as_mut().unwrap();
 
         match state.decoder.send_pending_data() {
             Ok(()) => {
-                gst::trace!(CAT, obj: element, "Decoder returned OK");
+                gst::trace!(CAT, imp: self, "Decoder returned OK");
                 Ok(std::ops::ControlFlow::Break(()))
             }
             Err(err) if err.is_again() => {
-                gst::trace!(CAT, obj: element, "Decoder returned EAGAIN");
+                gst::trace!(CAT, imp: self, "Decoder returned EAGAIN");
                 Ok(std::ops::ControlFlow::Continue(()))
             }
             Err(err) => {
                 gst::error!(CAT, "Sending data failed (error code: {})", err);
                 gst_video::video_decoder_error!(
-                    element,
+                    &*self.instance(),
                     1,
                     gst::StreamError::Decode,
                     ["Sending data failed (error code {})", err]
@@ -264,7 +258,6 @@ impl Dav1dDec {
 
     fn decoded_picture_as_buffer(
         &self,
-        element: &super::Dav1dDec,
         state_guard: &mut MutexGuard<Option<State>>,
         pic: &dav1d::Picture,
         output_state: gst_video::VideoCodecState<gst_video::video_codec_state::Readable>,
@@ -304,7 +297,7 @@ impl Dav1dDec {
             } else {
                 gst::trace!(
                     gst::CAT_PERFORMANCE,
-                    obj: element,
+                    imp: self,
                     "Copying decoded video frame component {:?}",
                     component
                 );
@@ -359,71 +352,67 @@ impl Dav1dDec {
 
     fn handle_picture<'s>(
         &'s self,
-        element: &super::Dav1dDec,
         mut state_guard: MutexGuard<'s, Option<State>>,
         pic: &dav1d::Picture,
     ) -> Result<MutexGuard<'s, Option<State>>, gst::FlowError> {
-        gst::trace!(CAT, obj: element, "Handling picture {}", pic.offset());
+        gst::trace!(CAT, imp: self, "Handling picture {}", pic.offset());
 
-        state_guard = self.handle_resolution_change(element, state_guard, pic)?;
+        state_guard = self.handle_resolution_change(state_guard, pic)?;
 
-        let output_state = element
+        let instance = self.instance();
+        let output_state = instance
             .output_state()
             .expect("Output state not set. Shouldn't happen!");
         let offset = pic.offset() as i32;
 
-        if let Some(mut frame) = element.frame(offset) {
+        let frame = instance.frame(offset);
+        if let Some(mut frame) = frame {
             let output_buffer =
-                self.decoded_picture_as_buffer(element, &mut state_guard, pic, output_state)?;
+                self.decoded_picture_as_buffer(&mut state_guard, pic, output_state)?;
             frame.set_output_buffer(output_buffer);
             drop(state_guard);
-            element.finish_frame(frame)?;
+            instance.finish_frame(frame)?;
             Ok(self.state.lock().unwrap())
         } else {
-            gst::warning!(CAT, obj: element, "No frame found for offset {}", offset);
+            gst::warning!(CAT, imp: self, "No frame found for offset {}", offset);
             Ok(state_guard)
         }
     }
 
-    fn drop_decoded_pictures(
-        &self,
-        element: &super::Dav1dDec,
-        state_guard: &mut MutexGuard<Option<State>>,
-    ) {
-        while let Ok(Some(pic)) = self.pending_pictures(element, state_guard) {
-            gst::debug!(CAT, obj: element, "Dropping picture {}", pic.offset());
+    fn drop_decoded_pictures(&self, state_guard: &mut MutexGuard<Option<State>>) {
+        while let Ok(Some(pic)) = self.pending_pictures(state_guard) {
+            gst::debug!(CAT, imp: self, "Dropping picture {}", pic.offset());
             drop(pic);
         }
     }
 
     fn pending_pictures(
         &self,
-        element: &super::Dav1dDec,
         state_guard: &mut MutexGuard<Option<State>>,
     ) -> Result<Option<dav1d::Picture>, gst::FlowError> {
-        gst::trace!(CAT, obj: element, "Retrieving pending picture");
+        gst::trace!(CAT, imp: self, "Retrieving pending picture");
 
         let state = state_guard.as_mut().unwrap();
 
         match state.decoder.get_picture() {
             Ok(pic) => {
-                gst::trace!(CAT, obj: element, "Retrieved picture {}", pic.offset());
+                gst::trace!(CAT, imp: self, "Retrieved picture {}", pic.offset());
                 Ok(Some(pic))
             }
             Err(err) if err.is_again() => {
-                gst::trace!(CAT, obj: element, "Decoder needs more data");
+                gst::trace!(CAT, imp: self, "Decoder needs more data");
                 Ok(None)
             }
             Err(err) => {
                 gst::error!(
                     CAT,
-                    obj: element,
+                    imp: self,
                     "Retrieving decoded picture failed (error code {})",
                     err
                 );
 
                 gst_video::video_decoder_error!(
-                    element,
+                    &*self.instance(),
                     1,
                     gst::StreamError::Decode,
                     ["Retrieving decoded picture failed (error code {})", err]
@@ -435,11 +424,10 @@ impl Dav1dDec {
 
     fn forward_pending_pictures<'s>(
         &'s self,
-        element: &super::Dav1dDec,
         mut state_guard: MutexGuard<'s, Option<State>>,
     ) -> Result<MutexGuard<Option<State>>, gst::FlowError> {
-        while let Some(pic) = self.pending_pictures(element, &mut state_guard)? {
-            state_guard = self.handle_picture(element, state_guard, &pic)?;
+        while let Some(pic) = self.pending_pictures(&mut state_guard)? {
+            state_guard = self.handle_picture(state_guard, &pic)?;
         }
 
         Ok(state_guard)
@@ -516,13 +504,7 @@ impl ObjectImpl for Dav1dDec {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         let mut settings = self.settings.lock().unwrap();
 
         match pspec.name() {
@@ -536,7 +518,7 @@ impl ObjectImpl for Dav1dDec {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
 
         match pspec.name() {
@@ -600,7 +582,7 @@ impl ElementImpl for Dav1dDec {
 }
 
 impl VideoDecoderImpl for Dav1dDec {
-    fn src_query(&self, element: &Self::Type, query: &mut gst::QueryRef) -> bool {
+    fn src_query(&self, query: &mut gst::QueryRef) -> bool {
         match query.view_mut() {
             gst::QueryViewMut::Latency(q) => {
                 let state_guard = self.state.lock().unwrap();
@@ -613,9 +595,8 @@ impl VideoDecoderImpl for Dav1dDec {
                     Some(ref state) => match state.output_info {
                         Some(ref info) => {
                             let mut upstream_latency = gst::query::Latency::new();
-                            let sinkpad = element.sink_pad();
 
-                            if sinkpad.peer_query(&mut upstream_latency) {
+                            if self.instance().sink_pad().peer_query(&mut upstream_latency) {
                                 let (live, mut min, mut max) = upstream_latency.result();
                                 // For autodetection: 1 if live, else whatever dav1d gives us
                                 let frame_latency: u64 = if max_frame_delay < 0 && live {
@@ -638,7 +619,7 @@ impl VideoDecoderImpl for Dav1dDec {
                                     * gst::ClockTime::SECOND
                                     / (fps_n as u64);
 
-                                gst::debug!(CAT, obj: element, "Reporting latency of {}", latency);
+                                gst::debug!(CAT, imp: self, "Reporting latency of {}", latency);
 
                                 min += latency;
                                 max = max.opt_add(latency);
@@ -657,22 +638,21 @@ impl VideoDecoderImpl for Dav1dDec {
                     None => false,
                 }
             }
-            _ => VideoDecoderImplExt::parent_src_query(self, element, query),
+            _ => VideoDecoderImplExt::parent_src_query(self, query),
         }
     }
 
-    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         {
             let mut state_guard = self.state.lock().unwrap();
             *state_guard = None;
         }
 
-        self.parent_stop(element)
+        self.parent_stop()
     }
 
     fn set_format(
         &self,
-        element: &Self::Type,
         input_state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
         let mut state_guard = self.state.lock().unwrap();
@@ -681,14 +661,13 @@ impl VideoDecoderImpl for Dav1dDec {
         let max_frame_delay: u32;
         let n_cpus = num_cpus::get();
 
-        gst::info!(CAT, obj: element, "Detected {} logical CPUs", n_cpus);
+        gst::info!(CAT, imp: self, "Detected {} logical CPUs", n_cpus);
 
         if settings.max_frame_delay == -1 {
             let mut latency_query = gst::query::Latency::new();
             let mut is_live = false;
-            let sinkpad = element.sink_pad();
 
-            if sinkpad.peer_query(&mut latency_query) {
+            if self.instance().sink_pad().peer_query(&mut latency_query) {
                 is_live = latency_query.result().0;
             }
 
@@ -699,7 +678,7 @@ impl VideoDecoderImpl for Dav1dDec {
 
         gst::info!(
             CAT,
-            obj: element,
+            imp: self,
             "Creating decoder with n-threads={} and max-frame-delay={}",
             settings.n_threads,
             max_frame_delay
@@ -719,12 +698,11 @@ impl VideoDecoderImpl for Dav1dDec {
             n_cpus,
         });
 
-        self.parent_set_format(element, input_state)
+        self.parent_set_format(input_state)
     }
 
     fn handle_frame(
         &self,
-        element: &Self::Type,
         frame: gst_video::VideoCodecFrame,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let input_buffer = frame
@@ -733,73 +711,71 @@ impl VideoDecoderImpl for Dav1dDec {
 
         {
             let mut state_guard = self.state.lock().unwrap();
-            state_guard = self.forward_pending_pictures(element, state_guard)?;
-            if self.send_data(element, &mut state_guard, input_buffer, frame)?
+            state_guard = self.forward_pending_pictures(state_guard)?;
+            if self.send_data(&mut state_guard, input_buffer, frame)?
                 == std::ops::ControlFlow::Continue(())
             {
                 loop {
-                    state_guard = self.forward_pending_pictures(element, state_guard)?;
-                    if self.send_pending_data(element, &mut state_guard)?
-                        == std::ops::ControlFlow::Break(())
+                    state_guard = self.forward_pending_pictures(state_guard)?;
+                    if self.send_pending_data(&mut state_guard)? == std::ops::ControlFlow::Break(())
                     {
                         break;
                     }
                 }
             }
-            let _state_guard = self.forward_pending_pictures(element, state_guard)?;
+            let _state_guard = self.forward_pending_pictures(state_guard)?;
         }
 
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn flush(&self, element: &Self::Type) -> bool {
-        gst::info!(CAT, obj: element, "Flushing");
+    fn flush(&self) -> bool {
+        gst::info!(CAT, imp: self, "Flushing");
 
         {
             let mut state_guard = self.state.lock().unwrap();
             if state_guard.is_some() {
                 let state = state_guard.as_mut().unwrap();
-                self.flush_decoder(element, state);
-                self.drop_decoded_pictures(element, &mut state_guard);
+                self.flush_decoder(state);
+                self.drop_decoded_pictures(&mut state_guard);
             }
         }
 
         true
     }
 
-    fn drain(&self, element: &Self::Type) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::info!(CAT, obj: element, "Draining");
+    fn drain(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
+        gst::info!(CAT, imp: self, "Draining");
 
         {
             let mut state_guard = self.state.lock().unwrap();
             if state_guard.is_some() {
                 let state = state_guard.as_mut().unwrap();
-                self.flush_decoder(element, state);
-                let _state_guard = self.forward_pending_pictures(element, state_guard)?;
+                self.flush_decoder(state);
+                let _state_guard = self.forward_pending_pictures(state_guard)?;
             }
         }
 
-        self.parent_drain(element)
+        self.parent_drain()
     }
 
-    fn finish(&self, element: &Self::Type) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::info!(CAT, obj: element, "Finishing");
+    fn finish(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
+        gst::info!(CAT, imp: self, "Finishing");
 
         {
             let mut state_guard = self.state.lock().unwrap();
             if state_guard.is_some() {
                 let state = state_guard.as_mut().unwrap();
-                self.flush_decoder(element, state);
-                let _state_guard = self.forward_pending_pictures(element, state_guard)?;
+                self.flush_decoder(state);
+                let _state_guard = self.forward_pending_pictures(state_guard)?;
             }
         }
 
-        self.parent_finish(element)
+        self.parent_finish()
     }
 
     fn decide_allocation(
         &self,
-        element: &Self::Type,
         query: &mut gst::query::Allocation,
     ) -> Result<(), gst::LoggableError> {
         {
@@ -810,6 +786,6 @@ impl VideoDecoderImpl for Dav1dDec {
                 .is_some();
         }
 
-        self.parent_decide_allocation(element, query)
+        self.parent_decide_allocation(query)
     }
 }

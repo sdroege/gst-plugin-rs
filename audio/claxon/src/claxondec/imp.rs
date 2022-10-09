@@ -102,20 +102,20 @@ impl ElementImpl for ClaxonDec {
 }
 
 impl AudioDecoderImpl for ClaxonDec {
-    fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         *self.state.borrow_mut() = None;
 
         Ok(())
     }
 
-    fn start(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
         *self.state.borrow_mut() = Some(State { audio_info: None });
 
         Ok(())
     }
 
-    fn set_format(&self, element: &Self::Type, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        gst::debug!(CAT, obj: element, "Setting format {:?}", caps);
+    fn set_format(&self, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
+        gst::debug!(CAT, imp: self, "Setting format {:?}", caps);
 
         let mut audio_info: Option<gst_audio::AudioInfo> = None;
 
@@ -124,28 +124,25 @@ impl AudioDecoderImpl for ClaxonDec {
             let streamheaders = streamheaders.as_slice();
 
             if streamheaders.len() < 2 {
-                gst::debug!(
-                    CAT,
-                    obj: element,
-                    "Not enough streamheaders, trying in-band"
-                );
+                gst::debug!(CAT, imp: self, "Not enough streamheaders, trying in-band");
             } else {
                 let ident_buf = streamheaders[0].get::<Option<gst::Buffer>>();
                 if let Ok(Some(ident_buf)) = ident_buf {
-                    gst::debug!(CAT, obj: element, "Got streamheader buffers");
+                    gst::debug!(CAT, imp: self, "Got streamheader buffers");
                     let inmap = ident_buf.map_readable().unwrap();
 
                     if inmap[0..7] != [0x7f, b'F', b'L', b'A', b'C', 0x01, 0x00] {
-                        gst::debug!(CAT, obj: element, "Unknown streamheader format");
+                        gst::debug!(CAT, imp: self, "Unknown streamheader format");
                     } else if let Ok(tstreaminfo) = claxon_streaminfo(&inmap[13..]) {
                         if let Ok(taudio_info) = gstaudioinfo(&tstreaminfo) {
                             // To speed up negotiation
+                            let element = self.instance();
                             if element.set_output_format(&taudio_info).is_err()
                                 || element.negotiate().is_err()
                             {
                                 gst::debug!(
                                     CAT,
-                                    obj: element,
+                                    imp: self,
                                     "Error to negotiate output from based on in-caps streaminfo"
                                 );
                             }
@@ -166,10 +163,9 @@ impl AudioDecoderImpl for ClaxonDec {
     #[allow(clippy::verbose_bit_mask)]
     fn handle_frame(
         &self,
-        element: &Self::Type,
         inbuf: Option<&gst::Buffer>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::debug!(CAT, obj: element, "Handling buffer {:?}", inbuf);
+        gst::debug!(CAT, imp: self, "Handling buffer {:?}", inbuf);
 
         let inbuf = match inbuf {
             None => return Ok(gst::FlowSuccess::Ok),
@@ -177,7 +173,7 @@ impl AudioDecoderImpl for ClaxonDec {
         };
 
         let inmap = inbuf.map_readable().map_err(|_| {
-            gst::error!(CAT, obj: element, "Failed to buffer readable");
+            gst::error!(CAT, imp: self, "Failed to buffer readable");
             gst::FlowError::Error
         })?;
 
@@ -185,51 +181,51 @@ impl AudioDecoderImpl for ClaxonDec {
         let state = state_guard.as_mut().ok_or(gst::FlowError::NotNegotiated)?;
 
         if inmap.as_slice() == b"fLaC" {
-            gst::debug!(CAT, obj: element, "fLaC buffer received");
+            gst::debug!(CAT, imp: self, "fLaC buffer received");
         } else if inmap[0] & 0x7F == 0x00 {
-            gst::debug!(CAT, obj: element, "Streaminfo header buffer received");
-            return self.handle_streaminfo_header(element, state, inmap.as_ref());
+            gst::debug!(CAT, imp: self, "Streaminfo header buffer received");
+            return self.handle_streaminfo_header(state, inmap.as_ref());
         } else if inmap[0] == 0b1111_1111 && inmap[1] & 0b1111_1100 == 0b1111_1000 {
-            gst::debug!(CAT, obj: element, "Data buffer received");
-            return self.handle_data(element, state, inmap.as_ref());
+            gst::debug!(CAT, imp: self, "Data buffer received");
+            return self.handle_data(state, inmap.as_ref());
         } else {
             // info about other headers in flacparse and https://xiph.org/flac/format.html
             gst::debug!(
                 CAT,
-                obj: element,
+                imp: self,
                 "Other header buffer received {:?}",
                 inmap[0] & 0x7F
             );
         }
 
-        element.finish_frame(None, 1)
+        self.instance().finish_frame(None, 1)
     }
 }
 
 impl ClaxonDec {
     fn handle_streaminfo_header(
         &self,
-        element: &super::ClaxonDec,
         state: &mut State,
         indata: &[u8],
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let streaminfo = claxon_streaminfo(indata).map_err(|e| {
-            gst::element_error!(element, gst::StreamError::Decode, [e]);
+            gst::element_imp_error!(self, gst::StreamError::Decode, [e]);
             gst::FlowError::Error
         })?;
 
         let audio_info = gstaudioinfo(&streaminfo).map_err(|e| {
-            gst::element_error!(element, gst::StreamError::Decode, [&e]);
+            gst::element_imp_error!(self, gst::StreamError::Decode, [&e]);
             gst::FlowError::Error
         })?;
 
         gst::debug!(
             CAT,
-            obj: element,
+            imp: self,
             "Successfully parsed headers: {:?}",
             audio_info
         );
 
+        let element = self.instance();
         element.set_output_format(&audio_info)?;
         element.negotiate()?;
 
@@ -240,7 +236,6 @@ impl ClaxonDec {
 
     fn handle_data(
         &self,
-        element: &super::ClaxonDec,
         state: &mut State,
         indata: &[u8],
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -265,10 +260,10 @@ impl ClaxonDec {
         let mut reader = claxon::frame::FrameReader::new(&mut cursor);
         let result = match reader.read_next_or_eof(buffer) {
             Ok(Some(result)) => result,
-            Ok(None) => return element.finish_frame(None, 1),
+            Ok(None) => return self.instance().finish_frame(None, 1),
             Err(err) => {
                 return gst_audio::audio_decoder_error!(
-                    element,
+                    self.instance(),
                     1,
                     gst::StreamError::Decode,
                     ["Failed to decode packet: {:?}", err]
@@ -293,7 +288,7 @@ impl ClaxonDec {
 
         let depth_adjusted = depth.adjust_samples(v);
         let outbuf = gst::Buffer::from_mut_slice(depth_adjusted);
-        element.finish_frame(Some(outbuf), 1)
+        self.instance().finish_frame(Some(outbuf), 1)
     }
 }
 

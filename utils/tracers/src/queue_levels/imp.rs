@@ -115,28 +115,28 @@ impl Default for Settings {
 }
 
 impl Settings {
-    fn update_from_params(&mut self, obj: &super::QueueLevels, params: String) {
+    fn update_from_params(&mut self, imp: &QueueLevels, params: String) {
         let s = match gst::Structure::from_str(&format!("queue-levels,{}", params)) {
             Ok(s) => s,
             Err(err) => {
-                gst::warning!(CAT, obj: obj, "failed to parse tracer parameters: {}", err);
+                gst::warning!(CAT, imp: imp, "failed to parse tracer parameters: {}", err);
                 return;
             }
         };
 
         if let Ok(file) = s.get::<&str>("file") {
-            gst::log!(CAT, obj: obj, "file= {}", file);
+            gst::log!(CAT, imp: imp, "file= {}", file);
             self.file = PathBuf::from(file);
         }
 
         if let Ok(filter) = s.get::<&str>("include-filter") {
-            gst::log!(CAT, obj: obj, "include filter= {}", filter);
+            gst::log!(CAT, imp: imp, "include filter= {}", filter);
             let filter = match Regex::new(filter) {
                 Ok(filter) => Some(filter),
                 Err(err) => {
                     gst::error!(
                         CAT,
-                        obj: obj,
+                        imp: imp,
                         "Failed to compile include-filter regex: {}",
                         err
                     );
@@ -147,13 +147,13 @@ impl Settings {
         }
 
         if let Ok(filter) = s.get::<&str>("exclude-filter") {
-            gst::log!(CAT, obj: obj, "exclude filter= {}", filter);
+            gst::log!(CAT, imp: imp, "exclude filter= {}", filter);
             let filter = match Regex::new(filter) {
                 Ok(filter) => Some(filter),
                 Err(err) => {
                     gst::error!(
                         CAT,
-                        obj: obj,
+                        imp: imp,
                         "Failed to compile exclude-filter regex: {}",
                         err
                     );
@@ -198,12 +198,12 @@ impl ObjectSubclass for QueueLevels {
 }
 
 impl ObjectImpl for QueueLevels {
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
-        if let Some(params) = obj.property::<Option<String>>("params") {
+        if let Some(params) = self.instance().property::<Option<String>>("params") {
             let mut state = self.state.lock().unwrap();
-            state.settings.update_from_params(obj, params);
+            state.settings.update_from_params(self, params);
         }
 
         Lazy::force(&QUEUE_TYPE);
@@ -230,7 +230,7 @@ impl ObjectImpl for QueueLevels {
         self.register_hook(TracerHook::PadPushEventPre);
     }
 
-    fn dispose(&self, obj: &Self::Type) {
+    fn dispose(&self) {
         use std::io::prelude::*;
 
         let state = self.state.lock().unwrap();
@@ -238,14 +238,14 @@ impl ObjectImpl for QueueLevels {
         let mut file = match std::fs::File::create(&state.settings.file) {
             Ok(file) => file,
             Err(err) => {
-                gst::error!(CAT, obj: obj, "Failed to create file: {err}");
+                gst::error!(CAT, imp: self, "Failed to create file: {err}");
                 return;
             }
         };
 
         gst::debug!(
             CAT,
-            obj: obj,
+            imp: self,
             "Writing file {}",
             state.settings.file.display()
         );
@@ -269,7 +269,7 @@ impl ObjectImpl for QueueLevels {
                 writeln!(&mut file, "{timestamp},{name},0x{ptr:08x},{cur_level_bytes},{cur_level_time},{cur_level_buffers},{max_size_bytes},{max_size_time},{max_size_buffers}")
             };
             if let Err(err) = res {
-                gst::error!(CAT, obj: obj, "Failed to write to file: {err}");
+                gst::error!(CAT, imp: self, "Failed to write to file: {err}");
                 return;
             }
         }
@@ -284,11 +284,10 @@ impl TracerImpl for QueueLevels {
             return;
         }
 
-        let tracer = self.instance();
         let ptr = element.as_ptr() as usize;
         gst::debug!(
             CAT,
-            obj: &tracer,
+            imp: self,
             "new queue: {} 0x{:08x}",
             element.name(),
             ptr

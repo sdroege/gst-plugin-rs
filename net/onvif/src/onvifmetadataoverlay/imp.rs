@@ -72,17 +72,14 @@ pub struct OnvifMetadataOverlay {
 }
 
 impl OnvifMetadataOverlay {
-    fn negotiate(
-        &self,
-        element: &super::OnvifMetadataOverlay,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn negotiate(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
         let video_info = {
             let state = self.state.lock().unwrap();
             match state.video_info.as_ref() {
                 Some(video_info) => Ok(video_info.clone()),
                 None => {
-                    gst::element_error!(
-                        element,
+                    gst::element_imp_error!(
+                        self,
                         gst::CoreError::Negotiation,
                         ["Element hasn't received valid video caps at negotiation time"]
                     );
@@ -115,7 +112,7 @@ impl OnvifMetadataOverlay {
 
         gst::debug!(
             CAT,
-            obj: element,
+            imp: self,
             "upstream has meta: {}, downstream accepts meta: {}",
             upstream_has_meta,
             downstream_accepts_meta
@@ -138,7 +135,7 @@ impl OnvifMetadataOverlay {
                 .find_allocation_meta::<gst_video::VideoOverlayCompositionMeta>()
                 .is_some();
 
-            gst::debug!(CAT, obj: element, "attach meta: {}", attach);
+            gst::debug!(CAT, imp: self, "attach meta: {}", attach);
 
             self.state.lock().unwrap().attach = attach;
 
@@ -291,12 +288,7 @@ impl OnvifMetadataOverlay {
     }
 
     // Update our overlay composition with a set of rectangles
-    fn overlay_shapes(
-        &self,
-        state: &mut State,
-        element: &super::OnvifMetadataOverlay,
-        shapes: Vec<Shape>,
-    ) {
+    fn overlay_shapes(&self, state: &mut State, shapes: Vec<Shape>) {
         if shapes.is_empty() {
             state.composition = None;
             return;
@@ -306,8 +298,8 @@ impl OnvifMetadataOverlay {
             let fontmap = match pangocairo::FontMap::new() {
                 Some(fontmap) => Ok(fontmap),
                 None => {
-                    gst::element_error!(
-                        element,
+                    gst::element_imp_error!(
+                        self,
                         gst::LibraryError::Failed,
                         ["Failed to create pangocairo font map"]
                     );
@@ -318,8 +310,8 @@ impl OnvifMetadataOverlay {
             let context = match fontmap.create_context() {
                 Some(context) => Ok(context),
                 None => {
-                    gst::element_error!(
-                        element,
+                    gst::element_imp_error!(
+                        self,
                         gst::LibraryError::Failed,
                         ["Failed to create font map context"]
                     );
@@ -348,7 +340,7 @@ impl OnvifMetadataOverlay {
 
             gst::debug!(
                 CAT,
-                obj: element,
+                imp: self,
                 "Rendering shape with tag {:?} x {} y {} width {} height {}",
                 shape.tag,
                 shape.x,
@@ -366,7 +358,7 @@ impl OnvifMetadataOverlay {
             ) {
                 Some(ret) => ret,
                 None => {
-                    gst::error!(CAT, obj: element, "Failed to render buffer");
+                    gst::error!(CAT, imp: self, "Failed to render buffer");
                     state.composition = None;
                     return;
                 }
@@ -390,13 +382,12 @@ impl OnvifMetadataOverlay {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &super::OnvifMetadataOverlay,
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::trace!(CAT, obj: pad, "Handling buffer {:?}", buffer);
 
         if self.srcpad.check_reconfigure() {
-            if let Err(err) = self.negotiate(element) {
+            if let Err(err) = self.negotiate() {
                 if self.srcpad.pad_flags().contains(gst::PadFlags::FLUSHING) {
                     self.srcpad.mark_reconfigure();
                     return Ok(gst::FlowSuccess::Ok);
@@ -417,7 +408,7 @@ impl OnvifMetadataOverlay {
             let mut shapes: Vec<Shape> = Vec::new();
 
             if let Ok(frames) = s.get::<gst::BufferList>("frames") {
-                gst::log!(CAT, obj: element, "Overlaying {} frames", frames.len());
+                gst::log!(CAT, imp: self, "Overlaying {} frames", frames.len());
 
                 // Metadata for multiple frames may be attached to this frame, either because:
                 //
@@ -435,8 +426,8 @@ impl OnvifMetadataOverlay {
 
                 for buffer in frames.iter().rev() {
                     let buffer = buffer.map_readable().map_err(|_| {
-                        gst::element_error!(
-                            element,
+                        gst::element_imp_error!(
+                            self,
                             gst::ResourceError::Read,
                             ["Failed to map buffer readable"]
                         );
@@ -445,8 +436,8 @@ impl OnvifMetadataOverlay {
                     })?;
 
                     let utf8 = std::str::from_utf8(buffer.as_ref()).map_err(|err| {
-                        gst::element_error!(
-                            element,
+                        gst::element_imp_error!(
+                            self,
                             gst::StreamError::Format,
                             ["Failed to decode buffer as UTF-8: {}", err]
                         );
@@ -455,8 +446,8 @@ impl OnvifMetadataOverlay {
                     })?;
 
                     let root = utf8.parse::<Element>().map_err(|err| {
-                        gst::element_error!(
-                            element,
+                        gst::element_imp_error!(
+                            self,
                             gst::ResourceError::Read,
                             ["Failed to parse buffer as XML: {}", err]
                         );
@@ -472,14 +463,14 @@ impl OnvifMetadataOverlay {
                         if object.is("Frame", "http://www.onvif.org/ver10/schema") {
                             for object in object.children() {
                                 if object.is("Object", "http://www.onvif.org/ver10/schema") {
-                                    gst::trace!(CAT, obj: element, "Handling object {:?}", object);
+                                    gst::trace!(CAT, imp: self, "Handling object {:?}", object);
 
                                     let object_id = match object.attr("ObjectId") {
                                         Some(id) => id.to_string(),
                                         None => {
                                             gst::warning!(
                                                 CAT,
-                                                obj: element,
+                                                imp: self,
                                                 "XML Object with no ObjectId"
                                             );
                                             continue;
@@ -528,7 +519,7 @@ impl OnvifMetadataOverlay {
                                         None => {
                                             gst::warning!(
                                                 CAT,
-                                                obj: element,
+                                                imp: self,
                                                 "XML Shape with no BoundingBox"
                                             );
                                             continue;
@@ -541,7 +532,7 @@ impl OnvifMetadataOverlay {
                                             None => {
                                                 gst::warning!(
                                                     CAT,
-                                                    obj: element,
+                                                    imp: self,
                                                     "BoundingBox with no left attribute"
                                                 );
                                                 continue;
@@ -554,7 +545,7 @@ impl OnvifMetadataOverlay {
                                             None => {
                                                 gst::warning!(
                                                     CAT,
-                                                    obj: element,
+                                                    imp: self,
                                                     "BoundingBox with no right attribute"
                                                 );
                                                 continue;
@@ -567,7 +558,7 @@ impl OnvifMetadataOverlay {
                                             None => {
                                                 gst::warning!(
                                                     CAT,
-                                                    obj: element,
+                                                    imp: self,
                                                     "BoundingBox with no top attribute"
                                                 );
                                                 continue;
@@ -582,7 +573,7 @@ impl OnvifMetadataOverlay {
                                         None => {
                                             gst::warning!(
                                                 CAT,
-                                                obj: element,
+                                                imp: self,
                                                 "BoundingBox with no bottom attribute"
                                             );
                                             continue;
@@ -614,7 +605,7 @@ impl OnvifMetadataOverlay {
                                                     None => {
                                                         gst::warning!(
                                                             CAT,
-                                                            obj: element,
+                                                            imp: self,
                                                             "Point with no x attribute"
                                                         );
                                                         continue;
@@ -629,7 +620,7 @@ impl OnvifMetadataOverlay {
                                                     None => {
                                                         gst::warning!(
                                                             CAT,
-                                                            obj: element,
+                                                            imp: self,
                                                             "Point with no y attribute"
                                                         );
                                                         continue;
@@ -666,7 +657,7 @@ impl OnvifMetadataOverlay {
                 }
 
                 if !frames.is_empty() {
-                    self.overlay_shapes(&mut state, element, shapes);
+                    self.overlay_shapes(&mut state, shapes);
                 }
             }
         }
@@ -692,12 +683,7 @@ impl OnvifMetadataOverlay {
         self.srcpad.push(buffer)
     }
 
-    fn sink_event(
-        &self,
-        pad: &gst::Pad,
-        element: &super::OnvifMetadataOverlay,
-        event: gst::Event,
-    ) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -708,7 +694,7 @@ impl OnvifMetadataOverlay {
                 state.video_info = gst_video::VideoInfo::from_caps(c.caps()).ok();
                 drop(state);
                 self.srcpad.check_reconfigure();
-                match self.negotiate(element) {
+                match self.negotiate() {
                     Ok(_) => true,
                     Err(_) => {
                         self.srcpad.mark_reconfigure();
@@ -719,9 +705,9 @@ impl OnvifMetadataOverlay {
             EventView::FlushStop(..) => {
                 let mut state = self.state.lock().unwrap();
                 state.composition = None;
-                pad.event_default(Some(element), event)
+                pad.event_default(Some(&*self.instance()), event)
             }
-            _ => pad.event_default(Some(element), event),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 }
@@ -739,14 +725,14 @@ impl ObjectSubclass for OnvifMetadataOverlay {
                 OnvifMetadataOverlay::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |overlay, element| overlay.sink_chain(pad, element, buffer),
+                    |overlay| overlay.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
                 OnvifMetadataOverlay::catch_panic_pad_function(
                     parent,
                     || false,
-                    |overlay, element| overlay.sink_event(pad, element, event),
+                    |overlay| overlay.sink_event(pad, event),
                 )
             })
             .flags(gst::PadFlags::PROXY_CAPS)
@@ -781,13 +767,7 @@ impl ObjectImpl for OnvifMetadataOverlay {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "font-desc" => {
                 self.settings.lock().unwrap().font_desc = value
@@ -800,16 +780,17 @@ impl ObjectImpl for OnvifMetadataOverlay {
         };
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "font-desc" => self.settings.lock().unwrap().font_desc.to_value(),
             _ => unimplemented!(),
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
@@ -862,10 +843,9 @@ impl ElementImpl for OnvifMetadataOverlay {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused | gst::StateChange::PausedToReady => {
@@ -876,6 +856,6 @@ impl ElementImpl for OnvifMetadataOverlay {
             _ => (),
         }
 
-        self.parent_change_state(element, transition)
+        self.parent_change_state(transition)
     }
 }

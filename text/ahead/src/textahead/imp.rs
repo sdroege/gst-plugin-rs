@@ -77,14 +77,14 @@ impl ObjectSubclass for TextAhead {
                 TextAhead::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |imp, element| imp.sink_chain(pad, element, buffer),
+                    |imp| imp.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
                 TextAhead::catch_panic_pad_function(
                     parent,
                     || false,
-                    |imp, element| imp.sink_event(pad, element, event),
+                    |imp| imp.sink_event(pad, event),
                 )
             })
             .build();
@@ -144,13 +144,7 @@ impl ObjectImpl for TextAhead {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         let mut settings = self.settings.lock().unwrap();
 
         match pspec.name() {
@@ -173,7 +167,7 @@ impl ObjectImpl for TextAhead {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
 
         match pspec.name() {
@@ -186,9 +180,10 @@ impl ObjectImpl for TextAhead {
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sink_pad).unwrap();
         obj.add_pad(&self.src_pad).unwrap();
     }
@@ -242,10 +237,9 @@ impl ElementImpl for TextAhead {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        let res = self.parent_change_state(element, transition);
+        let res = self.parent_change_state(transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => *self.state.lock().unwrap() = State::default(),
@@ -264,7 +258,6 @@ impl TextAhead {
     fn sink_chain(
         &self,
         _pad: &gst::Pad,
-        element: &super::TextAhead,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let pts = buffer.pts();
@@ -279,7 +272,7 @@ impl TextAhead {
         // queue buffer
         let mut state = self.state.lock().unwrap();
 
-        gst::log!(CAT, obj: element, "input {:?}: {}", pts, text);
+        gst::log!(CAT, imp: self, "input {:?}: {}", pts, text);
 
         state.pending.push(Input {
             text,
@@ -295,26 +288,27 @@ impl TextAhead {
         // then check if we can output
         // FIXME: this won't work on live pipelines as we can't really report latency
         if state.pending.len() > n_ahead {
-            self.push_pending(element, &mut state)
+            self.push_pending(&mut state)
         } else {
             Ok(gst::FlowSuccess::Ok)
         }
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &super::TextAhead, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         match event.view() {
             gst::EventView::Eos(_) => {
                 let mut state = self.state.lock().unwrap();
 
-                gst::debug!(CAT, obj: element, "eos");
+                gst::debug!(CAT, imp: self, "eos");
 
                 while !state.pending.is_empty() {
-                    let _ = self.push_pending(element, &mut state);
+                    let _ = self.push_pending(&mut state);
                 }
-                pad.event_default(Some(element), event)
+                pad.event_default(Some(&*self.instance()), event)
             }
             gst::EventView::Caps(_caps) => {
                 // set caps on src pad
+                let element = self.instance();
                 let templ = element.class().pad_template("src").unwrap();
                 let _ = self.src_pad.push_event(gst::event::Caps::new(templ.caps()));
                 true
@@ -332,16 +326,15 @@ impl TextAhead {
                     }
                 }
 
-                pad.event_default(Some(element), event)
+                pad.event_default(Some(&*self.instance()), event)
             }
-            _ => pad.event_default(Some(element), event),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 
     /// push first pending buffer as current and all the other ones as ahead text
     fn push_pending(
         &self,
-        element: &super::TextAhead,
         state: &mut MutexGuard<State>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         if state.done {
@@ -390,7 +383,7 @@ impl TextAhead {
             }
         }
 
-        gst::log!(CAT, obj: element, "output {:?}: {}", pts, text);
+        gst::log!(CAT, imp: self, "output {:?}: {}", pts, text);
 
         let mut output = gst::Buffer::from_mut_slice(text.into_bytes());
         {

@@ -318,12 +318,12 @@ pub struct TestSrc {
 }
 
 impl TestSrc {
-    fn prepare(&self, element: &super::TestSrc) -> Result<(), gst::ErrorMessage> {
+    fn prepare(&self) -> Result<(), gst::ErrorMessage> {
         let raise_log_level = self.settings.lock().unwrap().raise_log_level;
         if raise_log_level {
-            gst::debug!(CAT, obj: element, "Preparing");
+            gst::debug!(CAT, imp: self, "Preparing");
         } else {
-            gst::trace!(CAT, obj: element, "Preparing");
+            gst::trace!(CAT, imp: self, "Preparing");
         }
 
         let settings = self.settings.lock().unwrap();
@@ -337,87 +337,87 @@ impl TestSrc {
         drop(settings);
 
         self.task
-            .prepare(SrcTask::new(element.clone()), context)
+            .prepare(SrcTask::new(self.instance().clone()), context)
             .block_on()?;
 
         if raise_log_level {
-            gst::debug!(CAT, obj: element, "Prepared");
+            gst::debug!(CAT, imp: self, "Prepared");
         } else {
-            gst::trace!(CAT, obj: element, "Prepared");
+            gst::trace!(CAT, imp: self, "Prepared");
         }
 
         Ok(())
     }
 
-    fn unprepare(&self, element: &super::TestSrc) {
+    fn unprepare(&self) {
         let raise_log_level = self.settings.lock().unwrap().raise_log_level;
         if raise_log_level {
-            gst::debug!(CAT, obj: element, "Unpreparing");
+            gst::debug!(CAT, imp: self, "Unpreparing");
         } else {
-            gst::trace!(CAT, obj: element, "Unpreparing");
+            gst::trace!(CAT, imp: self, "Unpreparing");
         }
 
         self.task.unprepare().block_on().unwrap();
 
         if raise_log_level {
-            gst::debug!(CAT, obj: element, "Unprepared");
+            gst::debug!(CAT, imp: self, "Unprepared");
         } else {
-            gst::trace!(CAT, obj: element, "Unprepared");
+            gst::trace!(CAT, imp: self, "Unprepared");
         }
     }
 
-    fn stop(&self, element: &super::TestSrc) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         let raise_log_level = self.settings.lock().unwrap().raise_log_level;
         if raise_log_level {
-            gst::debug!(CAT, obj: element, "Stopping");
+            gst::debug!(CAT, imp: self, "Stopping");
         } else {
-            gst::trace!(CAT, obj: element, "Stopping");
+            gst::trace!(CAT, imp: self, "Stopping");
         }
 
         self.task.stop().block_on()?;
 
         if raise_log_level {
-            gst::debug!(CAT, obj: element, "Stopped");
+            gst::debug!(CAT, imp: self, "Stopped");
         } else {
-            gst::trace!(CAT, obj: element, "Stopped");
+            gst::trace!(CAT, imp: self, "Stopped");
         }
 
         Ok(())
     }
 
-    fn start(&self, element: &super::TestSrc) -> Result<(), gst::ErrorMessage> {
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
         let raise_log_level = self.settings.lock().unwrap().raise_log_level;
         if raise_log_level {
-            gst::debug!(CAT, obj: element, "Starting");
+            gst::debug!(CAT, imp: self, "Starting");
         } else {
-            gst::trace!(CAT, obj: element, "Starting");
+            gst::trace!(CAT, imp: self, "Starting");
         }
 
         self.task.start().block_on()?;
 
         if raise_log_level {
-            gst::debug!(CAT, obj: element, "Started");
+            gst::debug!(CAT, imp: self, "Started");
         } else {
-            gst::trace!(CAT, obj: element, "Started");
+            gst::trace!(CAT, imp: self, "Started");
         }
 
         Ok(())
     }
 
-    fn pause(&self, element: &super::TestSrc) -> Result<(), gst::ErrorMessage> {
+    fn pause(&self) -> Result<(), gst::ErrorMessage> {
         let raise_log_level = self.settings.lock().unwrap().raise_log_level;
         if raise_log_level {
-            gst::debug!(CAT, obj: element, "Pausing");
+            gst::debug!(CAT, imp: self, "Pausing");
         } else {
-            gst::trace!(CAT, obj: element, "Pausing");
+            gst::trace!(CAT, imp: self, "Pausing");
         }
 
         self.task.pause().block_on()?;
 
         if raise_log_level {
-            gst::debug!(CAT, obj: element, "Paused");
+            gst::debug!(CAT, imp: self, "Paused");
         } else {
-            gst::trace!(CAT, obj: element, "Paused");
+            gst::trace!(CAT, imp: self, "Paused");
         }
 
         Ok(())
@@ -479,13 +479,7 @@ impl ObjectImpl for TestSrc {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         let mut settings = self.settings.lock().unwrap();
         match pspec.name() {
             "context" => {
@@ -515,7 +509,7 @@ impl ObjectImpl for TestSrc {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
         match pspec.name() {
             "context" => settings.context.to_value(),
@@ -531,12 +525,12 @@ impl ObjectImpl for TestSrc {
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(self.src_pad.gst_pad()).unwrap();
-
-        gstthreadshare::set_element_flags(obj, gst::ElementFlags::SOURCE);
+        obj.set_element_flags(gst::ElementFlags::SOURCE);
     }
 }
 
@@ -575,41 +569,40 @@ impl ElementImpl for TestSrc {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {
-                self.prepare(element).map_err(|err| {
-                    element.post_error_message(err);
+                self.prepare().map_err(|err| {
+                    self.post_error_message(err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::PlayingToPaused => {
-                self.pause(element).map_err(|_| gst::StateChangeError)?;
+                self.pause().map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                self.unprepare(element);
+                self.unprepare();
             }
             _ => (),
         }
 
-        let mut success = self.parent_change_state(element, transition)?;
+        let mut success = self.parent_change_state(transition)?;
 
         match transition {
             gst::StateChange::ReadyToPaused => {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToPlaying => {
-                self.start(element).map_err(|_| gst::StateChangeError)?;
+                self.start().map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::PlayingToPaused => {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToReady => {
-                self.stop(element).map_err(|_| gst::StateChangeError)?;
+                self.stop().map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }

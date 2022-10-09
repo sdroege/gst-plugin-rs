@@ -96,9 +96,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
             gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", buffer);
             let queue = element.imp();
-            queue
-                .enqueue_item(&element, DataQueueItem::Buffer(buffer))
-                .await
+            queue.enqueue_item(DataQueueItem::Buffer(buffer)).await
         }
         .boxed()
     }
@@ -116,9 +114,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
             gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", list);
             let queue = element.imp();
-            queue
-                .enqueue_item(&element, DataQueueItem::BufferList(list))
-                .await
+            queue.enqueue_item(DataQueueItem::BufferList(list)).await
         }
         .boxed()
     }
@@ -183,7 +179,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
 
             gst::log!(CAT, obj: pad.gst_pad(), "Queuing serialized {:?}", event);
             queue
-                .enqueue_item(&element, DataQueueItem::Event(event))
+                .enqueue_item(DataQueueItem::Event(event))
                 .await
                 .is_ok()
         }
@@ -495,7 +491,7 @@ impl Queue {
     /* Schedules emptying of the pending queue. If there is an upstream
      * TaskContext, the new task is spawned, it is otherwise
      * returned, for the caller to block on */
-    async fn schedule_pending_queue(&self, element: &super::Queue) {
+    async fn schedule_pending_queue(&self) {
         loop {
             let more_queue_space_receiver = {
                 let dataqueue = self.dataqueue.lock().unwrap();
@@ -504,7 +500,7 @@ impl Queue {
                 }
                 let mut pending_queue_grd = self.pending_queue.lock().unwrap();
 
-                gst::log!(CAT, obj: element, "Trying to empty pending queue");
+                gst::log!(CAT, imp: self, "Trying to empty pending queue");
 
                 if let Some(pending_queue) = pending_queue_grd.as_mut() {
                     let mut failed_item = None;
@@ -521,30 +517,26 @@ impl Queue {
 
                         receiver
                     } else {
-                        gst::log!(CAT, obj: element, "Pending queue is empty now");
+                        gst::log!(CAT, imp: self, "Pending queue is empty now");
                         *pending_queue_grd = None;
                         return;
                     }
                 } else {
-                    gst::log!(CAT, obj: element, "Flushing, dropping pending queue");
+                    gst::log!(CAT, imp: self, "Flushing, dropping pending queue");
                     return;
                 }
             };
 
-            gst::log!(CAT, obj: element, "Waiting for more queue space");
+            gst::log!(CAT, imp: self, "Waiting for more queue space");
             let _ = more_queue_space_receiver.await;
         }
     }
 
-    async fn enqueue_item(
-        &self,
-        element: &super::Queue,
-        item: DataQueueItem,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+    async fn enqueue_item(&self, item: DataQueueItem) -> Result<gst::FlowSuccess, gst::FlowError> {
         let wait_fut = {
             let dataqueue = self.dataqueue.lock().unwrap();
             let dataqueue = dataqueue.as_ref().ok_or_else(|| {
-                gst::error!(CAT, obj: element, "No DataQueue");
+                gst::error!(CAT, imp: self, "No DataQueue");
                 gst::FlowError::Error
             })?;
 
@@ -573,18 +565,18 @@ impl Queue {
 
                     gst::log!(
                         CAT,
-                        obj: element,
+                        imp: self,
                         "Queue is full - Pushing first item on pending queue"
                     );
 
                     if schedule_now {
-                        gst::log!(CAT, obj: element, "Scheduling pending queue now");
+                        gst::log!(CAT, imp: self, "Scheduling pending queue now");
                         pending_queue.as_mut().unwrap().scheduled = true;
 
-                        let wait_fut = self.schedule_pending_queue(element);
+                        let wait_fut = self.schedule_pending_queue();
                         Some(wait_fut)
                     } else {
-                        gst::log!(CAT, obj: element, "Scheduling pending queue later");
+                        gst::log!(CAT, imp: self, "Scheduling pending queue later");
                         None
                     }
                 } else {
@@ -597,20 +589,20 @@ impl Queue {
         };
 
         if let Some(wait_fut) = wait_fut {
-            gst::log!(CAT, obj: element, "Blocking until queue has space again");
+            gst::log!(CAT, imp: self, "Blocking until queue has space again");
             wait_fut.await;
         }
 
         *self.last_res.lock().unwrap()
     }
 
-    fn prepare(&self, element: &super::Queue) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, obj: element, "Preparing");
+    fn prepare(&self) -> Result<(), gst::ErrorMessage> {
+        gst::debug!(CAT, imp: self, "Preparing");
 
         let settings = self.settings.lock().unwrap().clone();
 
         let dataqueue = DataQueue::new(
-            &element.clone().upcast(),
+            &self.instance().clone().upcast(),
             self.src_pad.gst_pad(),
             if settings.max_size_buffers == 0 {
                 None
@@ -640,16 +632,16 @@ impl Queue {
             })?;
 
         self.task
-            .prepare(QueueTask::new(element.clone(), dataqueue), context)
+            .prepare(QueueTask::new(self.instance().clone(), dataqueue), context)
             .block_on()?;
 
-        gst::debug!(CAT, obj: element, "Prepared");
+        gst::debug!(CAT, imp: self, "Prepared");
 
         Ok(())
     }
 
-    fn unprepare(&self, element: &super::Queue) {
-        gst::debug!(CAT, obj: element, "Unpreparing");
+    fn unprepare(&self) {
+        gst::debug!(CAT, imp: self, "Unpreparing");
 
         self.task.unprepare().block_on().unwrap();
 
@@ -658,20 +650,20 @@ impl Queue {
 
         *self.last_res.lock().unwrap() = Ok(gst::FlowSuccess::Ok);
 
-        gst::debug!(CAT, obj: element, "Unprepared");
+        gst::debug!(CAT, imp: self, "Unprepared");
     }
 
-    fn stop(&self, element: &super::Queue) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, obj: element, "Stopping");
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
+        gst::debug!(CAT, imp: self, "Stopping");
         self.task.stop().await_maybe_on_context()?;
-        gst::debug!(CAT, obj: element, "Stopped");
+        gst::debug!(CAT, imp: self, "Stopped");
         Ok(())
     }
 
-    fn start(&self, element: &super::Queue) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, obj: element, "Starting");
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
+        gst::debug!(CAT, imp: self, "Starting");
         self.task.start().await_maybe_on_context()?;
-        gst::debug!(CAT, obj: element, "Started");
+        gst::debug!(CAT, imp: self, "Started");
         Ok(())
     }
 }
@@ -738,13 +730,7 @@ impl ObjectImpl for Queue {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         let mut settings = self.settings.lock().unwrap();
         match pspec.name() {
             "max-size-buffers" => {
@@ -772,7 +758,7 @@ impl ObjectImpl for Queue {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
         match pspec.name() {
             "max-size-buffers" => settings.max_size_buffers.to_value(),
@@ -784,9 +770,10 @@ impl ObjectImpl for Queue {
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(self.sink_pad.gst_pad()).unwrap();
         obj.add_pad(self.src_pad.gst_pad()).unwrap();
     }
@@ -836,31 +823,30 @@ impl ElementImpl for Queue {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {
-                self.prepare(element).map_err(|err| {
-                    element.post_error_message(err);
+                self.prepare().map_err(|err| {
+                    self.post_error_message(err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::PausedToReady => {
-                self.stop(element).map_err(|_| gst::StateChangeError)?;
+                self.stop().map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                self.unprepare(element);
+                self.unprepare();
             }
             _ => (),
         }
 
-        let success = self.parent_change_state(element, transition)?;
+        let success = self.parent_change_state(transition)?;
 
         if transition == gst::StateChange::ReadyToPaused {
-            self.start(element).map_err(|_| gst::StateChangeError)?;
+            self.start().map_err(|_| gst::StateChangeError)?;
         }
 
         Ok(success)

@@ -136,7 +136,6 @@ impl WebPDec {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        _element: &super::WebPDec,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
@@ -149,7 +148,7 @@ impl WebPDec {
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn decode(&self, _element: &super::WebPDec) -> Result<(), gst::ErrorMessage> {
+    fn decode(&self) -> Result<(), gst::ErrorMessage> {
         let mut prev_timestamp: Option<gst::ClockTime> = Some(gst::ClockTime::ZERO);
         let mut state = self.state.lock().unwrap();
 
@@ -234,7 +233,7 @@ impl WebPDec {
         Ok(())
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &super::WebPDec, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -242,26 +241,26 @@ impl WebPDec {
             EventView::FlushStop(..) => {
                 let mut state = self.state.lock().unwrap();
                 *state = State::default();
-                pad.event_default(Some(element), event)
+                pad.event_default(Some(&*self.instance()), event)
             }
             EventView::Eos(..) => {
-                if let Err(err) = self.decode(element) {
-                    element.post_error_message(err);
+                if let Err(err) = self.decode() {
+                    self.post_error_message(err);
                 }
-                pad.event_default(Some(element), event)
+                pad.event_default(Some(&*self.instance()), event)
             }
             EventView::Segment(..) => true,
-            _ => pad.event_default(Some(element), event),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 
-    fn src_event(&self, pad: &gst::Pad, element: &super::WebPDec, event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Seek(..) => false,
-            _ => pad.event_default(Some(element), event),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 }
@@ -279,14 +278,14 @@ impl ObjectSubclass for WebPDec {
                 WebPDec::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |dec, element| dec.sink_chain(pad, element, buffer),
+                    |dec| dec.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
                 WebPDec::catch_panic_pad_function(
                     parent,
                     || false,
-                    |dec, element| dec.sink_event(pad, element, event),
+                    |dec| dec.sink_event(pad, event),
                 )
             })
             .build();
@@ -294,11 +293,7 @@ impl ObjectSubclass for WebPDec {
         let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
             .event_function(|pad, parent, event| {
-                WebPDec::catch_panic_pad_function(
-                    parent,
-                    || false,
-                    |dec, element| dec.src_event(pad, element, event),
-                )
+                WebPDec::catch_panic_pad_function(parent, || false, |dec| dec.src_event(pad, event))
             })
             .build();
 
@@ -311,9 +306,10 @@ impl ObjectSubclass for WebPDec {
 }
 
 impl ObjectImpl for WebPDec {
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
@@ -367,15 +363,14 @@ impl ElementImpl for WebPDec {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         if transition == gst::StateChange::PausedToReady {
             *self.state.lock().unwrap() = State::default();
         }
 
-        self.parent_change_state(element, transition)
+        self.parent_change_state(transition)
     }
 }

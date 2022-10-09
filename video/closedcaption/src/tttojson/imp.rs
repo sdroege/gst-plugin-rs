@@ -48,15 +48,14 @@ impl TtToJson {
     fn sink_chain(
         &self,
         _pad: &gst::Pad,
-        element: &super::TtToJson,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let pts = buffer.pts();
         let duration = buffer.duration();
 
         let buffer = buffer.into_mapped_buffer_readable().map_err(|_| {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::ResourceError::Read,
                 ["Failed to map buffer readable"]
             );
@@ -65,8 +64,8 @@ impl TtToJson {
         })?;
 
         let text = std::str::from_utf8(buffer.as_slice()).map_err(|err| {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::ResourceError::Read,
                 ["Failed to map decode as utf8: {}", err]
             );
@@ -101,8 +100,8 @@ impl TtToJson {
         }
 
         let json = serde_json::to_string(&lines).map_err(|err| {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::ResourceError::Write,
                 ["Failed to serialize as json {}", err]
             );
@@ -120,7 +119,7 @@ impl TtToJson {
         self.srcpad.push(buf)
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &super::TtToJson, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -133,8 +132,8 @@ impl TtToJson {
                     .build();
                 self.srcpad.push_event(gst::event::Caps::new(&caps))
             }
-            EventView::Eos(_) => pad.event_default(Some(element), event),
-            _ => pad.event_default(Some(element), event),
+            EventView::Eos(_) => pad.event_default(Some(&*self.instance()), event),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 }
@@ -197,14 +196,14 @@ impl ObjectSubclass for TtToJson {
                 TtToJson::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |enc, element| enc.sink_chain(pad, element, buffer),
+                    |enc| enc.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
                 TtToJson::catch_panic_pad_function(
                     parent,
                     || false,
-                    |enc, element| enc.sink_event(pad, element, event),
+                    |enc| enc.sink_event(pad, event),
                 )
             })
             .build();
@@ -235,20 +234,15 @@ impl ObjectImpl for TtToJson {
         PROPERTIES.as_ref()
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "mode" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -258,7 +252,7 @@ impl ObjectImpl for TtToJson {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "mode" => {
                 let settings = self.settings.lock().unwrap();

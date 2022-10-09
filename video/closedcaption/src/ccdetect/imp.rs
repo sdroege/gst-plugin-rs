@@ -72,9 +72,13 @@ struct CCPacketContents {
 }
 
 impl CCDetect {
-    fn detect_cc_data(data: &[u8]) -> Result<CCPacketContents, ParseError> {
+    fn detect_cc_data(&self, data: &[u8]) -> Result<CCPacketContents, ParseError> {
         if data.len() % 3 != 0 {
-            gst::warning!(CAT, "cc_data length is not a multiple of 3, truncating");
+            gst::warning!(
+                CAT,
+                imp: self,
+                "cc_data length is not a multiple of 3, truncating"
+            );
         }
 
         /* logic from ccconverter */
@@ -86,6 +90,7 @@ impl CCDetect {
             let cc_type = triple[0] & 0x03;
             gst::trace!(
                 CAT,
+                imp: self,
                 "triple:{} have ccp:{} 608:{} 708:{} data:{:02x},{:02x},{:02x} cc_valid:{} cc_type:{:02b}",
                 i * 3,
                 started_ccp,
@@ -130,22 +135,21 @@ impl CCDetect {
         })
     }
 
-    fn detect_cdp(data: &[u8]) -> Result<CCPacketContents, ParseError> {
+    fn detect_cdp(&self, data: &[u8]) -> Result<CCPacketContents, ParseError> {
         let data = extract_cdp(data)?;
 
-        Self::detect_cc_data(data)
+        self.detect_cc_data(data)
     }
 
-    fn detect(format: CCFormat, data: &[u8]) -> Result<CCPacketContents, ParseError> {
+    fn detect(&self, format: CCFormat, data: &[u8]) -> Result<CCPacketContents, ParseError> {
         match format {
-            CCFormat::Cc708CcData => Self::detect_cc_data(data),
-            CCFormat::Cc708Cdp => Self::detect_cdp(data),
+            CCFormat::Cc708CcData => self.detect_cc_data(data),
+            CCFormat::Cc708Cdp => self.detect_cdp(data),
         }
     }
 
     fn maybe_update_properties(
         &self,
-        element: &super::CCDetect,
         ts: gst::ClockTime,
         cc_packet: CCPacketContents,
     ) -> Result<(), gst::FlowError> {
@@ -160,6 +164,7 @@ impl CCDetect {
 
             gst::trace!(
                 CAT,
+                imp: self,
                 "packet contains {:?} current settings {:?} and state {:?}",
                 cc_packet,
                 settings,
@@ -193,14 +198,20 @@ impl CCDetect {
                 state.last_cc708_change = Some(ts);
             }
 
-            gst::trace!(CAT, "changed to settings {:?} state {:?}", settings, state);
+            gst::trace!(
+                CAT,
+                imp: self,
+                "changed to settings {:?} state {:?}",
+                settings,
+                state
+            );
         }
 
         if notify_cc608 {
-            element.notify("cc608");
+            self.instance().notify("cc608");
         }
         if notify_cc708 {
-            element.notify("cc708");
+            self.instance().notify("cc708");
         }
 
         Ok(())
@@ -243,13 +254,7 @@ impl ObjectImpl for CCDetect {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "window" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -260,7 +265,7 @@ impl ObjectImpl for CCDetect {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "window" => {
                 let settings = self.settings.lock().unwrap();
@@ -337,14 +342,13 @@ impl BaseTransformImpl for CCDetect {
 
     fn transform_ip_passthrough(
         &self,
-        element: &Self::Type,
         buf: &gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let map = buf.map_readable().map_err(|_| gst::FlowError::Error)?;
 
         let pts = buf.pts().ok_or_else(|| {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::ResourceError::Read,
                 ["Input buffers must have valid timestamps"]
             );
@@ -357,11 +361,11 @@ impl BaseTransformImpl for CCDetect {
             state.format
         };
 
-        let cc_packet = match Self::detect(format, map.as_slice()) {
+        let cc_packet = match self.detect(format, map.as_slice()) {
             Ok(v) => v,
             Err(e) => {
-                gst::warning!(CAT, "{}", &e.to_string());
-                gst::element_warning!(element, gst::StreamError::Decode, [&e.to_string()]);
+                gst::warning!(CAT, imp: self, "{}", &e.to_string());
+                gst::element_imp_warning!(self, gst::StreamError::Decode, [&e.to_string()]);
                 CCPacketContents {
                     cc608: false,
                     cc708: false,
@@ -369,35 +373,29 @@ impl BaseTransformImpl for CCDetect {
             }
         };
 
-        self.maybe_update_properties(element, pts, cc_packet)
+        self.maybe_update_properties(pts, cc_packet)
             .map_err(|_| gst::FlowError::Error)?;
 
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn sink_event(&self, element: &Self::Type, event: gst::Event) -> bool {
+    fn sink_event(&self, event: gst::Event) -> bool {
         match event.view() {
             gst::event::EventView::Gap(gap) => {
                 let _ = self.maybe_update_properties(
-                    element,
                     gap.get().0,
                     CCPacketContents {
                         cc608: false,
                         cc708: false,
                     },
                 );
-                self.parent_sink_event(element, event)
+                self.parent_sink_event(event)
             }
-            _ => self.parent_sink_event(element, event),
+            _ => self.parent_sink_event(event),
         }
     }
 
-    fn set_caps(
-        &self,
-        _element: &Self::Type,
-        incaps: &gst::Caps,
-        outcaps: &gst::Caps,
-    ) -> Result<(), gst::LoggableError> {
+    fn set_caps(&self, incaps: &gst::Caps, outcaps: &gst::Caps) -> Result<(), gst::LoggableError> {
         if incaps != outcaps {
             return Err(gst::loggable_error!(
                 CAT,
@@ -427,7 +425,7 @@ impl BaseTransformImpl for CCDetect {
         Ok(())
     }
 
-    fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         // Drop state
         let _ = self.state.lock().unwrap().take();
 

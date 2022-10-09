@@ -838,8 +838,8 @@ impl UdpSink {
         self.item_sender.lock().unwrap().as_ref().unwrap().clone()
     }
 
-    fn prepare(&self, element: &super::UdpSink) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, obj: element, "Preparing");
+    fn prepare(&self) -> Result<(), gst::ErrorMessage> {
+        gst::debug!(CAT, imp: self, "Preparing");
 
         let context = {
             let settings = self.settings.lock().unwrap();
@@ -855,39 +855,37 @@ impl UdpSink {
         // Enable backpressure for items
         let (item_sender, item_receiver) = flume::bounded(0);
         let (cmd_sender, cmd_receiver) = flume::unbounded();
-        let task_impl = UdpSinkTask::new(element, item_receiver, cmd_receiver);
+        let task_impl = UdpSinkTask::new(&*self.instance(), item_receiver, cmd_receiver);
         self.task.prepare(task_impl, context).block_on()?;
 
         *self.item_sender.lock().unwrap() = Some(item_sender);
         *self.cmd_sender.lock().unwrap() = Some(cmd_sender);
 
-        gst::debug!(CAT, obj: element, "Started preparation");
+        gst::debug!(CAT, imp: self, "Started preparation");
 
         Ok(())
     }
 
-    fn unprepare(&self, element: &super::UdpSink) {
-        gst::debug!(CAT, obj: element, "Unpreparing");
+    fn unprepare(&self) {
+        gst::debug!(CAT, imp: self, "Unpreparing");
         self.task.unprepare().block_on().unwrap();
-        gst::debug!(CAT, obj: element, "Unprepared");
+        gst::debug!(CAT, imp: self, "Unprepared");
     }
 
-    fn stop(&self, element: &super::UdpSink) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, obj: element, "Stopping");
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
+        gst::debug!(CAT, imp: self, "Stopping");
         self.task.stop().block_on()?;
-        gst::debug!(CAT, obj: element, "Stopped");
+        gst::debug!(CAT, imp: self, "Stopped");
         Ok(())
     }
 
-    fn start(&self, element: &super::UdpSink) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, obj: element, "Starting");
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
+        gst::debug!(CAT, imp: self, "Starting");
         self.task.start().block_on()?;
-        gst::debug!(CAT, obj: element, "Started");
+        gst::debug!(CAT, imp: self, "Started");
         Ok(())
     }
-}
 
-impl UdpSink {
     fn add_client(&self, settings: &mut Settings, client: SocketAddr) {
         settings.clients.insert(client);
         if let Some(cmd_sender) = self.cmd_sender.lock().unwrap().as_mut() {
@@ -919,10 +917,10 @@ impl UdpSink {
     }
 }
 
-fn try_into_socket_addr(element: &super::UdpSink, host: &str, port: i32) -> Result<SocketAddr, ()> {
+fn try_into_socket_addr(imp: &UdpSink, host: &str, port: i32) -> Result<SocketAddr, ()> {
     let addr: IpAddr = match host.parse() {
         Err(err) => {
-            gst::error!(CAT, obj: element, "Failed to parse host {}: {}", host, err);
+            gst::error!(CAT, imp: imp, "Failed to parse host {}: {}", host, err);
             return Err(());
         }
         Ok(addr) => addr,
@@ -930,7 +928,7 @@ fn try_into_socket_addr(element: &super::UdpSink, host: &str, port: i32) -> Resu
 
     let port: u16 = match port.try_into() {
         Err(err) => {
-            gst::error!(CAT, obj: element, "Invalid port {}: {}", port, err);
+            gst::error!(CAT, imp: imp, "Invalid port {}: {}", port, err);
             return Err(());
         }
         Ok(port) => port,
@@ -1071,9 +1069,9 @@ impl ObjectImpl for UdpSink {
                         let element = args[0].get::<super::UdpSink>().expect("signal arg");
                         let host = args[1].get::<String>().expect("signal arg");
                         let port = args[2].get::<i32>().expect("signal arg");
+                        let udpsink = element.imp();
 
-                        if let Ok(addr) = try_into_socket_addr(&element, &host, port) {
-                            let udpsink = element.imp();
+                        if let Ok(addr) = try_into_socket_addr(udpsink, &host, port) {
                             let mut settings = udpsink.settings.lock().unwrap();
                             udpsink.add_client(&mut settings, addr);
                         }
@@ -1088,9 +1086,9 @@ impl ObjectImpl for UdpSink {
                         let element = args[0].get::<super::UdpSink>().expect("signal arg");
                         let host = args[1].get::<String>().expect("signal arg");
                         let port = args[2].get::<i32>().expect("signal arg");
+                        let udpsink = element.imp();
 
-                        if let Ok(addr) = try_into_socket_addr(&element, &host, port) {
-                            let udpsink = element.imp();
+                        if let Ok(addr) = try_into_socket_addr(udpsink, &host, port) {
                             let mut settings = udpsink.settings.lock().unwrap();
                             udpsink.remove_client(&mut settings, addr);
                         }
@@ -1116,13 +1114,7 @@ impl ObjectImpl for UdpSink {
         SIGNALS.as_ref()
     }
 
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         let mut settings = self.settings.lock().unwrap();
         match pspec.name() {
             "sync" => {
@@ -1196,9 +1188,9 @@ impl ObjectImpl for UdpSink {
                         rsplit[0]
                             .parse::<i32>()
                             .map_err(|err| {
-                                gst::error!(CAT, obj: obj, "Invalid port {}: {}", rsplit[0], err);
+                                gst::error!(CAT, imp: self, "Invalid port {}: {}", rsplit[0], err);
                             })
-                            .and_then(|port| try_into_socket_addr(obj, rsplit[1], port))
+                            .and_then(|port| try_into_socket_addr(self, rsplit[1], port))
                             .ok()
                     } else {
                         None
@@ -1222,7 +1214,7 @@ impl ObjectImpl for UdpSink {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
         match pspec.name() {
             "sync" => settings.sync.to_value(),
@@ -1268,12 +1260,12 @@ impl ObjectImpl for UdpSink {
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(self.sink_pad.gst_pad()).unwrap();
-
-        crate::set_element_flags(obj, gst::ElementFlags::SINK);
+        obj.set_element_flags(gst::ElementFlags::SINK);
     }
 }
 
@@ -1313,34 +1305,33 @@ impl ElementImpl for UdpSink {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {
-                self.prepare(element).map_err(|err| {
-                    element.post_error_message(err);
+                self.prepare().map_err(|err| {
+                    self.post_error_message(err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::ReadyToPaused => {
-                self.start(element).map_err(|_| gst::StateChangeError)?;
+                self.start().map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::PausedToReady => {
-                self.stop(element).map_err(|_| gst::StateChangeError)?;
+                self.stop().map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                self.unprepare(element);
+                self.unprepare();
             }
             _ => (),
         }
 
-        self.parent_change_state(element, transition)
+        self.parent_change_state(transition)
     }
 
-    fn send_event(&self, _element: &Self::Type, event: gst::Event) -> bool {
+    fn send_event(&self, event: gst::Event) -> bool {
         match event.view() {
             EventView::Latency(ev) => {
                 let latency = Some(ev.latency());

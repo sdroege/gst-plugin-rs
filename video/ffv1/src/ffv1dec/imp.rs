@@ -358,7 +358,6 @@ impl VideoDecoderImpl for Ffv1Dec {
     /* We allocate the decoder here rather than start() because we need the sink caps */
     fn set_format(
         &self,
-        element: &super::Ffv1Dec,
         state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
         let info = state.info();
@@ -372,7 +371,8 @@ impl VideoDecoderImpl for Ffv1Dec {
         let format = get_output_format(decoder.config_record())
             .ok_or_else(|| gst::loggable_error!(CAT, "Unsupported format"))?;
 
-        let output_state = element
+        let instance = self.instance();
+        let output_state = instance
             .set_output_state(format, info.width(), info.height(), Some(state))
             .map_err(|err| gst::loggable_error!(CAT, "Failed to set output params: {}", err))?;
 
@@ -386,23 +386,22 @@ impl VideoDecoderImpl for Ffv1Dec {
         };
         drop(decoder_state);
 
-        element
+        instance
             .negotiate(output_state)
             .map_err(|err| gst::loggable_error!(CAT, "Negotiation failed: {}", err))?;
 
-        self.parent_set_format(element, state)
+        self.parent_set_format(state)
     }
 
-    fn stop(&self, element: &super::Ffv1Dec) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         let mut decoder_state = self.state.lock().unwrap();
         *decoder_state = DecoderState::Stopped;
 
-        self.parent_stop(element)
+        self.parent_stop()
     }
 
     fn handle_frame(
         &self,
-        element: &super::Ffv1Dec,
         mut frame: gst_video::VideoCodecFrame,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
@@ -438,14 +437,13 @@ impl VideoDecoderImpl for Ffv1Dec {
         drop(state);
 
         frame.set_output_buffer(buf);
-        element.finish_frame(frame)?;
+        self.instance().finish_frame(frame)?;
 
         Ok(gst::FlowSuccess::Ok)
     }
 
     fn decide_allocation(
         &self,
-        element: &Self::Type,
         query: &mut gst::query::Allocation,
     ) -> Result<(), gst::LoggableError> {
         let supported = query
@@ -461,6 +459,6 @@ impl VideoDecoderImpl for Ffv1Dec {
             *video_meta_supported = supported;
         }
 
-        self.parent_decide_allocation(element, query)
+        self.parent_decide_allocation(query)
     }
 }

@@ -159,20 +159,14 @@ impl ObjectImpl for HsvFilter {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "hue-shift" => {
                 let mut settings = self.settings.lock().unwrap();
                 let hue_shift = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing hue-shift from {} to {}",
                     settings.hue_shift,
                     hue_shift
@@ -184,7 +178,7 @@ impl ObjectImpl for HsvFilter {
                 let saturation_mul = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing saturation-mul from {} to {}",
                     settings.saturation_mul,
                     saturation_mul
@@ -196,7 +190,7 @@ impl ObjectImpl for HsvFilter {
                 let saturation_off = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing saturation-off from {} to {}",
                     settings.saturation_off,
                     saturation_off
@@ -208,7 +202,7 @@ impl ObjectImpl for HsvFilter {
                 let value_mul = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing value-mul from {} to {}",
                     settings.value_mul,
                     value_mul
@@ -220,7 +214,7 @@ impl ObjectImpl for HsvFilter {
                 let value_off = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing value-off from {} to {}",
                     settings.value_off,
                     value_off
@@ -233,7 +227,7 @@ impl ObjectImpl for HsvFilter {
 
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "hue-shift" => {
                 let settings = self.settings.lock().unwrap();
@@ -327,7 +321,6 @@ impl BaseTransformImpl for HsvFilter {
 impl VideoFilterImpl for HsvFilter {
     fn transform_frame_ip(
         &self,
-        _element: &Self::Type,
         frame: &mut gst_video::VideoFrameRef<&mut gst::BufferRef>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         match frame.format() {

@@ -331,7 +331,6 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 impl ToggleRecord {
     fn handle_main_stream<T: HandleData>(
         &self,
-        element: &super::ToggleRecord,
         pad: &gst::Pad,
         stream: &Stream,
         data: T,
@@ -339,8 +338,8 @@ impl ToggleRecord {
         let mut state = stream.state.lock();
 
         let mut dts_or_pts = data.dts_or_pts().ok_or_else(|| {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::StreamError::Format,
                 ["Buffer without DTS or PTS"]
             );
@@ -498,7 +497,7 @@ impl ToggleRecord {
 
                 drop(rec_state);
                 drop(state);
-                element.notify("recording");
+                self.instance().notify("recording");
 
                 Ok(HandleResult::Drop)
             }
@@ -584,7 +583,7 @@ impl ToggleRecord {
 
                 drop(rec_state);
                 drop(state);
-                element.notify("recording");
+                self.instance().notify("recording");
 
                 Ok(HandleResult::Pass(data))
             }
@@ -594,7 +593,6 @@ impl ToggleRecord {
     #[allow(clippy::blocks_in_if_conditions)]
     fn handle_secondary_stream<T: HandleData>(
         &self,
-        element: &super::ToggleRecord,
         pad: &gst::Pad,
         stream: &Stream,
         data: T,
@@ -603,13 +601,13 @@ impl ToggleRecord {
         let mut state = stream.state.lock();
 
         let mut pts = data.pts().ok_or_else(|| {
-            gst::element_error!(element, gst::StreamError::Format, ["Buffer without PTS"]);
+            gst::element_imp_error!(self, gst::StreamError::Format, ["Buffer without PTS"]);
             gst::FlowError::Error
         })?;
 
         if data.dts().map_or(false, |dts| dts != pts) {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::StreamError::Format,
                 ["DTS != PTS not supported for secondary streams"]
             );
@@ -617,8 +615,8 @@ impl ToggleRecord {
         }
 
         if !data.is_keyframe() {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::StreamError::Format,
                 ["Delta-units not supported for secondary streams"]
             );
@@ -1149,15 +1147,10 @@ impl ToggleRecord {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &super::ToggleRecord,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let stream = self.pads.lock().get(pad).cloned().ok_or_else(|| {
-            gst::element_error!(
-                element,
-                gst::CoreError::Pad,
-                ["Unknown pad {:?}", pad.name()]
-            );
+            gst::element_imp_error!(self, gst::CoreError::Pad, ["Unknown pad {:?}", pad.name()]);
             gst::FlowError::Error
         })?;
 
@@ -1174,9 +1167,9 @@ impl ToggleRecord {
         }
 
         let handle_result = if stream != self.main_stream {
-            self.handle_secondary_stream(element, pad, &stream, buffer)
+            self.handle_secondary_stream(pad, &stream, buffer)
         } else {
-            self.handle_main_stream(element, pad, &stream, buffer)
+            self.handle_main_stream(pad, &stream, buffer)
         }?;
 
         let mut buffer = match handle_result {
@@ -1194,7 +1187,7 @@ impl ToggleRecord {
                 );
 
                 if recording_state_updated {
-                    element.notify("recording");
+                    self.instance().notify("recording");
                 }
 
                 return Err(gst::FlowError::Eos);
@@ -1275,18 +1268,13 @@ impl ToggleRecord {
         stream.srcpad.push(buffer)
     }
 
-    fn sink_event(
-        &self,
-        pad: &gst::Pad,
-        element: &super::ToggleRecord,
-        mut event: gst::Event,
-    ) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, mut event: gst::Event) -> bool {
         use gst::EventView;
 
         let stream = match self.pads.lock().get(pad) {
             None => {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::CoreError::Pad,
                     ["Unknown pad {:?}", pad.name()]
                 );
@@ -1345,8 +1333,8 @@ impl ToggleRecord {
 
                 let segment = match e.segment().clone().downcast::<gst::ClockTime>() {
                     Err(segment) => {
-                        gst::element_error!(
-                            element,
+                        gst::element_imp_error!(
+                            self,
                             gst::StreamError::Format,
                             ["Only Time segments supported, got {:?}", segment.format(),]
                         );
@@ -1356,8 +1344,8 @@ impl ToggleRecord {
                 };
 
                 if (segment.rate() - 1.0).abs() > f64::EPSILON {
-                    gst::element_error!(
-                        element,
+                    gst::element_imp_error!(
+                        self,
                         gst::StreamError::Format,
                         [
                             "Only rate==1.0 segments supported, got {:?}",
@@ -1381,9 +1369,9 @@ impl ToggleRecord {
                 gst::debug!(CAT, obj: pad, "Handling Gap event {:?}", event);
                 let (pts, duration) = e.get();
                 let handle_result = if stream == self.main_stream {
-                    self.handle_main_stream(element, pad, &stream, (pts, duration))
+                    self.handle_main_stream(pad, &stream, (pts, duration))
                 } else {
-                    self.handle_secondary_stream(element, pad, &stream, (pts, duration))
+                    self.handle_secondary_stream(pad, &stream, (pts, duration))
                 };
 
                 forward = match handle_result {
@@ -1456,7 +1444,7 @@ impl ToggleRecord {
         };
 
         if recording_state_changed {
-            element.notify("recording");
+            self.instance().notify("recording");
         }
 
         // If a serialized event and coming after Segment and a new Segment is pending,
@@ -1505,16 +1493,11 @@ impl ToggleRecord {
         }
     }
 
-    fn sink_query(
-        &self,
-        pad: &gst::Pad,
-        element: &super::ToggleRecord,
-        query: &mut gst::QueryRef,
-    ) -> bool {
+    fn sink_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         let stream = match self.pads.lock().get(pad) {
             None => {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::CoreError::Pad,
                     ["Unknown pad {:?}", pad.name()]
                 );
@@ -1531,18 +1514,13 @@ impl ToggleRecord {
     // FIXME `matches!` was introduced in rustc 1.42.0, current MSRV is 1.41.0
     // FIXME uncomment when CI can upgrade to 1.47.1
     //#[allow(clippy::match_like_matches_macro)]
-    fn src_event(
-        &self,
-        pad: &gst::Pad,
-        element: &super::ToggleRecord,
-        mut event: gst::Event,
-    ) -> bool {
+    fn src_event(&self, pad: &gst::Pad, mut event: gst::Event) -> bool {
         use gst::EventView;
 
         let stream = match self.pads.lock().get(pad) {
             None => {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::CoreError::Pad,
                     ["Unknown pad {:?}", pad.name()]
                 );
@@ -1571,18 +1549,13 @@ impl ToggleRecord {
         }
     }
 
-    fn src_query(
-        &self,
-        pad: &gst::Pad,
-        element: &super::ToggleRecord,
-        query: &mut gst::QueryRef,
-    ) -> bool {
+    fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
         let stream = match self.pads.lock().get(pad) {
             None => {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::CoreError::Pad,
                     ["Unknown pad {:?}", pad.name()]
                 );
@@ -1703,15 +1676,11 @@ impl ToggleRecord {
         }
     }
 
-    fn iterate_internal_links(
-        &self,
-        pad: &gst::Pad,
-        element: &super::ToggleRecord,
-    ) -> gst::Iterator<gst::Pad> {
+    fn iterate_internal_links(&self, pad: &gst::Pad) -> gst::Iterator<gst::Pad> {
         let stream = match self.pads.lock().get(pad) {
             None => {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::CoreError::Pad,
                     ["Unknown pad {:?}", pad.name()]
                 );
@@ -1741,28 +1710,28 @@ impl ObjectSubclass for ToggleRecord {
                 ToggleRecord::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |togglerecord, element| togglerecord.sink_chain(pad, element, buffer),
+                    |togglerecord| togglerecord.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
                 ToggleRecord::catch_panic_pad_function(
                     parent,
                     || false,
-                    |togglerecord, element| togglerecord.sink_event(pad, element, event),
+                    |togglerecord| togglerecord.sink_event(pad, event),
                 )
             })
             .query_function(|pad, parent, query| {
                 ToggleRecord::catch_panic_pad_function(
                     parent,
                     || false,
-                    |togglerecord, element| togglerecord.sink_query(pad, element, query),
+                    |togglerecord| togglerecord.sink_query(pad, query),
                 )
             })
             .iterate_internal_links_function(|pad, parent| {
                 ToggleRecord::catch_panic_pad_function(
                     parent,
                     || gst::Iterator::from_vec(vec![]),
-                    |togglerecord, element| togglerecord.iterate_internal_links(pad, element),
+                    |togglerecord| togglerecord.iterate_internal_links(pad),
                 )
             })
             .build();
@@ -1773,21 +1742,21 @@ impl ObjectSubclass for ToggleRecord {
                 ToggleRecord::catch_panic_pad_function(
                     parent,
                     || false,
-                    |togglerecord, element| togglerecord.src_event(pad, element, event),
+                    |togglerecord| togglerecord.src_event(pad, event),
                 )
             })
             .query_function(|pad, parent, query| {
                 ToggleRecord::catch_panic_pad_function(
                     parent,
                     || false,
-                    |togglerecord, element| togglerecord.src_query(pad, element, query),
+                    |togglerecord| togglerecord.src_query(pad, query),
                 )
             })
             .iterate_internal_links_function(|pad, parent| {
                 ToggleRecord::catch_panic_pad_function(
                     parent,
                     || gst::Iterator::from_vec(vec![]),
-                    |togglerecord, element| togglerecord.iterate_internal_links(pad, element),
+                    |togglerecord| togglerecord.iterate_internal_links(pad),
                 )
             })
             .build();
@@ -1837,20 +1806,14 @@ impl ObjectImpl for ToggleRecord {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "record" => {
                 let mut settings = self.settings.lock();
                 let record = value.get().expect("type checked upstream");
                 gst::debug!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Setting record from {:?} to {:?}",
                     settings.record,
                     record
@@ -1863,7 +1826,7 @@ impl ObjectImpl for ToggleRecord {
                 let live = value.get().expect("type checked upstream");
                 gst::debug!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Setting live from {:?} to {:?}",
                     settings.live,
                     live
@@ -1875,7 +1838,7 @@ impl ObjectImpl for ToggleRecord {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "record" => {
                 let settings = self.settings.lock();
@@ -1893,9 +1856,10 @@ impl ObjectImpl for ToggleRecord {
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.main_stream.sinkpad).unwrap();
         obj.add_pad(&self.main_stream.srcpad).unwrap();
     }
@@ -1965,10 +1929,9 @@ impl ElementImpl for ToggleRecord {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {
@@ -2001,7 +1964,7 @@ impl ElementImpl for ToggleRecord {
             _ => (),
         }
 
-        let success = self.parent_change_state(element, transition)?;
+        let success = self.parent_change_state(transition)?;
 
         if transition == gst::StateChange::PausedToReady {
             for s in self
@@ -2019,7 +1982,7 @@ impl ElementImpl for ToggleRecord {
             let mut rec_state = self.state.lock();
             *rec_state = State::default();
             drop(rec_state);
-            element.notify("recording");
+            self.instance().notify("recording");
         }
 
         Ok(success)
@@ -2027,7 +1990,6 @@ impl ElementImpl for ToggleRecord {
 
     fn request_new_pad(
         &self,
-        element: &Self::Type,
         _templ: &gst::PadTemplate,
         _name: Option<String>,
         _caps: Option<&gst::Caps>,
@@ -2039,60 +2001,60 @@ impl ElementImpl for ToggleRecord {
         let id = *pad_count;
         *pad_count += 1;
 
-        let templ = element.pad_template("sink_%u").unwrap();
+        let templ = self.instance().pad_template("sink_%u").unwrap();
         let sinkpad =
             gst::Pad::builder_with_template(&templ, Some(format!("sink_{}", id).as_str()))
                 .chain_function(|pad, parent, buffer| {
                     ToggleRecord::catch_panic_pad_function(
                         parent,
                         || Err(gst::FlowError::Error),
-                        |togglerecord, element| togglerecord.sink_chain(pad, element, buffer),
+                        |togglerecord| togglerecord.sink_chain(pad, buffer),
                     )
                 })
                 .event_function(|pad, parent, event| {
                     ToggleRecord::catch_panic_pad_function(
                         parent,
                         || false,
-                        |togglerecord, element| togglerecord.sink_event(pad, element, event),
+                        |togglerecord| togglerecord.sink_event(pad, event),
                     )
                 })
                 .query_function(|pad, parent, query| {
                     ToggleRecord::catch_panic_pad_function(
                         parent,
                         || false,
-                        |togglerecord, element| togglerecord.sink_query(pad, element, query),
+                        |togglerecord| togglerecord.sink_query(pad, query),
                     )
                 })
                 .iterate_internal_links_function(|pad, parent| {
                     ToggleRecord::catch_panic_pad_function(
                         parent,
                         || gst::Iterator::from_vec(vec![]),
-                        |togglerecord, element| togglerecord.iterate_internal_links(pad, element),
+                        |togglerecord| togglerecord.iterate_internal_links(pad),
                     )
                 })
                 .build();
 
-        let templ = element.pad_template("src_%u").unwrap();
+        let templ = self.instance().pad_template("src_%u").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some(format!("src_{}", id).as_str()))
             .event_function(|pad, parent, event| {
                 ToggleRecord::catch_panic_pad_function(
                     parent,
                     || false,
-                    |togglerecord, element| togglerecord.src_event(pad, element, event),
+                    |togglerecord| togglerecord.src_event(pad, event),
                 )
             })
             .query_function(|pad, parent, query| {
                 ToggleRecord::catch_panic_pad_function(
                     parent,
                     || false,
-                    |togglerecord, element| togglerecord.src_query(pad, element, query),
+                    |togglerecord| togglerecord.src_query(pad, query),
                 )
             })
             .iterate_internal_links_function(|pad, parent| {
                 ToggleRecord::catch_panic_pad_function(
                     parent,
                     || gst::Iterator::from_vec(vec![]),
-                    |togglerecord, element| togglerecord.iterate_internal_links(pad, element),
+                    |togglerecord| togglerecord.iterate_internal_links(pad),
                 )
             })
             .build();
@@ -2110,13 +2072,13 @@ impl ElementImpl for ToggleRecord {
         drop(pads);
         drop(other_streams_guard);
 
-        element.add_pad(&sinkpad).unwrap();
-        element.add_pad(&srcpad).unwrap();
+        self.instance().add_pad(&sinkpad).unwrap();
+        self.instance().add_pad(&srcpad).unwrap();
 
         Some(sinkpad)
     }
 
-    fn release_pad(&self, element: &Self::Type, pad: &gst::Pad) {
+    fn release_pad(&self, pad: &gst::Pad) {
         let mut other_streams_guard = self.other_streams.lock();
         let (ref mut other_streams, _) = *other_streams_guard;
         let mut pads = self.pads.lock();
@@ -2143,7 +2105,7 @@ impl ElementImpl for ToggleRecord {
         stream.srcpad.set_active(false).unwrap();
         stream.sinkpad.set_active(false).unwrap();
 
-        element.remove_pad(&stream.sinkpad).unwrap();
-        element.remove_pad(&stream.srcpad).unwrap();
+        self.instance().remove_pad(&stream.sinkpad).unwrap();
+        self.instance().remove_pad(&stream.srcpad).unwrap();
     }
 }

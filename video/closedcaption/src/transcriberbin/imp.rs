@@ -85,12 +85,8 @@ pub struct TranscriberBin {
 }
 
 impl TranscriberBin {
-    fn construct_transcription_bin(
-        &self,
-        element: &super::TranscriberBin,
-        state: &mut State,
-    ) -> Result<(), Error> {
-        gst::debug!(CAT, obj: element, "Building transcription bin");
+    fn construct_transcription_bin(&self, state: &mut State) -> Result<(), Error> {
+        gst::debug!(CAT, imp: self, "Building transcription bin");
 
         let aqueue_transcription = gst::ElementFactory::make("queue", Some("transqueue"))?;
         aqueue_transcription.set_property("max-size-buffers", 0u32);
@@ -153,11 +149,7 @@ impl TranscriberBin {
         Ok(())
     }
 
-    fn construct_internal_bin(
-        &self,
-        element: &super::TranscriberBin,
-        state: &mut State,
-    ) -> Result<(), Error> {
+    fn construct_internal_bin(&self, state: &mut State) -> Result<(), Error> {
         let aclocksync = gst::ElementFactory::make("clocksync", None)?;
 
         let vclocksync = gst::ElementFactory::make("clocksync", None)?;
@@ -202,17 +194,16 @@ impl TranscriberBin {
         state.internal_bin.add_pad(&internal_video_sinkpad)?;
         state.internal_bin.add_pad(&internal_video_srcpad)?;
 
-        let element_weak = element.downgrade();
+        let imp_weak = self.downgrade();
         let comp_sinkpad = &state.cccombiner.static_pad("sink").unwrap();
         // Drop caption meta from video buffer if user preference is transcription
         comp_sinkpad.add_probe(gst::PadProbeType::BUFFER, move |_, probe_info| {
-            let element = match element_weak.upgrade() {
+            let imp = match imp_weak.upgrade() {
                 None => return gst::PadProbeReturn::Remove,
-                Some(element) => element,
+                Some(imp) => imp,
             };
 
-            let trans = TranscriberBin::from_instance(&element);
-            let settings = trans.settings.lock().unwrap();
+            let settings = imp.settings.lock().unwrap();
             if settings.caption_source != CaptionSource::Transcription {
                 return gst::PadProbeReturn::Pass;
             }
@@ -227,7 +218,7 @@ impl TranscriberBin {
             gst::PadProbeReturn::Ok
         });
 
-        element.add(&state.internal_bin)?;
+        self.instance().add(&state.internal_bin)?;
 
         state
             .cccombiner
@@ -242,12 +233,12 @@ impl TranscriberBin {
         self.video_srcpad
             .set_target(Some(&state.internal_bin.static_pad("video_src").unwrap()))?;
 
-        self.construct_transcription_bin(element, state)?;
+        self.construct_transcription_bin(state)?;
 
         Ok(())
     }
 
-    fn setup_transcription(&self, element: &super::TranscriberBin, state: &State) {
+    fn setup_transcription(&self, state: &State) {
         let settings = self.settings.lock().unwrap();
         let mut cc_caps = settings.cc_caps.clone();
 
@@ -285,10 +276,10 @@ impl TranscriberBin {
 
         drop(settings);
 
-        self.setup_cc_mode(element, state);
+        self.setup_cc_mode(state);
     }
 
-    fn disable_transcription_bin(&self, element: &super::TranscriberBin) {
+    fn disable_transcription_bin(&self) {
         let mut state = self.state.lock().unwrap();
 
         if let Some(ref mut state) = state.as_mut() {
@@ -299,7 +290,7 @@ impl TranscriberBin {
             let passthrough = self.settings.lock().unwrap().passthrough;
 
             if passthrough {
-                gst::debug!(CAT, obj: element, "disabling transcription bin");
+                gst::debug!(CAT, imp: self, "disabling transcription bin");
 
                 let bin_sink_pad = state.transcription_bin.static_pad("sink").unwrap();
                 if let Some(audio_tee_pad) = bin_sink_pad.peer() {
@@ -319,13 +310,13 @@ impl TranscriberBin {
         }
     }
 
-    fn block_and_update(&self, element: &super::TranscriberBin, passthrough: bool) {
+    fn block_and_update(&self, passthrough: bool) {
         let mut s = self.state.lock().unwrap();
 
         if let Some(ref mut state) = s.as_mut() {
             if passthrough {
                 let sinkpad = state.transcription_bin.static_pad("sink").unwrap();
-                let element_weak = element.downgrade();
+                let imp_weak = self.downgrade();
                 state.tearing_down = true;
                 drop(s);
                 let _ = sinkpad.add_probe(
@@ -333,14 +324,12 @@ impl TranscriberBin {
                         | gst::PadProbeType::BUFFER
                         | gst::PadProbeType::EVENT_DOWNSTREAM,
                     move |_pad, _info| {
-                        let element = match element_weak.upgrade() {
+                        let imp = match imp_weak.upgrade() {
                             None => return gst::PadProbeReturn::Pass,
-                            Some(element) => element,
+                            Some(imp) => imp,
                         };
 
-                        let this = element.imp();
-
-                        this.disable_transcription_bin(&element);
+                        imp.disable_transcription_bin();
 
                         gst::PadProbeReturn::Remove
                     },
@@ -363,10 +352,10 @@ impl TranscriberBin {
         }
     }
 
-    fn setup_cc_mode(&self, element: &super::TranscriberBin, state: &State) {
+    fn setup_cc_mode(&self, state: &State) {
         let mode = self.settings.lock().unwrap().mode;
 
-        gst::debug!(CAT, obj: element, "setting CC mode {:?}", mode);
+        gst::debug!(CAT, imp: self, "setting CC mode {:?}", mode);
 
         state.tttocea608.set_property("mode", mode);
 
@@ -386,12 +375,11 @@ impl TranscriberBin {
     fn relink_transcriber(
         &self,
         state: &mut State,
-        element: &super::TranscriberBin,
         old_transcriber: &gst::Element,
     ) -> Result<(), Error> {
         gst::error!(
             CAT,
-            obj: element,
+            imp: self,
             "Relinking transcriber, old: {:?}, new: {:?}",
             old_transcriber,
             state.transcriber
@@ -414,12 +402,7 @@ impl TranscriberBin {
     }
 
     #[allow(clippy::single_match)]
-    fn src_query(
-        &self,
-        pad: &gst::Pad,
-        element: &super::TranscriberBin,
-        query: &mut gst::QueryRef,
-    ) -> bool {
+    fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
         gst::log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -428,7 +411,7 @@ impl TranscriberBin {
             QueryViewMut::Latency(q) => {
                 let mut upstream_query = gst::query::Latency::new();
 
-                let ret = pad.query_default(Some(element), &mut upstream_query);
+                let ret = pad.query_default(Some(&*self.instance()), &mut upstream_query);
 
                 if ret {
                     let (_, mut min, _) = upstream_query.result();
@@ -453,7 +436,7 @@ impl TranscriberBin {
 
                 ret
             }
-            _ => pad.query_default(Some(element), query),
+            _ => pad.query_default(Some(&*self.instance()), query),
         }
     }
 
@@ -497,12 +480,7 @@ impl TranscriberBin {
     }
 
     #[allow(clippy::single_match)]
-    fn video_sink_event(
-        &self,
-        pad: &gst::Pad,
-        element: &super::TranscriberBin,
-        event: gst::Event,
-    ) -> bool {
+    fn video_sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -525,16 +503,16 @@ impl TranscriberBin {
                     if !had_framerate {
                         gst::info!(
                             CAT,
-                            obj: element,
+                            imp: self,
                             "Received video caps, setting up transcription"
                         );
-                        self.setup_transcription(element, state);
+                        self.setup_transcription(state);
                     }
                 }
 
-                pad.event_default(Some(element), event)
+                pad.event_default(Some(&*self.instance()), event)
             }
-            _ => pad.event_default(Some(element), event),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 }
@@ -554,7 +532,7 @@ impl ObjectSubclass for TranscriberBin {
                 TranscriberBin::catch_panic_pad_function(
                     parent,
                     || false,
-                    |transcriber, element| transcriber.src_query(pad.upcast_ref(), element, query),
+                    |transcriber| transcriber.src_query(pad.upcast_ref(), query),
                 )
             })
             .build();
@@ -565,9 +543,7 @@ impl ObjectSubclass for TranscriberBin {
                 TranscriberBin::catch_panic_pad_function(
                     parent,
                     || false,
-                    |transcriber, element| {
-                        transcriber.video_sink_event(pad.upcast_ref(), element, event)
-                    },
+                    |transcriber| transcriber.video_sink_event(pad.upcast_ref(), event),
                 )
             })
             .build();
@@ -577,7 +553,7 @@ impl ObjectSubclass for TranscriberBin {
                 TranscriberBin::catch_panic_pad_function(
                     parent,
                     || false,
-                    |transcriber, element| transcriber.src_query(pad.upcast_ref(), element, query),
+                    |transcriber| transcriber.src_query(pad.upcast_ref(), query),
                 )
             })
             .build();
@@ -644,13 +620,7 @@ impl ObjectImpl for TranscriberBin {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "passthrough" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -661,7 +631,7 @@ impl ObjectImpl for TranscriberBin {
 
                 if old_passthrough != new_passthrough {
                     drop(settings);
-                    self.block_and_update(obj, new_passthrough);
+                    self.block_and_update(new_passthrough);
                 }
             }
             "latency" => {
@@ -685,7 +655,7 @@ impl ObjectImpl for TranscriberBin {
 
                 if old_mode != new_mode {
                     drop(settings);
-                    self.setup_cc_mode(obj, self.state.lock().unwrap().as_ref().unwrap());
+                    self.setup_cc_mode(self.state.lock().unwrap().as_ref().unwrap());
                 }
             }
             "cc-caps" => {
@@ -698,7 +668,7 @@ impl ObjectImpl for TranscriberBin {
                     let old_transcriber = state.transcriber.clone();
                     state.transcriber = value.get().expect("type checked upstream");
                     if old_transcriber != state.transcriber {
-                        match self.relink_transcriber(state, obj, &old_transcriber) {
+                        match self.relink_transcriber(state, &old_transcriber) {
                             Ok(()) => (),
                             Err(err) => {
                                 gst::error!(CAT, "invalid transcriber: {}", err);
@@ -716,10 +686,10 @@ impl ObjectImpl for TranscriberBin {
                 let s = self.state.lock().unwrap();
                 if let Some(state) = s.as_ref() {
                     if settings.caption_source == CaptionSource::Inband {
-                        gst::debug!(CAT, obj: obj, "Use inband caption, dropping transcription");
+                        gst::debug!(CAT, imp: self, "Use inband caption, dropping transcription");
                         state.transcription_valve.set_property("drop", true);
                     } else {
-                        gst::debug!(CAT, obj: obj, "Stop dropping transcription");
+                        gst::debug!(CAT, imp: self, "Stop dropping transcription");
                         state.transcription_valve.set_property("drop", false);
                     }
                 }
@@ -728,7 +698,7 @@ impl ObjectImpl for TranscriberBin {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "passthrough" => {
                 let settings = self.settings.lock().unwrap();
@@ -767,16 +737,17 @@ impl ObjectImpl for TranscriberBin {
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.audio_srcpad).unwrap();
         obj.add_pad(&self.audio_sinkpad).unwrap();
         obj.add_pad(&self.video_srcpad).unwrap();
         obj.add_pad(&self.video_sinkpad).unwrap();
 
         *self.state.lock().unwrap() = match self.build_state() {
-            Ok(mut state) => match self.construct_internal_bin(obj, &mut state) {
+            Ok(mut state) => match self.construct_internal_bin(&mut state) {
                 Ok(()) => Some(state),
                 Err(err) => {
                     gst::error!(CAT, "Failed to build internal bin: {}", err);
@@ -855,10 +826,9 @@ impl ElementImpl for TranscriberBin {
     #[allow(clippy::single_match)]
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {
@@ -868,14 +838,14 @@ impl ElementImpl for TranscriberBin {
                     if state.framerate.is_some() {
                         gst::info!(
                             CAT,
-                            obj: element,
+                            imp: self,
                             "Received video caps, setting up transcription"
                         );
-                        self.setup_transcription(element, state);
+                        self.setup_transcription(state);
                     }
                 } else {
-                    gst::element_error!(
-                        element,
+                    gst::element_imp_error!(
+                        self,
                         gst::StreamError::Failed,
                         ["Can't change state with no state"]
                     );
@@ -885,12 +855,12 @@ impl ElementImpl for TranscriberBin {
             _ => (),
         }
 
-        self.parent_change_state(element, transition)
+        self.parent_change_state(transition)
     }
 }
 
 impl BinImpl for TranscriberBin {
-    fn handle_message(&self, bin: &Self::Type, msg: gst::Message) {
+    fn handle_message(&self, msg: gst::Message) {
         use gst::MessageView;
 
         match msg.view() {
@@ -902,7 +872,7 @@ impl BinImpl for TranscriberBin {
                     if msg.src().as_ref() == Some(state.transcriber.upcast_ref()) {
                         gst::error!(
                             CAT,
-                            obj: bin,
+                            imp: self,
                             "Transcriber has posted an error ({:?}), going back to passthrough",
                             m
                         );
@@ -910,21 +880,21 @@ impl BinImpl for TranscriberBin {
                         let mut settings = self.settings.lock().unwrap();
                         settings.passthrough = true;
                         drop(settings);
-                        bin.notify("passthrough");
-                        bin.call_async(move |bin| {
+                        self.instance().notify("passthrough");
+                        self.instance().call_async(move |bin| {
                             let thiz = bin.imp();
-                            thiz.block_and_update(bin, true);
+                            thiz.block_and_update(true);
                         });
                     } else {
                         drop(s);
-                        self.parent_handle_message(bin, msg);
+                        self.parent_handle_message(msg);
                     }
                 } else {
                     drop(s);
-                    self.parent_handle_message(bin, msg);
+                    self.parent_handle_message(msg);
                 }
             }
-            _ => self.parent_handle_message(bin, msg),
+            _ => self.parent_handle_message(msg),
         }
     }
 }

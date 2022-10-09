@@ -230,8 +230,8 @@ mod imp_src {
             }
         }
 
-        fn prepare(&self, element: &super::ElementSrcTest) -> Result<(), gst::ErrorMessage> {
-            gst::debug!(SRC_CAT, obj: element, "Preparing");
+        fn prepare(&self) -> Result<(), gst::ErrorMessage> {
+            gst::debug!(SRC_CAT, imp: self, "Preparing");
 
             let settings = self.settings.lock().unwrap().clone();
             let context =
@@ -246,39 +246,42 @@ mod imp_src {
             *self.sender.lock().unwrap() = Some(sender);
 
             self.task
-                .prepare(ElementSrcTestTask::new(element.clone(), receiver), context)
+                .prepare(
+                    ElementSrcTestTask::new(self.instance().clone(), receiver),
+                    context,
+                )
                 .block_on()?;
 
-            gst::debug!(SRC_CAT, obj: element, "Prepared");
+            gst::debug!(SRC_CAT, imp: self, "Prepared");
 
             Ok(())
         }
 
-        fn unprepare(&self, element: &super::ElementSrcTest) {
-            gst::debug!(SRC_CAT, obj: element, "Unpreparing");
+        fn unprepare(&self) {
+            gst::debug!(SRC_CAT, imp: self, "Unpreparing");
 
             *self.sender.lock().unwrap() = None;
             self.task.unprepare().block_on().unwrap();
 
-            gst::debug!(SRC_CAT, obj: element, "Unprepared");
+            gst::debug!(SRC_CAT, imp: self, "Unprepared");
         }
 
-        fn stop(&self, element: &super::ElementSrcTest) {
-            gst::debug!(SRC_CAT, obj: element, "Stopping");
+        fn stop(&self) {
+            gst::debug!(SRC_CAT, imp: self, "Stopping");
             self.task.stop().await_maybe_on_context().unwrap();
-            gst::debug!(SRC_CAT, obj: element, "Stopped");
+            gst::debug!(SRC_CAT, imp: self, "Stopped");
         }
 
-        fn start(&self, element: &super::ElementSrcTest) {
-            gst::debug!(SRC_CAT, obj: element, "Starting");
+        fn start(&self) {
+            gst::debug!(SRC_CAT, imp: self, "Starting");
             self.task.start().await_maybe_on_context().unwrap();
-            gst::debug!(SRC_CAT, obj: element, "Started");
+            gst::debug!(SRC_CAT, imp: self, "Started");
         }
 
-        fn pause(&self, element: &super::ElementSrcTest) {
-            gst::debug!(SRC_CAT, obj: element, "Pausing");
+        fn pause(&self) {
+            gst::debug!(SRC_CAT, imp: self, "Pausing");
             self.task.pause().block_on().unwrap();
-            gst::debug!(SRC_CAT, obj: element, "Paused");
+            gst::debug!(SRC_CAT, imp: self, "Paused");
         }
     }
 
@@ -315,13 +318,7 @@ mod imp_src {
             PROPERTIES.as_ref()
         }
 
-        fn set_property(
-            &self,
-            _obj: &Self::Type,
-            _id: usize,
-            value: &glib::Value,
-            pspec: &glib::ParamSpec,
-        ) {
+        fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
             match pspec.name() {
                 "context" => {
                     let context = value
@@ -335,9 +332,10 @@ mod imp_src {
             }
         }
 
-        fn constructed(&self, obj: &Self::Type) {
-            self.parent_constructed(obj);
+        fn constructed(&self) {
+            self.parent_constructed();
 
+            let obj = self.instance();
             obj.add_pad(self.src_pad.gst_pad()).unwrap();
         }
     }
@@ -377,35 +375,34 @@ mod imp_src {
 
         fn change_state(
             &self,
-            element: &Self::Type,
             transition: gst::StateChange,
         ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-            gst::log!(SRC_CAT, obj: element, "Changing state {:?}", transition);
+            gst::log!(SRC_CAT, imp: self, "Changing state {:?}", transition);
 
             match transition {
                 gst::StateChange::NullToReady => {
-                    self.prepare(element).map_err(|err| {
-                        element.post_error_message(err);
+                    self.prepare().map_err(|err| {
+                        self.post_error_message(err);
                         gst::StateChangeError
                     })?;
                 }
                 gst::StateChange::PlayingToPaused => {
-                    self.pause(element);
+                    self.pause();
                 }
                 gst::StateChange::ReadyToNull => {
-                    self.unprepare(element);
+                    self.unprepare();
                 }
                 _ => (),
             }
 
-            let mut success = self.parent_change_state(element, transition)?;
+            let mut success = self.parent_change_state(transition)?;
 
             match transition {
                 gst::StateChange::PausedToReady => {
-                    self.stop(element);
+                    self.stop();
                 }
                 gst::StateChange::PausedToPlaying => {
-                    self.start(element);
+                    self.start();
                 }
                 gst::StateChange::ReadyToPaused | gst::StateChange::PlayingToPaused => {
                     success = gst::StateChangeSuccess::NoPreroll;
@@ -416,7 +413,7 @@ mod imp_src {
             Ok(success)
         }
 
-        fn send_event(&self, _element: &Self::Type, event: gst::Event) -> bool {
+        fn send_event(&self, event: gst::Event) -> bool {
             match event.view() {
                 EventView::FlushStart(..) => {
                     self.task.flush_start().await_maybe_on_context().unwrap();
@@ -464,9 +461,7 @@ mod imp_sink {
                 .unwrap();
             async move {
                 let elem_sink_test = element.imp();
-                elem_sink_test
-                    .forward_item(&element, Item::Buffer(buffer))
-                    .await
+                elem_sink_test.forward_item(Item::Buffer(buffer)).await
             }
             .boxed()
         }
@@ -484,9 +479,7 @@ mod imp_sink {
                 .unwrap();
             async move {
                 let elem_sink_test = element.imp();
-                elem_sink_test
-                    .forward_item(&element, Item::BufferList(list))
-                    .await
+                elem_sink_test.forward_item(Item::BufferList(list)).await
             }
             .boxed()
         }
@@ -495,14 +488,14 @@ mod imp_sink {
             &self,
             pad: &PadSinkRef,
             elem_sink_test: &ElementSinkTest,
-            element: &gst::Element,
+            _element: &gst::Element,
             event: gst::Event,
         ) -> bool {
             gst::debug!(SINK_CAT, obj: pad.gst_pad(), "Handling non-serialized {:?}", event);
 
             match event.view() {
                 EventView::FlushStart(..) => {
-                    elem_sink_test.stop(element.downcast_ref::<super::ElementSinkTest>().unwrap());
+                    elem_sink_test.stop();
                     true
                 }
                 _ => false,
@@ -526,11 +519,11 @@ mod imp_sink {
                 let elem_sink_test = element.imp();
 
                 if let EventView::FlushStop(..) = event.view() {
-                    elem_sink_test.start(&element);
+                    elem_sink_test.start();
                 }
 
                 elem_sink_test
-                    .forward_item(&element, Item::Event(event))
+                    .forward_item(Item::Event(event))
                     .await
                     .is_ok()
             }
@@ -546,13 +539,9 @@ mod imp_sink {
     }
 
     impl ElementSinkTest {
-        async fn forward_item(
-            &self,
-            element: &super::ElementSinkTest,
-            item: Item,
-        ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        async fn forward_item(&self, item: Item) -> Result<gst::FlowSuccess, gst::FlowError> {
             if !self.flushing.load(Ordering::SeqCst) {
-                gst::debug!(SINK_CAT, obj: element, "Fowarding {:?}", item);
+                gst::debug!(SINK_CAT, imp: self, "Fowarding {:?}", item);
                 let mut sender = self
                     .sender
                     .lock()
@@ -568,7 +557,7 @@ mod imp_sink {
             } else {
                 gst::debug!(
                     SINK_CAT,
-                    obj: element,
+                    imp: self,
                     "Not fowarding {:?} due to flushing",
                     item
                 );
@@ -576,34 +565,32 @@ mod imp_sink {
             }
         }
 
-        fn start(&self, element: &super::ElementSinkTest) {
-            gst::debug!(SINK_CAT, obj: element, "Starting");
+        fn start(&self) {
+            gst::debug!(SINK_CAT, imp: self, "Starting");
             self.flushing.store(false, Ordering::SeqCst);
-            gst::debug!(SINK_CAT, obj: element, "Started");
+            gst::debug!(SINK_CAT, imp: self, "Started");
         }
 
-        fn stop(&self, element: &super::ElementSinkTest) {
-            gst::debug!(SINK_CAT, obj: element, "Stopping");
+        fn stop(&self) {
+            gst::debug!(SINK_CAT, imp: self, "Stopping");
             self.flushing.store(true, Ordering::SeqCst);
-            gst::debug!(SINK_CAT, obj: element, "Stopped");
+            gst::debug!(SINK_CAT, imp: self, "Stopped");
         }
-    }
 
-    impl ElementSinkTest {
-        pub fn push_flush_start(&self, element: &super::ElementSinkTest) {
-            gst::debug!(SINK_CAT, obj: element, "Pushing FlushStart");
+        pub fn push_flush_start(&self) {
+            gst::debug!(SINK_CAT, imp: self, "Pushing FlushStart");
             self.sink_pad
                 .gst_pad()
                 .push_event(gst::event::FlushStart::new());
-            gst::debug!(SINK_CAT, obj: element, "FlushStart pushed");
+            gst::debug!(SINK_CAT, imp: self, "FlushStart pushed");
         }
 
-        pub fn push_flush_stop(&self, element: &super::ElementSinkTest) {
-            gst::debug!(SINK_CAT, obj: element, "Pushing FlushStop");
+        pub fn push_flush_stop(&self) {
+            gst::debug!(SINK_CAT, imp: self, "Pushing FlushStop");
             self.sink_pad
                 .gst_pad()
                 .push_event(gst::event::FlushStop::new(true));
-            gst::debug!(SINK_CAT, obj: element, "FlushStop pushed");
+            gst::debug!(SINK_CAT, imp: self, "FlushStop pushed");
         }
     }
 
@@ -647,13 +634,7 @@ mod imp_sink {
             PROPERTIES.as_ref()
         }
 
-        fn set_property(
-            &self,
-            _obj: &Self::Type,
-            _id: usize,
-            value: &glib::Value,
-            pspec: &glib::ParamSpec,
-        ) {
+        fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
             match pspec.name() {
                 "sender" => {
                     let ItemSender { sender } = value
@@ -666,9 +647,10 @@ mod imp_sink {
             }
         }
 
-        fn constructed(&self, obj: &Self::Type) {
-            self.parent_constructed(obj);
+        fn constructed(&self) {
+            self.parent_constructed();
 
+            let obj = self.instance();
             obj.add_pad(self.sink_pad.gst_pad()).unwrap();
         }
     }
@@ -708,19 +690,18 @@ mod imp_sink {
 
         fn change_state(
             &self,
-            element: &Self::Type,
             transition: gst::StateChange,
         ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-            gst::log!(SINK_CAT, obj: element, "Changing state {:?}", transition);
+            gst::log!(SINK_CAT, imp: self, "Changing state {:?}", transition);
 
             if let gst::StateChange::PausedToReady = transition {
-                self.stop(element);
+                self.stop();
             }
 
-            let success = self.parent_change_state(element, transition)?;
+            let success = self.parent_change_state(transition)?;
 
             if let gst::StateChange::ReadyToPaused = transition {
-                self.start(element);
+                self.start();
             }
 
             Ok(success)
@@ -1225,13 +1206,13 @@ fn start_flush() {
 
     let elem_sink_test = sink_element.imp();
 
-    elem_sink_test.push_flush_start(&sink_element);
+    elem_sink_test.push_flush_start();
 
     elem_src_test
         .try_push(Item::Buffer(gst::Buffer::from_slice(vec![5, 6, 7])))
         .unwrap_err();
 
-    elem_sink_test.push_flush_stop(&sink_element);
+    elem_sink_test.push_flush_stop();
 
     elem_src_test
         .try_push(Item::Event(gst::event::Segment::new(

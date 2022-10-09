@@ -10,6 +10,7 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst_base::prelude::*;
 use gst_base::subclass::base_transform::BaseTransformImplExt;
 use gst_base::subclass::base_transform::GenerateOutputSuccess;
 use gst_base::subclass::prelude::*;
@@ -121,7 +122,7 @@ impl State {
 }
 
 impl AudioRNNoise {
-    fn drain(&self, element: &super::AudioRNNoise) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn drain(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state_lock = self.state.borrow_mut();
         let state = state_lock.as_mut().unwrap();
 
@@ -131,12 +132,7 @@ impl AudioRNNoise {
         }
 
         let mut buffer = gst::Buffer::with_size(available).map_err(|e| {
-            gst::error!(
-                CAT,
-                obj: element,
-                "Failed to allocate buffer at EOS {:?}",
-                e
-            );
+            gst::error!(CAT, imp: self, "Failed to allocate buffer at EOS {:?}", e);
             gst::FlowError::Flushing
         })?;
 
@@ -158,15 +154,10 @@ impl AudioRNNoise {
             state.process(in_data, out_data);
         }
 
-        let srcpad = element.static_pad("src").unwrap();
-        srcpad.push(buffer)
+        self.instance().src_pad().push(buffer)
     }
 
-    fn generate_output(
-        &self,
-        _element: &super::AudioRNNoise,
-        state: &mut State,
-    ) -> Result<GenerateOutputSuccess, gst::FlowError> {
+    fn generate_output(&self, state: &mut State) -> Result<GenerateOutputSuccess, gst::FlowError> {
         let available = state.adapter.available();
         let bpf = state.in_info.bpf() as usize;
         let output_size = available - (available % (FRAME_SIZE * bpf));
@@ -257,16 +248,11 @@ impl BaseTransformImpl for AudioRNNoise {
     const PASSTHROUGH_ON_SAME_CAPS: bool = false;
     const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
 
-    fn set_caps(
-        &self,
-        element: &Self::Type,
-        incaps: &gst::Caps,
-        outcaps: &gst::Caps,
-    ) -> Result<(), gst::LoggableError> {
+    fn set_caps(&self, incaps: &gst::Caps, outcaps: &gst::Caps) -> Result<(), gst::LoggableError> {
         // Flush previous state
         if self.state.borrow_mut().is_some() {
-            self.drain(element).map_err(|e| {
-                gst::loggable_error!(CAT, "Error flusing previous state data {:?}", e)
+            self.drain().map_err(|e| {
+                gst::loggable_error!(CAT, "Error flushing previous state data {:?}", e)
             })?;
         }
         if incaps != outcaps {
@@ -276,7 +262,7 @@ impl BaseTransformImpl for AudioRNNoise {
             ));
         }
 
-        gst::debug!(CAT, obj: element, "Set caps to {}", incaps);
+        gst::debug!(CAT, imp: self, "Set caps to {}", incaps);
 
         let in_info = gst_audio::AudioInfo::from_caps(incaps)
             .map_err(|e| gst::loggable_error!(CAT, "Failed to parse input caps {:?}", e))?;
@@ -300,22 +286,19 @@ impl BaseTransformImpl for AudioRNNoise {
         Ok(())
     }
 
-    fn generate_output(
-        &self,
-        element: &Self::Type,
-    ) -> Result<GenerateOutputSuccess, gst::FlowError> {
+    fn generate_output(&self) -> Result<GenerateOutputSuccess, gst::FlowError> {
         // Check if there are enough data in the queued buffer and adapter,
         // if it is not the case, just notify the parent class to not generate
         // an output
         if let Some(buffer) = self.take_queued_buffer() {
             if buffer.flags().contains(gst::BufferFlags::DISCONT) {
-                self.drain(element)?;
+                self.drain()?;
             }
 
             let mut state_guard = self.state.borrow_mut();
             let state = state_guard.as_mut().ok_or_else(|| {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::CoreError::Negotiation,
                     ["Can not generate an output without State"]
                 );
@@ -324,39 +307,33 @@ impl BaseTransformImpl for AudioRNNoise {
 
             state.adapter.push(buffer);
             if !state.needs_more_data() {
-                return self.generate_output(element, state);
+                return self.generate_output(state);
             }
         }
         Ok(GenerateOutputSuccess::NoOutput)
     }
 
-    fn sink_event(&self, element: &Self::Type, event: gst::Event) -> bool {
+    fn sink_event(&self, event: gst::Event) -> bool {
         use gst::EventView;
 
         if let EventView::Eos(_) = event.view() {
-            gst::debug!(CAT, obj: element, "Handling EOS");
-            if self.drain(element).is_err() {
+            gst::debug!(CAT, imp: self, "Handling EOS");
+            if self.drain().is_err() {
                 return false;
             }
         }
-        self.parent_sink_event(element, event)
+        self.parent_sink_event(event)
     }
 
-    fn query(
-        &self,
-        element: &Self::Type,
-        direction: gst::PadDirection,
-        query: &mut gst::QueryRef,
-    ) -> bool {
+    fn query(&self, direction: gst::PadDirection, query: &mut gst::QueryRef) -> bool {
         if direction == gst::PadDirection::Src {
             if let gst::QueryViewMut::Latency(q) = query.view_mut() {
-                let sink_pad = element.static_pad("sink").expect("Sink pad not found");
                 let mut upstream_query = gst::query::Latency::new();
-                if sink_pad.peer_query(&mut upstream_query) {
+                if self.instance().sink_pad().peer_query(&mut upstream_query) {
                     let (live, mut min, mut max) = upstream_query.result();
                     gst::debug!(
                         CAT,
-                        obj: element,
+                        imp: self,
                         "Peer latency: live {} min {} max {}",
                         live,
                         min,
@@ -370,10 +347,10 @@ impl BaseTransformImpl for AudioRNNoise {
                 }
             }
         }
-        BaseTransformImplExt::parent_query(self, element, direction, query)
+        BaseTransformImplExt::parent_query(self, direction, query)
     }
 
-    fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         // Drop state
         let _ = self.state.borrow_mut().take();
 

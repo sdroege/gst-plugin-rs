@@ -111,16 +111,15 @@ fn time_to_bytes(time: gst::ClockTime) -> Bytes {
 }
 
 impl BaseParseImpl for CdgParse {
-    fn start(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
-        element.set_min_frame_size(CDG_PACKET_SIZE as u32);
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
+        self.instance().set_min_frame_size(CDG_PACKET_SIZE as u32);
 
         /* Set duration */
         let mut query = gst::query::Duration::new(gst::Format::Bytes);
-        let pad = element.src_pad();
-        if pad.query(&mut query) {
+        if self.instance().src_pad().query(&mut query) {
             let size = query.result();
             let bytes: Option<Bytes> = size.try_into().unwrap();
-            element.set_duration(bytes.map(bytes_to_time), 0);
+            self.instance().set_duration(bytes.map(bytes_to_time), 0);
         }
 
         Ok(())
@@ -128,11 +127,9 @@ impl BaseParseImpl for CdgParse {
 
     fn handle_frame(
         &self,
-        element: &Self::Type,
         mut frame: gst_base::BaseParseFrame,
     ) -> Result<(gst::FlowSuccess, u32), gst::FlowError> {
-        let pad = element.src_pad();
-        if pad.current_caps().is_none() {
+        if self.instance().src_pad().current_caps().is_none() {
             // Set src pad caps
             let src_caps = gst::Caps::builder("video/x-cdg")
                 .field("width", CDG_WIDTH as i32)
@@ -141,15 +138,17 @@ impl BaseParseImpl for CdgParse {
                 .field("parsed", true)
                 .build();
 
-            pad.push_event(gst::event::Caps::new(&src_caps));
+            self.instance()
+                .src_pad()
+                .push_event(gst::event::Caps::new(&src_caps));
         }
 
         // Scan for CDG instruction
         let input = frame.buffer().unwrap();
         let skip = {
             let map = input.map_readable().map_err(|_| {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::CoreError::Failed,
                     ["Failed to map input buffer readable"]
                 );
@@ -172,8 +171,8 @@ impl BaseParseImpl for CdgParse {
 
         let (keyframe, header) = {
             let map = input.map_readable().map_err(|_| {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::CoreError::Failed,
                     ["Failed to map input buffer readable"]
                 );
@@ -203,16 +202,16 @@ impl BaseParseImpl for CdgParse {
             buffer.set_flags(gst::BufferFlags::HEADER);
         }
 
-        gst::debug!(CAT, obj: element, "Found frame pts={}", pts);
+        gst::debug!(CAT, imp: self, "Found frame pts={}", pts);
 
-        element.finish_frame(frame, CDG_PACKET_SIZE as u32)?;
+        self.instance()
+            .finish_frame(frame, CDG_PACKET_SIZE as u32)?;
 
         Ok((gst::FlowSuccess::Ok, skip))
     }
 
     fn convert(
         &self,
-        _element: &Self::Type,
         src_val: impl FormattedValue,
         dest_format: gst::Format,
     ) -> Option<gst::GenericFormattedValue> {

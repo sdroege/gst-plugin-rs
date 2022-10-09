@@ -153,13 +153,7 @@ impl ObjectImpl for FallbackSwitchSinkPad {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             PROP_PRIORITY => {
                 let mut settings = self.settings.lock();
@@ -170,7 +164,7 @@ impl ObjectImpl for FallbackSwitchSinkPad {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             PROP_PRIORITY => {
                 let settings = self.settings.lock();
@@ -318,15 +312,15 @@ impl SinkState {
 
     fn schedule_clock(
         &mut self,
-        element: &super::FallbackSwitch,
+        imp: &FallbackSwitch,
         pad: &super::FallbackSwitchSinkPad,
         running_time: Option<gst::ClockTime>,
         extra_time: gst::ClockTime,
     ) -> Option<gst::SingleShotClockId> {
         let running_time = running_time?;
-        let clock = element.clock()?;
+        let clock = imp.instance().clock()?;
+        let base_time = imp.instance().base_time()?;
 
-        let base_time = element.base_time()?;
         let wait_until = running_time + base_time;
         let wait_until = wait_until.saturating_add(extra_time);
 
@@ -403,15 +397,10 @@ impl FallbackSwitch {
         debug!(CAT, obj: pad, "Now active pad");
     }
 
-    fn handle_timeout(
-        &self,
-        element: &super::FallbackSwitch,
-        state: &mut State,
-        settings: &Settings,
-    ) {
+    fn handle_timeout(&self, state: &mut State, settings: &Settings) {
         debug!(
             CAT,
-            obj: element,
+            imp: self,
             "timeout fired - looking for a pad to switch to"
         );
 
@@ -423,10 +412,10 @@ impl FallbackSwitch {
         let mut best_priority = 0u32;
         let mut best_pad = None;
 
-        for pad in element.sink_pads() {
+        for pad in self.instance().sink_pads() {
             /* Don't consider the active sinkpad */
             let pad = pad.downcast_ref::<super::FallbackSwitchSinkPad>().unwrap();
-            let pad_imp = FallbackSwitchSinkPad::from_instance(pad);
+            let pad_imp = pad.imp();
             if active_sinkpad.as_ref() == Some(pad) {
                 continue;
             }
@@ -446,7 +435,7 @@ impl FallbackSwitch {
         if let Some(best_pad) = best_pad {
             debug!(
                 CAT,
-                obj: element,
+                imp: self,
                 "Found viable pad to switch to: {:?}",
                 best_pad
             );
@@ -456,49 +445,44 @@ impl FallbackSwitch {
         }
     }
 
-    fn on_timeout(
-        &self,
-        element: &super::FallbackSwitch,
-        clock_id: &gst::ClockId,
-        settings: &Settings,
-    ) {
+    fn on_timeout(&self, clock_id: &gst::ClockId, settings: &Settings) {
         let mut state = self.state.lock();
 
         if state.timeout_clock_id.as_ref() != Some(clock_id) {
             /* Timeout fired late, ignore it. */
-            debug!(CAT, obj: element, "Late timeout callback. Ignoring");
+            debug!(CAT, imp: self, "Late timeout callback. Ignoring");
             return;
         }
 
         // Ensure sink_chain on an inactive pad can schedule another timeout
         state.timeout_clock_id = None;
 
-        self.handle_timeout(element, &mut state, settings);
+        self.handle_timeout(&mut state, settings);
     }
 
-    fn cancel_waits(&self, element: &super::FallbackSwitch) {
-        for pad in element.sink_pads() {
-            let sink_pad = FallbackSwitchSinkPad::from_instance(pad.downcast_ref().unwrap());
-            let mut pad_state = sink_pad.state.lock();
+    fn cancel_waits(&self) {
+        for pad in self.instance().sink_pads() {
+            let pad = pad.downcast_ref::<super::FallbackSwitchSinkPad>().unwrap();
+            let pad_imp = pad.imp();
+            let mut pad_state = pad_imp.state.lock();
             pad_state.cancel_wait();
         }
     }
 
     fn schedule_timeout(
         &self,
-        element: &super::FallbackSwitch,
         state: &mut State,
         settings: &Settings,
         running_time: gst::ClockTime,
     ) {
         state.cancel_timeout();
 
-        let clock = match element.clock() {
+        let clock = match self.instance().clock() {
             None => return,
             Some(clock) => clock,
         };
 
-        let base_time = match element.base_time() {
+        let base_time = match self.instance().base_time() {
             Some(base_time) => base_time,
             None => return,
         };
@@ -511,26 +495,25 @@ impl FallbackSwitch {
         /* If we're already running behind, fire the timeout immediately */
         let now = clock.time();
         if now.map_or(false, |now| wait_until <= now) {
-            self.handle_timeout(element, state, settings);
+            self.handle_timeout(state, settings);
             return;
         }
 
-        debug!(CAT, obj: element, "Scheduling timeout for {}", wait_until);
+        debug!(CAT, imp: self, "Scheduling timeout for {}", wait_until);
         let timeout_id = clock.new_single_shot_id(wait_until);
 
         state.timeout_clock_id = Some(timeout_id.clone().into());
         state.timed_out = false;
 
-        let element_weak = element.downgrade();
+        let imp_weak = self.downgrade();
         timeout_id
             .wait_async(move |_clock, _time, clock_id| {
-                let element = match element_weak.upgrade() {
+                let imp = match imp_weak.upgrade() {
                     None => return,
-                    Some(element) => element,
+                    Some(imp) => imp,
                 };
-                let fallbackswitch = FallbackSwitch::from_instance(&element);
-                let settings = fallbackswitch.settings.lock().clone();
-                fallbackswitch.on_timeout(&element, clock_id, &settings);
+                let settings = imp.settings.lock().clone();
+                imp.on_timeout(clock_id, &settings);
             })
             .expect("Failed to wait async");
     }
@@ -553,23 +536,21 @@ impl FallbackSwitch {
     fn sink_chain(
         &self,
         pad: &super::FallbackSwitchSinkPad,
-        element: &super::FallbackSwitch,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        self.chain(pad, element, buffer, None)
+        self.chain(pad, buffer, None)
     }
 
     fn chain(
         &self,
         pad: &super::FallbackSwitchSinkPad,
-        element: &super::FallbackSwitch,
         buffer: gst::Buffer,
         from_gap: Option<&gst::event::Gap>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.lock();
         let settings = self.settings.lock().clone();
-        let pad = pad.downcast_ref().unwrap();
-        let pad_imp = FallbackSwitchSinkPad::from_instance(pad);
+        let pad = pad.downcast_ref::<super::FallbackSwitchSinkPad>().unwrap();
+        let pad_imp = pad.imp();
 
         let mut buffer = {
             let pad_state = pad_imp.state.lock();
@@ -654,7 +635,7 @@ impl FallbackSwitch {
         #[allow(clippy::blocks_in_if_conditions)]
         let output_clockid = if is_active {
             pad_state.schedule_clock(
-                element,
+                self,
                 pad,
                 start_running_time,
                 state.upstream_latency + settings.latency,
@@ -684,7 +665,7 @@ impl FallbackSwitch {
             }
         } else {
             pad_state.schedule_clock(
-                element,
+                self,
                 pad,
                 end_running_time,
                 state.upstream_latency + settings.timeout + settings.latency,
@@ -701,7 +682,7 @@ impl FallbackSwitch {
         if let Some(running_time) = start_running_time {
             if state.timeout_clock_id.is_none() && !is_active {
                 // May change active pad immediately
-                self.schedule_timeout(element, &mut state, &settings, running_time);
+                self.schedule_timeout(&mut state, &settings, running_time);
                 is_active = self.active_sinkpad.lock().as_ref() == Some(pad);
             }
         }
@@ -716,7 +697,7 @@ impl FallbackSwitch {
 
         let mut pad_state = pad_imp.state.lock();
         if pad_state.flushing {
-            debug!(CAT, obj: element, "Flushing");
+            debug!(CAT, imp: self, "Flushing");
             return Err(gst::FlowError::Flushing);
         }
 
@@ -756,7 +737,7 @@ impl FallbackSwitch {
 
             if let Some(end_running_time) = end_running_time {
                 // May change active pad immediately
-                self.schedule_timeout(element, &mut state, &settings, end_running_time);
+                self.schedule_timeout(&mut state, &settings, end_running_time);
                 is_active = self.active_sinkpad.lock().as_ref() == Some(pad);
             } else {
                 state.cancel_timeout();
@@ -796,7 +777,7 @@ impl FallbackSwitch {
                 std::ops::ControlFlow::Continue(gst::EventForeachAction::Keep)
             });
 
-            element.notify(PROP_ACTIVE_PAD);
+            self.instance().notify(PROP_ACTIVE_PAD);
         }
 
         if discont_pending && !buffer.flags().contains(gst::BufferFlags::DISCONT) {
@@ -836,25 +817,19 @@ impl FallbackSwitch {
     fn sink_chain_list(
         &self,
         pad: &super::FallbackSwitchSinkPad,
-        element: &super::FallbackSwitch,
         list: gst::BufferList,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         log!(CAT, obj: pad, "Handling buffer list {:?}", list);
         // TODO: Keep the list intact and forward it in one go (or broken into several
         // pieces if needed) when outputting to the active pad
         for buffer in list.iter_owned() {
-            self.chain(pad, element, buffer, None)?;
+            self.chain(pad, buffer, None)?;
         }
 
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn sink_event(
-        &self,
-        pad: &super::FallbackSwitchSinkPad,
-        element: &super::FallbackSwitch,
-        event: gst::Event,
-    ) -> bool {
+    fn sink_event(&self, pad: &super::FallbackSwitchSinkPad, event: gst::Event) -> bool {
         if let gst::EventView::Gap(ev) = event.view() {
             let mut buffer = gst::Buffer::new();
 
@@ -866,7 +841,7 @@ impl FallbackSwitch {
                 buf_mut.set_duration(duration);
             }
 
-            return match self.chain(pad, element, buffer, Some(ev)) {
+            return match self.chain(pad, buffer, Some(ev)) {
                 Ok(_) => true,
                 Err(gst::FlowError::Flushing) | Err(gst::FlowError::Eos) => true,
                 Err(err) => {
@@ -900,8 +875,8 @@ impl FallbackSwitch {
             gst::EventView::Segment(e) => {
                 let segment = match e.segment().clone().downcast::<gst::ClockTime>() {
                     Err(segment) => {
-                        gst::element_error!(
-                            element,
+                        gst::element_imp_error!(
+                            self,
                             gst::StreamError::Format,
                             ["Only TIME segments supported, got {:?}", segment.format(),]
                         );
@@ -956,17 +931,12 @@ impl FallbackSwitch {
                 std::ops::ControlFlow::Continue(gst::EventForeachAction::Keep)
             });
 
-            element.notify(PROP_ACTIVE_PAD);
+            self.instance().notify(PROP_ACTIVE_PAD);
         }
         self.src_pad.push_event(event)
     }
 
-    fn sink_query(
-        &self,
-        pad: &super::FallbackSwitchSinkPad,
-        element: &super::FallbackSwitch,
-        query: &mut gst::QueryRef,
-    ) -> bool {
+    fn sink_query(&self, pad: &super::FallbackSwitchSinkPad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryView;
 
         log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -983,7 +953,7 @@ impl FallbackSwitch {
                 self.active_sinkpad.lock().as_ref() == Some(pad)
             }
             _ => {
-                pad.query_default(Some(element), query);
+                pad.query_default(Some(&*self.instance()), query);
                 false
             }
         };
@@ -996,18 +966,13 @@ impl FallbackSwitch {
         }
     }
 
-    fn reset(&self, _element: &super::FallbackSwitch) {
+    fn reset(&self) {
         let mut state = self.state.lock();
         *state = State::default();
         self.active_sinkpad.lock().take();
     }
 
-    fn src_query(
-        &self,
-        pad: &gst::Pad,
-        element: &super::FallbackSwitch,
-        query: &mut gst::QueryRef,
-    ) -> bool {
+    fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
         log!(CAT, obj: pad, "Handling {:?}", query);
@@ -1018,7 +983,7 @@ impl FallbackSwitch {
                 let mut min_latency = gst::ClockTime::ZERO;
                 let mut max_latency = gst::ClockTime::NONE;
 
-                for pad in element.sink_pads() {
+                for pad in self.instance().sink_pads() {
                     let mut peer_query = gst::query::Latency::new();
 
                     ret = pad.peer_query(&mut peer_query);
@@ -1052,7 +1017,7 @@ impl FallbackSwitch {
                 if let Some(sinkpad) = sinkpad {
                     sinkpad.peer_query(query)
                 } else {
-                    pad.query_default(Some(element), query)
+                    pad.query_default(Some(&*self.instance()), query)
                 }
             }
             _ => {
@@ -1083,7 +1048,7 @@ impl ObjectSubclass for FallbackSwitch {
                 FallbackSwitch::catch_panic_pad_function(
                     parent,
                     || false,
-                    |fallbackswitch, element| fallbackswitch.src_query(pad, element, query),
+                    |fallbackswitch| fallbackswitch.src_query(pad, query),
                 )
             })
             .build();
@@ -1146,20 +1111,14 @@ impl ObjectImpl for FallbackSwitch {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             PROP_ACTIVE_PAD => {
                 let settings = self.settings.lock();
                 if settings.auto_switch {
                     gst::warning!(
                         CAT,
-                        obj: obj,
+                        imp: self,
                         "active-pad property setting ignored, because auto-switch=true"
                     );
                 } else {
@@ -1183,9 +1142,13 @@ impl ObjectImpl for FallbackSwitch {
                 let new_value = value.get().expect("type checked upstream");
 
                 settings.timeout = new_value;
-                debug!(CAT, obj: obj, "Timeout now {}", settings.timeout);
+                debug!(CAT, imp: self, "Timeout now {}", settings.timeout);
                 drop(settings);
-                let _ = obj.post_message(gst::message::Latency::builder().src(obj).build());
+                let _ = self.instance().post_message(
+                    gst::message::Latency::builder()
+                        .src(&*self.instance())
+                        .build(),
+                );
             }
             PROP_LATENCY => {
                 let mut settings = self.settings.lock();
@@ -1193,7 +1156,11 @@ impl ObjectImpl for FallbackSwitch {
 
                 settings.latency = new_value;
                 drop(settings);
-                let _ = obj.post_message(gst::message::Latency::builder().src(obj).build());
+                let _ = self.instance().post_message(
+                    gst::message::Latency::builder()
+                        .src(&*self.instance())
+                        .build(),
+                );
             }
             PROP_MIN_UPSTREAM_LATENCY => {
                 let mut settings = self.settings.lock();
@@ -1201,7 +1168,11 @@ impl ObjectImpl for FallbackSwitch {
 
                 settings.min_upstream_latency = new_value;
                 drop(settings);
-                let _ = obj.post_message(gst::message::Latency::builder().src(obj).build());
+                let _ = self.instance().post_message(
+                    gst::message::Latency::builder()
+                        .src(&*self.instance())
+                        .build(),
+                );
             }
             PROP_IMMEDIATE_FALLBACK => {
                 let mut settings = self.settings.lock();
@@ -1217,7 +1188,7 @@ impl ObjectImpl for FallbackSwitch {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             PROP_ACTIVE_PAD => {
                 let active_pad = self.active_sinkpad.lock().clone();
@@ -1247,9 +1218,10 @@ impl ObjectImpl for FallbackSwitch {
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.src_pad).unwrap();
         obj.set_element_flags(gst::ElementFlags::REQUIRE_CLOCK);
     }
@@ -1297,23 +1269,22 @@ impl ElementImpl for FallbackSwitch {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        trace!(CAT, obj: element, "Changing state {:?}", transition);
+        trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::PlayingToPaused => {
-                self.cancel_waits(element);
+                self.cancel_waits();
             }
             gst::StateChange::ReadyToNull => {
-                self.reset(element);
+                self.reset();
             }
             gst::StateChange::ReadyToPaused => {
                 let mut state = self.state.lock();
                 let prev_active_pad = self.active_sinkpad.lock().take();
                 *state = State::default();
-                let pads = element.sink_pads();
+                let pads = self.instance().sink_pads();
 
                 if let Some(pad) = pads.first() {
                     let pad = pad.downcast_ref::<super::FallbackSwitchSinkPad>().unwrap();
@@ -1324,7 +1295,7 @@ impl ElementImpl for FallbackSwitch {
                     drop(state);
 
                     if prev_active_pad.as_ref() != Some(pad) {
-                        element.notify(PROP_ACTIVE_PAD);
+                        self.instance().notify(PROP_ACTIVE_PAD);
                     }
                 }
                 for pad in pads {
@@ -1336,7 +1307,7 @@ impl ElementImpl for FallbackSwitch {
             _ => (),
         }
 
-        let mut success = self.parent_change_state(element, transition)?;
+        let mut success = self.parent_change_state(transition)?;
 
         match transition {
             gst::StateChange::ReadyToPaused => {
@@ -1347,7 +1318,7 @@ impl ElementImpl for FallbackSwitch {
             }
             gst::StateChange::PausedToReady => {
                 *self.state.lock() = State::default();
-                for pad in element.sink_pads() {
+                for pad in self.instance().sink_pads() {
                     let pad = pad.downcast_ref::<super::FallbackSwitchSinkPad>().unwrap();
                     let pad_imp = pad.imp();
                     *pad_imp.state.lock() = SinkState::default();
@@ -1361,7 +1332,6 @@ impl ElementImpl for FallbackSwitch {
 
     fn request_new_pad(
         &self,
-        element: &Self::Type,
         templ: &gst::PadTemplate,
         _name: Option<String>,
         _caps: Option<&gst::Caps>,
@@ -1378,28 +1348,28 @@ impl ElementImpl for FallbackSwitch {
             FallbackSwitch::catch_panic_pad_function(
                 parent,
                 || Err(gst::FlowError::Error),
-                |fallbackswitch, element| fallbackswitch.sink_chain(pad, element, buffer),
+                |fallbackswitch| fallbackswitch.sink_chain(pad, buffer),
             )
         })
         .chain_list_function(|pad, parent, bufferlist| {
             FallbackSwitch::catch_panic_pad_function(
                 parent,
                 || Err(gst::FlowError::Error),
-                |fallbackswitch, element| fallbackswitch.sink_chain_list(pad, element, bufferlist),
+                |fallbackswitch| fallbackswitch.sink_chain_list(pad, bufferlist),
             )
         })
         .event_function(|pad, parent, event| {
             FallbackSwitch::catch_panic_pad_function(
                 parent,
                 || false,
-                |fallbackswitch, element| fallbackswitch.sink_event(pad, element, event),
+                |fallbackswitch| fallbackswitch.sink_event(pad, event),
             )
         })
         .query_function(|pad, parent, query| {
             FallbackSwitch::catch_panic_pad_function(
                 parent,
                 || false,
-                |fallbackswitch, element| fallbackswitch.sink_query(pad, element, query),
+                |fallbackswitch| fallbackswitch.sink_query(pad, query),
             )
         })
         .activatemode_function(|pad, _parent, mode, activate| {
@@ -1408,7 +1378,7 @@ impl ElementImpl for FallbackSwitch {
         .build();
 
         pad.set_active(true).unwrap();
-        element.add_pad(&pad).unwrap();
+        self.instance().add_pad(&pad).unwrap();
 
         let notify_active_pad = match &mut *self.active_sinkpad.lock() {
             active_sinkpad @ None => {
@@ -1426,26 +1396,34 @@ impl ElementImpl for FallbackSwitch {
         drop(state);
 
         if notify_active_pad {
-            element.notify(PROP_ACTIVE_PAD);
+            self.instance().notify(PROP_ACTIVE_PAD);
         }
 
-        let _ = element.post_message(gst::message::Latency::builder().src(element).build());
+        let _ = self.instance().post_message(
+            gst::message::Latency::builder()
+                .src(&*self.instance())
+                .build(),
+        );
 
-        element.child_added(&pad, &pad.name());
+        self.instance().child_added(&pad, &pad.name());
         Some(pad.upcast())
     }
 
-    fn release_pad(&self, element: &Self::Type, pad: &gst::Pad) {
+    fn release_pad(&self, pad: &gst::Pad) {
         let pad = pad.downcast_ref::<super::FallbackSwitchSinkPad>().unwrap();
         let mut pad_state = pad.imp().state.lock();
         pad_state.flush_start();
         drop(pad_state);
 
         let _ = pad.set_active(false);
-        element.remove_pad(pad).unwrap();
+        self.instance().remove_pad(pad).unwrap();
 
-        element.child_removed(pad, &pad.name());
-        let _ = element.post_message(gst::message::Latency::builder().src(element).build());
+        self.instance().child_removed(pad, &pad.name());
+        let _ = self.instance().post_message(
+            gst::message::Latency::builder()
+                .src(&*self.instance())
+                .build(),
+        );
     }
 }
 
@@ -1453,11 +1431,13 @@ impl ElementImpl for FallbackSwitch {
 //
 // This allows accessing the pads and their properties from e.g. gst-launch.
 impl ChildProxyImpl for FallbackSwitch {
-    fn children_count(&self, object: &Self::Type) -> u32 {
+    fn children_count(&self) -> u32 {
+        let object = self.instance();
         object.num_pads() as u32
     }
 
-    fn child_by_name(&self, object: &Self::Type, name: &str) -> Option<glib::Object> {
+    fn child_by_name(&self, name: &str) -> Option<glib::Object> {
+        let object = self.instance();
         object
             .pads()
             .into_iter()
@@ -1465,7 +1445,8 @@ impl ChildProxyImpl for FallbackSwitch {
             .map(|p| p.upcast())
     }
 
-    fn child_by_index(&self, object: &Self::Type, index: u32) -> Option<glib::Object> {
+    fn child_by_index(&self, index: u32) -> Option<glib::Object> {
+        let object = self.instance();
         object
             .pads()
             .into_iter()

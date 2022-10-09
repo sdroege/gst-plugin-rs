@@ -49,20 +49,19 @@ impl RegEx {
     fn sink_chain(
         &self,
         _pad: &gst::Pad,
-        element: &super::RegEx,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let data = buffer.map_readable().map_err(|_| {
-            gst::error!(CAT, obj: element, "Can't map buffer readable");
-            gst::element_error!(element, gst::CoreError::Failed, ["Failed to map buffer"]);
+            gst::error!(CAT, imp: self, "Can't map buffer readable");
+            gst::element_imp_error!(self, gst::CoreError::Failed, ["Failed to map buffer"]);
             gst::FlowError::Error
         })?;
 
         let mut data = std::str::from_utf8(&data)
             .map_err(|err| {
-                gst::error!(CAT, obj: element, "Can't decode utf8: {}", err);
-                gst::element_error!(
-                    element,
+                gst::error!(CAT, imp: self, "Can't decode utf8: {}", err);
+                gst::element_imp_error!(
+                    self,
                     gst::StreamError::Decode,
                     ["Failed to decode utf8: {}", err]
                 );
@@ -117,7 +116,7 @@ impl ObjectSubclass for RegEx {
                 RegEx::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |regex, element| regex.sink_chain(pad, element, buffer),
+                    |regex| regex.sink_chain(pad, buffer),
                 )
             })
             .flags(gst::PadFlags::PROXY_CAPS | gst::PadFlags::FIXED_CAPS)
@@ -157,20 +156,15 @@ impl ObjectImpl for RegEx {
         PROPERTIES.as_ref()
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "commands" => {
                 let mut state = self.state.lock().unwrap();
@@ -191,7 +185,11 @@ impl ObjectImpl for RegEx {
                     let pattern = match s.get::<Option<String>>("pattern") {
                         Ok(Some(pattern)) => pattern,
                         Ok(None) | Err(_) => {
-                            gst::error!(CAT, "All commands require a pattern field as a string");
+                            gst::error!(
+                                CAT,
+                                imp: self,
+                                "All commands require a pattern field as a string"
+                            );
                             continue;
                         }
                     };
@@ -199,7 +197,7 @@ impl ObjectImpl for RegEx {
                     let regex = match Regex::new(&pattern) {
                         Ok(regex) => regex,
                         Err(err) => {
-                            gst::error!(CAT, "Failed to compile regex: {:?}", err);
+                            gst::error!(CAT, imp: self, "Failed to compile regex: {:?}", err);
                             continue;
                         }
                     };
@@ -211,6 +209,7 @@ impl ObjectImpl for RegEx {
                                 Ok(None) | Err(_) => {
                                     gst::error!(
                                         CAT,
+                                        imp: self,
                                         "Replace operations require a replacement field as a string"
                                     );
                                     continue;
@@ -223,7 +222,7 @@ impl ObjectImpl for RegEx {
                             });
                         }
                         val => {
-                            gst::error!(CAT, "Unknown operation {}", val);
+                            gst::error!(CAT, imp: self, "Unknown operation {}", val);
                         }
                     }
                 }
@@ -232,7 +231,7 @@ impl ObjectImpl for RegEx {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "commands" => {
                 let state = self.state.lock().unwrap();

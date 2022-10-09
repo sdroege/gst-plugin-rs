@@ -7,7 +7,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use gst::element_error;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -351,7 +350,6 @@ impl JsonToVtt {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        _element: &super::JsonToVtt,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::trace!(CAT, obj: pad, "Handling buffer {:?}", buffer);
@@ -370,7 +368,7 @@ impl JsonToVtt {
         state.keyunit_requests.push(fku);
     }
 
-    fn src_event(&self, pad: &gst::Pad, element: &super::JsonToVtt, event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -388,20 +386,20 @@ impl JsonToVtt {
                         }
                         Err(_) => gst::warning!(
                             CAT,
-                            obj: element,
+                            imp: self,
                             "Invalid force-key-unit event received from downstream: {:?}",
                             &ev
                         ),
                     }
                 }
-                pad.event_default(Some(element), event);
+                pad.event_default(Some(&*self.instance()), event);
                 true
             }
-            _ => pad.event_default(Some(element), event),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &super::JsonToVtt, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -412,7 +410,7 @@ impl JsonToVtt {
                 let buffers = state.handle_eos();
                 drop(state);
                 let _ = self.output(buffers);
-                pad.event_default(Some(element), event)
+                pad.event_default(Some(&*self.instance()), event)
             }
             EventView::Caps(..) => {
                 let mut downstream_caps = match self.srcpad.allowed_caps() {
@@ -455,8 +453,8 @@ impl JsonToVtt {
                         state.segment = s;
                     }
                     Err(err) => {
-                        element_error!(
-                            element,
+                        gst::element_imp_error!(
+                            self,
                             gst::StreamError::Failed,
                             ["Time segment needed: {:?}", err]
                         );
@@ -465,7 +463,7 @@ impl JsonToVtt {
                 };
 
                 /* FIXME: Handle segment updates by draining? */
-                pad.event_default(Some(element), event)
+                pad.event_default(Some(&*self.instance()), event)
             }
             EventView::Gap(ev) => {
                 gst::log!(CAT, obj: pad, "Handling gap {:?}", ev);
@@ -475,7 +473,7 @@ impl JsonToVtt {
                 let _ = self.output(buffers);
                 true
             }
-            _ => pad.event_default(Some(element), event),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 
@@ -501,14 +499,14 @@ impl ObjectSubclass for JsonToVtt {
                 JsonToVtt::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |this, element| this.sink_chain(pad, element, buffer),
+                    |this| this.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
                 JsonToVtt::catch_panic_pad_function(
                     parent,
                     || false,
-                    |this, element| this.sink_event(pad, element, event),
+                    |this| this.sink_event(pad, event),
                 )
             })
             .flags(gst::PadFlags::FIXED_CAPS)
@@ -521,7 +519,7 @@ impl ObjectSubclass for JsonToVtt {
                 JsonToVtt::catch_panic_pad_function(
                     parent,
                     || false,
-                    |this, element| this.src_event(pad, element, event),
+                    |this| this.src_event(pad, event),
                 )
             })
             .build();
@@ -535,9 +533,10 @@ impl ObjectSubclass for JsonToVtt {
 }
 
 impl ObjectImpl for JsonToVtt {
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
@@ -593,17 +592,16 @@ impl ElementImpl for JsonToVtt {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         if transition == gst::StateChange::ReadyToPaused {
             let mut state = self.state.lock().unwrap();
             *state = State::default();
         }
 
-        self.parent_change_state(element, transition)
+        self.parent_change_state(transition)
     }
 }
 

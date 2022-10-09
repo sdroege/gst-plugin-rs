@@ -168,13 +168,7 @@ impl ObjectImpl for GifEnc {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "repeat" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -188,7 +182,7 @@ impl ObjectImpl for GifEnc {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "repeat" => {
                 let settings = self.settings.lock().unwrap();
@@ -251,30 +245,28 @@ impl ElementImpl for GifEnc {
 }
 
 impl VideoEncoderImpl for GifEnc {
-    fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         *self.state.borrow_mut() = None;
         Ok(())
     }
 
     fn propose_allocation(
         &self,
-        element: &Self::Type,
         query: &mut gst::query::Allocation,
     ) -> Result<(), gst::LoggableError> {
         query.add_allocation_meta::<gst_video::VideoMeta>(None);
-        self.parent_propose_allocation(element, query)
+        self.parent_propose_allocation(query)
     }
 
     fn set_format(
         &self,
-        element: &Self::Type,
         state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
-        self.flush_encoder(element)
+        self.flush_encoder()
             .map_err(|_| gst::loggable_error!(CAT, "Failed to drain"))?;
 
         let video_info = state.info();
-        gst::debug!(CAT, obj: element, "Setting format {:?}", video_info);
+        gst::debug!(CAT, imp: self, "Setting format {:?}", video_info);
 
         {
             let mut state = State::new(video_info);
@@ -283,23 +275,23 @@ impl VideoEncoderImpl for GifEnc {
             *self.state.borrow_mut() = Some(state);
         }
 
-        let output_state = element
+        let instance = self.instance();
+        let output_state = instance
             .set_output_state(gst::Caps::builder("image/gif").build(), Some(state))
             .map_err(|_| gst::loggable_error!(CAT, "Failed to set output state"))?;
-        element
+        instance
             .negotiate(output_state)
             .map_err(|_| gst::loggable_error!(CAT, "Failed to negotiate"))?;
 
-        self.parent_set_format(element, state)
+        self.parent_set_format(state)
     }
 
-    fn finish(&self, element: &Self::Type) -> Result<gst::FlowSuccess, gst::FlowError> {
-        self.flush_encoder(element)
+    fn finish(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
+        self.flush_encoder()
     }
 
     fn handle_frame(
         &self,
-        element: &Self::Type,
         mut frame: gst_video::VideoCodecFrame,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state_guard = self.state.borrow_mut();
@@ -307,7 +299,7 @@ impl VideoEncoderImpl for GifEnc {
 
         gst::debug!(
             CAT,
-            obj: element,
+            imp: self,
             "Sending frame {}",
             frame.system_frame_number()
         );
@@ -318,8 +310,8 @@ impl VideoEncoderImpl for GifEnc {
             let in_frame =
                 gst_video::VideoFrameRef::from_buffer_ref_readable(input_buffer, &state.video_info)
                     .map_err(|_| {
-                        gst::element_error!(
-                            element,
+                        gst::element_imp_error!(
+                            self,
                             gst::CoreError::Failed,
                             ["Failed to map output buffer readable"]
                         );
@@ -339,8 +331,8 @@ impl VideoEncoderImpl for GifEnc {
                 state.gif_pts = pts;
             }
             let pts = pts.ok_or_else(|| {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::CoreError::Failed,
                     ["No PTS set on input frame. Unable to calculate proper frame timing."]
                 );
@@ -349,8 +341,8 @@ impl VideoEncoderImpl for GifEnc {
             let frame_delay = pts
                 .checked_sub(state.gif_pts.expect("checked above"))
                 .ok_or_else(|| {
-                    gst::element_error!(
-                        element,
+                    gst::element_imp_error!(
+                        self,
                         gst::CoreError::Failed,
                         ["Input frame PTS is greater than gif_pts. Unable to calculate proper frame timing."]
                     );
@@ -388,7 +380,7 @@ impl VideoEncoderImpl for GifEnc {
             // encode new frame
             let context = state.context.as_mut().unwrap();
             if let Err(e) = context.write_frame(&gif_frame) {
-                gst::element_error!(element, gst::CoreError::Failed, [&e.to_string()]);
+                gst::element_imp_error!(self, gst::CoreError::Failed, [&e.to_string()]);
                 return Err(gst::FlowError::Error);
             }
         }
@@ -405,13 +397,13 @@ impl VideoEncoderImpl for GifEnc {
         // Currently not using incremental frames -> every frame is a keyframe
         frame.set_flags(gst_video::VideoCodecFrameFlags::SYNC_POINT);
         frame.set_output_buffer(output_buffer);
-        element.finish_frame(Some(frame))
+        self.instance().finish_frame(Some(frame))
     }
 }
 
 impl GifEnc {
-    fn flush_encoder(&self, element: &super::GifEnc) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::debug!(CAT, obj: element, "Flushing");
+    fn flush_encoder(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
+        gst::debug!(CAT, imp: self, "Flushing");
 
         let trailer_buffer = self.state.borrow_mut().as_mut().map(|state| {
             // Drop encoder to flush and take flushed data (gif trailer)
@@ -433,8 +425,7 @@ impl GifEnc {
         });
         if let Some(trailer_buffer) = trailer_buffer {
             // manually push GIF trailer to the encoder's src pad
-            let srcpad = element.static_pad("src").unwrap();
-            srcpad.push(trailer_buffer)?;
+            self.instance().src_pad().push(trailer_buffer)?;
         }
 
         Ok(gst::FlowSuccess::Ok)

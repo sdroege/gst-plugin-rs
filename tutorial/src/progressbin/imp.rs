@@ -96,13 +96,7 @@ impl ObjectImpl for ProgressBin {
 
     // Called whenever a value of a property is changed. It can be called
     // at any time from any thread.
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "output" => {
                 let mut output_type = self.output_type.lock().unwrap();
@@ -111,7 +105,7 @@ impl ObjectImpl for ProgressBin {
                     .expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing output from {:?} to {:?}",
                     output_type,
                     new_output_type
@@ -124,7 +118,7 @@ impl ObjectImpl for ProgressBin {
 
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "output" => {
                 let output_type = self.output_type.lock().unwrap();
@@ -135,12 +129,14 @@ impl ObjectImpl for ProgressBin {
     }
 
     // Called right after construction of a new instance
-    fn constructed(&self, obj: &Self::Type) {
+    fn constructed(&self) {
         // Call the parent class' ::constructed() implementation first
-        self.parent_constructed(obj);
+        self.parent_constructed();
 
         // Here we actually add the pads we created in ProgressBin::new() to the
         // element so that GStreamer is aware of their existence.
+
+        let obj = self.instance();
 
         // Add the progressreport element to the bin.
         obj.add(&self.progress).unwrap();
@@ -215,7 +211,7 @@ impl ElementImpl for ProgressBin {
 
 // Implementation of gst::Bin virtual methods
 impl BinImpl for ProgressBin {
-    fn handle_message(&self, bin: &Self::Type, msg: gst::Message) {
+    fn handle_message(&self, msg: gst::Message) {
         use gst::MessageView;
 
         match msg.view() {
@@ -236,12 +232,12 @@ impl BinImpl for ProgressBin {
                     match output_type {
                         ProgressBinOutput::Println => println!("progress: {:5.1}%", percent),
                         ProgressBinOutput::DebugCategory => {
-                            gst::info!(CAT, "progress: {:5.1}%", percent);
+                            gst::info!(CAT, imp: self, "progress: {:5.1}%", percent);
                         }
                     };
                 }
             }
-            _ => self.parent_handle_message(bin, msg),
+            _ => self.parent_handle_message(msg),
         }
     }
 }

@@ -146,11 +146,7 @@ pub struct RaptorqDec {
 }
 
 impl RaptorqDec {
-    fn process_source_block(
-        &self,
-        element: &super::RaptorqDec,
-        state: &mut State,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn process_source_block(&self, state: &mut State) -> Result<gst::FlowSuccess, gst::FlowError> {
         // Pull the information about the current Source Block from sequence.
         // Data packets for current Source Block are in range: info.seq_range(),
         // Repair Packets on the other hand, for a given block share the same key
@@ -169,7 +165,7 @@ impl RaptorqDec {
             if data_packets_num == n {
                 gst::trace!(
                     CAT,
-                    obj: element,
+                    imp: self,
                     "All packets ({}) received, dropping Source Block ({})",
                     data_packets_num,
                     seq_lo
@@ -304,7 +300,7 @@ impl RaptorqDec {
 
                         gst::debug!(
                             CAT,
-                            obj: element,
+                            imp: self,
                             "Succesfully recovered packet: seqnum: {}, len: {}, ts: {}",
                             rtpbuf.seq(),
                             rtpbuf.payload_size(),
@@ -323,19 +319,18 @@ impl RaptorqDec {
 
     fn store_media_packet(
         &self,
-        element: &super::RaptorqDec,
         state: &mut State,
         buffer: &gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let this_seq = {
             let rtpbuf = RTPBuffer::from_buffer_readable(buffer).map_err(|err| {
-                gst::error!(CAT, obj: element, "Failed to map rtp buffer : {}", err);
+                gst::error!(CAT, imp: self, "Failed to map rtp buffer : {}", err);
                 gst::FlowError::Error
             })?;
 
             gst::trace!(
                 CAT,
-                obj: element,
+                imp: self,
                 "New data packet, seq {}, ts {}",
                 rtpbuf.seq(),
                 rtpbuf.timestamp()
@@ -383,18 +378,17 @@ impl RaptorqDec {
     fn sink_chain(
         &self,
         _pad: &gst::Pad,
-        element: &super::RaptorqDec,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
-        self.store_media_packet(element, &mut state, &buffer)?;
+        self.store_media_packet(&mut state, &buffer)?;
 
         // Retire the packets that have been around for too long
         let expired = state.expire_packets();
         for seq in expired {
             gst::trace!(
                 CAT,
-                obj: element,
+                imp: self,
                 "Source Block ({}) dropped, because max wait time has been exceeded",
                 seq as u16
             );
@@ -405,16 +399,16 @@ impl RaptorqDec {
         if thresh > 0 && state.media_packets.len() >= thresh {
             gst::warning!(
                 CAT,
-                obj: element,
+                imp: self,
                 "Too many buffered media packets, resetting decoder. This might \
                  be because we haven't received a repair packet for too long, or \
                  repair packets have no valid timestamps.",
             );
 
-            self.reset(element);
+            self.reset();
         }
 
-        self.process_source_block(element, &mut state)?;
+        self.process_source_block(&mut state)?;
         drop(state);
 
         self.srcpad.push(buffer)
@@ -423,17 +417,16 @@ impl RaptorqDec {
     fn fec_sink_chain(
         &self,
         _pad: &gst::Pad,
-        element: &super::RaptorqDec,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let rtpbuf = RTPBuffer::from_buffer_readable(&buffer).map_err(|err| {
-            gst::error!(CAT, obj: element, "Failed to map rtp buffer : {}", err);
+            gst::error!(CAT, imp: self, "Failed to map rtp buffer : {}", err);
             gst::FlowError::Error
         })?;
 
         let payload = rtpbuf.payload().unwrap();
         let payload_id = payload[0..7].try_into().map_err(|err| {
-            gst::error!(CAT, obj: element, "Unexpected rtp fec payload : {}", err);
+            gst::error!(CAT, imp: self, "Unexpected rtp fec payload : {}", err);
             gst::FlowError::Error
         })?;
 
@@ -447,7 +440,7 @@ impl RaptorqDec {
 
         gst::trace!(
             CAT,
-            obj: element,
+            imp: self,
             "New repair packet, I: {}, LP: {}, LB: {}",
             i,
             lp,
@@ -496,30 +489,25 @@ impl RaptorqDec {
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &super::RaptorqDec, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         gst::debug!(CAT, "Handling event {:?}", event);
         use gst::EventView;
 
         if let EventView::FlushStop(_) = event.view() {
-            self.reset(element);
+            self.reset();
         }
 
-        pad.event_default(Some(element), event)
+        pad.event_default(Some(&*self.instance()), event)
     }
 
-    fn fec_sink_event(
-        &self,
-        pad: &gst::Pad,
-        element: &super::RaptorqDec,
-        event: gst::Event,
-    ) -> bool {
+    fn fec_sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         gst::debug!(CAT, "Handling event {:?}", event);
         use gst::EventView;
 
         if let EventView::Caps(c) = event.view() {
-            if let Err(err) = self.start(element, c.caps()) {
-                gst::element_error!(
-                    element,
+            if let Err(err) = self.start(c.caps()) {
+                gst::element_imp_error!(
+                    self,
                     gst::CoreError::Event,
                     ["Failed to start raptorqdec {:?}", err]
                 );
@@ -528,14 +516,10 @@ impl RaptorqDec {
             }
         }
 
-        pad.event_default(Some(element), event)
+        pad.event_default(Some(&*self.instance()), event)
     }
 
-    fn iterate_internal_links(
-        &self,
-        pad: &gst::Pad,
-        _element: &super::RaptorqDec,
-    ) -> gst::Iterator<gst::Pad> {
+    fn iterate_internal_links(&self, pad: &gst::Pad) -> gst::Iterator<gst::Pad> {
         if pad == &self.srcpad {
             gst::Iterator::from_vec(vec![self.sinkpad.clone()])
         } else if pad == &self.sinkpad {
@@ -545,21 +529,17 @@ impl RaptorqDec {
         }
     }
 
-    fn start(
-        &self,
-        element: &super::RaptorqDec,
-        incaps: &gst::CapsRef,
-    ) -> Result<(), gst::ErrorMessage> {
+    fn start(&self, incaps: &gst::CapsRef) -> Result<(), gst::ErrorMessage> {
         let symbol_size = fmtp_param_from_caps::<usize>("t", incaps)?;
 
         if symbol_size > fecscheme::MAX_ENCODING_SYMBOL_SIZE {
-            let details = format!(
-                "Symbol size exceeds Maximum Encoding Symbol Size: {}",
-                fecscheme::MAX_ENCODING_SYMBOL_SIZE
-            );
-
-            gst::element_error!(element, gst::CoreError::Failed, [&details]);
-            return Err(error_msg!(gst::CoreError::Failed, [&details]));
+            return Err(error_msg!(
+                gst::CoreError::Failed,
+                [
+                    "Symbol size exceeds Maximum Encoding Symbol Size: {}",
+                    fecscheme::MAX_ENCODING_SYMBOL_SIZE
+                ]
+            ));
         }
 
         let settings = self.settings.lock().unwrap();
@@ -573,7 +553,7 @@ impl RaptorqDec {
 
         let media_packets_reset_threshold = settings.media_packets_reset_threshold as usize;
 
-        gst::debug!(CAT, obj: element, "Configured for caps {}", incaps);
+        gst::debug!(CAT, imp: self, "Configured for caps {}", incaps);
 
         let mut state = self.state.lock().unwrap();
 
@@ -584,11 +564,11 @@ impl RaptorqDec {
         Ok(())
     }
 
-    fn stop(&self, element: &super::RaptorqDec) {
-        self.reset(element);
+    fn stop(&self) {
+        self.reset();
     }
 
-    fn reset(&self, _element: &super::RaptorqDec) {
+    fn reset(&self) {
         let mut state = self.state.lock().unwrap();
 
         state.media_packets.clear();
@@ -615,21 +595,17 @@ impl ObjectSubclass for RaptorqDec {
                 Self::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |this, element| this.sink_chain(pad, element, buffer),
+                    |this| this.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
-                Self::catch_panic_pad_function(
-                    parent,
-                    || false,
-                    |this, element| this.sink_event(pad, element, event),
-                )
+                Self::catch_panic_pad_function(parent, || false, |this| this.sink_event(pad, event))
             })
             .iterate_internal_links_function(|pad, parent| {
                 Self::catch_panic_pad_function(
                     parent,
                     || gst::Iterator::from_vec(vec![]),
-                    |this, element| this.iterate_internal_links(pad, element),
+                    |this| this.iterate_internal_links(pad),
                 )
             })
             .flags(gst::PadFlags::PROXY_CAPS)
@@ -641,7 +617,7 @@ impl ObjectSubclass for RaptorqDec {
                 Self::catch_panic_pad_function(
                     parent,
                     || gst::Iterator::from_vec(vec![]),
-                    |this, element| this.iterate_internal_links(pad, element),
+                    |this| this.iterate_internal_links(pad),
                 )
             })
             .flags(gst::PadFlags::PROXY_CAPS)
@@ -688,13 +664,7 @@ impl ObjectImpl for RaptorqDec {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "repair-window-tolerance" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -711,7 +681,7 @@ impl ObjectImpl for RaptorqDec {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "repair-window-tolerance" => {
                 let settings = self.settings.lock().unwrap();
@@ -746,9 +716,10 @@ impl ObjectImpl for RaptorqDec {
             _ => unimplemented!(),
         }
     }
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
@@ -815,27 +786,25 @@ impl ElementImpl for RaptorqDec {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {
-                self.reset(element);
+                self.reset();
             }
             gst::StateChange::PausedToReady => {
-                self.stop(element);
+                self.stop();
             }
             _ => (),
         }
 
-        self.parent_change_state(element, transition)
+        self.parent_change_state(transition)
     }
 
     fn request_new_pad(
         &self,
-        element: &Self::Type,
         templ: &gst::PadTemplate,
         name: Option<String>,
         _caps: Option<&gst::Caps>,
@@ -843,8 +812,8 @@ impl ElementImpl for RaptorqDec {
         let mut sinkpad_fec_guard = self.sinkpad_fec.lock().unwrap();
 
         if sinkpad_fec_guard.is_some() {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::CoreError::Pad,
                 ["Not accepting more than one FEC stream"]
             );
@@ -857,21 +826,21 @@ impl ElementImpl for RaptorqDec {
                 Self::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |this, element| this.fec_sink_chain(pad, element, buffer),
+                    |this| this.fec_sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
                 Self::catch_panic_pad_function(
                     parent,
                     || false,
-                    |this, element| this.fec_sink_event(pad, element, event),
+                    |this| this.fec_sink_event(pad, event),
                 )
             })
             .iterate_internal_links_function(|pad, parent| {
                 Self::catch_panic_pad_function(
                     parent,
                     || gst::Iterator::from_vec(vec![]),
-                    |this, element| this.iterate_internal_links(pad, element),
+                    |this| this.iterate_internal_links(pad),
                 )
             })
             .build();
@@ -881,18 +850,18 @@ impl ElementImpl for RaptorqDec {
 
         drop(sinkpad_fec_guard);
 
-        element.add_pad(&sinkpad_fec).unwrap();
+        self.instance().add_pad(&sinkpad_fec).unwrap();
 
         Some(sinkpad_fec)
     }
 
-    fn release_pad(&self, element: &Self::Type, _pad: &gst::Pad) {
+    fn release_pad(&self, _pad: &gst::Pad) {
         let mut pad_guard = self.sinkpad_fec.lock().unwrap();
 
         if let Some(pad) = pad_guard.take() {
             drop(pad_guard);
             pad.set_active(false).unwrap();
-            element.remove_pad(&pad).unwrap();
+            self.instance().remove_pad(&pad).unwrap();
         }
     }
 }

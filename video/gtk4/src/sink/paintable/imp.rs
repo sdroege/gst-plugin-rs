@@ -45,7 +45,7 @@ impl ObjectSubclass for SinkPaintable {
 impl ObjectImpl for SinkPaintable {}
 
 impl PaintableImpl for SinkPaintable {
-    fn intrinsic_height(&self, _paintable: &Self::Type) -> i32 {
+    fn intrinsic_height(&self) -> i32 {
         if let Some(paintable) = self.paintables.borrow().first() {
             f32::round(paintable.height) as i32
         } else {
@@ -53,7 +53,7 @@ impl PaintableImpl for SinkPaintable {
         }
     }
 
-    fn intrinsic_width(&self, _paintable: &Self::Type) -> i32 {
+    fn intrinsic_width(&self) -> i32 {
         if let Some(paintable) = self.paintables.borrow().first() {
             f32::round(paintable.width) as i32
         } else {
@@ -61,7 +61,7 @@ impl PaintableImpl for SinkPaintable {
         }
     }
 
-    fn intrinsic_aspect_ratio(&self, _paintable: &Self::Type) -> f64 {
+    fn intrinsic_aspect_ratio(&self) -> f64 {
         if let Some(paintable) = self.paintables.borrow().first() {
             paintable.width as f64 / paintable.height as f64
         } else {
@@ -69,13 +69,13 @@ impl PaintableImpl for SinkPaintable {
         }
     }
 
-    fn snapshot(&self, paintable: &Self::Type, snapshot: &gdk::Snapshot, width: f64, height: f64) {
+    fn snapshot(&self, snapshot: &gdk::Snapshot, width: f64, height: f64) {
         let snapshot = snapshot.downcast_ref::<gtk::Snapshot>().unwrap();
 
         let paintables = self.paintables.borrow();
 
         if !paintables.is_empty() {
-            gst::trace!(CAT, obj: paintable, "Snapshotting frame");
+            gst::trace!(CAT, imp: self, "Snapshotting frame");
 
             let (frame_width, frame_height) =
                 paintables.first().map(|p| (p.width, p.height)).unwrap();
@@ -125,7 +125,7 @@ impl PaintableImpl for SinkPaintable {
                 snapshot.pop();
             }
         } else {
-            gst::trace!(CAT, obj: paintable, "Snapshotting black frame");
+            gst::trace!(CAT, imp: self, "Snapshotting black frame");
             snapshot.append_color(
                 &gdk::RGBA::BLACK,
                 &graphene::Rect::new(0f32, 0f32, width as f32, height as f32),
@@ -135,9 +135,9 @@ impl PaintableImpl for SinkPaintable {
 }
 
 impl SinkPaintable {
-    pub(super) fn handle_frame_changed(&self, obj: &super::SinkPaintable, frame: Option<Frame>) {
+    pub(super) fn handle_frame_changed(&self, frame: Option<Frame>) {
         if let Some(frame) = frame {
-            gst::trace!(CAT, obj: obj, "Received new frame");
+            gst::trace!(CAT, imp: self, "Received new frame");
 
             let new_paintables = frame.into_textures(&mut *self.cached_textures.borrow_mut());
             let new_size = new_paintables
@@ -153,15 +153,15 @@ impl SinkPaintable {
             if Some(new_size) != old_size {
                 gst::debug!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Size changed from {:?} to {:?}",
                     old_size,
                     new_size,
                 );
-                obj.invalidate_size();
+                self.instance().invalidate_size();
             }
 
-            obj.invalidate_contents();
+            self.instance().invalidate_contents();
         }
     }
 }

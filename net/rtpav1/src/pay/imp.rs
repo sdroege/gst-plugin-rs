@@ -95,8 +95,8 @@ impl Default for State {
 }
 
 impl RTPAv1Pay {
-    fn reset(&self, element: &<Self as ObjectSubclass>::Type, state: &mut State) {
-        gst::debug!(CAT, obj: element, "resetting state");
+    fn reset(&self, state: &mut State) {
+        gst::debug!(CAT, imp: self, "resetting state");
 
         *state = State::default();
     }
@@ -105,7 +105,6 @@ impl RTPAv1Pay {
     /// and constructs and sends new RTP packets when appropriate.
     fn handle_new_obus(
         &self,
-        element: &<Self as ObjectSubclass>::Type,
         state: &mut State,
         data: &[u8],
         dts: Option<gst::ClockTime>,
@@ -116,26 +115,26 @@ impl RTPAv1Pay {
         while reader.position() < data.len() as u64 {
             let obu_start = reader.position();
             let obu = SizedObu::parse(&mut BitReader::endian(&mut reader, ENDIANNESS))
-                .map_err(err_flow!(element, buf_read))?;
+                .map_err(err_flow!(self, buf_read))?;
 
             // tile lists and temporal delimiters should not be transmitted,
             // see section 5 of the RTP AV1 spec
             match obu.obu_type {
                 // completely ignore tile lists
                 ObuType::TileList => {
-                    gst::log!(CAT, obj: element, "ignoring tile list OBU");
+                    gst::log!(CAT, imp: self, "ignoring tile list OBU");
                     reader
                         .seek(SeekFrom::Current(
                             (obu.header_len + obu.leb_size + obu.size) as i64,
                         ))
-                        .map_err(err_flow!(element, buf_read))?;
+                        .map_err(err_flow!(self, buf_read))?;
                 }
 
                 // keep these OBUs around for now so we know where temporal units end
                 ObuType::TemporalDelimiter => {
                     if obu.size != 0 {
-                        gst::element_error!(
-                            element,
+                        gst::element_imp_error!(
+                            self,
                             gst::ResourceError::Read,
                             ["temporal delimiter OBUs should have empty payload"]
                         );
@@ -156,21 +155,21 @@ impl RTPAv1Pay {
                     // read header
                     reader
                         .seek(SeekFrom::Start(obu_start))
-                        .map_err(err_flow!(element, buf_read))?;
+                        .map_err(err_flow!(self, buf_read))?;
                     reader
                         .read_exact(&mut bytes[0..(obu.header_len as usize)])
-                        .map_err(err_flow!(element, buf_read))?;
+                        .map_err(err_flow!(self, buf_read))?;
 
                     // skip size field
                     bytes[0] &= !2_u8; // set `has_size_field` to 0
                     reader
                         .seek(SeekFrom::Current(obu.leb_size as i64))
-                        .map_err(err_flow!(element, buf_read))?;
+                        .map_err(err_flow!(self, buf_read))?;
 
                     // read OBU bytes
                     reader
                         .read_exact(&mut bytes[(obu.header_len as usize)..bytes_total])
-                        .map_err(err_flow!(element, buf_read))?;
+                        .map_err(err_flow!(self, buf_read))?;
 
                     state.obus.push(ObuData {
                         info: obu,
@@ -185,8 +184,8 @@ impl RTPAv1Pay {
         let mut list = gst::BufferList::new();
         {
             let list = list.get_mut().unwrap();
-            while let Some(packet_data) = self.consider_new_packet(element, state, false) {
-                let buffer = self.generate_new_packet(element, state, packet_data)?;
+            while let Some(packet_data) = self.consider_new_packet(state, false) {
+                let buffer = self.generate_new_packet(state, packet_data)?;
                 list.add(buffer);
             }
         }
@@ -200,15 +199,10 @@ impl RTPAv1Pay {
     ///
     /// If `true` is passed for `force`, packets of any size will be accepted,
     /// which is used in flushing the last OBUs after receiving an EOS for example.
-    fn consider_new_packet(
-        &self,
-        element: &<Self as ObjectSubclass>::Type,
-        state: &mut State,
-        force: bool,
-    ) -> Option<PacketOBUData> {
+    fn consider_new_packet(&self, state: &mut State, force: bool) -> Option<PacketOBUData> {
         gst::trace!(
             CAT,
-            obj: element,
+            imp: self,
             "{} new packet, currently storing {} OBUs",
             if force { "forcing" } else { "considering" },
             state.obus.len()
@@ -216,7 +210,7 @@ impl RTPAv1Pay {
 
         let mut data = state.temp_packet_data.take().unwrap_or_else(|| {
             TempPacketData {
-                payload_limit: gst_rtp::RTPBuffer::calc_payload_len(element.mtu(), 0, 0),
+                payload_limit: gst_rtp::RTPBuffer::calc_payload_len(self.instance().mtu(), 0, 0),
                 packet: PacketOBUData {
                     payload_size: 1, // 1 byte is used for the aggregation header
                     omit_last_size_field: true,
@@ -245,7 +239,7 @@ impl RTPAv1Pay {
             // should this packet be finished here?
             if current.obu_type == ObuType::TemporalDelimiter {
                 // remove the temporal delimiter, it is not supposed to be transmitted
-                gst::log!(CAT, obj: element, "ignoring temporal delimiter OBU");
+                gst::log!(CAT, imp: self, "ignoring temporal delimiter OBU");
                 state.obus.remove(packet.obu_count);
 
                 if packet.obu_count > 0 {
@@ -332,13 +326,12 @@ impl RTPAv1Pay {
     /// new RTP packet, filled with those OBUs.
     fn generate_new_packet(
         &self,
-        element: &<Self as ObjectSubclass>::Type,
         state: &mut State,
         packet: PacketOBUData,
     ) -> Result<gst::Buffer, gst::FlowError> {
         gst::log!(
             CAT,
-            obj: element,
+            imp: self,
             "constructing new RTP packet with {} OBUs",
             packet.obu_count
         );
@@ -346,8 +339,8 @@ impl RTPAv1Pay {
         // prepare the outgoing buffer
         let mut outbuf =
             gst::Buffer::new_rtp_with_sizes(packet.payload_size, 0, 0).map_err(|err| {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::ResourceError::Write,
                     ["Failed to allocate output buffer: {}", err]
                 );
@@ -389,7 +382,7 @@ impl RTPAv1Pay {
 
                 writer
                     .write(&aggr_header)
-                    .map_err(err_flow!(element, aggr_header_write))?;
+                    .map_err(err_flow!(self, aggr_header_write))?;
 
                 state.first_packet_in_seq = false;
             }
@@ -402,10 +395,10 @@ impl RTPAv1Pay {
                     &mut BitWriter::endian(&mut writer, ENDIANNESS),
                     obu.info.size + obu.info.header_len,
                 )
-                .map_err(err_flow!(element, leb_write))?;
+                .map_err(err_flow!(self, leb_write))?;
                 writer
                     .write(&obu.bytes)
-                    .map_err(err_flow!(element, obu_write))?;
+                    .map_err(err_flow!(self, obu_write))?;
 
                 state.obus.remove(0);
             }
@@ -423,14 +416,14 @@ impl RTPAv1Pay {
 
                 if !packet.omit_last_size_field {
                     write_leb128(&mut BitWriter::endian(&mut writer, ENDIANNESS), obu_size)
-                        .map_err(err_flow!(element, leb_write))?;
+                        .map_err(err_flow!(self, leb_write))?;
                 }
 
                 // if this OBU is not a fragment, handle it as usual
                 if packet.last_obu_fragment_size == None {
                     writer
                         .write(&state.obus[0].bytes)
-                        .map_err(err_flow!(element, obu_write))?;
+                        .map_err(err_flow!(self, obu_write))?;
                     state.obus.remove(0);
                 }
                 // otherwise write only a slice, and update the element
@@ -438,7 +431,7 @@ impl RTPAv1Pay {
                 else {
                     writer
                         .write(&state.obus[0].bytes[0..obu_size as usize])
-                        .map_err(err_flow!(element, obu_write))?;
+                        .map_err(err_flow!(self, obu_write))?;
 
                     let new_size = state.obus[0].bytes.len() as u32 - obu_size;
                     state.obus[0] = ObuData {
@@ -460,7 +453,7 @@ impl RTPAv1Pay {
 
         gst::log!(
             CAT,
-            obj: element,
+            imp: self,
             "generated RTP packet of size {}",
             outbuf.size()
         );
@@ -529,21 +522,20 @@ impl ElementImpl for RTPAv1Pay {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::debug!(CAT, obj: element, "changing state: {}", transition);
+        gst::debug!(CAT, imp: self, "changing state: {}", transition);
 
         if matches!(transition, gst::StateChange::ReadyToPaused) {
             let mut state = self.state.lock().unwrap();
-            self.reset(element, &mut state);
+            self.reset(&mut state);
         }
 
-        let ret = self.parent_change_state(element, transition);
+        let ret = self.parent_change_state(transition);
 
         if matches!(transition, gst::StateChange::PausedToReady) {
             let mut state = self.state.lock().unwrap();
-            self.reset(element, &mut state);
+            self.reset(&mut state);
         }
 
         ret
@@ -551,39 +543,31 @@ impl ElementImpl for RTPAv1Pay {
 }
 
 impl RTPBasePayloadImpl for RTPAv1Pay {
-    fn set_caps(&self, element: &Self::Type, _caps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        element.set_options("video", true, "AV1", CLOCK_RATE);
+    fn set_caps(&self, _caps: &gst::Caps) -> Result<(), gst::LoggableError> {
+        self.instance()
+            .set_options("video", true, "AV1", CLOCK_RATE);
 
-        gst::debug!(CAT, obj: element, "setting caps");
+        gst::debug!(CAT, imp: self, "setting caps");
 
         Ok(())
     }
 
-    fn handle_buffer(
-        &self,
-        element: &Self::Type,
-        buffer: gst::Buffer,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::trace!(
-            CAT,
-            obj: element,
-            "received buffer of size {}",
-            buffer.size()
-        );
+    fn handle_buffer(&self, buffer: gst::Buffer) -> Result<gst::FlowSuccess, gst::FlowError> {
+        gst::trace!(CAT, imp: self, "received buffer of size {}", buffer.size());
 
         let mut state = self.state.lock().unwrap();
 
         if buffer.flags().contains(gst::BufferFlags::DISCONT) {
-            gst::debug!(CAT, obj: element, "buffer discontinuity");
-            self.reset(element, &mut state);
+            gst::debug!(CAT, imp: self, "buffer discontinuity");
+            self.reset(&mut state);
         }
 
         let dts = buffer.dts();
         let pts = buffer.pts();
 
         let buffer = buffer.into_mapped_buffer_readable().map_err(|_| {
-            gst::element_error!(
-                element,
+            gst::element_imp_error!(
+                self,
                 gst::ResourceError::Read,
                 ["Failed to map buffer readable"]
             );
@@ -591,18 +575,18 @@ impl RTPBasePayloadImpl for RTPAv1Pay {
             gst::FlowError::Error
         })?;
 
-        let list = self.handle_new_obus(element, &mut state, buffer.as_slice(), dts, pts)?;
+        let list = self.handle_new_obus(&mut state, buffer.as_slice(), dts, pts)?;
         drop(state);
 
         if !list.is_empty() {
-            element.push_list(list)
+            self.instance().push_list(list)
         } else {
             Ok(gst::FlowSuccess::Ok)
         }
     }
 
-    fn sink_event(&self, element: &Self::Type, event: gst::Event) -> bool {
-        gst::log!(CAT, obj: element, "sink event: {}", event.type_());
+    fn sink_event(&self, event: gst::Event) -> bool {
+        gst::log!(CAT, imp: self, "sink event: {}", event.type_());
 
         match event.view() {
             gst::EventView::Eos(_) => {
@@ -612,29 +596,27 @@ impl RTPBasePayloadImpl for RTPAv1Pay {
                     let mut state = self.state.lock().unwrap();
                     let list = list.get_mut().unwrap();
 
-                    while let Some(packet_data) =
-                        self.consider_new_packet(element, &mut state, true)
-                    {
-                        match self.generate_new_packet(element, &mut state, packet_data) {
+                    while let Some(packet_data) = self.consider_new_packet(&mut state, true) {
+                        match self.generate_new_packet(&mut state, packet_data) {
                             Ok(buffer) => list.add(buffer),
                             Err(_) => break,
                         }
                     }
 
-                    self.reset(element, &mut state);
+                    self.reset(&mut state);
                 }
                 if !list.is_empty() {
-                    let _ = element.push_list(list);
+                    let _ = self.instance().push_list(list);
                 }
             }
             gst::EventView::FlushStop(_) => {
                 let mut state = self.state.lock().unwrap();
-                self.reset(element, &mut state);
+                self.reset(&mut state);
             }
             _ => (),
         }
 
-        self.parent_sink_event(element, event)
+        self.parent_sink_event(event)
     }
 }
 
@@ -824,7 +806,7 @@ mod tests {
             *state = input_data[idx].1.clone();
 
             assert_eq!(
-                pay.consider_new_packet(&element, &mut state, input_data[idx].0),
+                pay.consider_new_packet(&mut state, input_data[idx].0),
                 results[idx].0,
             );
             assert_eq!(state.obus, results[idx].1.obus);

@@ -65,11 +65,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 impl FileSrc {
-    fn set_location(
-        &self,
-        element: &super::FileSrc,
-        location: Option<FileLocation>,
-    ) -> Result<(), glib::Error> {
+    fn set_location(&self, location: Option<FileLocation>) -> Result<(), glib::Error> {
         let state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
             return Err(glib::Error::new(
@@ -99,20 +95,20 @@ impl FileSrc {
                     Some(ref location_cur) => {
                         gst::info!(
                             CAT,
-                            obj: element,
+                            imp: self,
                             "Changing `location` from {:?} to {}",
                             location_cur,
                             location,
                         );
                     }
                     None => {
-                        gst::info!(CAT, obj: element, "Setting `location to {}", location,);
+                        gst::info!(CAT, imp: self, "Setting `location to {}", location,);
                     }
                 }
                 Some(location)
             }
             None => {
-                gst::info!(CAT, obj: element, "Resetting `location` to None",);
+                gst::info!(CAT, imp: self, "Resetting `location` to None",);
                 None
             }
         };
@@ -142,31 +138,25 @@ impl ObjectImpl for FileSrc {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "location" => {
                 let res = match value.get::<Option<String>>() {
                     Ok(Some(location)) => FileLocation::try_from_path_str(location)
-                        .and_then(|file_location| self.set_location(obj, Some(file_location))),
-                    Ok(None) => self.set_location(obj, None),
+                        .and_then(|file_location| self.set_location(Some(file_location))),
+                    Ok(None) => self.set_location(None),
                     Err(_) => unreachable!("type checked upstream"),
                 };
 
                 if let Err(err) = res {
-                    gst::error!(CAT, obj: obj, "Failed to set property `location`: {}", err);
+                    gst::error!(CAT, imp: self, "Failed to set property `location`: {}", err);
                 }
             }
             _ => unimplemented!(),
         };
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "location" => {
                 let settings = self.settings.lock().unwrap();
@@ -181,10 +171,10 @@ impl ObjectImpl for FileSrc {
         }
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
-        obj.set_format(gst::Format::Bytes);
+        self.instance().set_format(gst::Format::Bytes);
     }
 }
 
@@ -223,11 +213,11 @@ impl ElementImpl for FileSrc {
 }
 
 impl BaseSrcImpl for FileSrc {
-    fn is_seekable(&self, _src: &Self::Type) -> bool {
+    fn is_seekable(&self) -> bool {
         true
     }
 
-    fn size(&self, _src: &Self::Type) -> Option<u64> {
+    fn size(&self) -> Option<u64> {
         let state = self.state.lock().unwrap();
         if let State::Started { ref file, .. } = *state {
             file.metadata().ok().map(|m| m.len())
@@ -236,7 +226,7 @@ impl BaseSrcImpl for FileSrc {
         }
     }
 
-    fn start(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
             unreachable!("FileSrc already started");
@@ -261,16 +251,16 @@ impl BaseSrcImpl for FileSrc {
             )
         })?;
 
-        gst::debug!(CAT, obj: element, "Opened file {:?}", file);
+        gst::debug!(CAT, imp: self, "Opened file {:?}", file);
 
         *state = State::Started { file, position: 0 };
 
-        gst::info!(CAT, obj: element, "Started");
+        gst::info!(CAT, imp: self, "Started");
 
         Ok(())
     }
 
-    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         if let State::Stopped = *state {
             return Err(gst::error_msg!(
@@ -281,14 +271,13 @@ impl BaseSrcImpl for FileSrc {
 
         *state = State::Stopped;
 
-        gst::info!(CAT, obj: element, "Stopped");
+        gst::info!(CAT, imp: self, "Stopped");
 
         Ok(())
     }
 
     fn fill(
         &self,
-        element: &Self::Type,
         offset: u64,
         _length: u32,
         buffer: &mut gst::BufferRef,
@@ -301,15 +290,15 @@ impl BaseSrcImpl for FileSrc {
                 ref mut position,
             } => (file, position),
             State::Stopped => {
-                gst::element_error!(element, gst::CoreError::Failed, ["Not started yet"]);
+                gst::element_imp_error!(self, gst::CoreError::Failed, ["Not started yet"]);
                 return Err(gst::FlowError::Error);
             }
         };
 
         if *position != offset {
             file.seek(SeekFrom::Start(offset)).map_err(|err| {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::LibraryError::Failed,
                     ["Failed to seek to {}: {}", offset, err.to_string()]
                 );
@@ -321,13 +310,13 @@ impl BaseSrcImpl for FileSrc {
 
         let size = {
             let mut map = buffer.map_writable().map_err(|_| {
-                gst::element_error!(element, gst::LibraryError::Failed, ["Failed to map buffer"]);
+                gst::element_imp_error!(self, gst::LibraryError::Failed, ["Failed to map buffer"]);
                 gst::FlowError::Error
             })?;
 
             file.read(map.as_mut()).map_err(|err| {
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::LibraryError::Failed,
                     ["Failed to read at {}: {}", offset, err.to_string()]
                 );
@@ -350,7 +339,7 @@ impl URIHandlerImpl for FileSrc {
         &["file"]
     }
 
-    fn uri(&self, _element: &Self::Type) -> Option<String> {
+    fn uri(&self) -> Option<String> {
         let settings = self.settings.lock().unwrap();
 
         // Conversion to Url already checked while building the `FileLocation`
@@ -361,13 +350,13 @@ impl URIHandlerImpl for FileSrc {
         })
     }
 
-    fn set_uri(&self, element: &Self::Type, uri: &str) -> Result<(), glib::Error> {
+    fn set_uri(&self, uri: &str) -> Result<(), glib::Error> {
         // Special case for "file://" as this is used by some applications to test
         // with `gst_element_make_from_uri` if there's an element that supports the URI protocol
 
         if uri != "file://" {
             let file_location = FileLocation::try_from_uri_str(uri)?;
-            self.set_location(element, Some(file_location))
+            self.set_location(Some(file_location))
         } else {
             Ok(())
         }

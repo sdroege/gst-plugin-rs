@@ -195,13 +195,7 @@ impl ObjectImpl for PngEncoder {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "compression-level" => {
                 let mut settings = self.settings.lock();
@@ -217,7 +211,7 @@ impl ObjectImpl for PngEncoder {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "compression-level" => {
                 let settings = self.settings.lock();
@@ -283,18 +277,17 @@ impl ElementImpl for PngEncoder {
 }
 
 impl VideoEncoderImpl for PngEncoder {
-    fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         *self.state.lock() = None;
         Ok(())
     }
 
     fn set_format(
         &self,
-        element: &Self::Type,
         state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
         let video_info = state.info();
-        gst::debug!(CAT, obj: element, "Setting format {:?}", video_info);
+        gst::debug!(CAT, imp: self, "Setting format {:?}", video_info);
         {
             let settings = self.settings.lock();
             let mut state = State::new(video_info);
@@ -302,17 +295,17 @@ impl VideoEncoderImpl for PngEncoder {
             *self.state.lock() = Some(state);
         }
 
-        let output_state = element
+        let instance = self.instance();
+        let output_state = instance
             .set_output_state(gst::Caps::builder("image/png").build(), Some(state))
             .map_err(|_| gst::loggable_error!(CAT, "Failed to set output state"))?;
-        element
+        instance
             .negotiate(output_state)
             .map_err(|_| gst::loggable_error!(CAT, "Failed to negotiate"))
     }
 
     fn handle_frame(
         &self,
-        element: &Self::Type,
         mut frame: gst_video::VideoCodecFrame,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state_guard = self.state.lock();
@@ -320,7 +313,7 @@ impl VideoEncoderImpl for PngEncoder {
 
         gst::debug!(
             CAT,
-            obj: element,
+            imp: self,
             "Sending frame {}",
             frame.system_frame_number()
         );
@@ -330,7 +323,7 @@ impl VideoEncoderImpl for PngEncoder {
             let input_map = input_buffer.map_readable().unwrap();
             let data = input_map.as_slice();
             state.write_data(data).map_err(|e| {
-                gst::element_error!(element, gst::CoreError::Failed, [&e.to_string()]);
+                gst::element_imp_error!(self, gst::CoreError::Failed, [&e.to_string()]);
                 gst::FlowError::Error
             })?;
         }
@@ -342,6 +335,6 @@ impl VideoEncoderImpl for PngEncoder {
         // There are no such incremental frames in the png format
         frame.set_flags(gst_video::VideoCodecFrameFlags::SYNC_POINT);
         frame.set_output_buffer(output_buffer);
-        element.finish_frame(Some(frame))
+        self.instance().finish_frame(Some(frame))
     }
 }

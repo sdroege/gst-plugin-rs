@@ -84,7 +84,7 @@ fn is_punctuation(word: &str) -> bool {
 }
 
 impl TextWrap {
-    fn update_wrapper(&self, element: &super::TextWrap) {
+    fn update_wrapper(&self) {
         let settings = self.settings.lock().unwrap();
         let mut state = self.state.lock().unwrap();
 
@@ -97,7 +97,7 @@ impl TextWrap {
         if let Some(dictionary) = &settings.dictionary {
             let dict_file = match File::open(dictionary) {
                 Err(err) => {
-                    gst::error!(CAT, obj: element, "Failed to open dictionary file: {}", err);
+                    gst::error!(CAT, imp: self, "Failed to open dictionary file: {}", err);
                     return;
                 }
                 Ok(dict_file) => dict_file,
@@ -106,12 +106,7 @@ impl TextWrap {
             let mut reader = io::BufReader::new(dict_file);
             let standard = match Standard::any_from_reader(&mut reader) {
                 Err(err) => {
-                    gst::error!(
-                        CAT,
-                        obj: element,
-                        "Failed to load standard from file: {}",
-                        err
-                    );
+                    gst::error!(CAT, imp: self, "Failed to load standard from file: {}", err);
                     return;
                 }
                 Ok(standard) => standard,
@@ -128,28 +123,27 @@ impl TextWrap {
     fn sink_chain(
         &self,
         _pad: &gst::Pad,
-        element: &super::TextWrap,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        self.update_wrapper(element);
+        self.update_wrapper();
 
         let mut pts = buffer.pts().ok_or_else(|| {
-            gst::error!(CAT, obj: element, "Need timestamped buffers");
+            gst::error!(CAT, imp: self, "Need timestamped buffers");
             gst::FlowError::Error
         })?;
 
         let duration = buffer.duration().ok_or_else(|| {
-            gst::error!(CAT, obj: element, "Need buffers with duration");
+            gst::error!(CAT, imp: self, "Need buffers with duration");
             gst::FlowError::Error
         })?;
 
         let data = buffer.map_readable().map_err(|_| {
-            gst::error!(CAT, obj: element, "Can't map buffer readable");
+            gst::error!(CAT, imp: self, "Can't map buffer readable");
             gst::FlowError::Error
         })?;
 
         let data = std::str::from_utf8(&data).map_err(|err| {
-            gst::error!(CAT, obj: element, "Can't decode utf8: {}", err);
+            gst::error!(CAT, imp: self, "Can't decode utf8: {}", err);
 
             gst::FlowError::Error
         })?;
@@ -225,7 +219,7 @@ impl TextWrap {
                             .join("\n");
                         gst::info!(
                             CAT,
-                            obj: element,
+                            imp: self,
                             "Outputting contents {}, ts: {}, duration: {}",
                             contents.to_string(),
                             state.start_ts.display(),
@@ -318,7 +312,7 @@ impl TextWrap {
         }
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &super::TextWrap, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
 
         use gst::EventView;
@@ -330,7 +324,7 @@ impl TextWrap {
                 if state.start_ts.is_some() {
                     true
                 } else {
-                    pad.event_default(Some(element), event)
+                    pad.event_default(Some(&*self.instance()), event)
                 }
             }
             EventView::FlushStart(_) => {
@@ -339,7 +333,7 @@ impl TextWrap {
                 *state = State::default();
                 state.options = options;
                 drop(state);
-                pad.event_default(Some(element), event)
+                pad.event_default(Some(&*self.instance()), event)
             }
             EventView::Eos(_) => {
                 let mut state = self.state.lock().unwrap();
@@ -363,18 +357,13 @@ impl TextWrap {
                 } else {
                     drop(state);
                 }
-                pad.event_default(Some(element), event)
+                pad.event_default(Some(&*self.instance()), event)
             }
-            _ => pad.event_default(Some(element), event),
+            _ => pad.event_default(Some(&*self.instance()), event),
         }
     }
 
-    fn src_query(
-        &self,
-        pad: &gst::Pad,
-        element: &super::TextWrap,
-        query: &mut gst::QueryRef,
-    ) -> bool {
+    fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
         gst::log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -390,7 +379,7 @@ impl TextWrap {
                     let our_latency: gst::ClockTime = self.settings.lock().unwrap().accumulate_time;
                     gst::info!(
                         CAT,
-                        obj: element,
+                        imp: self,
                         "Reporting our latency {} + {}",
                         our_latency,
                         min
@@ -399,7 +388,7 @@ impl TextWrap {
                 }
                 ret
             }
-            _ => pad.query_default(Some(element), query),
+            _ => pad.query_default(Some(&*self.instance()), query),
         }
     }
 }
@@ -417,14 +406,14 @@ impl ObjectSubclass for TextWrap {
                 TextWrap::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |textwrap, element| textwrap.sink_chain(pad, element, buffer),
+                    |textwrap| textwrap.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
                 TextWrap::catch_panic_pad_function(
                     parent,
                     || false,
-                    |textwrap, element| textwrap.sink_event(pad, element, event),
+                    |textwrap| textwrap.sink_event(pad, event),
                 )
             })
             .flags(gst::PadFlags::PROXY_CAPS | gst::PadFlags::FIXED_CAPS)
@@ -436,7 +425,7 @@ impl ObjectSubclass for TextWrap {
                 TextWrap::catch_panic_pad_function(
                     parent,
                     || false,
-                    |textwrap, element| textwrap.src_query(pad, element, query),
+                    |textwrap| textwrap.src_query(pad, query),
                 )
             })
             .flags(gst::PadFlags::PROXY_CAPS | gst::PadFlags::FIXED_CAPS)
@@ -491,20 +480,15 @@ impl ObjectImpl for TextWrap {
         PROPERTIES.as_ref()
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
 
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "dictionary" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -530,19 +514,23 @@ impl ObjectImpl for TextWrap {
                 if settings.accumulate_time != old_accumulate_time {
                     gst::debug!(
                         CAT,
-                        obj: obj,
+                        imp: self,
                         "Accumulate time changed: {}",
                         settings.accumulate_time.display(),
                     );
                     drop(settings);
-                    let _ = obj.post_message(gst::message::Latency::builder().src(obj).build());
+                    let _ = self.instance().post_message(
+                        gst::message::Latency::builder()
+                            .src(&*self.instance())
+                            .build(),
+                    );
                 }
             }
             _ => unimplemented!(),
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "dictionary" => {
                 let settings = self.settings.lock().unwrap();
@@ -610,17 +598,16 @@ impl ElementImpl for TextWrap {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::info!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::info!(CAT, imp: self, "Changing state {:?}", transition);
 
         if let gst::StateChange::PausedToReady = transition {
             let mut state = self.state.lock().unwrap();
             *state = State::default();
         }
 
-        let success = self.parent_change_state(element, transition)?;
+        let success = self.parent_change_state(transition)?;
 
         Ok(success)
     }

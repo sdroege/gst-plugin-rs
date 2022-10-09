@@ -123,18 +123,18 @@ impl Settings {
         )
     }
 
-    fn to_metadata(&self, element: &super::S3Sink) -> Option<HashMap<String, String>> {
+    fn to_metadata(&self, imp: &S3Sink) -> Option<HashMap<String, String>> {
         self.metadata.as_ref().map(|structure| {
             let mut hash = HashMap::new();
 
             for (key, value) in structure.iter() {
                 if let Ok(Ok(value_str)) = value.transform::<String>().map(|v| v.get()) {
-                    gst::log!(CAT, obj: element, "metadata '{}' -> '{}'", key, value_str);
+                    gst::log!(CAT, imp: imp, "metadata '{}' -> '{}'", key, value_str);
                     hash.insert(key.to_string(), value_str);
                 } else {
                     gst::warning!(
                         CAT,
-                        obj: element,
+                        imp: imp,
                         "Failed to convert metadata '{}' to string ('{:?}')",
                         key,
                         value
@@ -185,10 +185,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 impl S3Sink {
-    fn flush_current_buffer(
-        &self,
-        element: &super::S3Sink,
-    ) -> Result<(), Option<gst::ErrorMessage>> {
+    fn flush_current_buffer(&self) -> Result<(), Option<gst::ErrorMessage>> {
         let upload_part_req: UploadPart = self.create_upload_part_request()?;
 
         let mut state = self.state.lock().unwrap();
@@ -210,7 +207,7 @@ impl S3Sink {
                         OnError::Abort => {
                             gst::log!(
                                 CAT,
-                                obj: element,
+                                imp: self,
                                 "Aborting multipart upload request with id: {}",
                                 state.upload_id
                             );
@@ -218,13 +215,13 @@ impl S3Sink {
                                 Ok(()) => {
                                     gst::log!(
                                         CAT,
-                                        obj: element,
+                                        imp: self,
                                         "Aborting multipart upload request succeeded."
                                     );
                                 }
                                 Err(err) => gst::error!(
                                     CAT,
-                                    obj: element,
+                                    imp: self,
                                     "Aborting multipart upload failed: {}",
                                     err.to_string()
                                 ),
@@ -233,7 +230,7 @@ impl S3Sink {
                         OnError::Complete => {
                             gst::log!(
                                 CAT,
-                                obj: element,
+                                imp: self,
                                 "Completing multipart upload request with id: {}",
                                 state.upload_id
                             );
@@ -241,13 +238,13 @@ impl S3Sink {
                                 Ok(()) => {
                                     gst::log!(
                                         CAT,
-                                        obj: element,
+                                        imp: self,
                                         "Complete multipart upload request succeeded."
                                     );
                                 }
                                 Err(err) => gst::error!(
                                     CAT,
-                                    obj: element,
+                                    imp: self,
                                     "Completing multipart upload failed: {}",
                                     err.to_string()
                                 ),
@@ -269,7 +266,7 @@ impl S3Sink {
             .build();
         state.completed_parts.push(completed_part);
 
-        gst::info!(CAT, obj: element, "Uploaded part {}", part_number);
+        gst::info!(CAT, imp: self, "Uploaded part {}", part_number);
 
         Ok(())
     }
@@ -344,7 +341,7 @@ impl S3Sink {
         let bucket = Some(url.bucket.clone());
         let key = Some(url.object.clone());
         let content_type = settings.content_type.clone();
-        let metadata = settings.to_metadata(&self.instance());
+        let metadata = settings.to_metadata(self);
 
         client
             .create_multipart_upload()
@@ -429,8 +426,8 @@ impl S3Sink {
             })
     }
 
-    fn finalize_upload(&self, element: &super::S3Sink) -> Result<(), gst::ErrorMessage> {
-        if self.flush_current_buffer(element).is_err() {
+    fn finalize_upload(&self) -> Result<(), gst::ErrorMessage> {
+        if self.flush_current_buffer().is_err() {
             return Err(gst::error_msg!(
                 gst::ResourceError::Settings,
                 ["Failed to flush internal buffer."]
@@ -561,11 +558,7 @@ impl S3Sink {
         Ok(())
     }
 
-    fn update_buffer(
-        &self,
-        src: &[u8],
-        element: &super::S3Sink,
-    ) -> Result<(), Option<gst::ErrorMessage>> {
+    fn update_buffer(&self, src: &[u8]) -> Result<(), Option<gst::ErrorMessage>> {
         let mut state = self.state.lock().unwrap();
         let started_state = match *state {
             State::Started(ref mut started_state) => started_state,
@@ -585,11 +578,11 @@ impl S3Sink {
         drop(state);
 
         if do_flush {
-            self.flush_current_buffer(element)?;
+            self.flush_current_buffer()?;
         }
 
         if to_copy < src.len() {
-            self.update_buffer(tail, element)?;
+            self.update_buffer(tail)?;
         }
 
         Ok(())
@@ -608,11 +601,7 @@ impl S3Sink {
         };
     }
 
-    fn set_uri(
-        self: &S3Sink,
-        object: &super::S3Sink,
-        url_str: Option<&str>,
-    ) -> Result<(), glib::Error> {
+    fn set_uri(self: &S3Sink, url_str: Option<&str>) -> Result<(), glib::Error> {
         let state = self.state.lock().unwrap();
 
         if let State::Started { .. } = *state {
@@ -629,7 +618,7 @@ impl S3Sink {
             return Ok(());
         }
 
-        gst::debug!(CAT, obj: object, "Setting uri to {:?}", url_str);
+        gst::debug!(CAT, imp: self, "Setting uri to {:?}", url_str);
 
         let url_str = url_str.unwrap();
         match parse_s3_url(url_str) {
@@ -764,18 +753,12 @@ impl ObjectImpl for S3Sink {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         let mut settings = self.settings.lock().unwrap();
 
         gst::debug!(
             CAT,
-            obj: obj,
+            imp: self,
             "Setting property '{}' to '{:?}'",
             pspec.name(),
             value
@@ -787,7 +770,7 @@ impl ObjectImpl for S3Sink {
                     .get::<Option<String>>()
                     .expect("type checked upstream");
                 if settings.key.is_some() {
-                    let _ = self.set_uri(obj, Some(&settings.to_uri()));
+                    let _ = self.set_uri(Some(&settings.to_uri()));
                 }
             }
             "key" => {
@@ -795,21 +778,21 @@ impl ObjectImpl for S3Sink {
                     .get::<Option<String>>()
                     .expect("type checked upstream");
                 if settings.bucket.is_some() {
-                    let _ = self.set_uri(obj, Some(&settings.to_uri()));
+                    let _ = self.set_uri(Some(&settings.to_uri()));
                 }
             }
             "region" => {
                 let region = value.get::<String>().expect("type checked upstream");
                 settings.region = Region::new(region);
                 if settings.key.is_some() && settings.bucket.is_some() {
-                    let _ = self.set_uri(obj, Some(&settings.to_uri()));
+                    let _ = self.set_uri(Some(&settings.to_uri()));
                 }
             }
             "part-size" => {
                 settings.buffer_size = value.get::<u64>().expect("type checked upstream");
             }
             "uri" => {
-                let _ = self.set_uri(obj, value.get().expect("type checked upstream"));
+                let _ = self.set_uri(value.get().expect("type checked upstream"));
             }
             "access-key" => {
                 settings.access_key = value.get().expect("type checked upstream");
@@ -864,14 +847,14 @@ impl ObjectImpl for S3Sink {
                     .get::<Option<String>>()
                     .expect("type checked upstream");
                 if settings.key.is_some() && settings.bucket.is_some() {
-                    let _ = self.set_uri(obj, Some(&settings.to_uri()));
+                    let _ = self.set_uri(Some(&settings.to_uri()));
                 }
             }
             _ => unimplemented!(),
         }
     }
 
-    fn property(&self, _: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
 
         match pspec.name() {
@@ -954,77 +937,68 @@ impl URIHandlerImpl for S3Sink {
         &["s3"]
     }
 
-    fn uri(&self, _: &Self::Type) -> Option<String> {
+    fn uri(&self) -> Option<String> {
         self.url.lock().unwrap().as_ref().map(|s| s.to_string())
     }
 
-    fn set_uri(&self, element: &Self::Type, uri: &str) -> Result<(), glib::Error> {
-        self.set_uri(element, Some(uri))
+    fn set_uri(&self, uri: &str) -> Result<(), glib::Error> {
+        self.set_uri(Some(uri))
     }
 }
 
 impl BaseSinkImpl for S3Sink {
-    fn start(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
         self.start()
     }
 
-    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         *state = State::Stopped;
-        gst::info!(CAT, obj: element, "Stopped");
+        gst::info!(CAT, imp: self, "Stopped");
 
         Ok(())
     }
 
-    fn render(
-        &self,
-        element: &Self::Type,
-        buffer: &gst::Buffer,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn render(&self, buffer: &gst::Buffer) -> Result<gst::FlowSuccess, gst::FlowError> {
         if let State::Stopped = *self.state.lock().unwrap() {
-            gst::element_error!(element, gst::CoreError::Failed, ["Not started yet"]);
+            gst::element_imp_error!(self, gst::CoreError::Failed, ["Not started yet"]);
             return Err(gst::FlowError::Error);
         }
 
-        gst::trace!(CAT, obj: element, "Rendering {:?}", buffer);
+        gst::trace!(CAT, imp: self, "Rendering {:?}", buffer);
         let map = buffer.map_readable().map_err(|_| {
-            gst::element_error!(element, gst::CoreError::Failed, ["Failed to map buffer"]);
+            gst::element_imp_error!(self, gst::CoreError::Failed, ["Failed to map buffer"]);
             gst::FlowError::Error
         })?;
 
-        match self.update_buffer(&map, element) {
+        match self.update_buffer(&map) {
             Ok(_) => Ok(gst::FlowSuccess::Ok),
             Err(err) => match err {
                 Some(error_message) => {
-                    gst::error!(
-                        CAT,
-                        obj: element,
-                        "Multipart upload failed: {}",
-                        error_message
-                    );
-                    element.post_error_message(error_message);
+                    gst::error!(CAT, imp: self, "Multipart upload failed: {}", error_message);
+                    self.post_error_message(error_message);
                     Err(gst::FlowError::Error)
                 }
                 _ => {
-                    gst::info!(CAT, obj: element, "Upload interrupted. Flushing...");
+                    gst::info!(CAT, imp: self, "Upload interrupted. Flushing...");
                     Err(gst::FlowError::Flushing)
                 }
             },
         }
     }
 
-    fn unlock(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+    fn unlock(&self) -> Result<(), gst::ErrorMessage> {
         self.cancel();
 
         Ok(())
     }
 
-    fn event(&self, element: &Self::Type, event: gst::Event) -> bool {
+    fn event(&self, event: gst::Event) -> bool {
         if let gst::EventView::Eos(_) = event.view() {
-            if let Err(error_message) = self.finalize_upload(element) {
+            if let Err(error_message) = self.finalize_upload() {
                 gst::error!(
                     CAT,
-                    obj: element,
+                    imp: self,
                     "Failed to finalize the upload: {}",
                     error_message
                 );
@@ -1032,6 +1006,6 @@ impl BaseSinkImpl for S3Sink {
             }
         }
 
-        BaseSinkImplExt::parent_event(self, element, event)
+        BaseSinkImplExt::parent_event(self, event)
     }
 }

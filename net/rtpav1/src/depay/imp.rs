@@ -54,8 +54,8 @@ static TEMPORAL_DELIMITER: Lazy<gst::Memory> =
     Lazy::new(|| gst::Memory::from_slice(&[0b0001_0010, 0]));
 
 impl RTPAv1Depay {
-    fn reset(&self, element: &<Self as ObjectSubclass>::Type, state: &mut State) {
-        gst::debug!(CAT, obj: element, "resetting state");
+    fn reset(&self, state: &mut State) {
+        gst::debug!(CAT, imp: self, "resetting state");
 
         *state = State::default()
     }
@@ -121,21 +121,20 @@ impl ElementImpl for RTPAv1Depay {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::debug!(CAT, obj: element, "changing state: {}", transition);
+        gst::debug!(CAT, imp: self, "changing state: {}", transition);
 
         if matches!(transition, gst::StateChange::ReadyToPaused) {
             let mut state = self.state.lock().unwrap();
-            self.reset(element, &mut state);
+            self.reset(&mut state);
         }
 
-        let ret = self.parent_change_state(element, transition);
+        let ret = self.parent_change_state(transition);
 
         if matches!(transition, gst::StateChange::PausedToReady) {
             let mut state = self.state.lock().unwrap();
-            self.reset(element, &mut state);
+            self.reset(&mut state);
         }
 
         ret
@@ -143,38 +142,37 @@ impl ElementImpl for RTPAv1Depay {
 }
 
 impl RTPBaseDepayloadImpl for RTPAv1Depay {
-    fn handle_event(&self, element: &Self::Type, event: gst::Event) -> bool {
+    fn handle_event(&self, event: gst::Event) -> bool {
         match event.view() {
             gst::EventView::Eos(_) | gst::EventView::FlushStop(_) => {
                 let mut state = self.state.lock().unwrap();
-                self.reset(element, &mut state);
+                self.reset(&mut state);
             }
             _ => (),
         }
 
-        self.parent_handle_event(element, event)
+        self.parent_handle_event(event)
     }
 
     fn process_rtp_packet(
         &self,
-        element: &Self::Type,
         rtp: &gst_rtp::RTPBuffer<gst_rtp::rtp_buffer::Readable>,
     ) -> Option<gst::Buffer> {
         gst::log!(
             CAT,
-            obj: element,
+            imp: self,
             "processing RTP packet with payload type {} and size {}",
             rtp.payload_type(),
             rtp.buffer().size(),
         );
 
-        let payload = rtp.payload().map_err(err_opt!(element, payload_buf)).ok()?;
+        let payload = rtp.payload().map_err(err_opt!(self, payload_buf)).ok()?;
 
         let mut state = self.state.lock().unwrap();
 
         if rtp.buffer().flags().contains(gst::BufferFlags::DISCONT) {
-            gst::debug!(CAT, obj: element, "buffer discontinuity");
-            self.reset(element, &mut state);
+            gst::debug!(CAT, imp: self, "buffer discontinuity");
+            self.reset(&mut state);
         }
 
         // number of bytes that can be used in the next outgoing buffer
@@ -186,7 +184,7 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
             let mut byte = [0; 1];
             reader
                 .read_exact(&mut byte)
-                .map_err(err_opt!(element, aggr_header_read))
+                .map_err(err_opt!(self, aggr_header_read))
                 .ok()?;
             AggregationHeader::from(&byte)
         };
@@ -196,7 +194,7 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
             if state.last_timestamp.is_some() && state.obu_fragment.is_some() {
                 gst::error!(
                     CAT,
-                    obj: element,
+                    imp: self,
                     concat!(
                         "invalid packet: packet is part of a new TU but ",
                         "the previous TU still has an incomplete OBU",
@@ -205,7 +203,7 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
                     state.marked_packet,
                     state.last_timestamp
                 );
-                self.reset(element, &mut state);
+                self.reset(&mut state);
                 return None;
             }
 
@@ -230,20 +228,20 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
             if !aggr_header.leading_fragment {
                 gst::error!(
                     CAT,
-                    obj: element,
+                    imp: self,
                     "invalid packet: ignores unclosed OBU fragment"
                 );
                 return None;
             }
 
             let (element_size, is_last_obu) =
-                find_element_info(element, rtp, &mut reader, &aggr_header, idx)?;
+                self.find_element_info(rtp, &mut reader, &aggr_header, idx)?;
 
             let bytes_end = bytes.len();
             bytes.resize(bytes_end + element_size as usize, 0);
             reader
                 .read_exact(&mut bytes[bytes_end..])
-                .map_err(err_opt!(element, buf_read))
+                .map_err(err_opt!(self, buf_read))
                 .ok()?;
 
             // if this OBU is complete, it can be appended to the adapter
@@ -254,7 +252,7 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
                     obu.as_sized(size, leb_size)
                 };
 
-                let buffer = translate_obu(element, &mut Cursor::new(bytes.as_slice()), &full_obu)?;
+                let buffer = self.translate_obu(&mut Cursor::new(bytes.as_slice()), &full_obu)?;
 
                 state.adapter.push(buffer);
                 state.obu_fragment = None;
@@ -264,24 +262,24 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
         // handle other OBUs, including trailing fragments
         while reader.position() < rtp.payload_size() as u64 {
             let (element_size, is_last_obu) =
-                find_element_info(element, rtp, &mut reader, &aggr_header, idx)?;
+                self.find_element_info(rtp, &mut reader, &aggr_header, idx)?;
 
             let header_pos = reader.position();
             let mut bitreader = BitReader::endian(&mut reader, ENDIANNESS);
             let obu = UnsizedObu::parse(&mut bitreader)
-                .map_err(err_opt!(element, obu_read))
+                .map_err(err_opt!(self, obu_read))
                 .ok()?;
 
             reader
                 .seek(SeekFrom::Start(header_pos))
-                .map_err(err_opt!(element, buf_read))
+                .map_err(err_opt!(self, buf_read))
                 .ok()?;
 
             // ignore these OBU types
             if matches!(obu.obu_type, ObuType::TemporalDelimiter | ObuType::TileList) {
                 reader
                     .seek(SeekFrom::Current(element_size as i64))
-                    .map_err(err_opt!(element, buf_read))
+                    .map_err(err_opt!(self, buf_read))
                     .ok()?;
             }
             // trailing OBU fragments are stored in the state
@@ -290,7 +288,7 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
                 let mut bytes = vec![0; bytes_left as usize];
                 reader
                     .read_exact(bytes.as_mut_slice())
-                    .map_err(err_opt!(element, buf_read))
+                    .map_err(err_opt!(self, buf_read))
                     .ok()?;
 
                 state.obu_fragment = Some((obu, bytes));
@@ -303,7 +301,7 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
                     obu.as_sized(size, leb_size)
                 };
 
-                ready_obus.append(translate_obu(element, &mut reader, &full_obu)?);
+                ready_obus.append(self.translate_obu(&mut reader, &full_obu)?);
             }
 
             idx += 1;
@@ -315,13 +313,13 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
             if state.obu_fragment.is_some() {
                 gst::error!(
                     CAT,
-                    obj: element,
+                    imp: self,
                     concat!(
                         "invalid packet: has marker bit set, but ",
                         "last OBU is not yet complete"
                     )
                 );
-                self.reset(element, &mut state);
+                self.reset(&mut state);
                 return None;
             }
 
@@ -332,7 +330,7 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
         if bytes_ready > 0 {
             gst::log!(
                 CAT,
-                obj: element,
+                imp: self,
                 "creating buffer containing {} bytes of data...",
                 bytes_ready
             );
@@ -340,7 +338,7 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
                 state
                     .adapter
                     .take_buffer(bytes_ready)
-                    .map_err(err_opt!(element, buf_take))
+                    .map_err(err_opt!(self, buf_take))
                     .ok()?,
             )
         } else {
@@ -349,100 +347,98 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
     }
 }
 
-/// Find out the next OBU element's size, and if it is the last OBU in the packet.
-/// The reader is expected to be at the first byte of the element,
-/// or its preceding size field if present,
-/// and will be at the first byte past the element's size field afterwards.
-fn find_element_info(
-    element: &<RTPAv1Depay as ObjectSubclass>::Type,
-    rtp: &gst_rtp::RTPBuffer<gst_rtp::rtp_buffer::Readable>,
-    reader: &mut Cursor<&[u8]>,
-    aggr_header: &AggregationHeader,
-    index: u32,
-) -> Option<(u32, bool)> {
-    let element_size: u32;
-    let is_last_obu: bool;
+impl RTPAv1Depay {
+    /// Find out the next OBU element's size, and if it is the last OBU in the packet.
+    /// The reader is expected to be at the first byte of the element,
+    /// or its preceding size field if present,
+    /// and will be at the first byte past the element's size field afterwards.
+    fn find_element_info(
+        &self,
+        rtp: &gst_rtp::RTPBuffer<gst_rtp::rtp_buffer::Readable>,
+        reader: &mut Cursor<&[u8]>,
+        aggr_header: &AggregationHeader,
+        index: u32,
+    ) -> Option<(u32, bool)> {
+        let element_size: u32;
+        let is_last_obu: bool;
 
-    if let Some(count) = aggr_header.obu_count {
-        is_last_obu = index + 1 == count as u32;
-        element_size = if is_last_obu {
-            rtp.payload_size() - (reader.position() as u32)
-        } else {
-            let mut bitreader = BitReader::endian(reader, ENDIANNESS);
-            parse_leb128(&mut bitreader)
-                .map_err(err_opt!(element, leb_read))
-                .ok()? as u32
-        }
-    } else {
-        element_size = parse_leb128(&mut BitReader::endian(&mut *reader, ENDIANNESS))
-            .map_err(err_opt!(element, leb_read))
-            .ok()? as u32;
-        is_last_obu = match rtp
-            .payload_size()
-            .cmp(&(reader.position() as u32 + element_size))
-        {
-            Ordering::Greater => false,
-            Ordering::Equal => true,
-            Ordering::Less => {
-                gst::error!(
-                    CAT,
-                    obj: element,
-                    "invalid packet: size field gives impossibly large OBU size"
-                );
-                return None;
+        if let Some(count) = aggr_header.obu_count {
+            is_last_obu = index + 1 == count as u32;
+            element_size = if is_last_obu {
+                rtp.payload_size() - (reader.position() as u32)
+            } else {
+                let mut bitreader = BitReader::endian(reader, ENDIANNESS);
+                parse_leb128(&mut bitreader)
+                    .map_err(err_opt!(self, leb_read))
+                    .ok()? as u32
             }
-        };
+        } else {
+            element_size = parse_leb128(&mut BitReader::endian(&mut *reader, ENDIANNESS))
+                .map_err(err_opt!(self, leb_read))
+                .ok()? as u32;
+            is_last_obu = match rtp
+                .payload_size()
+                .cmp(&(reader.position() as u32 + element_size))
+            {
+                Ordering::Greater => false,
+                Ordering::Equal => true,
+                Ordering::Less => {
+                    gst::error!(
+                        CAT,
+                        imp: self,
+                        "invalid packet: size field gives impossibly large OBU size"
+                    );
+                    return None;
+                }
+            };
+        }
+
+        Some((element_size, is_last_obu))
     }
 
-    Some((element_size, is_last_obu))
-}
+    /// Using OBU data from an RTP packet, construct a buffer containing that OBU in AV1 bitstream format
+    fn translate_obu(&self, reader: &mut Cursor<&[u8]>, obu: &SizedObu) -> Option<gst::Buffer> {
+        let mut bytes = gst::Buffer::with_size(obu.full_size() as usize)
+            .map_err(err_opt!(self, buf_alloc))
+            .ok()?
+            .into_mapped_buffer_writable()
+            .unwrap();
 
-/// Using OBU data from an RTP packet, construct a buffer containing that OBU in AV1 bitstream format
-fn translate_obu(
-    element: &<RTPAv1Depay as ObjectSubclass>::Type,
-    reader: &mut Cursor<&[u8]>,
-    obu: &SizedObu,
-) -> Option<gst::Buffer> {
-    let mut bytes = gst::Buffer::with_size(obu.full_size() as usize)
-        .map_err(err_opt!(element, buf_alloc))
-        .ok()?
-        .into_mapped_buffer_writable()
-        .unwrap();
-
-    // write OBU header
-    reader
-        .read_exact(&mut bytes[..obu.header_len as usize])
-        .map_err(err_opt!(element, buf_read))
-        .ok()?;
-
-    // set `has_size_field`
-    bytes[0] |= 1 << 1;
-
-    // skip internal size field if present
-    if obu.has_size_field {
-        parse_leb128(&mut BitReader::endian(&mut *reader, ENDIANNESS))
-            .map_err(err_opt!(element, leb_read))
+        // write OBU header
+        reader
+            .read_exact(&mut bytes[..obu.header_len as usize])
+            .map_err(err_opt!(self, buf_read))
             .ok()?;
-    }
 
-    // write size field
-    write_leb128(
-        &mut BitWriter::endian(
-            Cursor::new(&mut bytes[obu.header_len as usize..]),
-            ENDIANNESS,
-        ),
-        obu.size,
-    )
-    .map_err(err_opt!(element, leb_write))
-    .ok()?;
+        // set `has_size_field`
+        bytes[0] |= 1 << 1;
 
-    // write OBU payload
-    reader
-        .read_exact(&mut bytes[(obu.header_len + obu.leb_size) as usize..])
-        .map_err(err_opt!(element, buf_read))
+        // skip internal size field if present
+        if obu.has_size_field {
+            parse_leb128(&mut BitReader::endian(&mut *reader, ENDIANNESS))
+                .map_err(err_opt!(self, leb_read))
+                .ok()?;
+        }
+
+        // write size field
+        write_leb128(
+            &mut BitWriter::endian(
+                Cursor::new(&mut bytes[obu.header_len as usize..]),
+                ENDIANNESS,
+            ),
+            obu.size,
+        )
+        .map_err(err_opt!(self, leb_write))
         .ok()?;
 
-    Some(bytes.into_buffer())
+        // write OBU payload
+        reader
+            .read_exact(&mut bytes[(obu.header_len + obu.leb_size) as usize..])
+            .map_err(err_opt!(self, buf_read))
+            .ok()?;
+
+        Some(bytes.into_buffer())
+    }
 }
 
 #[cfg(test)]
@@ -507,7 +503,7 @@ mod tests {
             println!("running test {}...", idx);
             let mut reader = Cursor::new(rtp_bytes.as_slice());
 
-            let actual = translate_obu(&element, &mut reader, &obu);
+            let actual = element.imp().translate_obu(&mut reader, &obu);
             assert_eq!(reader.position(), rtp_bytes.len() as u64);
             assert!(actual.is_some());
 
@@ -568,7 +564,7 @@ mod tests {
 
                 println!("testing element {} with reader position {}...", obu_idx, reader.position());
 
-                let actual = find_element_info(&element, &rtp, &mut reader, &aggr_header, obu_idx as u32);
+                let actual = element.imp().find_element_info(&rtp, &mut reader, &aggr_header, obu_idx as u32);
                 assert_eq!(actual, Some(expected));
                 element_size = actual.unwrap().0;
             }
