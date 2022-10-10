@@ -24,6 +24,20 @@ struct TimestampedLines {
     lines: Lines,
     pts: gst::ClockTime,
     duration: gst::ClockTime,
+    line_running_time: Option<gst::ClockTime>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Settings {
+    timeout: Option<gst::ClockTime>,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            timeout: gst::ClockTime::NONE,
+        }
+    }
 }
 
 struct State {
@@ -33,6 +47,7 @@ struct State {
 
     keyunit_requests: BinaryHeap<ForceKeyUnitRequest>,
     segment: gst::FormattedSegment<gst::ClockTime>,
+    settings: Settings,
 }
 
 impl Default for State {
@@ -43,6 +58,7 @@ impl Default for State {
             last_pts: None,
             keyunit_requests: BinaryHeap::new(),
             segment: gst::FormattedSegment::new(),
+            settings: Settings::default(),
         }
     }
 }
@@ -52,6 +68,7 @@ pub struct JsonToVtt {
     sinkpad: gst::Pad,
 
     state: Mutex<State>,
+    settings: Mutex<Settings>,
 }
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -208,10 +225,25 @@ impl State {
                         .unwrap_or_else(|| self.segment.stop().unwrap())
                 };
 
-                if running_time.is_some() {
-                    let mut cloned = drained_line.clone();
-                    cloned.pts = end_pts;
-                    self.pending.push_front(cloned);
+                if let (Some(line_running_time), Some(running_time)) =
+                    (drained_line.line_running_time, running_time)
+                {
+                    if self
+                        .settings
+                        .timeout
+                        .map_or(true, |timeout| running_time < line_running_time + timeout)
+                    {
+                        let mut cloned = drained_line.clone();
+                        cloned.pts = end_pts;
+                        self.pending.push_front(cloned);
+                    } else {
+                        gst::debug!(
+                            CAT,
+                            "Reached timeout, clearing line running time {}, cur running time {}",
+                            line_running_time,
+                            running_time
+                        );
+                    }
                 }
                 drained_line.duration = end_pts - drained_line.pts;
             }
@@ -299,13 +331,16 @@ impl State {
             ret.push(buffer);
         }
 
+        let line_running_time = self.segment.to_running_time(pts);
+
         self.pending.push_back(TimestampedLines {
             lines,
             pts,
             duration,
+            line_running_time,
         });
 
-        self.drain(&mut ret, self.segment.to_running_time(pts));
+        self.drain(&mut ret, line_running_time);
 
         self.last_pts = Some(pts + duration);
 
@@ -528,11 +563,58 @@ impl ObjectSubclass for JsonToVtt {
             srcpad,
             sinkpad,
             state: Mutex::new(State::default()),
+            settings: Mutex::new(Settings::default()),
         }
     }
 }
 
 impl ObjectImpl for JsonToVtt {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![glib::ParamSpecUInt64::builder("timeout")
+                .nick("Timeout")
+                .blurb("Duration after which to erase text when no data has arrived")
+                .minimum(gst::ClockTime::from_seconds(16).nseconds())
+                .default_value(u64::MAX)
+                .mutable_playing()
+                .build()]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        match pspec.name() {
+            "timeout" => {
+                let mut settings = self.settings.lock().unwrap();
+                let mut state = self.state.lock().unwrap();
+
+                let timeout = value.get().expect("type checked upstream");
+
+                settings.timeout = match timeout {
+                    u64::MAX => gst::ClockTime::NONE,
+                    _ => Some(gst::ClockTime::from_nseconds(timeout)),
+                };
+                state.settings.timeout = settings.timeout;
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.name() {
+            "timeout" => {
+                let settings = self.settings.lock().unwrap();
+                if let Some(timeout) = settings.timeout {
+                    timeout.nseconds().to_value()
+                } else {
+                    u64::MAX.to_value()
+                }
+            }
+            _ => unimplemented!(),
+        }
+    }
+
     fn constructed(&self) {
         self.parent_constructed();
 
@@ -597,8 +679,10 @@ impl ElementImpl for JsonToVtt {
         gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
         if transition == gst::StateChange::ReadyToPaused {
+            let settings = self.settings.lock().unwrap();
             let mut state = self.state.lock().unwrap();
             *state = State::default();
+            state.settings = *settings;
         }
 
         self.parent_change_state(transition)

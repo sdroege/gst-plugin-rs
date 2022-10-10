@@ -3645,6 +3645,22 @@
                         "presence": "always"
                     }
                 },
+                "properties": {
+                    "timeout": {
+                        "blurb": "Duration after which to erase text when no data has arrived",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "18446744073709551615",
+                        "max": "18446744073709551615",
+                        "min": "16000000000",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    }
+                },
                 "rank": "none"
             },
             "mccenc": {
