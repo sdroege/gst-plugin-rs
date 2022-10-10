@@ -182,7 +182,12 @@ impl State {
         }
     }
 
-    fn drain(&mut self, buffers: &mut Vec<gst::Buffer>, running_time: Option<gst::ClockTime>) {
+    fn drain(
+        &mut self,
+        imp: &JsonToVtt,
+        buffers: &mut Vec<gst::Buffer>,
+        running_time: Option<gst::ClockTime>,
+    ) {
         /* We don't output anything until we've received the first request, we trigger
          * that first request by sending a first header buffer for each new fragment.
          *
@@ -239,6 +244,7 @@ impl State {
                     } else {
                         gst::debug!(
                             CAT,
+                            imp: imp,
                             "Reached timeout, clearing line running time {}, cur running time {}",
                             line_running_time,
                             running_time
@@ -268,6 +274,7 @@ impl State {
                     } else {
                         gst::debug!(
                             CAT,
+                            imp: imp,
                             "Dropping empty duration cue, pts: {}, text: {}",
                             lines.pts,
                             output_text
@@ -287,6 +294,7 @@ impl State {
 
     fn handle_buffer(
         &mut self,
+        imp: &JsonToVtt,
         pad: &gst::Pad,
         buffer: gst::Buffer,
     ) -> Result<Vec<gst::Buffer>, gst::FlowError> {
@@ -340,14 +348,14 @@ impl State {
             line_running_time,
         });
 
-        self.drain(&mut ret, line_running_time);
+        self.drain(imp, &mut ret, line_running_time);
 
         self.last_pts = Some(pts + duration);
 
         Ok(ret)
     }
 
-    fn handle_gap(&mut self, gap: &gst::event::Gap) -> Vec<gst::Buffer> {
+    fn handle_gap(&mut self, imp: &JsonToVtt, gap: &gst::event::Gap) -> Vec<gst::Buffer> {
         let mut ret = vec![];
 
         let (pts, duration) = gap.get();
@@ -355,7 +363,7 @@ impl State {
         let (pts, duration) = match clamp(&self.segment, pts, duration) {
             Some((pts, duration)) => (pts, duration),
             None => {
-                gst::warning!(CAT, "Ignoring gap outside segment");
+                gst::warning!(CAT, imp: imp, "Ignoring gap outside segment");
                 return ret;
             }
         };
@@ -364,18 +372,18 @@ impl State {
             ret.push(buffer);
         }
 
-        self.drain(&mut ret, self.segment.to_running_time(pts));
+        self.drain(imp, &mut ret, self.segment.to_running_time(pts));
 
         self.last_pts = Some(pts).opt_add(duration).or(Some(pts));
 
         ret
     }
 
-    fn handle_eos(&mut self) -> Vec<gst::Buffer> {
+    fn handle_eos(&mut self, imp: &JsonToVtt) -> Vec<gst::Buffer> {
         let mut ret = vec![];
 
-        gst::log!(CAT, "handling EOS, {}", self.pending.len());
-        self.drain(&mut ret, None);
+        gst::log!(CAT, imp: imp, "handling EOS, {}", self.pending.len());
+        self.drain(imp, &mut ret, None);
 
         ret
     }
@@ -390,7 +398,7 @@ impl JsonToVtt {
         gst::trace!(CAT, obj: pad, "Handling buffer {:?}", buffer);
         let mut state = self.state.lock().unwrap();
 
-        let buffers = state.handle_buffer(pad, buffer)?;
+        let buffers = state.handle_buffer(self, pad, buffer)?;
         drop(state);
         self.output(buffers)?;
 
@@ -442,7 +450,7 @@ impl JsonToVtt {
             EventView::Eos(..) => {
                 gst::log!(CAT, obj: pad, "Handling EOS");
                 let mut state = self.state.lock().unwrap();
-                let buffers = state.handle_eos();
+                let buffers = state.handle_eos(self);
                 drop(state);
                 let _ = self.output(buffers);
                 pad.event_default(Some(&*self.instance()), event)
@@ -503,7 +511,7 @@ impl JsonToVtt {
             EventView::Gap(ev) => {
                 gst::log!(CAT, obj: pad, "Handling gap {:?}", ev);
                 let mut state = self.state.lock().unwrap();
-                let buffers = state.handle_gap(ev);
+                let buffers = state.handle_gap(self, ev);
                 drop(state);
                 let _ = self.output(buffers);
                 true
