@@ -415,9 +415,9 @@ impl JsonGstParse {
             ));
         }
 
-        let size = match q.result().try_into().ok().flatten() {
-            Some(gst::format::Bytes(size)) => size,
-            None => {
+        let size = match q.result() {
+            gst::GenericFormattedValue::Bytes(Some(size)) => *size,
+            _ => {
                 return Err(gst::loggable_error!(
                     CAT,
                     "Failed to query upstream duration"

@@ -289,11 +289,10 @@ impl Encrypter {
                     return false;
                 }
 
-                let size = match peer_query.result().try_into().unwrap() {
-                    Some(gst::format::Bytes(size)) => size,
-                    None => {
+                let size = match peer_query.result() {
+                    gst::GenericFormattedValue::Bytes(Some(size)) => *size,
+                    _ => {
                         gst::error!(CAT, "Failed to query upstream duration");
-
                         return false;
                     }
                 };
@@ -315,7 +314,7 @@ impl Encrypter {
                 let size = size + crate::HEADERS_SIZE as u64;
 
                 gst::debug!(CAT, obj: pad, "Setting duration bytes: {}", size);
-                q.set(gst::format::Bytes(size));
+                q.set(size * gst::format::Bytes::ONE);
 
                 true
             }

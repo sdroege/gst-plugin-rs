@@ -92,7 +92,7 @@ impl ElementImpl for CdgParse {
 }
 
 fn bytes_to_time(bytes: Bytes) -> gst::ClockTime {
-    let nb = bytes.0 / CDG_PACKET_SIZE as u64;
+    let nb = *bytes / CDG_PACKET_SIZE as u64;
     gst::ClockTime::from_nseconds(
         nb.mul_div_round(*gst::ClockTime::SECOND, CDG_PACKET_PERIOD)
             .unwrap(),
@@ -100,14 +100,13 @@ fn bytes_to_time(bytes: Bytes) -> gst::ClockTime {
 }
 
 fn time_to_bytes(time: gst::ClockTime) -> Bytes {
-    Bytes(
-        time.nseconds()
-            .mul_div_round(
-                CDG_PACKET_PERIOD * CDG_PACKET_SIZE as u64,
-                *gst::ClockTime::SECOND,
-            )
-            .unwrap(),
-    )
+    time.nseconds()
+        .mul_div_round(
+            CDG_PACKET_PERIOD * CDG_PACKET_SIZE as u64,
+            *gst::ClockTime::SECOND,
+        )
+        .unwrap()
+        * Bytes::ONE
 }
 
 impl BaseParseImpl for CdgParse {
@@ -191,7 +190,7 @@ impl BaseParseImpl for CdgParse {
             }
         };
 
-        let pts = bytes_to_time(Bytes(frame.offset()));
+        let pts = bytes_to_time(frame.offset() * Bytes::ONE);
         let buffer = frame.buffer_mut().unwrap();
         buffer.set_pts(pts);
 

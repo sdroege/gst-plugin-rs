@@ -376,7 +376,7 @@ fn test_basic_request() {
         if cursor.position() == 0 {
             assert_eq!(
                 h.src.query_duration::<gst::format::Bytes>(),
-                Some(gst::format::Bytes(expected_output.len() as u64))
+                Some(expected_output.len() as u64 * gst::format::Bytes::ONE)
             );
         }
 
@@ -434,7 +434,7 @@ fn test_basic_request_inverted_defaults() {
         if cursor.position() == 0 {
             assert_eq!(
                 h.src.query_duration::<gst::format::Bytes>(),
-                Some(gst::format::Bytes(expected_output.len() as u64))
+                Some(expected_output.len() as u64 * gst::format::Bytes::ONE)
             );
         }
 
@@ -511,7 +511,7 @@ fn test_extra_headers() {
         if cursor.position() == 0 {
             assert_eq!(
                 h.src.query_duration::<gst::format::Bytes>(),
-                Some(gst::format::Bytes(expected_output.len() as u64))
+                Some(expected_output.len() as u64 * gst::format::Bytes::ONE)
             );
         }
 
@@ -570,7 +570,7 @@ fn test_cookies_property() {
         if cursor.position() == 0 {
             assert_eq!(
                 h.src.query_duration::<gst::format::Bytes>(),
-                Some(gst::format::Bytes(expected_output.len() as u64))
+                Some(expected_output.len() as u64 * gst::format::Bytes::ONE)
             );
         }
 
@@ -630,7 +630,7 @@ fn test_iradio_mode() {
         if cursor.position() == 0 {
             assert_eq!(
                 h.src.query_duration::<gst::format::Bytes>(),
-                Some(gst::format::Bytes(expected_output.len() as u64))
+                Some(expected_output.len() as u64 * gst::format::Bytes::ONE)
             );
         }
 
@@ -706,7 +706,7 @@ fn test_audio_l16() {
         if cursor.position() == 0 {
             assert_eq!(
                 h.src.query_duration::<gst::format::Bytes>(),
-                Some(gst::format::Bytes(expected_output.len() as u64))
+                Some(expected_output.len() as u64 * gst::format::Bytes::ONE)
             );
         }
 
@@ -780,7 +780,7 @@ fn test_authorization() {
         if cursor.position() == 0 {
             assert_eq!(
                 h.src.query_duration::<gst::format::Bytes>(),
-                Some(gst::format::Bytes(expected_output.len() as u64))
+                Some(expected_output.len() as u64 * gst::format::Bytes::ONE)
             );
         }
 
@@ -930,13 +930,13 @@ fn test_seek_after_ready() {
     assert_eq!(current_state, gst::State::Ready);
 
     h.run(|src| {
-        src.seek_simple(gst::SeekFlags::FLUSH, gst::format::Bytes(123))
+        src.seek_simple(gst::SeekFlags::FLUSH, 123 * gst::format::Bytes::ONE)
             .unwrap();
         src.set_state(gst::State::Playing).unwrap();
     });
 
     let segment = h.wait_for_segment(false);
-    assert_eq!(segment.start(), Some(gst::format::Bytes(123)));
+    assert_eq!(segment.start(), Some(123 * gst::format::Bytes::ONE));
 
     let mut expected_output = vec![0; 8192 - 123];
     for (i, d) in expected_output.iter_mut().enumerate() {
@@ -1009,12 +1009,12 @@ fn test_seek_after_buffer_received() {
 
     //seek to a position after a buffer is Received
     h.run(|src| {
-        src.seek_simple(gst::SeekFlags::FLUSH, gst::format::Bytes(123))
+        src.seek_simple(gst::SeekFlags::FLUSH, 123 * gst::format::Bytes::ONE)
             .unwrap();
     });
 
     let segment = h.wait_for_segment(true);
-    assert_eq!(segment.start(), Some(gst::format::Bytes(123)));
+    assert_eq!(segment.start(), Some(123 * gst::format::Bytes::ONE));
 
     let mut expected_output = vec![0; 8192 - 123];
     for (i, d) in expected_output.iter_mut().enumerate() {
@@ -1086,21 +1086,23 @@ fn test_seek_with_stop_position() {
     assert_eq!(buffer.offset(), 0);
 
     //seek to a position after a buffer is Received
-    h.run(|src| {
+    let start = 123 * gst::format::Bytes::ONE;
+    let stop = 131 * gst::format::Bytes::ONE;
+    h.run(move |src| {
         src.seek(
             1.0,
             gst::SeekFlags::FLUSH,
             gst::SeekType::Set,
-            gst::format::Bytes(123),
+            start,
             gst::SeekType::Set,
-            gst::format::Bytes(131),
+            stop,
         )
         .unwrap();
     });
 
     let segment = h.wait_for_segment(true);
-    assert_eq!(segment.start(), Some(gst::format::Bytes(123)));
-    assert_eq!(segment.stop(), Some(gst::format::Bytes(131)));
+    assert_eq!(segment.start(), Some(start));
+    assert_eq!(segment.stop(), Some(stop));
 
     let mut expected_output = vec![0; 8];
     for (i, d) in expected_output.iter_mut().enumerate() {
