@@ -191,7 +191,7 @@ fn test_pull_range() {
     let (seekable, start, stop) = q.result();
     assert!(seekable);
     assert_eq!(start, gst::format::Bytes::ZERO.into());
-    assert_eq!(stop, (6043 * gst::format::Bytes::ONE).into());
+    assert_eq!(stop, gst::format::Bytes::from_u64(6043).into());
 
     // do pulls
     let expected_array_1 = [

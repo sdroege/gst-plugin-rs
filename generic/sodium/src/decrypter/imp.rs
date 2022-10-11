@@ -337,7 +337,7 @@ impl Decrypter {
                 let size = size - total_chunks * box_::MACBYTES as u64;
 
                 gst::debug!(CAT, obj: pad, "Setting duration bytes: {}", size);
-                q.set(size * gst::format::Bytes::ONE);
+                q.set(gst::format::Bytes::from_u64(size));
 
                 true
             }
