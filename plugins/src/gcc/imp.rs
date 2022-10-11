@@ -1054,7 +1054,7 @@ impl BandwidthEstimator {
         self.srcpad.start_task(move || {
             let pause = || {
                 if let Some(pad) = weak_pad.upgrade() {
-                    pad.pause_task().unwrap();
+                    let _ = pad.pause_task();
                 }
             };
             let bwe = weak_bwe
