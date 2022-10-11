@@ -14,7 +14,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     src::register(plugin)?;
-    sink::register(plugin)?;
+    sink::task::register(plugin)?;
 
     Ok(())
 }
