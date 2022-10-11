@@ -3,7 +3,7 @@ name="webrtcsink-signalling"
 version = "0.1.0"
 edition = "2018"
 authors = ["Mathieu Duponchelle <mathieu@centricular.com>"]
-license = "MIT"
+license = "MPL-2.0"
 description = "GStreamer WebRTC sink signalling server"
 repository = "https://github.com/centricular/webrtcsink/"
 

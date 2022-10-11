@@ -214,6 +214,11 @@ can be found [here].
 
 ## License
 
-All code in this repository is licensed under the [MIT license].
+All the rust code in this repository is licensed under the [Mozilla Public License Version 2.0].
 
-[MIT license]: https://opensource.org/licenses/MIT
+Parts of the JavaScript code in the www/ example are licensed under the [Apache License, Version 2.0],
+the rest is licensed under the [Mozilla Public License Version 2.0] unless advertised in the
+header.
+
+[Mozilla Public License Version 2.0]: http://opensource.org/licenses/MPL-2.0
+[Apache License, Version 2.0]: https://www.apache.org/licenses/LICENSE-2.1
