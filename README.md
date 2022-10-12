@@ -127,6 +127,9 @@ You will find the following plugins in this repository:
         configuring a fallback audio/video if there are problems with the main
         source.
 
+    - `livesync`: Element to maintain a continuous live stream from a
+      potentially unstable source.
+
     - `togglerecord`: Element to enable starting and stopping multiple streams together.
 
     - `tracers`: Plugin with multiple tracers:

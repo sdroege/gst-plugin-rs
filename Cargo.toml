@@ -36,6 +36,7 @@ members = [
     "text/wrap",
 
     "utils/fallbackswitch",
+    "utils/livesync",
     "utils/togglerecord",
     "utils/tracers",
     "utils/uriplaylistbin",
@@ -84,6 +85,7 @@ default-members = [
     "text/wrap",
 
     "utils/fallbackswitch",
+    "utils/livesync",
     "utils/togglerecord",
     "utils/tracers",
     "utils/uriplaylistbin",

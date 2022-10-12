@@ -1,0 +1,58 @@
+[package]
+name = "gst-plugin-livesync"
+version = "0.9.0-alpha.1"
+authors = ["Jan Alexander Steffens (heftig) <jan.steffens@ltnglobal.com>"]
+license = "MPL-2.0"
+description = "Livesync Plugin"
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+edition = "2021"
+rust-version = "1.63"
+
+[dependencies]
+gio = { git = "https://github.com/gtk-rs/gtk-rs-core", optional = true }
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-plugin-gtk4 = { path = "../../video/gtk4", optional = true }
+gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", optional = true }
+muldiv = "1.0"
+num-rational = { version = "0.4", default-features = false, features = [] }
+once_cell = "1.0"
+parking_lot = "0.12"
+
+[dev-dependencies]
+gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+
+[lib]
+name = "gstlivesync"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[[example]]
+name = "gtk-livesync"
+path = "examples/gtk_livesync.rs"
+required-features = ["gtk", "gio", "gst-plugin-gtk4"]
+
+[[test]]
+name = "livesync"
+path = "tests/livesync.rs"
+
+[build-dependencies]
+gst-plugin-version-helper = { path="../../version-helper" }
+
+[features]
+static = []
+capi = []
+doc = ["gst/v1_18"]
+
+[package.metadata.capi]
+min_version = "0.8.0"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-audio-1.0, gobject-2.0, glib-2.0, gmodule-2.0"

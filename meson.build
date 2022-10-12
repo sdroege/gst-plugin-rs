@@ -67,6 +67,7 @@ plugins = {
   'gst-plugin-textwrap': 'libgsttextwrap',
 
   'gst-plugin-fallbackswitch': 'libgstfallbackswitch',
+  'gst-plugin-livesync': 'libgstlivesync',
   'gst-plugin-togglerecord': 'libgsttogglerecord',
   'gst-plugin-tracers': 'libgstrstracers',
   'gst-plugin-uriplaylistbin': 'libgsturiplaylistbin',

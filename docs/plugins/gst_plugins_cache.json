@@ -2497,6 +2497,142 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "livesync": {
+        "description": "Livesync Plugin",
+        "elements": {
+            "livesync": {
+                "author": "Jan Alexander Steffens (heftig) <jan.steffens@ltnglobal.com>",
+                "description": "Outputs livestream, inserting gap frames when input lags",
+                "hierarchy": [
+                    "GstLiveSync",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Filter",
+                "long-name": "Live Synchronizer",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "drop": {
+                        "blurb": "Number of incoming frames dropped",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": false
+                    },
+                    "duplicate": {
+                        "blurb": "Number of outgoing frames duplicated",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": false
+                    },
+                    "in": {
+                        "blurb": "Number of incoming frames accepted",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": false
+                    },
+                    "late-threshold": {
+                        "blurb": "Maximum time spent (in nanoseconds) before accepting one late buffer; -1 = never",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "2000000000",
+                        "max": "18446744073709551615",
+                        "min": "1000000000",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "latency": {
+                        "blurb": "Additional latency to allow upstream to take longer to produce buffers for the current position (in nanoseconds)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "9223372036854775807",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "out": {
+                        "blurb": "Number of outgoing frames produced",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": false
+                    },
+                    "single-segment": {
+                        "blurb": "Timestamp buffers and eat segments so as to appear as one segment",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstlivesync",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-livesync",
+        "source": "gst-plugin-livesync",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "mp4": {
         "description": "GStreamer Rust MP4 Plugin",
         "elements": {
