@@ -1659,7 +1659,7 @@ impl AudioLoudNorm {
             _ => (),
         }
 
-        pad.event_default(Some(&*self.instance()), event)
+        gst::Pad::event_default(pad, Some(&*self.instance()), event)
     }
 
     #[allow(clippy::single_match)]
@@ -1682,7 +1682,7 @@ impl AudioLoudNorm {
                     false
                 }
             }
-            _ => pad.query_default(Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
         }
     }
 }

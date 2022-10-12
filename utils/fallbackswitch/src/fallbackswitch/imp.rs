@@ -953,7 +953,7 @@ impl FallbackSwitch {
                 self.active_sinkpad.lock().as_ref() == Some(pad)
             }
             _ => {
-                pad.query_default(Some(&*self.instance()), query);
+                gst::Pad::query_default(pad, Some(&*self.instance()), query);
                 false
             }
         };
@@ -1017,7 +1017,7 @@ impl FallbackSwitch {
                 if let Some(sinkpad) = sinkpad {
                     sinkpad.peer_query(query)
                 } else {
-                    pad.query_default(Some(&*self.instance()), query)
+                    gst::Pad::query_default(pad, Some(&*self.instance()), query)
                 }
             }
             _ => {

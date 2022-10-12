@@ -367,7 +367,7 @@ impl Cea608ToTt {
             _ => (),
         }
 
-        pad.event_default(Some(&*self.instance()), event)
+        gst::Pad::event_default(pad, Some(&*self.instance()), event)
     }
 }
 

@@ -1360,7 +1360,7 @@ impl UriPlaylistBin {
                                 }
                                 false
                             }
-                            _ => pad.event_default(parent, event),
+                            _ => gst::Pad::event_default(pad, parent, event),
                         });
                     }
 

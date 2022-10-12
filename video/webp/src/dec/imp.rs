@@ -241,16 +241,16 @@ impl WebPDec {
             EventView::FlushStop(..) => {
                 let mut state = self.state.lock().unwrap();
                 *state = State::default();
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
             EventView::Eos(..) => {
                 if let Err(err) = self.decode() {
                     self.post_error_message(err);
                 }
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
             EventView::Segment(..) => true,
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 
@@ -260,7 +260,7 @@ impl WebPDec {
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Seek(..) => false,
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 }

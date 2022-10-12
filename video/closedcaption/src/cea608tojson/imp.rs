@@ -932,7 +932,7 @@ impl Cea608ToJson {
                 *state = State::default();
                 state.settings = old_settings;
                 drop(state);
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
             EventView::Eos(..) => {
                 if let Some(lines) = self.state.borrow_mut().drain_pending(self) {
@@ -942,9 +942,9 @@ impl Cea608ToJson {
                     let _ = self.output(lines);
                 }
 
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 }

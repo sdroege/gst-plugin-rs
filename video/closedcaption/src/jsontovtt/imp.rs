@@ -435,10 +435,10 @@ impl JsonToVtt {
                         ),
                     }
                 }
-                pad.event_default(Some(&*self.instance()), event);
+                gst::Pad::event_default(pad, Some(&*self.instance()), event);
                 true
             }
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 
@@ -453,7 +453,7 @@ impl JsonToVtt {
                 let buffers = state.handle_eos(self);
                 drop(state);
                 let _ = self.output(buffers);
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
             EventView::Caps(..) => {
                 let mut downstream_caps = match self.srcpad.allowed_caps() {
@@ -506,7 +506,7 @@ impl JsonToVtt {
                 };
 
                 /* FIXME: Handle segment updates by draining? */
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
             EventView::Gap(ev) => {
                 gst::log!(CAT, obj: pad, "Handling gap {:?}", ev);
@@ -516,7 +516,7 @@ impl JsonToVtt {
                 let _ = self.output(buffers);
                 true
             }
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 

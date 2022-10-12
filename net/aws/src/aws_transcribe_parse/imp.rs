@@ -225,10 +225,10 @@ impl TranscribeParse {
             EventView::FlushStop(..) => {
                 let mut state = self.state.lock().unwrap();
                 *state = State::default();
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
             EventView::Eos(..) => match self.drain() {
-                Ok(()) => pad.event_default(Some(&*self.instance()), event),
+                Ok(()) => gst::Pad::event_default(pad, Some(&*self.instance()), event),
                 Err(err) => {
                     gst::error!(CAT, imp: self, "failed to drain on EOS: {}", err);
                     element_imp_error!(
@@ -241,7 +241,7 @@ impl TranscribeParse {
                 }
             },
             EventView::Segment(..) | EventView::Caps(..) => true,
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 }

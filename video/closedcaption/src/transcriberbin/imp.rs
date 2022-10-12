@@ -411,7 +411,8 @@ impl TranscriberBin {
             QueryViewMut::Latency(q) => {
                 let mut upstream_query = gst::query::Latency::new();
 
-                let ret = pad.query_default(Some(&*self.instance()), &mut upstream_query);
+                let ret =
+                    gst::Pad::query_default(pad, Some(&*self.instance()), &mut upstream_query);
 
                 if ret {
                     let (_, mut min, _) = upstream_query.result();
@@ -436,7 +437,7 @@ impl TranscriberBin {
 
                 ret
             }
-            _ => pad.query_default(Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
         }
     }
 
@@ -510,9 +511,9 @@ impl TranscriberBin {
                     }
                 }
 
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 }

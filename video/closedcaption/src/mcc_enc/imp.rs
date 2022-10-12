@@ -375,7 +375,7 @@ impl MccEnc {
                     .build();
                 self.srcpad.push_event(gst::event::Caps::new(&caps))
             }
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 
@@ -388,7 +388,7 @@ impl MccEnc {
                 gst::log!(CAT, obj: pad, "Dropping seek event");
                 false
             }
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 
@@ -408,7 +408,7 @@ impl MccEnc {
                 );
                 true
             }
-            _ => pad.query_default(Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
         }
     }
 }

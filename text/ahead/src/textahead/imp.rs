@@ -304,7 +304,7 @@ impl TextAhead {
                 while !state.pending.is_empty() {
                     let _ = self.push_pending(&mut state);
                 }
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
             gst::EventView::Caps(_caps) => {
                 // set caps on src pad
@@ -326,9 +326,9 @@ impl TextAhead {
                     }
                 }
 
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 

@@ -370,21 +370,21 @@ impl FlvDemux {
         match event.view() {
             EventView::Eos(..) => {
                 // TODO implement
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
             EventView::Segment(..) => {
                 // TODO implement
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
             EventView::FlushStart(..) => {
                 // TODO implement
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
             EventView::FlushStop(..) => {
                 // TODO implement
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 
@@ -432,7 +432,7 @@ impl FlvDemux {
                     false
                 }
             }
-            _ => pad.query_default(Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
         }
     }
 
@@ -444,7 +444,7 @@ impl FlvDemux {
                 // TODO: Implement
                 false
             }
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 

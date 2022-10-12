@@ -929,7 +929,7 @@ impl TtToCea608 {
                     drop(state);
                 }
 
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
             EventView::FlushStop(_) => {
                 let mut state = self.state.lock().unwrap();
@@ -946,9 +946,9 @@ impl TtToCea608 {
                 drop(settings);
                 drop(state);
 
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 }

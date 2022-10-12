@@ -762,14 +762,14 @@ impl SccParse {
                 let state = self.flush(state);
                 drop(state);
 
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
             EventView::Eos(_) => {
                 gst::log!(CAT, obj: pad, "Draining");
                 if let Err(err) = self.handle_buffer(None) {
                     gst::error!(CAT, obj: pad, "Failed to drain parser: {:?}", err);
                 }
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
             _ => {
                 if event.is_sticky()
@@ -781,7 +781,7 @@ impl SccParse {
                     state.pending_events.push(event);
                     true
                 } else {
-                    pad.event_default(Some(&*self.instance()), event)
+                    gst::Pad::event_default(pad, Some(&*self.instance()), event)
                 }
             }
         }
@@ -886,7 +886,7 @@ impl SccParse {
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Seek(e) => self.perform_seek(e),
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 
@@ -940,7 +940,7 @@ impl SccParse {
                     self.sinkpad.peer_query(query)
                 }
             }
-            _ => pad.query_default(Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
         }
     }
 }

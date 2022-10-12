@@ -821,7 +821,7 @@ impl OnvifMetadataParse {
                 drop(state);
                 self.cond.notify_all();
 
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
             gst::EventView::FlushStop(_) => {
                 let _ = self.srcpad.stop_task();
@@ -835,7 +835,7 @@ impl OnvifMetadataParse {
                 state.out_segment.set_position(gst::ClockTime::NONE);
                 state.last_flow_ret = Ok(gst::FlowSuccess::Ok);
                 drop(state);
-                let mut res = pad.event_default(Some(&*self.instance()), event);
+                let mut res = gst::Pad::event_default(pad, Some(&*self.instance()), event);
                 if res {
                     res = self.src_start_task().is_ok();
                 }
@@ -991,7 +991,7 @@ impl OnvifMetadataParse {
                             gst::StreamError::Failed,
                             ["Got EOS event before creating UTC/running time mapping"]
                         );
-                        return pad.event_default(Some(&*self.instance()), event);
+                        return gst::Pad::event_default(pad, Some(&*self.instance()), event);
                     }
 
                     let current_running_time = in_segment
@@ -1009,7 +1009,7 @@ impl OnvifMetadataParse {
                     true
                 }
             }
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 
@@ -1040,7 +1040,7 @@ impl OnvifMetadataParse {
                 gst::fixme!(CAT, obj: pad, "Dropping allocation query");
                 false
             }
-            _ => pad.query_default(Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
         }
     }
 
@@ -1057,7 +1057,7 @@ impl OnvifMetadataParse {
                 drop(state);
                 self.cond.notify_all();
 
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
             gst::EventView::FlushStop(_) => {
                 let _ = self.srcpad.stop_task();
@@ -1071,13 +1071,13 @@ impl OnvifMetadataParse {
                 state.out_segment.set_position(gst::ClockTime::NONE);
                 state.last_flow_ret = Ok(gst::FlowSuccess::Ok);
                 drop(state);
-                let mut res = pad.event_default(Some(&*self.instance()), event);
+                let mut res = gst::Pad::event_default(pad, Some(&*self.instance()), event);
                 if res {
                     res = self.src_start_task().is_ok();
                 }
                 res
             }
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 
@@ -1132,7 +1132,7 @@ impl OnvifMetadataParse {
 
                 ret
             }
-            _ => pad.query_default(Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
         }
     }
 

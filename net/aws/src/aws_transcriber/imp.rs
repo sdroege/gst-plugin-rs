@@ -648,7 +648,7 @@ impl Transcriber {
                     false
                 }
             }
-            _ => pad.query_default(Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
         }
     }
 
@@ -667,7 +667,7 @@ impl Transcriber {
             },
             EventView::FlushStart(_) => {
                 gst::info!(CAT, imp: self, "Received flush start, disconnecting");
-                let mut ret = pad.event_default(Some(&*self.instance()), event);
+                let mut ret = gst::Pad::event_default(pad, Some(&*self.instance()), event);
 
                 match self.srcpad.stop_task() {
                     Err(err) => {
@@ -687,7 +687,7 @@ impl Transcriber {
             EventView::FlushStop(_) => {
                 gst::info!(CAT, imp: self, "Received flush stop, restarting task");
 
-                if pad.event_default(Some(&*self.instance()), event) {
+                if gst::Pad::event_default(pad, Some(&*self.instance()), event) {
                     match self.start_task() {
                         Err(err) => {
                             gst::error!(CAT, imp: self, "Failed to start srcpad task: {}", err);
@@ -725,7 +725,7 @@ impl Transcriber {
                 true
             }
             EventView::StreamStart(_) => true,
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 

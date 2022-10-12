@@ -527,9 +527,9 @@ impl Cea608Overlay {
                 let mut state = self.state.lock().unwrap();
                 state.caption_frame = CaptionFrame::default();
                 state.composition = None;
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 }

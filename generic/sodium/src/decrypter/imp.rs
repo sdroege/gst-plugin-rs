@@ -300,7 +300,7 @@ impl Decrypter {
             }
             QueryViewMut::Duration(q) => {
                 if q.format() != gst::Format::Bytes {
-                    return pad.query_default(Some(&*self.instance()), query);
+                    return gst::Pad::query_default(pad, Some(&*self.instance()), query);
                 }
 
                 /* First let's query the bytes duration upstream */
@@ -341,7 +341,7 @@ impl Decrypter {
 
                 true
             }
-            _ => pad.query_default(Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
         }
     }
 

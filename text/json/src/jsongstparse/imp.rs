@@ -633,14 +633,14 @@ impl JsonGstParse {
                 self.flush(&mut state);
                 drop(state);
 
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
             EventView::Eos(_) => {
                 gst::log!(CAT, obj: pad, "Draining");
                 if let Err(err) = self.handle_buffer(None) {
                     gst::error!(CAT, obj: pad, "Failed to drain parser: {:?}", err);
                 }
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
             _ => {
                 if event.is_sticky()
@@ -652,7 +652,7 @@ impl JsonGstParse {
                     state.pending_events.push(event);
                     true
                 } else {
-                    pad.event_default(Some(&*self.instance()), event)
+                    gst::Pad::event_default(pad, Some(&*self.instance()), event)
                 }
             }
         }
@@ -757,7 +757,7 @@ impl JsonGstParse {
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Seek(e) => self.perform_seek(e),
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 
@@ -811,7 +811,7 @@ impl JsonGstParse {
                     self.sinkpad.peer_query(query)
                 }
             }
-            _ => pad.query_default(Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
         }
     }
 }

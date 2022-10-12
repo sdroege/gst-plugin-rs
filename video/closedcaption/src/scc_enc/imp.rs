@@ -307,9 +307,9 @@ impl SccEnc {
                     gst::error!(CAT, obj: pad, "Failed to write a line after EOS: {:?}", err);
                     return false;
                 }
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 
@@ -322,7 +322,7 @@ impl SccEnc {
                 gst::log!(CAT, obj: pad, "Dropping seek event");
                 false
             }
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 
@@ -342,7 +342,7 @@ impl SccEnc {
                 );
                 true
             }
-            _ => pad.query_default(Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
         }
     }
 }

@@ -543,7 +543,7 @@ impl RaptorqEnc {
             _ => (),
         }
 
-        pad.event_default(Some(&*self.instance()), event)
+        gst::Pad::event_default(pad, Some(&*self.instance()), event)
     }
 
     fn iterate_internal_links(&self, pad: &gst::Pad) -> gst::Iterator<gst::Pad> {

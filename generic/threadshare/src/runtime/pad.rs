@@ -170,7 +170,7 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
         // Safety: `Self::ElementImpl` is bound to `gst::subclass::ElementImpl`.
         let element = unsafe { elem.unsafe_cast_ref::<gst::Element>() };
 
-        pad.gst_pad().event_default(Some(element), event)
+        gst::Pad::event_default(pad.gst_pad(), Some(element), event)
     }
 
     fn src_event_full(
@@ -206,7 +206,7 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
             // Safety: `Self::ElementImpl` is bound to `gst::subclass::ElementImpl`.
             let element = unsafe { elem.unsafe_cast_ref::<gst::Element>() };
 
-            pad.gst_pad().query_default(Some(element), query)
+            gst::Pad::query_default(pad.gst_pad(), Some(element), query)
         }
     }
 }
@@ -578,7 +578,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         // Safety: `Self::ElementImpl` is bound to `gst::subclass::ElementImpl`.
         let element = unsafe { elem.unsafe_cast_ref::<gst::Element>() };
 
-        pad.gst_pad().event_default(Some(element), event)
+        gst::Pad::event_default(pad.gst_pad(), Some(element), event)
     }
 
     fn sink_event_serialized(
@@ -598,7 +598,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
             let pad = pad.upgrade().expect("PadSink no longer exists");
             gst::log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
-            pad.gst_pad().event_default(Some(&element), event)
+            gst::Pad::event_default(pad.gst_pad(), Some(&element), event)
         }
         .boxed()
     }
@@ -653,7 +653,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
             // Safety: `Self::ElementImpl` is bound to `gst::subclass::ElementImpl`.
             let element = unsafe { elem.unsafe_cast_ref::<gst::Element>() };
 
-            pad.gst_pad().query_default(Some(element), query)
+            gst::Pad::query_default(pad.gst_pad(), Some(element), query)
         }
     }
 }

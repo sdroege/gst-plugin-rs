@@ -324,7 +324,7 @@ impl TextWrap {
                 if state.start_ts.is_some() {
                     true
                 } else {
-                    pad.event_default(Some(&*self.instance()), event)
+                    gst::Pad::event_default(pad, Some(&*self.instance()), event)
                 }
             }
             EventView::FlushStart(_) => {
@@ -333,7 +333,7 @@ impl TextWrap {
                 *state = State::default();
                 state.options = options;
                 drop(state);
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
             EventView::Eos(_) => {
                 let mut state = self.state.lock().unwrap();
@@ -357,9 +357,9 @@ impl TextWrap {
                 } else {
                     drop(state);
                 }
-                pad.event_default(Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.instance()), event)
             }
-            _ => pad.event_default(Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 
@@ -388,7 +388,7 @@ impl TextWrap {
                 }
                 ret
             }
-            _ => pad.query_default(Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
         }
     }
 }

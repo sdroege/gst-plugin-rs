@@ -132,8 +132,8 @@ impl TtToJson {
                     .build();
                 self.srcpad.push_event(gst::event::Caps::new(&caps))
             }
-            EventView::Eos(_) => pad.event_default(Some(&*self.instance()), event),
-            _ => pad.event_default(Some(&*self.instance()), event),
+            EventView::Eos(_) => gst::Pad::event_default(pad, Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
         }
     }
 }
