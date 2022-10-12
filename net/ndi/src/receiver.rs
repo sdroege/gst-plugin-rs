@@ -1604,8 +1604,6 @@ impl Receiver {
 
         #[cfg(feature = "advanced-sdk")]
         if [NDIlib_FourCC_audio_type_AAC].contains(&fourcc) {
-            use std::convert::TryInto;
-
             let compressed_packet = audio_frame.compressed_packet().ok_or_else(|| {
                 error!(
                     CAT,

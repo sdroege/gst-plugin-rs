@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: MPL-2.0
 
-#![allow(non_camel_case_types, non_upper_case_globals, non_snake_case)]
+#![allow(
+    non_camel_case_types,
+    non_upper_case_globals,
+    non_snake_case,
+    clippy::upper_case_acronyms,
+    clippy::missing_safety_doc
+)]
 
 #[cfg(unix)]
 use libloading::os::unix::{Library, Symbol};
@@ -16,6 +22,7 @@ const LIBRARY_NAME: &str = "libndi.so.5";
 #[cfg(target_os = "macos")]
 const LIBRARY_NAME: &str = "libndi.dylib";
 
+#[allow(clippy::type_complexity)]
 struct FFI {
     _library: Library,
     initialize: Symbol<fn() -> bool>,

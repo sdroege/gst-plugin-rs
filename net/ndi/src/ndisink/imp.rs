@@ -168,6 +168,7 @@ impl ElementImpl for NdiSink {
         PAD_TEMPLATES.as_ref()
     }
 
+    #[allow(clippy::single_match)]
     fn change_state(
         &self,
         transition: gst::StateChange,
