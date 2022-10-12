@@ -81,30 +81,19 @@ impl ElementImpl for NdiSinkCombiner {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let caps = gst::Caps::builder("video/x-raw")
-                .field(
-                    "format",
-                    &gst::List::new(&[
-                        &gst_video::VideoFormat::Uyvy.to_str(),
-                        &gst_video::VideoFormat::I420.to_str(),
-                        &gst_video::VideoFormat::Nv12.to_str(),
-                        &gst_video::VideoFormat::Nv21.to_str(),
-                        &gst_video::VideoFormat::Yv12.to_str(),
-                        &gst_video::VideoFormat::Bgra.to_str(),
-                        &gst_video::VideoFormat::Bgrx.to_str(),
-                        &gst_video::VideoFormat::Rgba.to_str(),
-                        &gst_video::VideoFormat::Rgbx.to_str(),
-                    ]),
-                )
-                .field("width", &gst::IntRange::<i32>::new(1, i32::MAX))
-                .field("height", &gst::IntRange::<i32>::new(1, i32::MAX))
-                .field(
-                    "framerate",
-                    &gst::FractionRange::new(
-                        gst::Fraction::new(1, i32::MAX),
-                        gst::Fraction::new(i32::MAX, 1),
-                    ),
-                )
+            let caps = gst_video::VideoCapsBuilder::new()
+                .format_list([
+                        gst_video::VideoFormat::Uyvy,
+                        gst_video::VideoFormat::I420,
+                        gst_video::VideoFormat::Nv12,
+                        gst_video::VideoFormat::Nv21,
+                        gst_video::VideoFormat::Yv12,
+                        gst_video::VideoFormat::Bgra,
+                        gst_video::VideoFormat::Bgrx,
+                        gst_video::VideoFormat::Rgba,
+                        gst_video::VideoFormat::Rgbx,
+                    ])
+                .framerate_range(gst::Fraction::new(1, i32::MAX)..gst::Fraction::new(i32::MAX, 1))
                 .build();
             let src_pad_template = gst::PadTemplate::with_gtype(
                 "src",
@@ -124,11 +113,9 @@ impl ElementImpl for NdiSinkCombiner {
             )
             .unwrap();
 
-            let caps = gst::Caps::builder("audio/x-raw")
-                .field("format", &gst_audio::AUDIO_FORMAT_F32.to_str())
-                .field("rate", &gst::IntRange::<i32>::new(1, i32::MAX))
-                .field("channels", &gst::IntRange::<i32>::new(1, i32::MAX))
-                .field("layout", &"interleaved")
+            let caps = gst_audio::AudioCapsBuilder::new_interleaved()
+                .format(gst_audio::AUDIO_FORMAT_F32)
+                .rate_range(1..i32::MAX)
                 .build();
             let audio_sink_pad_template = gst::PadTemplate::with_gtype(
                 "audio",
