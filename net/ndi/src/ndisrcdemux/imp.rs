@@ -311,6 +311,6 @@ impl NdiSrcDemux {
                 );
             }
         }
-        pad.event_default(Some(element), event)
+        gst::Pad::event_default(pad, Some(element), event)
     }
 }
