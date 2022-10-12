@@ -76,18 +76,19 @@ impl Default for Settings {
 
 #[derive(Debug)]
 struct Frame {
-    video_analytics: minidom::Element,
-    other_elements: Vec<minidom::Element>,
+    video_analytics: xmltree::Element,
+    other_elements: Vec<xmltree::Element>,
     events: Vec<gst::Event>,
 }
 
 impl Default for Frame {
     fn default() -> Self {
+        let mut video_analytics = xmltree::Element::new("VideoAnalytics");
+        video_analytics.namespace = Some(String::from(crate::ONVIF_METADATA_SCHEMA));
+        video_analytics.prefix = Some(String::from("tt"));
+
         Frame {
-            video_analytics: minidom::Element::bare(
-                "VideoAnalytics",
-                "http://www.onvif.org/ver10/schema",
-            ),
+            video_analytics,
             other_elements: Vec::new(),
             events: Vec::new(),
         }
@@ -372,22 +373,32 @@ impl OnvifMetadataParse {
                     .entry(dt_unix_ns)
                     .or_insert_with(Frame::default);
 
-                frame.video_analytics.append_child(el.clone());
+                frame
+                    .video_analytics
+                    .children
+                    .push(xmltree::XMLNode::Element(el.clone()));
             }
 
             let utc_time = running_time_to_utc_time(utc_time_running_time_mapping, running_time)
                 .unwrap_or(gst::ClockTime::ZERO);
 
-            for child in root.children() {
+            for child in root.children.iter().filter_map(|n| n.as_element()) {
                 let frame = queued_frames.entry(utc_time).or_insert_with(Frame::default);
 
-                if child.is("VideoAnalytics", "http://www.onvif.org/ver10/schema") {
-                    for subchild in child.children() {
-                        if subchild.is("Frame", "http://www.onvif.org/ver10/schema") {
+                if child.name == "VideoAnalytics"
+                    && child.namespace.as_deref() == Some(crate::ONVIF_METADATA_SCHEMA)
+                {
+                    for subchild in child.children.iter().filter_map(|n| n.as_element()) {
+                        if subchild.name == "Frame"
+                            && subchild.namespace.as_deref() == Some(crate::ONVIF_METADATA_SCHEMA)
+                        {
                             continue;
                         }
 
-                        frame.video_analytics.append_child(subchild.clone());
+                        frame
+                            .video_analytics
+                            .children
+                            .push(xmltree::XMLNode::Element(subchild.clone()));
                     }
                 } else {
                     frame.other_elements.push(child.clone());
@@ -678,8 +689,7 @@ impl OnvifMetadataParse {
                     }
                 };
 
-            if frame.video_analytics.children().next().is_none() && frame.other_elements.is_empty()
-            {
+            if frame.video_analytics.children.is_empty() && frame.other_elements.is_empty() {
                 // Generate a gap event if there's no actual data for this time
                 if !had_events {
                     data.push(BufferOrEvent::Event(
@@ -753,21 +763,30 @@ impl OnvifMetadataParse {
                 frame_pts
             );
 
-            let mut xml =
-                minidom::Element::builder("MetadataStream", "http://www.onvif.org/ver10/schema")
-                    .prefix(Some("tt".into()), "http://www.onvif.org/ver10/schema")
-                    .unwrap()
-                    .build();
+            let mut xml = xmltree::Element::new("MetadataStream");
+            xml.namespaces
+                .get_or_insert_with(|| xmltree::Namespace(Default::default()))
+                .put("tt", crate::ONVIF_METADATA_SCHEMA);
+            xml.namespace = Some(String::from(crate::ONVIF_METADATA_SCHEMA));
+            xml.prefix = Some(String::from("tt"));
 
-            if video_analytics.children().next().is_some() {
-                xml.append_child(video_analytics);
+            if !video_analytics.children.is_empty() {
+                xml.children
+                    .push(xmltree::XMLNode::Element(video_analytics));
             }
             for child in other_elements {
-                xml.append_child(child);
+                xml.children.push(xmltree::XMLNode::Element(child));
             }
 
             let mut vec = Vec::new();
-            if let Err(err) = xml.write_to_decl(&mut vec) {
+            if let Err(err) = xml.write_with_config(
+                &mut vec,
+                xmltree::EmitterConfig {
+                    write_document_declaration: false,
+                    perform_indent: true,
+                    ..xmltree::EmitterConfig::default()
+                },
+            ) {
                 gst::error!(CAT, imp: self, "Can't serialize XML element: {}", err);
                 for event in eos_events {
                     data.push(BufferOrEvent::Event(event));

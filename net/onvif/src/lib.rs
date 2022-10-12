@@ -21,6 +21,9 @@ mod onvifmetadataoverlay;
 mod onvifmetadataparse;
 mod onvifmetadatapay;
 
+// ONVIF Timed Metadata schema
+pub(crate) const ONVIF_METADATA_SCHEMA: &str = "http://www.onvif.org/ver10/schema";
+
 // Offset in nanoseconds from midnight 01-01-1900 (prime epoch) to
 // midnight 01-01-1970 (UNIX epoch)
 pub(crate) const PRIME_EPOCH_OFFSET: gst::ClockTime = gst::ClockTime::from_seconds(2_208_988_800);
@@ -43,7 +46,7 @@ pub(crate) fn lookup_reference_timestamp(buffer: &gst::Buffer) -> Option<gst::Cl
     None
 }
 
-pub(crate) fn xml_from_buffer(buffer: &gst::Buffer) -> Result<minidom::Element, gst::ErrorMessage> {
+pub(crate) fn xml_from_buffer(buffer: &gst::Buffer) -> Result<xmltree::Element, gst::ErrorMessage> {
     let map = buffer.map_readable().map_err(|_| {
         gst::error_msg!(gst::ResourceError::Read, ["Failed to map buffer readable"])
     })?;
@@ -55,7 +58,7 @@ pub(crate) fn xml_from_buffer(buffer: &gst::Buffer) -> Result<minidom::Element, 
         )
     })?;
 
-    let root = utf8.parse::<minidom::Element>().map_err(|err| {
+    let root = xmltree::Element::parse(std::io::Cursor::new(utf8)).map_err(|err| {
         gst::error_msg!(
             gst::ResourceError::Read,
             ["Failed to parse buffer as XML: {}", err]
@@ -66,40 +69,45 @@ pub(crate) fn xml_from_buffer(buffer: &gst::Buffer) -> Result<minidom::Element, 
 }
 
 pub(crate) fn iterate_video_analytics_frames(
-    root: &minidom::Element,
+    root: &xmltree::Element,
 ) -> impl Iterator<
-    Item = Result<(chrono::DateTime<chrono::FixedOffset>, &minidom::Element), gst::ErrorMessage>,
+    Item = Result<(chrono::DateTime<chrono::FixedOffset>, &xmltree::Element), gst::ErrorMessage>,
 > {
-    root.get_child("VideoAnalytics", "http://www.onvif.org/ver10/schema")
+    root.get_child(("VideoAnalytics", ONVIF_METADATA_SCHEMA))
         .map(|analytics| {
-            analytics.children().filter_map(|el| {
-                // We are only interested in associating Frame metadata with video frames
-                if el.is("Frame", "http://www.onvif.org/ver10/schema") {
-                    let timestamp = match el.attr("UtcTime") {
-                        Some(timestamp) => timestamp,
-                        None => {
-                            return Some(Err(gst::error_msg!(
-                                gst::ResourceError::Read,
-                                ["Frame element has no UtcTime attribute"]
-                            )));
-                        }
-                    };
+            analytics
+                .children
+                .iter()
+                .filter_map(|n| n.as_element())
+                .filter_map(|el| {
+                    // We are only interested in associating Frame metadata with video frames
+                    if el.name == "Frame" && el.namespace.as_deref() == Some(ONVIF_METADATA_SCHEMA)
+                    {
+                        let timestamp = match el.attributes.get("UtcTime") {
+                            Some(timestamp) => timestamp,
+                            None => {
+                                return Some(Err(gst::error_msg!(
+                                    gst::ResourceError::Read,
+                                    ["Frame element has no UtcTime attribute"]
+                                )));
+                            }
+                        };
 
-                    let dt = match chrono::DateTime::parse_from_rfc3339(timestamp) {
-                        Ok(dt) => dt,
-                        Err(err) => {
-                            return Some(Err(gst::error_msg!(
-                                gst::ResourceError::Read,
-                                ["Failed to parse UtcTime {}: {}", timestamp, err]
-                            )));
-                        }
-                    };
+                        let dt = match chrono::DateTime::parse_from_rfc3339(timestamp) {
+                            Ok(dt) => dt,
+                            Err(err) => {
+                                return Some(Err(gst::error_msg!(
+                                    gst::ResourceError::Read,
+                                    ["Failed to parse UtcTime {}: {}", timestamp, err]
+                                )));
+                            }
+                        };
 
-                    Some(Ok((dt, el)))
-                } else {
-                    None
-                }
-            })
+                        Some(Ok((dt, el)))
+                    } else {
+                        None
+                    }
+                })
         })
         .into_iter()
         .flatten()

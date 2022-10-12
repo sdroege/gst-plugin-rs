@@ -9,8 +9,6 @@ use once_cell::sync::Lazy;
 use std::collections::HashSet;
 use std::sync::Mutex;
 
-use minidom::Element;
-
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "onvifmetadataoverlay",
@@ -445,212 +443,231 @@ impl OnvifMetadataOverlay {
                         gst::FlowError::Error
                     })?;
 
-                    let root = utf8.parse::<Element>().map_err(|err| {
-                        gst::element_imp_error!(
-                            self,
-                            gst::ResourceError::Read,
-                            ["Failed to parse buffer as XML: {}", err]
-                        );
+                    let root =
+                        xmltree::Element::parse(std::io::Cursor::new(utf8)).map_err(|err| {
+                            gst::element_imp_error!(
+                                self,
+                                gst::ResourceError::Read,
+                                ["Failed to parse buffer as XML: {}", err]
+                            );
 
-                        gst::FlowError::Error
-                    })?;
+                            gst::FlowError::Error
+                        })?;
 
                     for object in root
-                        .get_child("VideoAnalytics", "http://www.onvif.org/ver10/schema")
-                        .map(|el| el.children().into_iter().collect())
-                        .unwrap_or_else(Vec::new)
+                        .get_child(("VideoAnalytics", crate::ONVIF_METADATA_SCHEMA))
+                        .map(|e| e.children.iter().filter_map(|n| n.as_element()))
+                        .into_iter()
+                        .flatten()
                     {
-                        if object.is("Frame", "http://www.onvif.org/ver10/schema") {
-                            for object in object.children() {
-                                if object.is("Object", "http://www.onvif.org/ver10/schema") {
-                                    gst::trace!(CAT, imp: self, "Handling object {:?}", object);
+                        if object.name == "Frame"
+                            && object.namespace.as_deref() == Some(crate::ONVIF_METADATA_SCHEMA)
+                        {
+                            for object in object
+                                .children
+                                .iter()
+                                .filter_map(|n| n.as_element())
+                                .filter(|e| {
+                                    e.name == "Object"
+                                        && e.namespace.as_deref()
+                                            == Some(crate::ONVIF_METADATA_SCHEMA)
+                                })
+                            {
+                                gst::trace!(CAT, imp: self, "Handling object {:?}", object);
 
-                                    let object_id = match object.attr("ObjectId") {
-                                        Some(id) => id.to_string(),
-                                        None => {
-                                            gst::warning!(
-                                                CAT,
-                                                imp: self,
-                                                "XML Object with no ObjectId"
-                                            );
-                                            continue;
-                                        }
-                                    };
-
-                                    if !object_ids.insert(object_id.clone()) {
-                                        gst::debug!(
+                                let object_id = match object.attributes.get("ObjectId") {
+                                    Some(id) => id.to_string(),
+                                    None => {
+                                        gst::warning!(
                                             CAT,
-                                            "Skipping older version of object {}",
-                                            object_id
+                                            imp: self,
+                                            "XML Object with no ObjectId"
                                         );
                                         continue;
                                     }
+                                };
 
-                                    let appearance = match object.get_child(
-                                        "Appearance",
-                                        "http://www.onvif.org/ver10/schema",
-                                    ) {
-                                        Some(appearance) => appearance,
-                                        None => continue,
-                                    };
+                                if !object_ids.insert(object_id.clone()) {
+                                    gst::debug!(
+                                        CAT,
+                                        "Skipping older version of object {}",
+                                        object_id
+                                    );
+                                    continue;
+                                }
 
-                                    let shape = match appearance
-                                        .get_child("Shape", "http://www.onvif.org/ver10/schema")
+                                let appearance = match object
+                                    .get_child(("Appearance", crate::ONVIF_METADATA_SCHEMA))
+                                {
+                                    Some(appearance) => appearance,
+                                    None => continue,
+                                };
+
+                                let shape = match appearance
+                                    .get_child(("Shape", crate::ONVIF_METADATA_SCHEMA))
+                                {
+                                    Some(shape) => shape,
+                                    None => continue,
+                                };
+
+                                let tag = appearance
+                                    .get_child(("Class", crate::ONVIF_METADATA_SCHEMA))
+                                    .and_then(|class| {
+                                        class.get_child(("Type", crate::ONVIF_METADATA_SCHEMA))
+                                    })
+                                    .and_then(|t| t.get_text())
+                                    .map(|t| t.into_owned());
+
+                                let bbox = match shape
+                                    .get_child(("BoundingBox", crate::ONVIF_METADATA_SCHEMA))
+                                {
+                                    Some(bbox) => bbox,
+                                    None => {
+                                        gst::warning!(
+                                            CAT,
+                                            imp: self,
+                                            "XML Shape with no BoundingBox"
+                                        );
+                                        continue;
+                                    }
+                                };
+
+                                let left: f64 = match bbox
+                                    .attributes
+                                    .get("left")
+                                    .and_then(|val| val.parse().ok())
+                                {
+                                    Some(val) => val,
+                                    None => {
+                                        gst::warning!(
+                                            CAT,
+                                            imp: self,
+                                            "BoundingBox with no left attribute"
+                                        );
+                                        continue;
+                                    }
+                                };
+
+                                let right: f64 = match bbox
+                                    .attributes
+                                    .get("right")
+                                    .and_then(|val| val.parse().ok())
+                                {
+                                    Some(val) => val,
+                                    None => {
+                                        gst::warning!(
+                                            CAT,
+                                            imp: self,
+                                            "BoundingBox with no right attribute"
+                                        );
+                                        continue;
+                                    }
+                                };
+
+                                let top: f64 = match bbox
+                                    .attributes
+                                    .get("top")
+                                    .and_then(|val| val.parse().ok())
+                                {
+                                    Some(val) => val,
+                                    None => {
+                                        gst::warning!(
+                                            CAT,
+                                            imp: self,
+                                            "BoundingBox with no top attribute"
+                                        );
+                                        continue;
+                                    }
+                                };
+
+                                let bottom: f64 = match bbox
+                                    .attributes
+                                    .get("bottom")
+                                    .and_then(|val| val.parse().ok())
+                                {
+                                    Some(val) => val,
+                                    None => {
+                                        gst::warning!(
+                                            CAT,
+                                            imp: self,
+                                            "BoundingBox with no bottom attribute"
+                                        );
+                                        continue;
+                                    }
+                                };
+
+                                let x1 = width / 2 + ((left * (width / 2) as f64) as i32);
+                                let y1 = height / 2 - ((top * (height / 2) as f64) as i32);
+                                let x2 = width / 2 + ((right * (width / 2) as f64) as i32);
+                                let y2 = height / 2 - ((bottom * (height / 2) as f64) as i32);
+
+                                let w = (x2 - x1) as u32;
+                                let h = (y2 - y1) as u32;
+
+                                let mut points = vec![];
+
+                                if let Some(polygon) =
+                                    shape.get_child(("Polygon", crate::ONVIF_METADATA_SCHEMA))
+                                {
+                                    for point in
+                                        polygon.children.iter().filter_map(|n| n.as_element())
                                     {
-                                        Some(shape) => shape,
-                                        None => continue,
-                                    };
-
-                                    let tag = appearance
-                                        .get_child("Class", "http://www.onvif.org/ver10/schema")
-                                        .and_then(|class| {
-                                            class.get_child(
-                                                "Type",
-                                                "http://www.onvif.org/ver10/schema",
-                                            )
-                                        })
-                                        .map(|t| t.text());
-
-                                    let bbox = match shape.get_child(
-                                        "BoundingBox",
-                                        "http://www.onvif.org/ver10/schema",
-                                    ) {
-                                        Some(bbox) => bbox,
-                                        None => {
-                                            gst::warning!(
-                                                CAT,
-                                                imp: self,
-                                                "XML Shape with no BoundingBox"
-                                            );
-                                            continue;
-                                        }
-                                    };
-
-                                    let left: f64 =
-                                        match bbox.attr("left").and_then(|val| val.parse().ok()) {
-                                            Some(val) => val,
-                                            None => {
-                                                gst::warning!(
-                                                    CAT,
-                                                    imp: self,
-                                                    "BoundingBox with no left attribute"
-                                                );
-                                                continue;
-                                            }
-                                        };
-
-                                    let right: f64 =
-                                        match bbox.attr("right").and_then(|val| val.parse().ok()) {
-                                            Some(val) => val,
-                                            None => {
-                                                gst::warning!(
-                                                    CAT,
-                                                    imp: self,
-                                                    "BoundingBox with no right attribute"
-                                                );
-                                                continue;
-                                            }
-                                        };
-
-                                    let top: f64 =
-                                        match bbox.attr("top").and_then(|val| val.parse().ok()) {
-                                            Some(val) => val,
-                                            None => {
-                                                gst::warning!(
-                                                    CAT,
-                                                    imp: self,
-                                                    "BoundingBox with no top attribute"
-                                                );
-                                                continue;
-                                            }
-                                        };
-
-                                    let bottom: f64 = match bbox
-                                        .attr("bottom")
-                                        .and_then(|val| val.parse().ok())
-                                    {
-                                        Some(val) => val,
-                                        None => {
-                                            gst::warning!(
-                                                CAT,
-                                                imp: self,
-                                                "BoundingBox with no bottom attribute"
-                                            );
-                                            continue;
-                                        }
-                                    };
-
-                                    let x1 = width / 2 + ((left * (width / 2) as f64) as i32);
-                                    let y1 = height / 2 - ((top * (height / 2) as f64) as i32);
-                                    let x2 = width / 2 + ((right * (width / 2) as f64) as i32);
-                                    let y2 = height / 2 - ((bottom * (height / 2) as f64) as i32);
-
-                                    let w = (x2 - x1) as u32;
-                                    let h = (y2 - y1) as u32;
-
-                                    let mut points = vec![];
-
-                                    if let Some(polygon) = shape
-                                        .get_child("Polygon", "http://www.onvif.org/ver10/schema")
-                                    {
-                                        for point in polygon.children() {
-                                            if point
-                                                .is("Point", "http://www.onvif.org/ver10/schema")
+                                        if point.name == "Point"
+                                            && point.namespace.as_deref()
+                                                == Some(crate::ONVIF_METADATA_SCHEMA)
+                                        {
+                                            let px: f64 = match point
+                                                .attributes
+                                                .get("x")
+                                                .and_then(|val| val.parse().ok())
                                             {
-                                                let px: f64 = match point
-                                                    .attr("x")
-                                                    .and_then(|val| val.parse().ok())
-                                                {
-                                                    Some(val) => val,
-                                                    None => {
-                                                        gst::warning!(
-                                                            CAT,
-                                                            imp: self,
-                                                            "Point with no x attribute"
-                                                        );
-                                                        continue;
-                                                    }
-                                                };
+                                                Some(val) => val,
+                                                None => {
+                                                    gst::warning!(
+                                                        CAT,
+                                                        imp: self,
+                                                        "Point with no x attribute"
+                                                    );
+                                                    continue;
+                                                }
+                                            };
 
-                                                let py: f64 = match point
-                                                    .attr("y")
-                                                    .and_then(|val| val.parse().ok())
-                                                {
-                                                    Some(val) => val,
-                                                    None => {
-                                                        gst::warning!(
-                                                            CAT,
-                                                            imp: self,
-                                                            "Point with no y attribute"
-                                                        );
-                                                        continue;
-                                                    }
-                                                };
+                                            let py: f64 = match point
+                                                .attributes
+                                                .get("y")
+                                                .and_then(|val| val.parse().ok())
+                                            {
+                                                Some(val) => val,
+                                                None => {
+                                                    gst::warning!(
+                                                        CAT,
+                                                        imp: self,
+                                                        "Point with no y attribute"
+                                                    );
+                                                    continue;
+                                                }
+                                            };
 
-                                                let px =
-                                                    width / 2 + ((px * (width / 2) as f64) as i32);
-                                                let px =
-                                                    (px as u32).saturating_sub(x1 as u32).min(w);
+                                            let px = width / 2 + ((px * (width / 2) as f64) as i32);
+                                            let px = (px as u32).saturating_sub(x1 as u32).min(w);
 
-                                                let py = height / 2
-                                                    - ((py * (height / 2) as f64) as i32);
-                                                let py =
-                                                    (py as u32).saturating_sub(y1 as u32).min(h);
+                                            let py =
+                                                height / 2 - ((py * (height / 2) as f64) as i32);
+                                            let py = (py as u32).saturating_sub(y1 as u32).min(h);
 
-                                                points.push(Point { x: px, y: py });
-                                            }
+                                            points.push(Point { x: px, y: py });
                                         }
                                     }
-
-                                    shapes.push(Shape {
-                                        x: x1 as u32,
-                                        y: y1 as u32,
-                                        width: w,
-                                        height: h,
-                                        points,
-                                        tag,
-                                    });
                                 }
+
+                                shapes.push(Shape {
+                                    x: x1 as u32,
+                                    y: y1 as u32,
+                                    width: w,
+                                    height: h,
+                                    points,
+                                    tag,
+                                });
                             }
                         }
                     }
