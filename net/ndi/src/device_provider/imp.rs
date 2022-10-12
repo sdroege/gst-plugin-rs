@@ -72,6 +72,10 @@ impl DeviceProviderImpl for DeviceProvider {
     }
 
     fn start(&self) -> Result<(), gst::LoggableError> {
+        if let Err(err) = crate::ndi::load() {
+            return Err(gst::loggable_error!(CAT, "{}", err));
+        }
+
         let mut thread_guard = self.thread.lock().unwrap();
         let device_provider = self.instance();
         if thread_guard.is_some() {

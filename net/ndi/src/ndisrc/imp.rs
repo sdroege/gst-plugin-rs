@@ -370,6 +370,12 @@ impl ElementImpl for NdiSrc {
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         match transition {
+            gst::StateChange::NullToReady => {
+                if let Err(err) = crate::ndi::load() {
+                    gst::element_imp_error!(self, gst::LibraryError::Init, ("{}", err));
+                    return Err(gst::StateChangeError);
+                }
+            }
             gst::StateChange::PausedToPlaying => {
                 if let Some(ref controller) = *self.receiver_controller.lock().unwrap() {
                     controller.set_playing(true);

@@ -118,10 +118,6 @@ impl From<RecvColorFormat> for NDIlib_recv_color_format_e {
 }
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    if !ndi::initialize() {
-        return Err(glib::bool_error!("Cannot initialize NDI"));
-    }
-
     device_provider::register(plugin)?;
 
     ndisrc::register(plugin)?;

@@ -167,6 +167,23 @@ impl ElementImpl for NdiSink {
 
         PAD_TEMPLATES.as_ref()
     }
+
+    fn change_state(
+        &self,
+        transition: gst::StateChange,
+    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
+        match transition {
+            gst::StateChange::NullToReady => {
+                if let Err(err) = crate::ndi::load() {
+                    gst::element_imp_error!(self, gst::LibraryError::Init, ("{}", err));
+                    return Err(gst::StateChangeError);
+                }
+            }
+            _ => (),
+        }
+
+        self.parent_change_state(transition)
+    }
 }
 
 impl BaseSinkImpl for NdiSink {

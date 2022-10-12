@@ -57,6 +57,7 @@ default-members = [
     "net/reqwest",
     "net/rtpav1",
     "net/webrtc-http",
+    "net/ndi",
     "text/ahead",
     "text/json",
     "text/regex",

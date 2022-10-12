@@ -32,6 +32,7 @@ You will find the following plugins in this repository:
       - `aws_transcriber`: an element wrapping the AWS Transcriber service.
 
     - `raptorq`: Encoder/decoder element for RaptorQ RTP FEC mechanism.
+    - `ndi`: An [NDI](https://www.newtek.com/ndi/) plugin containing a source, sink and device provider.
 
   * `audio`
     - `audiofx`: Elements to apply audio effects to a stream

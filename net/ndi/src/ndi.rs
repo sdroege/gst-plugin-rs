@@ -9,8 +9,8 @@ use std::ptr;
 
 use byte_slice_cast::*;
 
-pub fn initialize() -> bool {
-    unsafe { NDIlib_initialize() }
+pub fn load() -> Result<(), glib::BoolError> {
+    ndisys::load()
 }
 
 #[derive(Debug)]

@@ -69,6 +69,7 @@ plugins = {
   'gst-plugin-tracers': 'libgstrstracers',
   'gst-plugin-webrtchttp': 'libgstwebrtchttp',
   'gst-plugin-rtpav1': 'libgstrtpav1',
+  'gst-plugin-ndi': 'libgstndi',
 }
 
 extra_env = {}
