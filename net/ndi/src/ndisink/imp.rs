@@ -15,7 +15,7 @@ use crate::ndi::SendInstance;
 
 static DEFAULT_SENDER_NDI_NAME: Lazy<String> = Lazy::new(|| {
     format!(
-        "GStreamer NDI Sink {}-{}",
+        "GStreamer NewTek NDI Sink {}-{}",
         env!("CARGO_PKG_VERSION"),
         env!("COMMIT_ID")
     )
@@ -105,9 +105,9 @@ impl ElementImpl for NdiSink {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
             gst::subclass::ElementMetadata::new(
-                "NDI Sink",
+                "NewTek NDI Sink",
                 "Sink/Audio/Video",
-                "Render as an NDI stream",
+                "NewTek NDI Sink",
                 "Sebastian Dröge <sebastian@centricular.com>",
             )
         });

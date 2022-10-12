@@ -17,7 +17,7 @@ static CAT: once_cell::sync::Lazy<gst::DebugCategory> = once_cell::sync::Lazy::n
     gst::DebugCategory::new(
         "ndisinkcombiner",
         gst::DebugColorFlags::empty(),
-        Some("NDI sink audio/video combiner"),
+        Some("NewTek NDI sink audio/video combiner"),
     )
 });
 
@@ -71,9 +71,9 @@ impl ElementImpl for NdiSinkCombiner {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
             gst::subclass::ElementMetadata::new(
-                "NDI Sink Combiner",
+                "NewTek NDI Sink Combiner",
                 "Combiner/Audio/Video",
-                "NDI sink audio/video combiner",
+                "NewTek NDI sink audio/video combiner",
                 "Sebastian Dröge <sebastian@centricular.com>",
             )
         });

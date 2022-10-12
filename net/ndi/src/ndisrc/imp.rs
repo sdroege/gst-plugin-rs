@@ -341,7 +341,7 @@ impl ElementImpl for NdiSrc {
             gst::subclass::ElementMetadata::new(
             "NewTek NDI Source",
             "Source/Audio/Video/Network",
-            "NewTek NDI source",
+            "NewTek NDI Source",
             "Ruben Gonzalez <rubenrua@teltek.es>, Daniel Vilar <daniel.peiteado@teltek.es>, Sebastian Dröge <sebastian@centricular.com>",
             )
         });
