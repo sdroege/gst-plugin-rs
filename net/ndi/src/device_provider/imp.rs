@@ -1,6 +1,6 @@
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_error, gst_log, gst_trace};
+use gst::{error, log, trace};
 
 use once_cell::sync::OnceCell;
 
@@ -60,7 +60,7 @@ impl DeviceProviderImpl for DeviceProvider {
         Some(&*METADATA)
     }
 
-    fn probe(&self, _device_provider: &Self::Type) -> Vec<gst::Device> {
+    fn probe(&self) -> Vec<gst::Device> {
         self.current_devices
             .lock()
             .unwrap()
@@ -69,10 +69,11 @@ impl DeviceProviderImpl for DeviceProvider {
             .collect()
     }
 
-    fn start(&self, device_provider: &Self::Type) -> Result<(), gst::LoggableError> {
+    fn start(&self) -> Result<(), gst::LoggableError> {
         let mut thread_guard = self.thread.lock().unwrap();
+        let device_provider = self.instance();
         if thread_guard.is_some() {
-            gst_log!(CAT, obj: device_provider, "Device provider already started");
+            log!(CAT, obj: device_provider, "Device provider already started");
             return Ok(());
         }
 
@@ -90,13 +91,13 @@ impl DeviceProviderImpl for DeviceProvider {
             {
                 let mut find_guard = imp.find.lock().unwrap();
                 if find_guard.is_some() {
-                    gst_log!(CAT, obj: &device_provider, "Already started");
+                    log!(CAT, obj: &device_provider, "Already started");
                     return;
                 }
 
                 let find = match ndi::FindInstance::builder().build() {
                     None => {
-                        gst_error!(CAT, obj: &device_provider, "Failed to create Find instance");
+                        error!(CAT, obj: &device_provider, "Failed to create Find instance");
                         return;
                     }
                     Some(find) => find,
@@ -123,7 +124,7 @@ impl DeviceProviderImpl for DeviceProvider {
         Ok(())
     }
 
-    fn stop(&self, _device_provider: &Self::Type) {
+    fn stop(&self) {
         if let Some(_thread) = self.thread.lock().unwrap().take() {
             self.is_running.store(false, atomic::Ordering::SeqCst);
             // Don't actually join because that might take a while
@@ -140,7 +141,7 @@ impl DeviceProvider {
         };
 
         if !find.wait_for_sources(if first { 1000 } else { 5000 }) {
-            gst_trace!(CAT, obj: device_provider, "No new sources found");
+            trace!(CAT, obj: device_provider, "No new sources found");
             return;
         }
 
@@ -156,8 +157,8 @@ impl DeviceProvider {
             let old_device_imp = Device::from_instance(old_device);
             let old_source = old_device_imp.source.get().unwrap();
 
-            if !sources.contains(&*old_source) {
-                gst_log!(
+            if !sources.contains(old_source) {
+                log!(
                     CAT,
                     obj: device_provider,
                     "Source {:?} disappeared",
@@ -184,7 +185,7 @@ impl DeviceProvider {
 
         // Now go through all new devices and announce them
         for source in sources {
-            gst_log!(CAT, obj: device_provider, "Source {:?} appeared", source);
+            log!(CAT, obj: device_provider, "Source {:?} appeared", source);
             let device = super::Device::new(&source);
             device_provider.device_add(&device);
             current_devices_guard.push(device);
@@ -215,11 +216,7 @@ impl ObjectImpl for Device {}
 impl GstObjectImpl for Device {}
 
 impl DeviceImpl for Device {
-    fn create_element(
-        &self,
-        _device: &Self::Type,
-        name: Option<&str>,
-    ) -> Result<gst::Element, gst::LoggableError> {
+    fn create_element(&self, name: Option<&str>) -> Result<gst::Element, gst::LoggableError> {
         let source_info = self.source.get().unwrap();
         let element = glib::Object::with_type(
             crate::ndisrc::NdiSrc::static_type(),
@@ -229,7 +226,6 @@ impl DeviceImpl for Device {
                 ("url-address", &source_info.url_address()),
             ],
         )
-        .unwrap()
         .dynamic_cast::<gst::Element>()
         .unwrap();
 
@@ -258,8 +254,7 @@ impl super::Device {
             ("display-name", &display_name),
             ("device-class", &device_class),
             ("properties", &extra_properties),
-        ])
-        .unwrap();
+        ]);
         let device_impl = Device::from_instance(&device);
 
         device_impl.source.set(source.to_owned()).unwrap();

@@ -1,6 +1,6 @@
 use glib::prelude::*;
 use gst::prelude::*;
-use gst::{gst_debug, gst_error, gst_log, gst_trace, gst_warning};
+use gst::{debug, error, log, trace, warning};
 use gst_video::prelude::*;
 
 use byte_slice_cast::*;
@@ -291,7 +291,7 @@ impl Observations {
 
         let mut inner = self.0.borrow_mut();
 
-        gst_trace!(
+        trace!(
             CAT,
             obj: element,
             "Local time {}, remote time {}, slope correct {}/{}",
@@ -325,7 +325,7 @@ impl Observations {
             match (inner.base_remote_time, inner.base_local_time) {
                 (Some(remote), Some(local)) => (remote, local),
                 _ => {
-                    gst_debug!(
+                    debug!(
                         CAT,
                         obj: element,
                         "Initializing base time: local {}, remote {}",
@@ -373,7 +373,7 @@ impl Observations {
 
                 // Check for some obviously wrong slopes and try to correct for that
                 if !(0.5..1.5).contains(&scaled_slope) {
-                    gst_warning!(
+                    warning!(
                         CAT,
                         obj: element,
                         "Too small/big slope {}, resetting",
@@ -414,7 +414,7 @@ impl Observations {
                         .unwrap()
                         .0
                         .mul_div_round(inner.slope_correction.0, inner.slope_correction.1)?;
-                    gst_debug!(
+                    debug!(
                         CAT,
                         obj: element,
                         "Initializing base time: local {}, remote {}, slope correction {}/{}",
@@ -435,7 +435,7 @@ impl Observations {
         let local_diff = local_time.saturating_sub(base_local_time);
         let delta = (local_diff as i64) - (remote_diff as i64);
 
-        gst_trace!(
+        trace!(
             CAT,
             obj: element,
             "Local diff {}, remote diff {}, delta {}",
@@ -447,7 +447,7 @@ impl Observations {
         if (delta > inner.skew && delta - inner.skew > 1_000_000_000)
             || (delta < inner.skew && inner.skew - delta > 1_000_000_000)
         {
-            gst_warning!(
+            warning!(
                 CAT,
                 obj: element,
                 "Delta {} too far from skew {}, resetting",
@@ -457,7 +457,7 @@ impl Observations {
 
             let discont = !inner.deltas.is_empty();
 
-            gst_debug!(
+            debug!(
                 CAT,
                 obj: element,
                 "Initializing base time: local {}, remote {}",
@@ -511,14 +511,14 @@ impl Observations {
             out_time + (inner.skew as u64)
         };
 
-        gst_trace!(
+        trace!(
             CAT,
             obj: element,
             "Skew {}, min delta {}",
             inner.skew,
             inner.min_delta
         );
-        gst_trace!(
+        trace!(
             CAT,
             obj: element,
             "Outputting {}",
@@ -563,7 +563,7 @@ impl Drop for ReceiverInner {
         let element = self.element.upgrade();
 
         if let Some(ref element) = element {
-            gst_debug!(CAT, obj: element, "Closed NDI connection");
+            debug!(CAT, obj: element, "Closed NDI connection");
         }
     }
 }
@@ -684,11 +684,11 @@ impl Receiver {
         timeout: u32,
         max_queue_length: usize,
     ) -> Option<Self> {
-        gst_debug!(CAT, obj: element, "Starting NDI connection...");
+        debug!(CAT, obj: element, "Starting NDI connection...");
 
         assert!(ndi_name.is_some() || url_address.is_some());
 
-        gst_debug!(
+        debug!(
             CAT,
             obj: element,
             "Connecting to NDI source with NDI name '{:?}' and URL/Address {:?}",
@@ -754,13 +754,13 @@ impl Receiver {
             let flushing = {
                 let queue = (receiver.0.queue.0).0.lock().unwrap();
                 if queue.shutdown {
-                    gst_debug!(CAT, obj: &element, "Shutting down");
+                    debug!(CAT, obj: &element, "Shutting down");
                     break;
                 }
 
                 // If an error happened in the meantime, just go out of here
                 if queue.error.is_some() {
-                    gst_error!(CAT, obj: &element, "Error while waiting for connection");
+                    error!(CAT, obj: &element, "Error while waiting for connection");
                     return;
                 }
 
@@ -775,7 +775,7 @@ impl Receiver {
 
             let res = match recv.capture(50) {
                 _ if flushing => {
-                    gst_debug!(CAT, obj: &element, "Flushing");
+                    debug!(CAT, obj: &element, "Flushing");
                     Err(gst::FlowError::Flushing)
                 }
                 Err(_) => {
@@ -787,11 +787,11 @@ impl Receiver {
                     Err(gst::FlowError::Error)
                 }
                 Ok(None) if timeout > 0 && timer.elapsed().as_millis() >= timeout as u128 => {
-                    gst_debug!(CAT, obj: &element, "Timed out -- assuming EOS",);
+                    debug!(CAT, obj: &element, "Timed out -- assuming EOS",);
                     Err(gst::FlowError::Eos)
                 }
                 Ok(None) => {
-                    gst_debug!(CAT, obj: &element, "No frame received yet, retry");
+                    debug!(CAT, obj: &element, "No frame received yet, retry");
                     continue;
                 }
                 Ok(Some(Frame::Video(frame))) => {
@@ -824,7 +824,7 @@ impl Receiver {
                 }
                 Ok(Some(Frame::Metadata(frame))) => {
                     if let Some(metadata) = frame.metadata() {
-                        gst_debug!(
+                        debug!(
                             CAT,
                             obj: &element,
                             "Received metadata at timecode {}: {}",
@@ -841,7 +841,7 @@ impl Receiver {
                 Ok(item) => {
                     let mut queue = (receiver.0.queue.0).0.lock().unwrap();
                     while queue.buffer_queue.len() > receiver.0.max_queue_length {
-                        gst_warning!(
+                        warning!(
                             CAT,
                             obj: &element,
                             "Dropping old buffer -- queue has {} items",
@@ -854,7 +854,7 @@ impl Receiver {
                     timer = time::Instant::now();
                 }
                 Err(gst::FlowError::Eos) => {
-                    gst_debug!(CAT, obj: &element, "Signalling EOS");
+                    debug!(CAT, obj: &element, "Signalling EOS");
                     let mut queue = (receiver.0.queue.0).0.lock().unwrap();
                     queue.timeout = true;
                     (receiver.0.queue.0).1.notify_one();
@@ -868,7 +868,7 @@ impl Receiver {
                     timer = time::Instant::now();
                 }
                 Err(err) => {
-                    gst_error!(CAT, obj: &element, "Signalling error");
+                    error!(CAT, obj: &element, "Signalling error");
                     let mut queue = (receiver.0.queue.0).0.lock().unwrap();
                     if queue.error.is_none() {
                         queue.error = Some(err);
@@ -898,7 +898,7 @@ impl Receiver {
         };
         let timecode = gst::ClockTime::from_nseconds(timecode as u64 * 100);
 
-        gst_log!(
+        log!(
             CAT,
             obj: element,
             "Received frame with timecode {}, timestamp {}, duration {}, receive time {}, local time now {}",
@@ -927,7 +927,7 @@ impl Receiver {
             TimestampMode::ReceiveTimeTimecode => match res_timecode {
                 Some((pts, duration, discont)) => (pts, duration, discont),
                 None => {
-                    gst_warning!(CAT, obj: element, "Can't calculate timestamp");
+                    warning!(CAT, obj: element, "Can't calculate timestamp");
                     (receive_time, duration, false)
                 }
             },
@@ -935,7 +935,7 @@ impl Receiver {
                 Some((pts, duration, discont)) => (pts, duration, discont),
                 None => {
                     if timestamp.is_some() {
-                        gst_warning!(CAT, obj: element, "Can't calculate timestamp");
+                        warning!(CAT, obj: element, "Can't calculate timestamp");
                     }
 
                     (receive_time, duration, false)
@@ -966,7 +966,7 @@ impl Receiver {
             }
         };
 
-        gst_log!(
+        log!(
             CAT,
             obj: element,
             "Calculated PTS {}, duration {}",
@@ -982,12 +982,12 @@ impl Receiver {
         element: &gst_base::BaseSrc,
         video_frame: VideoFrame,
     ) -> Result<Buffer, gst::FlowError> {
-        gst_debug!(CAT, obj: element, "Received video frame {:?}", video_frame);
+        debug!(CAT, obj: element, "Received video frame {:?}", video_frame);
 
         let (pts, duration, discont) = self
             .calculate_video_timestamp(element, &video_frame)
             .ok_or_else(|| {
-                gst_debug!(CAT, obj: element, "Flushing, dropping buffer");
+                debug!(CAT, obj: element, "Flushing, dropping buffer");
                 gst::FlowError::Flushing
             })?;
 
@@ -1001,7 +1001,7 @@ impl Receiver {
                 .set_flags(gst::BufferFlags::RESYNC);
         }
 
-        gst_log!(CAT, obj: element, "Produced video buffer {:?}", buffer);
+        log!(CAT, obj: element, "Produced video buffer {:?}", buffer);
 
         Ok(Buffer::Video(buffer, info))
     }
@@ -1203,7 +1203,7 @@ impl Receiver {
         .contains(&fourcc)
         {
             let compressed_packet = video_frame.compressed_packet().ok_or_else(|| {
-                gst_error!(
+                error!(
                     CAT,
                     obj: element,
                     "Video packet doesn't have compressed packet start"
@@ -1214,7 +1214,7 @@ impl Receiver {
             })?;
 
             if compressed_packet.fourcc != NDIlib_compressed_FourCC_type_H264 {
-                gst_error!(CAT, obj: element, "Non-H264 video packet");
+                error!(CAT, obj: element, "Non-H264 video packet");
                 gst::element_error!(element, gst::StreamError::Format, ["Invalid video packet"]);
 
                 return Err(gst::FlowError::Error);
@@ -1241,7 +1241,7 @@ impl Receiver {
         .contains(&fourcc)
         {
             let compressed_packet = video_frame.compressed_packet().ok_or_else(|| {
-                gst_error!(
+                error!(
                     CAT,
                     obj: element,
                     "Video packet doesn't have compressed packet start"
@@ -1252,7 +1252,7 @@ impl Receiver {
             })?;
 
             if compressed_packet.fourcc != NDIlib_compressed_FourCC_type_HEVC {
-                gst_error!(CAT, obj: element, "Non-H265 video packet");
+                error!(CAT, obj: element, "Non-H265 video packet");
                 gst::element_error!(element, gst::StreamError::Format, ["Invalid video packet"]);
 
                 return Err(gst::FlowError::Error);
@@ -1483,7 +1483,7 @@ impl Receiver {
             #[cfg(feature = "advanced-sdk")]
             VideoInfo::SpeedHQInfo { .. } => {
                 let data = video_frame.data().ok_or_else(|| {
-                    gst_error!(CAT, obj: element, "Video packet has no data");
+                    error!(CAT, obj: element, "Video packet has no data");
                     gst::element_error!(
                         element,
                         gst::StreamError::Format,
@@ -1498,7 +1498,7 @@ impl Receiver {
             #[cfg(feature = "advanced-sdk")]
             VideoInfo::H264Info { .. } | VideoInfo::H265Info { .. } => {
                 let compressed_packet = video_frame.compressed_packet().ok_or_else(|| {
-                    gst_error!(
+                    error!(
                         CAT,
                         obj: element,
                         "Video packet doesn't have compressed packet start"
@@ -1533,12 +1533,12 @@ impl Receiver {
         element: &gst_base::BaseSrc,
         audio_frame: AudioFrame,
     ) -> Result<Buffer, gst::FlowError> {
-        gst_debug!(CAT, obj: element, "Received audio frame {:?}", audio_frame);
+        debug!(CAT, obj: element, "Received audio frame {:?}", audio_frame);
 
         let (pts, duration, discont) = self
             .calculate_audio_timestamp(element, &audio_frame)
             .ok_or_else(|| {
-                gst_debug!(CAT, obj: element, "Flushing, dropping buffer");
+                debug!(CAT, obj: element, "Flushing, dropping buffer");
                 gst::FlowError::Flushing
             })?;
 
@@ -1552,7 +1552,7 @@ impl Receiver {
                 .set_flags(gst::BufferFlags::RESYNC);
         }
 
-        gst_log!(CAT, obj: element, "Produced audio buffer {:?}", buffer);
+        log!(CAT, obj: element, "Produced audio buffer {:?}", buffer);
 
         Ok(Buffer::Audio(buffer, info))
     }
@@ -1608,7 +1608,7 @@ impl Receiver {
             use std::convert::TryInto;
 
             let compressed_packet = audio_frame.compressed_packet().ok_or_else(|| {
-                gst_error!(
+                error!(
                     CAT,
                     obj: element,
                     "Audio packet doesn't have compressed packet start"
@@ -1619,7 +1619,7 @@ impl Receiver {
             })?;
 
             if compressed_packet.fourcc != NDIlib_compressed_FourCC_type_AAC {
-                gst_error!(CAT, obj: element, "Non-AAC audio packet");
+                error!(CAT, obj: element, "Non-AAC audio packet");
                 gst::element_error!(element, gst::StreamError::Format, ["Invalid audio packet"]);
 
                 return Err(gst::FlowError::Error);
@@ -1717,7 +1717,7 @@ impl Receiver {
             #[cfg(feature = "advanced-sdk")]
             AudioInfo::OpusInfo { .. } => {
                 let data = audio_frame.data().ok_or_else(|| {
-                    gst_error!(CAT, obj: element, "Audio packet has no data");
+                    error!(CAT, obj: element, "Audio packet has no data");
                     gst::element_error!(
                         element,
                         gst::StreamError::Format,
@@ -1732,7 +1732,7 @@ impl Receiver {
             #[cfg(feature = "advanced-sdk")]
             AudioInfo::AacInfo { .. } => {
                 let compressed_packet = audio_frame.compressed_packet().ok_or_else(|| {
-                    gst_error!(
+                    error!(
                         CAT,
                         obj: element,
                         "Audio packet doesn't have compressed packet start"
