@@ -1,4 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
+#![allow(unused_doc_comments)]
+
+/**
+ * plugin-ndi:
+ *
+ * Since: plugins-rs-0.9
+ */
 
 #[allow(dead_code)]
 mod ndi;
@@ -17,6 +24,9 @@ mod ndisinkmeta;
 mod ndisrc;
 mod ndisrcdemux;
 mod ndisrcmeta;
+
+#[cfg(feature = "doc")]
+use gst::prelude::*;
 
 use once_cell::sync::Lazy;
 
@@ -118,6 +128,11 @@ impl From<RecvColorFormat> for crate::ndisys::NDIlib_recv_color_format_e {
 }
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "doc")]
+    TimestampMode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    #[cfg(feature = "doc")]
+    RecvColorFormat::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+
     device_provider::register(plugin)?;
 
     ndisrc::register(plugin)?;
@@ -128,16 +143,9 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         ndisinkcombiner::register(plugin)?;
         ndisink::register(plugin)?;
     }
+
     Ok(())
 }
-
-static DEFAULT_RECEIVER_NDI_NAME: Lazy<String> = Lazy::new(|| {
-    format!(
-        "GStreamer NDI Source {}-{}",
-        env!("CARGO_PKG_VERSION"),
-        env!("COMMIT_ID")
-    )
-});
 
 static TIMECODE_CAPS: Lazy<gst::Caps> =
     Lazy::new(|| gst::Caps::new_simple("timestamp/x-ndi-timecode", &[]));

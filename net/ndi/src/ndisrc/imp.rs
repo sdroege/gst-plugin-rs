@@ -18,13 +18,20 @@ use crate::TimestampMode;
 
 use super::receiver::{self, Buffer, Receiver, ReceiverControlHandle, ReceiverItem};
 use crate::ndisrcmeta;
-use crate::DEFAULT_RECEIVER_NDI_NAME;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "ndisrc",
         gst::DebugColorFlags::empty(),
         Some("NewTek NDI Source"),
+    )
+});
+
+static DEFAULT_RECEIVER_NDI_NAME: Lazy<String> = Lazy::new(|| {
+    format!(
+        "GStreamer NewTek NDI Source {}-{}",
+        env!("CARGO_PKG_VERSION"),
+        env!("COMMIT_ID")
     )
 });
 
@@ -115,6 +122,7 @@ impl ObjectImpl for NdiSrc {
                 glib::ParamSpecString::builder("receiver-ndi-name")
                     .nick("Receiver NDI Name")
                     .blurb("NDI stream name of this receiver")
+                    .doc_show_default()
                     .build(),
                 glib::ParamSpecUInt::builder("connect-timeout")
                     .nick("Connect Timeout")

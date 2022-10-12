@@ -69,7 +69,7 @@ impl ObjectImpl for NdiSink {
             vec![glib::ParamSpecString::builder("ndi-name")
                 .nick("NDI Name")
                 .blurb("NDI Name to use")
-                .default_value(Some(DEFAULT_SENDER_NDI_NAME.as_ref()))
+                .doc_show_default()
                 .build()]
         });
 

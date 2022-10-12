@@ -2319,6 +2319,331 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "ndi": {
+        "description": "NewTek NDI Plugin",
+        "elements": {
+            "ndisink": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "NewTek NDI Sink",
+                "hierarchy": [
+                    "GstNdiSink",
+                    "GstBaseSink",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Sink/Audio/Video",
+                "long-name": "NewTek NDI Sink",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-raw:\n         format: { UYVY, I420, NV12, NV21, YV12, BGRA, BGRx, RGBA, RGBx }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\naudio/x-raw:\n         format: F32LE\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "ndi-name": {
+                        "blurb": "NDI Name to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
+            "ndisinkcombiner": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "NewTek NDI sink audio/video combiner",
+                "hierarchy": [
+                    "GstNdiSinkCombiner",
+                    "GstAggregator",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Combiner/Audio/Video",
+                "long-name": "NewTek NDI Sink Combiner",
+                "pad-templates": {
+                    "audio": {
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483646 ]\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: F32LE\n",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "GstAggregatorPad"
+                    },
+                    "src": {
+                        "caps": "video/x-raw:\n         format: { UYVY, I420, NV12, NV21, YV12, BGRA, BGRx, RGBA, RGBx }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 1/2147483647, 2147483646/1 ]\n",
+                        "direction": "src",
+                        "presence": "always",
+                        "type": "GstAggregatorPad"
+                    },
+                    "video": {
+                        "caps": "video/x-raw:\n         format: { UYVY, I420, NV12, NV21, YV12, BGRA, BGRx, RGBA, RGBx }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 1/2147483647, 2147483646/1 ]\n",
+                        "direction": "sink",
+                        "presence": "always",
+                        "type": "GstAggregatorPad"
+                    }
+                },
+                "rank": "none"
+            },
+            "ndisrc": {
+                "author": "Ruben Gonzalez <rubenrua@teltek.es>, Daniel Vilar <daniel.peiteado@teltek.es>, Sebastian Dröge <sebastian@centricular.com>",
+                "description": "NewTek NDI Source",
+                "hierarchy": [
+                    "GstNdiSrc",
+                    "GstBaseSrc",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Source/Audio/Video/Network",
+                "long-name": "NewTek NDI Source",
+                "pad-templates": {
+                    "src": {
+                        "caps": "application/x-ndi:\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "bandwidth": {
+                        "blurb": "Bandwidth, -10 metadata-only, 10 audio-only, 100 highest",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "100",
+                        "max": "100",
+                        "min": "-10",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": true
+                    },
+                    "color-format": {
+                        "blurb": "Receive color format",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "uyvy-bgra (1)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstNdiRecvColorFormat",
+                        "writable": true
+                    },
+                    "connect-timeout": {
+                        "blurb": "Connection timeout in ms",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "10000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "max-queue-length": {
+                        "blurb": "Maximum receive queue length",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "10",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "ndi-name": {
+                        "blurb": "NDI stream name of the sender",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "receiver-ndi-name": {
+                        "blurb": "NDI stream name of this receiver",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "timeout": {
+                        "blurb": "Receive timeout in ms",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "5000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "timestamp-mode": {
+                        "blurb": "Timestamp information to use for outgoing PTS",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "auto (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstNdiTimestampMode",
+                        "writable": true
+                    },
+                    "url-address": {
+                        "blurb": "URL/address and port of the sender, e.g. 127.0.0.1:5961",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
+            "ndisrcdemux": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "NewTek NDI source demuxer",
+                "hierarchy": [
+                    "GstNdiSrcDemux",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Demuxer/Audio/Video",
+                "long-name": "NewTek NDI Source Demuxer",
+                "pad-templates": {
+                    "audio": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    },
+                    "sink": {
+                        "caps": "application/x-ndi:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "video": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    }
+                },
+                "rank": "primary"
+            }
+        },
+        "filename": "gstndi",
+        "license": "MPL",
+        "other-types": {
+            "GstNdiRecvColorFormat": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "BGRX or BGRA",
+                        "name": "bgrx-bgra",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "UYVY or BGRA",
+                        "name": "uyvy-bgra",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "RGBX or RGBA",
+                        "name": "rgbx-rgba",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "UYVY or RGBA",
+                        "name": "uyvy-rgba",
+                        "value": "3"
+                    },
+                    {
+                        "desc": "Fastest",
+                        "name": "fastest",
+                        "value": "4"
+                    },
+                    {
+                        "desc": "Best",
+                        "name": "best",
+                        "value": "5"
+                    }
+                ]
+            },
+            "GstNdiTimestampMode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Auto",
+                        "name": "auto",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Receive Time / Timecode",
+                        "name": "receive-time-vs-timecode",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Receive Time / Timestamp",
+                        "name": "receive-time-vs-timestamp",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "NDI Timecode",
+                        "name": "timecode",
+                        "value": "3"
+                    },
+                    {
+                        "desc": "NDI Timestamp",
+                        "name": "timestamp",
+                        "value": "4"
+                    },
+                    {
+                        "desc": "Receive Time",
+                        "name": "receive-time",
+                        "value": "5"
+                    }
+                ]
+            }
+        },
+        "package": "gst-plugin-ndi",
+        "source": "gst-plugin-ndi",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "raptorq": {
         "description": "Rust Raptorq FEC Plugin",
         "elements": {
