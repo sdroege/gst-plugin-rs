@@ -36,7 +36,7 @@ use std::sync::Mutex as StdMutex;
 use std::time::Duration;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{self, Context, PadSink, PadSinkRef, PadSrc, PadSrcRef, Task};
+use crate::runtime::{self, Context, PadSink, PadSinkRef, PadSinkWeak, PadSrc, PadSrcRef, Task};
 
 use super::jitterbuffer::{RTPJitterBuffer, RTPJitterBufferItem, RTPPacketRateCtx};
 
@@ -143,14 +143,10 @@ impl SinkHandler {
     }
 
     // For resetting if seqnum discontinuities
-    fn reset(
-        &self,
-        inner: &mut SinkHandlerInner,
-        state: &mut State,
-        element: &super::JitterBuffer,
-    ) -> BTreeSet<GapPacket> {
-        gst::info!(CAT, obj: element, "Resetting");
+    fn reset(&self, inner: &mut SinkHandlerInner, jb: &JitterBuffer) -> BTreeSet<GapPacket> {
+        gst::info!(CAT, imp: jb, "Resetting");
 
+        let mut state = jb.state.lock().unwrap();
         state.jbuf.flush();
         state.jbuf.reset_skew();
         state.discont = true;
@@ -174,23 +170,23 @@ impl SinkHandler {
         &self,
         inner: &mut SinkHandlerInner,
         state: &mut State,
-        element: &super::JitterBuffer,
+        jb: &JitterBuffer,
         caps: &gst::Caps,
         pt: u8,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let s = caps.structure(0).ok_or(gst::FlowError::Error)?;
 
-        gst::debug!(CAT, obj: element, "Parsing {:?}", caps);
+        gst::debug!(CAT, imp: jb, "Parsing {:?}", caps);
 
         let payload = s.get::<i32>("payload").map_err(|err| {
-            gst::debug!(CAT, obj: element, "Caps 'payload': {}", err);
+            gst::debug!(CAT, imp: jb, "Caps 'payload': {}", err);
             gst::FlowError::Error
         })?;
 
         if pt != 0 && payload as u8 != pt {
             gst::debug!(
                 CAT,
-                obj: element,
+                imp: jb,
                 "Caps 'payload' ({}) doesn't match payload type ({})",
                 payload,
                 pt
@@ -200,12 +196,12 @@ impl SinkHandler {
 
         inner.last_pt = Some(pt);
         let clock_rate = s.get::<i32>("clock-rate").map_err(|err| {
-            gst::debug!(CAT, obj: element, "Caps 'clock-rate': {}", err);
+            gst::debug!(CAT, imp: jb, "Caps 'clock-rate': {}", err);
             gst::FlowError::Error
         })?;
 
         if clock_rate <= 0 {
-            gst::debug!(CAT, obj: element, "Caps 'clock-rate' <= 0");
+            gst::debug!(CAT, imp: jb, "Caps 'clock-rate' <= 0");
             return Err(gst::FlowError::Error);
         }
         state.clock_rate = Some(clock_rate as u32);
@@ -253,7 +249,7 @@ impl SinkHandler {
     fn handle_big_gap_buffer(
         &self,
         inner: &mut SinkHandlerInner,
-        element: &super::JitterBuffer,
+        jb: &JitterBuffer,
         buffer: gst::Buffer,
         pt: u8,
     ) -> bool {
@@ -262,7 +258,7 @@ impl SinkHandler {
 
         gst::debug!(
             CAT,
-            obj: element,
+            imp: jb,
             "Handling big gap, gap packets length: {}",
             gap_packets_length
         );
@@ -276,7 +272,7 @@ impl SinkHandler {
             for gap_packet in inner.gap_packets.iter() {
                 gst::log!(
                     CAT,
-                    obj: element,
+                    imp: jb,
                     "Looking at gap packet with seq {}",
                     gap_packet.seq,
                 );
@@ -296,7 +292,7 @@ impl SinkHandler {
                 }
             }
 
-            gst::debug!(CAT, obj: element, "all consecutive: {}", all_consecutive);
+            gst::debug!(CAT, imp: jb, "all consecutive: {}", all_consecutive);
 
             if all_consecutive && gap_packets_length > 3 {
                 reset = true;
@@ -312,10 +308,9 @@ impl SinkHandler {
         &self,
         inner: &mut SinkHandlerInner,
         pad: &gst::Pad,
-        element: &super::JitterBuffer,
+        jb: &JitterBuffer,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let jb = element.imp();
         let mut state = jb.state.lock().unwrap();
 
         let (max_misorder_time, max_dropout_time) = {
@@ -339,12 +334,14 @@ impl SinkHandler {
 
         gst::log!(
             CAT,
-            obj: element,
+            imp: jb,
             "Storing buffer, seq: {}, rtptime: {}, pt: {}",
             seq,
             rtptime,
             pt
         );
+
+        let element = jb.instance();
 
         if dts.is_none() {
             dts = pts;
@@ -374,7 +371,7 @@ impl SinkHandler {
 
             if let Some(caps) = pad.current_caps() {
                 /* Ignore errors at this point, as we want to emit request-pt-map */
-                let _ = self.parse_caps(inner, &mut state, element, &caps, pt);
+                let _ = self.parse_caps(inner, &mut state, jb, &caps, pt);
             }
         }
 
@@ -388,7 +385,7 @@ impl SinkHandler {
                         gst::FlowError::Error
                     })?;
                 let mut state = jb.state.lock().unwrap();
-                self.parse_caps(inner, &mut state, element, &caps, pt)?;
+                self.parse_caps(inner, &mut state, jb, &caps, pt)?;
                 state
             } else {
                 state
@@ -407,7 +404,7 @@ impl SinkHandler {
         if pts.is_none() {
             gst::debug!(
                 CAT,
-                obj: element,
+                imp: jb,
                 "cannot calculate a valid pts for #{}, discard",
                 seq
             );
@@ -420,7 +417,7 @@ impl SinkHandler {
                 self.calculate_packet_spacing(inner, &mut state, rtptime, pts);
             } else {
                 if (gap != -1 && gap < -(max_misorder as i32)) || (gap >= max_dropout as i32) {
-                    let reset = self.handle_big_gap_buffer(inner, element, buffer, pt);
+                    let reset = self.handle_big_gap_buffer(inner, jb, buffer, pt);
                     if reset {
                         // Handle reset in `enqueue_item` to avoid recursion
                         return Err(gst::FlowError::CustomError);
@@ -440,7 +437,7 @@ impl SinkHandler {
 
             if gap <= 0 {
                 state.stats.num_late += 1;
-                gst::debug!(CAT, obj: element, "Dropping late {}", seq);
+                gst::debug!(CAT, imp: jb, "Dropping late {}", seq);
                 return Ok(gst::FlowSuccess::Ok);
             }
         }
@@ -492,7 +489,7 @@ impl SinkHandler {
     fn enqueue_item(
         &self,
         pad: &gst::Pad,
-        element: &super::JitterBuffer,
+        jb: &JitterBuffer,
         buffer: Option<gst::Buffer>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut inner = self.0.lock().unwrap();
@@ -504,12 +501,10 @@ impl SinkHandler {
 
         // This is to avoid recursion with `store`, `reset` and `enqueue_item`
         while let Some(buf) = buffers.pop_front() {
-            if let Err(err) = self.store(&mut inner, pad, element, buf) {
+            if let Err(err) = self.store(&mut inner, pad, jb, buf) {
                 match err {
                     gst::FlowError::CustomError => {
-                        let jb = element.imp();
-                        let mut state = jb.state.lock().unwrap();
-                        for gap_packet in self.reset(&mut inner, &mut state, element) {
+                        for gap_packet in self.reset(&mut inner, jb) {
                             buffers.push_back(gap_packet.buffer);
                         }
                     }
@@ -518,7 +513,6 @@ impl SinkHandler {
             }
         }
 
-        let jb = element.imp();
         let mut state = jb.state.lock().unwrap();
 
         let (latency, context_wait) = {
@@ -529,7 +523,7 @@ impl SinkHandler {
         // Reschedule if needed
         let (_, next_wakeup) =
             jb.src_pad_handler
-                .next_wakeup(element, &state, latency, context_wait);
+                .next_wakeup(&jb.instance(), &state, latency, context_wait);
         if let Some((next_wakeup, _)) = next_wakeup {
             if let Some((previous_next_wakeup, ref abort_handle)) = state.wait_handle {
                 if previous_next_wakeup.is_none()
@@ -555,32 +549,20 @@ impl PadSinkHandler for SinkHandler {
     type ElementImpl = JitterBuffer;
 
     fn sink_chain(
-        &self,
-        pad: &PadSinkRef,
-        _jb: &JitterBuffer,
-        element: &gst::Element,
+        self,
+        pad: PadSinkWeak,
+        elem: super::JitterBuffer,
         buffer: gst::Buffer,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-        let pad_weak = pad.downgrade();
-        let element = element.clone().downcast::<super::JitterBuffer>().unwrap();
-        let this = self.clone();
-
         async move {
-            let pad = pad_weak.upgrade().expect("PadSink no longer exists");
-
+            let pad = pad.upgrade().expect("PadSink no longer exists");
             gst::debug!(CAT, obj: pad.gst_pad(), "Handling {:?}", buffer);
-            this.enqueue_item(pad.gst_pad(), &element, Some(buffer))
+            self.enqueue_item(pad.gst_pad(), elem.imp(), Some(buffer))
         }
         .boxed()
     }
 
-    fn sink_event(
-        &self,
-        pad: &PadSinkRef,
-        jb: &JitterBuffer,
-        element: &gst::Element,
-        event: gst::Event,
-    ) -> bool {
+    fn sink_event(&self, pad: &PadSinkRef, jb: &JitterBuffer, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
@@ -588,8 +570,8 @@ impl PadSinkHandler for SinkHandler {
         if let EventView::FlushStart(..) = event.view() {
             if let Err(err) = jb.task.flush_start().await_maybe_on_context() {
                 gst::error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    jb,
                     gst::StreamError::Failed,
                     ("Internal data stream error"),
                     ["FlushStart failed {:?}", err]
@@ -603,25 +585,20 @@ impl PadSinkHandler for SinkHandler {
     }
 
     fn sink_event_serialized(
-        &self,
-        pad: &PadSinkRef,
-        _jb: &JitterBuffer,
-        element: &gst::Element,
+        self,
+        pad: PadSinkWeak,
+        elem: super::JitterBuffer,
         event: gst::Event,
     ) -> BoxFuture<'static, bool> {
-        use gst::EventView;
-
-        let pad_weak = pad.downgrade();
-        let element = element.clone().downcast::<super::JitterBuffer>().unwrap();
-
         async move {
-            let pad = pad_weak.upgrade().expect("PadSink no longer exists");
+            let pad = pad.upgrade().expect("PadSink no longer exists");
 
             gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
-            let jb = element.imp();
+            let jb = elem.imp();
 
             let mut forward = true;
+            use gst::EventView;
             match event.view() {
                 EventView::Segment(e) => {
                     let mut state = jb.state.lock().unwrap();
@@ -631,7 +608,7 @@ impl PadSinkHandler for SinkHandler {
                     if let Err(err) = jb.task.flush_stop().await_maybe_on_context() {
                         gst::error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
                         gst::element_error!(
-                            element,
+                            elem,
                             gst::StreamError::Failed,
                             ("Internal data stream error"),
                             ["FlushStop failed {:?}", err]
@@ -893,13 +870,7 @@ impl SrcHandler {
 impl PadSrcHandler for SrcHandler {
     type ElementImpl = JitterBuffer;
 
-    fn src_event(
-        &self,
-        pad: &PadSrcRef,
-        jb: &JitterBuffer,
-        element: &gst::Element,
-        event: gst::Event,
-    ) -> bool {
+    fn src_event(&self, pad: &PadSrcRef, jb: &JitterBuffer, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
@@ -908,8 +879,8 @@ impl PadSrcHandler for SrcHandler {
             EventView::FlushStart(..) => {
                 if let Err(err) = jb.task.flush_start().await_maybe_on_context() {
                     gst::error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
-                    gst::element_error!(
-                        element,
+                    gst::element_imp_error!(
+                        jb,
                         gst::StreamError::Failed,
                         ("Internal data stream error"),
                         ["FlushStart failed {:?}", err]
@@ -920,8 +891,8 @@ impl PadSrcHandler for SrcHandler {
             EventView::FlushStop(..) => {
                 if let Err(err) = jb.task.flush_stop().await_maybe_on_context() {
                     gst::error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
-                    gst::element_error!(
-                        element,
+                    gst::element_imp_error!(
+                        jb,
                         gst::StreamError::Failed,
                         ("Internal data stream error"),
                         ["FlushStop failed {:?}", err]
@@ -936,13 +907,7 @@ impl PadSrcHandler for SrcHandler {
         jb.sink_pad.gst_pad().push_event(event)
     }
 
-    fn src_query(
-        &self,
-        pad: &PadSrcRef,
-        jb: &JitterBuffer,
-        _element: &gst::Element,
-        query: &mut gst::QueryRef,
-    ) -> bool {
+    fn src_query(&self, pad: &PadSrcRef, jb: &JitterBuffer, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
         gst::log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", query);

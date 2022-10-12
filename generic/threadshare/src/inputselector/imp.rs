@@ -33,7 +33,7 @@ use std::time::Duration;
 use std::u32;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{self, PadSink, PadSinkRef, PadSrc, PadSrcRef};
+use crate::runtime::{self, PadSink, PadSinkRef, PadSinkWeak, PadSrc, PadSrcRef};
 
 const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: Duration = Duration::ZERO;
@@ -75,14 +75,10 @@ struct InputSelectorPadSinkHandler(Arc<Mutex<InputSelectorPadSinkHandlerInner>>)
 
 impl InputSelectorPadSinkHandler {
     /* Wait until specified time */
-    async fn sync(
-        &self,
-        element: &super::InputSelector,
-        running_time: impl Into<Option<gst::ClockTime>>,
-    ) {
-        let now = element.current_running_time();
+    async fn sync(&self, elem: &super::InputSelector, running_time: Option<gst::ClockTime>) {
+        let now = elem.current_running_time();
 
-        match running_time.into().opt_checked_sub(now) {
+        match running_time.opt_checked_sub(now) {
             Ok(Some(delay)) => {
                 runtime::timer::delay_for(delay.into()).await;
             }
@@ -92,11 +88,11 @@ impl InputSelectorPadSinkHandler {
 
     async fn handle_item(
         &self,
-        element: &super::InputSelector,
         pad: &PadSinkRef<'_>,
+        elem: &super::InputSelector,
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let inputselector = element.imp();
+        let inputselector = elem.imp();
 
         let (stickies, is_active, sync_future, switched_pad) = {
             let mut state = inputselector.state.lock().unwrap();
@@ -108,7 +104,7 @@ impl InputSelectorPadSinkHandler {
             if let Some(segment) = &inner.segment {
                 if let Some(segment) = segment.downcast_ref::<gst::format::Time>() {
                     let rtime = segment.to_running_time(buffer.pts());
-                    let (sync_fut, abort_handle) = abortable(self.sync(element, rtime));
+                    let (sync_fut, abort_handle) = abortable(self.sync(elem, rtime));
                     inner.abort_handle = Some(abort_handle);
                     sync_future = Some(sync_fut.map_err(|_| gst::FlowError::Flushing));
                 }
@@ -162,38 +158,30 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
     type ElementImpl = InputSelector;
 
     fn sink_chain(
-        &self,
-        pad: &PadSinkRef,
-        _inputselector: &InputSelector,
-        element: &gst::Element,
+        self,
+        pad: PadSinkWeak,
+        elem: super::InputSelector,
         buffer: gst::Buffer,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-        let this = self.clone();
-        let element = element.clone().downcast::<super::InputSelector>().unwrap();
-        let pad_weak = pad.downgrade();
         async move {
-            let pad = pad_weak.upgrade().expect("PadSink no longer exists");
-            this.handle_item(&element, &pad, buffer).await
+            let pad = pad.upgrade().expect("PadSink no longer exists");
+            self.handle_item(&pad, &elem, buffer).await
         }
         .boxed()
     }
 
     fn sink_chain_list(
-        &self,
-        pad: &PadSinkRef,
-        _inputselector: &InputSelector,
-        element: &gst::Element,
+        self,
+        pad: PadSinkWeak,
+        elem: super::InputSelector,
         list: gst::BufferList,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-        let this = self.clone();
-        let element = element.clone().downcast::<super::InputSelector>().unwrap();
-        let pad_weak = pad.downgrade();
         async move {
-            let pad = pad_weak.upgrade().expect("PadSink no longer exists");
+            let pad = pad.upgrade().expect("PadSink no longer exists");
             gst::log!(CAT, obj: pad.gst_pad(), "Handling buffer list {:?}", list);
             // TODO: Ideally we would keep the list intact and forward it in one go
             for buffer in list.iter_owned() {
-                this.handle_item(&element, &pad, buffer).await?;
+                self.handle_item(&pad, &elem, buffer).await?;
             }
 
             Ok(gst::FlowSuccess::Ok)
@@ -202,16 +190,13 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
     }
 
     fn sink_event_serialized(
-        &self,
-        _pad: &PadSinkRef,
-        _inputselector: &InputSelector,
-        _element: &gst::Element,
+        self,
+        _pad: PadSinkWeak,
+        _elem: super::InputSelector,
         event: gst::Event,
     ) -> BoxFuture<'static, bool> {
-        let this = self.clone();
-
         async move {
-            let mut inner = this.0.lock().unwrap();
+            let mut inner = self.0.lock().unwrap();
 
             // Remember the segment for later use
             if let gst::EventView::Segment(e) = event.view() {
@@ -234,17 +219,11 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
         .boxed()
     }
 
-    fn sink_event(
-        &self,
-        _pad: &PadSinkRef,
-        inputselector: &InputSelector,
-        _element: &gst::Element,
-        event: gst::Event,
-    ) -> bool {
+    fn sink_event(&self, _pad: &PadSinkRef, imp: &InputSelector, event: gst::Event) -> bool {
         /* Drop all events for now */
         if let gst::EventView::FlushStart(..) = event.view() {
             /* Unblock downstream */
-            inputselector.src_pad.gst_pad().push_event(event.clone());
+            imp.src_pad.gst_pad().push_event(event.clone());
 
             let mut inner = self.0.lock().unwrap();
 
@@ -255,13 +234,7 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
         true
     }
 
-    fn sink_query(
-        &self,
-        pad: &PadSinkRef,
-        inputselector: &InputSelector,
-        _element: &gst::Element,
-        query: &mut gst::QueryRef,
-    ) -> bool {
+    fn sink_query(&self, pad: &PadSinkRef, imp: &InputSelector, query: &mut gst::QueryRef) -> bool {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling query {:?}", query);
 
         if query.is_serialized() {
@@ -270,7 +243,7 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
             false
         } else {
             gst::log!(CAT, obj: pad.gst_pad(), "Forwarding query {:?}", query);
-            inputselector.src_pad.gst_pad().peer_query(query)
+            imp.src_pad.gst_pad().peer_query(query)
         }
     }
 }
@@ -281,24 +254,17 @@ struct InputSelectorPadSrcHandler;
 impl PadSrcHandler for InputSelectorPadSrcHandler {
     type ElementImpl = InputSelector;
 
-    fn src_query(
-        &self,
-        pad: &PadSrcRef,
-        inputselector: &InputSelector,
-        _element: &gst::Element,
-        query: &mut gst::QueryRef,
-    ) -> bool {
-        use gst::QueryViewMut;
-
+    fn src_query(&self, pad: &PadSrcRef, imp: &InputSelector, query: &mut gst::QueryRef) -> bool {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
+        use gst::QueryViewMut;
         match query.view_mut() {
             QueryViewMut::Latency(q) => {
                 let mut ret = true;
                 let mut min_latency = gst::ClockTime::ZERO;
                 let mut max_latency = gst::ClockTime::NONE;
                 let pads = {
-                    let pads = inputselector.pads.lock().unwrap();
+                    let pads = imp.pads.lock().unwrap();
                     pads.sink_pads
                         .iter()
                         .map(|p| p.0.clone())
@@ -325,7 +291,7 @@ impl PadSrcHandler for InputSelectorPadSrcHandler {
             }
             _ => {
                 let sinkpad = {
-                    let state = inputselector.state.lock().unwrap();
+                    let state = imp.state.lock().unwrap();
                     state.active_sinkpad.clone()
                 };
 

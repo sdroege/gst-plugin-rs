@@ -113,20 +113,13 @@ struct UdpSrcPadHandler;
 impl PadSrcHandler for UdpSrcPadHandler {
     type ElementImpl = UdpSrc;
 
-    fn src_event(
-        &self,
-        pad: &PadSrcRef,
-        udpsrc: &UdpSrc,
-        _element: &gst::Element,
-        event: gst::Event,
-    ) -> bool {
-        use gst::EventView;
-
+    fn src_event(&self, pad: &PadSrcRef, imp: &UdpSrc, event: gst::Event) -> bool {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
+        use gst::EventView;
         let ret = match event.view() {
-            EventView::FlushStart(..) => udpsrc.task.flush_start().await_maybe_on_context().is_ok(),
-            EventView::FlushStop(..) => udpsrc.task.flush_stop().await_maybe_on_context().is_ok(),
+            EventView::FlushStart(..) => imp.task.flush_start().await_maybe_on_context().is_ok(),
+            EventView::FlushStop(..) => imp.task.flush_stop().await_maybe_on_context().is_ok(),
             EventView::Reconfigure(..) => true,
             EventView::Latency(..) => true,
             _ => false,
@@ -141,17 +134,10 @@ impl PadSrcHandler for UdpSrcPadHandler {
         ret
     }
 
-    fn src_query(
-        &self,
-        pad: &PadSrcRef,
-        udpsrc: &UdpSrc,
-        _element: &gst::Element,
-        query: &mut gst::QueryRef,
-    ) -> bool {
-        use gst::QueryViewMut;
-
+    fn src_query(&self, pad: &PadSrcRef, imp: &UdpSrc, query: &mut gst::QueryRef) -> bool {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
+        use gst::QueryViewMut;
         let ret = match query.view_mut() {
             QueryViewMut::Latency(q) => {
                 q.set(true, gst::ClockTime::ZERO, gst::ClockTime::NONE);
@@ -163,7 +149,7 @@ impl PadSrcHandler for UdpSrcPadHandler {
                 true
             }
             QueryViewMut::Caps(q) => {
-                let caps = if let Some(caps) = udpsrc.configured_caps.lock().unwrap().as_ref() {
+                let caps = if let Some(caps) = imp.configured_caps.lock().unwrap().as_ref() {
                     q.filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
                         .unwrap_or_else(|| caps.clone())

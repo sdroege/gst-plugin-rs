@@ -214,57 +214,40 @@ impl PadSinkHandler for ProxySinkPadHandler {
     type ElementImpl = ProxySink;
 
     fn sink_chain(
-        &self,
-        pad: &PadSinkRef,
-        _proxysink: &ProxySink,
-        element: &gst::Element,
+        self,
+        pad: PadSinkWeak,
+        elem: super::ProxySink,
         buffer: gst::Buffer,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-        let pad_weak = pad.downgrade();
-        let element = element.clone().downcast::<super::ProxySink>().unwrap();
-
         async move {
-            let pad = pad_weak.upgrade().expect("PadSink no longer exists");
+            let pad = pad.upgrade().expect("PadSink no longer exists");
             gst::log!(SINK_CAT, obj: pad.gst_pad(), "Handling {:?}", buffer);
-            let proxysink = element.imp();
-            proxysink.enqueue_item(DataQueueItem::Buffer(buffer)).await
+            let imp = elem.imp();
+            imp.enqueue_item(DataQueueItem::Buffer(buffer)).await
         }
         .boxed()
     }
 
     fn sink_chain_list(
-        &self,
-        pad: &PadSinkRef,
-        _proxysink: &ProxySink,
-        element: &gst::Element,
+        self,
+        pad: PadSinkWeak,
+        elem: super::ProxySink,
         list: gst::BufferList,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-        let pad_weak = pad.downgrade();
-        let element = element.clone().downcast::<super::ProxySink>().unwrap();
         async move {
-            let pad = pad_weak.upgrade().expect("PadSink no longer exists");
+            let pad = pad.upgrade().expect("PadSink no longer exists");
             gst::log!(SINK_CAT, obj: pad.gst_pad(), "Handling {:?}", list);
-            let proxysink = element.imp();
-            proxysink
-                .enqueue_item(DataQueueItem::BufferList(list))
-                .await
+            let imp = elem.imp();
+            imp.enqueue_item(DataQueueItem::BufferList(list)).await
         }
         .boxed()
     }
 
-    fn sink_event(
-        &self,
-        pad: &PadSinkRef,
-        proxysink: &ProxySink,
-        _element: &gst::Element,
-        event: gst::Event,
-    ) -> bool {
-        use gst::EventView;
-
+    fn sink_event(&self, pad: &PadSinkRef, imp: &ProxySink, event: gst::Event) -> bool {
         gst::debug!(SINK_CAT, obj: pad.gst_pad(), "Handling non-serialized {:?}", event);
 
         let src_pad = {
-            let proxy_ctx = proxysink.proxy_ctx.lock().unwrap();
+            let proxy_ctx = imp.proxy_ctx.lock().unwrap();
 
             PROXY_SRC_PADS
                 .lock()
@@ -274,8 +257,8 @@ impl PadSinkHandler for ProxySinkPadHandler {
                 .map(|src_pad| src_pad.gst_pad().clone())
         };
 
-        if let EventView::FlushStart(..) = event.view() {
-            proxysink.stop();
+        if let gst::EventView::FlushStart(..) = event.view() {
+            imp.stop();
         }
 
         if let Some(src_pad) = src_pad {
@@ -288,36 +271,28 @@ impl PadSinkHandler for ProxySinkPadHandler {
     }
 
     fn sink_event_serialized(
-        &self,
-        pad: &PadSinkRef,
-        _proxysink: &ProxySink,
-        element: &gst::Element,
+        self,
+        pad: PadSinkWeak,
+        elem: super::ProxySink,
         event: gst::Event,
     ) -> BoxFuture<'static, bool> {
-        use gst::EventView;
-
-        gst::log!(SINK_CAT, obj: pad.gst_pad(), "Handling serialized {:?}", event);
-
-        let pad_weak = pad.downgrade();
-        let element = element.clone().downcast::<super::ProxySink>().unwrap();
         async move {
-            let pad = pad_weak.upgrade().expect("PadSink no longer exists");
-            let proxysink = element.imp();
+            let pad = pad.upgrade().expect("PadSink no longer exists");
+            gst::log!(SINK_CAT, obj: pad.gst_pad(), "Handling serialized {:?}", event);
 
+            let imp = elem.imp();
+
+            use gst::EventView;
             match event.view() {
                 EventView::Eos(..) => {
-                    let _ =
-                        element.post_message(gst::message::Eos::builder().src(&element).build());
+                    let _ = elem.post_message(gst::message::Eos::builder().src(&elem).build());
                 }
-                EventView::FlushStop(..) => proxysink.start(),
+                EventView::FlushStop(..) => imp.start(),
                 _ => (),
             }
 
             gst::log!(SINK_CAT, obj: pad.gst_pad(), "Queuing serialized {:?}", event);
-            proxysink
-                .enqueue_item(DataQueueItem::Event(event))
-                .await
-                .is_ok()
+            imp.enqueue_item(DataQueueItem::Event(event)).await.is_ok()
         }
         .boxed()
     }
@@ -691,19 +666,11 @@ struct ProxySrcPadHandler;
 impl PadSrcHandler for ProxySrcPadHandler {
     type ElementImpl = ProxySrc;
 
-    fn src_event(
-        &self,
-        pad: &PadSrcRef,
-        proxysrc: &ProxySrc,
-        element: &gst::Element,
-        event: gst::Event,
-    ) -> bool {
-        use gst::EventView;
-
+    fn src_event(&self, pad: &PadSrcRef, imp: &ProxySrc, event: gst::Event) -> bool {
         gst::log!(SRC_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         let sink_pad = {
-            let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
+            let proxy_ctx = imp.proxy_ctx.lock().unwrap();
 
             PROXY_SINK_PADS
                 .lock()
@@ -713,12 +680,13 @@ impl PadSrcHandler for ProxySrcPadHandler {
                 .map(|sink_pad| sink_pad.gst_pad().clone())
         };
 
+        use gst::EventView;
         match event.view() {
             EventView::FlushStart(..) => {
-                if let Err(err) = proxysrc.task.flush_start().await_maybe_on_context() {
+                if let Err(err) = imp.task.flush_start().await_maybe_on_context() {
                     gst::error!(SRC_CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
-                    gst::element_error!(
-                        element,
+                    gst::element_imp_error!(
+                        imp,
                         gst::StreamError::Failed,
                         ("Internal data stream error"),
                         ["FlushStart failed {:?}", err]
@@ -727,10 +695,10 @@ impl PadSrcHandler for ProxySrcPadHandler {
                 }
             }
             EventView::FlushStop(..) => {
-                if let Err(err) = proxysrc.task.flush_stop().await_maybe_on_context() {
+                if let Err(err) = imp.task.flush_stop().await_maybe_on_context() {
                     gst::error!(SRC_CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
-                    gst::element_error!(
-                        element,
+                    gst::element_imp_error!(
+                        imp,
                         gst::StreamError::Failed,
                         ("Internal data stream error"),
                         ["FlushStop failed {:?}", err]
@@ -750,16 +718,10 @@ impl PadSrcHandler for ProxySrcPadHandler {
         }
     }
 
-    fn src_query(
-        &self,
-        pad: &PadSrcRef,
-        _proxysrc: &ProxySrc,
-        _element: &gst::Element,
-        query: &mut gst::QueryRef,
-    ) -> bool {
-        use gst::QueryViewMut;
-
+    fn src_query(&self, pad: &PadSrcRef, _proxysrc: &ProxySrc, query: &mut gst::QueryRef) -> bool {
         gst::log!(SRC_CAT, obj: pad.gst_pad(), "Handling {:?}", query);
+
+        use gst::QueryViewMut;
         let ret = match query.view_mut() {
             QueryViewMut::Latency(q) => {
                 q.set(true, gst::ClockTime::ZERO, gst::ClockTime::NONE);

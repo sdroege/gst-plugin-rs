@@ -30,7 +30,7 @@ use gst::{element_error, error_msg};
 use once_cell::sync::Lazy;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{self, Async, Context, PadSink, PadSinkRef, Task};
+use crate::runtime::{self, Async, Context, PadSink, PadSinkRef, PadSinkWeak, Task};
 use crate::socket::{wrap_socket, GioSocketWrapper};
 
 use std::collections::BTreeSet;
@@ -133,18 +133,15 @@ impl PadSinkHandler for UdpSinkPadHandler {
     type ElementImpl = UdpSink;
 
     fn sink_chain(
-        &self,
-        _pad: &PadSinkRef,
-        udpsink: &UdpSink,
-        element: &gst::Element,
+        self,
+        _pad: PadSinkWeak,
+        elem: super::UdpSink,
         buffer: gst::Buffer,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-        let sender = udpsink.clone_item_sender();
-        let element = element.clone().downcast::<super::UdpSink>().unwrap();
-
+        let sender = elem.imp().clone_item_sender();
         async move {
             if sender.send_async(TaskItem::Buffer(buffer)).await.is_err() {
-                gst::debug!(CAT, obj: &element, "Flushing");
+                gst::debug!(CAT, obj: &elem, "Flushing");
                 return Err(gst::FlowError::Flushing);
             }
 
@@ -154,19 +151,16 @@ impl PadSinkHandler for UdpSinkPadHandler {
     }
 
     fn sink_chain_list(
-        &self,
-        _pad: &PadSinkRef,
-        udpsink: &UdpSink,
-        element: &gst::Element,
+        self,
+        _pad: PadSinkWeak,
+        elem: super::UdpSink,
         list: gst::BufferList,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-        let sender = udpsink.clone_item_sender();
-        let element = element.clone().downcast::<super::UdpSink>().unwrap();
-
+        let sender = elem.imp().clone_item_sender();
         async move {
             for buffer in list.iter_owned() {
                 if sender.send_async(TaskItem::Buffer(buffer)).await.is_err() {
-                    gst::debug!(CAT, obj: &element, "Flushing");
+                    gst::debug!(CAT, obj: &elem, "Flushing");
                     return Err(gst::FlowError::Flushing);
                 }
             }
@@ -177,21 +171,18 @@ impl PadSinkHandler for UdpSinkPadHandler {
     }
 
     fn sink_event_serialized(
-        &self,
-        _pad: &PadSinkRef,
-        udpsink: &UdpSink,
-        element: &gst::Element,
+        self,
+        _pad: PadSinkWeak,
+        elem: super::UdpSink,
         event: gst::Event,
     ) -> BoxFuture<'static, bool> {
-        let sender = udpsink.clone_item_sender();
-        let element = element.clone().downcast::<super::UdpSink>().unwrap();
-
+        let sender = elem.imp().clone_item_sender();
         async move {
             if let EventView::FlushStop(_) = event.view() {
-                let udpsink = element.imp();
-                return udpsink.task.flush_stop().await_maybe_on_context().is_ok();
+                let imp = elem.imp();
+                return imp.task.flush_stop().await_maybe_on_context().is_ok();
             } else if sender.send_async(TaskItem::Event(event)).await.is_err() {
-                gst::debug!(CAT, obj: &element, "Flushing");
+                gst::debug!(CAT, obj: &elem, "Flushing");
             }
 
             true
@@ -199,15 +190,9 @@ impl PadSinkHandler for UdpSinkPadHandler {
         .boxed()
     }
 
-    fn sink_event(
-        &self,
-        _pad: &PadSinkRef,
-        udpsink: &UdpSink,
-        _element: &gst::Element,
-        event: gst::Event,
-    ) -> bool {
+    fn sink_event(&self, _pad: &PadSinkRef, imp: &UdpSink, event: gst::Event) -> bool {
         if let EventView::FlushStart(..) = event.view() {
-            return udpsink.task.flush_start().await_maybe_on_context().is_ok();
+            return imp.task.flush_start().await_maybe_on_context().is_ok();
         }
 
         true

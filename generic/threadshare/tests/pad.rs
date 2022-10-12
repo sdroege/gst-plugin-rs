@@ -36,7 +36,9 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use gstthreadshare::runtime::prelude::*;
-use gstthreadshare::runtime::{Context, PadSink, PadSinkRef, PadSrc, PadSrcRef, Task, TaskState};
+use gstthreadshare::runtime::{
+    Context, PadSink, PadSinkRef, PadSinkWeak, PadSrc, PadSrcRef, Task, TaskState,
+};
 
 const DEFAULT_CONTEXT: &str = "";
 const THROTTLING_DURATION: Duration = Duration::from_millis(2);
@@ -87,27 +89,15 @@ mod imp_src {
     impl PadSrcHandler for PadSrcTestHandler {
         type ElementImpl = ElementSrcTest;
 
-        fn src_event(
-            &self,
-            pad: &PadSrcRef,
-            elem_src_test: &ElementSrcTest,
-            _element: &gst::Element,
-            event: gst::Event,
-        ) -> bool {
+        fn src_event(&self, pad: &PadSrcRef, imp: &ElementSrcTest, event: gst::Event) -> bool {
             gst::log!(SRC_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
             let ret = match event.view() {
-                EventView::FlushStart(..) => elem_src_test
-                    .task
-                    .flush_start()
-                    .await_maybe_on_context()
-                    .is_ok(),
+                EventView::FlushStart(..) => {
+                    imp.task.flush_start().await_maybe_on_context().is_ok()
+                }
                 EventView::Qos(..) | EventView::Reconfigure(..) | EventView::Latency(..) => true,
-                EventView::FlushStop(..) => elem_src_test
-                    .task
-                    .flush_stop()
-                    .await_maybe_on_context()
-                    .is_ok(),
+                EventView::FlushStop(..) => imp.task.flush_stop().await_maybe_on_context().is_ok(),
                 _ => false,
             };
 
@@ -337,6 +327,7 @@ mod imp_src {
 
             let obj = self.instance();
             obj.add_pad(self.src_pad.gst_pad()).unwrap();
+            obj.set_element_flags(gst::ElementFlags::SOURCE);
         }
     }
 
@@ -449,53 +440,37 @@ mod imp_sink {
         type ElementImpl = ElementSinkTest;
 
         fn sink_chain(
-            &self,
-            _pad: &PadSinkRef,
-            _elem_sink_test: &ElementSinkTest,
-            element: &gst::Element,
+            self,
+            _pad: PadSinkWeak,
+            elem: super::ElementSinkTest,
             buffer: gst::Buffer,
         ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-            let element = element
-                .clone()
-                .downcast::<super::ElementSinkTest>()
-                .unwrap();
             async move {
-                let elem_sink_test = element.imp();
-                elem_sink_test.forward_item(Item::Buffer(buffer)).await
+                let imp = elem.imp();
+                imp.forward_item(Item::Buffer(buffer)).await
             }
             .boxed()
         }
 
         fn sink_chain_list(
-            &self,
-            _pad: &PadSinkRef,
-            _elem_sink_test: &ElementSinkTest,
-            element: &gst::Element,
+            self,
+            _pad: PadSinkWeak,
+            elem: super::ElementSinkTest,
             list: gst::BufferList,
         ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-            let element = element
-                .clone()
-                .downcast::<super::ElementSinkTest>()
-                .unwrap();
             async move {
-                let elem_sink_test = element.imp();
-                elem_sink_test.forward_item(Item::BufferList(list)).await
+                let imp = elem.imp();
+                imp.forward_item(Item::BufferList(list)).await
             }
             .boxed()
         }
 
-        fn sink_event(
-            &self,
-            pad: &PadSinkRef,
-            elem_sink_test: &ElementSinkTest,
-            _element: &gst::Element,
-            event: gst::Event,
-        ) -> bool {
+        fn sink_event(&self, pad: &PadSinkRef, imp: &ElementSinkTest, event: gst::Event) -> bool {
             gst::debug!(SINK_CAT, obj: pad.gst_pad(), "Handling non-serialized {:?}", event);
 
             match event.view() {
                 EventView::FlushStart(..) => {
-                    elem_sink_test.stop();
+                    imp.stop();
                     true
                 }
                 _ => false,
@@ -503,29 +478,21 @@ mod imp_sink {
         }
 
         fn sink_event_serialized(
-            &self,
-            pad: &PadSinkRef,
-            _elem_sink_test: &ElementSinkTest,
-            element: &gst::Element,
+            self,
+            pad: PadSinkWeak,
+            elem: super::ElementSinkTest,
             event: gst::Event,
         ) -> BoxFuture<'static, bool> {
-            gst::log!(SINK_CAT, obj: pad.gst_pad(), "Handling serialized {:?}", event);
-
-            let element = element
-                .clone()
-                .downcast::<super::ElementSinkTest>()
-                .unwrap();
             async move {
-                let elem_sink_test = element.imp();
+                let pad = pad.upgrade().expect("PadSink no longer exists");
+                gst::log!(SINK_CAT, obj: pad.gst_pad(), "Handling serialized {:?}", event);
 
+                let imp = elem.imp();
                 if let EventView::FlushStop(..) = event.view() {
-                    elem_sink_test.start();
+                    imp.start();
                 }
 
-                elem_sink_test
-                    .forward_item(Item::Event(event))
-                    .await
-                    .is_ok()
+                imp.forward_item(Item::Event(event)).await.is_ok()
             }
             .boxed()
         }
@@ -652,6 +619,7 @@ mod imp_sink {
 
             let obj = self.instance();
             obj.add_pad(self.sink_pad.gst_pad()).unwrap();
+            obj.set_element_flags(gst::ElementFlags::SINK);
         }
     }
 

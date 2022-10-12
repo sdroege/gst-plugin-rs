@@ -82,20 +82,13 @@ struct AppSrcPadHandler;
 impl PadSrcHandler for AppSrcPadHandler {
     type ElementImpl = AppSrc;
 
-    fn src_event(
-        &self,
-        pad: &PadSrcRef,
-        appsrc: &AppSrc,
-        _element: &gst::Element,
-        event: gst::Event,
-    ) -> bool {
-        use gst::EventView;
-
+    fn src_event(&self, pad: &PadSrcRef, imp: &AppSrc, event: gst::Event) -> bool {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
+        use gst::EventView;
         let ret = match event.view() {
-            EventView::FlushStart(..) => appsrc.task.flush_start().await_maybe_on_context().is_ok(),
-            EventView::FlushStop(..) => appsrc.task.flush_stop().await_maybe_on_context().is_ok(),
+            EventView::FlushStart(..) => imp.task.flush_start().await_maybe_on_context().is_ok(),
+            EventView::FlushStop(..) => imp.task.flush_stop().await_maybe_on_context().is_ok(),
             EventView::Reconfigure(..) => true,
             EventView::Latency(..) => true,
             _ => false,
@@ -110,16 +103,10 @@ impl PadSrcHandler for AppSrcPadHandler {
         ret
     }
 
-    fn src_query(
-        &self,
-        pad: &PadSrcRef,
-        appsrc: &AppSrc,
-        _element: &gst::Element,
-        query: &mut gst::QueryRef,
-    ) -> bool {
-        use gst::QueryViewMut;
-
+    fn src_query(&self, pad: &PadSrcRef, imp: &AppSrc, query: &mut gst::QueryRef) -> bool {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
+
+        use gst::QueryViewMut;
         let ret = match query.view_mut() {
             QueryViewMut::Latency(q) => {
                 q.set(true, gst::ClockTime::ZERO, gst::ClockTime::NONE);
@@ -131,7 +118,7 @@ impl PadSrcHandler for AppSrcPadHandler {
                 true
             }
             QueryViewMut::Caps(q) => {
-                let caps = if let Some(caps) = appsrc.configured_caps.lock().unwrap().as_ref() {
+                let caps = if let Some(caps) = imp.configured_caps.lock().unwrap().as_ref() {
                     q.filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
                         .unwrap_or_else(|| caps.clone())
@@ -328,8 +315,9 @@ impl AppSrc {
 
         let do_timestamp = self.settings.lock().unwrap().do_timestamp;
         if do_timestamp {
-            if let Some(clock) = self.instance().clock() {
-                let base_time = self.instance().base_time();
+            let elem = self.instance();
+            if let Some(clock) = elem.clock() {
+                let base_time = elem.base_time();
                 let now = clock.time();
 
                 let buffer = buffer.make_mut();
@@ -499,11 +487,10 @@ impl ObjectImpl for AppSrc {
                     .return_type::<bool>()
                     .action()
                     .class_handler(|_, args| {
-                        let element = args[0].get::<super::AppSrc>().expect("signal arg");
+                        let elem = args[0].get::<super::AppSrc>().expect("signal arg");
                         let buffer = args[1].get::<gst::Buffer>().expect("signal arg");
-                        let appsrc = element.imp();
 
-                        Some(appsrc.push_buffer(buffer).to_value())
+                        Some(elem.imp().push_buffer(buffer).to_value())
                     })
                     .build(),
                 /**
@@ -516,10 +503,9 @@ impl ObjectImpl for AppSrc {
                     .return_type::<bool>()
                     .action()
                     .class_handler(|_, args| {
-                        let element = args[0].get::<super::AppSrc>().expect("signal arg");
-                        let appsrc = element.imp();
+                        let elem = args[0].get::<super::AppSrc>().expect("signal arg");
 
-                        Some(appsrc.end_of_stream().to_value())
+                        Some(elem.imp().end_of_stream().to_value())
                     })
                     .build(),
             ]

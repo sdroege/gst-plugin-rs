@@ -96,28 +96,13 @@ struct TcpClientSrcPadHandler;
 impl PadSrcHandler for TcpClientSrcPadHandler {
     type ElementImpl = TcpClientSrc;
 
-    fn src_event(
-        &self,
-        pad: &PadSrcRef,
-        tcpclientsrc: &TcpClientSrc,
-        _element: &gst::Element,
-        event: gst::Event,
-    ) -> bool {
-        use gst::EventView;
-
+    fn src_event(&self, pad: &PadSrcRef, imp: &TcpClientSrc, event: gst::Event) -> bool {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
+        use gst::EventView;
         let ret = match event.view() {
-            EventView::FlushStart(..) => tcpclientsrc
-                .task
-                .flush_start()
-                .await_maybe_on_context()
-                .is_ok(),
-            EventView::FlushStop(..) => tcpclientsrc
-                .task
-                .flush_stop()
-                .await_maybe_on_context()
-                .is_ok(),
+            EventView::FlushStart(..) => imp.task.flush_start().await_maybe_on_context().is_ok(),
+            EventView::FlushStop(..) => imp.task.flush_stop().await_maybe_on_context().is_ok(),
             EventView::Reconfigure(..) => true,
             EventView::Latency(..) => true,
             _ => false,
@@ -132,16 +117,10 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
         ret
     }
 
-    fn src_query(
-        &self,
-        pad: &PadSrcRef,
-        tcpclientsrc: &TcpClientSrc,
-        _element: &gst::Element,
-        query: &mut gst::QueryRef,
-    ) -> bool {
-        use gst::QueryViewMut;
-
+    fn src_query(&self, pad: &PadSrcRef, imp: &TcpClientSrc, query: &mut gst::QueryRef) -> bool {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
+
+        use gst::QueryViewMut;
         let ret = match query.view_mut() {
             QueryViewMut::Latency(q) => {
                 q.set(false, gst::ClockTime::ZERO, gst::ClockTime::NONE);
@@ -153,8 +132,7 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
                 true
             }
             QueryViewMut::Caps(q) => {
-                let caps = if let Some(caps) = tcpclientsrc.configured_caps.lock().unwrap().as_ref()
-                {
+                let caps = if let Some(caps) = imp.configured_caps.lock().unwrap().as_ref() {
                     q.filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
                         .unwrap_or_else(|| caps.clone())
