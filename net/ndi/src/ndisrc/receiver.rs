@@ -11,10 +11,16 @@ use std::cmp;
 use std::collections::VecDeque;
 use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::thread;
+use std::time;
 
 use atomic_refcell::AtomicRefCell;
 
-use super::*;
+use once_cell::sync::Lazy;
+
+use crate::ndi::*;
+use crate::ndisys;
+use crate::ndisys::*;
+use crate::TimestampMode;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -29,14 +35,15 @@ pub struct Receiver(Arc<ReceiverInner>);
 #[derive(Debug, PartialEq, Eq)]
 #[allow(clippy::large_enum_variant)]
 pub enum AudioInfo {
-    AudioInfo(gst_audio::AudioInfo),
+    Audio(gst_audio::AudioInfo),
     #[cfg(feature = "advanced-sdk")]
-    OpusInfo {
+    #[allow(dead_code)]
+    Opus {
         sample_rate: i32,
         no_channels: i32,
     },
     #[cfg(feature = "advanced-sdk")]
-    AacInfo {
+    Aac {
         sample_rate: i32,
         no_channels: i32,
         codec_data: [u8; 2],
@@ -46,9 +53,9 @@ pub enum AudioInfo {
 impl AudioInfo {
     pub fn to_caps(&self) -> Result<gst::Caps, glib::BoolError> {
         match self {
-            AudioInfo::AudioInfo(ref info) => info.to_caps(),
+            AudioInfo::Audio(ref info) => info.to_caps(),
             #[cfg(feature = "advanced-sdk")]
-            AudioInfo::OpusInfo {
+            AudioInfo::Opus {
                 sample_rate,
                 no_channels,
             } => Ok(gst::Caps::builder("audio/x-opus")
@@ -57,7 +64,7 @@ impl AudioInfo {
                 .field("channel-mapping-family", 0i32)
                 .build()),
             #[cfg(feature = "advanced-sdk")]
-            AudioInfo::AacInfo {
+            AudioInfo::Aac {
                 sample_rate,
                 no_channels,
                 codec_data,
@@ -74,7 +81,7 @@ impl AudioInfo {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum VideoInfo {
-    VideoInfo(gst_video::VideoInfo),
+    Video(gst_video::VideoInfo),
     #[cfg(feature = "advanced-sdk")]
     SpeedHQInfo {
         variant: String,
@@ -87,7 +94,7 @@ pub enum VideoInfo {
         interlace_mode: gst_video::VideoInterlaceMode,
     },
     #[cfg(feature = "advanced-sdk")]
-    H264Info {
+    H264 {
         xres: i32,
         yres: i32,
         fps_n: i32,
@@ -97,7 +104,7 @@ pub enum VideoInfo {
         interlace_mode: gst_video::VideoInterlaceMode,
     },
     #[cfg(feature = "advanced-sdk")]
-    H265Info {
+    H265 {
         xres: i32,
         yres: i32,
         fps_n: i32,
@@ -111,7 +118,7 @@ pub enum VideoInfo {
 impl VideoInfo {
     pub fn to_caps(&self) -> Result<gst::Caps, glib::BoolError> {
         match self {
-            VideoInfo::VideoInfo(ref info) => info.to_caps(),
+            VideoInfo::Video(ref info) => info.to_caps(),
             #[cfg(feature = "advanced-sdk")]
             VideoInfo::SpeedHQInfo {
                 ref variant,
@@ -131,7 +138,7 @@ impl VideoInfo {
                 .field("variant", variant)
                 .build()),
             #[cfg(feature = "advanced-sdk")]
-            VideoInfo::H264Info {
+            VideoInfo::H264 {
                 xres,
                 yres,
                 fps_n,
@@ -150,7 +157,7 @@ impl VideoInfo {
                 .field("alignment", "au")
                 .build()),
             #[cfg(feature = "advanced-sdk")]
-            VideoInfo::H265Info {
+            VideoInfo::H265 {
                 xres,
                 yres,
                 fps_n,
@@ -639,17 +646,20 @@ impl Receiver {
         }
     }
 
+    #[allow(dead_code)]
     pub fn set_flushing(&self, flushing: bool) {
         let mut queue = (self.0.queue.0).0.lock().unwrap();
         queue.flushing = flushing;
         (self.0.queue.0).1.notify_all();
     }
 
+    #[allow(dead_code)]
     pub fn set_playing(&self, playing: bool) {
         let mut queue = (self.0.queue.0).0.lock().unwrap();
         queue.playing = playing;
     }
 
+    #[allow(dead_code)]
     pub fn shutdown(&self) {
         let mut queue = (self.0.queue.0).0.lock().unwrap();
         queue.shutdown = true;
@@ -1111,7 +1121,7 @@ impl Receiver {
                     builder = builder.field_order(gst_video::VideoFieldOrder::TopFieldFirst);
                 }
 
-                return Ok(VideoInfo::VideoInfo(builder.build().map_err(|_| {
+                return Ok(VideoInfo::Video(builder.build().map_err(|_| {
                     gst::element_error!(
                         element,
                         gst::StreamError::Format,
@@ -1139,7 +1149,7 @@ impl Receiver {
                     builder = builder.field_order(gst_video::VideoFieldOrder::TopFieldFirst);
                 }
 
-                return Ok(VideoInfo::VideoInfo(builder.build().map_err(|_| {
+                return Ok(VideoInfo::Video(builder.build().map_err(|_| {
                     gst::element_error!(
                         element,
                         gst::StreamError::Format,
@@ -1222,7 +1232,7 @@ impl Receiver {
                 return Err(gst::FlowError::Error);
             }
 
-            return Ok(VideoInfo::H264Info {
+            return Ok(VideoInfo::H264 {
                 xres: video_frame.xres(),
                 yres: video_frame.yres(),
                 fps_n: video_frame.frame_rate().0,
@@ -1260,7 +1270,7 @@ impl Receiver {
                 return Err(gst::FlowError::Error);
             }
 
-            return Ok(VideoInfo::H265Info {
+            return Ok(VideoInfo::H265 {
                 xres: video_frame.xres(),
                 yres: video_frame.yres(),
                 fps_n: video_frame.frame_rate().0,
@@ -1295,14 +1305,14 @@ impl Receiver {
 
             gst::ReferenceTimestampMeta::add(
                 buffer,
-                &*TIMECODE_CAPS,
+                &*crate::TIMECODE_CAPS,
                 gst::ClockTime::from_nseconds(video_frame.timecode() as u64 * 100),
                 gst::ClockTime::NONE,
             );
             if video_frame.timestamp() != ndisys::NDIlib_recv_timestamp_undefined {
                 gst::ReferenceTimestampMeta::add(
                     buffer,
-                    &*TIMESTAMP_CAPS,
+                    &*crate::TIMESTAMP_CAPS,
                     gst::ClockTime::from_nseconds(video_frame.timestamp() as u64 * 100),
                     gst::ClockTime::NONE,
                 );
@@ -1355,7 +1365,7 @@ impl Receiver {
         video_frame: &VideoFrame,
     ) -> Result<gst::Buffer, gst::FlowError> {
         match info {
-            VideoInfo::VideoInfo(ref info) => {
+            VideoInfo::Video(ref info) => {
                 let src = video_frame.data().ok_or(gst::FlowError::Error)?;
 
                 let buffer = gst::Buffer::with_size(info.size()).unwrap();
@@ -1495,7 +1505,7 @@ impl Receiver {
                 Ok(gst::Buffer::from_mut_slice(Vec::from(data)))
             }
             #[cfg(feature = "advanced-sdk")]
-            VideoInfo::H264Info { .. } | VideoInfo::H265Info { .. } => {
+            VideoInfo::H264 { .. } | VideoInfo::H265 { .. } => {
                 let compressed_packet = video_frame.compressed_packet().ok_or_else(|| {
                     error!(
                         CAT,
@@ -1599,7 +1609,7 @@ impl Receiver {
                 gst::FlowError::NotNegotiated
             })?;
 
-            return Ok(AudioInfo::AudioInfo(info));
+            return Ok(AudioInfo::Audio(info));
         }
 
         #[cfg(feature = "advanced-sdk")]
@@ -1622,7 +1632,7 @@ impl Receiver {
                 return Err(gst::FlowError::Error);
             }
 
-            return Ok(AudioInfo::AacInfo {
+            return Ok(AudioInfo::Aac {
                 sample_rate: audio_frame.sample_rate(),
                 no_channels: audio_frame.no_channels(),
                 codec_data: compressed_packet
@@ -1653,7 +1663,7 @@ impl Receiver {
         audio_frame: &AudioFrame,
     ) -> Result<gst::Buffer, gst::FlowError> {
         match info {
-            AudioInfo::AudioInfo(ref info) => {
+            AudioInfo::Audio(ref info) => {
                 let src = audio_frame.data().ok_or(gst::FlowError::Error)?;
                 let buff_size = (audio_frame.no_samples() as u32 * info.bpf()) as usize;
 
@@ -1666,14 +1676,14 @@ impl Receiver {
 
                     gst::ReferenceTimestampMeta::add(
                         buffer,
-                        &*TIMECODE_CAPS,
+                        &*crate::TIMECODE_CAPS,
                         gst::ClockTime::from_nseconds(audio_frame.timecode() as u64 * 100),
                         gst::ClockTime::NONE,
                     );
                     if audio_frame.timestamp() != ndisys::NDIlib_recv_timestamp_undefined {
                         gst::ReferenceTimestampMeta::add(
                             buffer,
-                            &*TIMESTAMP_CAPS,
+                            &*crate::TIMESTAMP_CAPS,
                             gst::ClockTime::from_nseconds(audio_frame.timestamp() as u64 * 100),
                             gst::ClockTime::NONE,
                         );
@@ -1709,7 +1719,7 @@ impl Receiver {
                 Ok(buffer)
             }
             #[cfg(feature = "advanced-sdk")]
-            AudioInfo::OpusInfo { .. } => {
+            AudioInfo::Opus { .. } => {
                 let data = audio_frame.data().ok_or_else(|| {
                     error!(CAT, obj: element, "Audio packet has no data");
                     gst::element_error!(
@@ -1724,7 +1734,7 @@ impl Receiver {
                 Ok(gst::Buffer::from_mut_slice(Vec::from(data)))
             }
             #[cfg(feature = "advanced-sdk")]
-            AudioInfo::AacInfo { .. } => {
+            AudioInfo::Aac { .. } => {
                 let compressed_packet = audio_frame.compressed_packet().ok_or_else(|| {
                     error!(
                         CAT,

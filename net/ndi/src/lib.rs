@@ -1,24 +1,22 @@
 // SPDX-License-Identifier: MPL-2.0
 
+#[allow(dead_code)]
+mod ndi;
+#[allow(dead_code)]
+mod ndisys;
+
 mod device_provider;
-pub mod ndi;
+
 #[cfg(feature = "sink")]
 mod ndisink;
 #[cfg(feature = "sink")]
 mod ndisinkcombiner;
 #[cfg(feature = "sink")]
-pub mod ndisinkmeta;
+mod ndisinkmeta;
+
 mod ndisrc;
 mod ndisrcdemux;
-pub mod ndisrcmeta;
-pub mod ndisys;
-pub mod receiver;
-
-use crate::ndi::*;
-use crate::ndisys::*;
-use crate::receiver::*;
-
-use std::time;
+mod ndisrcmeta;
 
 use once_cell::sync::Lazy;
 
@@ -82,8 +80,10 @@ pub enum RecvColorFormat {
     CompressedV5WithAudio = 13,
 }
 
-impl From<RecvColorFormat> for NDIlib_recv_color_format_e {
+impl From<RecvColorFormat> for crate::ndisys::NDIlib_recv_color_format_e {
     fn from(v: RecvColorFormat) -> Self {
+        use crate::ndisys::*;
+
         match v {
             RecvColorFormat::BgrxBgra => NDIlib_recv_color_format_BGRX_BGRA,
             RecvColorFormat::UyvyBgra => NDIlib_recv_color_format_UYVY_BGRA,

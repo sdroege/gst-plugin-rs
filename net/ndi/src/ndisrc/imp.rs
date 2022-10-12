@@ -13,14 +13,11 @@ use std::u32;
 use once_cell::sync::Lazy;
 
 use crate::ndisys;
-
-use crate::ndisrcmeta;
-use crate::Buffer;
-use crate::Receiver;
-use crate::ReceiverControlHandle;
-use crate::ReceiverItem;
 use crate::RecvColorFormat;
 use crate::TimestampMode;
+
+use super::receiver::{self, Buffer, Receiver, ReceiverControlHandle, ReceiverItem};
+use crate::ndisrcmeta;
 use crate::DEFAULT_RECEIVER_NDI_NAME;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -61,9 +58,9 @@ impl Default for Settings {
 }
 
 struct State {
-    video_info: Option<crate::VideoInfo>,
+    video_info: Option<receiver::VideoInfo>,
     video_caps: Option<gst::Caps>,
-    audio_info: Option<crate::AudioInfo>,
+    audio_info: Option<receiver::AudioInfo>,
     audio_caps: Option<gst::Caps>,
     current_latency: Option<gst::ClockTime>,
     receiver: Option<Receiver>,
