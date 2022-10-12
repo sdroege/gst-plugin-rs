@@ -1291,22 +1291,19 @@ impl Receiver {
             buffer.set_pts(pts);
             buffer.set_duration(duration);
 
-            #[cfg(feature = "reference-timestamps")]
-            {
+            gst::ReferenceTimestampMeta::add(
+                buffer,
+                &*TIMECODE_CAPS,
+                gst::ClockTime::from_nseconds(video_frame.timecode() as u64 * 100),
+                gst::ClockTime::NONE,
+            );
+            if video_frame.timestamp() != ndisys::NDIlib_recv_timestamp_undefined {
                 gst::ReferenceTimestampMeta::add(
                     buffer,
-                    &*TIMECODE_CAPS,
-                    gst::ClockTime::from_nseconds(video_frame.timecode() as u64 * 100),
+                    &*TIMESTAMP_CAPS,
+                    gst::ClockTime::from_nseconds(video_frame.timestamp() as u64 * 100),
                     gst::ClockTime::NONE,
                 );
-                if video_frame.timestamp() != ndisys::NDIlib_recv_timestamp_undefined {
-                    gst::ReferenceTimestampMeta::add(
-                        buffer,
-                        &*TIMESTAMP_CAPS,
-                        gst::ClockTime::from_nseconds(video_frame.timestamp() as u64 * 100),
-                        gst::ClockTime::NONE,
-                    );
-                }
             }
 
             #[cfg(feature = "interlaced-fields")]
@@ -1667,22 +1664,19 @@ impl Receiver {
                     buffer.set_pts(pts);
                     buffer.set_duration(duration);
 
-                    #[cfg(feature = "reference-timestamps")]
-                    {
+                    gst::ReferenceTimestampMeta::add(
+                        buffer,
+                        &*TIMECODE_CAPS,
+                        gst::ClockTime::from_nseconds(audio_frame.timecode() as u64 * 100),
+                        gst::ClockTime::NONE,
+                    );
+                    if audio_frame.timestamp() != ndisys::NDIlib_recv_timestamp_undefined {
                         gst::ReferenceTimestampMeta::add(
                             buffer,
-                            &*TIMECODE_CAPS,
-                            gst::ClockTime::from_nseconds(audio_frame.timecode() as u64 * 100),
+                            &*TIMESTAMP_CAPS,
+                            gst::ClockTime::from_nseconds(audio_frame.timestamp() as u64 * 100),
                             gst::ClockTime::NONE,
                         );
-                        if audio_frame.timestamp() != ndisys::NDIlib_recv_timestamp_undefined {
-                            gst::ReferenceTimestampMeta::add(
-                                buffer,
-                                &*TIMESTAMP_CAPS,
-                                gst::ClockTime::from_nseconds(audio_frame.timestamp() as u64 * 100),
-                                gst::ClockTime::NONE,
-                            );
-                        }
                     }
 
                     let mut dest = buffer.map_writable().unwrap();

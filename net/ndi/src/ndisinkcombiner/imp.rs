@@ -83,16 +83,16 @@ impl ElementImpl for NdiSinkCombiner {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
             let caps = gst_video::VideoCapsBuilder::new()
                 .format_list([
-                        gst_video::VideoFormat::Uyvy,
-                        gst_video::VideoFormat::I420,
-                        gst_video::VideoFormat::Nv12,
-                        gst_video::VideoFormat::Nv21,
-                        gst_video::VideoFormat::Yv12,
-                        gst_video::VideoFormat::Bgra,
-                        gst_video::VideoFormat::Bgrx,
-                        gst_video::VideoFormat::Rgba,
-                        gst_video::VideoFormat::Rgbx,
-                    ])
+                    gst_video::VideoFormat::Uyvy,
+                    gst_video::VideoFormat::I420,
+                    gst_video::VideoFormat::Nv12,
+                    gst_video::VideoFormat::Nv21,
+                    gst_video::VideoFormat::Yv12,
+                    gst_video::VideoFormat::Bgra,
+                    gst_video::VideoFormat::Bgrx,
+                    gst_video::VideoFormat::Rgba,
+                    gst_video::VideoFormat::Rgbx,
+                ])
                 .framerate_range(gst::Fraction::new(1, i32::MAX)..gst::Fraction::new(i32::MAX, 1))
                 .build();
             let src_pad_template = gst::PadTemplate::with_gtype(

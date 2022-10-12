@@ -283,7 +283,6 @@ impl NdiSrcDemux {
             if element.num_src_pads() == 2 {
                 element.no_more_pads();
             }
-
         }
 
         for ev in events {
