@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 #![allow(non_camel_case_types, non_upper_case_globals, non_snake_case)]
 
 #[cfg_attr(

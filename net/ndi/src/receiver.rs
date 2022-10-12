@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 use glib::prelude::*;
 use gst::prelude::*;
 use gst::{debug, error, log, trace, warning};

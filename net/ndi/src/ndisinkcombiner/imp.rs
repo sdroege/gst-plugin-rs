@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 use glib::prelude::*;
 use glib::subclass::prelude::*;
 use gst::prelude::*;

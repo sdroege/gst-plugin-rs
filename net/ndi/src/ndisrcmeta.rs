@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 use gst::prelude::*;
 use std::fmt;
 use std::mem;
