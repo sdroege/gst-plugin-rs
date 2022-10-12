@@ -35,7 +35,7 @@ pub struct NdiSrcDemux {
 
 #[glib::object_subclass]
 impl ObjectSubclass for NdiSrcDemux {
-    const NAME: &'static str = "NdiSrcDemux";
+    const NAME: &'static str = "GstNdiSrcDemux";
     type Type = super::NdiSrcDemux;
     type ParentType = gst::Element;
 

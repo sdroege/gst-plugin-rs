@@ -32,7 +32,7 @@ pub struct DeviceProvider {
 
 #[glib::object_subclass]
 impl ObjectSubclass for DeviceProvider {
-    const NAME: &'static str = "NdiDeviceProvider";
+    const NAME: &'static str = "GstNdiDeviceProvider";
     type Type = super::DeviceProvider;
     type ParentType = gst::DeviceProvider;
 

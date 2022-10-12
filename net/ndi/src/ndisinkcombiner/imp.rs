@@ -38,7 +38,7 @@ pub struct NdiSinkCombiner {
 
 #[glib::object_subclass]
 impl ObjectSubclass for NdiSinkCombiner {
-    const NAME: &'static str = "NdiSinkCombiner";
+    const NAME: &'static str = "GstNdiSinkCombiner";
     type Type = super::NdiSinkCombiner;
     type ParentType = gst_base::Aggregator;
 

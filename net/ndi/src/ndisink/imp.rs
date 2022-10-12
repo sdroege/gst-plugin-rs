@@ -51,7 +51,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 #[glib::object_subclass]
 impl ObjectSubclass for NdiSink {
-    const NAME: &'static str = "NdiSink";
+    const NAME: &'static str = "GstNdiSink";
     type Type = super::NdiSink;
     type ParentType = gst_base::BaseSink;
 

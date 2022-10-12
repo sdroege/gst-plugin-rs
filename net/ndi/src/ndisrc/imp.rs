@@ -90,7 +90,7 @@ pub struct NdiSrc {
 
 #[glib::object_subclass]
 impl ObjectSubclass for NdiSrc {
-    const NAME: &'static str = "NdiSrc";
+    const NAME: &'static str = "GstNdiSrc";
     type Type = super::NdiSrc;
     type ParentType = gst_base::BaseSrc;
 
