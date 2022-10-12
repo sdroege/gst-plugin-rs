@@ -6,7 +6,7 @@ use gst_base::subclass::base_src::CreateSuccess;
 use gst_base::subclass::prelude::*;
 
 use std::sync::Mutex;
-use std::{i32, u32};
+use std::u32;
 
 use once_cell::sync::Lazy;
 
@@ -105,79 +105,54 @@ impl ObjectImpl for NdiSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecString::new(
-                    "ndi-name",
-                    "NDI Name",
-                    "NDI stream name of the sender",
-                    None,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecString::new(
-                    "url-address",
-                    "URL/Address",
-                    "URL/address and port of the sender, e.g. 127.0.0.1:5961",
-                    None,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecString::new(
-                    "receiver-ndi-name",
-                    "Receiver NDI Name",
-                    "NDI stream name of this receiver",
-                    Some(&*DEFAULT_RECEIVER_NDI_NAME),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "connect-timeout",
-                    "Connect Timeout",
-                    "Connection timeout in ms",
-                    0,
-                    u32::MAX,
-                    10000,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "timeout",
-                    "Timeout",
-                    "Receive timeout in ms",
-                    0,
-                    u32::MAX,
-                    5000,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "max-queue-length",
-                    "Max Queue Length",
-                    "Maximum receive queue length",
-                    0,
-                    u32::MAX,
-                    10,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecInt::new(
-                    "bandwidth",
-                    "Bandwidth",
-                    "Bandwidth, -10 metadata-only, 10 audio-only, 100 highest",
-                    -10,
-                    100,
-                    100,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecEnum::new(
+                glib::ParamSpecString::builder("ndi-name")
+                    .nick("NDI Name")
+                    .blurb("NDI stream name of the sender")
+                    .build(),
+                glib::ParamSpecString::builder("url-address")
+                    .nick("URL/Address")
+                    .blurb("URL/address and port of the sender, e.g. 127.0.0.1:5961")
+                    .build(),
+                glib::ParamSpecString::builder("receiver-ndi-name")
+                    .nick("Receiver NDI Name")
+                    .blurb("NDI stream name of this receiver")
+                    .build(),
+                glib::ParamSpecUInt::builder("connect-timeout")
+                    .nick("Connect Timeout")
+                    .blurb("Connection timeout in ms")
+                    .default_value(10000)
+                    .build(),
+                glib::ParamSpecUInt::builder("timeout")
+                    .nick("Timeout")
+                    .blurb("Receive timeout in ms")
+                    .default_value(5000)
+                    .build(),
+                glib::ParamSpecUInt::builder("max-queue-length")
+                    .nick("Max Queue Length")
+                    .blurb("Maximum receive queue length")
+                    .default_value(10)
+                    .build(),
+                glib::ParamSpecInt::builder("bandwidth")
+                    .nick("Bandwidth")
+                    .blurb("Bandwidth, -10 metadata-only, 10 audio-only, 100 highest")
+                    .minimum(-10)
+                    .maximum(100)
+                    .default_value(100)
+                    .build(),
+                glib::ParamSpecEnum::builder::<RecvColorFormat>(
                     "color-format",
-                    "Color Format",
-                    "Receive color format",
-                    RecvColorFormat::static_type(),
-                    RecvColorFormat::UyvyBgra as u32 as i32,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecEnum::new(
+                    RecvColorFormat::UyvyBgra,
+                )
+                .nick("Color Format")
+                .blurb("Receive color format")
+                .build(),
+                glib::ParamSpecEnum::builder::<TimestampMode>(
                     "timestamp-mode",
-                    "Timestamp Mode",
-                    "Timestamp information to use for outgoing PTS",
-                    TimestampMode::static_type(),
-                    TimestampMode::ReceiveTimeTimecode as i32,
-                    glib::ParamFlags::READWRITE,
-                ),
+                    TimestampMode::ReceiveTimeTimecode,
+                )
+                .nick("Timestamp Mode")
+                .blurb("Timestamp information to use for outgoing PTS")
+                .build(),
             ]
         });
 

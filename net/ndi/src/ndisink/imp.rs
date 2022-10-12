@@ -64,13 +64,11 @@ impl ObjectSubclass for NdiSink {
 impl ObjectImpl for NdiSink {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpecString::new(
-                "ndi-name",
-                "NDI Name",
-                "NDI Name to use",
-                Some(DEFAULT_SENDER_NDI_NAME.as_ref()),
-                glib::ParamFlags::READWRITE,
-            )]
+            vec![glib::ParamSpecString::builder("ndi-name")
+                .nick("NDI Name")
+                .blurb("NDI Name to use")
+                .default_value(Some(DEFAULT_SENDER_NDI_NAME.as_ref()))
+                .build()]
         });
 
         PROPERTIES.as_ref()
