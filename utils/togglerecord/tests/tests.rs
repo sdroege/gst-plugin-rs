@@ -101,18 +101,17 @@ fn setup_sender_receiver(
             if first {
                 assert!(sinkpad.send_event(gst::event::StreamStart::new("test")));
                 let caps = if main_stream {
-                    gst::Caps::builder("video/x-raw")
-                        .field("format", "ARGB")
-                        .field("width", 320i32)
-                        .field("height", 240i32)
-                        .field("framerate", gst::Fraction::new(50, 1))
+                    gst_video::VideoCapsBuilder::new()
+                        .format(gst_video::VideoFormat::Argb)
+                        .width(320)
+                        .height(240)
+                        .framerate(gst::Fraction::new(50, 1))
                         .build()
                 } else {
-                    gst::Caps::builder("audio/x-raw")
-                        .field("format", "U8")
-                        .field("layout", "interleaved")
-                        .field("rate", 8000i32)
-                        .field("channels", 1i32)
+                    gst_audio::AudioCapsBuilder::new_interleaved()
+                        .format(gst_audio::AUDIO_FORMAT_U8)
+                        .rate(800)
+                        .channels(1)
                         .build()
                 };
                 assert!(sinkpad.send_event(gst::event::Caps::new(&caps)));

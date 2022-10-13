@@ -343,8 +343,8 @@ impl ElementImpl for WebPDec {
             )
             .unwrap();
 
-            let caps = gst::Caps::builder("video/x-raw")
-                .field("format", "RGBA")
+            let caps = gst_video::VideoCapsBuilder::new()
+                .format(gst_video::VideoFormat::Rgba)
                 .build();
 
             let src_pad_template = gst::PadTemplate::new(

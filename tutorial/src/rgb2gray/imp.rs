@@ -14,7 +14,6 @@ use gst::subclass::prelude::*;
 use gst_base::subclass::prelude::*;
 use gst_video::subclass::prelude::*;
 
-use std::i32;
 use std::sync::Mutex;
 
 use once_cell::sync::Lazy;
@@ -197,23 +196,8 @@ impl ElementImpl for Rgb2Gray {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
             // On the src pad, we can produce BGRx and GRAY8 of any
             // width/height and with any framerate
-            let caps = gst::Caps::builder("video/x-raw")
-                .field(
-                    "format",
-                    gst::List::new([
-                        gst_video::VideoFormat::Bgrx.to_str(),
-                        gst_video::VideoFormat::Gray8.to_str(),
-                    ]),
-                )
-                .field("width", gst::IntRange::new(0, i32::MAX))
-                .field("height", gst::IntRange::new(0, i32::MAX))
-                .field(
-                    "framerate",
-                    gst::FractionRange::new(
-                        gst::Fraction::new(0, 1),
-                        gst::Fraction::new(i32::MAX, 1),
-                    ),
-                )
+            let caps = gst_video::VideoCapsBuilder::new()
+                .format_list([gst_video::VideoFormat::Bgrx, gst_video::VideoFormat::Gray8])
                 .build();
             // The src pad template must be named "src" for basetransform
             // and specific a pad that is always there
@@ -227,17 +211,8 @@ impl ElementImpl for Rgb2Gray {
 
             // On the sink pad, we can accept BGRx of any
             // width/height and with any framerate
-            let caps = gst::Caps::builder("video/x-raw")
-                .field("format", gst_video::VideoFormat::Bgrx.to_str())
-                .field("width", gst::IntRange::new(0, i32::MAX))
-                .field("height", gst::IntRange::new(0, i32::MAX))
-                .field(
-                    "framerate",
-                    gst::FractionRange::new(
-                        gst::Fraction::new(0, 1),
-                        gst::Fraction::new(i32::MAX, 1),
-                    ),
-                )
+            let caps = gst_video::VideoCapsBuilder::new()
+                .format(gst_video::VideoFormat::Bgrx)
                 .build();
             // The sink pad template must be named "sink" for basetransform
             // and specific a pad that is always there

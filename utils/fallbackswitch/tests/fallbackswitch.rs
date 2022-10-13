@@ -530,11 +530,11 @@ fn setup_pipeline(
     src.set_property("min-latency", LATENCY.nseconds() as i64);
     src.set_property(
         "caps",
-        gst::Caps::builder("video/x-raw")
-            .field("format", "ARGB")
-            .field("width", 320i32)
-            .field("height", 240i32)
-            .field("framerate", gst::Fraction::new(0, 1))
+        gst_video::VideoCapsBuilder::new()
+            .format(gst_video::VideoFormat::Argb)
+            .width(320)
+            .height(240)
+            .framerate(gst::Fraction::new(0, 1))
             .build(),
     );
 
@@ -575,11 +575,11 @@ fn setup_pipeline(
         fallback_src.set_property("min-latency", LATENCY.nseconds() as i64);
         fallback_src.set_property(
             "caps",
-            gst::Caps::builder("video/x-raw")
-                .field("format", "ARGB")
-                .field("width", 160i32)
-                .field("height", 120i32)
-                .field("framerate", gst::Fraction::new(0, 1))
+            gst_video::VideoCapsBuilder::new()
+                .format(gst_video::VideoFormat::Argb)
+                .width(160)
+                .height(120)
+                .framerate(gst::Fraction::new(0, 1))
                 .build(),
         );
 

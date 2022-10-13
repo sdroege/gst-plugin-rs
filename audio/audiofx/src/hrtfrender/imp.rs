@@ -547,11 +547,9 @@ impl ElementImpl for HrtfRender {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let src_caps = gst::Caps::builder("audio/x-raw")
-                .field("format", gst_audio::AUDIO_FORMAT_F32.to_str())
-                .field("rate", gst::IntRange::new(1, i32::MAX))
-                .field("channels", 2i32)
-                .field("layout", "interleaved")
+            let src_caps = gst_audio::AudioCapsBuilder::new_interleaved()
+                .channels(2)
+                .format(gst_audio::AUDIO_FORMAT_F32)
                 .build();
 
             let src_pad_template = gst::PadTemplate::new(
@@ -562,11 +560,9 @@ impl ElementImpl for HrtfRender {
             )
             .unwrap();
 
-            let sink_caps = gst::Caps::builder("audio/x-raw")
-                .field("format", gst_audio::AUDIO_FORMAT_F32.to_str())
-                .field("rate", gst::IntRange::new(1, i32::MAX))
-                .field("channels", gst::IntRange::new(1i32, 64))
-                .field("layout", "interleaved")
+            let sink_caps = gst_audio::AudioCapsBuilder::new_interleaved()
+                .channels_range(1..=64)
+                .format(gst_audio::AUDIO_FORMAT_F32)
                 .build();
 
             let sink_pad_template = gst::PadTemplate::new(

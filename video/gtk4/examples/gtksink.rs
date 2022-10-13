@@ -18,9 +18,9 @@ fn create_ui(app: &gtk::Application) {
     pipeline.add_many(&[&src, &overlay, &sink]).unwrap();
     src.link_filtered(
         &overlay,
-        &gst::Caps::builder("video/x-raw")
-            .field("width", 640)
-            .field("height", 480)
+        &gst_video::VideoCapsBuilder::new()
+            .width(640)
+            .height(480)
             .build(),
     )
     .unwrap();

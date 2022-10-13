@@ -596,7 +596,7 @@
                 "long-name": "Transcriber",
                 "pad-templates": {
                     "sink": {
-                        "caps": "audio/x-raw:\n         format: S16LE\n           rate: [ 8000, 48000 ]\n       channels: 1\n",
+                        "caps": "audio/x-raw:\n           rate: [ 8000, 48000 ]\n       channels: 1\n         layout: { (string)interleaved, (string)non-interleaved }\n         format: S16LE\n",
                         "direction": "sink",
                         "presence": "always"
                     },
@@ -2303,7 +2303,7 @@
                         "presence": "always"
                     },
                     "src": {
-                        "caps": "audio/x-raw:\n         format: F32LE\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 255 ]\n         layout: interleaved\n",
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 255 ]\n         layout: interleaved\n         format: F32LE\n",
                         "direction": "src",
                         "presence": "always"
                     }
@@ -3452,12 +3452,12 @@
                 "long-name": "Head-Related Transfer Function (HRTF) renderer",
                 "pad-templates": {
                     "sink": {
-                        "caps": "audio/x-raw:\n         format: F32LE\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 64 ]\n         layout: interleaved\n",
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 64 ]\n         layout: interleaved\n         format: F32LE\n",
                         "direction": "sink",
                         "presence": "always"
                     },
                     "src": {
-                        "caps": "audio/x-raw:\n         format: F32LE\n           rate: [ 1, 2147483647 ]\n       channels: 2\n         layout: interleaved\n",
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: 2\n         layout: interleaved\n         format: F32LE\n",
                         "direction": "src",
                         "presence": "always"
                     }
@@ -5343,7 +5343,7 @@
                         "presence": "always"
                     },
                     "src": {
-                        "caps": "video/x-raw:\n         format: RGBA\n",
+                        "caps": "video/x-raw:\n         format: RGBA\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
                         "direction": "src",
                         "presence": "always"
                     }

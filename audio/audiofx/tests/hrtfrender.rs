@@ -40,19 +40,17 @@ fn build_harness(src_caps: gst::Caps, sink_caps: gst::Caps) -> (gst_check::Harne
 fn test_hrtfrender_samples_in_samples_out() {
     init();
 
-    let src_caps = gst::Caps::builder("audio/x-raw")
-        .field("format", gst_audio::AUDIO_FORMAT_F32.to_str())
-        .field("rate", 44_100i32)
-        .field("channels", 1i32)
+    let src_caps = gst_audio::AudioCapsBuilder::new_interleaved()
+        .format(gst_audio::AUDIO_FORMAT_F32)
+        .rate(44_100)
+        .channels(1)
         .field("channel-mask", gst::Bitmask::new(0x1))
-        .field("layout", "interleaved")
         .build();
 
-    let sink_caps = gst::Caps::builder("audio/x-raw")
-        .field("format", gst_audio::AUDIO_FORMAT_F32.to_str())
-        .field("rate", 44_100i32)
-        .field("channels", 2i32)
-        .field("layout", "interleaved")
+    let sink_caps = gst_audio::AudioCapsBuilder::new_interleaved()
+        .format(gst_audio::AUDIO_FORMAT_F32)
+        .rate(44_100)
+        .channels(2)
         .build();
 
     let (mut h, _) = build_harness(src_caps, sink_caps);
@@ -97,19 +95,17 @@ fn test_hrtfrender_samples_in_samples_out() {
 fn test_hrtfrender_implicit_spatial_objects() {
     init();
 
-    let src_caps = gst::Caps::builder("audio/x-raw")
-        .field("format", gst_audio::AUDIO_FORMAT_F32.to_str())
-        .field("rate", 44_100i32)
-        .field("channels", 8i32)
+    let src_caps = gst_audio::AudioCapsBuilder::new_interleaved()
+        .format(gst_audio::AUDIO_FORMAT_F32)
+        .rate(44_100)
+        .channels(8)
         .field("channel-mask", gst::Bitmask::new(0xc3f))
-        .field("layout", "interleaved")
         .build();
 
-    let sink_caps = gst::Caps::builder("audio/x-raw")
-        .field("format", gst_audio::AUDIO_FORMAT_F32.to_str())
-        .field("rate", 44_100i32)
-        .field("channels", 2i32)
-        .field("layout", "interleaved")
+    let sink_caps = gst_audio::AudioCapsBuilder::new_interleaved()
+        .format(gst_audio::AUDIO_FORMAT_F32)
+        .rate(44_100)
+        .channels(2)
         .build();
 
     let (mut h, hrtf) = build_harness(src_caps, sink_caps);
@@ -124,18 +120,16 @@ fn test_hrtfrender_implicit_spatial_objects() {
 fn test_hrtfrender_explicit_spatial_objects() {
     init();
 
-    let src_caps = gst::Caps::builder("audio/x-raw")
-        .field("format", gst_audio::AUDIO_FORMAT_F32.to_str())
-        .field("rate", 44_100i32)
-        .field("channels", 8i32)
-        .field("layout", "interleaved")
+    let src_caps = gst_audio::AudioCapsBuilder::new_interleaved()
+        .format(gst_audio::AUDIO_FORMAT_F32)
+        .rate(44_100)
+        .channels(8)
         .build();
 
-    let sink_caps = gst::Caps::builder("audio/x-raw")
-        .field("format", gst_audio::AUDIO_FORMAT_F32.to_str())
-        .field("rate", 44_100i32)
-        .field("channels", 2i32)
-        .field("layout", "interleaved")
+    let sink_caps = gst_audio::AudioCapsBuilder::new_interleaved()
+        .format(gst_audio::AUDIO_FORMAT_F32)
+        .rate(44_100)
+        .channels(2)
         .build();
 
     let (mut h, hrtf) = build_harness(src_caps, sink_caps);
@@ -166,18 +160,16 @@ fn test_hrtfrender_explicit_spatial_objects() {
 fn test_hrtfrender_caps_negotiation_fail() {
     init();
 
-    let src_caps = gst::Caps::builder("audio/x-raw")
-        .field("format", gst_audio::AUDIO_FORMAT_F32.to_str())
-        .field("rate", 44_100i32)
-        .field("channels", 6i32)
-        .field("layout", "interleaved")
+    let src_caps = gst_audio::AudioCapsBuilder::new_interleaved()
+        .format(gst_audio::AUDIO_FORMAT_F32)
+        .rate(44_100)
+        .channels(6)
         .build();
 
-    let sink_caps = gst::Caps::builder("audio/x-raw")
-        .field("format", gst_audio::AUDIO_FORMAT_F32.to_str())
-        .field("rate", 44_100i32)
-        .field("channels", 2i32)
-        .field("layout", "interleaved")
+    let sink_caps = gst_audio::AudioCapsBuilder::new_interleaved()
+        .format(gst_audio::AUDIO_FORMAT_F32)
+        .rate(44_100)
+        .channels(2)
         .build();
 
     let (mut h, hrtf) = build_harness(src_caps, sink_caps);
@@ -213,18 +205,16 @@ fn test_hrtfrender_caps_negotiation_fail() {
 fn test_hrtfrender_multiple_instances_sharing_thread_pool() {
     init();
 
-    let src_caps = gst::Caps::builder("audio/x-raw")
-        .field("format", gst_audio::AUDIO_FORMAT_F32.to_str())
-        .field("rate", 44_100i32)
-        .field("channels", 1i32)
-        .field("layout", "interleaved")
+    let src_caps = gst_audio::AudioCapsBuilder::new_interleaved()
+        .format(gst_audio::AUDIO_FORMAT_F32)
+        .rate(44_100)
+        .channels(1)
         .build();
 
-    let sink_caps = gst::Caps::builder("audio/x-raw")
-        .field("format", gst_audio::AUDIO_FORMAT_F32.to_str())
-        .field("rate", 44_100i32)
-        .field("channels", 2i32)
-        .field("layout", "interleaved")
+    let sink_caps = gst_audio::AudioCapsBuilder::new_interleaved()
+        .format(gst_audio::AUDIO_FORMAT_F32)
+        .rate(44_100)
+        .channels(2)
         .build();
 
     let (_, hrtf) = build_harness(src_caps.clone(), sink_caps.clone());

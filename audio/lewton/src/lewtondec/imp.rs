@@ -81,11 +81,9 @@ impl ElementImpl for LewtonDec {
             )
             .unwrap();
 
-            let src_caps = gst::Caps::builder("audio/x-raw")
-                .field("format", gst_audio::AUDIO_FORMAT_F32.to_str())
-                .field("rate", gst::IntRange::new(1, std::i32::MAX))
-                .field("channels", gst::IntRange::new(1i32, 255))
-                .field("layout", "interleaved")
+            let src_caps = gst_audio::AudioCapsBuilder::new_interleaved()
+                .format(gst_audio::AUDIO_FORMAT_F32)
+                .channels_range(1..=255)
                 .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",

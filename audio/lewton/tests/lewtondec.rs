@@ -93,11 +93,10 @@ fn run_test(inline_headers: bool) {
         .expect("pad has no caps");
     assert_eq!(
         caps,
-        gst::Caps::builder("audio/x-raw")
-            .field("format", gst_audio::AUDIO_FORMAT_F32.to_str())
-            .field("rate", 44_100i32)
-            .field("channels", 1i32)
-            .field("layout", "interleaved")
+        gst_audio::AudioCapsBuilder::new_interleaved()
+            .format(gst_audio::AUDIO_FORMAT_F32)
+            .rate(44_100)
+            .channels(1)
             .build()
     );
 }

@@ -321,11 +321,11 @@ impl VideoStream {
 
         raw_capsfilter.set_property(
             "caps",
-            gst::Caps::builder("video/x-raw")
-                .field("format", "I420")
-                .field("width", self.width)
-                .field("height", self.height)
-                .field("framerate", gst::Fraction::new(30, 1))
+            gst_video::VideoCapsBuilder::new()
+                .format(gst_video::VideoFormat::I420)
+                .width(self.width as i32)
+                .height(self.height as i32)
+                .framerate(gst::Fraction::new(30, 1))
                 .build(),
         );
 
@@ -375,9 +375,7 @@ impl AudioStream {
         src.set_property_from_str("wave", &self.wave);
         raw_capsfilter.set_property(
             "caps",
-            gst::Caps::builder("audio/x-raw")
-                .field("rate", 44100)
-                .build(),
+            gst_audio::AudioCapsBuilder::new().rate(44100).build(),
         );
 
         mux.set_property("fragment-duration", gst::ClockTime::from_mseconds(2500));
