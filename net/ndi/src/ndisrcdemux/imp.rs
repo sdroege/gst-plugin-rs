@@ -2,7 +2,6 @@
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{debug, error, log};
 
 use std::sync::Mutex;
 
@@ -47,14 +46,14 @@ impl ObjectSubclass for NdiSrcDemux {
                 NdiSrcDemux::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |self_| self_.sink_chain(pad, &self_.instance(), buffer),
+                    |self_| self_.sink_chain(pad, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
                 NdiSrcDemux::catch_panic_pad_function(
                     parent,
                     || false,
-                    |self_| self_.sink_event(pad, &self_.instance(), event),
+                    |self_| self_.sink_event(pad, event),
                 )
             })
             .build();
@@ -131,7 +130,6 @@ impl ElementImpl for NdiSrcDemux {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        let element = self.instance();
         let res = self.parent_change_state(transition)?;
 
         match transition {
@@ -141,7 +139,7 @@ impl ElementImpl for NdiSrcDemux {
                     .iter()
                     .flatten()
                 {
-                    element.remove_pad(pad).unwrap();
+                    self.instance().remove_pad(pad).unwrap();
                 }
                 *state = State::default();
             }
@@ -155,17 +153,16 @@ impl ElementImpl for NdiSrcDemux {
 impl NdiSrcDemux {
     fn sink_chain(
         &self,
-        pad: &gst::Pad,
-        element: &super::NdiSrcDemux,
+        _pad: &gst::Pad,
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, imp: self, "Handling buffer {:?}", buffer);
 
         let meta = buffer
             .make_mut()
             .meta_mut::<ndisrcmeta::NdiSrcMeta>()
             .ok_or_else(|| {
-                error!(CAT, obj: element, "Buffer without NDI source meta");
+                gst::error!(CAT, imp: self, "Buffer without NDI source meta");
                 gst::FlowError::Error
             })?;
 
@@ -180,10 +177,13 @@ impl NdiSrcDemux {
                 if let Some(ref pad) = state.audio_pad {
                     srcpad = pad.clone();
                 } else {
-                    debug!(CAT, obj: element, "Adding audio pad with caps {}", caps);
+                    gst::debug!(CAT, imp: self, "Adding audio pad with caps {}", caps);
 
-                    let klass = element.element_class();
-                    let templ = klass.pad_template("audio").unwrap();
+                    let templ = self
+                        .instance()
+                        .element_class()
+                        .pad_template("audio")
+                        .unwrap();
                     let pad = gst::Pad::builder_with_template(&templ, Some("audio"))
                         .flags(gst::PadFlags::FIXED_CAPS)
                         .build();
@@ -221,7 +221,7 @@ impl NdiSrcDemux {
                 }
 
                 if state.audio_caps.as_ref() != Some(&caps) {
-                    debug!(CAT, obj: element, "Audio caps changed to {}", caps);
+                    gst::debug!(CAT, imp: self, "Audio caps changed to {}", caps);
                     events.push(gst::event::Caps::new(&caps));
                     state.audio_caps = Some(caps);
                 }
@@ -230,10 +230,13 @@ impl NdiSrcDemux {
                 if let Some(ref pad) = state.video_pad {
                     srcpad = pad.clone();
                 } else {
-                    debug!(CAT, obj: element, "Adding video pad with caps {}", caps);
+                    gst::debug!(CAT, imp: self, "Adding video pad with caps {}", caps);
 
-                    let klass = element.element_class();
-                    let templ = klass.pad_template("video").unwrap();
+                    let templ = self
+                        .instance()
+                        .element_class()
+                        .pad_template("video")
+                        .unwrap();
                     let pad = gst::Pad::builder_with_template(&templ, Some("video"))
                         .flags(gst::PadFlags::FIXED_CAPS)
                         .build();
@@ -271,7 +274,7 @@ impl NdiSrcDemux {
                 }
 
                 if state.video_caps.as_ref() != Some(&caps) {
-                    debug!(CAT, obj: element, "Video caps changed to {}", caps);
+                    gst::debug!(CAT, imp: self, "Video caps changed to {}", caps);
                     events.push(gst::event::Caps::new(&caps));
                     state.video_caps = Some(caps);
                 }
@@ -281,9 +284,9 @@ impl NdiSrcDemux {
         meta.remove().unwrap();
 
         if add_pad {
-            element.add_pad(&srcpad).unwrap();
-            if element.num_src_pads() == 2 {
-                element.no_more_pads();
+            self.instance().add_pad(&srcpad).unwrap();
+            if self.instance().num_src_pads() == 2 {
+                self.instance().no_more_pads();
             }
         }
 
@@ -297,20 +300,20 @@ impl NdiSrcDemux {
         state.combiner.update_pad_flow(&srcpad, res)
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &super::NdiSrcDemux, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, imp: self, "Handling event {:?}", event);
         if let EventView::Eos(_) = event.view() {
-            if element.num_src_pads() == 0 {
+            if self.instance().num_src_pads() == 0 {
                 // error out on EOS if no src pad are available
-                gst::element_error!(
-                    element,
+                gst::element_imp_error!(
+                    self,
                     gst::StreamError::Demux,
                     ["EOS without available srcpad(s)"]
                 );
             }
         }
-        gst::Pad::event_default(pad, Some(element), event)
+        gst::Pad::event_default(pad, Some(&*self.instance()), event)
     }
 }

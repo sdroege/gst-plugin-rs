@@ -4,7 +4,6 @@ use glib::prelude::*;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{debug, error, trace, warning};
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
@@ -58,10 +57,10 @@ impl ObjectSubclass for NdiSinkCombiner {
 
 impl ObjectImpl for NdiSinkCombiner {
     fn constructed(&self) {
+        self.parent_constructed();
+
         let obj = self.instance();
         obj.add_pad(&self.video_pad).unwrap();
-
-        self.parent_constructed();
     }
 }
 
@@ -141,7 +140,7 @@ impl ElementImpl for NdiSinkCombiner {
         let mut audio_pad_storage = self.audio_pad.lock().unwrap();
 
         if audio_pad_storage.as_ref().map(|p| p.upcast_ref()) == Some(pad) {
-            debug!(CAT, obj: self.instance(), "Release audio pad");
+            gst::debug!(CAT, obj: pad, "Release audio pad");
             self.parent_release_pad(pad);
             *audio_pad_storage = None;
         }
@@ -155,17 +154,16 @@ impl AggregatorImpl for NdiSinkCombiner {
         _req_name: Option<&str>,
         _caps: Option<&gst::Caps>,
     ) -> Option<gst_base::AggregatorPad> {
-        let agg = self.instance();
         let mut audio_pad_storage = self.audio_pad.lock().unwrap();
 
         if audio_pad_storage.is_some() {
-            error!(CAT, obj: agg, "Audio pad already requested");
+            gst::error!(CAT, imp: self, "Audio pad already requested");
             return None;
         }
 
-        let sink_templ = agg.pad_template("audio").unwrap();
+        let sink_templ = self.instance().pad_template("audio").unwrap();
         if templ != &sink_templ {
-            error!(CAT, obj: agg, "Wrong pad template");
+            gst::error!(CAT, imp: self, "Wrong pad template");
             return None;
         }
 
@@ -173,7 +171,7 @@ impl AggregatorImpl for NdiSinkCombiner {
             gst::PadBuilder::<gst_base::AggregatorPad>::from_template(templ, Some("audio")).build();
         *audio_pad_storage = Some(pad.clone());
 
-        debug!(CAT, obj: agg, "Requested audio pad");
+        gst::debug!(CAT, imp: self, "Requested audio pad");
 
         Some(pad)
     }
@@ -187,7 +185,7 @@ impl AggregatorImpl for NdiSinkCombiner {
             current_audio_buffers: Vec::new(),
         });
 
-        debug!(CAT, obj: self.instance(), "Started");
+        gst::debug!(CAT, imp: self, "Started");
 
         Ok(())
     }
@@ -196,7 +194,7 @@ impl AggregatorImpl for NdiSinkCombiner {
         // Drop our state now
         let _ = self.state.lock().unwrap().take();
 
-        debug!(CAT, obj: self.instance(), "Stopped");
+        gst::debug!(CAT, imp: self, "Stopped");
 
         Ok(())
     }
@@ -211,24 +209,23 @@ impl AggregatorImpl for NdiSinkCombiner {
         agg_pad: &gst_base::AggregatorPad,
         mut buffer: gst::Buffer,
     ) -> Option<gst::Buffer> {
-        let agg = self.instance();
         let segment = match agg_pad.segment().downcast::<gst::ClockTime>() {
             Ok(segment) => segment,
             Err(_) => {
-                error!(CAT, obj: agg, "Only TIME segments supported");
+                gst::error!(CAT, obj: agg_pad, "Only TIME segments supported");
                 return Some(buffer);
             }
         };
 
         let pts = buffer.pts();
         if pts.is_none() {
-            error!(CAT, obj: agg, "Only buffers with PTS supported");
+            gst::error!(CAT, obj: agg_pad, "Only buffers with PTS supported");
             return Some(buffer);
         }
 
         let duration = buffer.duration();
 
-        trace!(
+        gst::trace!(
             CAT,
             obj: agg_pad,
             "Clipping buffer {:?} with PTS {} and duration {}",
@@ -263,7 +260,7 @@ impl AggregatorImpl for NdiSinkCombiner {
             unreachable!()
         };
 
-        debug!(
+        gst::debug!(
             CAT,
             obj: agg_pad,
             "Clipping buffer {:?} with PTS {} and duration {}",
@@ -307,7 +304,6 @@ impl AggregatorImpl for NdiSinkCombiner {
         // should be improved!
         assert!(!timeout);
 
-        let agg = self.instance();
         // Because peek_buffer() can call into clip() and that would take the state lock again,
         // first try getting buffers from both pads here
         let video_buffer_and_segment = match self.video_pad.peek_buffer() {
@@ -316,9 +312,9 @@ impl AggregatorImpl for NdiSinkCombiner {
                 let video_segment = match video_segment.downcast::<gst::ClockTime>() {
                     Ok(video_segment) => video_segment,
                     Err(video_segment) => {
-                        error!(
+                        gst::error!(
                             CAT,
-                            obj: agg,
+                            imp: self,
                             "Video segment of wrong format {:?}",
                             video_segment.format()
                         );
@@ -329,7 +325,7 @@ impl AggregatorImpl for NdiSinkCombiner {
                 Some((video_buffer, video_segment))
             }
             None if !self.video_pad.is_eos() => {
-                trace!(CAT, obj: agg, "Waiting for video buffer");
+                gst::trace!(CAT, imp: self, "Waiting for video buffer");
                 return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
             }
             None => None,
@@ -341,7 +337,7 @@ impl AggregatorImpl for NdiSinkCombiner {
                     Some(audio_buffer) if audio_buffer.size() == 0 => {
                         // Skip empty/gap audio buffer
                         audio_pad.drop_buffer();
-                        trace!(CAT, obj: agg, "Empty audio buffer, waiting for next");
+                        gst::trace!(CAT, imp: self, "Empty audio buffer, waiting for next");
                         return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
                     }
                     Some(audio_buffer) => {
@@ -349,9 +345,9 @@ impl AggregatorImpl for NdiSinkCombiner {
                         let audio_segment = match audio_segment.downcast::<gst::ClockTime>() {
                             Ok(audio_segment) => audio_segment,
                             Err(audio_segment) => {
-                                error!(
+                                gst::error!(
                                     CAT,
-                                    obj: agg,
+                                    imp: self,
                                     "Audio segment of wrong format {:?}",
                                     audio_segment.format()
                                 );
@@ -362,7 +358,7 @@ impl AggregatorImpl for NdiSinkCombiner {
                         Some((audio_buffer, audio_segment, audio_pad))
                     }
                     None if !audio_pad.is_eos() => {
-                        trace!(CAT, obj: agg, "Waiting for audio buffer");
+                        gst::trace!(CAT, imp: self, "Waiting for audio buffer");
                         return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
                     }
                     None => None,
@@ -383,7 +379,7 @@ impl AggregatorImpl for NdiSinkCombiner {
 
                 match state.current_video_buffer {
                     None => {
-                        trace!(CAT, obj: agg, "First video buffer, waiting for second");
+                        gst::trace!(CAT, imp: self, "First video buffer, waiting for second");
                         state.current_video_buffer = Some((video_buffer, video_running_time));
                         drop(state_storage);
                         self.video_pad.drop_buffer();
@@ -398,9 +394,9 @@ impl AggregatorImpl for NdiSinkCombiner {
             } else {
                 match (&state.current_video_buffer, &audio_buffer_segment_and_pad) {
                     (None, None) => {
-                        trace!(
+                        gst::trace!(
                             CAT,
-                            obj: agg,
+                            imp: self,
                             "All pads are EOS and no buffers are queued, finishing"
                         );
                         return Err(gst::FlowError::Eos);
@@ -415,9 +411,9 @@ impl AggregatorImpl for NdiSinkCombiner {
                         let video_segment = match video_segment.downcast::<gst::ClockTime>() {
                             Ok(video_segment) => video_segment,
                             Err(video_segment) => {
-                                error!(
+                                gst::error!(
                                     CAT,
-                                    obj: agg,
+                                    imp: self,
                                     "Video segment of wrong format {:?}",
                                     video_segment.format()
                                 );
@@ -427,7 +423,11 @@ impl AggregatorImpl for NdiSinkCombiner {
                         let video_pts =
                             video_segment.position_from_running_time(audio_running_time);
                         if video_pts.is_none() {
-                            warning!(CAT, obj: agg, "Can't output more audio after video EOS");
+                            gst::warning!(
+                                CAT,
+                                imp: self,
+                                "Can't output more audio after video EOS"
+                            );
                             return Err(gst::FlowError::Eos);
                         }
 
@@ -447,7 +447,7 @@ impl AggregatorImpl for NdiSinkCombiner {
             let audio_info = match state.audio_info {
                 Some(ref audio_info) => audio_info,
                 None => {
-                    error!(CAT, obj: agg, "Have no audio caps");
+                    gst::error!(CAT, imp: self, "Have no audio caps");
                     return Err(gst::FlowError::NotNegotiated);
                 }
             };
@@ -466,7 +466,8 @@ impl AggregatorImpl for NdiSinkCombiner {
                 .map(|(audio, video)| audio <= video)
                 .unwrap_or(true)
             {
-                let timecode = agg
+                let timecode = self
+                    .instance()
                     .base_time()
                     .zip(audio_running_time)
                     .map(|(base_time, audio_running_time)| {
@@ -474,9 +475,9 @@ impl AggregatorImpl for NdiSinkCombiner {
                     })
                     .unwrap_or(crate::ndisys::NDIlib_send_timecode_synthesize);
 
-                trace!(
+                gst::trace!(
                     CAT,
-                    obj: agg,
+                    imp: self,
                     "Including audio buffer {:?} with timecode {}: {} <= {}",
                     audio_buffer,
                     timecode,
@@ -515,18 +516,17 @@ impl AggregatorImpl for NdiSinkCombiner {
             drop(state_storage);
         }
 
-        trace!(
+        gst::trace!(
             CAT,
-            obj: agg,
+            imp: self,
             "Finishing video buffer {:?}",
             current_video_buffer
         );
-        agg.finish_buffer(current_video_buffer)
+        self.instance().finish_buffer(current_video_buffer)
     }
 
     fn sink_event(&self, pad: &gst_base::AggregatorPad, event: gst::Event) -> bool {
         use gst::EventView;
-        let agg = self.instance();
 
         match event.view() {
             EventView::Caps(caps) => {
@@ -542,7 +542,7 @@ impl AggregatorImpl for NdiSinkCombiner {
                     let info = match gst_video::VideoInfo::from_caps(&caps) {
                         Ok(info) => info,
                         Err(_) => {
-                            error!(CAT, obj: pad, "Failed to parse caps {:?}", caps);
+                            gst::error!(CAT, obj: pad, "Failed to parse caps {:?}", caps);
                             return false;
                         }
                     };
@@ -562,15 +562,15 @@ impl AggregatorImpl for NdiSinkCombiner {
 
                     drop(state_storage);
 
-                    agg.set_latency(latency, gst::ClockTime::NONE);
+                    self.instance().set_latency(latency, gst::ClockTime::NONE);
 
                     // The video caps are passed through as the audio is included only in a meta
-                    agg.set_src_caps(&caps);
+                    self.instance().set_src_caps(&caps);
                 } else {
                     let info = match gst_audio::AudioInfo::from_caps(&caps) {
                         Ok(info) => info,
                         Err(_) => {
-                            error!(CAT, obj: pad, "Failed to parse caps {:?}", caps);
+                            gst::error!(CAT, obj: pad, "Failed to parse caps {:?}", caps);
                             return false;
                         }
                     };
@@ -581,8 +581,8 @@ impl AggregatorImpl for NdiSinkCombiner {
             // The video segment is passed through as-is and the video timestamps are preserved
             EventView::Segment(segment) if pad == &self.video_pad => {
                 let segment = segment.segment();
-                debug!(CAT, obj: agg, "Updating segment {:?}", segment);
-                agg.update_segment(segment);
+                gst::debug!(CAT, obj: pad, "Updating segment {:?}", segment);
+                self.instance().update_segment(segment);
             }
             _ => (),
         }

@@ -2,7 +2,6 @@
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{error, log, trace};
 
 use once_cell::sync::OnceCell;
 
@@ -77,33 +76,31 @@ impl DeviceProviderImpl for DeviceProvider {
         }
 
         let mut thread_guard = self.thread.lock().unwrap();
-        let device_provider = self.instance();
         if thread_guard.is_some() {
-            log!(CAT, obj: device_provider, "Device provider already started");
+            gst::log!(CAT, imp: self, "Device provider already started");
             return Ok(());
         }
 
         self.is_running.store(true, atomic::Ordering::SeqCst);
 
-        let device_provider_weak = device_provider.downgrade();
+        let imp_weak = self.downgrade();
         let mut first = true;
         *thread_guard = Some(thread::spawn(move || {
-            let device_provider = match device_provider_weak.upgrade() {
-                None => return,
-                Some(device_provider) => device_provider,
-            };
-
-            let imp = DeviceProvider::from_instance(&device_provider);
             {
+                let imp = match imp_weak.upgrade() {
+                    None => return,
+                    Some(imp) => imp,
+                };
+
                 let mut find_guard = imp.find.lock().unwrap();
                 if find_guard.is_some() {
-                    log!(CAT, obj: &device_provider, "Already started");
+                    gst::log!(CAT, imp: imp, "Already started");
                     return;
                 }
 
                 let find = match ndi::FindInstance::builder().build() {
                     None => {
-                        error!(CAT, obj: &device_provider, "Failed to create Find instance");
+                        gst::error!(CAT, imp: imp, "Failed to create Find instance");
                         return;
                     }
                     Some(find) => find,
@@ -112,17 +109,16 @@ impl DeviceProviderImpl for DeviceProvider {
             }
 
             loop {
-                let device_provider = match device_provider_weak.upgrade() {
-                    None => break,
-                    Some(device_provider) => device_provider,
+                let imp = match imp_weak.upgrade() {
+                    None => return,
+                    Some(imp) => imp,
                 };
 
-                let imp = DeviceProvider::from_instance(&device_provider);
                 if !imp.is_running.load(atomic::Ordering::SeqCst) {
                     break;
                 }
 
-                imp.poll(&device_provider, first);
+                imp.poll(first);
                 first = false;
             }
         }));
@@ -139,7 +135,7 @@ impl DeviceProviderImpl for DeviceProvider {
 }
 
 impl DeviceProvider {
-    fn poll(&self, device_provider: &super::DeviceProvider, first: bool) {
+    fn poll(&self, first: bool) {
         let mut find_guard = self.find.lock().unwrap();
         let find = match *find_guard {
             None => return,
@@ -147,7 +143,7 @@ impl DeviceProvider {
         };
 
         if !find.wait_for_sources(if first { 1000 } else { 5000 }) {
-            trace!(CAT, obj: device_provider, "No new sources found");
+            gst::trace!(CAT, imp: self, "No new sources found");
             return;
         }
 
@@ -160,16 +156,11 @@ impl DeviceProvider {
 
         // First check for each device we previously knew if it's still available
         for old_device in &*current_devices_guard {
-            let old_device_imp = Device::from_instance(old_device);
+            let old_device_imp = old_device.imp();
             let old_source = old_device_imp.source.get().unwrap();
 
             if !sources.contains(old_source) {
-                log!(
-                    CAT,
-                    obj: device_provider,
-                    "Source {:?} disappeared",
-                    old_source
-                );
+                gst::log!(CAT, imp: self, "Source {:?} disappeared", old_source);
                 expired_devices.push(old_device.clone());
             } else {
                 // Otherwise remember that we had it before already and don't have to announce it
@@ -186,14 +177,14 @@ impl DeviceProvider {
         current_devices_guard.retain(|d| !expired_devices.contains(d));
         // And also notify the device provider of them having disappeared
         for old_device in expired_devices {
-            device_provider.device_remove(&old_device);
+            self.instance().device_remove(&old_device);
         }
 
         // Now go through all new devices and announce them
         for source in sources {
-            log!(CAT, obj: device_provider, "Source {:?} appeared", source);
+            gst::log!(CAT, imp: self, "Source {:?} appeared", source);
             let device = super::Device::new(&source);
-            device_provider.device_add(&device);
+            self.instance().device_add(&device);
             current_devices_guard.push(device);
         }
     }
@@ -261,9 +252,9 @@ impl super::Device {
             ("device-class", &device_class),
             ("properties", &extra_properties),
         ]);
-        let device_impl = Device::from_instance(&device);
 
-        device_impl.source.set(source.to_owned()).unwrap();
+        let imp = device.imp();
+        imp.source.set(source.to_owned()).unwrap();
 
         device
     }

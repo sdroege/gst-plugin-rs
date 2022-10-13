@@ -2,7 +2,6 @@
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{debug, error};
 use gst_base::prelude::*;
 use gst_base::subclass::base_src::CreateSuccess;
 use gst_base::subclass::prelude::*;
@@ -168,23 +167,22 @@ impl ObjectImpl for NdiSrc {
 
     fn constructed(&self) {
         self.parent_constructed();
-        let obj = self.instance();
 
         // Initialize live-ness and notify the base class that
         // we'd like to operate in Time format
+        let obj = self.instance();
         obj.set_live(true);
         obj.set_format(gst::Format::Time);
     }
 
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
-        let obj = self.instance();
         match pspec.name() {
             "ndi-name" => {
                 let mut settings = self.settings.lock().unwrap();
                 let ndi_name = value.get().unwrap();
-                debug!(
+                gst::debug!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing ndi-name from {:?} to {:?}",
                     settings.ndi_name,
                     ndi_name,
@@ -194,9 +192,9 @@ impl ObjectImpl for NdiSrc {
             "url-address" => {
                 let mut settings = self.settings.lock().unwrap();
                 let url_address = value.get().unwrap();
-                debug!(
+                gst::debug!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing url-address from {:?} to {:?}",
                     settings.url_address,
                     url_address,
@@ -206,9 +204,9 @@ impl ObjectImpl for NdiSrc {
             "receiver-ndi-name" => {
                 let mut settings = self.settings.lock().unwrap();
                 let receiver_ndi_name = value.get::<Option<String>>().unwrap();
-                debug!(
+                gst::debug!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing receiver-ndi-name from {:?} to {:?}",
                     settings.receiver_ndi_name,
                     receiver_ndi_name,
@@ -219,9 +217,9 @@ impl ObjectImpl for NdiSrc {
             "connect-timeout" => {
                 let mut settings = self.settings.lock().unwrap();
                 let connect_timeout = value.get().unwrap();
-                debug!(
+                gst::debug!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing connect-timeout from {} to {}",
                     settings.connect_timeout,
                     connect_timeout,
@@ -231,9 +229,9 @@ impl ObjectImpl for NdiSrc {
             "timeout" => {
                 let mut settings = self.settings.lock().unwrap();
                 let timeout = value.get().unwrap();
-                debug!(
+                gst::debug!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing timeout from {} to {}",
                     settings.timeout,
                     timeout,
@@ -243,9 +241,9 @@ impl ObjectImpl for NdiSrc {
             "max-queue-length" => {
                 let mut settings = self.settings.lock().unwrap();
                 let max_queue_length = value.get().unwrap();
-                debug!(
+                gst::debug!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing max-queue-length from {} to {}",
                     settings.max_queue_length,
                     max_queue_length,
@@ -255,9 +253,9 @@ impl ObjectImpl for NdiSrc {
             "bandwidth" => {
                 let mut settings = self.settings.lock().unwrap();
                 let bandwidth = value.get().unwrap();
-                debug!(
+                gst::debug!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing bandwidth from {} to {}",
                     settings.bandwidth,
                     bandwidth,
@@ -267,9 +265,9 @@ impl ObjectImpl for NdiSrc {
             "color-format" => {
                 let mut settings = self.settings.lock().unwrap();
                 let color_format = value.get().unwrap();
-                debug!(
+                gst::debug!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing color format from {:?} to {:?}",
                     settings.color_format,
                     color_format,
@@ -279,15 +277,19 @@ impl ObjectImpl for NdiSrc {
             "timestamp-mode" => {
                 let mut settings = self.settings.lock().unwrap();
                 let timestamp_mode = value.get().unwrap();
-                debug!(
+                gst::debug!(
                     CAT,
-                    obj: obj,
+                    imp: self,
                     "Changing timestamp mode from {:?} to {:?}",
                     settings.timestamp_mode,
                     timestamp_mode
                 );
                 if settings.timestamp_mode != timestamp_mode {
-                    let _ = obj.post_message(gst::message::Latency::builder().src(&*obj).build());
+                    let _ = self.instance().post_message(
+                        gst::message::Latency::builder()
+                            .src(&*self.instance())
+                            .build(),
+                    );
                 }
                 settings.timestamp_mode = timestamp_mode;
             }
@@ -411,7 +413,7 @@ impl BaseSrcImpl for NdiSrc {
     }
 
     fn unlock(&self) -> Result<(), gst::ErrorMessage> {
-        debug!(CAT, obj: self.instance(), "Unlocking",);
+        gst::debug!(CAT, imp: self, "Unlocking",);
         if let Some(ref controller) = *self.receiver_controller.lock().unwrap() {
             controller.set_flushing(true);
         }
@@ -419,7 +421,7 @@ impl BaseSrcImpl for NdiSrc {
     }
 
     fn unlock_stop(&self) -> Result<(), gst::ErrorMessage> {
-        debug!(CAT, obj: self.instance(), "Stop unlocking",);
+        gst::debug!(CAT, imp: self, "Stop unlocking",);
         if let Some(ref controller) = *self.receiver_controller.lock().unwrap() {
             controller.set_flushing(false);
         }
@@ -501,13 +503,7 @@ impl BaseSrcImpl for NdiSrc {
 
                     let max = settings.max_queue_length as u64 * latency;
 
-                    debug!(
-                        CAT,
-                        obj: self.instance(),
-                        "Returning latency min {} max {}",
-                        min,
-                        max
-                    );
+                    gst::debug!(CAT, imp: self, "Returning latency min {} max {}", min, max);
                     q.set(true, min, max);
                     true
                 } else {
@@ -524,13 +520,12 @@ impl BaseSrcImpl for NdiSrc {
         _buffer: Option<&mut gst::BufferRef>,
         _length: u32,
     ) -> Result<CreateSuccess, gst::FlowError> {
-        let element = self.instance();
         let recv = {
             let mut state = self.state.lock().unwrap();
             match state.receiver.take() {
                 Some(recv) => recv,
                 None => {
-                    error!(CAT, obj: element, "Have no receiver");
+                    gst::error!(CAT, imp: self, "Have no receiver");
                     return Err(gst::FlowError::Error);
                 }
             }
@@ -547,8 +542,8 @@ impl BaseSrcImpl for NdiSrc {
                     Buffer::Audio(mut buffer, info) => {
                         if state.audio_info.as_ref() != Some(&info) {
                             let caps = info.to_caps().map_err(|_| {
-                                gst::element_error!(
-                                    element,
+                                gst::element_imp_error!(
+                                    self,
                                     gst::ResourceError::Settings,
                                     ["Invalid audio info received: {:?}", info]
                                 );
@@ -574,8 +569,8 @@ impl BaseSrcImpl for NdiSrc {
 
                         if state.video_info.as_ref() != Some(&info) {
                             let caps = info.to_caps().map_err(|_| {
-                                gst::element_error!(
-                                    element,
+                                gst::element_imp_error!(
+                                    self,
                                     gst::ResourceError::Settings,
                                     ["Invalid video info received: {:?}", info]
                                 );
@@ -598,8 +593,10 @@ impl BaseSrcImpl for NdiSrc {
 
                         drop(state);
                         if latency_changed {
-                            let _ = element.post_message(
-                                gst::message::Latency::builder().src(&*element).build(),
+                            let _ = self.instance().post_message(
+                                gst::message::Latency::builder()
+                                    .src(&*self.instance())
+                                    .build(),
                             );
                         }
 
