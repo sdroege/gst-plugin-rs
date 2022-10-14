@@ -293,18 +293,7 @@ impl OnvifMetadataOverlay {
         }
 
         if state.layout.is_none() {
-            let fontmap = match pangocairo::FontMap::new() {
-                Some(fontmap) => Ok(fontmap),
-                None => {
-                    gst::element_imp_error!(
-                        self,
-                        gst::LibraryError::Failed,
-                        ["Failed to create pangocairo font map"]
-                    );
-                    Err(gst::FlowError::Error)
-                }
-            }
-            .unwrap();
+            let fontmap = pangocairo::FontMap::new();
             let context = match fontmap.create_context() {
                 Some(context) => Ok(context),
                 None => {

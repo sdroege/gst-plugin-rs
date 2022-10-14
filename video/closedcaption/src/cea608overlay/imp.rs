@@ -98,17 +98,7 @@ impl Cea608Overlay {
     // TODO: switch to the API presented in this post once it's been exposed
     fn recalculate_layout(&self, state: &mut State) -> Result<gst::FlowSuccess, gst::FlowError> {
         let video_info = state.video_info.as_ref().unwrap();
-        let fontmap = match pangocairo::FontMap::new() {
-            Some(fontmap) => Ok(fontmap),
-            None => {
-                gst::element_imp_error!(
-                    self,
-                    gst::LibraryError::Failed,
-                    ["Failed to create pangocairo font map"]
-                );
-                Err(gst::FlowError::Error)
-            }
-        }?;
+        let fontmap = pangocairo::FontMap::new();
         let context = match fontmap.create_context() {
             Some(context) => Ok(context),
             None => {
