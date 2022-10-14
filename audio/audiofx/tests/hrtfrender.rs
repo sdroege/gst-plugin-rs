@@ -44,7 +44,7 @@ fn test_hrtfrender_samples_in_samples_out() {
         .format(gst_audio::AUDIO_FORMAT_F32)
         .rate(44_100)
         .channels(1)
-        .field("channel-mask", gst::Bitmask::new(0x1))
+        .channel_mask(0x1)
         .build();
 
     let sink_caps = gst_audio::AudioCapsBuilder::new_interleaved()
@@ -99,7 +99,7 @@ fn test_hrtfrender_implicit_spatial_objects() {
         .format(gst_audio::AUDIO_FORMAT_F32)
         .rate(44_100)
         .channels(8)
-        .field("channel-mask", gst::Bitmask::new(0xc3f))
+        .channel_mask(0xc3f)
         .build();
 
     let sink_caps = gst_audio::AudioCapsBuilder::new_interleaved()

@@ -54,7 +54,7 @@ fn test_stereo_s32() {
             .format(gst_audio::AUDIO_FORMAT_S2432)
             .rate(44100)
             .channels(2)
-            .field("channel-mask", gst::Bitmask::new(0x3))
+            .channel_mask(0x3)
             .build()
     );
 }
