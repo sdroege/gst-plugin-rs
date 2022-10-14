@@ -70,7 +70,7 @@ impl ElementImpl for CdgDec {
                 .format(gst_video::VideoFormat::Rgba)
                 .width(CDG_WIDTH as i32)
                 .height(CDG_HEIGHT as i32)
-                .framerate(gst::Fraction::new(0, 1))
+                .framerate((0, 1).into())
                 .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",

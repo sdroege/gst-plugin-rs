@@ -218,7 +218,7 @@ impl ElementImpl for GifEnc {
             let sink_caps = gst_video::VideoCapsBuilder::new()
                 .format_list([VideoFormat::Rgb, VideoFormat::Rgba])
                 // frame-delay timing in gif is a multiple of 10ms -> max 100fps
-                .framerate_range(gst::Fraction::new(1, 1)..gst::Fraction::new(100, 1))
+                .framerate_range(gst::Fraction::from(1)..gst::Fraction::from(100))
                 .build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",

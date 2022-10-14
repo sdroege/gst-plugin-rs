@@ -325,7 +325,7 @@ impl VideoStream {
                 .format(gst_video::VideoFormat::I420)
                 .width(self.width as i32)
                 .height(self.height as i32)
-                .framerate(gst::Fraction::new(30, 1))
+                .framerate(30.into())
                 .build(),
         );
 

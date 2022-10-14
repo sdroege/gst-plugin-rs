@@ -534,7 +534,7 @@ fn setup_pipeline(
             .format(gst_video::VideoFormat::Argb)
             .width(320)
             .height(240)
-            .framerate(gst::Fraction::new(0, 1))
+            .framerate((0, 1).into())
             .build(),
     );
 
@@ -579,7 +579,7 @@ fn setup_pipeline(
                 .format(gst_video::VideoFormat::Argb)
                 .width(160)
                 .height(120)
-                .framerate(gst::Fraction::new(0, 1))
+                .framerate((0, 1).into())
                 .build(),
         );
 

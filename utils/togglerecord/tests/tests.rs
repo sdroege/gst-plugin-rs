@@ -105,7 +105,7 @@ fn setup_sender_receiver(
                         .format(gst_video::VideoFormat::Argb)
                         .width(320)
                         .height(240)
-                        .framerate(gst::Fraction::new(50, 1))
+                        .framerate(50.into())
                         .build()
                 } else {
                     gst_audio::AudioCapsBuilder::new_interleaved()
