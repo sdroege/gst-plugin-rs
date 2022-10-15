@@ -4,14 +4,14 @@ use gst::prelude::*;
 mod imp;
 
 glib::wrapper! {
-    pub struct TestSink(ObjectSubclass<imp::TestSink>) @extends gst::Element, gst::Object;
+    pub struct TaskSink(ObjectSubclass<imp::TaskSink>) @extends gst::Element, gst::Object;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
-        "ts-standalone-test-sink",
+        super::TASK_ELEMENT_NAME,
         gst::Rank::None,
-        TestSink::static_type(),
+        TaskSink::static_type(),
     )
 }

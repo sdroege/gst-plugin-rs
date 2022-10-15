@@ -19,11 +19,11 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use gstthreadshare::runtime::prelude::*;
-use gstthreadshare::runtime::{timer, Context, PadSrc, Task};
+use gstthreadshare::runtime::{task, timer, Context, PadSrc, Task};
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "ts-standalone-test-src",
+        super::ELEMENT_NAME,
         gst::DebugColorFlags::empty(),
         Some("Thread-sharing standalone test src"),
     )
@@ -39,7 +39,7 @@ struct Settings {
     context: String,
     context_wait: Duration,
     push_period: gst::ClockTime,
-    raise_log_level: bool,
+    is_main_elem: bool,
     num_buffers: Option<u32>,
 }
 
@@ -49,7 +49,7 @@ impl Default for Settings {
             context: DEFAULT_CONTEXT.into(),
             context_wait: DEFAULT_CONTEXT_WAIT,
             push_period: DEFAULT_PUSH_PERIOD,
-            raise_log_level: false,
+            is_main_elem: false,
             num_buffers: Some(DEFAULT_NUM_BUFFERS as u32),
         }
     }
@@ -63,19 +63,18 @@ impl PadSrcHandler for TestSrcPadHandler {
 
 #[derive(Debug)]
 struct SrcTask {
-    element: super::TestSrc,
+    elem: super::TestSrc,
     buffer_pool: gst::BufferPool,
     timer: Option<timer::Interval>,
-    raise_log_level: bool,
+    is_main_elem: bool,
     push_period: gst::ClockTime,
     need_initial_events: bool,
-    need_segment: bool,
     num_buffers: Option<u32>,
     buffer_count: u32,
 }
 
 impl SrcTask {
-    fn new(element: super::TestSrc) -> Self {
+    fn new(elem: super::TestSrc) -> Self {
         let buffer_pool = gst::BufferPool::new();
         let mut pool_config = buffer_pool.config();
         pool_config
@@ -84,13 +83,12 @@ impl SrcTask {
         buffer_pool.set_config(pool_config).unwrap();
 
         SrcTask {
-            element,
+            elem,
             buffer_pool,
             timer: None,
-            raise_log_level: false,
+            is_main_elem: false,
             push_period: gst::ClockTime::ZERO,
             need_initial_events: true,
-            need_segment: true,
             num_buffers: Some(DEFAULT_NUM_BUFFERS as u32),
             buffer_count: 0,
         }
@@ -98,34 +96,48 @@ impl SrcTask {
 }
 
 impl TaskImpl for SrcTask {
-    type Item = gst::Buffer;
+    type Item = ();
 
     fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        async move {
-            let src = self.element.imp();
-            let settings = src.settings.lock().unwrap();
-            self.raise_log_level = settings.raise_log_level;
+        let imp = self.elem.imp();
+        let settings = imp.settings.lock().unwrap();
+        self.is_main_elem = settings.is_main_elem;
 
-            if self.raise_log_level {
-                gst::log!(CAT, obj: self.element, "Preparing Task");
-            } else {
-                gst::trace!(CAT, obj: self.element, "Preparing Task");
-            }
+        log_or_trace!(CAT, self.is_main_elem, imp: imp, "Preparing Task");
 
-            self.push_period = settings.push_period;
-            self.num_buffers = settings.num_buffers;
+        self.push_period = settings.push_period;
+        self.num_buffers = settings.num_buffers;
 
-            Ok(())
-        }
-        .boxed()
+        future::ok(()).boxed()
     }
 
     fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        async {
-            if self.raise_log_level {
-                gst::log!(CAT, obj: self.element, "Starting Task");
-            } else {
-                gst::trace!(CAT, obj: self.element, "Starting Task");
+        async move {
+            log_or_trace!(CAT, self.is_main_elem, obj: self.elem, "Starting Task");
+
+            if self.need_initial_events {
+                let imp = self.elem.imp();
+
+                debug_or_trace!(CAT, self.is_main_elem, obj: self.elem, "Pushing initial events");
+
+                let stream_id =
+                    format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
+                let stream_start_evt = gst::event::StreamStart::builder(&stream_id)
+                    .group_id(gst::GroupId::next())
+                    .build();
+                imp.src_pad.push_event(stream_start_evt).await;
+
+                imp.src_pad
+                    .push_event(gst::event::Caps::new(
+                        &gst::Caps::builder("foo/bar").build(),
+                    ))
+                    .await;
+
+                let segment_evt =
+                    gst::event::Segment::new(&gst::FormattedSegment::<gst::format::Time>::new());
+                imp.src_pad.push_event(segment_evt).await;
+
+                self.need_initial_events = false;
             }
 
             self.timer = Some(
@@ -138,175 +150,97 @@ impl TaskImpl for SrcTask {
             );
             self.buffer_count = 0;
             self.buffer_pool.set_active(true).unwrap();
+
             Ok(())
         }
         .boxed()
     }
 
     fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        async move {
-            if self.raise_log_level {
-                gst::log!(CAT, obj: self.element, "Stopping Task");
-            } else {
-                gst::trace!(CAT, obj: self.element, "Stopping Task");
-            }
+        log_or_trace!(CAT, self.is_main_elem, obj: self.elem, "Stopping Task");
+        self.buffer_pool.set_active(false).unwrap();
+        self.timer = None;
+        self.need_initial_events = true;
 
-            self.buffer_pool.set_active(false).unwrap();
-            self.timer = None;
-            self.need_initial_events = true;
-            self.need_segment = true;
+        future::ok(()).boxed()
+    }
+
+    fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+        async move {
+            log_or_trace!(CAT, self.is_main_elem, obj: self.elem, "Awaiting timer");
+            self.timer.as_mut().unwrap().next().await;
+            log_or_trace!(CAT, self.is_main_elem, obj: self.elem, "Timer ticked");
 
             Ok(())
         }
         .boxed()
     }
 
-    fn try_next(&mut self) -> BoxFuture<'_, Result<gst::Buffer, gst::FlowError>> {
+    fn handle_item(&mut self, _: ()) -> BoxFuture<'_, Result<(), gst::FlowError>> {
         async move {
-            if self.raise_log_level {
-                gst::log!(CAT, obj: self.element, "Awaiting timer");
-            } else {
-                gst::trace!(CAT, obj: self.element, "Awaiting timer");
-            }
-
-            self.timer.as_mut().unwrap().next().await;
-
-            if self.raise_log_level {
-                gst::log!(CAT, obj: self.element, "Timer ticked");
-            } else {
-                gst::trace!(CAT, obj: self.element, "Timer ticked");
-            }
-
-            self.buffer_pool
+            let buffer = self
+                .buffer_pool
                 .acquire_buffer(None)
                 .map(|mut buffer| {
                     {
                         let buffer = buffer.get_mut().unwrap();
-                        let rtime = self.element.current_running_time().unwrap();
+                        let rtime = self.elem.current_running_time().unwrap();
                         buffer.set_dts(rtime);
                     }
                     buffer
                 })
                 .map_err(|err| {
-                    gst::error!(CAT, obj: self.element, "Failed to acquire buffer {}", err);
+                    gst::error!(CAT, obj: self.elem, "Failed to acquire buffer {err}");
                     err
-                })
+                })?;
+
+            debug_or_trace!(CAT, self.is_main_elem, obj: self.elem, "Forwarding buffer");
+            self.elem.imp().src_pad.push(buffer).await?;
+            log_or_trace!(CAT, self.is_main_elem, obj: self.elem, "Successfully pushed buffer");
+
+            self.buffer_count += 1;
+
+            if self.num_buffers.opt_eq(self.buffer_count) == Some(true) {
+                return Err(gst::FlowError::Eos);
+            }
+
+            Ok(())
         }
         .boxed()
     }
 
-    fn handle_item(&mut self, buffer: gst::Buffer) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+    fn handle_loop_error(&mut self, err: gst::FlowError) -> BoxFuture<'_, task::Trigger> {
         async move {
-            let res = self.push(buffer).await;
-            match res {
-                Ok(_) => {
-                    if self.raise_log_level {
-                        gst::log!(CAT, obj: self.element, "Successfully pushed buffer");
-                    } else {
-                        gst::trace!(CAT, obj: self.element, "Successfully pushed buffer");
-                    }
-                }
-                Err(gst::FlowError::Eos) => {
-                    if self.raise_log_level {
-                        gst::debug!(CAT, obj: self.element, "EOS");
-                    } else {
-                        gst::trace!(CAT, obj: self.element, "EOS");
-                    }
-                    let test_src = self.element.imp();
-                    test_src.src_pad.push_event(gst::event::Eos::new()).await;
+            match err {
+                gst::FlowError::Eos => {
+                    debug_or_trace!(CAT, self.is_main_elem, obj: self.elem, "Pushing EOS");
 
-                    return Err(gst::FlowError::Eos);
-                }
-                Err(gst::FlowError::Flushing) => {
-                    if self.raise_log_level {
-                        gst::debug!(CAT, obj: self.element, "Flushing");
-                    } else {
-                        gst::trace!(CAT, obj: self.element, "Flushing");
+                    let imp = self.elem.imp();
+                    if !imp.src_pad.push_event(gst::event::Eos::new()).await {
+                        gst::error!(CAT, imp: imp, "Error pushing EOS");
                     }
+
+                    task::Trigger::Stop
                 }
-                Err(err) => {
-                    gst::error!(CAT, obj: self.element, "Got error {}", err);
+                gst::FlowError::Flushing => {
+                    debug_or_trace!(CAT, self.is_main_elem, obj: self.elem, "Flushing");
+
+                    task::Trigger::FlushStart
+                }
+                err => {
+                    gst::error!(CAT, obj: self.elem, "Got error {err}");
                     gst::element_error!(
-                        &self.element,
+                        &self.elem,
                         gst::StreamError::Failed,
                         ("Internal data stream error"),
                         ["streaming stopped, reason {}", err]
                     );
+
+                    task::Trigger::Error
                 }
             }
-
-            res.map(drop)
         }
         .boxed()
-    }
-}
-
-impl SrcTask {
-    async fn push(&mut self, buffer: gst::Buffer) -> Result<gst::FlowSuccess, gst::FlowError> {
-        if self.raise_log_level {
-            gst::debug!(CAT, obj: self.element, "Pushing {:?}", buffer);
-        } else {
-            gst::trace!(CAT, obj: self.element, "Pushing {:?}", buffer);
-        }
-
-        let test_src = self.element.imp();
-
-        if self.need_initial_events {
-            if self.raise_log_level {
-                gst::debug!(CAT, obj: self.element, "Pushing initial events");
-            } else {
-                gst::trace!(CAT, obj: self.element, "Pushing initial events");
-            }
-
-            let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
-            let stream_start_evt = gst::event::StreamStart::builder(&stream_id)
-                .group_id(gst::GroupId::next())
-                .build();
-            test_src.src_pad.push_event(stream_start_evt).await;
-
-            test_src
-                .src_pad
-                .push_event(gst::event::Caps::new(
-                    &gst::Caps::builder("foo/bar").build(),
-                ))
-                .await;
-
-            self.need_initial_events = false;
-        }
-
-        if self.need_segment {
-            let segment_evt =
-                gst::event::Segment::new(&gst::FormattedSegment::<gst::format::Time>::new());
-            test_src.src_pad.push_event(segment_evt).await;
-
-            self.need_segment = false;
-        }
-
-        if self.raise_log_level {
-            gst::debug!(CAT, obj: self.element, "Forwarding buffer");
-        } else {
-            gst::trace!(CAT, obj: self.element, "Forwarding buffer");
-        }
-
-        let ok = test_src.src_pad.push(buffer).await?;
-
-        self.buffer_count += 1;
-
-        if self.num_buffers.opt_eq(self.buffer_count).unwrap_or(false) {
-            if self.raise_log_level {
-                gst::debug!(CAT, obj: self.element, "Pushing EOS");
-            } else {
-                gst::trace!(CAT, obj: self.element, "Pushing EOS");
-            }
-
-            let test_src = self.element.imp();
-            if !test_src.src_pad.push_event(gst::event::Eos::new()).await {
-                gst::error!(CAT, obj: self.element, "Error pushing EOS");
-            }
-            return Err(gst::FlowError::Eos);
-        }
-
-        Ok(ok)
     }
 }
 
@@ -319,106 +253,57 @@ pub struct TestSrc {
 
 impl TestSrc {
     fn prepare(&self) -> Result<(), gst::ErrorMessage> {
-        let raise_log_level = self.settings.lock().unwrap().raise_log_level;
-        if raise_log_level {
-            gst::debug!(CAT, imp: self, "Preparing");
-        } else {
-            gst::trace!(CAT, imp: self, "Preparing");
-        }
+        let is_main_elem = self.settings.lock().unwrap().is_main_elem;
+        debug_or_trace!(CAT, is_main_elem, imp: self, "Preparing");
 
         let settings = self.settings.lock().unwrap();
-        let context =
-            Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
-                gst::error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Failed to acquire Context: {}", err]
-                )
-            })?;
+        let ts_ctx = Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
+            gst::error_msg!(
+                gst::ResourceError::OpenRead,
+                ["Failed to acquire Context: {}", err]
+            )
+        })?;
         drop(settings);
 
         self.task
-            .prepare(SrcTask::new(self.obj().clone()), context)
+            .prepare(SrcTask::new(self.instance().clone()), ts_ctx)
             .block_on()?;
 
-        if raise_log_level {
-            gst::debug!(CAT, imp: self, "Prepared");
-        } else {
-            gst::trace!(CAT, imp: self, "Prepared");
-        }
+        debug_or_trace!(CAT, is_main_elem, imp: self, "Prepared");
 
         Ok(())
     }
 
     fn unprepare(&self) {
-        let raise_log_level = self.settings.lock().unwrap().raise_log_level;
-        if raise_log_level {
-            gst::debug!(CAT, imp: self, "Unpreparing");
-        } else {
-            gst::trace!(CAT, imp: self, "Unpreparing");
-        }
-
+        let is_main_elem = self.settings.lock().unwrap().is_main_elem;
+        debug_or_trace!(CAT, is_main_elem, imp: self, "Unpreparing");
         self.task.unprepare().block_on().unwrap();
-
-        if raise_log_level {
-            gst::debug!(CAT, imp: self, "Unprepared");
-        } else {
-            gst::trace!(CAT, imp: self, "Unprepared");
-        }
+        debug_or_trace!(CAT, is_main_elem, imp: self, "Unprepared");
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
-        let raise_log_level = self.settings.lock().unwrap().raise_log_level;
-        if raise_log_level {
-            gst::debug!(CAT, imp: self, "Stopping");
-        } else {
-            gst::trace!(CAT, imp: self, "Stopping");
-        }
-
+        let is_main_elem = self.settings.lock().unwrap().is_main_elem;
+        debug_or_trace!(CAT, is_main_elem, imp: self, "Stopping");
         self.task.stop().block_on()?;
-
-        if raise_log_level {
-            gst::debug!(CAT, imp: self, "Stopped");
-        } else {
-            gst::trace!(CAT, imp: self, "Stopped");
-        }
+        debug_or_trace!(CAT, is_main_elem, imp: self, "Stopped");
 
         Ok(())
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
-        let raise_log_level = self.settings.lock().unwrap().raise_log_level;
-        if raise_log_level {
-            gst::debug!(CAT, imp: self, "Starting");
-        } else {
-            gst::trace!(CAT, imp: self, "Starting");
-        }
-
+        let is_main_elem = self.settings.lock().unwrap().is_main_elem;
+        debug_or_trace!(CAT, is_main_elem, imp: self, "Starting");
         self.task.start().block_on()?;
-
-        if raise_log_level {
-            gst::debug!(CAT, imp: self, "Started");
-        } else {
-            gst::trace!(CAT, imp: self, "Started");
-        }
+        debug_or_trace!(CAT, is_main_elem, imp: self, "Started");
 
         Ok(())
     }
 
     fn pause(&self) -> Result<(), gst::ErrorMessage> {
-        let raise_log_level = self.settings.lock().unwrap().raise_log_level;
-        if raise_log_level {
-            gst::debug!(CAT, imp: self, "Pausing");
-        } else {
-            gst::trace!(CAT, imp: self, "Pausing");
-        }
-
+        let is_main_elem = self.settings.lock().unwrap().is_main_elem;
+        debug_or_trace!(CAT, is_main_elem, imp: self, "Pausing");
         self.task.pause().block_on()?;
-
-        if raise_log_level {
-            gst::debug!(CAT, imp: self, "Paused");
-        } else {
-            gst::trace!(CAT, imp: self, "Paused");
-        }
+        debug_or_trace!(CAT, is_main_elem, imp: self, "Paused");
 
         Ok(())
     }
@@ -462,9 +347,9 @@ impl ObjectImpl for TestSrc {
                     .blurb("Push a new buffer every this many ms")
                     .default_value(DEFAULT_PUSH_PERIOD.mseconds() as u32)
                     .build(),
-                glib::ParamSpecBoolean::builder("raise-log-level")
-                    .nick("Raise log level")
-                    .blurb("Raises the log level so that this element stands out")
+                glib::ParamSpecBoolean::builder("main-elem")
+                    .nick("Main Element")
+                    .blurb("Declare this element as the main one")
                     .write_only()
                     .build(),
                 glib::ParamSpecInt::builder("num-buffers")
@@ -485,24 +370,21 @@ impl ObjectImpl for TestSrc {
             "context" => {
                 settings.context = value
                     .get::<Option<String>>()
-                    .expect("type checked upstream")
+                    .unwrap()
                     .unwrap_or_else(|| DEFAULT_CONTEXT.into());
             }
             "context-wait" => {
-                settings.context_wait = Duration::from_millis(
-                    value.get::<u32>().expect("type checked upstream").into(),
-                );
+                settings.context_wait = Duration::from_millis(value.get::<u32>().unwrap().into());
             }
             "push-period" => {
-                settings.push_period = gst::ClockTime::from_mseconds(
-                    value.get::<u32>().expect("type checked upstream").into(),
-                );
+                let value: u64 = value.get::<u32>().unwrap().into();
+                settings.push_period = value.mseconds();
             }
-            "raise-log-level" => {
-                settings.raise_log_level = value.get::<bool>().expect("type checked upstream");
+            "main-elem" => {
+                settings.is_main_elem = value.get::<bool>().unwrap();
             }
             "num-buffers" => {
-                let value = value.get::<i32>().expect("type checked upstream");
+                let value = value.get::<i32>().unwrap();
                 settings.num_buffers = if value > 0 { Some(value as u32) } else { None };
             }
             _ => unimplemented!(),
@@ -515,7 +397,7 @@ impl ObjectImpl for TestSrc {
             "context" => settings.context.to_value(),
             "context-wait" => (settings.context_wait.as_millis() as u32).to_value(),
             "push-period" => (settings.push_period.mseconds() as u32).to_value(),
-            "raise-log-level" => settings.raise_log_level.to_value(),
+            "main-elem" => settings.is_main_elem.to_value(),
             "num-buffers" => settings
                 .num_buffers
                 .and_then(|val| val.try_into().ok())
@@ -571,7 +453,7 @@ impl ElementImpl for TestSrc {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp: self, "Changing state {transition:?}");
 
         match transition {
             gst::StateChange::NullToReady => {

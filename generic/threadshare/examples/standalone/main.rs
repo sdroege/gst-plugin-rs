@@ -1,12 +1,21 @@
 use gst::glib;
 use once_cell::sync::Lazy;
 
+mod args;
+use args::*;
+
+#[macro_use]
+mod macros;
+
 mod sink;
 mod src;
 
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
+
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "ts-standalone-test-main",
+        "ts-standalone-main",
         gst::DebugColorFlags::empty(),
         Some("Thread-sharing standalone test main"),
     )
@@ -14,6 +23,8 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     src::register(plugin)?;
+    sink::async_mutex::register(plugin)?;
+    sink::sync_mutex::register(plugin)?;
     sink::task::register(plugin)?;
 
     Ok(())
@@ -30,91 +41,6 @@ gst::plugin_define!(
     env!("CARGO_PKG_REPOSITORY"),
     env!("BUILD_REL_DATE")
 );
-
-#[cfg(feature = "clap")]
-use clap::Parser;
-
-#[cfg(feature = "clap")]
-#[derive(Parser, Debug)]
-#[clap(version)]
-#[clap(
-    about = "Standalone pipeline threadshare runtime test. Use `GST_DEBUG=ts-standalone*:4` for stats"
-)]
-struct Args {
-    /// Parallel streams to process.
-    #[clap(short, long, default_value_t = 5000)]
-    streams: u32,
-
-    /// Threadshare groups.
-    #[clap(short, long, default_value_t = 2)]
-    groups: u32,
-
-    /// Threadshare Context wait in ms (max throttling duration).
-    #[clap(short, long, default_value_t = 20)]
-    wait: u32,
-
-    /// Buffer push period in ms.
-    #[clap(short, long, default_value_t = 20)]
-    push_period: u32,
-
-    /// Number of buffers per stream to output before sending EOS (-1 = unlimited).
-    #[clap(short, long, default_value_t = 5000)]
-    num_buffers: i32,
-
-    /// Disables statistics logging.
-    #[clap(short, long)]
-    disable_stats_log: bool,
-}
-
-#[cfg(not(feature = "clap"))]
-#[derive(Debug)]
-struct Args {
-    streams: u32,
-    groups: u32,
-    wait: u32,
-    push_period: u32,
-    num_buffers: i32,
-    disable_stats_log: bool,
-}
-
-#[cfg(not(feature = "clap"))]
-impl Default for Args {
-    fn default() -> Self {
-        Args {
-            streams: 5000,
-            groups: 2,
-            wait: 20,
-            push_period: 20,
-            num_buffers: 5000,
-            disable_stats_log: false,
-        }
-    }
-}
-
-fn args() -> Args {
-    #[cfg(feature = "clap")]
-    let args = {
-        let args = Args::parse();
-        gst::info!(CAT, "{:?}", args);
-
-        args
-    };
-
-    #[cfg(not(feature = "clap"))]
-    let args = {
-        if std::env::args().len() > 1 {
-            gst::warning!(CAT, "Ignoring command line arguments");
-            gst::warning!(CAT, "Build with `--features=clap`");
-        }
-
-        let args = Args::default();
-        gst::warning!(CAT, "{:?}", args);
-
-        args
-    };
-
-    args
-}
 
 fn main() {
     use gst::prelude::*;
@@ -133,8 +59,8 @@ fn main() {
     for i in 0..args.streams {
         let ctx_name = format!("standalone {}", i % args.groups);
 
-        let src = gst::ElementFactory::make("ts-standalone-test-src")
-            .name(format!("src-{}", i).as_str())
+        let src = gst::ElementFactory::make(src::ELEMENT_NAME)
+            .name(format!("src-{i}").as_str())
             .property("context", &ctx_name)
             .property("context-wait", args.wait)
             .property("push-period", args.push_period)
@@ -142,16 +68,16 @@ fn main() {
             .build()
             .unwrap();
 
-        let sink = gst::ElementFactory::make("ts-standalone-test-sink")
-            .name(format!("sink-{}", i).as_str())
+        let sink = gst::ElementFactory::make(args.sink.element_name())
+            .name(format!("sink-{i}").as_str())
             .property("context", &ctx_name)
             .property("context-wait", args.wait)
             .build()
             .unwrap();
 
         if i == 0 {
-            src.set_property("raise-log-level", true);
-            sink.set_property("raise-log-level", true);
+            src.set_property("main-elem", true);
+            sink.set_property("main-elem", true);
 
             if !args.disable_stats_log {
                 // Don't use the last 5 secs in stats
@@ -179,30 +105,46 @@ fn main() {
     let l = glib::MainLoop::new(None, false);
 
     let bus = pipeline.bus().unwrap();
+    let terminated_count = Arc::new(AtomicU32::new(0));
     let pipeline_clone = pipeline.clone();
     let l_clone = l.clone();
     bus.add_watch(move |_, msg| {
         use gst::MessageView;
-
         match msg.view() {
             MessageView::Eos(_) => {
+                // Actually, we don't post EOS (see sinks impl).
                 gst::info!(CAT, "Received eos");
                 l_clone.quit();
+
+                glib::Continue(false)
             }
-            MessageView::Error(err) => {
+            MessageView::Error(msg) => {
+                if let gst::MessageView::Error(msg) = msg.message().view() {
+                    if msg.error().matches(gst::LibraryError::Shutdown) {
+                        if terminated_count.fetch_add(1, Ordering::SeqCst) == args.streams - 1 {
+                            gst::info!(CAT, "Received all shutdown requests");
+                            l_clone.quit();
+
+                            return glib::Continue(false);
+                        } else {
+                            return glib::Continue(true);
+                        }
+                    }
+                }
+
                 gst::error!(
                     CAT,
                     "Error from {:?}: {} ({:?})",
-                    err.src().map(|s| s.path_string()),
-                    err.error(),
-                    err.debug()
+                    msg.src().map(|s| s.path_string()),
+                    msg.error(),
+                    msg.debug()
                 );
                 l_clone.quit();
-            }
-            _ => (),
-        };
 
-        glib::Continue(true)
+                glib::Continue(false)
+            }
+            _ => glib::Continue(true),
+        }
     })
     .expect("Failed to add bus watch");
 
