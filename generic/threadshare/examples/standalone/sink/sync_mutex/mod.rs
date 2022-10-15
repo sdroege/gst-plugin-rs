@@ -3,17 +3,15 @@ use gst::prelude::*;
 
 mod imp;
 
-pub const ELEMENT_NAME: &str = "ts-standalone-src";
-
 glib::wrapper! {
-    pub struct TestSrc(ObjectSubclass<imp::TestSrc>) @extends gst::Element, gst::Object;
+    pub struct DirectSink(ObjectSubclass<imp::DirectSink>) @extends gst::Element, gst::Object;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
-        "ts-standalone-src",
+        super::SYNC_MUTEX_ELEMENT_NAME,
         gst::Rank::None,
-        TestSrc::static_type(),
+        DirectSink::static_type(),
     )
 }
