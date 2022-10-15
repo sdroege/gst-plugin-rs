@@ -61,7 +61,6 @@ plugins = {
   # FIXME: libwebp-sys2 will build its bundled version on msvc and apple platforms
   # https://github.com/qnighy/libwebp-sys2-rs/issues/4
   'gst-plugin-webp': 'libgstrswebp',
-  'gst-plugin-videofx': 'libgstvideofx',
   'gst-plugin-uriplaylistbin': 'libgsturiplaylistbin',
   'gst-plugin-spotify': 'libgstspotify',
   'gst-plugin-textahead': 'libgsttextahead',
@@ -73,6 +72,10 @@ plugins = {
 }
 
 extra_env = {}
+
+if dependency('cairo-gobject', required : get_option('videofx')).found()
+  plugins += {'gst-plugin-videofx': 'libgstvideofx',}
+endif
 
 if dependency('pangocairo', required : get_option('closedcaption')).found()
   plugins += {'gst-plugin-closedcaption' : 'libgstrsclosedcaption',}
