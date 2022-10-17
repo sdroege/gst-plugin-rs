@@ -119,7 +119,7 @@ impl ObjectImpl for TextAhead {
                     .default_value(&*default.separator)
                     .mutable_playing()
                     .build(),
-                // See https://developer.gimp.org/api/2.0/pango/PangoMarkupFormat.html for pango attributes
+                // See https://docs.gtk.org/Pango/pango_markup.html for pango attributes
                 glib::ParamSpecString::builder("current-attributes")
                     .nick("Current attributes")
                     .blurb("Pango span attributes to set on the text from the current buffer")
