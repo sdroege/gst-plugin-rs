@@ -246,7 +246,7 @@ impl Signaller {
     }
 
     pub fn start(&self, element: &WebRTCSink) {
-        let this = self.instance();
+        let this = self.instance().clone();
         let element_clone = element.clone();
         task::spawn(async move {
             let this = Self::from_instance(&this);
@@ -392,7 +392,6 @@ impl ObjectImpl for Signaller {
 
     fn set_property(
         &self,
-        _obj: &Self::Type,
         _id: usize,
         value: &glib::Value,
         pspec: &glib::ParamSpec,
@@ -419,7 +418,7 @@ impl ObjectImpl for Signaller {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "address" => self.settings.lock().unwrap().address.to_value(),
             "cafile" => {

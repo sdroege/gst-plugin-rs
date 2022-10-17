@@ -1162,7 +1162,7 @@ impl WebRTCSink {
                             payload: pt,
                         })
                     } else {
-                        gst::warning!(CAT, obj: &self.instance(),
+                        gst::warning!(CAT, imp: self,
                                 "Too many formats for available payload type range, ignoring {}",
                                 s);
                         None
@@ -2300,10 +2300,10 @@ impl WebRTCSink {
                         });
                     }
 
-                    pad.event_default(Some(element), event)
+                    gst::Pad::event_default(pad, Some(element), event)
                 }
             }
-            _ => pad.event_default(Some(element), event),
+            _ => gst::Pad::event_default(pad, Some(element), event),
         }
     }
 }
@@ -2426,7 +2426,6 @@ impl ObjectImpl for WebRTCSink {
 
     fn set_property(
         &self,
-        _obj: &Self::Type,
         _id: usize,
         value: &glib::Value,
         pspec: &glib::ParamSpec,
@@ -2499,7 +2498,7 @@ impl ObjectImpl for WebRTCSink {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "video-caps" => {
                 let settings = self.settings.lock().unwrap();
@@ -2648,9 +2647,10 @@ impl ObjectImpl for WebRTCSink {
         SIGNALS.as_ref()
     }
 
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.set_suppressed_flags(gst::ElementFlags::SINK | gst::ElementFlags::SOURCE);
         obj.set_element_flags(gst::ElementFlags::SINK);
     }
@@ -2714,11 +2714,11 @@ impl ElementImpl for WebRTCSink {
 
     fn request_new_pad(
         &self,
-        element: &Self::Type,
         templ: &gst::PadTemplate,
         _name: Option<String>,
         _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
+        let element = self.instance();
         if element.current_state() > gst::State::Ready {
             gst::error!(CAT, "element pads can only be requested before starting");
             return None;
@@ -2741,7 +2741,7 @@ impl ElementImpl for WebRTCSink {
                 WebRTCSink::catch_panic_pad_function(
                     parent,
                     || false,
-                    |sink, element| sink.sink_event(pad.upcast_ref(), element, event),
+                    |this| this.sink_event(pad.upcast_ref(), &*this.instance(), event),
                 )
             })
             .build();
@@ -2766,11 +2766,11 @@ impl ElementImpl for WebRTCSink {
 
     fn change_state(
         &self,
-        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
+        let element = self.instance();
         if let gst::StateChange::ReadyToPaused = transition {
-            if let Err(err) = self.prepare(element) {
+            if let Err(err) = self.prepare(&*element) {
                 gst::element_error!(
                     element,
                     gst::StreamError::Failed,
@@ -2780,11 +2780,11 @@ impl ElementImpl for WebRTCSink {
             }
         }
 
-        let mut ret = self.parent_change_state(element, transition);
+        let mut ret = self.parent_change_state(transition);
 
         match transition {
             gst::StateChange::PausedToReady => {
-                if let Err(err) = self.unprepare(element) {
+                if let Err(err) = self.unprepare(&*element) {
                     gst::element_error!(
                         element,
                         gst::StreamError::Failed,
@@ -2798,7 +2798,7 @@ impl ElementImpl for WebRTCSink {
             }
             gst::StateChange::PausedToPlaying => {
                 let mut state = self.state.lock().unwrap();
-                state.maybe_start_signaller(element);
+                state.maybe_start_signaller(&*element);
             }
             _ => (),
         }
@@ -2810,15 +2810,15 @@ impl ElementImpl for WebRTCSink {
 impl BinImpl for WebRTCSink {}
 
 impl ChildProxyImpl for WebRTCSink {
-    fn child_by_index(&self, _object: &Self::Type, _index: u32) -> Option<glib::Object> {
+    fn child_by_index(&self, _index: u32) -> Option<glib::Object> {
         None
     }
 
-    fn children_count(&self, _object: &Self::Type) -> u32 {
+    fn children_count(&self) -> u32 {
         0
     }
 
-    fn child_by_name(&self, _object: &Self::Type, name: &str) -> Option<glib::Object> {
+    fn child_by_name(&self, name: &str) -> Option<glib::Object> {
         match name {
             "signaller" => Some(
                 self.state
@@ -2835,7 +2835,7 @@ impl ChildProxyImpl for WebRTCSink {
 }
 
 impl NavigationImpl for WebRTCSink {
-    fn send_event(&self, _imp: &Self::Type, event_def: gst::Structure) {
+    fn send_event(&self, event_def: gst::Structure) {
         let mut state = self.state.lock().unwrap();
         let event = gst::event::Navigation::new(event_def);
 

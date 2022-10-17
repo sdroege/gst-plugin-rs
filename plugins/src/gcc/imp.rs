@@ -1148,7 +1148,7 @@ impl ObjectSubclass for BandwidthEstimator {
                 BandwidthEstimator::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |this, _element| {
+                    |this| {
                         let mut state = this.state.lock().unwrap();
                         let mutbuf = buffer.make_mut();
                         mutbuf.set_pts(None);
@@ -1168,7 +1168,9 @@ impl ObjectSubclass for BandwidthEstimator {
                 BandwidthEstimator::catch_panic_pad_function(
                     parent,
                     || false,
-                    |this, bwe| {
+                    |this| {
+                        let bwe = this.instance();
+
                         if let Some(structure) = event.structure() {
                             if structure.name() == "RTPTWCCPackets" {
                                 let varray = structure.get::<glib::ValueArray>("packets").unwrap();
@@ -1183,8 +1185,8 @@ impl ObjectSubclass for BandwidthEstimator {
                                     let mut state = this.state.lock().unwrap();
 
                                     state.detector.update(&mut packets);
-                                    if !state.delay_control(bwe) {
-                                        state.loss_control(bwe)
+                                    if !state.delay_control(&bwe) {
+                                        state.loss_control(&bwe)
                                     } else {
                                         true
                                     }
@@ -1196,7 +1198,7 @@ impl ObjectSubclass for BandwidthEstimator {
                             }
                         }
 
-                        pad.event_default(Some(bwe), event)
+                        gst::Pad::event_default(pad, parent, event)
                     },
                 )
             })
@@ -1209,7 +1211,7 @@ impl ObjectSubclass for BandwidthEstimator {
                             "Panic activating src pad with mode"
                         ))
                     },
-                    |this, bwe| this.src_activatemode(pad, bwe, mode, active),
+                    |this| this.src_activatemode(pad, &this.instance(), mode, active),
                 )
             })
             .flags(gst::PadFlags::PROXY_CAPS | gst::PadFlags::PROXY_ALLOCATION)
@@ -1224,9 +1226,10 @@ impl ObjectSubclass for BandwidthEstimator {
 }
 
 impl ObjectImpl for BandwidthEstimator {
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
 
+        let obj = self.instance();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
@@ -1277,7 +1280,6 @@ impl ObjectImpl for BandwidthEstimator {
 
     fn set_property(
         &self,
-        _obj: &Self::Type,
         _id: usize,
         value: &glib::Value,
         pspec: &glib::ParamSpec,
@@ -1302,7 +1304,7 @@ impl ObjectImpl for BandwidthEstimator {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "min-bitrate" => {
                 let state = self.state.lock().unwrap();
