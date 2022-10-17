@@ -22,3 +22,9 @@ The `spotifyaudiosrc` element can be used to play a song from Spotify using its 
 ```
 gst-launch-1.0 spotifyaudiosrc username=$USERNAME password=$PASSWORD track=spotify:track:3i3P1mGpV9eRlfKccjDjwi ! oggdemux ! vorbisdec ! audioconvert ! autoaudiosink
 ```
+
+The element also implements an URI handler which accepts credentials and cache settings as URI parameters:
+
+```console
+gst-launch-1.0 playbin3 uri=spotify:track:3i3P1mGpV9eRlfKccjDjwi?username=$USERNAME\&password=$PASSWORD\&cache-credentials=cache\&cache-files=cache
+```

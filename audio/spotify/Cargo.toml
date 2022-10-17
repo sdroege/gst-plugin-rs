@@ -16,6 +16,7 @@ librespot = { version = "0.4", default-features = false }
 tokio = "1.0"
 futures = "0.3"
 anyhow = "1.0"
+url = "2.3"
 
 [lib]
 name = "gstspotify"

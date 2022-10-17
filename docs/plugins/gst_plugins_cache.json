@@ -5565,6 +5565,9 @@
                     "GInitiallyUnowned",
                     "GObject"
                 ],
+                "interfaces": [
+                    "GstURIHandler"
+                ],
                 "klass": "Source/Audio",
                 "long-name": "Spotify source",
                 "pad-templates": {

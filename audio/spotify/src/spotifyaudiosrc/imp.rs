@@ -83,6 +83,7 @@ impl ObjectSubclass for SpotifyAudioSrc {
     const NAME: &'static str = "GstSpotifyAudioSrc";
     type Type = super::SpotifyAudioSrc;
     type ParentType = gst_base::BaseSrc;
+    type Interfaces = (gst::URIHandler,);
 }
 
 impl ObjectImpl for SpotifyAudioSrc {
@@ -409,6 +410,48 @@ impl Sink for BufferSink {
 
         // ignore if sending fails as that means the source element is being shutdown
         let _ = self.sender.send(Message::Buffer(buffer));
+
+        Ok(())
+    }
+}
+
+impl URIHandlerImpl for SpotifyAudioSrc {
+    const URI_TYPE: gst::URIType = gst::URIType::Src;
+
+    fn protocols() -> &'static [&'static str] {
+        &["spotify"]
+    }
+
+    fn uri(&self) -> Option<String> {
+        let settings = self.settings.lock().unwrap();
+
+        if settings.track.is_empty() {
+            None
+        } else {
+            Some(settings.track.clone())
+        }
+    }
+
+    fn set_uri(&self, uri: &str) -> Result<(), glib::Error> {
+        gst::debug!(CAT, imp: self, "set URI: {}", uri);
+
+        let url = url::Url::parse(uri)
+            .map_err(|e| glib::Error::new(gst::URIError::BadUri, &format!("{:?}", e)))?;
+
+        // allow to configure auth and cache settings from the URI
+        for (key, value) in url.query_pairs() {
+            match key.as_ref() {
+                "username" | "password" | "cache-credentials" | "cache-files" => {
+                    self.instance().set_property(&key, value.as_ref());
+                }
+                _ => {
+                    gst::warning!(CAT, imp: self, "unsupported query: {}={}", key, value);
+                }
+            }
+        }
+
+        self.instance()
+            .set_property("track", format!("{}:{}", url.scheme(), url.path()));
 
         Ok(())
     }
