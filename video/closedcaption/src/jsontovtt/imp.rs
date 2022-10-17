@@ -582,7 +582,7 @@ impl ObjectImpl for JsonToVtt {
             vec![glib::ParamSpecUInt64::builder("timeout")
                 .nick("Timeout")
                 .blurb("Duration after which to erase text when no data has arrived")
-                .minimum(gst::ClockTime::from_seconds(16).nseconds())
+                .minimum(16.seconds().nseconds())
                 .default_value(u64::MAX)
                 .mutable_playing()
                 .build()]
@@ -601,7 +601,7 @@ impl ObjectImpl for JsonToVtt {
 
                 settings.timeout = match timeout {
                     u64::MAX => gst::ClockTime::NONE,
-                    _ => Some(gst::ClockTime::from_nseconds(timeout)),
+                    _ => Some(timeout.nseconds()),
                 };
                 state.settings.timeout = settings.timeout;
             }
@@ -707,15 +707,12 @@ mod tests {
 
         let segment = gst::FormattedSegment::<gst::ClockTime>::new();
 
-        let pts: gst::ClockTime = gst::ClockTime::from_nseconds(0);
-        let duration: Option<gst::ClockTime> = Some(gst::ClockTime::from_nseconds(10));
+        let pts = gst::ClockTime::ZERO;
+        let duration = Some(10.nseconds());
 
         assert_eq!(
             clamp(&segment, pts, duration),
-            Some((
-                gst::ClockTime::from_nseconds(0),
-                Some(gst::ClockTime::from_nseconds(10))
-            ))
+            Some((gst::ClockTime::ZERO, Some(10.nseconds())))
         );
     }
 
@@ -724,17 +721,14 @@ mod tests {
         gst::init().unwrap();
 
         let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
-        segment.set_start(gst::ClockTime::from_nseconds(2));
+        segment.set_start(2.nseconds());
 
-        let pts = gst::ClockTime::from_nseconds(0);
-        let duration = Some(gst::ClockTime::from_nseconds(10));
+        let pts = gst::ClockTime::ZERO;
+        let duration = Some(10.nseconds());
 
         assert_eq!(
             clamp(&segment, pts, duration),
-            Some((
-                gst::ClockTime::from_nseconds(2),
-                Some(gst::ClockTime::from_nseconds(8))
-            ))
+            Some((2.nseconds(), Some(8.nseconds())))
         );
     }
 
@@ -743,17 +737,14 @@ mod tests {
         gst::init().unwrap();
 
         let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
-        segment.set_stop(gst::ClockTime::from_nseconds(7));
+        segment.set_stop(7.nseconds());
 
-        let pts = gst::ClockTime::from_nseconds(0);
-        let duration = Some(gst::ClockTime::from_nseconds(10));
+        let pts = gst::ClockTime::ZERO;
+        let duration = Some(10.nseconds());
 
         assert_eq!(
             clamp(&segment, pts, duration),
-            Some((
-                gst::ClockTime::from_nseconds(0),
-                Some(gst::ClockTime::from_nseconds(7))
-            ))
+            Some((gst::ClockTime::ZERO, Some(7.nseconds())))
         );
     }
 
@@ -762,18 +753,15 @@ mod tests {
         gst::init().unwrap();
 
         let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
-        segment.set_start(gst::ClockTime::from_nseconds(2));
-        segment.set_stop(gst::ClockTime::from_nseconds(7));
+        segment.set_start(2.nseconds());
+        segment.set_stop(7.nseconds());
 
-        let pts = gst::ClockTime::from_nseconds(0);
-        let duration = Some(gst::ClockTime::from_nseconds(10));
+        let pts = gst::ClockTime::ZERO;
+        let duration = Some(10.nseconds());
 
         assert_eq!(
             clamp(&segment, pts, duration),
-            Some((
-                gst::ClockTime::from_nseconds(2),
-                Some(gst::ClockTime::from_nseconds(5))
-            ))
+            Some((2.nseconds(), Some(5.nseconds())))
         );
     }
 
@@ -782,10 +770,10 @@ mod tests {
         gst::init().unwrap();
 
         let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
-        segment.set_start(gst::ClockTime::from_nseconds(15));
+        segment.set_start(15.nseconds());
 
-        let pts = gst::ClockTime::from_nseconds(0);
-        let duration = Some(gst::ClockTime::from_nseconds(10));
+        let pts = gst::ClockTime::ZERO;
+        let duration = Some(10.nseconds());
 
         assert_eq!(clamp(&segment, pts, duration), None);
     }
@@ -795,10 +783,10 @@ mod tests {
         gst::init().unwrap();
 
         let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
-        segment.set_stop(gst::ClockTime::from_nseconds(10));
+        segment.set_stop(10.nseconds());
 
-        let pts = gst::ClockTime::from_nseconds(15);
-        let duration = Some(gst::ClockTime::from_nseconds(10));
+        let pts = 15.nseconds();
+        let duration = Some(10.nseconds());
 
         assert_eq!(clamp(&segment, pts, duration), None);
     }

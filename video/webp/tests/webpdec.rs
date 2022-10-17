@@ -33,7 +33,7 @@ fn test_decode() {
 
     let mut expected_timestamp: Option<gst::ClockTime> = Some(gst::ClockTime::ZERO);
     let mut count = 0;
-    let expected_duration: Option<gst::ClockTime> = Some(gst::ClockTime::from_nseconds(40_000_000));
+    let expected_duration: Option<gst::ClockTime> = Some(40_000_000.nseconds());
 
     while let Some(buf) = h.try_pull() {
         assert_eq!(buf.pts(), expected_timestamp);

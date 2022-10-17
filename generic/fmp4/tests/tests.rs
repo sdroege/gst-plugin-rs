@@ -28,7 +28,7 @@ fn test_buffer_flags_single_stream(cmaf: bool) {
     // 5s fragment duration
     h.element()
         .unwrap()
-        .set_property("fragment-duration", gst::ClockTime::from_seconds(5));
+        .set_property("fragment-duration", 5.seconds());
 
     h.set_src_caps(
         gst::Caps::builder("video/x-h264")
@@ -45,7 +45,7 @@ fn test_buffer_flags_single_stream(cmaf: bool) {
     let output_offset = if cmaf {
         gst::ClockTime::ZERO
     } else {
-        gst::ClockTime::from_seconds(60 * 60 * 1000)
+        (60 * 60 * 1000).seconds()
     };
 
     // Push 7 buffers of 1s each, 1st and 6 buffer without DELTA_UNIT flag
@@ -53,8 +53,8 @@ fn test_buffer_flags_single_stream(cmaf: bool) {
         let mut buffer = gst::Buffer::with_size(1).unwrap();
         {
             let buffer = buffer.get_mut().unwrap();
-            buffer.set_pts(gst::ClockTime::from_seconds(i));
-            buffer.set_dts(gst::ClockTime::from_seconds(i));
+            buffer.set_pts(i.seconds());
+            buffer.set_dts(i.seconds());
             buffer.set_duration(gst::ClockTime::SECOND);
             if i != 0 && i != 5 {
                 buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
@@ -76,7 +76,7 @@ fn test_buffer_flags_single_stream(cmaf: bool) {
             assert_eq!(
                 gst_video::UpstreamForceKeyUnitEvent::parse(&ev).unwrap(),
                 gst_video::UpstreamForceKeyUnitEvent {
-                    running_time: Some(gst::ClockTime::from_seconds(5)),
+                    running_time: Some(5.seconds()),
                     all_headers: true,
                     count: 0
                 }
@@ -102,10 +102,7 @@ fn test_buffer_flags_single_stream(cmaf: bool) {
         fragment_header.dts(),
         Some(gst::ClockTime::ZERO + output_offset)
     );
-    assert_eq!(
-        fragment_header.duration(),
-        Some(gst::ClockTime::from_seconds(5))
-    );
+    assert_eq!(fragment_header.duration(), Some(5.seconds()));
 
     for i in 0..5 {
         let buffer = h.pull().unwrap();
@@ -117,14 +114,8 @@ fn test_buffer_flags_single_stream(cmaf: bool) {
         } else {
             assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
         }
-        assert_eq!(
-            buffer.pts(),
-            Some(gst::ClockTime::from_seconds(i) + output_offset)
-        );
-        assert_eq!(
-            buffer.dts(),
-            Some(gst::ClockTime::from_seconds(i) + output_offset)
-        );
+        assert_eq!(buffer.pts(), Some(i.seconds() + output_offset));
+        assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
         assert_eq!(buffer.duration(), Some(gst::ClockTime::SECOND));
     }
 
@@ -132,18 +123,9 @@ fn test_buffer_flags_single_stream(cmaf: bool) {
 
     let fragment_header = h.pull().unwrap();
     assert_eq!(fragment_header.flags(), gst::BufferFlags::HEADER);
-    assert_eq!(
-        fragment_header.pts(),
-        Some(gst::ClockTime::from_seconds(5) + output_offset)
-    );
-    assert_eq!(
-        fragment_header.dts(),
-        Some(gst::ClockTime::from_seconds(5) + output_offset)
-    );
-    assert_eq!(
-        fragment_header.duration(),
-        Some(gst::ClockTime::from_seconds(2))
-    );
+    assert_eq!(fragment_header.pts(), Some(5.seconds() + output_offset));
+    assert_eq!(fragment_header.dts(), Some(5.seconds() + output_offset));
+    assert_eq!(fragment_header.duration(), Some(2.seconds()));
 
     for i in 5..7 {
         let buffer = h.pull().unwrap();
@@ -155,14 +137,8 @@ fn test_buffer_flags_single_stream(cmaf: bool) {
         } else {
             assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
         }
-        assert_eq!(
-            buffer.pts(),
-            Some(gst::ClockTime::from_seconds(i) + output_offset)
-        );
-        assert_eq!(
-            buffer.dts(),
-            Some(gst::ClockTime::from_seconds(i) + output_offset)
-        );
+        assert_eq!(buffer.pts(), Some(i.seconds() + output_offset));
+        assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
         assert_eq!(buffer.duration(), Some(gst::ClockTime::SECOND));
     }
 
@@ -200,7 +176,7 @@ fn test_buffer_flags_multi_stream() {
     // 5s fragment duration
     h1.element()
         .unwrap()
-        .set_property("fragment-duration", gst::ClockTime::from_seconds(5));
+        .set_property("fragment-duration", 5.seconds());
 
     h1.set_src_caps(
         gst::Caps::builder("video/x-h264")
@@ -231,15 +207,15 @@ fn test_buffer_flags_multi_stream() {
     );
     h2.play();
 
-    let output_offset = gst::ClockTime::from_seconds(60 * 60 * 1000);
+    let output_offset = (60 * 60 * 1000).seconds();
 
     // Push 7 buffers of 1s each, 1st and last buffer without DELTA_UNIT flag
     for i in 0..7 {
         let mut buffer = gst::Buffer::with_size(1).unwrap();
         {
             let buffer = buffer.get_mut().unwrap();
-            buffer.set_pts(gst::ClockTime::from_seconds(i));
-            buffer.set_dts(gst::ClockTime::from_seconds(i));
+            buffer.set_pts(i.seconds());
+            buffer.set_dts(i.seconds());
             buffer.set_duration(gst::ClockTime::SECOND);
             if i != 0 && i != 5 {
                 buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
@@ -250,8 +226,8 @@ fn test_buffer_flags_multi_stream() {
         let mut buffer = gst::Buffer::with_size(1).unwrap();
         {
             let buffer = buffer.get_mut().unwrap();
-            buffer.set_pts(gst::ClockTime::from_seconds(i));
-            buffer.set_dts(gst::ClockTime::from_seconds(i));
+            buffer.set_pts(i.seconds());
+            buffer.set_dts(i.seconds());
             buffer.set_duration(gst::ClockTime::SECOND);
         }
         assert_eq!(h2.push(buffer), Ok(gst::FlowSuccess::Ok));
@@ -270,7 +246,7 @@ fn test_buffer_flags_multi_stream() {
             assert_eq!(
                 gst_video::UpstreamForceKeyUnitEvent::parse(&ev).unwrap(),
                 gst_video::UpstreamForceKeyUnitEvent {
-                    running_time: Some(gst::ClockTime::from_seconds(5)),
+                    running_time: Some(5.seconds()),
                     all_headers: true,
                     count: 0
                 }
@@ -289,7 +265,7 @@ fn test_buffer_flags_multi_stream() {
             assert_eq!(
                 gst_video::UpstreamForceKeyUnitEvent::parse(&ev).unwrap(),
                 gst_video::UpstreamForceKeyUnitEvent {
-                    running_time: Some(gst::ClockTime::from_seconds(5)),
+                    running_time: Some(5.seconds()),
                     all_headers: true,
                     count: 0
                 }
@@ -315,10 +291,7 @@ fn test_buffer_flags_multi_stream() {
         fragment_header.dts(),
         Some(gst::ClockTime::ZERO + output_offset)
     );
-    assert_eq!(
-        fragment_header.duration(),
-        Some(gst::ClockTime::from_seconds(5))
-    );
+    assert_eq!(fragment_header.duration(), Some(5.seconds()));
 
     for i in 0..5 {
         for j in 0..2 {
@@ -332,16 +305,10 @@ fn test_buffer_flags_multi_stream() {
                 assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
             }
 
-            assert_eq!(
-                buffer.pts(),
-                Some(gst::ClockTime::from_seconds(i) + output_offset)
-            );
+            assert_eq!(buffer.pts(), Some(i.seconds() + output_offset));
 
             if j == 0 {
-                assert_eq!(
-                    buffer.dts(),
-                    Some(gst::ClockTime::from_seconds(i) + output_offset)
-                );
+                assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
             } else {
                 assert!(buffer.dts().is_none());
             }
@@ -354,18 +321,9 @@ fn test_buffer_flags_multi_stream() {
 
     let fragment_header = h1.pull().unwrap();
     assert_eq!(fragment_header.flags(), gst::BufferFlags::HEADER);
-    assert_eq!(
-        fragment_header.pts(),
-        Some(gst::ClockTime::from_seconds(5) + output_offset)
-    );
-    assert_eq!(
-        fragment_header.dts(),
-        Some(gst::ClockTime::from_seconds(5) + output_offset)
-    );
-    assert_eq!(
-        fragment_header.duration(),
-        Some(gst::ClockTime::from_seconds(2))
-    );
+    assert_eq!(fragment_header.pts(), Some(5.seconds() + output_offset));
+    assert_eq!(fragment_header.dts(), Some(5.seconds() + output_offset));
+    assert_eq!(fragment_header.duration(), Some(2.seconds()));
 
     for i in 5..7 {
         for j in 0..2 {
@@ -378,15 +336,9 @@ fn test_buffer_flags_multi_stream() {
             } else {
                 assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
             }
-            assert_eq!(
-                buffer.pts(),
-                Some(gst::ClockTime::from_seconds(i) + output_offset)
-            );
+            assert_eq!(buffer.pts(), Some(i.seconds() + output_offset));
             if j == 0 {
-                assert_eq!(
-                    buffer.dts(),
-                    Some(gst::ClockTime::from_seconds(i) + output_offset)
-                );
+                assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
             } else {
                 assert!(buffer.dts().is_none());
             }
@@ -416,7 +368,7 @@ fn test_live_timeout() {
     // 5s fragment duration
     h1.element()
         .unwrap()
-        .set_property("fragment-duration", gst::ClockTime::from_seconds(5));
+        .set_property("fragment-duration", 5.seconds());
 
     h1.set_src_caps(
         gst::Caps::builder("video/x-h264")
@@ -447,15 +399,15 @@ fn test_live_timeout() {
     );
     h2.play();
 
-    let output_offset = gst::ClockTime::from_seconds(60 * 60 * 1000);
+    let output_offset = (60 * 60 * 1000).seconds();
 
     // Push 7 buffers of 1s each, 1st and last buffer without DELTA_UNIT flag
     for i in 0..7 {
         let mut buffer = gst::Buffer::with_size(1).unwrap();
         {
             let buffer = buffer.get_mut().unwrap();
-            buffer.set_pts(gst::ClockTime::from_seconds(i));
-            buffer.set_dts(gst::ClockTime::from_seconds(i));
+            buffer.set_pts(i.seconds());
+            buffer.set_dts(i.seconds());
             buffer.set_duration(gst::ClockTime::SECOND);
             if i != 0 && i != 5 {
                 buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
@@ -470,8 +422,8 @@ fn test_live_timeout() {
             let mut buffer = gst::Buffer::with_size(1).unwrap();
             {
                 let buffer = buffer.get_mut().unwrap();
-                buffer.set_pts(gst::ClockTime::from_seconds(i));
-                buffer.set_dts(gst::ClockTime::from_seconds(i));
+                buffer.set_pts(i.seconds());
+                buffer.set_dts(i.seconds());
                 buffer.set_duration(gst::ClockTime::SECOND);
             }
             assert_eq!(h2.push(buffer), Ok(gst::FlowSuccess::Ok));
@@ -491,7 +443,7 @@ fn test_live_timeout() {
             assert_eq!(
                 gst_video::UpstreamForceKeyUnitEvent::parse(&ev).unwrap(),
                 gst_video::UpstreamForceKeyUnitEvent {
-                    running_time: Some(gst::ClockTime::from_seconds(5)),
+                    running_time: Some(5.seconds()),
                     all_headers: true,
                     count: 0
                 }
@@ -510,7 +462,7 @@ fn test_live_timeout() {
             assert_eq!(
                 gst_video::UpstreamForceKeyUnitEvent::parse(&ev).unwrap(),
                 gst_video::UpstreamForceKeyUnitEvent {
-                    running_time: Some(gst::ClockTime::from_seconds(5)),
+                    running_time: Some(5.seconds()),
                     all_headers: true,
                     count: 0
                 }
@@ -519,7 +471,7 @@ fn test_live_timeout() {
     }
 
     // Advance time and crank the clock: this should bring us to the end of the first fragment
-    h1.set_time(gst::ClockTime::from_seconds(5)).unwrap();
+    h1.set_time(5.seconds()).unwrap();
     h1.crank_single_clock_wait().unwrap();
 
     let header = h1.pull().unwrap();
@@ -540,10 +492,7 @@ fn test_live_timeout() {
         fragment_header.dts(),
         Some(gst::ClockTime::ZERO + output_offset)
     );
-    assert_eq!(
-        fragment_header.duration(),
-        Some(gst::ClockTime::from_seconds(5))
-    );
+    assert_eq!(fragment_header.duration(), Some(5.seconds()));
 
     for i in 0..5 {
         for j in 0..2 {
@@ -567,16 +516,10 @@ fn test_live_timeout() {
                 assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
             }
 
-            assert_eq!(
-                buffer.pts(),
-                Some(gst::ClockTime::from_seconds(i) + output_offset)
-            );
+            assert_eq!(buffer.pts(), Some(i.seconds() + output_offset));
 
             if j == 0 {
-                assert_eq!(
-                    buffer.dts(),
-                    Some(gst::ClockTime::from_seconds(i) + output_offset)
-                );
+                assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
             } else {
                 assert!(buffer.dts().is_none());
             }
@@ -589,18 +532,9 @@ fn test_live_timeout() {
 
     let fragment_header = h1.pull().unwrap();
     assert_eq!(fragment_header.flags(), gst::BufferFlags::HEADER);
-    assert_eq!(
-        fragment_header.pts(),
-        Some(gst::ClockTime::from_seconds(5) + output_offset)
-    );
-    assert_eq!(
-        fragment_header.dts(),
-        Some(gst::ClockTime::from_seconds(5) + output_offset)
-    );
-    assert_eq!(
-        fragment_header.duration(),
-        Some(gst::ClockTime::from_seconds(2))
-    );
+    assert_eq!(fragment_header.pts(), Some(5.seconds() + output_offset));
+    assert_eq!(fragment_header.dts(), Some(5.seconds() + output_offset));
+    assert_eq!(fragment_header.duration(), Some(2.seconds()));
 
     for i in 5..7 {
         for j in 0..2 {
@@ -618,15 +552,9 @@ fn test_live_timeout() {
             } else {
                 assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
             }
-            assert_eq!(
-                buffer.pts(),
-                Some(gst::ClockTime::from_seconds(i) + output_offset)
-            );
+            assert_eq!(buffer.pts(), Some(i.seconds() + output_offset));
             if j == 0 {
-                assert_eq!(
-                    buffer.dts(),
-                    Some(gst::ClockTime::from_seconds(i) + output_offset)
-                );
+                assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
             } else {
                 assert!(buffer.dts().is_none());
             }
@@ -656,7 +584,7 @@ fn test_gap_events() {
     // 5s fragment duration
     h1.element()
         .unwrap()
-        .set_property("fragment-duration", gst::ClockTime::from_seconds(5));
+        .set_property("fragment-duration", 5.seconds());
 
     h1.set_src_caps(
         gst::Caps::builder("video/x-h264")
@@ -687,15 +615,15 @@ fn test_gap_events() {
     );
     h2.play();
 
-    let output_offset = gst::ClockTime::from_seconds(60 * 60 * 1000);
+    let output_offset = (60 * 60 * 1000).seconds();
 
     // Push 7 buffers of 1s each, 1st and last buffer without DELTA_UNIT flag
     for i in 0..7 {
         let mut buffer = gst::Buffer::with_size(1).unwrap();
         {
             let buffer = buffer.get_mut().unwrap();
-            buffer.set_pts(gst::ClockTime::from_seconds(i));
-            buffer.set_dts(gst::ClockTime::from_seconds(i));
+            buffer.set_pts(i.seconds());
+            buffer.set_dts(i.seconds());
             buffer.set_duration(gst::ClockTime::SECOND);
             if i != 0 && i != 5 {
                 buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
@@ -705,7 +633,7 @@ fn test_gap_events() {
 
         // Replace buffer 3 and 6 with a gap event
         if i == 3 || i == 6 {
-            let ev = gst::event::Gap::builder(gst::ClockTime::from_seconds(i))
+            let ev = gst::event::Gap::builder(i.seconds())
                 .duration(gst::ClockTime::SECOND)
                 .build();
             assert!(h2.push_event(ev));
@@ -713,8 +641,8 @@ fn test_gap_events() {
             let mut buffer = gst::Buffer::with_size(1).unwrap();
             {
                 let buffer = buffer.get_mut().unwrap();
-                buffer.set_pts(gst::ClockTime::from_seconds(i));
-                buffer.set_dts(gst::ClockTime::from_seconds(i));
+                buffer.set_pts(i.seconds());
+                buffer.set_dts(i.seconds());
                 buffer.set_duration(gst::ClockTime::SECOND);
             }
             assert_eq!(h2.push(buffer), Ok(gst::FlowSuccess::Ok));
@@ -734,7 +662,7 @@ fn test_gap_events() {
             assert_eq!(
                 gst_video::UpstreamForceKeyUnitEvent::parse(&ev).unwrap(),
                 gst_video::UpstreamForceKeyUnitEvent {
-                    running_time: Some(gst::ClockTime::from_seconds(5)),
+                    running_time: Some(5.seconds()),
                     all_headers: true,
                     count: 0
                 }
@@ -753,7 +681,7 @@ fn test_gap_events() {
             assert_eq!(
                 gst_video::UpstreamForceKeyUnitEvent::parse(&ev).unwrap(),
                 gst_video::UpstreamForceKeyUnitEvent {
-                    running_time: Some(gst::ClockTime::from_seconds(5)),
+                    running_time: Some(5.seconds()),
                     all_headers: true,
                     count: 0
                 }
@@ -762,7 +690,7 @@ fn test_gap_events() {
     }
 
     // Advance time and crank the clock: this should bring us to the end of the first fragment
-    h1.set_time(gst::ClockTime::from_seconds(5)).unwrap();
+    h1.set_time(5.seconds()).unwrap();
     h1.crank_single_clock_wait().unwrap();
 
     let header = h1.pull().unwrap();
@@ -783,10 +711,7 @@ fn test_gap_events() {
         fragment_header.dts(),
         Some(gst::ClockTime::ZERO + output_offset)
     );
-    assert_eq!(
-        fragment_header.duration(),
-        Some(gst::ClockTime::from_seconds(5))
-    );
+    assert_eq!(fragment_header.duration(), Some(5.seconds()));
 
     for i in 0..5 {
         for j in 0..2 {
@@ -805,16 +730,10 @@ fn test_gap_events() {
                 assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
             }
 
-            assert_eq!(
-                buffer.pts(),
-                Some(gst::ClockTime::from_seconds(i) + output_offset)
-            );
+            assert_eq!(buffer.pts(), Some(i.seconds() + output_offset));
 
             if j == 0 {
-                assert_eq!(
-                    buffer.dts(),
-                    Some(gst::ClockTime::from_seconds(i) + output_offset)
-                );
+                assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
             } else {
                 assert!(buffer.dts().is_none());
             }
@@ -827,18 +746,9 @@ fn test_gap_events() {
 
     let fragment_header = h1.pull().unwrap();
     assert_eq!(fragment_header.flags(), gst::BufferFlags::HEADER);
-    assert_eq!(
-        fragment_header.pts(),
-        Some(gst::ClockTime::from_seconds(5) + output_offset)
-    );
-    assert_eq!(
-        fragment_header.dts(),
-        Some(gst::ClockTime::from_seconds(5) + output_offset)
-    );
-    assert_eq!(
-        fragment_header.duration(),
-        Some(gst::ClockTime::from_seconds(2))
-    );
+    assert_eq!(fragment_header.pts(), Some(5.seconds() + output_offset));
+    assert_eq!(fragment_header.dts(), Some(5.seconds() + output_offset));
+    assert_eq!(fragment_header.duration(), Some(2.seconds()));
 
     for i in 5..7 {
         for j in 0..2 {
@@ -856,15 +766,9 @@ fn test_gap_events() {
             } else {
                 assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
             }
-            assert_eq!(
-                buffer.pts(),
-                Some(gst::ClockTime::from_seconds(i) + output_offset)
-            );
+            assert_eq!(buffer.pts(), Some(i.seconds() + output_offset));
             if j == 0 {
-                assert_eq!(
-                    buffer.dts(),
-                    Some(gst::ClockTime::from_seconds(i) + output_offset)
-                );
+                assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
             } else {
                 assert!(buffer.dts().is_none());
             }
@@ -891,7 +795,7 @@ fn test_single_stream_short_gops() {
     // 5s fragment duration
     h.element()
         .unwrap()
-        .set_property("fragment-duration", gst::ClockTime::from_seconds(5));
+        .set_property("fragment-duration", 5.seconds());
 
     h.set_src_caps(
         gst::Caps::builder("video/x-h264")
@@ -905,15 +809,15 @@ fn test_single_stream_short_gops() {
     );
     h.play();
 
-    let output_offset = gst::ClockTime::from_seconds(60 * 60 * 1000);
+    let output_offset = (60 * 60 * 1000).seconds();
 
     // Push 8 buffers of 1s each, 1st, 4th and 7th buffer without DELTA_UNIT flag
     for i in 0..8 {
         let mut buffer = gst::Buffer::with_size(1).unwrap();
         {
             let buffer = buffer.get_mut().unwrap();
-            buffer.set_pts(gst::ClockTime::from_seconds(i));
-            buffer.set_dts(gst::ClockTime::from_seconds(i));
+            buffer.set_pts(i.seconds());
+            buffer.set_dts(i.seconds());
             buffer.set_duration(gst::ClockTime::SECOND);
             if i != 0 && i != 3 && i != 6 {
                 buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
@@ -931,11 +835,7 @@ fn test_single_stream_short_gops() {
                 }
             };
 
-            let fku_time = if i == 2 {
-                gst::ClockTime::from_seconds(5)
-            } else {
-                gst::ClockTime::from_seconds(8)
-            };
+            let fku_time = if i == 2 { 5.seconds() } else { 8.seconds() };
 
             assert_eq!(ev.type_(), gst::EventType::CustomUpstream);
             assert_eq!(
@@ -967,10 +867,7 @@ fn test_single_stream_short_gops() {
         fragment_header.dts(),
         Some(gst::ClockTime::ZERO + output_offset)
     );
-    assert_eq!(
-        fragment_header.duration(),
-        Some(gst::ClockTime::from_seconds(3))
-    );
+    assert_eq!(fragment_header.duration(), Some(3.seconds()));
 
     for i in 0..3 {
         let buffer = h.pull().unwrap();
@@ -982,14 +879,8 @@ fn test_single_stream_short_gops() {
         } else {
             assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
         }
-        assert_eq!(
-            buffer.pts(),
-            Some(gst::ClockTime::from_seconds(i) + output_offset)
-        );
-        assert_eq!(
-            buffer.dts(),
-            Some(gst::ClockTime::from_seconds(i) + output_offset)
-        );
+        assert_eq!(buffer.pts(), Some(i.seconds() + output_offset));
+        assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
         assert_eq!(buffer.duration(), Some(gst::ClockTime::SECOND));
     }
 
@@ -997,18 +888,9 @@ fn test_single_stream_short_gops() {
 
     let fragment_header = h.pull().unwrap();
     assert_eq!(fragment_header.flags(), gst::BufferFlags::HEADER);
-    assert_eq!(
-        fragment_header.pts(),
-        Some(gst::ClockTime::from_seconds(3) + output_offset)
-    );
-    assert_eq!(
-        fragment_header.dts(),
-        Some(gst::ClockTime::from_seconds(3) + output_offset)
-    );
-    assert_eq!(
-        fragment_header.duration(),
-        Some(gst::ClockTime::from_seconds(5))
-    );
+    assert_eq!(fragment_header.pts(), Some(3.seconds() + output_offset));
+    assert_eq!(fragment_header.dts(), Some(3.seconds() + output_offset));
+    assert_eq!(fragment_header.duration(), Some(5.seconds()));
 
     for i in 3..8 {
         let buffer = h.pull().unwrap();
@@ -1020,14 +902,8 @@ fn test_single_stream_short_gops() {
         } else {
             assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
         }
-        assert_eq!(
-            buffer.pts(),
-            Some(gst::ClockTime::from_seconds(i) + output_offset)
-        );
-        assert_eq!(
-            buffer.dts(),
-            Some(gst::ClockTime::from_seconds(i) + output_offset)
-        );
+        assert_eq!(buffer.pts(), Some(i.seconds() + output_offset));
+        assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
         assert_eq!(buffer.duration(), Some(gst::ClockTime::SECOND));
     }
 
@@ -1050,7 +926,7 @@ fn test_single_stream_long_gops() {
     // 5s fragment duration
     h.element()
         .unwrap()
-        .set_property("fragment-duration", gst::ClockTime::from_seconds(5));
+        .set_property("fragment-duration", 5.seconds());
 
     h.set_src_caps(
         gst::Caps::builder("video/x-h264")
@@ -1064,15 +940,15 @@ fn test_single_stream_long_gops() {
     );
     h.play();
 
-    let output_offset = gst::ClockTime::from_seconds(60 * 60 * 1000);
+    let output_offset = (60 * 60 * 1000).seconds();
 
     // Push 10 buffers of 1s each, 1st and 7th buffer without DELTA_UNIT flag
     for i in 0..10 {
         let mut buffer = gst::Buffer::with_size(1).unwrap();
         {
             let buffer = buffer.get_mut().unwrap();
-            buffer.set_pts(gst::ClockTime::from_seconds(i));
-            buffer.set_dts(gst::ClockTime::from_seconds(i));
+            buffer.set_pts(i.seconds());
+            buffer.set_dts(i.seconds());
             buffer.set_duration(gst::ClockTime::SECOND);
             if i != 0 && i != 6 {
                 buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
@@ -1090,11 +966,7 @@ fn test_single_stream_long_gops() {
                 }
             };
 
-            let fku_time = if i == 2 {
-                gst::ClockTime::from_seconds(5)
-            } else {
-                gst::ClockTime::from_seconds(11)
-            };
+            let fku_time = if i == 2 { 5.seconds() } else { 11.seconds() };
 
             assert_eq!(ev.type_(), gst::EventType::CustomUpstream);
             assert_eq!(
@@ -1126,10 +998,7 @@ fn test_single_stream_long_gops() {
         fragment_header.dts(),
         Some(gst::ClockTime::ZERO + output_offset)
     );
-    assert_eq!(
-        fragment_header.duration(),
-        Some(gst::ClockTime::from_seconds(6))
-    );
+    assert_eq!(fragment_header.duration(), Some(6.seconds()));
 
     for i in 0..6 {
         let buffer = h.pull().unwrap();
@@ -1141,14 +1010,8 @@ fn test_single_stream_long_gops() {
         } else {
             assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
         }
-        assert_eq!(
-            buffer.pts(),
-            Some(gst::ClockTime::from_seconds(i) + output_offset)
-        );
-        assert_eq!(
-            buffer.dts(),
-            Some(gst::ClockTime::from_seconds(i) + output_offset)
-        );
+        assert_eq!(buffer.pts(), Some(i.seconds() + output_offset));
+        assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
         assert_eq!(buffer.duration(), Some(gst::ClockTime::SECOND));
     }
 
@@ -1156,18 +1019,9 @@ fn test_single_stream_long_gops() {
 
     let fragment_header = h.pull().unwrap();
     assert_eq!(fragment_header.flags(), gst::BufferFlags::HEADER);
-    assert_eq!(
-        fragment_header.pts(),
-        Some(gst::ClockTime::from_seconds(6) + output_offset)
-    );
-    assert_eq!(
-        fragment_header.dts(),
-        Some(gst::ClockTime::from_seconds(6) + output_offset)
-    );
-    assert_eq!(
-        fragment_header.duration(),
-        Some(gst::ClockTime::from_seconds(4))
-    );
+    assert_eq!(fragment_header.pts(), Some(6.seconds() + output_offset));
+    assert_eq!(fragment_header.dts(), Some(6.seconds() + output_offset));
+    assert_eq!(fragment_header.duration(), Some(4.seconds()));
 
     for i in 6..10 {
         let buffer = h.pull().unwrap();
@@ -1179,14 +1033,8 @@ fn test_single_stream_long_gops() {
         } else {
             assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
         }
-        assert_eq!(
-            buffer.pts(),
-            Some(gst::ClockTime::from_seconds(i) + output_offset)
-        );
-        assert_eq!(
-            buffer.dts(),
-            Some(gst::ClockTime::from_seconds(i) + output_offset)
-        );
+        assert_eq!(buffer.pts(), Some(i.seconds() + output_offset));
+        assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
         assert_eq!(buffer.duration(), Some(gst::ClockTime::SECOND));
     }
 
@@ -1210,7 +1058,7 @@ fn test_buffer_multi_stream_short_gops() {
     // 5s fragment duration
     h1.element()
         .unwrap()
-        .set_property("fragment-duration", gst::ClockTime::from_seconds(5));
+        .set_property("fragment-duration", 5.seconds());
 
     h1.set_src_caps(
         gst::Caps::builder("video/x-h264")
@@ -1241,15 +1089,15 @@ fn test_buffer_multi_stream_short_gops() {
     );
     h2.play();
 
-    let output_offset = gst::ClockTime::from_seconds(60 * 60 * 1000);
+    let output_offset = (60 * 60 * 1000).seconds();
 
     // Push 8 buffers of 1s each, 1st, 4th and 7th buffer without DELTA_UNIT flag
     for i in 0..8 {
         let mut buffer = gst::Buffer::with_size(1).unwrap();
         {
             let buffer = buffer.get_mut().unwrap();
-            buffer.set_pts(gst::ClockTime::from_seconds(i));
-            buffer.set_dts(gst::ClockTime::from_seconds(i));
+            buffer.set_pts(i.seconds());
+            buffer.set_dts(i.seconds());
             buffer.set_duration(gst::ClockTime::SECOND);
             if i != 0 && i != 3 && i != 6 {
                 buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
@@ -1260,8 +1108,8 @@ fn test_buffer_multi_stream_short_gops() {
         let mut buffer = gst::Buffer::with_size(1).unwrap();
         {
             let buffer = buffer.get_mut().unwrap();
-            buffer.set_pts(gst::ClockTime::from_seconds(i));
-            buffer.set_dts(gst::ClockTime::from_seconds(i));
+            buffer.set_pts(i.seconds());
+            buffer.set_dts(i.seconds());
             buffer.set_duration(gst::ClockTime::SECOND);
         }
         assert_eq!(h2.push(buffer), Ok(gst::FlowSuccess::Ok));
@@ -1276,11 +1124,7 @@ fn test_buffer_multi_stream_short_gops() {
                 }
             };
 
-            let fku_time = if i == 2 {
-                gst::ClockTime::from_seconds(5)
-            } else {
-                gst::ClockTime::from_seconds(8)
-            };
+            let fku_time = if i == 2 { 5.seconds() } else { 8.seconds() };
 
             assert_eq!(ev.type_(), gst::EventType::CustomUpstream);
             assert_eq!(
@@ -1331,10 +1175,7 @@ fn test_buffer_multi_stream_short_gops() {
         fragment_header.dts(),
         Some(gst::ClockTime::ZERO + output_offset)
     );
-    assert_eq!(
-        fragment_header.duration(),
-        Some(gst::ClockTime::from_seconds(3))
-    );
+    assert_eq!(fragment_header.duration(), Some(3.seconds()));
 
     for i in 0..3 {
         for j in 0..2 {
@@ -1348,16 +1189,10 @@ fn test_buffer_multi_stream_short_gops() {
                 assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
             }
 
-            assert_eq!(
-                buffer.pts(),
-                Some(gst::ClockTime::from_seconds(i) + output_offset)
-            );
+            assert_eq!(buffer.pts(), Some(i.seconds() + output_offset));
 
             if j == 0 {
-                assert_eq!(
-                    buffer.dts(),
-                    Some(gst::ClockTime::from_seconds(i) + output_offset)
-                );
+                assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
             } else {
                 assert!(buffer.dts().is_none());
             }
@@ -1370,18 +1205,9 @@ fn test_buffer_multi_stream_short_gops() {
 
     let fragment_header = h1.pull().unwrap();
     assert_eq!(fragment_header.flags(), gst::BufferFlags::HEADER);
-    assert_eq!(
-        fragment_header.pts(),
-        Some(gst::ClockTime::from_seconds(3) + output_offset)
-    );
-    assert_eq!(
-        fragment_header.dts(),
-        Some(gst::ClockTime::from_seconds(3) + output_offset)
-    );
-    assert_eq!(
-        fragment_header.duration(),
-        Some(gst::ClockTime::from_seconds(5))
-    );
+    assert_eq!(fragment_header.pts(), Some(3.seconds() + output_offset));
+    assert_eq!(fragment_header.dts(), Some(3.seconds() + output_offset));
+    assert_eq!(fragment_header.duration(), Some(5.seconds()));
 
     for i in 3..8 {
         for j in 0..2 {
@@ -1394,15 +1220,9 @@ fn test_buffer_multi_stream_short_gops() {
             } else {
                 assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
             }
-            assert_eq!(
-                buffer.pts(),
-                Some(gst::ClockTime::from_seconds(i) + output_offset)
-            );
+            assert_eq!(buffer.pts(), Some(i.seconds() + output_offset));
             if j == 0 {
-                assert_eq!(
-                    buffer.dts(),
-                    Some(gst::ClockTime::from_seconds(i) + output_offset)
-                );
+                assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
             } else {
                 assert!(buffer.dts().is_none());
             }

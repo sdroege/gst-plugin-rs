@@ -55,15 +55,15 @@ fn test_no_fallback_no_drops() {
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(gst::ClockTime::ZERO));
 
-    push_buffer(&pipeline, gst::ClockTime::SECOND);
-    set_time(&pipeline, gst::ClockTime::SECOND + LATENCY);
+    push_buffer(&pipeline, 1.seconds());
+    set_time(&pipeline, 1.seconds() + LATENCY);
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(gst::ClockTime::SECOND));
 
-    push_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
-    set_time(&pipeline, 2 * gst::ClockTime::SECOND + LATENCY);
+    push_buffer(&pipeline, 2.seconds());
+    set_time(&pipeline, 2.seconds() + LATENCY);
     let buffer = pull_buffer(&pipeline);
-    assert_buffer!(buffer, Some(2 * gst::ClockTime::SECOND));
+    assert_buffer!(buffer, Some(2.seconds()));
 
     push_eos(&pipeline);
     wait_eos(&pipeline);
@@ -90,17 +90,17 @@ fn test_no_drops(live: bool) {
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(gst::ClockTime::ZERO));
 
-    push_fallback_buffer(&pipeline, gst::ClockTime::SECOND);
-    push_buffer(&pipeline, gst::ClockTime::SECOND);
-    set_time(&pipeline, gst::ClockTime::SECOND + LATENCY);
+    push_fallback_buffer(&pipeline, 1.seconds());
+    push_buffer(&pipeline, 1.seconds());
+    set_time(&pipeline, 1.seconds() + LATENCY);
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(gst::ClockTime::SECOND));
 
-    push_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
-    push_fallback_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
-    set_time(&pipeline, 2 * gst::ClockTime::SECOND + LATENCY);
+    push_buffer(&pipeline, 2.seconds());
+    push_fallback_buffer(&pipeline, 2.seconds());
+    set_time(&pipeline, 2.seconds() + LATENCY);
     let buffer = pull_buffer(&pipeline);
-    assert_buffer!(buffer, Some(2 * gst::ClockTime::SECOND));
+    assert_buffer!(buffer, Some(2.seconds()));
 
     // EOS on the fallback should not be required
     push_eos(&pipeline);
@@ -129,15 +129,15 @@ fn test_no_drops_but_no_fallback_frames(live: bool) {
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(gst::ClockTime::ZERO));
 
-    push_buffer(&pipeline, gst::ClockTime::SECOND);
-    set_time(&pipeline, gst::ClockTime::SECOND + LATENCY);
+    push_buffer(&pipeline, 1.seconds());
+    set_time(&pipeline, 1.seconds() + LATENCY);
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(gst::ClockTime::SECOND));
 
-    push_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
-    set_time(&pipeline, 2 * gst::ClockTime::SECOND + LATENCY);
+    push_buffer(&pipeline, 2.seconds());
+    set_time(&pipeline, 2.seconds() + LATENCY);
     let buffer = pull_buffer(&pipeline);
-    assert_buffer!(buffer, Some(2 * gst::ClockTime::SECOND));
+    assert_buffer!(buffer, Some(2.seconds()));
 
     // EOS on the fallback should not be required
     push_eos(&pipeline);
@@ -167,18 +167,15 @@ fn test_short_drop(live: bool) {
 
     // A timeout at 1s will get rid of the fallback buffer
     // but not output anything
-    push_fallback_buffer(&pipeline, gst::ClockTime::SECOND);
+    push_fallback_buffer(&pipeline, 1.seconds());
     // Time out the fallback buffer at +10ms
-    set_time(
-        &pipeline,
-        gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
-    );
+    set_time(&pipeline, 1.seconds() + 10.mseconds());
 
-    push_fallback_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
-    push_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
-    set_time(&pipeline, 2 * gst::ClockTime::SECOND + LATENCY);
+    push_fallback_buffer(&pipeline, 2.seconds());
+    push_buffer(&pipeline, 2.seconds());
+    set_time(&pipeline, 2.seconds() + LATENCY);
     let buffer = pull_buffer(&pipeline);
-    assert_buffer!(buffer, Some(2 * gst::ClockTime::SECOND));
+    assert_buffer!(buffer, Some(2.seconds()));
 
     push_eos(&pipeline);
     push_fallback_eos(&pipeline);
@@ -208,38 +205,26 @@ fn test_long_drop_and_eos(live: bool) {
     assert_buffer!(buffer, Some(gst::ClockTime::ZERO));
 
     // Produce a second frame but only from the fallback source
-    push_fallback_buffer(&pipeline, gst::ClockTime::SECOND);
-    set_time(
-        &pipeline,
-        gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
-    );
+    push_fallback_buffer(&pipeline, 1.seconds());
+    set_time(&pipeline, 1.seconds() + 10.mseconds());
 
     // Produce a third frame but only from the fallback source
-    push_fallback_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
-    set_time(
-        &pipeline,
-        2 * gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
-    );
+    push_fallback_buffer(&pipeline, 2.seconds());
+    set_time(&pipeline, 2.seconds() + 10.mseconds());
 
     // Produce a fourth frame but only from the fallback source
     // This should be output now
-    push_fallback_buffer(&pipeline, 3 * gst::ClockTime::SECOND);
-    set_time(
-        &pipeline,
-        3 * gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
-    );
+    push_fallback_buffer(&pipeline, 3.seconds());
+    set_time(&pipeline, 3.seconds() + 10.mseconds());
     let buffer = pull_buffer(&pipeline);
-    assert_fallback_buffer!(buffer, Some(3 * gst::ClockTime::SECOND));
+    assert_fallback_buffer!(buffer, Some(3.seconds()));
 
     // Produce a fifth frame but only from the fallback source
     // This should be output now
-    push_fallback_buffer(&pipeline, 4 * gst::ClockTime::SECOND);
-    set_time(
-        &pipeline,
-        4 * gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
-    );
+    push_fallback_buffer(&pipeline, 4.seconds());
+    set_time(&pipeline, 4.seconds() + 10.mseconds());
     let buffer = pull_buffer(&pipeline);
-    assert_fallback_buffer!(buffer, Some(4 * gst::ClockTime::SECOND));
+    assert_fallback_buffer!(buffer, Some(4.seconds()));
 
     // Wait for EOS to arrive at appsink
     push_eos(&pipeline);
@@ -273,70 +258,49 @@ fn test_long_drop_and_recover(live: bool) {
     assert!(mainsink.property::<bool>("is-healthy"));
 
     // Produce a second frame but only from the fallback source
-    push_fallback_buffer(&pipeline, gst::ClockTime::SECOND);
-    set_time(
-        &pipeline,
-        gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
-    );
+    push_fallback_buffer(&pipeline, 1.seconds());
+    set_time(&pipeline, 1.seconds() + 10.mseconds());
 
     // Produce a third frame but only from the fallback source
-    push_fallback_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
-    set_time(
-        &pipeline,
-        2 * gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
-    );
+    push_fallback_buffer(&pipeline, 2.seconds());
+    set_time(&pipeline, 2.seconds() + 10.mseconds());
 
     // Produce a fourth frame but only from the fallback source
     // This should be output now
-    push_fallback_buffer(&pipeline, 3 * gst::ClockTime::SECOND);
-    set_time(
-        &pipeline,
-        3 * gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
-    );
+    push_fallback_buffer(&pipeline, 3.seconds());
+    set_time(&pipeline, 3.seconds() + 10.mseconds());
     let buffer = pull_buffer(&pipeline);
-    assert_fallback_buffer!(buffer, Some(3 * gst::ClockTime::SECOND));
+    assert_fallback_buffer!(buffer, Some(3.seconds()));
 
     // Produce a fifth frame but only from the fallback source
     // This should be output now
-    push_fallback_buffer(&pipeline, 4 * gst::ClockTime::SECOND);
-    set_time(
-        &pipeline,
-        4 * gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
-    );
+    push_fallback_buffer(&pipeline, 4.seconds());
+    set_time(&pipeline, 4.seconds() + 10.mseconds());
     let buffer = pull_buffer(&pipeline);
-    assert_fallback_buffer!(buffer, Some(4 * gst::ClockTime::SECOND));
+    assert_fallback_buffer!(buffer, Some(4.seconds()));
 
     // Produce a sixth frame from the normal source
-    push_buffer(&pipeline, 5 * gst::ClockTime::SECOND);
-    set_time(
-        &pipeline,
-        5 * gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
-    );
+    push_buffer(&pipeline, 5.seconds());
+    set_time(&pipeline, 5.seconds() + 10.mseconds());
     let buffer = pull_buffer(&pipeline);
-    assert_buffer!(buffer, Some(5 * gst::ClockTime::SECOND));
+    assert_buffer!(buffer, Some(5.seconds()));
     assert!(!mainsink.property::<bool>("is-healthy"));
     drop(mainsink);
     drop(switch);
 
     // Produce a seventh frame from the normal source but no fallback.
     // This should still be output immediately
-    push_buffer(&pipeline, 6 * gst::ClockTime::SECOND);
-    set_time(
-        &pipeline,
-        6 * gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
-    );
+    push_buffer(&pipeline, 6.seconds());
+    set_time(&pipeline, 6.seconds() + 10.mseconds());
     let buffer = pull_buffer(&pipeline);
-    assert_buffer!(buffer, Some(6 * gst::ClockTime::SECOND));
+    assert_buffer!(buffer, Some(6.seconds()));
 
     // Produce a eight frame from the normal source
-    push_buffer(&pipeline, 7 * gst::ClockTime::SECOND);
-    push_fallback_buffer(&pipeline, 7 * gst::ClockTime::SECOND);
-    set_time(
-        &pipeline,
-        7 * gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
-    );
+    push_buffer(&pipeline, 7.seconds());
+    push_fallback_buffer(&pipeline, 7.seconds());
+    set_time(&pipeline, 7.seconds() + 10.mseconds());
     let buffer = pull_buffer(&pipeline);
-    assert_buffer!(buffer, Some(7 * gst::ClockTime::SECOND));
+    assert_buffer!(buffer, Some(7.seconds()));
 
     // Wait for EOS to arrive at appsink
     push_eos(&pipeline);
@@ -364,38 +328,26 @@ fn test_initial_timeout(live: bool) {
     set_time(&pipeline, gst::ClockTime::ZERO);
 
     // Produce a second frame but only from the fallback source
-    push_fallback_buffer(&pipeline, gst::ClockTime::SECOND);
-    set_time(
-        &pipeline,
-        gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
-    );
+    push_fallback_buffer(&pipeline, 1.seconds());
+    set_time(&pipeline, 1.seconds() + 10.mseconds());
 
     // Produce a third frame but only from the fallback source
-    push_fallback_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
-    set_time(
-        &pipeline,
-        2 * gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
-    );
+    push_fallback_buffer(&pipeline, 2.seconds());
+    set_time(&pipeline, 2.seconds() + 10.mseconds());
 
     // Produce a fourth frame but only from the fallback source
     // This should be output now
-    push_fallback_buffer(&pipeline, 3 * gst::ClockTime::SECOND);
-    set_time(
-        &pipeline,
-        3 * gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
-    );
+    push_fallback_buffer(&pipeline, 3.seconds());
+    set_time(&pipeline, 3.seconds() + 10.mseconds());
     let buffer = pull_buffer(&pipeline);
-    assert_fallback_buffer!(buffer, Some(3 * gst::ClockTime::SECOND));
+    assert_fallback_buffer!(buffer, Some(3.seconds()));
 
     // Produce a fifth frame but only from the fallback source
     // This should be output now
-    push_fallback_buffer(&pipeline, 4 * gst::ClockTime::SECOND);
-    set_time(
-        &pipeline,
-        4 * gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
-    );
+    push_fallback_buffer(&pipeline, 4.seconds());
+    set_time(&pipeline, 4.seconds() + 10.mseconds());
     let buffer = pull_buffer(&pipeline);
-    assert_fallback_buffer!(buffer, Some(4 * gst::ClockTime::SECOND));
+    assert_fallback_buffer!(buffer, Some(4.seconds()));
 
     // Wait for EOS to arrive at appsink
     push_eos(&pipeline);
@@ -457,9 +409,9 @@ fn test_manual_switch(live: bool) {
     assert_buffer!(buffer, Some(gst::ClockTime::ZERO));
 
     switch.set_property("active-pad", &fallbacksink);
-    push_fallback_buffer(&pipeline, gst::ClockTime::SECOND);
-    push_buffer(&pipeline, gst::ClockTime::SECOND);
-    set_time(&pipeline, gst::ClockTime::SECOND + LATENCY);
+    push_fallback_buffer(&pipeline, 1.seconds());
+    push_buffer(&pipeline, 1.seconds());
+    set_time(&pipeline, 1.seconds() + LATENCY);
     let mut buffer = pull_buffer(&pipeline);
     // FIXME: Sometimes we first get the ZERO buffer from the fallback sink
     if buffer.pts() == Some(gst::ClockTime::ZERO) {
@@ -468,15 +420,15 @@ fn test_manual_switch(live: bool) {
     assert_fallback_buffer!(buffer, Some(gst::ClockTime::SECOND));
 
     switch.set_property("active-pad", &mainsink);
-    push_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
-    push_fallback_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
-    set_time(&pipeline, 2 * gst::ClockTime::SECOND + LATENCY);
+    push_buffer(&pipeline, 2.seconds());
+    push_fallback_buffer(&pipeline, 2.seconds());
+    set_time(&pipeline, 2.seconds() + LATENCY);
     buffer = pull_buffer(&pipeline);
     // FIXME: Sometimes we first get the 1sec buffer from the main sink
     if buffer.pts() == Some(gst::ClockTime::SECOND) {
         buffer = pull_buffer(&pipeline);
     }
-    assert_buffer!(buffer, Some(2 * gst::ClockTime::SECOND));
+    assert_buffer!(buffer, Some(2.seconds()));
 
     drop(mainsink);
     drop(fallbacksink);
@@ -539,7 +491,7 @@ fn setup_pipeline(
     );
 
     let switch = gst::ElementFactory::make("fallbackswitch", Some("switch")).unwrap();
-    switch.set_property("timeout", 3 * gst::ClockTime::SECOND);
+    switch.set_property("timeout", 3.seconds());
     if let Some(imm) = immediate_fallback {
         switch.set_property("immediate-fallback", imm);
     }

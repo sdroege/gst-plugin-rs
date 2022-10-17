@@ -36,23 +36,23 @@ fn test_parse() {
     // Check the first 4 output buffers
     let expected: [(ClockTime, ClockTime, &'static str); 4] = [
         (
-            ClockTime::from_nseconds(15_048_366_666),
-            ClockTime::from_nseconds(3_236_566_667),
+            15_048_366_666.nseconds(),
+            3_236_566_667.nseconds(),
             "From New York,\r\nthis is Democracy Now!",
         ),
         (
-            ClockTime::from_nseconds(18_985_633_333),
-            ClockTime::from_nseconds(1_234_566_667),
+            18_985_633_333.nseconds(),
+            1_234_566_667.nseconds(),
             "Yes, I’m supporting\r\nDonald Trump.",
         ),
         (
-            ClockTime::from_nseconds(20_220_200_000),
-            ClockTime::from_nseconds(2_168_833_333),
+            20_220_200_000.nseconds(),
+            2_168_833_333.nseconds(),
             "I’m doing so as enthusiastically\r\nas I can,",
         ),
         (
-            ClockTime::from_nseconds(22_389_033_333),
-            ClockTime::from_nseconds(2_235_566_667),
+            22_389_033_333.nseconds(),
+            2_235_566_667.nseconds(),
             "even the fact I think\r\nhe’s a terrible human being.",
         ),
     ];

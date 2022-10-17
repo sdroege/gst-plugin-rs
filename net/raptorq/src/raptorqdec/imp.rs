@@ -547,8 +547,8 @@ impl RaptorqDec {
         let tolerance = settings.repair_window_tolerance as u64;
         let repair_window = fmtp_param_from_caps::<u64>("repair-window", incaps)?;
 
-        let tolerance = gst::ClockTime::from_mseconds(tolerance);
-        let repair_window = gst::ClockTime::from_useconds(repair_window);
+        let tolerance = tolerance.mseconds();
+        let repair_window = repair_window.useconds();
         let repair_window = Some(repair_window + tolerance);
 
         let media_packets_reset_threshold = settings.media_packets_reset_threshold as usize;

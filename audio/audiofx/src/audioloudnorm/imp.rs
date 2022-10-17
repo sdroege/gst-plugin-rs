@@ -632,9 +632,7 @@ impl State {
 
         // PTS is 2.9s seconds before the input PTS as we buffer 3s of samples and just
         // outputted here the first 100ms of that.
-        let pts = pts
-            .into()
-            .map(|pts| pts + 100 * gst::ClockTime::MSECOND - 3 * gst::ClockTime::SECOND);
+        let pts = pts.into().map(|pts| pts + 100.mseconds() - 3.seconds());
         Ok((outbuf, pts))
     }
 
@@ -766,9 +764,7 @@ impl State {
 
         // PTS is 2.9s seconds before the input PTS as we buffer 3s of samples and just
         // outputted here the first 100ms of that.
-        let pts = pts
-            .into()
-            .map(|pts| pts + 100 * gst::ClockTime::MSECOND - 3 * gst::ClockTime::SECOND);
+        let pts = pts.into().map(|pts| pts + 100.mseconds() - 3.seconds());
         Ok((outbuf, pts))
     }
 
@@ -1674,8 +1670,8 @@ impl AudioLoudNorm {
                     let (live, min_latency, max_latency) = peer_query.result();
                     q.set(
                         live,
-                        min_latency + 3 * gst::ClockTime::SECOND,
-                        max_latency.opt_add(3 * gst::ClockTime::SECOND),
+                        min_latency + 3.seconds(),
+                        max_latency.opt_add(3.seconds()),
                     );
                     true
                 } else {

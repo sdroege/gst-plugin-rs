@@ -19,6 +19,8 @@
 
 use super::ffi;
 
+use gst::prelude::*;
+
 use std::ptr;
 
 use glib::translate::*;
@@ -117,7 +119,7 @@ impl RTPJitterBufferItem {
             if item.as_ref().dts == gst::ffi::GST_CLOCK_TIME_NONE {
                 None
             } else {
-                Some(gst::ClockTime::from_nseconds(item.as_ref().dts))
+                Some(item.as_ref().dts.nseconds())
             }
         }
     }
@@ -128,7 +130,7 @@ impl RTPJitterBufferItem {
             if item.as_ref().pts == gst::ffi::GST_CLOCK_TIME_NONE {
                 None
             } else {
-                Some(gst::ClockTime::from_nseconds(item.as_ref().pts))
+                Some(item.as_ref().pts.nseconds())
             }
         }
     }

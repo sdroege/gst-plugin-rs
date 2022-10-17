@@ -68,7 +68,7 @@ fn test_push() {
 
     let mut eos = false;
     let bus = pipeline.bus().unwrap();
-    while let Some(msg) = bus.timed_pop(5 * gst::ClockTime::SECOND) {
+    while let Some(msg) = bus.timed_pop(5.seconds()) {
         use gst::MessageView;
         match msg.view() {
             MessageView::Eos(..) => {

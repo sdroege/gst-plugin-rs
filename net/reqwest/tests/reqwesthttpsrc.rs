@@ -930,13 +930,12 @@ fn test_seek_after_ready() {
     assert_eq!(current_state, gst::State::Ready);
 
     h.run(|src| {
-        src.seek_simple(gst::SeekFlags::FLUSH, gst::format::Bytes::from_u64(123))
-            .unwrap();
+        src.seek_simple(gst::SeekFlags::FLUSH, 123.bytes()).unwrap();
         src.set_state(gst::State::Playing).unwrap();
     });
 
     let segment = h.wait_for_segment(false);
-    assert_eq!(segment.start(), Some(gst::format::Bytes::from_u64(123)));
+    assert_eq!(segment.start(), Some(123.bytes()));
 
     let mut expected_output = vec![0; 8192 - 123];
     for (i, d) in expected_output.iter_mut().enumerate() {
@@ -1009,12 +1008,11 @@ fn test_seek_after_buffer_received() {
 
     //seek to a position after a buffer is Received
     h.run(|src| {
-        src.seek_simple(gst::SeekFlags::FLUSH, gst::format::Bytes::from_u64(123))
-            .unwrap();
+        src.seek_simple(gst::SeekFlags::FLUSH, 123.bytes()).unwrap();
     });
 
     let segment = h.wait_for_segment(true);
-    assert_eq!(segment.start(), Some(gst::format::Bytes::from_u64(123)));
+    assert_eq!(segment.start(), Some(123.bytes()));
 
     let mut expected_output = vec![0; 8192 - 123];
     for (i, d) in expected_output.iter_mut().enumerate() {
@@ -1086,8 +1084,8 @@ fn test_seek_with_stop_position() {
     assert_eq!(buffer.offset(), 0);
 
     //seek to a position after a buffer is Received
-    let start = gst::format::Bytes::from_u64(123);
-    let stop = gst::format::Bytes::from_u64(131);
+    let start = 123.bytes();
+    let stop = 131.bytes();
     h.run(move |src| {
         src.seek(
             1.0,

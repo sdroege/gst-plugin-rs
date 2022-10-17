@@ -137,14 +137,12 @@ impl ObjectImpl for AudioEcho {
             "max-delay" => {
                 let mut settings = self.settings.lock().unwrap();
                 if self.state.lock().unwrap().is_none() {
-                    settings.max_delay =
-                        gst::ClockTime::from_nseconds(value.get().expect("type checked upstream"));
+                    settings.max_delay = value.get::<u64>().unwrap().nseconds();
                 }
             }
             "delay" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.delay =
-                    gst::ClockTime::from_nseconds(value.get().expect("type checked upstream"));
+                settings.delay = value.get::<u64>().unwrap().nseconds();
             }
             "intensity" => {
                 let mut settings = self.settings.lock().unwrap();

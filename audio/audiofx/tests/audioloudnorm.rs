@@ -151,7 +151,7 @@ fn run_test(
         num_samples += data.len() / channels as usize;
         r128.add_frames_f64(data).unwrap();
 
-        expected_ts += gst::ClockTime::from_seconds(data.len() as u64 / channels as u64) / 192_000;
+        expected_ts += (data.len() as u64 / channels as u64).seconds() / 192_000;
     }
 
     assert_eq!(

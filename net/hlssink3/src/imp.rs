@@ -493,7 +493,7 @@ impl ObjectImpl for HlsSink3 {
                 settings.target_duration = value.get().expect("type checked upstream");
                 settings.splitmuxsink.set_property(
                     "max-size-time",
-                    &(gst::ClockTime::from_seconds(settings.target_duration as u64)),
+                    &((settings.target_duration as u64).seconds()),
                 );
             }
             "playlist-length" => {
@@ -627,7 +627,7 @@ impl ObjectImpl for HlsSink3 {
             ("location", &location),
             (
                 "max-size-time",
-                &(gst::ClockTime::from_seconds(settings.target_duration as u64)),
+                &(settings.target_duration as u64).seconds(),
             ),
             ("send-keyframe-requests", &settings.send_keyframe_requests),
             ("muxer", &mux),

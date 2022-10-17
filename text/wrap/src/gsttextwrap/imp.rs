@@ -509,8 +509,7 @@ impl ObjectImpl for TextWrap {
             "accumulate-time" => {
                 let mut settings = self.settings.lock().unwrap();
                 let old_accumulate_time = settings.accumulate_time;
-                settings.accumulate_time =
-                    gst::ClockTime::from_nseconds(value.get().expect("type checked upstream"));
+                settings.accumulate_time = value.get::<u64>().unwrap().nseconds();
                 if settings.accumulate_time != old_accumulate_time {
                     gst::debug!(
                         CAT,

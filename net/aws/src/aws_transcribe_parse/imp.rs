@@ -125,7 +125,7 @@ impl TranscribeParse {
             )
         })?;
 
-        let mut last_pts: gst::ClockTime = gst::ClockTime::from_nseconds(0);
+        let mut last_pts = gst::ClockTime::ZERO;
 
         for mut item in transcript.results.items.drain(..) {
             match item.type_.as_str() {
@@ -139,7 +139,7 @@ impl TranscribeParse {
                             let outbuf = outbuf.get_mut().unwrap();
 
                             outbuf.set_pts(last_pts);
-                            outbuf.set_duration(gst::ClockTime::from_nseconds(0));
+                            outbuf.set_duration(gst::ClockTime::ZERO);
                         }
 
                         self.srcpad.push(outbuf).map_err(|err| {
@@ -170,10 +170,8 @@ impl TranscribeParse {
                         }
                     };
 
-                    let start_pts =
-                        gst::ClockTime::from_nseconds((start_time as f64 * 1_000_000_000.0) as u64);
-                    let end_pts =
-                        gst::ClockTime::from_nseconds((end_time as f64 * 1_000_000_000.0) as u64);
+                    let start_pts = ((start_time as f64 * 1_000_000_000.0) as u64).nseconds();
+                    let end_pts = ((end_time as f64 * 1_000_000_000.0) as u64).nseconds();
                     let duration = end_pts.saturating_sub(start_pts);
 
                     if start_pts > last_pts {

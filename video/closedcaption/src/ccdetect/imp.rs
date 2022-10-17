@@ -258,8 +258,7 @@ impl ObjectImpl for CCDetect {
         match pspec.name() {
             "window" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.window =
-                    gst::ClockTime::from_nseconds(value.get().expect("type checked upstream"));
+                settings.window = value.get::<u64>().unwrap().nseconds();
             }
             _ => unimplemented!(),
         }

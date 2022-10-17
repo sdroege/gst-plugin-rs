@@ -303,8 +303,8 @@ impl Observations {
             CAT,
             obj: element,
             "Local time {}, remote time {}, slope correct {}/{}",
-            gst::ClockTime::from_nseconds(local_time),
-            gst::ClockTime::from_nseconds(remote_time),
+            local_time.nseconds(),
+            remote_time.nseconds(),
             inner.slope_correction.0,
             inner.slope_correction.1,
         );
@@ -337,18 +337,18 @@ impl Observations {
                         CAT,
                         obj: element,
                         "Initializing base time: local {}, remote {}",
-                        gst::ClockTime::from_nseconds(local_time),
-                        gst::ClockTime::from_nseconds(remote_time),
+                        local_time.nseconds(),
+                        remote_time.nseconds(),
                     );
                     inner.base_remote_time = Some(remote_time);
                     inner.base_local_time = Some(local_time);
 
-                    return Some((gst::ClockTime::from_nseconds(local_time), duration, true));
+                    return Some((local_time.nseconds(), duration, true));
                 }
             };
 
         if inner.times.len() < PREFILL_WINDOW_LENGTH {
-            return Some((gst::ClockTime::from_nseconds(local_time), duration, false));
+            return Some((local_time.nseconds(), duration, false));
         }
 
         // Check if the slope is simply wrong and try correcting
@@ -426,15 +426,15 @@ impl Observations {
                         CAT,
                         obj: element,
                         "Initializing base time: local {}, remote {}, slope correction {}/{}",
-                        gst::ClockTime::from_nseconds(local_time),
-                        gst::ClockTime::from_nseconds(remote_time),
+                        local_time.nseconds(),
+                        remote_time.nseconds(),
                         inner.slope_correction.0,
                         inner.slope_correction.1,
                     );
                     inner.base_remote_time = Some(remote_time);
                     inner.base_local_time = Some(local_time);
 
-                    return Some((gst::ClockTime::from_nseconds(local_time), duration, discont));
+                    return Some((local_time.nseconds(), duration, discont));
                 }
             }
         }
@@ -447,8 +447,8 @@ impl Observations {
             CAT,
             obj: element,
             "Local diff {}, remote diff {}, delta {}",
-            gst::ClockTime::from_nseconds(local_diff),
-            gst::ClockTime::from_nseconds(remote_diff),
+            local_diff.nseconds(),
+            remote_diff.nseconds(),
             delta,
         );
 
@@ -469,15 +469,15 @@ impl Observations {
                 CAT,
                 obj: element,
                 "Initializing base time: local {}, remote {}",
-                gst::ClockTime::from_nseconds(local_time),
-                gst::ClockTime::from_nseconds(remote_time),
+                local_time.nseconds(),
+                remote_time.nseconds(),
             );
 
             inner.reset();
             inner.base_remote_time = Some(remote_time);
             inner.base_local_time = Some(local_time);
 
-            return Some((gst::ClockTime::from_nseconds(local_time), duration, discont));
+            return Some((local_time.nseconds(), duration, discont));
         }
 
         if inner.filling {
@@ -526,14 +526,9 @@ impl Observations {
             inner.skew,
             inner.min_delta
         );
-        gst::trace!(
-            CAT,
-            obj: element,
-            "Outputting {}",
-            gst::ClockTime::from_nseconds(out_time)
-        );
+        gst::trace!(CAT, obj: element, "Outputting {}", out_time.nseconds());
 
-        Some((gst::ClockTime::from_nseconds(out_time), duration, false))
+        Some((out_time.nseconds(), duration, false))
     }
 }
 
@@ -839,7 +834,7 @@ impl Receiver {
                             CAT,
                             obj: &element,
                             "Received metadata at timecode {}: {}",
-                            gst::ClockTime::from_nseconds(frame.timecode() as u64 * 100),
+                            (frame.timecode() as u64 * 100).nseconds(),
                             metadata,
                         );
                     }
@@ -901,13 +896,13 @@ impl Receiver {
     ) -> Option<(gst::ClockTime, Option<gst::ClockTime>, bool)> {
         let receive_time = element.current_running_time()?;
 
-        let real_time_now = gst::ClockTime::from_nseconds(glib::real_time() as u64 * 1000);
+        let real_time_now = (glib::real_time() as u64 * 1000).nseconds();
         let timestamp = if timestamp == ndisys::NDIlib_recv_timestamp_undefined {
             gst::ClockTime::NONE
         } else {
-            Some(gst::ClockTime::from_nseconds(timestamp as u64 * 100))
+            Some((timestamp as u64 * 100).nseconds())
         };
-        let timecode = gst::ClockTime::from_nseconds(timecode as u64 * 100);
+        let timecode = (timecode as u64 * 100).nseconds();
 
         gst::log!(
             CAT,
@@ -1305,14 +1300,14 @@ impl Receiver {
             gst::ReferenceTimestampMeta::add(
                 buffer,
                 &*crate::TIMECODE_CAPS,
-                gst::ClockTime::from_nseconds(video_frame.timecode() as u64 * 100),
+                (video_frame.timecode() as u64 * 100).nseconds(),
                 gst::ClockTime::NONE,
             );
             if video_frame.timestamp() != ndisys::NDIlib_recv_timestamp_undefined {
                 gst::ReferenceTimestampMeta::add(
                     buffer,
                     &*crate::TIMESTAMP_CAPS,
-                    gst::ClockTime::from_nseconds(video_frame.timestamp() as u64 * 100),
+                    (video_frame.timestamp() as u64 * 100).nseconds(),
                     gst::ClockTime::NONE,
                 );
             }
@@ -1676,14 +1671,14 @@ impl Receiver {
                     gst::ReferenceTimestampMeta::add(
                         buffer,
                         &*crate::TIMECODE_CAPS,
-                        gst::ClockTime::from_nseconds(audio_frame.timecode() as u64 * 100),
+                        (audio_frame.timecode() as u64 * 100).nseconds(),
                         gst::ClockTime::NONE,
                     );
                     if audio_frame.timestamp() != ndisys::NDIlib_recv_timestamp_undefined {
                         gst::ReferenceTimestampMeta::add(
                             buffer,
                             &*crate::TIMESTAMP_CAPS,
-                            gst::ClockTime::from_nseconds(audio_frame.timestamp() as u64 * 100),
+                            (audio_frame.timestamp() as u64 * 100).nseconds(),
                             gst::ClockTime::NONE,
                         );
                     }

@@ -45,7 +45,7 @@ fn test_encode_single_packet() {
         let mut buf = gst::Buffer::from_mut_slice(Vec::from(&input[..]));
         let buf_ref = buf.get_mut().unwrap();
         gst_video::VideoTimeCodeMeta::add(buf_ref, &tc);
-        buf_ref.set_pts(gst::ClockTime::from_seconds(0));
+        buf_ref.set_pts(gst::ClockTime::ZERO);
         buf
     };
 
@@ -117,7 +117,7 @@ fn test_encode_multiple_packets() {
         let mut buf = gst::Buffer::from_mut_slice(Vec::from(&input1[..]));
         let buf_ref = buf.get_mut().unwrap();
         gst_video::VideoTimeCodeMeta::add(buf_ref, &tc1);
-        buf_ref.set_pts(gst::ClockTime::from_seconds(0));
+        buf_ref.set_pts(gst::ClockTime::ZERO);
         buf
     };
 
@@ -127,7 +127,7 @@ fn test_encode_multiple_packets() {
         let mut tc = tc1.clone();
         tc.increment_frame();
         gst_video::VideoTimeCodeMeta::add(buf_ref, &tc);
-        buf_ref.set_pts(gst::ClockTime::from_seconds(0));
+        buf_ref.set_pts(gst::ClockTime::ZERO);
         buf
     };
 

@@ -111,7 +111,7 @@ static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
 });
 
 const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_seconds(8);
-const DEFAULT_LATENESS: gst::ClockTime = gst::ClockTime::from_seconds(0);
+const DEFAULT_LATENESS: gst::ClockTime = gst::ClockTime::ZERO;
 const DEFAULT_STABILITY: AwsTranscriberResultStability = AwsTranscriberResultStability::Low;
 const DEFAULT_VOCABULARY_FILTER_METHOD: AwsTranscriberVocabularyFilterMethod =
     AwsTranscriberVocabularyFilterMethod::Mask;
@@ -395,11 +395,8 @@ impl Transcriber {
 
         for item in &alternative.items[state.partial_index..] {
             let start_time =
-                gst::ClockTime::from_nseconds((item.start_time as f64 * 1_000_000_000.0) as u64)
-                    + lateness;
-            let end_time =
-                gst::ClockTime::from_nseconds((item.end_time as f64 * 1_000_000_000.0) as u64)
-                    + lateness;
+                ((item.start_time as f64 * 1_000_000_000.0) as u64).nseconds() + lateness;
+            let end_time = ((item.end_time as f64 * 1_000_000_000.0) as u64).nseconds() + lateness;
 
             if !item.stable {
                 break;

@@ -204,7 +204,9 @@ impl State {
 
         let (fps_n, fps_d) = (self.framerate.numer() as u64, self.framerate.denom() as u64);
 
-        let pts = (self.last_frame_no * gst::ClockTime::SECOND)
+        let pts = self
+            .last_frame_no
+            .seconds()
             .mul_div_round(fps_d, fps_n)
             .unwrap();
 
@@ -214,7 +216,9 @@ impl State {
             gst::debug!(CAT, imp: imp, "More text than bandwidth!");
         }
 
-        let next_pts = (self.last_frame_no * gst::ClockTime::SECOND)
+        let next_pts = self
+            .last_frame_no
+            .seconds()
             .mul_div_round(fps_d, fps_n)
             .unwrap();
 
@@ -1065,7 +1069,7 @@ impl ObjectImpl for TtToCea608 {
 
                 settings.roll_up_timeout = match timeout {
                     u64::MAX => gst::ClockTime::NONE,
-                    _ => Some(gst::ClockTime::from_nseconds(timeout)),
+                    _ => Some(timeout.nseconds()),
                 };
             }
             _ => unimplemented!(),

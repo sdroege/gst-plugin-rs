@@ -339,7 +339,7 @@ impl VideoStream {
         src.set_property("num-buffers", 300);
         enc.set_property("bframes", 0u32);
         enc.set_property("bitrate", self.bitrate as u32 / 1000u32);
-        mux.set_property("fragment-duration", gst::ClockTime::from_mseconds(2500));
+        mux.set_property("fragment-duration", 2500.mseconds());
         mux.set_property_from_str("header-update-mode", "update");
         mux.set_property("write-mehd", true);
 
@@ -378,7 +378,7 @@ impl AudioStream {
             gst_audio::AudioCapsBuilder::new().rate(44100).build(),
         );
 
-        mux.set_property("fragment-duration", gst::ClockTime::from_mseconds(2500));
+        mux.set_property("fragment-duration", 2500.mseconds());
         mux.set_property_from_str("header-update-mode", "update");
         mux.set_property("write-mehd", true);
 

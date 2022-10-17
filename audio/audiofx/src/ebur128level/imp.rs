@@ -195,8 +195,7 @@ impl ObjectImpl for EbuR128Level {
                 settings.post_messages = post_messages;
             }
             "interval" => {
-                let interval =
-                    gst::ClockTime::from_nseconds(value.get().expect("type checked upstream"));
+                let interval = value.get::<u64>().unwrap().nseconds();
                 gst::info!(
                     CAT,
                     imp: self,
@@ -455,7 +454,7 @@ impl BaseTransformImpl for EbuR128Level {
                     gst::FlowError::Error
                 })?;
 
-            state.interval_frames_remaining -= gst::ClockTime::from_nseconds(to_process);
+            state.interval_frames_remaining -= to_process.nseconds();
             state.num_frames += to_process;
 
             // The timestamp we report in messages is always the timestamp until which measurements

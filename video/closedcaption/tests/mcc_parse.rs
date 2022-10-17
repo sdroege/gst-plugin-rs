@@ -170,7 +170,7 @@ fn test_pull() {
         gst::SeekType::Set,
         gst::ClockTime::SECOND,
         gst::SeekType::Set,
-        2 * gst::ClockTime::SECOND,
+        2.seconds(),
     ));
 
     loop {
@@ -179,7 +179,7 @@ fn test_pull() {
         while h.buffers_in_queue() != 0 {
             if let Ok(buffer) = h.pull() {
                 let pts = buffer.pts().unwrap();
-                assert!(pts > gst::ClockTime::SECOND && pts < 2 * gst::ClockTime::SECOND);
+                assert!(pts > gst::ClockTime::SECOND && pts < 2.seconds());
             }
         }
 

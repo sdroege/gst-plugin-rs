@@ -344,7 +344,7 @@ impl Dav1dDec {
             out_buffer
                 .get_mut()
                 .unwrap()
-                .set_duration(gst::ClockTime::from_nseconds(duration));
+                .set_duration(duration.nseconds());
         }
 
         Ok(out_buffer)
@@ -614,9 +614,7 @@ impl VideoDecoderImpl for Dav1dDec {
                                     n => n,
                                 };
 
-                                let latency = frame_latency
-                                    * (info.fps().denom() as u64)
-                                    * gst::ClockTime::SECOND
+                                let latency = frame_latency * (info.fps().denom() as u64).seconds()
                                     / (fps_n as u64);
 
                                 gst::debug!(CAT, imp: self, "Reporting latency of {}", latency);

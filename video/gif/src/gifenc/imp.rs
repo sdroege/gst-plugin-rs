@@ -375,7 +375,7 @@ impl VideoEncoderImpl for GifEnc {
             gif_frame.delay = (frame_delay.mseconds() as f32 / 10.0).round() as u16;
             state.gif_pts = state
                 .gif_pts
-                .opt_add(gst::ClockTime::from_mseconds(gif_frame.delay as u64 * 10));
+                .opt_add((gif_frame.delay as u64 * 10).mseconds());
 
             // encode new frame
             let context = state.context.as_mut().unwrap();

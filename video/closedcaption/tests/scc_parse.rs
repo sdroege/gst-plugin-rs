@@ -235,9 +235,9 @@ fn test_pull() {
         1.0,
         gst::SeekFlags::FLUSH,
         gst::SeekType::Set,
-        18 * gst::ClockTime::SECOND,
+        18.seconds(),
         gst::SeekType::Set,
-        19 * gst::ClockTime::SECOND,
+        19.seconds(),
     ));
 
     loop {
@@ -248,9 +248,7 @@ fn test_pull() {
                 let pts = buffer.pts().unwrap();
                 let end_time = pts + buffer.duration().unwrap();
 
-                assert!(
-                    end_time >= 18 * gst::ClockTime::SECOND && pts < 19 * gst::ClockTime::SECOND
-                );
+                assert!(end_time >= 18.seconds() && pts < 19.seconds());
             }
         }
 

@@ -936,7 +936,7 @@ impl StreamingState {
 
         {
             let buffer = buffer.get_mut().unwrap();
-            buffer.set_pts(gst::ClockTime::from_mseconds(tag_header.timestamp as u64));
+            buffer.set_pts((tag_header.timestamp as u64).mseconds());
         }
 
         gst::trace!(
@@ -1130,7 +1130,7 @@ impl StreamingState {
             if !is_keyframe {
                 buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
             }
-            buffer.set_dts(gst::ClockTime::from_mseconds(tag_header.timestamp as u64));
+            buffer.set_dts((tag_header.timestamp as u64).mseconds());
 
             // Prevent negative numbers
             let pts = if cts < 0 && tag_header.timestamp < (-cts) as u32 {
@@ -1138,7 +1138,7 @@ impl StreamingState {
             } else {
                 ((tag_header.timestamp as i64) + (cts as i64)) as u64
             };
-            buffer.set_pts(gst::ClockTime::from_mseconds(pts));
+            buffer.set_pts(pts.mseconds());
         }
 
         gst::trace!(
@@ -1487,9 +1487,8 @@ impl Metadata {
         for arg in args {
             match (arg.name, &arg.data) {
                 ("duration", &flavors::ScriptDataValue::Number(duration)) => {
-                    metadata.duration = Some(gst::ClockTime::from_nseconds(
-                        (duration * 1000.0 * 1000.0 * 1000.0) as u64,
-                    ));
+                    metadata.duration =
+                        Some(((duration * 1000.0 * 1000.0 * 1000.0) as u64).nseconds());
                 }
                 ("creationdate", &flavors::ScriptDataValue::String(date)) => {
                     metadata.creation_date = Some(String::from(date));

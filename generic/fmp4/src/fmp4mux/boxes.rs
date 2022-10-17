@@ -459,7 +459,8 @@ fn caps_to_timescale(caps: &gst::CapsRef) -> u32 {
         }
 
         if fps.denom() != 1 && fps.denom() != 1001 {
-            if let Some(fps) = gst::ClockTime::from_nseconds(fps.denom() as u64)
+            if let Some(fps) = (fps.denom() as u64)
+                .nseconds()
                 .mul_div_round(1_000_000_000, fps.numer() as u64)
                 .and_then(gst_video::guess_framerate)
             {

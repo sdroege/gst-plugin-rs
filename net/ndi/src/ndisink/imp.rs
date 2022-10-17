@@ -279,7 +279,7 @@ impl BaseSinkImpl for NdiSink {
                         if *timecode < 0 {
                             gst::ClockTime::NONE.display()
                         } else {
-                            Some(gst::ClockTime::from_nseconds(*timecode as u64 * 100)).display()
+                            Some((*timecode as u64 * 100).nseconds()).display()
                         },
                         info,
                     );
@@ -323,7 +323,7 @@ impl BaseSinkImpl for NdiSink {
                     if timecode < 0 {
                         gst::ClockTime::NONE.display()
                     } else {
-                        Some(gst::ClockTime::from_nseconds(timecode as u64 * 100)).display()
+                        Some((timecode as u64 * 100).nseconds()).display()
                     },
                     info
                 );
@@ -358,7 +358,7 @@ impl BaseSinkImpl for NdiSink {
                 if timecode < 0 {
                     gst::ClockTime::NONE.display()
                 } else {
-                    Some(gst::ClockTime::from_nseconds(timecode as u64 * 100)).display()
+                    Some((timecode as u64 * 100).nseconds()).display()
                 },
                 info,
             );

@@ -69,7 +69,7 @@ impl Default for Settings {
     fn default() -> Self {
         Settings {
             latency: None,
-            max_lateness: Some(gst::ClockTime::from_mseconds(200)),
+            max_lateness: Some(200.mseconds()),
         }
     }
 }
@@ -359,8 +359,8 @@ impl OnvifMetadataParse {
                     gst::FlowError::Error
                 })?;
 
-                let dt_unix_ns = gst::ClockTime::from_nseconds(dt.timestamp_nanos() as u64)
-                    + crate::PRIME_EPOCH_OFFSET;
+                let dt_unix_ns =
+                    (dt.timestamp_nanos() as u64).nseconds() + crate::PRIME_EPOCH_OFFSET;
 
                 gst::trace!(
                     CAT,
@@ -909,7 +909,7 @@ impl OnvifMetadataParse {
                             if parsed {
                                 gst::ClockTime::ZERO
                             } else {
-                                gst::ClockTime::from_seconds(6)
+                                6.seconds()
                             }
                         };
                         state.configured_latency = latency;

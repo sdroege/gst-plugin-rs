@@ -217,7 +217,7 @@ impl OnvifMetadataCombiner {
                                 imp: self,
                                 "could not calculate duration for current media buffer"
                             );
-                            Some(gst::ClockTime::from_nseconds(0))
+                            Some(gst::ClockTime::ZERO)
                         }
                     }
                 } else if timeout {
@@ -226,7 +226,7 @@ impl OnvifMetadataCombiner {
                         imp: self,
                         "could not calculate duration for current media buffer"
                     );
-                    Some(gst::ClockTime::from_nseconds(0))
+                    Some(gst::ClockTime::ZERO)
                 } else {
                     gst::trace!(
                         CAT,
@@ -304,11 +304,9 @@ impl AggregatorImpl for OnvifMetadataCombiner {
                 s.set("frames", buflist);
             }
 
-            let position = buffer.pts().opt_add(
-                buffer
-                    .duration()
-                    .unwrap_or_else(|| gst::ClockTime::from_nseconds(0)),
-            );
+            let position = buffer
+                .pts()
+                .opt_add(buffer.duration().unwrap_or(gst::ClockTime::ZERO));
 
             gst::log!(CAT, imp: self, "Updating position: {:?}", position);
 

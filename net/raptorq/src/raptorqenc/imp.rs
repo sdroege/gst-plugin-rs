@@ -177,7 +177,7 @@ impl RaptorqEnc {
             .unwrap_or(0);
 
         let delays = (1..=state.repair_packets_num)
-            .map(|n| gst::ClockTime::from_mseconds((n * delay_step) as u64))
+            .map(|n| ((n * delay_step) as u64).mseconds())
             .collect::<Vec<_>>();
 
         let base_time = self.instance().base_time();

@@ -45,8 +45,7 @@ fn get_utc_time_from_buffer(buffer: &gst::BufferRef) -> Option<gst::ClockTime> {
             if meta.reference().can_intersect(&UNIX_CAPS) {
                 Some(meta.timestamp())
             } else if meta.reference().can_intersect(&NTP_CAPS) {
-                meta.timestamp()
-                    .checked_sub(gst::ClockTime::from_seconds(NTP_UNIX_OFFSET))
+                meta.timestamp().checked_sub(NTP_UNIX_OFFSET.seconds())
             } else {
                 None
             }
@@ -913,13 +912,11 @@ impl FMP4Mux {
         let calculate_pts = |buffer: &Buffer| -> gst::ClockTime {
             let composition_time_offset = buffer.composition_time_offset.unwrap_or(0);
             if composition_time_offset > 0 {
-                buffer.timestamp + gst::ClockTime::from_nseconds(composition_time_offset as u64)
+                buffer.timestamp + (composition_time_offset as u64).nseconds()
             } else {
                 buffer
                     .timestamp
-                    .checked_sub(gst::ClockTime::from_nseconds(
-                        (-composition_time_offset) as u64,
-                    ))
+                    .checked_sub(((-composition_time_offset) as u64).nseconds())
                     .unwrap()
             }
         };
@@ -957,13 +954,11 @@ impl FMP4Mux {
                         };
                         let buffer_utc_time = if buffer_pts_diff >= 0 {
                             utc_time
-                                .checked_sub(gst::ClockTime::from_nseconds(buffer_pts_diff as u64))
+                                .checked_sub((buffer_pts_diff as u64).nseconds())
                                 .unwrap()
                         } else {
                             utc_time
-                                .checked_add(gst::ClockTime::from_nseconds(
-                                    (-buffer_pts_diff) as u64,
-                                ))
+                                .checked_add(((-buffer_pts_diff) as u64).nseconds())
                                 .unwrap()
                         };
 
@@ -1035,15 +1030,11 @@ impl FMP4Mux {
                     if let Some(composition_time_offset) = buffer.composition_time_offset {
                         if composition_time_offset >= 0 {
                             utc_time
-                                .checked_sub(gst::ClockTime::from_nseconds(
-                                    composition_time_offset as u64,
-                                ))
+                                .checked_sub((composition_time_offset as u64).nseconds())
                                 .unwrap()
                         } else {
                             utc_time
-                                .checked_add(gst::ClockTime::from_nseconds(
-                                    (-composition_time_offset) as u64,
-                                ))
+                                .checked_add(((-composition_time_offset) as u64).nseconds())
                                 .unwrap()
                         }
                     } else {
@@ -2122,7 +2113,7 @@ impl AggregatorImpl for FMP4Mux {
                         gst::StreamError::Format,
                         ["Longer GOPs than fragment duration"]
                     );
-                    state.timeout_delay += gst::ClockTime::from_seconds(1);
+                    state.timeout_delay += 1.seconds();
 
                     drop(state);
                     for (sinkpad, event) in upstream_events {

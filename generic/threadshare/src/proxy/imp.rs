@@ -1111,8 +1111,7 @@ impl ObjectImpl for ProxySrc {
                 settings.max_size_bytes = value.get().expect("type checked upstream");
             }
             "max-size-time" => {
-                settings.max_size_time =
-                    gst::ClockTime::from_nseconds(value.get().expect("type checked upstream"));
+                settings.max_size_time = value.get::<u64>().unwrap().nseconds();
             }
             "context" => {
                 settings.context = value

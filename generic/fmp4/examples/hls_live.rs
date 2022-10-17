@@ -445,7 +445,7 @@ impl VideoStream {
         enc.set_property("bframes", 0u32);
         enc.set_property("bitrate", self.bitrate as u32 / 1000u32);
         enc.set_property_from_str("tune", "zerolatency");
-        mux.set_property("fragment-duration", gst::ClockTime::from_mseconds(2500));
+        mux.set_property("fragment-duration", 2500.mseconds());
         mux.set_property_from_str("header-update-mode", "update");
         mux.set_property("write-mehd", true);
 
@@ -477,7 +477,7 @@ impl AudioStream {
 
         src.set_property("is-live", true);
         src.set_property_from_str("wave", &self.wave);
-        mux.set_property("fragment-duration", gst::ClockTime::from_mseconds(2500));
+        mux.set_property("fragment-duration", 2500.mseconds());
         mux.set_property_from_str("header-update-mode", "update");
         mux.set_property("write-mehd", true);
 

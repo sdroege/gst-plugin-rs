@@ -220,9 +220,7 @@ impl TranscriberBin {
 
         self.instance().add(&state.internal_bin)?;
 
-        state
-            .cccombiner
-            .set_property("latency", 100 * gst::ClockTime::MSECOND);
+        state.cccombiner.set_property("latency", 100.mseconds());
 
         self.audio_sinkpad
             .set_target(Some(&state.internal_bin.static_pad("audio_sink").unwrap()))?;

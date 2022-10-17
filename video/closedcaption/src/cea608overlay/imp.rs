@@ -577,7 +577,7 @@ impl ObjectImpl for Cea608Overlay {
                 glib::ParamSpecUInt64::builder("timeout")
                     .nick("Timeout")
                     .blurb("Duration after which to erase overlay when no cc data has arrived for the selected field")
-                    .minimum(gst::ClockTime::from_seconds(16).nseconds())
+                    .minimum(16.seconds().nseconds())
                     .default_value(u64::MAX)
                     .mutable_playing()
                     .build(),
@@ -613,7 +613,7 @@ impl ObjectImpl for Cea608Overlay {
 
                 settings.timeout = match timeout {
                     u64::MAX => gst::ClockTime::NONE,
-                    _ => Some(gst::ClockTime::from_nseconds(timeout)),
+                    _ => Some(timeout.nseconds()),
                 };
             }
             _ => unimplemented!(),

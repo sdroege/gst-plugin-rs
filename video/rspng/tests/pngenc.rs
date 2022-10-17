@@ -8,6 +8,8 @@
 //
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use gst::prelude::*;
+
 fn init() {
     use std::sync::Once;
     static INIT: Once = Once::new();
@@ -72,7 +74,7 @@ fn test_png_encode(video_info: &gst_video::VideoInfo) {
             let mut buffer = gst::Buffer::with_size(video_info.size()).unwrap();
             {
                 let buffer = buffer.get_mut().unwrap();
-                buffer.set_pts(gst::ClockTime::from_seconds(pts));
+                buffer.set_pts(pts.seconds());
             }
             let mut vframe =
                 gst_video::VideoFrame::from_buffer_writable(buffer, video_info).unwrap();

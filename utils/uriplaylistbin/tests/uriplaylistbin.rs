@@ -34,28 +34,28 @@ impl TestMedia {
     fn ogg() -> Self {
         Self {
             uri: file_name_to_uri("sample.ogg"),
-            len: gst::ClockTime::from_mseconds(510),
+            len: 510.mseconds(),
         }
     }
 
     fn mkv() -> Self {
         Self {
             uri: file_name_to_uri("sample.mkv"),
-            len: gst::ClockTime::from_mseconds(510),
+            len: 510.mseconds(),
         }
     }
 
     fn missing_file() -> Self {
         Self {
             uri: "file:///not-there.ogg".to_string(),
-            len: gst::ClockTime::from_mseconds(10),
+            len: 10.mseconds(),
         }
     }
 
     fn missing_http() -> Self {
         Self {
             uri: "http:///not-there.ogg".to_string(),
-            len: gst::ClockTime::from_mseconds(10),
+            len: 10.mseconds(),
         }
     }
 }
@@ -87,12 +87,7 @@ fn test(
 
     pipeline.add_many(&[&playlist, &mq]).unwrap();
 
-    let total_len = gst::ClockTime::from_nseconds(
-        medias
-            .iter()
-            .map(|t| t.len.nseconds() * (iterations as u64))
-            .sum(),
-    );
+    let total_len: gst::ClockTime = medias.iter().map(|t| t.len * (iterations as u64)).sum();
 
     let uris: Vec<String> = medias.iter().map(|t| t.uri.clone()).collect();
 

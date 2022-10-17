@@ -96,9 +96,9 @@ impl Default for Settings {
             uri: None,
             source: None,
             fallback_uri: None,
-            timeout: 5 * gst::ClockTime::SECOND,
-            restart_timeout: 5 * gst::ClockTime::SECOND,
-            retry_timeout: 60 * gst::ClockTime::SECOND,
+            timeout: 5.seconds(),
+            restart_timeout: 5.seconds(),
+            retry_timeout: 60.seconds(),
             restart_on_eos: false,
             min_latency: gst::ClockTime::ZERO,
             buffer_duration: -1,
@@ -918,10 +918,7 @@ impl FallbackSrc {
         queue.set_properties(&[
             ("max-size-bytes", &0u32),
             ("max-size-buffers", &0u32),
-            (
-                "max-size-time",
-                &(cmp::max(min_latency, gst::ClockTime::from_seconds(1))),
-            ),
+            ("max-size-time", &(cmp::max(min_latency, 1.seconds()))),
         ]);
 
         bin.add_many(&[
@@ -975,10 +972,7 @@ impl FallbackSrc {
         queue.set_properties(&[
             ("max-size-bytes", &0u32),
             ("max-size-buffers", &0u32),
-            (
-                "max-size-time",
-                &(cmp::max(min_latency, gst::ClockTime::from_seconds(1))),
-            ),
+            ("max-size-time", &(cmp::max(min_latency, 1.seconds()))),
         ]);
 
         bin.add_many(&[
@@ -1764,7 +1758,7 @@ impl FallbackSrc {
             ("max-size-buffers", &0u32),
             (
                 "max-size-time",
-                &(cmp::max(state.settings.min_latency, gst::ClockTime::from_seconds(1))),
+                &(cmp::max(state.settings.min_latency, 1.seconds())),
             ),
         ]);
         let clocksync = gst::ElementFactory::make("clocksync", None).unwrap_or_else(|_| {

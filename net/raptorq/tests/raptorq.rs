@@ -195,8 +195,7 @@ impl RaptorqTest {
         }
 
         // Check if repair packets pushed from encoder are delayed properly
-        let delay_step =
-            gst::ClockTime::from_mseconds((self.repair_window / self.repair_packets) as u64);
+        let delay_step = ((self.repair_window / self.repair_packets) as u64).mseconds();
         let mut delay = delay_step;
 
         let repair_packets = (0..self.repair_packets)
@@ -556,7 +555,7 @@ fn test_raptorq_repair_window_tolerance() {
     h_dec.set_src_caps_str("application/x-rtp");
     h_dec_fec.set_src_caps(caps);
 
-    h_enc_fec.set_time(gst::ClockTime::from_seconds(1)).unwrap();
+    h_enc_fec.set_time(1.seconds()).unwrap();
 
     let result = h_enc.pull();
     assert!(result.is_ok());

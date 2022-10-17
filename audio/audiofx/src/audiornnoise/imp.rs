@@ -340,8 +340,8 @@ impl BaseTransformImpl for AudioRNNoise {
                         max.display(),
                     );
 
-                    min += gst::ClockTime::from_seconds((FRAME_SIZE / 48000) as u64);
-                    max = max.opt_add(gst::ClockTime::from_seconds((FRAME_SIZE / 48000) as u64));
+                    min += ((FRAME_SIZE / 48000) as u64).seconds();
+                    max = max.opt_add(((FRAME_SIZE / 48000) as u64).seconds());
                     q.set(live, min, max);
                     return true;
                 }

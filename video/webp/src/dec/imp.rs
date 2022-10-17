@@ -203,7 +203,7 @@ impl WebPDec {
                 gst::error_msg!(gst::StreamError::Decode, ["Failed to get next frame"])
             })?;
 
-            let timestamp = frame.timestamp as u64 * gst::ClockTime::MSECOND;
+            let timestamp = (frame.timestamp as u64).mseconds();
             let duration =
                 prev_timestamp.and_then(|prev_timestamp| timestamp.checked_sub(prev_timestamp));
 
