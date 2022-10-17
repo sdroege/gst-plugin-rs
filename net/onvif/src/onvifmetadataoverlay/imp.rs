@@ -294,19 +294,8 @@ impl OnvifMetadataOverlay {
 
         if state.layout.is_none() {
             let fontmap = pangocairo::FontMap::new();
-            let context = match fontmap.create_context() {
-                Some(context) => Ok(context),
-                None => {
-                    gst::element_imp_error!(
-                        self,
-                        gst::LibraryError::Failed,
-                        ["Failed to create font map context"]
-                    );
-                    Err(gst::FlowError::Error)
-                }
-            }
-            .unwrap();
-            context.set_language(&pango::Language::from_string("en_US"));
+            let context = fontmap.create_context();
+            context.set_language(Some(&pango::Language::from_string("en_US")));
             context.set_base_dir(pango::Direction::Ltr);
             let layout = pango::Layout::new(&context);
             layout.set_alignment(pango::Alignment::Left);
