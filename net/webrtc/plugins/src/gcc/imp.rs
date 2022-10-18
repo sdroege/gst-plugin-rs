@@ -191,7 +191,7 @@ impl Default for PacketGroup {
 }
 
 fn pdur(d: &Duration) -> String {
-    let stdd = time::Duration::from_nanos(d.num_nanoseconds().unwrap().abs() as u64);
+    let stdd = time::Duration::from_nanos(d.num_nanoseconds().unwrap().unsigned_abs());
 
     format!("{}{stdd:?}", if d.lt(&Duration::zero()) { "-" } else { "" })
 }
@@ -367,7 +367,7 @@ impl Detector {
             .arrival;
 
         while last_arrival - self.oldest_packet_in_window_ts() > *PACKETS_RECEIVED_WINDOW {
-            let oldest_seqnum = self.last_received_packets.iter().next().unwrap().0.clone();
+            let oldest_seqnum = *self.last_received_packets.iter().next().unwrap().0;
             self.last_received_packets.remove(&oldest_seqnum);
         }
     }
@@ -433,7 +433,7 @@ impl Detector {
         for pkt in packets {
             // We know feedbacks packets will arrive "soon" after the packets they are reported for or considered
             // lost so we can make the assumption that
-            let mut seqnum = pkt.seqnum + (self.twcc_extended_seqnum & !(0xffff as u64));
+            let mut seqnum = pkt.seqnum + (self.twcc_extended_seqnum & !0xffff_u64);
 
             if seqnum < self.twcc_extended_seqnum {
                 let diff = self.twcc_extended_seqnum.overflowing_sub(seqnum).0;
@@ -1098,7 +1098,7 @@ impl BandwidthEstimator {
             if !list.is_empty() {
                 if let Err(err) = bwe.imp().push_list(list) {
                     gst::error!(CAT, obj: &bwe, "pause task, reason: {err:?}");
-                    return pause();
+                    pause()
                 }
             }
         })?;

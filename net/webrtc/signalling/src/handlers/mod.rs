@@ -291,11 +291,11 @@ impl Handler {
         );
         self.consumer_sessions
             .entry(consumer_id.to_string())
-            .or_insert(HashSet::new())
+            .or_insert_with(HashSet::new)
             .insert(session_id.clone());
         self.producer_sessions
             .entry(producer_id.to_string())
-            .or_insert(HashSet::new())
+            .or_insert_with(HashSet::new)
             .insert(session_id.clone());
         self.items.push_back((
             consumer_id.to_string(),
@@ -672,7 +672,7 @@ mod tests {
         assert_eq!(
             sent_message,
             p::OutgoingMessage::EndSession(p::EndSessionMessage {
-                session_id: session_id
+                session_id
             })
         );
     }
@@ -723,7 +723,7 @@ mod tests {
         assert_eq!(
             sent_message,
             p::OutgoingMessage::EndSession(p::EndSessionMessage {
-                session_id: session_id
+                session_id
             })
         );
     }

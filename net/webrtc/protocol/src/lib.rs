@@ -1,7 +1,7 @@
 /// The default protocol used by the signalling server
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Peer {
     pub id: String,
@@ -9,7 +9,7 @@ pub struct Peer {
     pub meta: Option<serde_json::Value>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(tag = "type")]
 #[serde(rename_all = "camelCase")]
 /// Messages sent from the server to peers
@@ -75,7 +75,7 @@ pub struct StartSessionMessage {
     pub peer_id: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 #[serde(tag = "type")]
 #[serde(rename_all = "camelCase")]
 /// Conveys a SDP
@@ -92,7 +92,7 @@ pub enum SdpMessage {
     },
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 /// Contents of the peer message
 pub enum PeerMessageInner {
@@ -107,7 +107,7 @@ pub enum PeerMessageInner {
     Sdp(SdpMessage),
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 /// Messages directly forwarded from one peer to another
 pub struct PeerMessage {

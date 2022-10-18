@@ -302,7 +302,7 @@ impl Default for State {
 fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error> {
     assert!(caps.is_fixed());
 
-    let video_info = gst_video::VideoInfo::from_caps(&caps)?;
+    let video_info = gst_video::VideoInfo::from_caps(caps)?;
 
     let ret = gst::Bin::new(None);
 
@@ -468,7 +468,7 @@ fn setup_encoding(
         .with_context(|| format!("Creating payloader {}", codec.payloader.name()))?;
     let parse_filter = make_element("capsfilter", None)?;
 
-    pay.set_property("mtu", 1200 as u32);
+    pay.set_property("mtu", 1200_u32);
     pay.set_property("pt", codec.payload as u32);
 
     if let Some(ssrc) = ssrc {
@@ -1004,7 +1004,7 @@ impl Session {
 
             self.encoders.push(enc);
 
-            if let Some(ref rtpgccbwe) = self.rtpgccbwe.as_ref() {
+            if let Some(rtpgccbwe) = self.rtpgccbwe.as_ref() {
                 let max_bitrate = self.cc_info.max_bitrate * (self.encoders.len() as u32);
                 rtpgccbwe.set_property("max-bitrate", max_bitrate);
             }
@@ -1335,7 +1335,7 @@ impl WebRTCSink {
                 obj: element,
                 "consumer for session {} no longer exists (sessions: {:?}",
                 session_id,
-                state.sessions.keys().map(|id| id)
+                state.sessions.keys()
             );
         }
     }
@@ -1461,7 +1461,7 @@ impl WebRTCSink {
 
                         if e.factory().map_or(false, |f| f.name() == "rtprtxsend") {
                             if e.has_property("stuffing-kbps", Some(i32::static_type())) {
-                                element.imp().set_rtptrxsend(&element, &session_id, e);
+                                element.imp().set_rtptrxsend(element, &session_id, e);
                             } else {
                                 gst::warning!(CAT, "rtprtxsend doesn't have a `stuffing-kbps` \
                                     property, stuffing disabled");
@@ -1785,7 +1785,7 @@ impl WebRTCSink {
         let mut state = element.imp().state.lock().unwrap();
         if let Some(mut session) = state.sessions.get_mut(session_id) {
             if let Some(congestion_controller) = session.congestion_controller.as_mut() {
-                congestion_controller.loss_control(&element, stats, &mut session.encoders);
+                congestion_controller.loss_control(element, stats, &mut session.encoders);
             }
             session.stats = stats.to_owned();
         }
@@ -1843,7 +1843,7 @@ impl WebRTCSink {
                 / (1. + (fec_percentage / 100.))
                 / (session.encoders.len() as f64)) as i32;
 
-            if let Some(ref rtpxsend) = session.rtprtxsend.as_ref() {
+            if let Some(rtpxsend) = session.rtprtxsend.as_ref() {
                 rtpxsend.set_property("stuffing-kbps", (bitrate as f64 / 1000.) as i32);
             }
 

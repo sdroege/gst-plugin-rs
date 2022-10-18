@@ -139,15 +139,7 @@ async fn run(args: Args) -> Result<(), Error> {
         info!("Encoder: {}", encoder.factory().unwrap().name());
 
         let configured = if let Some(factory) = encoder.factory() {
-            match factory.name().as_str() {
-                "does-not-exist" => {
-                    // One could configure a hardware encoder to their liking here,
-                    // and return true to make sure webrtcsink does not do any configuration
-                    // of its own
-                    true
-                }
-                _ => false,
-            }
+            matches!(factory.name().as_str(), "does-not-exist")
         } else {
             false
         };
