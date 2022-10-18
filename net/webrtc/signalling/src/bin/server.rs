@@ -15,7 +15,7 @@ use tracing::{info, warn};
 /// Program arguments
 struct Args {
     /// Address to listen on
-    #[clap(short, long, default_value = "0.0.0.0")]
+    #[clap(long, default_value = "0.0.0.0")]
     host: String,
     /// Port to listen on
     #[clap(short, long, default_value_t = 8443)]
