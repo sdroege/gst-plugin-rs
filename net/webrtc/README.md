@@ -1,13 +1,19 @@
-# webrtcsink
+# webrtcsink and webrtcsrc
 
-All-batteries included GStreamer WebRTC producer, that tries its best to do The Right Thing™.
+All-batteries included GStreamer WebRTC producer and consumer, that try their
+best to do The Right Thing™.
+
+It also provides a flexible and all-purposes WebRTC signalling server
+([gst-webrtc-signalling-server](signalling/src/bin/server.rs)) and a Javascript
+API ([gstwebrtc-api](gstwebrtc-api)) to produce and consume compatible WebRTC
+streams from a web browser.
 
 ## Use case
 
-The [webrtcbin] element in GStreamer is extremely flexible and powerful, but using
-it can be a difficult exercise. When all you want to do is serve a fixed set of streams
-to any number of consumers, `webrtcsink` (which wraps `webrtcbin` internally) can be a
-useful alternative.
+The [webrtcbin] element in GStreamer is extremely flexible and powerful, but
+using it can be a difficult exercise. When all you want to do is serve a fixed
+set of streams to any number of consumers, `webrtcsink` (which wraps
+`webrtcbin` internally) can be a useful alternative.
 
 [webrtcbin]: https://gstreamer.freedesktop.org/documentation/webrtc/index.html
 
@@ -15,25 +21,27 @@ useful alternative.
 
 `webrtcsink` implements the following features:
 
-* Built-in signaller: when using the default signalling server, this element will
-  perform signalling without requiring application interaction.
+* Built-in signaller: when using the default signalling server, this element
+  will perform signalling without requiring application interaction.
   This makes it usable directly from `gst-launch`.
 
-* Application-provided signalling: `webrtcsink` can be instantiated by an application
-  with a custom signaller. That signaller must be a GObject, and must implement the
-  `Signallable` interface as defined [here](src/webrtcsink/mod.rs). The
-  [default signaller](src/signaller/mod.rs) can be used as an example.
+* Application-provided signalling: `webrtcsink` can be instantiated by an
+  application with a custom signaller. That signaller must be a GObject, and
+  must implement the `Signallable` interface as defined
+  [here](src/webrtcsink/mod.rs). The [default signaller](src/signaller/mod.rs)
+  can be used as an example.
 
-  An [example project] is also available to use as a boilerplate for implementing
-  and using a custom signaller.
+  An [example project] is also available to use as a boilerplate for
+  implementing and using a custom signaller.
 
-* Sandboxed consumers: when a consumer is added, its encoder / payloader / webrtcbin
-  elements run in a separately managed pipeline. This provides a certain level of
-  sandboxing, as opposed to having those elements running inside the element itself.
+* Sandboxed consumers: when a consumer is added, its encoder / payloader /
+  webrtcbin elements run in a separately managed pipeline. This provides a
+  certain level of sandboxing, as opposed to having those elements running
+  inside the element itself.
 
-  It is important to note that at this moment, encoding is not shared between consumers.
-  While this is not on the roadmap at the moment, nothing in the design prevents
-  implementing this optimization.
+  It is important to note that at this moment, encoding is not shared between
+  consumers. While this is not on the roadmap at the moment, nothing in the
+  design prevents implementing this optimization.
 
 * Congestion control: the element leverages transport-wide congestion control
   feedback messages in order to adapt the bitrate of individual consumers' video
@@ -45,20 +53,20 @@ useful alternative.
 
 * Packet loss mitigation: webrtcsink now supports sending protection packets for
   Forward Error Correction, modulating the amount as a function of the available
-  bandwidth, and can honor retransmission requests. Both features can be disabled
-  via properties.
+  bandwidth, and can honor retransmission requests. Both features can be
+  disabled via properties.
 
 It is important to note that full control over the individual elements used by
-`webrtcsink` is *not* on the roadmap, as it will act as a black box in that respect,
-for example `webrtcsink` wants to reserve control over the bitrate for congestion
-control.
+`webrtcsink` is *not* on the roadmap, as it will act as a black box in that
+respect, for example `webrtcsink` wants to reserve control over the bitrate for
+congestion control.
 
 A signal is now available however for the application to provide the initial
 configuration for the encoders `webrtcsink` instantiates.
 
-If more granular control is required, applications should use `webrtcbin` directly,
-`webrtcsink` will focus on trying to just do the right thing, although it might
-expose more interfaces to guide and tune the heuristics it employs.
+If more granular control is required, applications should use `webrtcbin`
+directly, `webrtcsink` will focus on trying to just do the right thing, although
+it might expose more interfaces to guide and tune the heuristics it employs.
 
 [example project]: https://github.com/centricular/webrtcsink-custom-signaller
 
@@ -74,38 +82,49 @@ cargo build
 
 ## Usage
 
-Open three terminals. In the first, run:
+Open three terminals. In the first one, run the signalling server:
 
 ``` shell
 WEBRTCSINK_SIGNALLING_SERVER_LOG=debug cargo run --bin gst-webrtc-signalling-server
 ```
 
-In the second, run:
+In the second one, run a web browser client (can produce and consume streams):
 
 ``` shell
-python3 -m http.server -d www/
+cd gstwebrtc-api
+npm install
+npm start
 ```
 
-In the third, run:
+In the third one, run a webrtcsink producer from a GStreamer pipeline:
 
 ``` shell
 export GST_PLUGIN_PATH=$PWD/target/debug:$GST_PLUGIN_PATH
-gst-launch-1.0 webrtcsink name=ws videotestsrc ! ws. audiotestsrc ! ws.
+gst-launch-1.0 webrtcsink name=ws meta="meta,name=gst-stream" videotestsrc ! ws. audiotestsrc ! ws.
 ```
 
-When the pipeline above is running successfully, open a browser and
-point it to the http server:
+The webrtcsink produced stream will appear in the former web page
+(automatically opened at https://localhost:9090) under the name "gst-stream",
+if you click on it you should see a test video stream and hear a test tone.
+
+You can also produce WebRTC streams from the web browser and consume them with
+a GStreamer pipeline. Click on the "Start Capture" button and copy the
+"Client ID" value.
+
+Then open a new terminal and run:
 
 ``` shell
-gio open http://127.0.0.1:8000
+export GST_PLUGIN_PATH=$PWD/target/debug:$GST_PLUGIN_PATH
+gst-launch-1.0 playbin uri=gstwebrtc://127.0.0.1:8443?peer-id=[Client ID]
 ```
 
-You should see an identifier listed in the left-hand panel, click on
-it. You should see a test video stream, and hear a test tone.
+Replacing the "peer-id" value with the previously copied "Client ID" value. You
+should see the playbin element opening a window and showing you the content
+produced by the web page.
 
 ## Configuration
 
-The element itself can be configured through its properties, see
+The webrtcsink element itself can be configured through its properties, see
 `gst-inspect-1.0 webrtcsink` for more information about that, in addition the
 default signaller also exposes properties for configuring it, in
 particular setting the signalling server address, those properties
@@ -122,15 +141,15 @@ gst-launch-1.0 webrtcsink signaller::address="ws://127.0.0.1:8443" ..
 with the content, for example move with your mouse, entering keys with the
 keyboard, etc... On top of that a `WebRTCDataChannel` based protocol has been
 implemented and can be activated with the `enable-data-channel-navigation=true`
-property. The [demo](www/) implements the protocol and you can easily test this
-feature, using the [`wpesrc`] for example.
+property. The [gstwebrtc-api](gstwebrtc-api) implements the protocol and you
+can easily test this feature using the [`wpesrc`] for example.
 
 As an example, the following pipeline allows you to navigate the GStreamer
-documentation inside the video running within your web browser (in
-http://127.0.0.1:8000 if you followed previous steps of that readme):
+documentation inside the video running within your web browser (at
+https://127.0.0.1:9090 if you followed previous steps in that readme):
 
 ``` shell
-gst-launch-1.0 wpesrc location=https://gstreamer.freedesktop.org/documentation/ ! webrtcsink enable-data-channel-navigation=true
+gst-launch-1.0 wpesrc location=https://gstreamer.freedesktop.org/documentation/ ! queue ! webrtcsink enable-data-channel-navigation=true meta="meta,name=web-stream"
 ```
 
 [`GstNavigation`]: https://gstreamer.freedesktop.org/documentation/video/gstnavigation.html
@@ -139,16 +158,16 @@ gst-launch-1.0 wpesrc location=https://gstreamer.freedesktop.org/documentation/ 
 ## Testing congestion control
 
 For the purpose of testing congestion in a reproducible manner, a
-[simple tool] has been used, I only used it on Linux but it is documented
-as usable on MacOS too. I had to run the client browser on a separate
-machine on my local network for congestion to actually be applied, I didn't
-look into why that was necessary.
+[simple tool] has been used, it has been used on Linux exclusively but it is
+also documented as usable on MacOS too. Client web browser has to be launched
+on a separate machine on the LAN to test for congestion, although specific
+configurations may allow to run it on the same machine.
 
-My testing procedure was:
+Testing procedure was:
 
-* identify the server machine network interface (eg with `ifconfig` on Linux)
+* identify the server machine network interface (e.g. with `ifconfig` on Linux)
 
-* identify the client machine IP address (eg with `ifconfig` on Linux)
+* identify the client machine IP address (e.g. with `ifconfig` on Linux)
 
 * start the various services as explained in the Usage section (use
   `GST_DEBUG=webrtcsink:7` to get detailed logs about congestion control)
@@ -171,7 +190,7 @@ My testing procedure was:
   $HOME/go/bin/comcast --device=$SERVER_INTERFACE --stop
   ```
 
-For comparison, the congestion control property can be set to disabled on
+For comparison, the congestion control property can be set to "disabled" on
 webrtcsink, then the above procedure applied again, the expected result is
 for playback to simply crawl down to a halt until the bandwidth limitation
 is lifted:
@@ -184,18 +203,18 @@ gst-launch-1.0 webrtcsink congestion-control=disabled
 
 ## Monitoring tool
 
-An example server / client application for monitoring per-consumer stats
+An example of client/server application for monitoring per-consumer stats
 can be found [here].
 
 [here]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/tree/main/net/webrtc/examples
 
 ## License
 
-All the rust code in this repository is licensed under the [Mozilla Public License Version 2.0].
+All the rust code in this repository is licensed under the
+[Mozilla Public License Version 2.0].
 
-Parts of the JavaScript code in the www/ example are licensed under the [Apache License, Version 2.0],
-the rest is licensed under the [Mozilla Public License Version 2.0] unless advertised in the
-header.
+Code in [gstwebrtc-api](gstwebrtc-api) is also licensed under the
+[Mozilla Public License Version 2.0].
 
 ## Using the AWS KVS signaller
 
@@ -212,4 +231,3 @@ AWS_ACCESS_KEY_ID="XXX" AWS_SECRET_ACCESS_KEY="XXX" gst-launch-1.0 videotestsrc 
 * Connect a viewer @ <https://awslabs.github.io/amazon-kinesis-video-streams-webrtc-sdk-js/examples/index.html>
 
 [Mozilla Public License Version 2.0]: http://opensource.org/licenses/MPL-2.0
-[Apache License, Version 2.0]: https://www.apache.org/licenses/LICENSE-2.1

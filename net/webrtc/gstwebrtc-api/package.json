@@ -1,0 +1,59 @@
+{
+  "name": "gstwebrtc-api",
+  "version": "1.0.0",
+  "description": "Javascript API to integrate GStreamer WebRTC streams (webrtcsrc/webrtcsink) in a web browser",
+  "keywords": [
+    "webrtc",
+    "multimedia",
+    "realtime",
+    "gstreamer",
+    "audio",
+    "video"
+  ],
+  "homepage": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/tree/main/net/webrtc/gstwebrtc-api",
+  "bugs": {
+    "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues"
+  },
+  "license": "MPL-2.0",
+  "author": {
+    "name": "Loïc Le Page",
+    "email": "llepage@igalia.com",
+    "url": "https://www.igalia.com/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs.git",
+    "directory": "net/webrtc/gstwebrtc-api"
+  },
+  "browser": "dist/gstwebrtc-api-${npm_package_version}.min.js",
+  "files": [
+    "dist/",
+    "docs/",
+    "src/",
+    "third-party/",
+    "index.html",
+    "webpack.config.js"
+  ],
+  "devDependencies": {
+    "eslint": "8.37.0",
+    "html-webpack-plugin": "5.5.0",
+    "jsdoc": "4.0.2",
+    "rimraf": "4.4.1",
+    "terser-webpack-plugin": "5.3.7",
+    "webpack": "5.77.0",
+    "webpack-cli": "5.0.1",
+    "webpack-dev-server": "4.13.1"
+  },
+  "dependencies": {
+    "webrtc-adapter": "8.2.2"
+  },
+  "scripts": {
+    "check": "eslint src",
+    "format": "eslint --fix --fix-type layout src",
+    "build": "rimraf dist && webpack",
+    "docs": "rimraf docs && jsdoc src/*.js -d docs/ -p package.json -R README.md",
+    "make": "npm run check && npm run build && npm run docs",
+    "prepack": "npm run make",
+    "start": "webpack serve"
+  }
+}

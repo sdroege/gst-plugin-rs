@@ -400,6 +400,16 @@ rustfmt:
     - cargo fmt --version
     - cargo fmt -- --color=always --check
 
+gstwebrtc-api lint:
+  image: node:lts
+  stage: "lint"
+  rules:
+    - when: 'always'
+  script:
+    - cd net/webrtc/gstwebrtc-api
+    - npm install
+    - npm run check
+
 check commits:
   extends: .img-stable
   stage: "lint"

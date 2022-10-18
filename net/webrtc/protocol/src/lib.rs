@@ -17,6 +17,7 @@ pub struct Peer {
 /// Messages sent from the server to peers
 pub enum OutgoingMessage {
     /// Welcoming message, sets the Peer ID linked to a new connection
+    #[serde(rename_all = "camelCase")]
     Welcome { peer_id: String },
     /// Notifies listeners that a peer status has changed
     PeerStatusChanged(PeerStatus),
@@ -27,13 +28,14 @@ pub enum OutgoingMessage {
     #[serde(rename_all = "camelCase")]
     SessionStarted { peer_id: String, session_id: String },
     /// Signals that the session the peer was in was ended
-    #[serde(rename_all = "camelCase")]
     EndSession(EndSessionMessage),
     /// Messages directly forwarded from one peer to another
     Peer(PeerMessage),
     /// Provides the current list of consumer peers
+    #[serde(rename_all = "camelCase")]
     List { producers: Vec<Peer> },
     /// Notifies that an error occurred with the peer's current session
+    #[serde(rename_all = "camelCase")]
     Error { details: String },
 }
 
@@ -42,10 +44,8 @@ pub enum OutgoingMessage {
 /// Register with a peer type
 pub enum PeerRole {
     /// Register as a producer
-    #[serde(rename_all = "camelCase")]
     Producer,
     /// Register as a listener
-    #[serde(rename_all = "camelCase")]
     Listener,
 }
 
@@ -83,11 +83,13 @@ pub struct StartSessionMessage {
 /// Conveys a SDP
 pub enum SdpMessage {
     /// Conveys an offer
+    #[serde(rename_all = "camelCase")]
     Offer {
         /// The SDP
         sdp: String,
     },
     /// Conveys an answer
+    #[serde(rename_all = "camelCase")]
     Answer {
         /// The SDP
         sdp: String,
