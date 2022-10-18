@@ -41,6 +41,13 @@ base32 = "0.4"
 backoff = { version = "0.4", features = [ "futures", "tokio" ] }
 gio = { git = "https://github.com/gtk-rs/gtk-rs-core.git", package = "gio" }
 
+[dev-dependencies]
+chrono = { version = "0.4", features = [ "alloc" ] }
+env_logger = "0.9"
+gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_18"] }
+rand = "0.8"
+test-with = { version = "0.8", default-features = false }
+
 [lib]
 name = "gstaws"
 crate-type = ["cdylib", "rlib"]
