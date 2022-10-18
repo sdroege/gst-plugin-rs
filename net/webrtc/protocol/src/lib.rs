@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 /// The default protocol used by the signalling server
 use serde::{Deserialize, Serialize};
 

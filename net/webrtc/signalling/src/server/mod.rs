@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 use anyhow::Error;
 use async_std::task;
 use async_tungstenite::tungstenite::Message as WsMessage;

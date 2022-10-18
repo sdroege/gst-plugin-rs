@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 use async_std::task;
 use clap::Parser;
 use tracing_subscriber::prelude::*;
