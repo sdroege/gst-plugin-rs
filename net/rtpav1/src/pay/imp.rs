@@ -210,7 +210,7 @@ impl RTPAv1Pay {
 
         let mut data = state.temp_packet_data.take().unwrap_or_else(|| {
             TempPacketData {
-                payload_limit: gst_rtp::RTPBuffer::calc_payload_len(self.instance().mtu(), 0, 0),
+                payload_limit: gst_rtp::calc_payload_len(self.instance().mtu(), 0, 0),
                 packet: PacketOBUData {
                     payload_size: 1, // 1 byte is used for the aggregation header
                     omit_last_size_field: true,

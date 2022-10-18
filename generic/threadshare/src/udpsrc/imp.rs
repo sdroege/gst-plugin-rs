@@ -159,7 +159,7 @@ impl PadSrcHandler for UdpSrcPadHandler {
                         .unwrap_or_else(gst::Caps::new_any)
                 };
 
-                q.set_result(&caps);
+                q.set_result(Some(&caps));
 
                 true
             }

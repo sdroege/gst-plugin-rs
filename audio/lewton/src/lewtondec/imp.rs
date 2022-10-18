@@ -405,15 +405,7 @@ impl LewtonDec {
         let outbuf = if let Some(ref reorder_map) = state.reorder_map {
             let mut outbuf = self
                 .instance()
-                .allocate_output_buffer(sample_count as usize * audio_info.bpf() as usize)
-                .map_err(|_| {
-                    gst::element_imp_error!(
-                        self,
-                        gst::StreamError::Decode,
-                        ["Failed to allocate output buffer"]
-                    );
-                    gst::FlowError::Error
-                })?;
+                .allocate_output_buffer(sample_count as usize * audio_info.bpf() as usize);
             {
                 // And copy the decoded data into our output buffer while reordering the channels to the
                 // GStreamer channel order

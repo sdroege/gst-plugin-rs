@@ -181,7 +181,7 @@ fn test_payloader() {
         let pay = h.element().unwrap();
         pay.set_property(
             "mtu",
-            RTPBuffer::calc_packet_len(25, 0, 0)
+            gst_rtp::calc_packet_len(25, 0, 0)
         );
     }
     h.play();

@@ -395,11 +395,11 @@ impl AggregatorImpl for OnvifMetadataCombiner {
                     let templ_caps = templ.caps();
 
                     if let Some(filter) = filter {
-                        q.set_result(
+                        q.set_result(Some(
                             &filter.intersect_with_mode(templ_caps, gst::CapsIntersectMode::First),
-                        );
+                        ));
                     } else {
-                        q.set_result(templ_caps);
+                        q.set_result(Some(templ_caps));
                     }
 
                     true

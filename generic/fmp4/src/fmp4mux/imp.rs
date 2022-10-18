@@ -1813,9 +1813,9 @@ impl AggregatorImpl for FMP4Mux {
                 if let Some(filter_caps) = q.filter() {
                     let res = filter_caps
                         .intersect_with_mode(&allowed_caps, gst::CapsIntersectMode::First);
-                    q.set_result(&res);
+                    q.set_result(Some(&res));
                 } else {
-                    q.set_result(&allowed_caps);
+                    q.set_result(Some(&allowed_caps));
                 }
 
                 true

@@ -141,7 +141,7 @@ impl RTPBasePayloadImpl for OnvifMetadataPay {
         }
 
         let mtu = self.instance().mtu();
-        let payload_size = gst_rtp::RTPBuffer::<()>::calc_payload_len(mtu, 0, 0) as usize;
+        let payload_size = gst_rtp::calc_payload_len(mtu, 0, 0) as usize;
 
         let mut chunks = utf8.as_bytes().chunks(payload_size).peekable();
         let mut buflist = gst::BufferList::new_sized((utf8.len() / payload_size) + 1);
