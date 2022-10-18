@@ -1696,7 +1696,9 @@ impl FallbackSrc {
             let capsfilter = gst::ElementFactory::make("capsfilter", Some("video_capsfilter"))
                 .expect("No capsfilter found");
 
-            capsfilter.set_property("caps", filter_caps);
+            if fallback_source {
+                capsfilter.set_property("caps", filter_caps);
+            }
 
             bin.add_many(&[&videoconvert, &videoscale, &capsfilter])
                 .unwrap();
@@ -1730,7 +1732,9 @@ impl FallbackSrc {
             let capsfilter = gst::ElementFactory::make("capsfilter", Some("audio_capsfilter"))
                 .expect("No capsfilter found");
 
-            capsfilter.set_property("caps", filter_caps);
+            if fallback_source {
+                capsfilter.set_property("caps", filter_caps);
+            }
 
             bin.add_many(&[&audioconvert, &audioresample, &capsfilter])
                 .unwrap();
