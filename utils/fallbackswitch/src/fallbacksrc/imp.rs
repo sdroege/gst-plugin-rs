@@ -1802,16 +1802,15 @@ impl FallbackSrc {
                     ["Failed to change imagefreeze state"]
                 ));
             }
-            converters.link(&imagefreeze).unwrap();
-            imagefreeze.link(&queue).unwrap();
+            gst::Element::link_many(&[&converters, &imagefreeze, &queue, &clocksync]).unwrap();
             Some(imagefreeze)
         } else {
-            converters.link(&queue).unwrap();
+            gst::Element::link_many(&[&converters, &queue, &clocksync]).unwrap();
             None
         };
 
         let ghostpad =
-            gst::GhostPad::with_target(Some(type_), &queue.static_pad("src").unwrap()).unwrap();
+            gst::GhostPad::with_target(Some(type_), &clocksync.static_pad("src").unwrap()).unwrap();
         let _ = ghostpad.set_active(true);
         source.source.add_pad(&ghostpad).unwrap();
 
