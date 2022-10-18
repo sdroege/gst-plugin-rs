@@ -1278,12 +1278,7 @@ impl ObjectImpl for BandwidthEstimator {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "min-bitrate" => {
                 let mut state = self.state.lock().unwrap();

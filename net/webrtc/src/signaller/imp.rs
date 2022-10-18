@@ -392,12 +392,7 @@ impl ObjectImpl for Signaller {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "address" => {
                 let address: Option<_> = value.get().expect("type checked upstream");

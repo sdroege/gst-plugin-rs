@@ -673,9 +673,7 @@ mod tests {
         assert_eq!(peer_id, "producer");
         assert_eq!(
             sent_message,
-            p::OutgoingMessage::EndSession(p::EndSessionMessage {
-                session_id
-            })
+            p::OutgoingMessage::EndSession(p::EndSessionMessage { session_id })
         );
     }
 
@@ -724,9 +722,7 @@ mod tests {
         assert_eq!(peer_id, "producer");
         assert_eq!(
             sent_message,
-            p::OutgoingMessage::EndSession(p::EndSessionMessage {
-                session_id
-            })
+            p::OutgoingMessage::EndSession(p::EndSessionMessage { session_id })
         );
     }
 

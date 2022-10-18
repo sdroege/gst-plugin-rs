@@ -1164,9 +1164,12 @@ impl WebRTCSink {
                             payload: pt,
                         })
                     } else {
-                        gst::warning!(CAT, imp: self,
-                                "Too many formats for available payload type range, ignoring {}",
-                                s);
+                        gst::warning!(
+                            CAT,
+                            imp: self,
+                            "Too many formats for available payload type range, ignoring {}",
+                            s
+                        );
                         None
                     }
                 })
@@ -2426,12 +2429,7 @@ impl ObjectImpl for WebRTCSink {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec,
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "video-caps" => {
                 let mut settings = self.settings.lock().unwrap();
