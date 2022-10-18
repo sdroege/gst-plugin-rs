@@ -682,7 +682,10 @@ impl WhipSink {
 
             s if s.is_server_error() => {
                 // FIXME: Check and handle 'Retry-After' header in case of server error
-                todo!()
+                Err(gst::error_msg!(
+                    gst::ResourceError::Failed,
+                    ["Server returned error: {}", s.as_str()]
+                ))
             }
 
             s => Err(gst::error_msg!(
