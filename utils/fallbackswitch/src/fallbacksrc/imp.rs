@@ -135,8 +135,6 @@ struct StreamBranch {
     source_srcpad_block: Option<Block>,
 
     // other elements in the source bin before the ghostpad
-    // imagefreeze before the clocksync if this is a stillframe stream
-    imagefreeze: Option<gst::Element>,
     clocksync: gst::Element,
     converters: gst::Element,
     queue: gst::Element,
@@ -1368,9 +1366,6 @@ impl FallbackSrc {
                 element.remove(&branch.queue).unwrap();
                 element.remove(&branch.converters).unwrap();
                 element.remove(&branch.clocksync).unwrap();
-                if let Some(ref imagefreeze) = branch.imagefreeze {
-                    element.remove(imagefreeze).unwrap();
-                }
                 if branch.switch_pad.parent().as_ref() == Some(stream.switch.upcast_ref()) {
                     stream.switch.release_request_pad(&branch.switch_pad);
                 }
@@ -1715,14 +1710,27 @@ impl FallbackSrc {
                 .build()
                 .expect("No capsfilter found");
 
+            let imagefreeze = if is_image {
+                gst::ElementFactory::make("imagefreeze")
+                    .property("is-live", true)
+                    .build()
+                    .expect("no imagefreeze found")
+            } else {
+                gst::ElementFactory::make("identity")
+                    .name("video_identity")
+                    .build()
+                    .expect("No identity found")
+            };
+
             if fallback_source {
                 capsfilter.set_property("caps", filter_caps);
             }
 
-            bin.add_many(&[&videoconvert, &videoscale, &capsfilter])
+            bin.add_many(&[&videoconvert, &videoscale, &imagefreeze, &capsfilter])
                 .unwrap();
 
-            gst::Element::link_many(&[&videoconvert, &videoscale, &capsfilter]).unwrap();
+            gst::Element::link_many(&[&videoconvert, &videoscale, &imagefreeze, &capsfilter])
+                .unwrap();
 
             let ghostpad =
                 gst::GhostPad::with_target(Some("sink"), &videoconvert.static_pad("sink").unwrap())
@@ -1815,27 +1823,7 @@ impl FallbackSrc {
             )
         })?;
 
-        let imagefreeze = if is_image {
-            gst::debug!(CAT, imp: self, "Image stream, inserting imagefreeze");
-            let imagefreeze = gst::ElementFactory::make("imagefreeze")
-                .property("is-live", true)
-                .build()
-                .expect("no imagefreeze found");
-            source.source.add(&imagefreeze).unwrap();
-
-            if imagefreeze.sync_state_with_parent().is_err() {
-                gst::error!(CAT, imp: self, "imagefreeze failed to change state",);
-                return Err(gst::error_msg!(
-                    gst::CoreError::StateChange,
-                    ["Failed to change imagefreeze state"]
-                ));
-            }
-            gst::Element::link_many(&[&converters, &imagefreeze, &queue, &clocksync]).unwrap();
-            Some(imagefreeze)
-        } else {
-            gst::Element::link_many(&[&converters, &queue, &clocksync]).unwrap();
-            None
-        };
+        gst::Element::link_many(&[&converters, &queue, &clocksync]).unwrap();
 
         let ghostpad =
             gst::GhostPad::with_target(Some(type_), &clocksync.static_pad("src").unwrap()).unwrap();
@@ -1940,7 +1928,6 @@ impl FallbackSrc {
         *branch_storage = Some(StreamBranch {
             source_srcpad: pad.clone(),
             source_srcpad_block,
-            imagefreeze,
             clocksync,
             converters,
             queue,
@@ -2455,7 +2442,7 @@ impl FallbackSrc {
             Some(state) => state,
         };
 
-        let (mut branch, is_video, source, switch) = match &mut *state {
+        let (branch, is_video, source, switch) = match &mut *state {
             State {
                 audio_stream:
                     Some(Stream {
@@ -2526,12 +2513,6 @@ impl FallbackSrc {
         branch.clocksync.set_locked_state(true);
         let _ = branch.clocksync.set_state(gst::State::Null);
         source.source.remove(&branch.clocksync).unwrap();
-
-        if let Some(imagefreeze) = branch.imagefreeze.take() {
-            imagefreeze.set_locked_state(true);
-            let _ = imagefreeze.set_state(gst::State::Null);
-            source.source.remove(&imagefreeze).unwrap();
-        }
 
         if branch.switch_pad.parent().as_ref() == Some(switch.upcast_ref()) {
             switch.release_request_pad(&branch.switch_pad);
