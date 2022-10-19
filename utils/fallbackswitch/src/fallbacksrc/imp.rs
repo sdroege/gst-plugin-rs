@@ -124,6 +124,7 @@ enum Source {
 struct Block {
     pad: gst::Pad,
     probe_id: gst::PadProbeId,
+    qos_probe_id: gst::PadProbeId,
     running_time: Option<gst::ClockTime>,
 }
 
@@ -2003,9 +2004,22 @@ impl FallbackSrc {
             )
             .unwrap();
 
+        let qos_probe_id = block_pad
+            .add_probe(gst::PadProbeType::EVENT_UPSTREAM, |_pad, info| {
+                if let Some(gst::PadProbeData::Event(ref ev)) = info.data {
+                    if let gst::EventView::Qos(_) = ev.view() {
+                        return gst::PadProbeReturn::Drop;
+                    }
+                }
+
+                gst::PadProbeReturn::Ok
+            })
+            .unwrap();
+
         Block {
             pad: block_pad.clone(),
             probe_id,
+            qos_probe_id,
             running_time: gst::ClockTime::NONE,
         }
     }
@@ -2120,6 +2134,7 @@ impl FallbackSrc {
                     fallback_source,
                 );
                 block.pad.remove_probe(block.probe_id);
+                block.pad.remove_probe(block.qos_probe_id);
             }
 
             gst::debug!(CAT, imp: self, "Live source, unblocking directly");
@@ -2337,6 +2352,7 @@ impl FallbackSrc {
                     block.pad.set_offset(offset);
                 }
                 block.pad.remove_probe(block.probe_id);
+                block.pad.remove_probe(block.qos_probe_id);
             }
 
             if let Some(block) = video_branch
@@ -2347,6 +2363,7 @@ impl FallbackSrc {
                     block.pad.set_offset(offset);
                 }
                 block.pad.remove_probe(block.probe_id);
+                block.pad.remove_probe(block.qos_probe_id);
             }
         } else if have_audio && want_audio {
             let audio_running_time = match audio_running_time {
@@ -2381,6 +2398,7 @@ impl FallbackSrc {
                     block.pad.set_offset(offset);
                 }
                 block.pad.remove_probe(block.probe_id);
+                block.pad.remove_probe(block.qos_probe_id);
             }
         } else if have_video && want_video {
             let video_running_time = match video_running_time {
@@ -2415,6 +2433,7 @@ impl FallbackSrc {
                     block.pad.set_offset(offset);
                 }
                 block.pad.remove_probe(block.probe_id);
+                block.pad.remove_probe(block.qos_probe_id);
             }
         }
     }
@@ -2905,6 +2924,7 @@ impl FallbackSrc {
                     source_srcpad.name()
                 );
                 block.pad.remove_probe(block.probe_id);
+                block.pad.remove_probe(block.qos_probe_id);
             }
             let switch_sinkpads = [state.audio_stream.as_ref(), state.video_stream.as_ref()]
                 .into_iter()
