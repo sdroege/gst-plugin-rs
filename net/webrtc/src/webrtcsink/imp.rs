@@ -234,7 +234,13 @@ fn create_navigation_event(sink: &super::WebRTCSink, msg: &str) {
 /// Wrapper around `gst::ElementFactory::make` with a better error
 /// message
 pub fn make_element(element: &str, name: Option<&str>) -> Result<gst::Element, Error> {
-    gst::ElementFactory::make(element, name)
+    let mut builder = gst::ElementFactory::make(element);
+    if let Some(name) = name {
+        builder = builder.name(name);
+    }
+
+    builder
+        .build()
         .with_context(|| format!("Failed to make element {}", element))
 }
 
@@ -462,11 +468,13 @@ fn setup_encoding(
 
     let enc = codec
         .encoder
-        .create(None)
+        .create()
+        .build()
         .with_context(|| format!("Creating encoder {}", codec.encoder.name()))?;
     let pay = codec
         .payloader
-        .create(None)
+        .create()
+        .build()
         .with_context(|| format!("Creating payloader {}", codec.payloader.name()))?;
     let parse_filter = make_element("capsfilter", None)?;
 
@@ -1416,7 +1424,7 @@ impl WebRTCSink {
 
         let rtpgccbwe = match settings.cc_info.heuristic {
             WebRTCSinkCongestionControl::GoogleCongestionControl => {
-                let rtpgccbwe = match gst::ElementFactory::make("rtpgccbwe", None) {
+                let rtpgccbwe = match gst::ElementFactory::make("rtpgccbwe").build() {
                     Err(err) => {
                         glib::g_warning!(
                             "webrtcsink",
