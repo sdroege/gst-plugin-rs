@@ -11,7 +11,7 @@ plugin:
 gst_plugin_version_helper::info();
 ```
 
-Inside `lib.rs` of the plugin, the information provided by `get_info` are usable as follows:
+Inside `lib.rs` of the plugin, the information provided by `info` are usable as follows:
 
 ```rust,ignore
 gst::plugin_define!(

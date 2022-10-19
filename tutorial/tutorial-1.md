@@ -105,13 +105,13 @@ Next we create `build.rs` in the project main directory.
 
 ```rust
 fn main() {
-    gst_plugin_version_helper::get_info()
+    gst_plugin_version_helper::info()
 }
 ```
 
 `build.rs` compiles and runs before anything else, [see](https://doc.rust-lang.org/cargo/reference/build-scripts.html).
 
-Therefore, `gst_plugin_version_helper::get_info()` will provide various information via `cargo` environment variables such as `COMMIT_ID` and `BUILD_REL_DATE` and these environment variables are then later accessed by our invocation of the `gst::plugin_define!` macro during compilation.
+Therefore, `gst_plugin_version_helper::info()` will provide various information via `cargo` environment variables such as `COMMIT_ID` and `BUILD_REL_DATE` and these environment variables are then later accessed by our invocation of the `gst::plugin_define!` macro during compilation.
 
 In addition we’re defining an empty plugin entry point function that just returns `Ok(())`
 

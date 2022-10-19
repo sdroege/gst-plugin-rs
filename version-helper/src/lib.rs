@@ -7,7 +7,7 @@
 
 //! Extracts release for [GStreamer](https://gstreamer.freedesktop.org) plugin metadata
 //!
-//! See [`get_info`](fn.get_info.html) for details.
+//! See [`info`](fn.info.html) for details.
 //!
 //! This function is supposed to be used as follows in the `build.rs` of a crate that implements a
 //! plugin:
@@ -16,7 +16,7 @@
 //! gst_plugin_version_helper::info();
 //! ```
 //!
-//! Inside `lib.rs` of the plugin, the information provided by `get_info` are usable as follows:
+//! Inside `lib.rs` of the plugin, the information provided by `info` are usable as follows:
 //!
 //! ```rust,ignore
 //! gst::plugin_define!(
