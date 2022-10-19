@@ -2556,7 +2556,7 @@ impl ObjectImpl for WebRTCSink {
     fn signals() -> &'static [glib::subclass::Signal] {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
             vec![
-                /*
+                /**
                  * RsWebRTCSink::consumer-added:
                  * @consumer_id: Identifier of the consumer added
                  * @webrtcbin: The new webrtcbin
@@ -2567,7 +2567,7 @@ impl ObjectImpl for WebRTCSink {
                 glib::subclass::Signal::builder("consumer-added")
                     .param_types([String::static_type(), gst::Element::static_type()])
                     .build(),
-                /*
+                /**
                  * RsWebRTCSink::consumer_removed:
                  * @consumer_id: Identifier of the consumer that was removed
                  * @webrtcbin: The webrtcbin connected to the newly removed consumer
@@ -2578,7 +2578,7 @@ impl ObjectImpl for WebRTCSink {
                 glib::subclass::Signal::builder("consumer-removed")
                     .param_types([String::static_type(), gst::Element::static_type()])
                     .build(),
-                /*
+                /**
                  * RsWebRTCSink::get_sessions:
                  *
                  * List all sessions (by ID).
@@ -2603,7 +2603,7 @@ impl ObjectImpl for WebRTCSink {
                     })
                     .return_type::<Vec<String>>()
                     .build(),
-                /*
+                /**
                  * RsWebRTCSink::encoder-setup:
                  * @consumer_id: Identifier of the consumer
                  * @pad_name: The name of the corresponding input pad
