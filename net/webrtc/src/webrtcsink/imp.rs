@@ -2323,7 +2323,7 @@ impl WebRTCSink {
 
 #[glib::object_subclass]
 impl ObjectSubclass for WebRTCSink {
-    const NAME: &'static str = "RsWebRTCSink";
+    const NAME: &'static str = "GstRSWebRTCSink";
     type Type = super::WebRTCSink;
     type ParentType = gst::Bin;
     type Interfaces = (gst::ChildProxy, gst_video::Navigation);

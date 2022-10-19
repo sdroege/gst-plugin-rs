@@ -5436,7 +5436,7 @@
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "WebRTC sink",
                 "hierarchy": [
-                    "RsWebRTCSink",
+                    "GstRSWebRTCSink",
                     "GstBin",
                     "GstElement",
                     "GstObject",
