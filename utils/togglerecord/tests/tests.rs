@@ -43,8 +43,10 @@ fn setup_sender_receiver(
     mpsc::Receiver<Either<gst::Buffer, gst::Event>>,
     thread::JoinHandle<()>,
 ) {
-    let fakesink = gst::ElementFactory::make("fakesink", None).unwrap();
-    fakesink.set_property("async", false);
+    let fakesink = gst::ElementFactory::make("fakesink")
+        .property("async", false)
+        .build()
+        .unwrap();
     pipeline.add(&fakesink).unwrap();
 
     let main_stream = pad == "src";
@@ -250,13 +252,13 @@ fn recv_buffers(
 #[test]
 fn test_create() {
     init();
-    assert!(gst::ElementFactory::make("togglerecord", None).is_ok());
+    assert!(gst::ElementFactory::make("togglerecord").build().is_ok());
 }
 
 #[test]
 fn test_create_pads() {
     init();
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
 
     let sinkpad = togglerecord.request_pad_simple("sink_%u").unwrap();
     let srcpad = sinkpad.iterate_internal_links().next().unwrap().unwrap();
@@ -274,7 +276,7 @@ fn test_one_stream_open() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input, _, receiver_output, thread) =
@@ -306,7 +308,7 @@ fn test_one_stream_gaps_open() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input, _, receiver_output, thread) =
@@ -339,7 +341,7 @@ fn test_one_stream_close_open() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input, receiver_input_done, receiver_output, thread) =
@@ -373,7 +375,7 @@ fn test_one_stream_open_close() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input, receiver_input_done, receiver_output, thread) =
@@ -408,7 +410,7 @@ fn test_one_stream_open_close_open() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input, receiver_input_done, receiver_output, thread) =
@@ -452,7 +454,7 @@ fn test_two_stream_open() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
@@ -505,7 +507,7 @@ fn test_two_stream_open_shift() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
@@ -562,7 +564,7 @@ fn test_two_stream_open_shift_main() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
@@ -627,7 +629,7 @@ fn test_two_stream_open_close() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
@@ -696,7 +698,7 @@ fn test_two_stream_close_open() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
@@ -765,7 +767,7 @@ fn test_two_stream_open_close_open() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
@@ -859,7 +861,7 @@ fn test_two_stream_open_close_open_gaps() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
@@ -959,7 +961,7 @@ fn test_two_stream_close_open_close_delta() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
@@ -1048,7 +1050,7 @@ fn test_three_stream_open_close_open() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
@@ -1172,7 +1174,7 @@ fn test_two_stream_main_eos() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
@@ -1247,7 +1249,7 @@ fn test_two_stream_secondary_eos_first() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
@@ -1315,7 +1317,7 @@ fn test_three_stream_main_eos() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
@@ -1416,7 +1418,7 @@ fn test_three_stream_main_and_second_eos() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
@@ -1517,7 +1519,7 @@ fn test_three_stream_secondary_eos_first() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =

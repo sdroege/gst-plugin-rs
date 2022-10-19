@@ -14,7 +14,7 @@ use gst::prelude::*;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use anyhow::{anyhow, Error};
+use anyhow::Error;
 
 use m3u8_rs::{
     AlternativeMedia, AlternativeMediaType, MasterPlaylist, MediaPlaylist, MediaPlaylistType,
@@ -125,11 +125,6 @@ impl State {
 
         self.wrote_manifest = true;
     }
-}
-
-pub fn make_element(element: &str, name: Option<&str>) -> Result<gst::Element, Error> {
-    gst::ElementFactory::make(element, name)
-        .map_err(|_| anyhow!("Failed to make element {}", element))
 }
 
 fn setup_appsink(appsink: &gst_app::AppSink, name: &str, path: &Path, is_video: bool) {
@@ -291,13 +286,22 @@ impl VideoStream {
         pipeline: &gst::Pipeline,
         path: &Path,
     ) -> Result<(), Error> {
-        let src = make_element("videotestsrc", None)?;
-        let raw_capsfilter = make_element("capsfilter", None)?;
-        let timeoverlay = make_element("timeoverlay", None)?;
-        let enc = make_element("x264enc", None)?;
-        let h264_capsfilter = make_element("capsfilter", None)?;
-        let mux = make_element("cmafmux", None)?;
-        let appsink = make_element("appsink", None)?;
+        let src = gst::ElementFactory::make("videotestsrc")
+            .property("num-buffers", 300)
+            .build()?;
+        let raw_capsfilter = gst::ElementFactory::make("capsfilter").build()?;
+        let timeoverlay = gst::ElementFactory::make("timeoverlay").build()?;
+        let enc = gst::ElementFactory::make("x264enc")
+            .property("bframes", 0u32)
+            .property("bitrate", self.bitrate as u32 / 1000u32)
+            .build()?;
+        let h264_capsfilter = gst::ElementFactory::make("capsfilter").build()?;
+        let mux = gst::ElementFactory::make("cmafmux")
+            .property("fragment-duration", 2500.mseconds())
+            .property_from_str("header-update-mode", "update")
+            .property("write-mehd", true)
+            .build()?;
+        let appsink = gst::ElementFactory::make("appsink").build()?;
 
         pipeline.add_many(&[
             &src,
@@ -336,13 +340,6 @@ impl VideoStream {
                 .build(),
         );
 
-        src.set_property("num-buffers", 300);
-        enc.set_property("bframes", 0u32);
-        enc.set_property("bitrate", self.bitrate as u32 / 1000u32);
-        mux.set_property("fragment-duration", 2500.mseconds());
-        mux.set_property_from_str("header-update-mode", "update");
-        mux.set_property("write-mehd", true);
-
         probe_encoder(state, enc);
 
         let appsink = appsink.downcast::<gst_app::AppSink>().unwrap();
@@ -360,27 +357,28 @@ impl AudioStream {
         pipeline: &gst::Pipeline,
         path: &Path,
     ) -> Result<(), Error> {
-        let src = make_element("audiotestsrc", None)?;
-        let raw_capsfilter = make_element("capsfilter", None)?;
-        let enc = make_element("avenc_aac", None)?;
-        let mux = make_element("cmafmux", None)?;
-        let appsink = make_element("appsink", None)?;
+        let src = gst::ElementFactory::make("audiotestsrc")
+            .property("num-buffers", 100)
+            .property("samplesperbuffer", 4410)
+            .property_from_str("wave", &self.wave)
+            .build()?;
+        let raw_capsfilter = gst::ElementFactory::make("capsfilter").build()?;
+        let enc = gst::ElementFactory::make("avenc_aac").build()?;
+        let mux = gst::ElementFactory::make("cmafmux")
+            .property("fragment-duration", 2500.mseconds())
+            .property_from_str("header-update-mode", "update")
+            .property("write-mehd", true)
+            .build()?;
+        let appsink = gst::ElementFactory::make("appsink").build()?;
 
         pipeline.add_many(&[&src, &raw_capsfilter, &enc, &mux, &appsink])?;
 
         gst::Element::link_many(&[&src, &raw_capsfilter, &enc, &mux, &appsink])?;
 
-        src.set_property("num-buffers", 100);
-        src.set_property("samplesperbuffer", 4410);
-        src.set_property_from_str("wave", &self.wave);
         raw_capsfilter.set_property(
             "caps",
             gst_audio::AudioCapsBuilder::new().rate(44100).build(),
         );
-
-        mux.set_property("fragment-duration", 2500.mseconds());
-        mux.set_property_from_str("header-update-mode", "update");
-        mux.set_property("write-mehd", true);
 
         probe_encoder(state, enc);
 

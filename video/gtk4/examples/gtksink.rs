@@ -7,12 +7,16 @@ use std::cell::RefCell;
 
 fn create_ui(app: &gtk::Application) {
     let pipeline = gst::Pipeline::new(None);
-    let src = gst::ElementFactory::make("videotestsrc", None).unwrap();
+    let src = gst::ElementFactory::make("videotestsrc").build().unwrap();
 
-    let overlay = gst::ElementFactory::make("clockoverlay", None).unwrap();
-    overlay.set_property("font-desc", "Monospace 42");
+    let overlay = gst::ElementFactory::make("clockoverlay")
+        .property("font-desc", "Monospace 42")
+        .build()
+        .unwrap();
 
-    let sink = gst::ElementFactory::make("gtk4paintablesink", None).unwrap();
+    let sink = gst::ElementFactory::make("gtk4paintablesink")
+        .build()
+        .unwrap();
     let paintable = sink.property::<gdk::Paintable>("paintable");
 
     pipeline.add_many(&[&src, &overlay, &sink]).unwrap();

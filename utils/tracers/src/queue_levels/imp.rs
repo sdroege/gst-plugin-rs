@@ -64,8 +64,8 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 static QUEUE_TYPE: Lazy<glib::Type> = Lazy::new(|| {
-    if let Ok(queue) = gst::ElementFactory::make("queue", None) {
-        queue.type_()
+    if let Some(queue) = gst::ElementFactory::find("queue").and_then(|f| f.load().ok()) {
+        queue.element_type()
     } else {
         gst::warning!(CAT, "Can't instantiate queue element");
         glib::Type::INVALID
@@ -73,8 +73,8 @@ static QUEUE_TYPE: Lazy<glib::Type> = Lazy::new(|| {
 });
 
 static QUEUE2_TYPE: Lazy<glib::Type> = Lazy::new(|| {
-    if let Ok(queue) = gst::ElementFactory::make("queue2", None) {
-        queue.type_()
+    if let Some(queue) = gst::ElementFactory::find("queue2").and_then(|f| f.load().ok()) {
+        queue.element_type()
     } else {
         gst::warning!(CAT, "Can't instantiate queue2 element");
         glib::Type::INVALID
@@ -82,8 +82,8 @@ static QUEUE2_TYPE: Lazy<glib::Type> = Lazy::new(|| {
 });
 
 static MULTIQUEUE_TYPE: Lazy<glib::Type> = Lazy::new(|| {
-    if let Ok(queue) = gst::ElementFactory::make("multiqueue", None) {
-        queue.type_()
+    if let Some(queue) = gst::ElementFactory::find("multiqueue").and_then(|f| f.load().ok()) {
+        queue.element_type()
     } else {
         gst::warning!(CAT, "Can't instantiate multiqueue element");
         glib::Type::INVALID

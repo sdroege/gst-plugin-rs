@@ -133,23 +133,21 @@ fn main() {
     for i in 0..args.streams {
         let ctx_name = format!("standalone {}", i % args.groups);
 
-        let src = gst::ElementFactory::make(
-            "ts-standalone-test-src",
-            Some(format!("src-{}", i).as_str()),
-        )
-        .unwrap();
-        src.set_property("context", &ctx_name);
-        src.set_property("context-wait", args.wait);
-        src.set_property("push-period", args.push_period);
-        src.set_property("num-buffers", args.num_buffers);
+        let src = gst::ElementFactory::make("ts-standalone-test-src")
+            .name(format!("src-{}", i).as_str())
+            .property("context", &ctx_name)
+            .property("context-wait", args.wait)
+            .property("push-period", args.push_period)
+            .property("num-buffers", args.num_buffers)
+            .build()
+            .unwrap();
 
-        let sink = gst::ElementFactory::make(
-            "ts-standalone-test-sink",
-            Some(format!("sink-{}", i).as_str()),
-        )
-        .unwrap();
-        sink.set_property("context", &ctx_name);
-        sink.set_property("context-wait", args.wait);
+        let sink = gst::ElementFactory::make("ts-standalone-test-sink")
+            .name(format!("sink-{}", i).as_str())
+            .property("context", &ctx_name)
+            .property("context-wait", args.wait)
+            .build()
+            .unwrap();
 
         if i == 0 {
             src.set_property("raise-log-level", true);

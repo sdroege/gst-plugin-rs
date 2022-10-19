@@ -63,7 +63,7 @@ impl Harness {
         use std::sync::{Arc, Mutex};
 
         // Create the HTTP source
-        let src = gst::ElementFactory::make("reqwesthttpsrc", None).unwrap();
+        let src = gst::ElementFactory::make("reqwesthttpsrc").build().unwrap();
 
         // Sender/receiver for the messages we generate from various places for the tests
         //
@@ -1193,8 +1193,10 @@ fn test_proxy_prop_souphttpsrc_compatibility() {
 
     fn assert_proxy_set(set_to: Option<&str>, expected: Option<&str>) {
         // The same assertions should hold for "souphttpsrc".
-        let src = gst::ElementFactory::make("reqwesthttpsrc", None).unwrap();
-        src.set_property("proxy", set_to);
+        let src = gst::ElementFactory::make("reqwesthttpsrc")
+            .property("proxy", set_to)
+            .build()
+            .unwrap();
         assert_eq!(src.property::<Option<String>>("proxy").as_deref(), expected);
     }
 

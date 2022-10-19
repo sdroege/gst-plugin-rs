@@ -72,17 +72,21 @@ fn test_pipeline() {
         r
     };
 
-    let filesrc = gst::ElementFactory::make("filesrc", None).unwrap();
-    filesrc.set_property("location", &input_path.to_str().unwrap());
+    let filesrc = gst::ElementFactory::make("filesrc")
+        .property("location", &input_path.to_str().unwrap())
+        .build()
+        .unwrap();
 
-    let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
-    dec.set_property("sender-key", &*SENDER_PUBLIC);
-    dec.set_property("receiver-key", &*RECEIVER_PRIVATE);
+    let dec = gst::ElementFactory::make("sodiumdecrypter")
+        .property("sender-key", &*SENDER_PUBLIC)
+        .property("receiver-key", &*RECEIVER_PRIVATE)
+        .build()
+        .unwrap();
 
     // the typefind element here is cause the decrypter only supports
     // operating in pull mode bu the filesink wants push-mode.
-    let typefind = gst::ElementFactory::make("typefind", None).unwrap();
-    let sink = gst::ElementFactory::make("appsink", None).unwrap();
+    let typefind = gst::ElementFactory::make("typefind").build().unwrap();
+    let sink = gst::ElementFactory::make("appsink").build().unwrap();
 
     pipeline
         .add_many(&[&filesrc, &dec, &typefind, &sink])
@@ -160,12 +164,16 @@ fn test_pull_range() {
         r
     };
 
-    let filesrc = gst::ElementFactory::make("filesrc", None).unwrap();
-    filesrc.set_property("location", input_path.to_str().unwrap());
+    let filesrc = gst::ElementFactory::make("filesrc")
+        .property("location", input_path.to_str().unwrap())
+        .build()
+        .unwrap();
 
-    let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
-    dec.set_property("sender-key", &*SENDER_PUBLIC);
-    dec.set_property("receiver-key", &*RECEIVER_PRIVATE);
+    let dec = gst::ElementFactory::make("sodiumdecrypter")
+        .property("sender-key", &*SENDER_PUBLIC)
+        .property("receiver-key", &*RECEIVER_PRIVATE)
+        .build()
+        .unwrap();
 
     pipeline
         .add_many(&[&filesrc, &dec])
@@ -265,33 +273,43 @@ fn test_state_changes() {
 
     // NullToReady without keys provided
     {
-        let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
+        let dec = gst::ElementFactory::make("sodiumdecrypter")
+            .build()
+            .unwrap();
         assert!(dec.change_state(gst::StateChange::NullToReady).is_err());
 
         // Set only receiver key
-        let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
-        dec.set_property("receiver-key", &*RECEIVER_PRIVATE);
+        let dec = gst::ElementFactory::make("sodiumdecrypter")
+            .property("receiver-key", &*RECEIVER_PRIVATE)
+            .build()
+            .unwrap();
         assert!(dec.change_state(gst::StateChange::NullToReady).is_err());
 
         // Set only sender key
-        let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
-        dec.set_property("sender-key", &*SENDER_PUBLIC);
+        let dec = gst::ElementFactory::make("sodiumdecrypter")
+            .property("sender-key", &*SENDER_PUBLIC)
+            .build()
+            .unwrap();
         assert!(dec.change_state(gst::StateChange::NullToReady).is_err());
     }
 
     // NullToReady, no nonce provided
     {
-        let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
-        dec.set_property("sender-key", &*SENDER_PUBLIC);
-        dec.set_property("receiver-key", &*RECEIVER_PRIVATE);
+        let dec = gst::ElementFactory::make("sodiumdecrypter")
+            .property("sender-key", &*SENDER_PUBLIC)
+            .property("receiver-key", &*RECEIVER_PRIVATE)
+            .build()
+            .unwrap();
         assert!(dec.change_state(gst::StateChange::NullToReady).is_ok());
     }
 
     // ReadyToNull
     {
-        let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
-        dec.set_property("sender-key", &*SENDER_PUBLIC);
-        dec.set_property("receiver-key", &*RECEIVER_PRIVATE);
+        let dec = gst::ElementFactory::make("sodiumdecrypter")
+            .property("sender-key", &*SENDER_PUBLIC)
+            .property("receiver-key", &*RECEIVER_PRIVATE)
+            .build()
+            .unwrap();
         assert!(dec.change_state(gst::StateChange::NullToReady).is_ok());
     }
 }

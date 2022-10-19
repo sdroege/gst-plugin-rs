@@ -41,7 +41,7 @@ impl RaptorqTest {
     fn new() -> Self {
         init();
 
-        let enc = gst::ElementFactory::make("raptorqenc", None).unwrap();
+        let enc = gst::ElementFactory::make("raptorqenc").build().unwrap();
 
         let protected_packets = enc.property::<u32>("protected-packets") as usize;
         let repair_packets = enc.property::<u32>("repair-packets") as usize;
@@ -117,13 +117,14 @@ impl RaptorqTest {
         assert!(self.input_buffers >= self.protected_packets);
 
         // 1. Decoder Setup:
-        let enc = gst::ElementFactory::make("raptorqenc", None).unwrap();
-
-        enc.set_property("protected-packets", self.protected_packets as u32);
-        enc.set_property("repair-packets", self.repair_packets as u32);
-        enc.set_property("repair-window", self.repair_window as u32);
-        enc.set_property("symbol-size", self.symbol_size as u32);
-        enc.set_property("mtu", self.mtu as u32);
+        let enc = gst::ElementFactory::make("raptorqenc")
+            .property("protected-packets", self.protected_packets as u32)
+            .property("repair-packets", self.repair_packets as u32)
+            .property("repair-window", self.repair_window as u32)
+            .property("symbol-size", self.symbol_size as u32)
+            .property("mtu", self.mtu as u32)
+            .build()
+            .unwrap();
 
         let mut h_enc = gst_check::Harness::with_element(&enc, Some("sink"), Some("src"));
         let mut h_enc_fec = gst_check::Harness::with_element(&enc, None, Some("fec_0"));
@@ -131,7 +132,7 @@ impl RaptorqTest {
         h_enc.set_src_caps_str("application/x-rtp,clock-rate=8000");
 
         // 2. Decoder Setup:
-        let dec = gst::ElementFactory::make("raptorqdec", None).unwrap();
+        let dec = gst::ElementFactory::make("raptorqdec").build().unwrap();
 
         let mut h_dec = gst_check::Harness::with_element(&dec, Some("sink"), Some("src"));
         let mut h_dec_fec = gst_check::Harness::with_element(&dec, Some("fec_0"), None);
@@ -438,12 +439,13 @@ fn test_raptorq_wrapping_sequence_number_3() {
 fn test_raptorq_encoder_flush_cancels_pending_timers() {
     init();
 
-    let enc = gst::ElementFactory::make("raptorqenc", None).unwrap();
-
-    // Set delay to 5s, this way each buffer should be delayed by 1s
-    enc.set_property("repair-window", 5000u32);
-    enc.set_property("protected-packets", 5u32);
-    enc.set_property("repair-packets", 5u32);
+    let enc = gst::ElementFactory::make("raptorqenc")
+        // Set delay to 5s, this way each buffer should be delayed by 1s
+        .property("repair-window", 5000u32)
+        .property("protected-packets", 5u32)
+        .property("repair-packets", 5u32)
+        .build()
+        .unwrap();
 
     let mut h_enc = gst_check::Harness::with_element(&enc, Some("sink"), Some("src"));
     let mut h_enc_fec = gst_check::Harness::with_element(&enc, None, Some("fec_0"));
@@ -504,12 +506,13 @@ fn test_raptorq_encoder_flush_cancels_pending_timers() {
 fn test_raptorq_repair_window_tolerance() {
     init();
 
-    let enc = gst::ElementFactory::make("raptorqenc", None).unwrap();
-
-    // Set delay to 5s, this way each buffer should be delayed by 1s
-    enc.set_property("repair-window", 1000u32);
-    enc.set_property("protected-packets", 5u32);
-    enc.set_property("repair-packets", 5u32);
+    let enc = gst::ElementFactory::make("raptorqenc")
+        // Set delay to 5s, this way each buffer should be delayed by 1s
+        .property("repair-window", 1000u32)
+        .property("protected-packets", 5u32)
+        .property("repair-packets", 5u32)
+        .build()
+        .unwrap();
 
     let mut h_enc = gst_check::Harness::with_element(&enc, Some("sink"), Some("src"));
     let mut h_enc_fec = gst_check::Harness::with_element(&enc, None, Some("fec_0"));
@@ -531,9 +534,10 @@ fn test_raptorq_repair_window_tolerance() {
         assert!(result.is_ok());
     }
 
-    let dec = gst::ElementFactory::make("raptorqdec", None).unwrap();
-
-    dec.set_property("repair-window-tolerance", 1000u32);
+    let dec = gst::ElementFactory::make("raptorqdec")
+        .property("repair-window-tolerance", 1000u32)
+        .build()
+        .unwrap();
 
     let mut h_dec = gst_check::Harness::with_element(&dec, Some("sink"), Some("src"));
     let mut h_dec_fec = gst_check::Harness::with_element(&dec, Some("fec_0"), None);

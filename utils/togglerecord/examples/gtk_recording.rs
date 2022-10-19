@@ -23,54 +23,66 @@ fn create_pipeline() -> (
 ) {
     let pipeline = gst::Pipeline::new(None);
 
-    let video_src = gst::ElementFactory::make("videotestsrc", None).unwrap();
-    video_src.set_property("is-live", true);
-    video_src.set_property_from_str("pattern", "ball");
+    let video_src = gst::ElementFactory::make("videotestsrc")
+        .property("is-live", true)
+        .property_from_str("pattern", "ball")
+        .build()
+        .unwrap();
 
-    let timeoverlay = gst::ElementFactory::make("timeoverlay", None).unwrap();
-    timeoverlay.set_property("font-desc", "Monospace 20");
+    let timeoverlay = gst::ElementFactory::make("timeoverlay")
+        .property("font-desc", "Monospace 20")
+        .build()
+        .unwrap();
 
-    let video_tee = gst::ElementFactory::make("tee", None).unwrap();
-    let video_queue1 = gst::ElementFactory::make("queue", None).unwrap();
-    let video_queue2 = gst::ElementFactory::make("queue", None).unwrap();
+    let video_tee = gst::ElementFactory::make("tee").build().unwrap();
+    let video_queue1 = gst::ElementFactory::make("queue").build().unwrap();
+    let video_queue2 = gst::ElementFactory::make("queue").build().unwrap();
 
-    let video_convert1 = gst::ElementFactory::make("videoconvert", None).unwrap();
-    let video_convert2 = gst::ElementFactory::make("videoconvert", None).unwrap();
+    let video_convert1 = gst::ElementFactory::make("videoconvert").build().unwrap();
+    let video_convert2 = gst::ElementFactory::make("videoconvert").build().unwrap();
 
-    let video_sink = gst::ElementFactory::make("gtk4paintablesink", None).unwrap();
+    let video_sink = gst::ElementFactory::make("gtk4paintablesink")
+        .build()
+        .unwrap();
 
-    let video_enc = gst::ElementFactory::make("x264enc", None).unwrap();
-    video_enc.set_property("rc-lookahead", 10i32);
-    video_enc.set_property("key-int-max", 30u32);
-    let video_parse = gst::ElementFactory::make("h264parse", None).unwrap();
+    let video_enc = gst::ElementFactory::make("x264enc")
+        .property("rc-lookahead", 10i32)
+        .property("key-int-max", 30u32)
+        .build()
+        .unwrap();
+    let video_parse = gst::ElementFactory::make("h264parse").build().unwrap();
 
-    let audio_src = gst::ElementFactory::make("audiotestsrc", None).unwrap();
-    audio_src.set_property("is-live", true);
-    audio_src.set_property_from_str("wave", "ticks");
+    let audio_src = gst::ElementFactory::make("audiotestsrc")
+        .property("is-live", true)
+        .property_from_str("wave", "ticks")
+        .build()
+        .unwrap();
 
-    let audio_tee = gst::ElementFactory::make("tee", None).unwrap();
-    let audio_queue1 = gst::ElementFactory::make("queue", None).unwrap();
-    let audio_queue2 = gst::ElementFactory::make("queue", None).unwrap();
+    let audio_tee = gst::ElementFactory::make("tee").build().unwrap();
+    let audio_queue1 = gst::ElementFactory::make("queue").build().unwrap();
+    let audio_queue2 = gst::ElementFactory::make("queue").build().unwrap();
 
-    let audio_convert1 = gst::ElementFactory::make("audioconvert", None).unwrap();
-    let audio_convert2 = gst::ElementFactory::make("audioconvert", None).unwrap();
+    let audio_convert1 = gst::ElementFactory::make("audioconvert").build().unwrap();
+    let audio_convert2 = gst::ElementFactory::make("audioconvert").build().unwrap();
 
-    let audio_sink = gst::ElementFactory::make("autoaudiosink", None).unwrap();
+    let audio_sink = gst::ElementFactory::make("autoaudiosink").build().unwrap();
 
-    let audio_enc = gst::ElementFactory::make("lamemp3enc", None).unwrap();
-    let audio_parse = gst::ElementFactory::make("mpegaudioparse", None).unwrap();
+    let audio_enc = gst::ElementFactory::make("lamemp3enc").build().unwrap();
+    let audio_parse = gst::ElementFactory::make("mpegaudioparse").build().unwrap();
 
-    let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
+    let togglerecord = gst::ElementFactory::make("togglerecord").build().unwrap();
 
-    let mux_queue1 = gst::ElementFactory::make("queue", None).unwrap();
-    let mux_queue2 = gst::ElementFactory::make("queue", None).unwrap();
+    let mux_queue1 = gst::ElementFactory::make("queue").build().unwrap();
+    let mux_queue2 = gst::ElementFactory::make("queue").build().unwrap();
 
-    let mux = gst::ElementFactory::make("mp4mux", None).unwrap();
+    let mux = gst::ElementFactory::make("mp4mux").build().unwrap();
 
-    let file_sink = gst::ElementFactory::make("filesink", None).unwrap();
-    file_sink.set_property("location", "recording.mp4");
-    file_sink.set_property("async", false);
-    file_sink.set_property("sync", false);
+    let file_sink = gst::ElementFactory::make("filesink")
+        .property("location", "recording.mp4")
+        .property("async", false)
+        .property("sync", false)
+        .build()
+        .unwrap();
 
     pipeline
         .add_many(&[

@@ -36,23 +36,28 @@ fn test_push() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let fakesrc = gst::ElementFactory::make("fakesrc", None).unwrap();
-    let proxysink = gst::ElementFactory::make("ts-proxysink", Some("proxysink::test1")).unwrap();
-    let proxysrc = gst::ElementFactory::make("ts-proxysrc", Some("proxysrc::test1")).unwrap();
-    let appsink = gst::ElementFactory::make("appsink", None).unwrap();
+    let fakesrc = gst::ElementFactory::make("fakesrc")
+        .property("num-buffers", 3i32)
+        .build()
+        .unwrap();
+    let proxysink = gst::ElementFactory::make("ts-proxysink")
+        .name("proxysink::test1")
+        .property("proxy-context", "proxy::test1_proxy")
+        .build()
+        .unwrap();
+    let proxysrc = gst::ElementFactory::make("ts-proxysrc")
+        .name("proxysrc::test1")
+        .property("proxy-context", "proxy::test1_proxy")
+        .property("context", "proxy::test")
+        .build()
+        .unwrap();
+    let appsink = gst::ElementFactory::make("appsink").build().unwrap();
 
     pipeline
         .add_many(&[&fakesrc, &proxysink, &proxysrc, &appsink])
         .unwrap();
     fakesrc.link(&proxysink).unwrap();
     proxysrc.link(&appsink).unwrap();
-
-    fakesrc.set_property("num-buffers", 3i32);
-    proxysink.set_property("proxy-context", "proxy::test1_proxy");
-    proxysrc.set_property("proxy-context", "proxy::test1_proxy");
-    proxysrc.set_property("context", "proxy::test");
-
-    appsink.set_property("emit-signals", true);
 
     let samples = Arc::new(Mutex::new(Vec::new()));
 
@@ -102,22 +107,27 @@ fn test_from_pipeline_to_pipeline() {
     init();
 
     let pipe_1 = gst::Pipeline::new(None);
-    let fakesrc = gst::ElementFactory::make("fakesrc", None).unwrap();
-    let pxsink = gst::ElementFactory::make("ts-proxysink", Some("proxysink::test2")).unwrap();
+    let fakesrc = gst::ElementFactory::make("fakesrc").build().unwrap();
+    let pxsink = gst::ElementFactory::make("ts-proxysink")
+        .name("proxysink::test2")
+        .property("proxy-context", "proxy::test2_proxy")
+        .build()
+        .unwrap();
 
     let pipe_2 = gst::Pipeline::new(None);
-    let pxsrc = gst::ElementFactory::make("ts-proxysrc", Some("proxysrc::test2")).unwrap();
-    let fakesink = gst::ElementFactory::make("fakesink", None).unwrap();
+    let pxsrc = gst::ElementFactory::make("ts-proxysrc")
+        .name("proxysrc::test2")
+        .property("proxy-context", "proxy::test2_proxy")
+        .property("context", "proxy::test")
+        .build()
+        .unwrap();
+    let fakesink = gst::ElementFactory::make("fakesink").build().unwrap();
 
     pipe_1.add_many(&[&fakesrc, &pxsink]).unwrap();
     fakesrc.link(&pxsink).unwrap();
 
     pipe_2.add_many(&[&pxsrc, &fakesink]).unwrap();
     pxsrc.link(&fakesink).unwrap();
-
-    pxsink.set_property("proxy-context", "proxy::test2_proxy");
-    pxsrc.set_property("proxy-context", "proxy::test2_proxy");
-    pxsrc.set_property("context", "proxy::test");
 
     pipe_1.set_state(gst::State::Paused).unwrap();
     pipe_2.set_state(gst::State::Paused).unwrap();
@@ -135,26 +145,36 @@ fn test_from_pipeline_to_pipeline_and_back() {
     init();
 
     let pipe_1 = gst::Pipeline::new(None);
-    let pxsrc_1 = gst::ElementFactory::make("ts-proxysrc", Some("proxysrc1::test3")).unwrap();
-    let pxsink_1 = gst::ElementFactory::make("ts-proxysink", Some("proxysink1::test3")).unwrap();
+    let pxsrc_1 = gst::ElementFactory::make("ts-proxysrc")
+        .name("proxysrc1::test3")
+        .property("proxy-context", "proxy::test3_proxy1")
+        .property("context", "proxy::test")
+        .build()
+        .unwrap();
+    let pxsink_1 = gst::ElementFactory::make("ts-proxysink")
+        .name("proxysink1::test3")
+        .property("proxy-context", "proxy::test3_proxy2")
+        .build()
+        .unwrap();
 
     let pipe_2 = gst::Pipeline::new(None);
-    let pxsrc_2 = gst::ElementFactory::make("ts-proxysrc", Some("proxysrc2::test3")).unwrap();
-    let pxsink_2 = gst::ElementFactory::make("ts-proxysink", Some("proxysink2::test3")).unwrap();
+    let pxsrc_2 = gst::ElementFactory::make("ts-proxysrc")
+        .name("proxysrc2::test3")
+        .property("proxy-context", "proxy::test3_proxy2")
+        .property("context", "proxy::test")
+        .build()
+        .unwrap();
+    let pxsink_2 = gst::ElementFactory::make("ts-proxysink")
+        .name("proxysink2::test3")
+        .property("proxy-context", "proxy::test3_proxy1")
+        .build()
+        .unwrap();
 
     pipe_1.add_many(&[&pxsrc_1, &pxsink_1]).unwrap();
     pxsrc_1.link(&pxsink_1).unwrap();
 
     pipe_2.add_many(&[&pxsrc_2, &pxsink_2]).unwrap();
     pxsrc_2.link(&pxsink_2).unwrap();
-
-    pxsrc_1.set_property("proxy-context", "proxy::test3_proxy1");
-    pxsrc_1.set_property("context", "proxy::test");
-    pxsink_2.set_property("proxy-context", "proxy::test3_proxy1");
-
-    pxsrc_2.set_property("proxy-context", "proxy::test3_proxy2");
-    pxsrc_2.set_property("context", "proxy::test");
-    pxsink_1.set_property("proxy-context", "proxy::test3_proxy2");
 
     pipe_1.set_state(gst::State::Paused).unwrap();
     pipe_2.set_state(gst::State::Paused).unwrap();

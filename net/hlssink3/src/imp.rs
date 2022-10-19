@@ -76,9 +76,13 @@ struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        let splitmuxsink = gst::ElementFactory::make("splitmuxsink", Some("split_mux_sink"))
+        let splitmuxsink = gst::ElementFactory::make("splitmuxsink")
+            .name("split_mux_sink")
+            .build()
             .expect("Could not make element splitmuxsink");
-        let giostreamsink = gst::ElementFactory::make("giostreamsink", Some("giostream_sink"))
+        let giostreamsink = gst::ElementFactory::make("giostreamsink")
+            .name("giostream_sink")
+            .build()
             .expect("Could not make element giostreamsink");
         Self {
             location: String::from(DEFAULT_LOCATION),
@@ -619,7 +623,9 @@ impl ObjectImpl for HlsSink3 {
 
         let settings = self.settings.lock().unwrap();
 
-        let mux = gst::ElementFactory::make("mpegtsmux", Some("mpeg-ts_mux"))
+        let mux = gst::ElementFactory::make("mpegtsmux")
+            .name("mpeg-ts_mux")
+            .build()
             .expect("Could not make element mpegtsmux");
 
         let location: Option<String> = None;

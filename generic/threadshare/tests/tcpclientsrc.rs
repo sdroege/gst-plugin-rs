@@ -56,19 +56,20 @@ fn test_push() {
 
     let pipeline = gst::Pipeline::new(None);
 
-    let tcpclientsrc = gst::ElementFactory::make("ts-tcpclientsrc", None).unwrap();
-    let appsink = gst::ElementFactory::make("appsink", None).unwrap();
-    appsink.set_property("sync", false);
-    appsink.set_property("async", false);
+    let caps = gst::Caps::builder("foo/bar").build();
+    let tcpclientsrc = gst::ElementFactory::make("ts-tcpclientsrc")
+        .property("caps", &caps)
+        .property("port", 5000i32)
+        .build()
+        .unwrap();
+    let appsink = gst::ElementFactory::make("appsink")
+        .property("sync", false)
+        .property("async", false)
+        .build()
+        .unwrap();
 
     pipeline.add_many(&[&tcpclientsrc, &appsink]).unwrap();
     tcpclientsrc.link(&appsink).unwrap();
-
-    let caps = gst::Caps::builder("foo/bar").build();
-    tcpclientsrc.set_property("caps", &caps);
-    tcpclientsrc.set_property("port", 5000i32);
-
-    appsink.set_property("emit-signals", true);
 
     let samples = Arc::new(Mutex::new(Vec::new()));
 

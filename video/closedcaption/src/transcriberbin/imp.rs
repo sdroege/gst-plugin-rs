@@ -88,12 +88,14 @@ impl TranscriberBin {
     fn construct_transcription_bin(&self, state: &mut State) -> Result<(), Error> {
         gst::debug!(CAT, imp: self, "Building transcription bin");
 
-        let aqueue_transcription = gst::ElementFactory::make("queue", Some("transqueue"))?;
-        aqueue_transcription.set_property("max-size-buffers", 0u32);
-        aqueue_transcription.set_property("max-size-bytes", 0u32);
-        aqueue_transcription.set_property("max-size-time", 5_000_000_000u64);
-        aqueue_transcription.set_property_from_str("leaky", "downstream");
-        let ccconverter = gst::ElementFactory::make("ccconverter", None)?;
+        let aqueue_transcription = gst::ElementFactory::make("queue")
+            .name("transqueue")
+            .property("max-size-buffers", 0u32)
+            .property("max-size-bytes", 0u32)
+            .property("max-size-time", 5_000_000_000u64)
+            .property_from_str("leaky", "downstream")
+            .build()?;
+        let ccconverter = gst::ElementFactory::make("ccconverter").build()?;
 
         state.transcription_bin.add_many(&[
             &aqueue_transcription,
@@ -150,9 +152,9 @@ impl TranscriberBin {
     }
 
     fn construct_internal_bin(&self, state: &mut State) -> Result<(), Error> {
-        let aclocksync = gst::ElementFactory::make("clocksync", None)?;
+        let aclocksync = gst::ElementFactory::make("clocksync").build()?;
 
-        let vclocksync = gst::ElementFactory::make("clocksync", None)?;
+        let vclocksync = gst::ElementFactory::make("clocksync").build()?;
 
         state.internal_bin.add_many(&[
             &aclocksync,
@@ -442,22 +444,31 @@ impl TranscriberBin {
     fn build_state(&self) -> Result<State, Error> {
         let internal_bin = gst::Bin::new(Some("internal"));
         let transcription_bin = gst::Bin::new(Some("transcription-bin"));
-        let audio_tee = gst::ElementFactory::make("tee", None)?;
-        let cccombiner = gst::ElementFactory::make("cccombiner", Some("cccombiner"))?;
-        let textwrap = gst::ElementFactory::make("textwrap", Some("textwrap"))?;
-        let tttocea608 = gst::ElementFactory::make("tttocea608", Some("tttocea608"))?;
-        let transcriber_aconv = gst::ElementFactory::make("audioconvert", None)?;
-        let transcriber = gst::ElementFactory::make("awstranscriber", Some("transcriber"))?;
-        let transcriber_queue = gst::ElementFactory::make("queue", None)?;
-        let audio_queue_passthrough = gst::ElementFactory::make("queue", None)?;
-        let video_queue = gst::ElementFactory::make("queue", None)?;
-        let cccapsfilter = gst::ElementFactory::make("capsfilter", None)?;
-        let transcription_valve = gst::ElementFactory::make("valve", None)?;
-
-        // Protect passthrough enable (and resulting dynamic reconfigure)
-        // from non-streaming thread
-        audio_tee.set_property("allow-not-linked", true);
-        transcription_valve.set_property_from_str("drop-mode", "transform-to-gap");
+        let audio_tee = gst::ElementFactory::make("tee")
+            // Protect passthrough enable (and resulting dynamic reconfigure)
+            // from non-streaming thread
+            .property("allow-not-linked", true)
+            .build()?;
+        let cccombiner = gst::ElementFactory::make("cccombiner")
+            .name("cccombiner")
+            .build()?;
+        let textwrap = gst::ElementFactory::make("textwrap")
+            .name("textwrap")
+            .build()?;
+        let tttocea608 = gst::ElementFactory::make("tttocea608")
+            .name("tttocea608")
+            .build()?;
+        let transcriber_aconv = gst::ElementFactory::make("audioconvert").build()?;
+        let transcriber = gst::ElementFactory::make("awstranscriber")
+            .name("transcriber")
+            .build()?;
+        let transcriber_queue = gst::ElementFactory::make("queue").build()?;
+        let audio_queue_passthrough = gst::ElementFactory::make("queue").build()?;
+        let video_queue = gst::ElementFactory::make("queue").build()?;
+        let cccapsfilter = gst::ElementFactory::make("capsfilter").build()?;
+        let transcription_valve = gst::ElementFactory::make("valve")
+            .property_from_str("drop-mode", "transform-to-gap")
+            .build()?;
 
         Ok(State {
             framerate: None,

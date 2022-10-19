@@ -81,18 +81,19 @@ fn test(
 
     let playlist_len = medias.len() * (iterations as usize);
 
-    let pipeline = gst::Pipeline::new(None);
-    let playlist = gst::ElementFactory::make("uriplaylistbin", None).unwrap();
-    let mq = gst::ElementFactory::make("multiqueue", None).unwrap();
-
-    pipeline.add_many(&[&playlist, &mq]).unwrap();
-
     let total_len: gst::ClockTime = medias.iter().map(|t| t.len * (iterations as u64)).sum();
 
     let uris: Vec<String> = medias.iter().map(|t| t.uri.clone()).collect();
 
-    playlist.set_property("uris", &uris);
-    playlist.set_property("iterations", &iterations);
+    let pipeline = gst::Pipeline::new(None);
+    let playlist = gst::ElementFactory::make("uriplaylistbin")
+        .property("uris", &uris)
+        .property("iterations", &iterations)
+        .build()
+        .unwrap();
+    let mq = gst::ElementFactory::make("multiqueue").build().unwrap();
+
+    pipeline.add_many(&[&playlist, &mq]).unwrap();
 
     assert_eq!(playlist.property::<u32>("current-iteration"), 0);
     assert_eq!(playlist.property::<u64>("current-uri-index"), 0);
@@ -114,7 +115,7 @@ fn test(
             None => return,
         };
 
-        let sink = gst::ElementFactory::make("fakesink", None).unwrap();
+        let sink = gst::ElementFactory::make("fakesink").build().unwrap();
         pipeline.add(&sink).unwrap();
         sink.sync_state_with_parent().unwrap();
 

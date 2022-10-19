@@ -896,30 +896,35 @@ impl FallbackSrc {
     fn create_dummy_audio_source(filter_caps: &gst::Caps, min_latency: gst::ClockTime) -> gst::Bin {
         let bin = gst::Bin::new(None);
 
-        let audiotestsrc = gst::ElementFactory::make("audiotestsrc", Some("audiosrc"))
+        let audiotestsrc = gst::ElementFactory::make("audiotestsrc")
+            .name("audiosrc")
+            .property_from_str("wave", "silence")
+            .property("is-live", true)
+            .build()
             .expect("No audiotestsrc found");
 
-        let audioconvert = gst::ElementFactory::make("audioconvert", Some("audio_audioconvert"))
+        let audioconvert = gst::ElementFactory::make("audioconvert")
+            .name("audio_audioconvert")
+            .build()
             .expect("No audioconvert found");
 
-        let audioresample = gst::ElementFactory::make("audioresample", Some("audio_audioresample"))
+        let audioresample = gst::ElementFactory::make("audioresample")
+            .name("audio_audioresample")
+            .build()
             .expect("No audioresample found");
 
-        let capsfilter = gst::ElementFactory::make("capsfilter", Some("audio_capsfilter"))
+        let capsfilter = gst::ElementFactory::make("capsfilter")
+            .name("audio_capsfilter")
+            .property("caps", filter_caps)
+            .build()
             .expect("No capsfilter found");
 
-        let queue = gst::ElementFactory::make("queue", None).expect("No queue found");
-
-        audiotestsrc.set_property_from_str("wave", "silence");
-        audiotestsrc.set_property("is-live", true);
-
-        capsfilter.set_property("caps", filter_caps);
-
-        queue.set_properties(&[
-            ("max-size-bytes", &0u32),
-            ("max-size-buffers", &0u32),
-            ("max-size-time", &(cmp::max(min_latency, 1.seconds()))),
-        ]);
+        let queue = gst::ElementFactory::make("queue")
+            .property("max-size-bytes", 0u32)
+            .property("max-size-buffers", 0u32)
+            .property("max-size-time", cmp::max(min_latency, 1.seconds()))
+            .build()
+            .expect("No queue found");
 
         bin.add_many(&[
             &audiotestsrc,
@@ -950,30 +955,35 @@ impl FallbackSrc {
     fn create_dummy_video_source(filter_caps: &gst::Caps, min_latency: gst::ClockTime) -> gst::Bin {
         let bin = gst::Bin::new(None);
 
-        let videotestsrc = gst::ElementFactory::make("videotestsrc", Some("videosrc"))
+        let videotestsrc = gst::ElementFactory::make("videotestsrc")
+            .name("videosrc")
+            .property_from_str("pattern", "black")
+            .property("is-live", true)
+            .build()
             .expect("No videotestsrc found");
 
-        let videoconvert = gst::ElementFactory::make("videoconvert", Some("video_videoconvert"))
+        let videoconvert = gst::ElementFactory::make("videoconvert")
+            .name("video_videoconvert")
+            .build()
             .expect("No videoconvert found");
 
-        let videoscale = gst::ElementFactory::make("videoscale", Some("video_videoscale"))
+        let videoscale = gst::ElementFactory::make("videoscale")
+            .name("video_videoscale")
+            .build()
             .expect("No videoscale found");
 
-        let capsfilter = gst::ElementFactory::make("capsfilter", Some("video_capsfilter"))
+        let capsfilter = gst::ElementFactory::make("capsfilter")
+            .name("video_capsfilter")
+            .property("caps", filter_caps)
+            .build()
             .expect("No capsfilter found");
 
-        let queue = gst::ElementFactory::make("queue", None).expect("No queue found");
-
-        videotestsrc.set_property_from_str("pattern", "black");
-        videotestsrc.set_property("is-live", true);
-
-        capsfilter.set_property("caps", filter_caps);
-
-        queue.set_properties(&[
-            ("max-size-bytes", &0u32),
-            ("max-size-buffers", &0u32),
-            ("max-size-time", &(cmp::max(min_latency, 1.seconds()))),
-        ]);
+        let queue = gst::ElementFactory::make("queue")
+            .property("max-size-bytes", 0u32)
+            .property("max-size-buffers", 0u32)
+            .property("max-size-time", cmp::max(min_latency, 1.seconds()))
+            .build()
+            .expect("No queue found");
 
         bin.add_many(&[
             &videotestsrc,
@@ -1006,16 +1016,17 @@ impl FallbackSrc {
 
         let source = match source {
             Source::Uri(ref uri) => {
-                let source = gst::ElementFactory::make("uridecodebin3", Some("uridecodebin"))
-                    .expect("No uridecodebin3 found");
-
                 let uri = self
                     .instance()
                     .emit_by_name::<glib::GString>("update-uri", &[uri]);
 
-                source.set_property("uri", uri);
-                source.set_property("use-buffering", true);
-                source.set_property("buffer-duration", buffer_duration);
+                let source = gst::ElementFactory::make("uridecodebin3")
+                    .name("uridecodebin")
+                    .property("uri", uri)
+                    .property("use-buffering", true)
+                    .property("buffer-duration", buffer_duration)
+                    .build()
+                    .expect("No uridecodebin3 found");
 
                 source
             }
@@ -1081,11 +1092,13 @@ impl FallbackSrc {
     ) -> Option<SourceBin> {
         let source: gst::Element = match fallback_uri {
             Some(uri) => {
-                let dbin = gst::ElementFactory::make("uridecodebin3", Some("uridecodebin"))
+                let dbin = gst::ElementFactory::make("uridecodebin3")
+                    .name("uridecodebin")
+                    .property("uri", uri)
+                    .property("use-buffering", true)
+                    .property("buffer-duration", buffer_duration)
+                    .build()
                     .expect("No uridecodebin3 found");
-                dbin.set_property("uri", uri);
-                dbin.set_property("use-buffering", true);
-                dbin.set_property("buffer-duration", buffer_duration);
 
                 dbin
             }
@@ -1156,14 +1169,14 @@ impl FallbackSrc {
         dummy_source: &gst::Bin,
         filter_caps: &gst::Caps,
     ) -> Stream {
-        let switch =
-            gst::ElementFactory::make("fallbackswitch", None).expect("No fallbackswitch found");
+        let switch = gst::ElementFactory::make("fallbackswitch")
+            .property("timeout", timeout.nseconds())
+            .property("min-upstream-latency", min_latency.nseconds())
+            .property("immediate-fallback", immediate_fallback)
+            .build()
+            .expect("No fallbackswitch found");
 
         self.instance().add(&switch).unwrap();
-
-        switch.set_property("timeout", timeout.nseconds());
-        switch.set_property("min-upstream-latency", min_latency.nseconds());
-        switch.set_property("immediate-fallback", immediate_fallback);
 
         let dummy_srcpad = dummy_source.static_pad("src").unwrap();
         let dummy_sinkpad = switch.request_pad_simple("sink_%u").unwrap();
@@ -1686,14 +1699,19 @@ impl FallbackSrc {
         let converters = if is_video {
             let bin = gst::Bin::new(None);
 
-            let videoconvert =
-                gst::ElementFactory::make("videoconvert", Some("video_videoconvert"))
-                    .expect("No videoconvert found");
+            let videoconvert = gst::ElementFactory::make("videoconvert")
+                .name("video_videoconvert")
+                .build()
+                .expect("No videoconvert found");
 
-            let videoscale = gst::ElementFactory::make("videoscale", Some("video_videoscale"))
+            let videoscale = gst::ElementFactory::make("videoscale")
+                .name("video_videoscale")
+                .build()
                 .expect("No videoscale found");
 
-            let capsfilter = gst::ElementFactory::make("capsfilter", Some("video_capsfilter"))
+            let capsfilter = gst::ElementFactory::make("capsfilter")
+                .name("video_capsfilter")
+                .build()
                 .expect("No capsfilter found");
 
             if fallback_source {
@@ -1721,15 +1739,19 @@ impl FallbackSrc {
         } else {
             let bin = gst::Bin::new(None);
 
-            let audioconvert =
-                gst::ElementFactory::make("audioconvert", Some("audio_audioconvert"))
-                    .expect("No audioconvert found");
+            let audioconvert = gst::ElementFactory::make("audioconvert")
+                .name("audio_audioconvert")
+                .build()
+                .expect("No audioconvert found");
 
-            let audioresample =
-                gst::ElementFactory::make("audioresample", Some("audio_audioresample"))
-                    .expect("No audioresample found");
+            let audioresample = gst::ElementFactory::make("audioresample")
+                .name("audio_audioresample")
+                .build()
+                .expect("No audioresample found");
 
-            let capsfilter = gst::ElementFactory::make("capsfilter", Some("audio_capsfilter"))
+            let capsfilter = gst::ElementFactory::make("capsfilter")
+                .name("audio_capsfilter")
+                .build()
                 .expect("No capsfilter found");
 
             if fallback_source {
@@ -1756,20 +1778,24 @@ impl FallbackSrc {
             bin.upcast()
         };
 
-        let queue = gst::ElementFactory::make("queue", None).unwrap();
-        queue.set_properties(&[
-            ("max-size-bytes", &0u32),
-            ("max-size-buffers", &0u32),
-            (
+        let queue = gst::ElementFactory::make("queue")
+            .property("max-size-bytes", 0u32)
+            .property("max-size-buffers", 0u32)
+            .property(
                 "max-size-time",
-                &(cmp::max(state.settings.min_latency, 1.seconds())),
-            ),
-        ]);
-        let clocksync = gst::ElementFactory::make("clocksync", None).unwrap_or_else(|_| {
-            let identity = gst::ElementFactory::make("identity", None).unwrap();
-            identity.set_property("sync", true);
-            identity
-        });
+                cmp::max(state.settings.min_latency, 1.seconds()),
+            )
+            .build()
+            .unwrap();
+        let clocksync = gst::ElementFactory::make("clocksync")
+            .build()
+            .unwrap_or_else(|_| {
+                let identity = gst::ElementFactory::make("identity")
+                    .property("sync", true)
+                    .build()
+                    .unwrap();
+                identity
+            });
 
         source
             .source
@@ -1790,10 +1816,11 @@ impl FallbackSrc {
 
         let imagefreeze = if is_image {
             gst::debug!(CAT, imp: self, "Image stream, inserting imagefreeze");
-            let imagefreeze =
-                gst::ElementFactory::make("imagefreeze", None).expect("no imagefreeze found");
+            let imagefreeze = gst::ElementFactory::make("imagefreeze")
+                .property("is-live", true)
+                .build()
+                .expect("no imagefreeze found");
             source.source.add(&imagefreeze).unwrap();
-            imagefreeze.set_property("is-live", true);
 
             if imagefreeze.sync_state_with_parent().is_err() {
                 gst::error!(CAT, imp: self, "imagefreeze failed to change state",);

@@ -63,22 +63,27 @@ fn multiple_contexts_queue() {
     let (sender, receiver) = mpsc::channel();
 
     for i in 0..SRC_NB {
-        let src =
-            gst::ElementFactory::make("ts-udpsrc", Some(format!("src-{}", i).as_str())).unwrap();
-        src.set_property("context", format!("context-{}", (i as u32) % CONTEXT_NB));
-        src.set_property("context-wait", CONTEXT_WAIT);
-        src.set_property("port", (FIRST_PORT + i) as i32);
+        let src = gst::ElementFactory::make("ts-udpsrc")
+            .name(format!("src-{}", i).as_str())
+            .property("context", format!("context-{}", (i as u32) % CONTEXT_NB))
+            .property("context-wait", CONTEXT_WAIT)
+            .property("port", (FIRST_PORT + i) as i32)
+            .build()
+            .unwrap();
 
-        let queue =
-            gst::ElementFactory::make("ts-queue", Some(format!("queue-{}", i).as_str())).unwrap();
-        queue.set_property("context", format!("context-{}", (i as u32) % CONTEXT_NB));
-        queue.set_property("context-wait", CONTEXT_WAIT);
+        let queue = gst::ElementFactory::make("ts-queue")
+            .name(format!("queue-{}", i).as_str())
+            .property("context", format!("context-{}", (i as u32) % CONTEXT_NB))
+            .property("context-wait", CONTEXT_WAIT)
+            .build()
+            .unwrap();
 
-        let sink =
-            gst::ElementFactory::make("appsink", Some(format!("sink-{}", i).as_str())).unwrap();
-        sink.set_property("sync", false);
-        sink.set_property("async", false);
-        sink.set_property("emit-signals", true);
+        let sink = gst::ElementFactory::make("appsink")
+            .name(format!("sink-{}", i).as_str())
+            .property("sync", false)
+            .property("async", false)
+            .build()
+            .unwrap();
 
         pipeline.add_many(&[&src, &queue, &sink]).unwrap();
         gst::Element::link_many(&[&src, &queue, &sink]).unwrap();
@@ -194,38 +199,36 @@ fn multiple_contexts_proxy() {
     for i in 0..SRC_NB {
         let pipeline_index = i + OFFSET;
 
-        let src = gst::ElementFactory::make(
-            "ts-udpsrc",
-            Some(format!("src-{}", pipeline_index).as_str()),
-        )
-        .unwrap();
-        src.set_property("context", format!("context-{}", (i as u32) % CONTEXT_NB));
-        src.set_property("context-wait", CONTEXT_WAIT);
-        src.set_property("port", (FIRST_PORT + i) as i32);
+        let src = gst::ElementFactory::make("ts-udpsrc")
+            .name(format!("src-{}", pipeline_index).as_str())
+            .property("context", format!("context-{}", (i as u32) % CONTEXT_NB))
+            .property("context-wait", CONTEXT_WAIT)
+            .property("port", (FIRST_PORT + i) as i32)
+            .build()
+            .unwrap();
 
-        let proxysink = gst::ElementFactory::make(
-            "ts-proxysink",
-            Some(format!("proxysink-{}", pipeline_index).as_str()),
-        )
-        .unwrap();
-        proxysink.set_property("proxy-context", format!("proxy-{}", pipeline_index));
-        let proxysrc = gst::ElementFactory::make(
-            "ts-proxysrc",
-            Some(format!("proxysrc-{}", pipeline_index).as_str()),
-        )
-        .unwrap();
-        proxysrc.set_property(
-            "context",
-            &format!("context-{}", (pipeline_index as u32) % CONTEXT_NB),
-        );
-        proxysrc.set_property("proxy-context", format!("proxy-{}", pipeline_index));
+        let proxysink = gst::ElementFactory::make("ts-proxysink")
+            .name(format!("proxysink-{}", pipeline_index).as_str())
+            .property("proxy-context", format!("proxy-{}", pipeline_index))
+            .build()
+            .unwrap();
 
-        let sink =
-            gst::ElementFactory::make("appsink", Some(format!("sink-{}", pipeline_index).as_str()))
-                .unwrap();
-        sink.set_property("sync", false);
-        sink.set_property("async", false);
-        sink.set_property("emit-signals", true);
+        let proxysrc = gst::ElementFactory::make("ts-proxysrc")
+            .name(format!("proxysrc-{}", pipeline_index).as_str())
+            .property(
+                "context",
+                &format!("context-{}", (pipeline_index as u32) % CONTEXT_NB),
+            )
+            .property("proxy-context", format!("proxy-{}", pipeline_index))
+            .build()
+            .unwrap();
+
+        let sink = gst::ElementFactory::make("appsink")
+            .name(format!("sink-{}", pipeline_index).as_str())
+            .property("sync", false)
+            .property("async", false)
+            .build()
+            .unwrap();
 
         pipeline
             .add_many(&[&src, &proxysink, &proxysrc, &sink])
@@ -331,23 +334,30 @@ fn eos() {
 
     let caps = gst::Caps::builder("foo/bar").build();
 
-    let src = gst::ElementFactory::make("ts-appsrc", Some("src-eos")).unwrap();
-    src.set_property("caps", &caps);
-    src.set_property("do-timestamp", true);
-    src.set_property("context", &CONTEXT);
+    let src = gst::ElementFactory::make("ts-appsrc")
+        .name("src-eos")
+        .property("caps", &caps)
+        .property("do-timestamp", true)
+        .property("context", &CONTEXT)
+        .build()
+        .unwrap();
 
-    let queue = gst::ElementFactory::make("ts-queue", Some("queue-eos")).unwrap();
-    queue.set_property("context", &CONTEXT);
+    let queue = gst::ElementFactory::make("ts-queue")
+        .name("queue-eos")
+        .property("context", &CONTEXT)
+        .build()
+        .unwrap();
 
-    let appsink = gst::ElementFactory::make("appsink", Some("sink-eos")).unwrap();
+    let appsink = gst::ElementFactory::make("appsink")
+        .name("sink-eos")
+        .property("sync", false)
+        .property("async", false)
+        .build()
+        .unwrap();
 
     pipeline.add_many(&[&src, &queue, &appsink]).unwrap();
     gst::Element::link_many(&[&src, &queue, &appsink]).unwrap();
 
-    appsink.set_property("sync", false);
-    appsink.set_property("async", false);
-
-    appsink.set_property("emit-signals", true);
     let (sample_notifier, sample_notif_rcv) = mpsc::channel();
     let (eos_notifier, eos_notif_rcv) = mpsc::channel();
     let appsink = appsink.dynamic_cast::<gst_app::AppSink>().unwrap();
@@ -455,25 +465,32 @@ fn premature_shutdown() {
 
     let caps = gst::Caps::builder("foo/bar").build();
 
-    let src = gst::ElementFactory::make("ts-appsrc", Some("src-ps")).unwrap();
-    src.set_property("caps", &caps);
-    src.set_property("do-timestamp", true);
-    src.set_property("context", "appsrc-context");
-    src.set_property("context-wait", APPSRC_CONTEXT_WAIT);
+    let src = gst::ElementFactory::make("ts-appsrc")
+        .name("src-ps")
+        .property("caps", &caps)
+        .property("do-timestamp", true)
+        .property("context", "appsrc-context")
+        .property("context-wait", APPSRC_CONTEXT_WAIT)
+        .build()
+        .unwrap();
 
-    let queue = gst::ElementFactory::make("ts-queue", Some("queue-ps")).unwrap();
-    queue.set_property("context", "queue-context");
-    queue.set_property("context-wait", QUEUE_CONTEXT_WAIT);
-    queue.set_property("max-size-buffers", QUEUE_ITEMS_CAPACITY);
+    let queue = gst::ElementFactory::make("ts-queue")
+        .name("queue-ps")
+        .property("context", "queue-context")
+        .property("context-wait", QUEUE_CONTEXT_WAIT)
+        .property("max-size-buffers", QUEUE_ITEMS_CAPACITY)
+        .build()
+        .unwrap();
 
-    let appsink = gst::ElementFactory::make("appsink", Some("sink-ps")).unwrap();
+    let appsink = gst::ElementFactory::make("appsink")
+        .name("sink-ps")
+        .property("sync", false)
+        .property("async", false)
+        .build()
+        .unwrap();
 
     pipeline.add_many(&[&src, &queue, &appsink]).unwrap();
     gst::Element::link_many(&[&src, &queue, &appsink]).unwrap();
-
-    appsink.set_property("emit-signals", true);
-    appsink.set_property("sync", false);
-    appsink.set_property("async", false);
 
     let (appsink_sender, appsink_receiver) = mpsc::channel();
 
@@ -605,9 +622,6 @@ fn socket_play_null_play() {
     let l = glib::MainLoop::new(None, false);
     let pipeline = gst::Pipeline::new(None);
 
-    let sink =
-        gst::ElementFactory::make("ts-udpsink", Some(format!("sink-{}", TEST).as_str())).unwrap();
-
     let socket = gio::Socket::new(
         SocketFamily::Ipv4,
         SocketType::Datagram,
@@ -621,9 +635,13 @@ fn socket_play_null_play() {
         )
         .unwrap();
 
-    sink.set_property("socket", &socket);
-    sink.set_property("context", &TEST);
-    sink.set_property("context-wait", 20u32);
+    let sink = gst::ElementFactory::make("ts-udpsink")
+        .name(format!("sink-{}", TEST).as_str())
+        .property("socket", &socket)
+        .property("context", &TEST)
+        .property("context-wait", 20u32)
+        .build()
+        .unwrap();
 
     pipeline.add(&sink).unwrap();
 

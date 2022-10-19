@@ -37,7 +37,7 @@ macro_rules! try_or_pause {
 macro_rules! try_create_element {
     ($l:expr, $n:expr) => {
         match gst::ElementFactory::find($l) {
-            Some(factory) => factory.create(Some($n)).unwrap(),
+            Some(factory) => factory.create().name($n).build().unwrap(),
             None => {
                 eprintln!("Could not find {} ({}) plugin, skipping test", $l, $n);
                 return Ok(());
@@ -114,11 +114,13 @@ fn test_hlssink3_element_with_video_content() -> Result<(), ()> {
     let x264enc = try_create_element!("x264enc");
     let h264parse = try_create_element!("h264parse");
 
-    let hlssink3 = gst::ElementFactory::make("hlssink3", Some("test_hlssink3"))
+    let hlssink3 = gst::ElementFactory::make("hlssink3")
+        .name("test_hlssink3")
+        .property("target-duration", 2u32)
+        .property("playlist-length", 2u32)
+        .property("max-files", 2u32)
+        .build()
         .expect("Must be able to instantiate hlssink3");
-    hlssink3.set_property("target-duration", 2u32);
-    hlssink3.set_property("playlist-length", 2u32);
-    hlssink3.set_property("max-files", 2u32);
 
     hlssink3.set_property("playlist-type", HlsSink3PlaylistType::Event);
     let pl_type: HlsSink3PlaylistType = hlssink3.property("playlist-type");
@@ -257,13 +259,14 @@ fn test_hlssink3_element_with_audio_content() -> Result<(), ()> {
     audio_src.set_property("is-live", true);
     audio_src.set_property("num-buffers", BUFFER_NB);
 
-    let hls_avenc_aac = try_or_pause!(gst::ElementFactory::make(
-        "avenc_aac",
-        Some("hls_avenc_aac")
-    ));
-    let hlssink3 = gst::ElementFactory::make("hlssink3", Some("hlssink3"))
+    let hls_avenc_aac = try_or_pause!(gst::ElementFactory::make("avenc_aac")
+        .name("hls_avenc_aac")
+        .build());
+    let hlssink3 = gst::ElementFactory::make("hlssink3")
+        .name("hlssink3")
+        .property("target-duration", 6u32)
+        .build()
         .expect("Must be able to instantiate hlssink3");
-    hlssink3.set_property("target-duration", 6u32);
 
     hlssink3.connect("get-playlist-stream", false, move |_args| {
         let stream = gio::MemoryOutputStream::new_resizable();
@@ -322,13 +325,13 @@ fn test_hlssink3_write_correct_playlist_content() -> Result<(), ()> {
     let x264enc = try_create_element!("x264enc");
     let h264parse = try_create_element!("h264parse");
 
-    let hlssink3 = gst::ElementFactory::make("hlssink3", Some("test_hlssink3"))
+    let hlssink3 = gst::ElementFactory::make("hlssink3")
+        .name("test_hlssink3")
+        .property("location", "/www/media/segments/my-own-filename-%03d.ts")
+        .property("playlist-location", "/www/media/main.m3u8")
+        .property("playlist-root", "segments")
+        .build()
         .expect("Must be able to instantiate hlssink3");
-    hlssink3.set_properties(&[
-        ("location", &"/www/media/segments/my-own-filename-%03d.ts"),
-        ("playlist-location", &"/www/media/main.m3u8"),
-        ("playlist-root", &"segments"),
-    ]);
 
     let (hls_events_sender, hls_events_receiver) = mpsc::sync_channel(20);
     let playlist_content = Arc::new(Mutex::new(String::from("")));

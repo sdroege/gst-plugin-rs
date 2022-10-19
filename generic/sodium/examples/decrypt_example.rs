@@ -85,16 +85,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     let receiver = &Keys::from_file(&receiver_keys)?;
     let sender = &Keys::from_file(&sender_keys)?;
 
-    let filesrc = gst::ElementFactory::make("filesrc", None).unwrap();
-    let decrypter = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
-    let typefind = gst::ElementFactory::make("typefind", None).unwrap();
-    let filesink = gst::ElementFactory::make("filesink", None).unwrap();
-
-    filesrc.set_property("location", &args.input);
-    filesink.set_property("location", &args.output);
-
-    decrypter.set_property("receiver-key", glib::Bytes::from_owned(receiver.private.0));
-    decrypter.set_property("sender-key", glib::Bytes::from_owned(sender.public));
+    let filesrc = gst::ElementFactory::make("filesrc")
+        .property("location", &args.input)
+        .build()
+        .unwrap();
+    let decrypter = gst::ElementFactory::make("sodiumdecrypter")
+        .property("receiver-key", glib::Bytes::from_owned(receiver.private.0))
+        .property("sender-key", glib::Bytes::from_owned(sender.public))
+        .build()
+        .unwrap();
+    let typefind = gst::ElementFactory::make("typefind").build().unwrap();
+    let filesink = gst::ElementFactory::make("filesink")
+        .property("location", &args.output)
+        .build()
+        .unwrap();
 
     let pipeline = gst::Pipeline::new(Some("test-pipeline"));
     pipeline

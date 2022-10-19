@@ -89,15 +89,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     let receiver = &Keys::from_file(&receiver_keys)?;
     let sender = &Keys::from_file(&sender_keys)?;
 
-    let filesrc = gst::ElementFactory::make("filesrc", None).unwrap();
-    let encrypter = gst::ElementFactory::make("sodiumencrypter", None).unwrap();
-    let filesink = gst::ElementFactory::make("filesink", None).unwrap();
-
-    filesrc.set_property("location", &args.input);
-    filesink.set_property("location", &args.output);
-
-    encrypter.set_property("receiver-key", glib::Bytes::from_owned(receiver.public));
-    encrypter.set_property("sender-key", glib::Bytes::from_owned(sender.private.0));
+    let filesrc = gst::ElementFactory::make("filesrc")
+        .property("location", &args.input)
+        .build()
+        .unwrap();
+    let encrypter = gst::ElementFactory::make("sodiumencrypter")
+        .property("receiver-key", glib::Bytes::from_owned(receiver.public))
+        .property("sender-key", glib::Bytes::from_owned(sender.private.0))
+        .build()
+        .unwrap();
+    let filesink = gst::ElementFactory::make("filesink")
+        .property("location", &args.output)
+        .build()
+        .unwrap();
 
     let pipeline = gst::Pipeline::new(Some("test-pipeline"));
     pipeline

@@ -26,18 +26,26 @@ fn setup_pipeline(
     max_distance_threshold: f64,
     hash_algo: HashAlgorithm,
 ) {
-    let videocompare = gst::ElementFactory::make("videocompare", None).unwrap();
-    videocompare.set_property("max-dist-threshold", max_distance_threshold);
-    videocompare.set_property("hash-algo", hash_algo);
+    let videocompare = gst::ElementFactory::make("videocompare")
+        .property("max-dist-threshold", max_distance_threshold)
+        .property("hash-algo", hash_algo)
+        .build()
+        .unwrap();
 
-    let reference_src = gst::ElementFactory::make("videotestsrc", Some("reference_src")).unwrap();
-    reference_src.set_property_from_str("pattern", pattern_a);
-    reference_src.set_property("num-buffers", 1i32);
+    let reference_src = gst::ElementFactory::make("videotestsrc")
+        .name("reference_src")
+        .property_from_str("pattern", pattern_a)
+        .property("num-buffers", 1i32)
+        .build()
+        .unwrap();
 
-    let secondary_src = gst::ElementFactory::make("videotestsrc", Some("secondary_src")).unwrap();
-    reference_src.set_property_from_str("pattern", pattern_b);
+    let secondary_src = gst::ElementFactory::make("videotestsrc")
+        .name("secondary_src")
+        .property_from_str("pattern", pattern_b)
+        .build()
+        .unwrap();
 
-    let sink = gst::ElementFactory::make("fakesink", None).unwrap();
+    let sink = gst::ElementFactory::make("fakesink").build().unwrap();
 
     pipeline
         .add_many(&[&reference_src, &secondary_src, &videocompare, &sink])
@@ -50,9 +58,7 @@ fn setup_pipeline(
 fn test_can_find_similar_frames() {
     init();
 
-    // TODO: for some reason only in the tests, the distance is higher
-    //       than when running via gst-launch tool for the same pipeline. What is happening?
-    let max_distance = 32_f64;
+    let max_distance = 0.0f64;
 
     let pipeline = gst::Pipeline::new(None);
     setup_pipeline(
@@ -101,7 +107,7 @@ fn test_do_not_send_message_when_image_not_found() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    setup_pipeline(&pipeline, "black", "red", 0f64, HashAlgorithm::Blockhash);
+    setup_pipeline(&pipeline, "snow", "red", 0f64, HashAlgorithm::Blockhash);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -127,7 +133,9 @@ fn test_do_not_send_message_when_image_not_found() {
 
     pipeline.set_state(gst::State::Null).unwrap();
 
-    assert!(detection.is_none());
+    if let Some(detection) = detection {
+        panic!("Got unexpected detection message {:?}", detection);
+    }
 }
 
 #[cfg(feature = "dssim")]
@@ -135,7 +143,7 @@ fn test_do_not_send_message_when_image_not_found() {
 fn test_use_dssim_to_find_similar_frames() {
     init();
 
-    let max_distance = 1_f64;
+    let max_distance = 0.0f64;
 
     let pipeline = gst::Pipeline::new(None);
     setup_pipeline(&pipeline, "red", "red", max_distance, HashAlgorithm::Dssim);

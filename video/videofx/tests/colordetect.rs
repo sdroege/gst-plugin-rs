@@ -23,12 +23,14 @@ fn test_red_color() {
     init();
     let pipeline = gst::Pipeline::new(None);
 
-    let src = gst::ElementFactory::make("videotestsrc", None).unwrap();
-    src.set_property_from_str("pattern", "red");
-    src.set_property("num-buffers", &2i32);
+    let src = gst::ElementFactory::make("videotestsrc")
+        .property_from_str("pattern", "red")
+        .property("num-buffers", &2i32)
+        .build()
+        .unwrap();
 
-    let filter = gst::ElementFactory::make("colordetect", None).unwrap();
-    let sink = gst::ElementFactory::make("fakevideosink", None).unwrap();
+    let filter = gst::ElementFactory::make("colordetect").build().unwrap();
+    let sink = gst::ElementFactory::make("fakevideosink").build().unwrap();
 
     pipeline
         .add_many(&[&src, &filter, &sink])

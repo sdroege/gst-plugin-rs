@@ -27,8 +27,10 @@ fn init() {
 }
 
 fn build_harness(src_caps: gst::Caps, sink_caps: gst::Caps) -> (gst_check::Harness, gst::Element) {
-    let hrtf = gst::ElementFactory::make("hrtfrender", None).unwrap();
-    hrtf.set_property("hrir-raw", &*CONFIG);
+    let hrtf = gst::ElementFactory::make("hrtfrender")
+        .property("hrir-raw", &*CONFIG)
+        .build()
+        .unwrap();
 
     let mut h = gst_check::Harness::with_element(&hrtf, Some("sink"), Some("src"));
     h.set_caps(src_caps, sink_caps);

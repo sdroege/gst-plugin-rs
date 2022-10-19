@@ -92,21 +92,27 @@ fn send_rtp_buffers(n_streams: u16) {
     let l = glib::MainLoop::new(None, false);
     let pipeline = gst::Pipeline::new(None);
     for i in 0..n_streams {
-        let src =
-            gst::ElementFactory::make("audiotestsrc", Some(format!("audiotestsrc-{}", i).as_str()))
-                .unwrap();
+        let src = gst::ElementFactory::make("audiotestsrc")
+            .name(format!("audiotestsrc-{}", i).as_str())
+            .build()
+            .unwrap();
         src.set_property("is-live", true);
 
-        let enc =
-            gst::ElementFactory::make("alawenc", Some(format!("alawenc-{}", i).as_str())).unwrap();
-        let pay =
-            gst::ElementFactory::make("rtppcmapay", Some(format!("rtppcmapay-{}", i).as_str()))
-                .unwrap();
-        let sink = gst::ElementFactory::make("ts-udpsink", Some(format!("udpsink-{}", i).as_str()))
+        let enc = gst::ElementFactory::make("alawenc")
+            .name(format!("alawenc-{}", i).as_str())
+            .build()
             .unwrap();
-        sink.set_property("clients", format!("127.0.0.1:{}", i + 40000));
-        sink.set_property("context", "context-udpsink");
-        sink.set_property("context-wait", 20u32);
+        let pay = gst::ElementFactory::make("rtppcmapay")
+            .name(format!("rtppcmapay-{}", i).as_str())
+            .build()
+            .unwrap();
+        let sink = gst::ElementFactory::make("ts-udpsink")
+            .name(format!("udpsink-{}", i).as_str())
+            .property("clients", format!("127.0.0.1:{}", i + 40000))
+            .property("context", "context-udpsink")
+            .property("context-wait", 20u32)
+            .build()
+            .unwrap();
 
         let elements = &[&src, &enc, &pay, &sink];
         pipeline.add_many(elements).unwrap();

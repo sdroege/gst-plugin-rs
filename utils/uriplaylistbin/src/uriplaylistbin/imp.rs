@@ -441,12 +441,11 @@ impl Item {
     fn set_waiting_for_stream_collection(&self) -> Result<(), PlaylistError> {
         let mut inner = self.inner.lock().unwrap();
 
-        let uridecodebin = gst::ElementFactory::make(
-            "uridecodebin3",
-            Some(&format!("playlist-decodebin-{}", inner.index)),
-        )
-        .map_err(|e| PlaylistError::PluginMissing { error: e.into() })?;
-        uridecodebin.set_property("uri", &inner.uri);
+        let uridecodebin = gst::ElementFactory::make("uridecodebin3")
+            .name(&format!("playlist-decodebin-{}", inner.index))
+            .property("uri", &inner.uri)
+            .build()
+            .map_err(|e| PlaylistError::PluginMissing { error: e.into() })?;
 
         assert!(matches!(inner.state, ItemState::Pending));
         inner.state = ItemState::WaitingForStreamCollection { uridecodebin };
@@ -974,9 +973,10 @@ impl UriPlaylistBin {
             let mut state_guard = self.state.lock().unwrap();
             assert!(state_guard.is_none());
 
-            let streamsynchronizer =
-                gst::ElementFactory::make("streamsynchronizer", Some("playlist-streamsync"))
-                    .map_err(|e| PlaylistError::PluginMissing { error: e.into() })?;
+            let streamsynchronizer = gst::ElementFactory::make("streamsynchronizer")
+                .name("playlist-streamsync")
+                .build()
+                .map_err(|e| PlaylistError::PluginMissing { error: e.into() })?;
 
             self.instance().add(&streamsynchronizer).unwrap();
 
@@ -1261,14 +1261,14 @@ impl UriPlaylistBin {
                         item.index()
                     );
 
-                    let concat = match gst::ElementFactory::make(
-                        "concat",
-                        Some(&format!(
+                    let concat = match gst::ElementFactory::make("concat")
+                        .name(&format!(
                             "playlist-concat-{}-{}",
                             stream_type.name(),
                             stream_index
-                        )),
-                    ) {
+                        ))
+                        .build()
+                    {
                         Ok(concat) => concat,
                         Err(_) => {
                             drop(state_guard);

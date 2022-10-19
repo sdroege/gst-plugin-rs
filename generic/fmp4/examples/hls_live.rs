@@ -15,7 +15,7 @@ use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use anyhow::{anyhow, Error};
+use anyhow::Error;
 use chrono::{DateTime, Duration, Utc};
 use m3u8_rs::{
     AlternativeMedia, AlternativeMediaType, MasterPlaylist, MediaPlaylist, MediaSegment,
@@ -137,11 +137,6 @@ struct AudioStream {
     lang: String,
     default: bool,
     wave: String,
-}
-
-pub fn make_element(element: &str, name: Option<&str>) -> Result<gst::Element, Error> {
-    gst::ElementFactory::make(element, name)
-        .map_err(|_| anyhow!("Failed to make element {}", element))
 }
 
 fn trim_segments(state: &mut StreamState) {
@@ -396,25 +391,26 @@ impl VideoStream {
         pipeline: &gst::Pipeline,
         path: &Path,
     ) -> Result<(), Error> {
-        let src = make_element("videotestsrc", None)?;
-        let raw_capsfilter = make_element("capsfilter", None)?;
-        let timeoverlay = make_element("timeoverlay", None)?;
-        let enc = make_element("x264enc", None)?;
-        let h264_capsfilter = make_element("capsfilter", None)?;
-        let mux = make_element("cmafmux", None)?;
-        let appsink = make_element("appsink", None)?;
+        let src = gst::ElementFactory::make("videotestsrc")
+            .property("is-live", true)
+            .build()?;
+
+        let raw_capsfilter = gst::ElementFactory::make("capsfilter").build()?;
+        let timeoverlay = gst::ElementFactory::make("timeoverlay").build()?;
+        let enc = gst::ElementFactory::make("x264enc")
+            .property("bframes", 0u32)
+            .property("bitrate", self.bitrate as u32 / 1000u32)
+            .property_from_str("tune", "zerolatency")
+            .build()?;
+        let h264_capsfilter = gst::ElementFactory::make("capsfilter").build()?;
+        let mux = gst::ElementFactory::make("cmafmux")
+            .property("fragment-duration", 2500.mseconds())
+            .property_from_str("header-update-mode", "update")
+            .property("write-mehd", true)
+            .build()?;
+        let appsink = gst::ElementFactory::make("appsink").build()?;
 
         pipeline.add_many(&[
-            &src,
-            &raw_capsfilter,
-            &timeoverlay,
-            &enc,
-            &h264_capsfilter,
-            &mux,
-            &appsink,
-        ])?;
-
-        gst::Element::link_many(&[
             &src,
             &raw_capsfilter,
             &timeoverlay,
@@ -441,13 +437,15 @@ impl VideoStream {
                 .build(),
         );
 
-        src.set_property("is-live", true);
-        enc.set_property("bframes", 0u32);
-        enc.set_property("bitrate", self.bitrate as u32 / 1000u32);
-        enc.set_property_from_str("tune", "zerolatency");
-        mux.set_property("fragment-duration", 2500.mseconds());
-        mux.set_property_from_str("header-update-mode", "update");
-        mux.set_property("write-mehd", true);
+        gst::Element::link_many(&[
+            &src,
+            &raw_capsfilter,
+            &timeoverlay,
+            &enc,
+            &h264_capsfilter,
+            &mux,
+            &appsink,
+        ])?;
 
         probe_encoder(state, enc);
 
@@ -466,20 +464,21 @@ impl AudioStream {
         pipeline: &gst::Pipeline,
         path: &Path,
     ) -> Result<(), Error> {
-        let src = make_element("audiotestsrc", None)?;
-        let enc = make_element("avenc_aac", None)?;
-        let mux = make_element("cmafmux", None)?;
-        let appsink = make_element("appsink", None)?;
+        let src = gst::ElementFactory::make("audiotestsrc")
+            .property("is-live", true)
+            .property_from_str("wave", &self.wave)
+            .property("fragment-duration", 2500.mseconds())
+            .build()?;
+        let enc = gst::ElementFactory::make("avenc_aac").build()?;
+        let mux = gst::ElementFactory::make("cmafmux")
+            .property_from_str("header-update-mode", "update")
+            .property("write-mehd", true)
+            .build()?;
+        let appsink = gst::ElementFactory::make("appsink").build()?;
 
         pipeline.add_many(&[&src, &enc, &mux, &appsink])?;
 
         gst::Element::link_many(&[&src, &enc, &mux, &appsink])?;
-
-        src.set_property("is-live", true);
-        src.set_property_from_str("wave", &self.wave);
-        mux.set_property("fragment-duration", 2500.mseconds());
-        mux.set_property_from_str("header-update-mode", "update");
-        mux.set_property("write-mehd", true);
 
         probe_encoder(state, enc);
 

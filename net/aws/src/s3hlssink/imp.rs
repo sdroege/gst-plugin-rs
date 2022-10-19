@@ -410,9 +410,14 @@ impl ObjectSubclass for S3HlsSink {
 
     fn with_class(_klass: &Self::Class) -> Self {
         /* Prefer hlssink3 here due to it's support for media playlist types */
-        let hlssink = match gst::ElementFactory::make("hlssink3", Some("hlssink3")) {
+        let hlssink = match gst::ElementFactory::make("hlssink3")
+            .name("hlssink3")
+            .build()
+        {
             Ok(element) => element,
-            Err(_) => gst::ElementFactory::make("hlssink2", Some("hlssink2"))
+            Err(_) => gst::ElementFactory::make("hlssink2")
+                .name("hlssink2")
+                .build()
                 .expect("Could not find hlssink2. Need hlssink2 or hlssink3."),
         };
 

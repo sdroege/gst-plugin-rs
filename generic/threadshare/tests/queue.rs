@@ -36,17 +36,16 @@ fn test_push() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
-    let fakesrc = gst::ElementFactory::make("fakesrc", None).unwrap();
-    let queue = gst::ElementFactory::make("ts-queue", None).unwrap();
-    let appsink = gst::ElementFactory::make("appsink", None).unwrap();
+    let fakesrc = gst::ElementFactory::make("fakesrc")
+        .property("num-buffers", 3i32)
+        .build()
+        .unwrap();
+    let queue = gst::ElementFactory::make("ts-queue").build().unwrap();
+    let appsink = gst::ElementFactory::make("appsink").build().unwrap();
 
     pipeline.add_many(&[&fakesrc, &queue, &appsink]).unwrap();
     fakesrc.link(&queue).unwrap();
     queue.link(&appsink).unwrap();
-
-    fakesrc.set_property("num-buffers", 3i32);
-
-    appsink.set_property("emit-signals", true);
 
     let samples = Arc::new(Mutex::new(Vec::new()));
 

@@ -73,10 +73,12 @@ fn encrypt_file() {
 
     let mut adapter = gst_base::UniqueAdapter::new();
 
-    let enc = gst::ElementFactory::make("sodiumencrypter", None).unwrap();
-    enc.set_property("sender-key", &*SENDER_PRIVATE);
-    enc.set_property("receiver-key", &*RECEIVER_PUBLIC);
-    enc.set_property("block-size", 1024u32);
+    let enc = gst::ElementFactory::make("sodiumencrypter")
+        .property("sender-key", &*SENDER_PRIVATE)
+        .property("receiver-key", &*RECEIVER_PUBLIC)
+        .property("block-size", 1024u32)
+        .build()
+        .unwrap();
 
     let mut h = gst_check::Harness::with_element(&enc, None, None);
     h.add_element_src_pad(&enc.static_pad("src").expect("failed to get src pad"));
@@ -109,33 +111,43 @@ fn test_state_changes() {
 
     // NullToReady without keys provided
     {
-        let enc = gst::ElementFactory::make("sodiumencrypter", None).unwrap();
+        let enc = gst::ElementFactory::make("sodiumencrypter")
+            .build()
+            .unwrap();
         assert!(enc.change_state(gst::StateChange::NullToReady).is_err());
 
         // Set only receiver key
-        let enc = gst::ElementFactory::make("sodiumencrypter", None).unwrap();
-        enc.set_property("receiver-key", &*RECEIVER_PUBLIC);
+        let enc = gst::ElementFactory::make("sodiumencrypter")
+            .property("receiver-key", &*RECEIVER_PUBLIC)
+            .build()
+            .unwrap();
         assert!(enc.change_state(gst::StateChange::NullToReady).is_err());
 
         // Set only sender key
-        let enc = gst::ElementFactory::make("sodiumencrypter", None).unwrap();
-        enc.set_property("sender-key", &*SENDER_PRIVATE);
+        let enc = gst::ElementFactory::make("sodiumencrypter")
+            .property("sender-key", &*SENDER_PRIVATE)
+            .build()
+            .unwrap();
         assert!(enc.change_state(gst::StateChange::NullToReady).is_err());
     }
 
     // NullToReady
     {
-        let enc = gst::ElementFactory::make("sodiumencrypter", None).unwrap();
-        enc.set_property("sender-key", &*SENDER_PRIVATE);
-        enc.set_property("receiver-key", &*RECEIVER_PUBLIC);
+        let enc = gst::ElementFactory::make("sodiumencrypter")
+            .property("sender-key", &*SENDER_PRIVATE)
+            .property("receiver-key", &*RECEIVER_PUBLIC)
+            .build()
+            .unwrap();
         assert!(enc.change_state(gst::StateChange::NullToReady).is_ok());
     }
 
     // ReadyToNull
     {
-        let enc = gst::ElementFactory::make("sodiumencrypter", None).unwrap();
-        enc.set_property("sender-key", &*SENDER_PRIVATE);
-        enc.set_property("receiver-key", &*RECEIVER_PUBLIC);
+        let enc = gst::ElementFactory::make("sodiumencrypter")
+            .property("sender-key", &*SENDER_PRIVATE)
+            .property("receiver-key", &*RECEIVER_PUBLIC)
+            .build()
+            .unwrap();
         assert!(enc.change_state(gst::StateChange::NullToReady).is_ok());
     }
 }

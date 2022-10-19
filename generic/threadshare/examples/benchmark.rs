@@ -77,11 +77,13 @@ fn main() {
     for i in 0..n_streams {
         let build_context = || format!("context-{}", (i as u32) % n_groups);
 
-        let sink =
-            gst::ElementFactory::make("fakesink", Some(format!("sink-{}", i).as_str())).unwrap();
-        sink.set_property("sync", false);
-        sink.set_property("async", false);
-        sink.set_property("signal-handoffs", true);
+        let sink = gst::ElementFactory::make("fakesink")
+            .name(format!("sink-{}", i).as_str())
+            .property("sync", false)
+            .property("async", false)
+            .property("signal-handoffs", true)
+            .build()
+            .unwrap();
         sink.connect(
             "handoff",
             true,
@@ -93,22 +95,24 @@ fn main() {
 
         let (source, context) = match source.as_str() {
             "udpsrc" => {
-                let source =
-                    gst::ElementFactory::make("udpsrc", Some(format!("source-{}", i).as_str()))
-                        .unwrap();
-                source.set_property("port", 40000i32 + i as i32);
-                source.set_property("retrieve-sender-address", false);
+                let source = gst::ElementFactory::make("udpsrc")
+                    .name(format!("source-{}", i).as_str())
+                    .property("port", 40000i32 + i as i32)
+                    .property("retrieve-sender-address", false)
+                    .build()
+                    .unwrap();
 
                 (source, None)
             }
             "ts-udpsrc" => {
                 let context = build_context();
-                let source =
-                    gst::ElementFactory::make("ts-udpsrc", Some(format!("source-{}", i).as_str()))
-                        .unwrap();
-                source.set_property("port", 40000i32 + i as i32);
-                source.set_property("context", &context);
-                source.set_property("context-wait", wait);
+                let source = gst::ElementFactory::make("ts-udpsrc")
+                    .name(format!("source-{}", i).as_str())
+                    .property("port", 40000i32 + i as i32)
+                    .property("context", &context)
+                    .property("context-wait", wait)
+                    .build()
+                    .unwrap();
 
                 if is_rtp {
                     source.set_property("caps", &rtp_caps);
@@ -117,37 +121,34 @@ fn main() {
                 (source, Some(context))
             }
             "tcpclientsrc" => {
-                let source = gst::ElementFactory::make(
-                    "tcpclientsrc",
-                    Some(format!("source-{}", i).as_str()),
-                )
-                .unwrap();
-                source.set_property("host", "127.0.0.1");
-                source.set_property("port", 40000i32);
+                let source = gst::ElementFactory::make("tcpclientsrc")
+                    .name(format!("source-{}", i).as_str())
+                    .property("host", "127.0.0.1")
+                    .property("port", 40000i32)
+                    .build()
+                    .unwrap();
 
                 (source, None)
             }
             "ts-tcpclientsrc" => {
                 let context = build_context();
-                let source = gst::ElementFactory::make(
-                    "ts-tcpclientsrc",
-                    Some(format!("source-{}", i).as_str()),
-                )
-                .unwrap();
-                source.set_property("host", "127.0.0.1");
-                source.set_property("port", 40000i32);
-                source.set_property("context", &context);
-                source.set_property("context-wait", wait);
+                let source = gst::ElementFactory::make("ts-tcpclientsrc")
+                    .name(format!("source-{}", i).as_str())
+                    .property("host", "127.0.0.1")
+                    .property("port", 40000i32)
+                    .property("context", &context)
+                    .property("context-wait", wait)
+                    .build()
+                    .unwrap();
 
                 (source, Some(context))
             }
             "tonegeneratesrc" => {
-                let source = gst::ElementFactory::make(
-                    "tonegeneratesrc",
-                    Some(format!("source-{}", i).as_str()),
-                )
-                .unwrap();
-                source.set_property("samplesperbuffer", (wait as i32) * 8000 / 1000);
+                let source = gst::ElementFactory::make("tonegeneratesrc")
+                    .name(format!("source-{}", i).as_str())
+                    .property("samplesperbuffer", (wait as i32) * 8000 / 1000)
+                    .build()
+                    .unwrap();
 
                 sink.set_property("sync", true);
 
@@ -155,12 +156,13 @@ fn main() {
             }
             "ts-tonesrc" => {
                 let context = build_context();
-                let source =
-                    gst::ElementFactory::make("ts-tonesrc", Some(format!("source-{}", i).as_str()))
-                        .unwrap();
-                source.set_property("samples-per-buffer", (wait as u32) * 8000 / 1000);
-                source.set_property("context", &context);
-                source.set_property("context-wait", wait);
+                let source = gst::ElementFactory::make("ts-tonesrc")
+                    .name(format!("source-{}", i).as_str())
+                    .property("samples-per-buffer", (wait as u32) * 8000 / 1000)
+                    .property("context", &context)
+                    .property("context-wait", wait)
+                    .build()
+                    .unwrap();
 
                 (source, Some(context))
             }
@@ -168,28 +170,33 @@ fn main() {
         };
 
         if is_rtp {
-            let jb =
-                gst::ElementFactory::make("ts-jitterbuffer", Some(format!("jb-{}", i).as_str()))
-                    .unwrap();
+            let jb = gst::ElementFactory::make("ts-jitterbuffer")
+                .name(format!("jb-{}", i).as_str())
+                .property("context-wait", wait)
+                .property("latency", wait)
+                .build()
+                .unwrap();
             if let Some(context) = context {
                 jb.set_property("context", &context);
             }
-            jb.set_property("context-wait", wait);
-            jb.set_property("latency", wait);
 
             let elements = &[&source, &jb, &sink];
             pipeline.add_many(elements).unwrap();
             gst::Element::link_many(elements).unwrap();
         } else {
             let queue = if let Some(context) = context {
-                let queue =
-                    gst::ElementFactory::make("ts-queue", Some(format!("queue-{}", i).as_str()))
-                        .unwrap();
-                queue.set_property("context", &context);
-                queue.set_property("context-wait", wait);
+                let queue = gst::ElementFactory::make("ts-queue")
+                    .name(format!("queue-{}", i).as_str())
+                    .property("context", &context)
+                    .property("context-wait", wait)
+                    .build()
+                    .unwrap();
                 queue
             } else {
-                gst::ElementFactory::make("queue2", Some(format!("queue-{}", i).as_str())).unwrap()
+                gst::ElementFactory::make("queue")
+                    .name(format!("queue-{}", i).as_str())
+                    .build()
+                    .unwrap()
             };
 
             let elements = &[&source, &queue, &sink];

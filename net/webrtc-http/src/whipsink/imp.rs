@@ -80,7 +80,9 @@ pub struct WhipSink {
 
 impl Default for WhipSink {
     fn default() -> Self {
-        let webrtcbin = gst::ElementFactory::make("webrtcbin", Some("whip-webrtcbin"))
+        let webrtcbin = gst::ElementFactory::make("webrtcbin")
+            .name("whip-webrtcbin")
+            .build()
             .expect("Failed to create webrtcbin");
         Self {
             settings: Mutex::new(Settings::default()),

@@ -37,7 +37,7 @@ fn test_rnnoise_silence_small_buffers() {
 }
 
 fn test_rnnoise(audio_info: &gst_audio::AudioInfo, buffer_size: usize) {
-    let filter = gst::ElementFactory::make("audiornnoise", None).unwrap();
+    let filter = gst::ElementFactory::make("audiornnoise").build().unwrap();
     let mut h = gst_check::Harness::with_element(&filter, Some("sink"), Some("src"));
     let sink_caps = audio_info.to_caps().unwrap();
     let src_caps = sink_caps.clone();

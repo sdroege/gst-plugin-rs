@@ -33,7 +33,9 @@ fn init() {
 fn test_active_pad() {
     init();
 
-    let is = gst::ElementFactory::make("ts-input-selector", None).unwrap();
+    let is = gst::ElementFactory::make("ts-input-selector")
+        .build()
+        .unwrap();
 
     let mut h1 = gst_check::Harness::with_element(&is, Some("sink_%u"), Some("src"));
     let mut h2 = gst_check::Harness::with_element(&is, Some("sink_%u"), None);

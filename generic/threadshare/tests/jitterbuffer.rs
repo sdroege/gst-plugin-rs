@@ -51,25 +51,45 @@ fn jb_pipeline() {
 
     let pipeline = gst::Pipeline::new(None);
 
-    let src = gst::ElementFactory::make("audiotestsrc", Some("audiotestsrc")).unwrap();
-    src.set_property("is-live", true);
-    src.set_property("num-buffers", BUFFER_NB);
+    let src = gst::ElementFactory::make("audiotestsrc")
+        .name("audiotestsrc")
+        .property("is-live", true)
+        .property("num-buffers", BUFFER_NB)
+        .build()
+        .unwrap();
 
-    let enc = gst::ElementFactory::make("alawenc", Some("alawenc")).unwrap();
-    let pay = gst::ElementFactory::make("rtppcmapay", Some("rtppcmapay")).unwrap();
+    let enc = gst::ElementFactory::make("alawenc")
+        .name("alawenc")
+        .build()
+        .unwrap();
+    let pay = gst::ElementFactory::make("rtppcmapay")
+        .name("rtppcmapay")
+        .build()
+        .unwrap();
 
-    let jb = gst::ElementFactory::make("ts-jitterbuffer", Some("ts-jitterbuffer")).unwrap();
-    jb.set_property("context", "jb_pipeline");
-    jb.set_property("context-wait", CONTEXT_WAIT);
-    jb.set_property("latency", LATENCY);
+    let jb = gst::ElementFactory::make("ts-jitterbuffer")
+        .name("ts-jitterbuffer")
+        .property("context", "jb_pipeline")
+        .property("context-wait", CONTEXT_WAIT)
+        .property("latency", LATENCY)
+        .build()
+        .unwrap();
 
-    let depay = gst::ElementFactory::make("rtppcmadepay", Some("rtppcmadepay")).unwrap();
-    let dec = gst::ElementFactory::make("alawdec", Some("alawdec")).unwrap();
+    let depay = gst::ElementFactory::make("rtppcmadepay")
+        .name("rtppcmadepay")
+        .build()
+        .unwrap();
+    let dec = gst::ElementFactory::make("alawdec")
+        .name("alawdec")
+        .build()
+        .unwrap();
 
-    let sink = gst::ElementFactory::make("appsink", Some("appsink")).unwrap();
-    sink.set_property("sync", false);
-    sink.set_property("async", false);
-    sink.set_property("emit-signals", true);
+    let sink = gst::ElementFactory::make("appsink")
+        .name("appsink")
+        .property("sync", false)
+        .property("async", false)
+        .build()
+        .unwrap();
 
     pipeline
         .add_many(&[&src, &enc, &pay, &jb, &depay, &dec, &sink])
@@ -110,29 +130,52 @@ fn jb_ts_pipeline() {
 
     let pipeline = gst::Pipeline::new(None);
 
-    let src = gst::ElementFactory::make("audiotestsrc", Some("audiotestsrc")).unwrap();
-    src.set_property("is-live", true);
-    src.set_property("num-buffers", BUFFER_NB);
+    let src = gst::ElementFactory::make("audiotestsrc")
+        .name("audiotestsrc")
+        .property("is-live", true)
+        .property("num-buffers", BUFFER_NB)
+        .build()
+        .unwrap();
 
-    let queue = gst::ElementFactory::make("ts-queue", Some("ts-queue")).unwrap();
-    queue.set_property("context", "jb_ts_pipeline_queue");
-    queue.set_property("context-wait", CONTEXT_WAIT);
+    let queue = gst::ElementFactory::make("ts-queue")
+        .name("ts-queue")
+        .property("context", "jb_ts_pipeline_queue")
+        .property("context-wait", CONTEXT_WAIT)
+        .build()
+        .unwrap();
 
-    let enc = gst::ElementFactory::make("alawenc", Some("alawenc")).unwrap();
-    let pay = gst::ElementFactory::make("rtppcmapay", Some("rtppcmapay")).unwrap();
+    let enc = gst::ElementFactory::make("alawenc")
+        .name("alawenc")
+        .build()
+        .unwrap();
+    let pay = gst::ElementFactory::make("rtppcmapay")
+        .name("rtppcmapay")
+        .build()
+        .unwrap();
 
-    let jb = gst::ElementFactory::make("ts-jitterbuffer", Some("ts-jitterbuffer")).unwrap();
-    jb.set_property("context", "jb_ts_pipeline");
-    jb.set_property("context-wait", CONTEXT_WAIT);
-    jb.set_property("latency", LATENCY);
+    let jb = gst::ElementFactory::make("ts-jitterbuffer")
+        .name("ts-jitterbuffer")
+        .property("context", "jb_ts_pipeline")
+        .property("context-wait", CONTEXT_WAIT)
+        .property("latency", LATENCY)
+        .build()
+        .unwrap();
 
-    let depay = gst::ElementFactory::make("rtppcmadepay", Some("rtppcmadepay")).unwrap();
-    let dec = gst::ElementFactory::make("alawdec", Some("alawdec")).unwrap();
+    let depay = gst::ElementFactory::make("rtppcmadepay")
+        .name("rtppcmadepay")
+        .build()
+        .unwrap();
+    let dec = gst::ElementFactory::make("alawdec")
+        .name("alawdec")
+        .build()
+        .unwrap();
 
-    let sink = gst::ElementFactory::make("appsink", Some("appsink")).unwrap();
-    sink.set_property("sync", false);
-    sink.set_property("async", false);
-    sink.set_property("emit-signals", true);
+    let sink = gst::ElementFactory::make("appsink")
+        .name("appsink")
+        .property("sync", false)
+        .property("async", false)
+        .build()
+        .unwrap();
 
     pipeline
         .add_many(&[&src, &queue, &enc, &pay, &jb, &depay, &dec, &sink])

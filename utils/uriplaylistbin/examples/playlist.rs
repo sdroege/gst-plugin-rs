@@ -25,12 +25,12 @@ struct Opt {
 
 fn create_pipeline(uris: Vec<String>, iterations: u32) -> anyhow::Result<gst::Pipeline> {
     let pipeline = gst::Pipeline::new(None);
-    let playlist = gst::ElementFactory::make("uriplaylistbin", None)?;
+    let playlist = gst::ElementFactory::make("uriplaylistbin")
+        .property("uris", &uris)
+        .property("iterations", &iterations)
+        .build()?;
 
     pipeline.add(&playlist)?;
-
-    playlist.set_property("uris", &uris);
-    playlist.set_property("iterations", &iterations);
 
     let sink_bins = Arc::new(Mutex::new(HashMap::new()));
     let sink_bins_clone = sink_bins.clone();

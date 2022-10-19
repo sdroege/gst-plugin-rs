@@ -37,8 +37,10 @@ fn test_cdgdec() {
     };
 
     // Ensure we are in push mode so 'blocksize' prop is used
-    let filesrc = gst::ElementFactory::make("pushfilesrc", None).unwrap();
-    filesrc.set_property("location", input_path.to_str().unwrap());
+    let filesrc = gst::ElementFactory::make("pushfilesrc")
+        .property("location", input_path.to_str().unwrap())
+        .build()
+        .unwrap();
     {
         let child_proxy = filesrc.dynamic_cast_ref::<gst::ChildProxy>().unwrap();
         child_proxy.set_child_property("real-filesrc::num-buffers", 1);
@@ -46,9 +48,9 @@ fn test_cdgdec() {
         child_proxy.set_child_property("real-filesrc::blocksize", blocksize);
     }
 
-    let parse = gst::ElementFactory::make("cdgparse", None).unwrap();
-    let dec = gst::ElementFactory::make("cdgdec", None).unwrap();
-    let sink = gst::ElementFactory::make("appsink", None).unwrap();
+    let parse = gst::ElementFactory::make("cdgparse").build().unwrap();
+    let dec = gst::ElementFactory::make("cdgdec").build().unwrap();
+    let sink = gst::ElementFactory::make("appsink").build().unwrap();
 
     pipeline
         .add_many(&[&filesrc, &parse, &dec, &sink])

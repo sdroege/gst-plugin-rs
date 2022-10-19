@@ -63,9 +63,12 @@ impl ObjectSubclass for ProgressBin {
         let srcpad = gst::GhostPad::from_template(&templ, Some("src"));
 
         // Create the progressreport element.
-        let progress = gst::ElementFactory::make("progressreport", Some("progress")).unwrap();
-        // Don't let progressreport print to stdout itself
-        progress.set_property("silent", true);
+        let progress = gst::ElementFactory::make("progressreport")
+            .name("progress")
+            // Don't let progressreport print to stdout itself
+            .property("silent", true)
+            .build()
+            .unwrap();
 
         // Return an instance of our struct
         Self {

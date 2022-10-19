@@ -32,11 +32,13 @@ fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element) {
         .unwrap()
         .upcast();
 
-    let fallbackswitch = gst::ElementFactory::make("fallbackswitch", None).unwrap();
-    fallbackswitch.set_property("timeout", gst::ClockTime::SECOND);
+    let fallbackswitch = gst::ElementFactory::make("fallbackswitch")
+        .property("timeout", gst::ClockTime::SECOND)
+        .build()
+        .unwrap();
 
-    let decodebin = gst::ElementFactory::make("decodebin", None).unwrap();
-    let videoconvert = gst::ElementFactory::make("videoconvert", None).unwrap();
+    let decodebin = gst::ElementFactory::make("decodebin").build().unwrap();
+    let videoconvert = gst::ElementFactory::make("videoconvert").build().unwrap();
 
     let videoconvert_clone = videoconvert.clone();
     decodebin.connect_pad_added(move |_, pad| {
@@ -50,7 +52,9 @@ fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element) {
         }
     });
 
-    let video_sink = gst::ElementFactory::make("gtk4paintablesink", None).unwrap();
+    let video_sink = gst::ElementFactory::make("gtk4paintablesink")
+        .build()
+        .unwrap();
 
     pipeline
         .add_many(&[
