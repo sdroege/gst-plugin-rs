@@ -300,6 +300,15 @@ impl OnvifMetadataCombiner {
                                 end
                             );
                             Ok(Some(current_media_buffer))
+                        } else if timeout {
+                            gst::warning!(
+                                CAT,
+                                imp: self,
+                                "Timed out but did not receive all meta for media buffer from {}-{} yet",
+                                current_media_start,
+                                end
+                            );
+                            Ok(Some(current_media_buffer))
                         } else {
                             gst::trace!(
                                 CAT,
