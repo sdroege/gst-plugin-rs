@@ -806,7 +806,7 @@ impl ElementImpl for RaptorqDec {
     fn request_new_pad(
         &self,
         templ: &gst::PadTemplate,
-        name: Option<String>,
+        name: Option<&str>,
         _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
         let mut sinkpad_fec_guard = self.sinkpad_fec.lock().unwrap();
@@ -821,7 +821,7 @@ impl ElementImpl for RaptorqDec {
             return None;
         }
 
-        let sinkpad_fec = gst::Pad::builder_with_template(templ, name.as_deref())
+        let sinkpad_fec = gst::Pad::builder_with_template(templ, name)
             .chain_function(|pad, parent, buffer| {
                 Self::catch_panic_pad_function(
                     parent,

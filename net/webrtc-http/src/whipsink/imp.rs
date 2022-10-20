@@ -130,10 +130,10 @@ impl ElementImpl for WhipSink {
     fn request_new_pad(
         &self,
         templ: &gst::PadTemplate,
-        name: Option<String>,
+        name: Option<&str>,
         caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
-        let wb_sink_pad = self.webrtcbin.request_pad(templ, name.as_deref(), caps)?;
+        let wb_sink_pad = self.webrtcbin.request_pad(templ, name, caps)?;
         let sink_pad = gst::GhostPad::new(Some(&wb_sink_pad.name()), gst::PadDirection::Sink);
 
         sink_pad.set_target(Some(&wb_sink_pad)).unwrap();

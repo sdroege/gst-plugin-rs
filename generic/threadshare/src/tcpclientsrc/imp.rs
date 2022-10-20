@@ -142,7 +142,7 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
                         .unwrap_or_else(gst::Caps::new_any)
                 };
 
-                q.set_result(Some(&caps));
+                q.set_result(&caps);
 
                 true
             }

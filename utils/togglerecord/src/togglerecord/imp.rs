@@ -1991,7 +1991,7 @@ impl ElementImpl for ToggleRecord {
     fn request_new_pad(
         &self,
         _templ: &gst::PadTemplate,
-        _name: Option<String>,
+        _name: Option<&str>,
         _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
         let mut other_streams_guard = self.other_streams.lock();

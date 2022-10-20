@@ -2723,7 +2723,7 @@ impl ElementImpl for WebRTCSink {
     fn request_new_pad(
         &self,
         templ: &gst::PadTemplate,
-        _name: Option<String>,
+        _name: Option<&str>,
         _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
         let element = self.instance();

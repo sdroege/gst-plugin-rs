@@ -1044,7 +1044,7 @@ impl OnvifMetadataParse {
                     caps
                 };
 
-                q.set_result(Some(&res));
+                q.set_result(&res);
 
                 true
             }
@@ -1112,7 +1112,7 @@ impl OnvifMetadataParse {
                     caps
                 };
 
-                q.set_result(Some(&res));
+                q.set_result(&res);
 
                 true
             }

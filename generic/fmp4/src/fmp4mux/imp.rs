@@ -1772,7 +1772,7 @@ impl ElementImpl for FMP4Mux {
     fn request_new_pad(
         &self,
         templ: &gst::PadTemplate,
-        name: Option<String>,
+        name: Option<&str>,
         caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
         let state = self.state.lock().unwrap();
@@ -1813,9 +1813,9 @@ impl AggregatorImpl for FMP4Mux {
                 if let Some(filter_caps) = q.filter() {
                     let res = filter_caps
                         .intersect_with_mode(&allowed_caps, gst::CapsIntersectMode::First);
-                    q.set_result(Some(&res));
+                    q.set_result(&res);
                 } else {
-                    q.set_result(Some(&allowed_caps));
+                    q.set_result(&allowed_caps);
                 }
 
                 true

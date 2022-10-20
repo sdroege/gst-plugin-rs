@@ -129,7 +129,7 @@ impl ElementImpl for OnvifMetadataCombiner {
     fn request_new_pad(
         &self,
         _templ: &gst::PadTemplate,
-        _name: Option<String>,
+        _name: Option<&str>,
         _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
         gst::error!(
@@ -468,11 +468,11 @@ impl AggregatorImpl for OnvifMetadataCombiner {
                     let templ_caps = templ.caps();
 
                     if let Some(filter) = filter {
-                        q.set_result(Some(
+                        q.set_result(
                             &filter.intersect_with_mode(templ_caps, gst::CapsIntersectMode::First),
-                        ));
+                        );
                     } else {
-                        q.set_result(Some(templ_caps));
+                        q.set_result(templ_caps);
                     }
 
                     true
