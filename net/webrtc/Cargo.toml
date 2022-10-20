@@ -27,7 +27,7 @@ async-tungstenite = { version = "0.17", features = ["async-std-runtime", "async-
 serde = "1"
 serde_json = "1"
 fastrand = "1.0"
-gst_plugin_webrtc_protocol = { version = "0.1", path="protocol", package = "gst-plugin-webrtc-signalling-protocol" }
+gst_plugin_webrtc_protocol = { version = "0.9", path="protocol", package = "gst-plugin-webrtc-signalling-protocol" }
 human_bytes = "0.3.1"
 
 [dev-dependencies]
@@ -43,7 +43,7 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [build-dependencies]
-gst-plugin-version-helper = "0.7"
+gst-plugin-version-helper = { path = "../../version-helper" }
 
 [features]
 static = []
