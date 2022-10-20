@@ -1,13 +1,22 @@
-///! Implements https://datatracker.ietf.org/doc/html/draft-ietf-rmcat-gcc-02
-///!
-///! This element implements the pacing as describe in the spec by running its
-///! own streaming thread on its srcpad. It implements the mathematic as closely
-///! to the specs as possible and sets the #rtpgccbwe:estimated-bitrate property
-///! each time a new estimate is produced. User should connect to the
-///! `rtpgccbwe::notify::estimated-bitrate` signal to make the encoders target
-///! that new estimated bitrate (the overall target bitrate of the potentially
-///! multiple encore should match that target bitrate, the application is
-///! responsible for determining what bitrate to give to each encode)
+/**
+ * element-rtpgccbwe:
+ *
+ * Implements the [Google Congestion Control algorithm](https://datatracker.ietf.org/doc/html/draft-ietf-rmcat-gcc-02).
+ *
+ * This element should always be placed right before a `rtpsession` and will only work
+ * when [twcc](https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01) is enabled
+ * as the bandwidth estimation relies on it.
+ *
+ * This element implements the pacing as describe in the spec by running its
+ * own streaming thread on its srcpad. It implements the mathematic as closely
+ * to the specs as possible and sets the #rtpgccbwe:estimated-bitrate property
+ * each time a new estimate is produced. User should connect to the
+ * `rtpgccbwe::notify::estimated-bitrate` signal to make the encoders target
+ * that new estimated bitrate (the overall target bitrate of the potentially
+ * multiple encoders should match that target bitrate, the application is
+ * responsible for determining what bitrate to give to each encode)
+ *
+ */
 use chrono::Duration;
 use gst::{
     glib::{self},

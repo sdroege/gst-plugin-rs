@@ -97,6 +97,7 @@ foreach plugin_name: list_plugin_res.stdout().split(':')
         sitemap: 'plugins/sitemap.txt',
         index: 'plugins/index.md',
         gst_index: 'plugins/index.md',
+        include_paths: join_paths(meson.current_source_dir(), '..'),
         gst_smart_index: true,
         gst_c_sources: [
           '../*/*/*/*.rs',

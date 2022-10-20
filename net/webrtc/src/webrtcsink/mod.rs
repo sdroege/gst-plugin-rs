@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
 
+/**
+ * element-webrtcsink:
+ *
+ * {{ net/webrtc/README.md[0:190] }}
+ *
+ */
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;

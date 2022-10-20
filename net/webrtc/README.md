@@ -64,26 +64,9 @@ expose more interfaces to guide and tune the heuristics it employs.
 
 ## Building
 
-### Prerequisites
-
-The element has only been tested for now against GStreamer main.
-
-For testing, it is recommended to simply build GStreamer locally and run
-in the uninstalled devenv.
-
 > Make sure to install the development packages for some codec libraries
 > beforehand, such as libx264, libvpx and libopusenc, exact names depend
 > on your distribution.
-
-```
-git clone --depth 1 --single-branch --branch main https://gitlab.freedesktop.org/gstreamer/gstreamer 
-cd gstreamer
-meson build
-ninja -C build
-ninja -C build devenv
-```
-
-### Compiling
 
 ``` shell
 cargo build
@@ -110,11 +93,11 @@ export GST_PLUGIN_PATH=$PWD/target/debug:$GST_PLUGIN_PATH
 gst-launch-1.0 webrtcsink name=ws videotestsrc ! ws. audiotestsrc ! ws.
 ```
 
-When the pipeline above is running succesfully, open a browser and
+When the pipeline above is running successfully, open a browser and
 point it to the http server:
 
 ``` shell
-xdg-open http://127.0.0.1:8000
+gio open http://127.0.0.1:8000
 ```
 
 You should see an identifier listed in the left-hand panel, click on
@@ -133,12 +116,6 @@ with gst-launch:
 gst-launch-1.0 webrtcsink signaller::address="ws://127.0.0.1:8443" ..
 ```
 
-The signaller object can not be inspected, refer to [the source code]
-for the list of properties.
-
-[the source code]: plugins/src/signaller/imp.rs
-
-
 ### Enable 'navigation' a.k.a user interactivity with the content
 
 `webrtcsink` implements the [`GstNavigation`] interface which allows interacting
@@ -152,7 +129,7 @@ As an example, the following pipeline allows you to navigate the GStreamer
 documentation inside the video running within your web browser (in
 http://127.0.0.1:8000 if you followed previous steps of that readme):
 
-```
+``` shell
 gst-launch-1.0 wpesrc location=https://gstreamer.freedesktop.org/documentation/ ! webrtcsink enable-data-channel-navigation=true
 ```
 
@@ -181,7 +158,7 @@ My testing procedure was:
 * Run a `comcast` command on the server machine, for instance:
 
   ``` shell
-  /home/meh/go/bin/comcast --device=$SERVER_INTERFACE --target-bw 3000 --target-addr=$CLIENT_IP --target-port=1:65535 --target-proto=udp
+  $HOME/go/bin/comcast --device=$SERVER_INTERFACE --target-bw 3000 --target-addr=$CLIENT_IP --target-port=1:65535 --target-proto=udp
   ```
 
 * Observe the bitrate sharply decreasing, playback should slow down briefly
@@ -191,7 +168,7 @@ My testing procedure was:
   back to a maximum:
 
   ``` shell
-  /home/meh/go/bin/comcast --device=$SERVER_INTERFACE --stop
+  $HOME/go/bin/comcast --device=$SERVER_INTERFACE --stop
   ```
 
 For comparison, the congestion control property can be set to disabled on
@@ -210,7 +187,7 @@ gst-launch-1.0 webrtcsink congestion-control=disabled
 An example server / client application for monitoring per-consumer stats
 can be found [here].
 
-[here]: plugins/examples/README.md
+[here]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/tree/main/net/webrtc/examples
 
 ## License
 
