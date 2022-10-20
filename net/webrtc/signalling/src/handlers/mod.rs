@@ -4,6 +4,7 @@ use anyhow::{anyhow, Error};
 use anyhow::{bail, Context};
 use futures::prelude::*;
 use futures::ready;
+use gst_plugin_webrtc_protocol as p;
 use p::PeerStatus;
 use pin_project_lite::pin_project;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -11,7 +12,6 @@ use std::pin::Pin;
 use std::task::{Context as TaskContext, Poll};
 use tracing::log::error;
 use tracing::{info, instrument, warn};
-use webrtcsink_protocol as p;
 
 type PeerId = String;
 

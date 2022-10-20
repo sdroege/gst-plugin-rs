@@ -1,5 +1,5 @@
 [package]
-name="webrtcsink-signalling"
+name="gst-plugin-webrtc-signalling"
 version = "0.1.0"
 edition = "2018"
 authors = ["Mathieu Duponchelle <mathieu@centricular.com>"]
@@ -23,4 +23,4 @@ uuid = { version = "1", features = ["v4"] }
 thiserror = "1"
 test-log = { version = "0.2", features = ["trace"], default-features = false }
 pin-project-lite = "0.2"
-webrtcsink-protocol = { version = "0.1", path="../protocol" }
+gst_plugin_webrtc_protocol = { version = "0.1", path="../protocol", package = "gst-plugin-webrtc-signalling-protocol" }

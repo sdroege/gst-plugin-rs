@@ -10,11 +10,11 @@ use gst::glib::prelude::*;
 use gst::glib::{self, Type};
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst_plugin_webrtc_protocol as p;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use webrtcsink_protocol as p;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(

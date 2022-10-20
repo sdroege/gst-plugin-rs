@@ -2,9 +2,9 @@
 
 use async_std::task;
 use clap::Parser;
+use gst_plugin_webrtc_signalling::handlers::Handler;
+use gst_plugin_webrtc_signalling::server::Server;
 use tracing_subscriber::prelude::*;
-use webrtcsink_signalling::handlers::Handler;
-use webrtcsink_signalling::server::Server;
 
 use anyhow::Error;
 use async_native_tls::TlsAcceptor;

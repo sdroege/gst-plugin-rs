@@ -1,5 +1,5 @@
 [package]
-name="webrtcsink-protocol"
+name="gst-plugin-webrtc-signalling-protocol"
 version = "0.1.0"
 edition = "2021"
 authors = ["Mathieu Duponchelle <mathieu@centricular.com>"]
