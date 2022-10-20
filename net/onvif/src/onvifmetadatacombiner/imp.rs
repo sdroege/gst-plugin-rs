@@ -171,14 +171,34 @@ impl OnvifMetadataCombiner {
                 gst::FlowError::Error
             })?;
             if meta_ts <= end {
+                gst::trace!(
+                    CAT,
+                    imp: self,
+                    "Consuming meta buffer at {} before the media end timestamp {}",
+                    meta_ts,
+                    end
+                );
                 let buffer = self.meta_sink_pad.pop_buffer().unwrap();
                 state.meta_frames.push(buffer);
             } else {
+                gst::trace!(
+                    CAT,
+                    imp: self,
+                    "Consumed all meta buffers before the media end timestamp {}",
+                    end
+                );
                 return Ok(true);
             }
         }
 
-        Ok(self.meta_sink_pad.is_eos())
+        let is_eos = self.meta_sink_pad.is_eos();
+        if is_eos {
+            gst::debug!(CAT, imp: self, "Meta pad is EOS");
+        } else {
+            gst::trace!(CAT, imp: self, "Need more meta until time {}", end);
+        }
+
+        Ok(is_eos)
     }
 
     fn media_buffer_duration(
@@ -188,7 +208,7 @@ impl OnvifMetadataCombiner {
     ) -> Option<gst::ClockTime> {
         match current_media_buffer.duration() {
             Some(duration) => {
-                gst::log!(
+                gst::trace!(
                     CAT,
                     imp: self,
                     "Current media buffer has a duration, using it: {}",
@@ -202,7 +222,7 @@ impl OnvifMetadataCombiner {
                         Some((next_pts, current_pts)) => {
                             let duration = next_pts.saturating_sub(current_pts);
 
-                            gst::log!(
+                            gst::trace!(
                                 CAT,
                                 imp: self,
                                 "calculated duration for current media buffer from next buffer: {}",
@@ -212,7 +232,7 @@ impl OnvifMetadataCombiner {
                             Some(duration)
                         }
                         None => {
-                            gst::log!(
+                            gst::trace!(
                                 CAT,
                                 imp: self,
                                 "could not calculate duration for current media buffer"
@@ -221,7 +241,7 @@ impl OnvifMetadataCombiner {
                         }
                     }
                 } else if timeout {
-                    gst::log!(
+                    gst::trace!(
                         CAT,
                         imp: self,
                         "could not calculate duration for current media buffer"
@@ -252,26 +272,68 @@ impl OnvifMetadataCombiner {
             if let Some(current_media_start) =
                 crate::lookup_reference_timestamp(&current_media_buffer)
             {
+                gst::trace!(
+                    CAT,
+                    imp: self,
+                    "Handling media buffer with reference timestamp {}",
+                    current_media_start
+                );
+
                 match self.media_buffer_duration(&current_media_buffer, timeout) {
                     Some(duration) => {
                         let end = current_media_start + duration;
 
+                        gst::trace!(
+                            CAT,
+                            imp: self,
+                            "Consuming meta for media buffer from {}-{}",
+                            current_media_start,
+                            end
+                        );
+
                         if self.consume_meta(state, end)? {
+                            gst::trace!(
+                                CAT,
+                                imp: self,
+                                "Consumed all meta for media buffer from {}-{}",
+                                current_media_start,
+                                end
+                            );
                             Ok(Some(current_media_buffer))
                         } else {
+                            gst::trace!(
+                                CAT,
+                                imp: self,
+                                "Waiting for more meta for media buffer from {}-{}",
+                                current_media_start,
+                                end
+                            );
                             state.current_media_buffer = Some(current_media_buffer);
                             Ok(None)
                         }
                     }
                     None => {
+                        gst::trace!(
+                            CAT,
+                            imp: self,
+                            "Can't calculate media buffer duration yet, waiting for next"
+                        );
+
                         state.current_media_buffer = Some(current_media_buffer);
                         Ok(None)
                     }
                 }
             } else {
+                gst::trace!(
+                    CAT,
+                    imp: self,
+                    "Returning media buffer without reference timestamp"
+                );
+
                 Ok(Some(current_media_buffer))
             }
         } else {
+            gst::trace!(CAT, imp: self, "No media buffer queued currently");
             Ok(None)
         }
     }
@@ -314,8 +376,10 @@ impl AggregatorImpl for OnvifMetadataCombiner {
 
             self.finish_buffer(buffer)
         } else if self.media_sink_pad.is_eos() {
+            gst::debug!(CAT, imp: self, "EOS");
             Err(gst::FlowError::Eos)
         } else {
+            gst::trace!(CAT, imp: self, "Need more data");
             Err(AGGREGATOR_FLOW_NEED_DATA)
         }
     }
