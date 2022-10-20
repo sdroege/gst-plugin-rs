@@ -23,5 +23,9 @@ for name in iterate_plugins():
         print(name, "missing in", prefix)
         success = False
 
+if len(glob.glob(os.path.join(prefix, '**', 'bin', 'gst-webrtc-signalling-server'), recursive=True)) != 1:
+    print("gst-webrtc-signalling-serverm is missing in", prefix)
+    success = False
+
 if not success:
     sys.exit(1)

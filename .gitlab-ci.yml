@@ -217,7 +217,7 @@ meson shared:
   script:
     - meson build --default-library=shared --prefix=$(pwd)/install
     - ninja -C build install
-    - ./ci/check-plugins-installed.py install
+    - ./ci/check-installed.py install
     - ninja -C build docs/gst_plugins_cache.json
     - ci/check-documentation-diff.py
   artifacts:

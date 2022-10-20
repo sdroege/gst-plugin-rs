@@ -21,20 +21,19 @@ PARSER.add_argument('extra_env')
 PARSER.add_argument('prefix', type=P)
 PARSER.add_argument('libdir', type=P)
 PARSER.add_argument('--version', default=None)
+PARSER.add_argument('--bin', default=None, type=P)
 PARSER.add_argument('--exts', nargs="+", default=[])
 PARSER.add_argument('--depfile')
 PARSER.add_argument('--disable-doc', action="store_true", default=False)
 
 
-def generate_depfile_for(libfile):
-    file_stem = libfile.parent / libfile.stem
+def generate_depfile_for(fpath):
+    file_stem = fpath.parent / fpath.stem
     depfile_content = ""
     with open(f"{file_stem}.d", 'r') as depfile:
         for l in depfile.readlines():
             if l.startswith(str(file_stem)):
                 output, srcs = l.split(":", maxsplit=2)
-                output = re.sub(f"^{file_stem}",
-                                f"{opts.build_dir / libfile.stem}", f)
 
                 all_deps = []
                 for src in srcs.split(" "):
@@ -74,11 +73,15 @@ if __name__ == "__main__":
             env[k] = v
 
     if opts.command == 'build':
-        cargo_cmd = ['cargo', 'cbuild']
+        cargo_cmd = ['cargo']
+        if opts.bin:
+            cargo_cmd += ['build']
+        else:
+            cargo_cmd += ['cbuild']
+            if not opts.disable_doc:
+                cargo_cmd += ['--features', "doc"]
         if opts.target == 'release':
             cargo_cmd.append('--release')
-        if not opts.disable_doc:
-            cargo_cmd += ['--features', "doc"]
     elif opts.command == 'test':
         # cargo test
         cargo_cmd = ['cargo', 'ctest', '--no-fail-fast', '--color=always']
@@ -86,41 +89,54 @@ if __name__ == "__main__":
         print("Unknown command:", opts.command, file=logfile)
         sys.exit(1)
 
-    cargo_cmd.extend(['--manifest-path', opts.src_dir / 'Cargo.toml'])
-    cargo_cmd.extend(['--prefix', opts.prefix, '--libdir',
-                     opts.prefix / opts.libdir])
+    cwd = None
+    if not opts.bin:
+        cargo_cmd.extend(['--manifest-path', opts.src_dir / 'Cargo.toml'])
+        cargo_cmd.extend(['--prefix', opts.prefix, '--libdir',
+                        opts.prefix / opts.libdir])
+        for p in opts.include.split(','):
+            cargo_cmd.extend(['-p', p])
+    else:
+        cargo_cmd.extend(['--bin', opts.bin.name])
+        cwd = opts.src_dir
 
-    def run(cargo_cmd, env):
+    def run(cargo_cmd, env, cwd=cwd):
         try:
-            subprocess.run(cargo_cmd, env=env, check=True)
+            subprocess.run(cargo_cmd, env=env, check=True, cwd=cwd)
         except subprocess.SubprocessError:
             sys.exit(1)
 
-    for p in opts.include.split(','):
-        cargo_cmd.extend(['-p', p])
-    run(cargo_cmd, env)
+    run(cargo_cmd, env, cwd)
 
     if opts.command == 'build':
         target_dir = cargo_target_dir / '**' / opts.target
+        if opts.bin:
+            if opts.exts[0]:
+                ext = f'.{opts.exts[0]}'
+            else:
+                ext = ''
+            exe = glob.glob(str(target_dir / opts.bin) + ext, recursive=True)[0]
+            shutil.copy2(exe, opts.build_dir)
+            depfile_content = generate_depfile_for(P(exe))
+        else:
+            # Copy so files to build dir
+            depfile_content = ""
+            for ext in opts.exts:
+                for f in glob.glob(str(target_dir / f'*.{ext}'), recursive=True):
+                    libfile = P(f)
 
-        # Copy so files to build dir
-        depfile_content = ""
-        for ext in opts.exts:
-            for f in glob.glob(str(target_dir / f'*.{ext}'), recursive=True):
-                libfile = P(f)
+                    depfile_content += generate_depfile_for(libfile)
 
-                depfile_content += generate_depfile_for(libfile)
+                    copied_file = (opts.build_dir / libfile.name)
+                    try:
+                        if copied_file.stat().st_mtime == libfile.stat().st_mtime:
+                            print(f"{copied_file} has not changed.", file=logfile)
+                            continue
+                    except FileNotFoundError:
+                        pass
 
-                copied_file = (opts.build_dir / libfile.name)
-                try:
-                    if copied_file.stat().st_mtime == libfile.stat().st_mtime:
-                        print(f"{copied_file} has not changed.", file=logfile)
-                        continue
-                except FileNotFoundError:
-                    pass
-
-                print(f"Copying {copied_file}", file=logfile)
-                shutil.copy2(f, opts.build_dir)
+                    print(f"Copying {copied_file}", file=logfile)
+                    shutil.copy2(f, opts.build_dir)
 
         with open(opts.depfile, 'w') as depfile:
             depfile.write(depfile_content)

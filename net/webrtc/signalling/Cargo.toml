@@ -25,3 +25,7 @@ thiserror = "1"
 test-log = { version = "0.2", features = ["trace"], default-features = false }
 pin-project-lite = "0.2"
 gst_plugin_webrtc_protocol = { version = "0.9", path="../protocol", package = "gst-plugin-webrtc-signalling-protocol" }
+
+[[bin]]
+name = "gst-webrtc-signalling-server"
+path = "src/bin/server.rs"

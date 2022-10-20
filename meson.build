@@ -23,7 +23,9 @@ if not cargo_c.found()
 endif
 
 system = build_machine.system()
+ext_exe = ''
 if system == 'windows'
+  ext_exe = 'exe'
   ext_dynamic = 'dll'
   ext_static = 'lib'
 elif system == 'darwin'
@@ -285,6 +287,29 @@ custom_target('gst-plugins-rs-pc-files',
   install_dir: pkgconfig_install_dir,
   depends: rs_plugins,
   command: [python, '-c', '""'])
+
+
+custom_target('gst-webrtc-signalling-server',
+  build_by_default: true,
+  output: 'gst-webrtc-signalling-server',
+  console: true,
+  install: true,
+  install_dir: get_option('bindir'),
+  depfile: 'gst-webrtc-signalling-server.dep',
+  command: [cargo_wrapper,
+    'build',
+    meson.current_build_dir(),
+    meson.current_source_dir(),
+    meson.global_build_root(),
+    target,
+    '',
+    '',
+    get_option('prefix'),
+    get_option('libdir'),
+    '--depfile', '@DEPFILE@',
+    '--exts', ext_exe,
+    '--bin', 'gst-webrtc-signalling-server'
+  ])
 
 test('tests',
   cargo_wrapper,
