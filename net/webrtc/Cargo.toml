@@ -1,0 +1,7 @@
+[workspace]
+
+members = [
+    "plugins",
+    "protocol",
+    "signalling",
+]

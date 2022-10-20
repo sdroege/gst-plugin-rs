@@ -1,0 +1,141 @@
+/* Reset CSS from Eric Meyer */
+
+html, body, div, span, applet, object, iframe,
+h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+a, abbr, acronym, address, big, cite, code,
+del, dfn, em, img, ins, kbd, q, s, samp,
+small, strike, strong, sub, sup, tt, var,
+b, u, i, center,
+dl, dt, dd, ol, ul, li,
+fieldset, form, label, legend,
+table, caption, tbody, tfoot, thead, tr, th, td,
+article, aside, canvas, details, embed, 
+figure, figcaption, footer, header, hgroup, 
+menu, nav, output, ruby, section, summary,
+time, mark, audio, video {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	font-size: 100%;
+	font: inherit;
+	vertical-align: baseline;
+}
+/* HTML5 display-role reset for older browsers */
+article, aside, details, figcaption, figure, 
+footer, header, hgroup, menu, nav, section {
+	display: block;
+}
+body {
+	line-height: 1;
+}
+ol, ul {
+	list-style: none;
+}
+blockquote, q {
+	quotes: none;
+}
+blockquote:before, blockquote:after,
+q:before, q:after {
+	content: '';
+	content: none;
+}
+table {
+	border-collapse: collapse;
+	border-spacing: 0;
+}
+
+/* Our style */
+
+body{
+	display: flex;
+	flex-direction: column;
+	min-height: 100vh;
+	background-color: #222;
+	color: white;
+}
+
+.holygrail-body {
+	flex: 1 0 auto;
+	display: flex;
+}
+
+.holygrail-body .content {
+	width: 100%;
+}
+
+#sessions {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	justify-content: space-around;
+}
+
+.holygrail-body .nav {
+	width: 220px;
+	list-style: none;
+	text-align: left;
+	order: -1;
+	background-color: #333;
+	margin: 0;
+}
+
+@media (max-width: 700px) {
+	.holygrail-body {
+		flex-direction: column;
+	}
+
+	.holygrail-body .nav {
+		width: 100%;
+	}
+}
+
+.session p span {
+	float: right;
+}
+
+.session p {
+	padding-top: 5px;
+	padding-bottom: 5px;
+}
+
+.stream {
+	background-color: black;
+	width: 480px;
+}
+
+#camera-list {
+	text-align: center;
+}
+
+.button {
+	border: none;
+	padding: 8px;
+	text-align: center;
+	text-decoration: none;
+	display: inline-block;
+	font-size: 16px;
+	-webkit-transition-duration: 0.4s; /* Safari */
+	transition-duration: 0.4s;
+	cursor: pointer;
+	margin: 5px auto;
+	width: 90%;
+}
+
+.button1 {
+	background-color: #222;
+	color: white;
+	border: 2px solid #4CAF50;
+  word-wrap: anywhere;
+}
+
+.button1:hover {
+	background-color: #4CAF50;
+	color: white;
+}
+
+#image-holder {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	justify-content: space-around;
+}
