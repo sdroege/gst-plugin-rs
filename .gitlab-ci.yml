@@ -348,6 +348,7 @@ gst-build:
 test windows msrv:
   extends: '.msvc2019 build'
   image: $WINDOWS_RUST_MINIMUM_IMAGE
+  when: 'manual'
 
 test windows stable:
   extends: '.msvc2019 build'
