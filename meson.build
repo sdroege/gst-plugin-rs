@@ -224,6 +224,7 @@ plugins = rs_plugins.to_list()
 # This is used by GStreamer to static link Rust plugins into gst-full
 gst_plugins = []
 pc_files = []
+plugin_names = []
 foreach plugin : plugins
   # skip the 'lib' prefix and extension from plugin path
   plugin_name = fs.stem(plugin.full_path()).substring(3)
@@ -264,6 +265,11 @@ foreach plugin : plugins
   endif
 
   pc_files += [plugin_name + '.pc']
+  if plugin_name.startswith('gst')
+    plugin_names += [plugin_name.substring(3)]
+  else
+    plugin_names += [plugin_name]
+  endif
 endforeach
 
 subdir('docs')
@@ -292,3 +298,7 @@ test('tests',
     get_option('prefix'),
     get_option('libdir')],
   timeout: 600)
+
+summary({
+    'Plugins': plugin_names,
+}, list_sep: ', ')
