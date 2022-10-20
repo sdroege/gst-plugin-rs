@@ -1571,6 +1571,153 @@ impl FallbackSrc {
         state.flow_combiner.update_pad_flow(pad, res)
     }
 
+    fn create_image_converts(
+        &self,
+        filter_caps: &gst::Caps,
+        fallback_source: bool,
+    ) -> gst::Element {
+        let imagefreeze = gst::ElementFactory::make("imagefreeze")
+            .property("is-live", true)
+            .build()
+            .expect("No imagefreeze found");
+
+        if !fallback_source || filter_caps.is_any() {
+            return imagefreeze;
+        }
+
+        let bin = gst::Bin::new(None);
+        let videoconvert = gst::ElementFactory::make("videoconvert")
+            .name("video_videoconvert")
+            .build()
+            .expect("No videoconvert found");
+
+        let videoscale = gst::ElementFactory::make("videoscale")
+            .name("video_videoscale")
+            .build()
+            .expect("No videoscale found");
+
+        let capsfilter = gst::ElementFactory::make("capsfilter")
+            .name("video_capsfilter")
+            .property("caps", filter_caps)
+            .build()
+            .expect("No capsfilter found");
+
+        bin.add_many(&[&videoconvert, &videoscale, &imagefreeze, &capsfilter])
+            .unwrap();
+
+        gst::Element::link_many(&[&videoconvert, &videoscale, &imagefreeze, &capsfilter]).unwrap();
+
+        let ghostpad =
+            gst::GhostPad::with_target(Some("sink"), &videoconvert.static_pad("sink").unwrap())
+                .unwrap();
+        ghostpad.set_active(true).unwrap();
+        bin.add_pad(&ghostpad).unwrap();
+
+        let ghostpad =
+            gst::GhostPad::with_target(Some("src"), &capsfilter.static_pad("src").unwrap())
+                .unwrap();
+        ghostpad.set_active(true).unwrap();
+        bin.add_pad(&ghostpad).unwrap();
+
+        bin.upcast()
+    }
+
+    fn create_video_converts(
+        &self,
+        filter_caps: &gst::Caps,
+        fallback_source: bool,
+    ) -> gst::Element {
+        if !fallback_source || filter_caps.is_any() {
+            return gst::ElementFactory::make("identity")
+                .build()
+                .expect("No identity found");
+        }
+
+        let bin = gst::Bin::new(None);
+        let videoconvert = gst::ElementFactory::make("videoconvert")
+            .name("video_videoconvert")
+            .build()
+            .expect("No videoconvert found");
+
+        let videoscale = gst::ElementFactory::make("videoscale")
+            .name("video_videoscale")
+            .build()
+            .expect("No videoscale found");
+
+        let capsfilter = gst::ElementFactory::make("capsfilter")
+            .name("video_capsfilter")
+            .property("caps", filter_caps)
+            .build()
+            .expect("No capsfilter found");
+
+        bin.add_many(&[&videoconvert, &videoscale, &capsfilter])
+            .unwrap();
+
+        gst::Element::link_many(&[&videoconvert, &videoscale, &capsfilter]).unwrap();
+
+        let ghostpad =
+            gst::GhostPad::with_target(Some("sink"), &videoconvert.static_pad("sink").unwrap())
+                .unwrap();
+        ghostpad.set_active(true).unwrap();
+        bin.add_pad(&ghostpad).unwrap();
+
+        let ghostpad =
+            gst::GhostPad::with_target(Some("src"), &capsfilter.static_pad("src").unwrap())
+                .unwrap();
+        ghostpad.set_active(true).unwrap();
+        bin.add_pad(&ghostpad).unwrap();
+
+        bin.upcast()
+    }
+
+    fn create_audio_converts(
+        &self,
+        filter_caps: &gst::Caps,
+        fallback_source: bool,
+    ) -> gst::Element {
+        if !fallback_source && filter_caps.is_any() {
+            return gst::ElementFactory::make("identity")
+                .build()
+                .expect("No identity found");
+        }
+
+        let bin = gst::Bin::new(None);
+        let audioconvert = gst::ElementFactory::make("audioconvert")
+            .name("audio_audioconvert")
+            .build()
+            .expect("No audioconvert found");
+
+        let audioresample = gst::ElementFactory::make("audioresample")
+            .name("audio_audioresample")
+            .build()
+            .expect("No audioresample found");
+
+        let capsfilter = gst::ElementFactory::make("capsfilter")
+            .name("audio_capsfilter")
+            .property("caps", filter_caps)
+            .build()
+            .expect("No capsfilter found");
+
+        bin.add_many(&[&audioconvert, &audioresample, &capsfilter])
+            .unwrap();
+
+        gst::Element::link_many(&[&audioconvert, &audioresample, &capsfilter]).unwrap();
+
+        let ghostpad =
+            gst::GhostPad::with_target(Some("sink"), &audioconvert.static_pad("sink").unwrap())
+                .unwrap();
+        ghostpad.set_active(true).unwrap();
+        bin.add_pad(&ghostpad).unwrap();
+
+        let ghostpad =
+            gst::GhostPad::with_target(Some("src"), &capsfilter.static_pad("src").unwrap())
+                .unwrap();
+        ghostpad.set_active(true).unwrap();
+        bin.add_pad(&ghostpad).unwrap();
+
+        bin.upcast()
+    }
+
     fn handle_source_pad_added(
         &self,
         pad: &gst::Pad,
@@ -1692,99 +1839,14 @@ impl FallbackSrc {
             }
         };
 
-        let converters = if is_video {
-            let bin = gst::Bin::new(None);
-
-            let videoconvert = gst::ElementFactory::make("videoconvert")
-                .name("video_videoconvert")
-                .build()
-                .expect("No videoconvert found");
-
-            let videoscale = gst::ElementFactory::make("videoscale")
-                .name("video_videoscale")
-                .build()
-                .expect("No videoscale found");
-
-            let capsfilter = gst::ElementFactory::make("capsfilter")
-                .name("video_capsfilter")
-                .build()
-                .expect("No capsfilter found");
-
-            let imagefreeze = if is_image {
-                gst::ElementFactory::make("imagefreeze")
-                    .property("is-live", true)
-                    .build()
-                    .expect("no imagefreeze found")
-            } else {
-                gst::ElementFactory::make("identity")
-                    .name("video_identity")
-                    .build()
-                    .expect("No identity found")
-            };
-
-            if fallback_source {
-                capsfilter.set_property("caps", filter_caps);
-            }
-
-            bin.add_many(&[&videoconvert, &videoscale, &imagefreeze, &capsfilter])
-                .unwrap();
-
-            gst::Element::link_many(&[&videoconvert, &videoscale, &imagefreeze, &capsfilter])
-                .unwrap();
-
-            let ghostpad =
-                gst::GhostPad::with_target(Some("sink"), &videoconvert.static_pad("sink").unwrap())
-                    .unwrap();
-            ghostpad.set_active(true).unwrap();
-            bin.add_pad(&ghostpad).unwrap();
-
-            let ghostpad =
-                gst::GhostPad::with_target(Some("src"), &capsfilter.static_pad("src").unwrap())
-                    .unwrap();
-            ghostpad.set_active(true).unwrap();
-            bin.add_pad(&ghostpad).unwrap();
-
-            bin.upcast()
+        // Configure conversion elements only for fallback stream
+        // (if fallback caps is not ANY) or image source.
+        let converters = if is_image {
+            self.create_image_converts(filter_caps, fallback_source)
+        } else if is_video {
+            self.create_video_converts(filter_caps, fallback_source)
         } else {
-            let bin = gst::Bin::new(None);
-
-            let audioconvert = gst::ElementFactory::make("audioconvert")
-                .name("audio_audioconvert")
-                .build()
-                .expect("No audioconvert found");
-
-            let audioresample = gst::ElementFactory::make("audioresample")
-                .name("audio_audioresample")
-                .build()
-                .expect("No audioresample found");
-
-            let capsfilter = gst::ElementFactory::make("capsfilter")
-                .name("audio_capsfilter")
-                .build()
-                .expect("No capsfilter found");
-
-            if fallback_source {
-                capsfilter.set_property("caps", filter_caps);
-            }
-
-            bin.add_many(&[&audioconvert, &audioresample, &capsfilter])
-                .unwrap();
-
-            gst::Element::link_many(&[&audioconvert, &audioresample, &capsfilter]).unwrap();
-
-            let ghostpad =
-                gst::GhostPad::with_target(Some("sink"), &audioconvert.static_pad("sink").unwrap())
-                    .unwrap();
-            ghostpad.set_active(true).unwrap();
-            bin.add_pad(&ghostpad).unwrap();
-
-            let ghostpad =
-                gst::GhostPad::with_target(Some("src"), &capsfilter.static_pad("src").unwrap())
-                    .unwrap();
-            ghostpad.set_active(true).unwrap();
-            bin.add_pad(&ghostpad).unwrap();
-
-            bin.upcast()
+            self.create_audio_converts(filter_caps, fallback_source)
         };
 
         let queue = gst::ElementFactory::make("queue")
