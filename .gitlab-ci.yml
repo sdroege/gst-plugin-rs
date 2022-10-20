@@ -38,11 +38,33 @@ default:
   interruptible: true
 
 stages:
+  - "trigger"
   - "prep"
   - "lint"
   - "test"
   - "extras"
   - "integration"
+
+# This is an empty job that is used to trigger the pipeline.
+trigger:
+  image: alpine:latest
+  stage: 'trigger'
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - echo "Trigger job done, now running the pipeline."
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    # If the MR is assigned to the Merge bot, trigger the pipeline automatically
+    - if: '$CI_MERGE_REQUEST_ASSIGNEES == "gstreamer-merge-bot"'
+    # Require explicit action to trigger tests post merge
+    - if: '$CI_PROJECT_NAMESPACE == "gstreamer" && $CI_COMMIT_BRANCH == "main"'
+      when: 'manual'
+    # When the assignee isn't the merge bot, require an explicit action to trigger the pipeline
+    # to avoid wasting CI resources
+    - if: '$CI_MERGE_REQUEST_ASSIGNEES != "gstreamer-merge-bot"'
+      when: 'manual'
+      allow_failure: false
 
 .debian:11:
   variables:
@@ -87,6 +109,8 @@ stages:
       apt clean &&
       bash ./ci/install-rust-ext.sh &&
       pip install tomli
+  needs:
+    - "trigger"
   rules:
     - if: '$UPDATE_IMG == null'
 
@@ -281,6 +305,15 @@ documentation:
     paths:
       - documentation/
   needs: []
+  rules:
+    # Run job if the MR is assigned to the Merge bot or it a post-merge pipeline on main branch
+    - if: '$CI_MERGE_REQUEST_ASSIGNEES == "gstreamer-merge-bot"'
+      when: 'always'
+    - if: '$CI_PROJECT_NAMESPACE == "gstreamer" && $CI_COMMIT_BRANCH == "main"'
+      when: 'always'
+    # Require explicit action to trigger otherwise
+    - if: '$CI_PROJECT_NAMESPACE != "gstreamer" || $CI_COMMIT_BRANCH != "main"'
+      when: 'manual'
 
 # build gst-plugins-rs as a gst-build subproject
 gst-build:
@@ -328,7 +361,8 @@ gst-build:
 
 .msvc2019 build:
   stage: 'test'
-  needs: []
+  needs:
+    - 'trigger'
   tags:
     - 'docker'
     - 'windows'
