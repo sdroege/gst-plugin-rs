@@ -73,6 +73,7 @@ impl HasherEngine {
                 let (val, _) = algo.compare(left, right);
                 val.into()
             }
+            #[cfg(feature = "dssim")]
             _ => unreachable!(),
         }
     }
