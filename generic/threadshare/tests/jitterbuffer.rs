@@ -49,7 +49,7 @@ fn jb_pipeline() {
     const LATENCY: u32 = 20;
     const BUFFER_NB: i32 = 3;
 
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
 
     let src = gst::ElementFactory::make("audiotestsrc")
         .name("audiotestsrc")
@@ -84,21 +84,19 @@ fn jb_pipeline() {
         .build()
         .unwrap();
 
-    let sink = gst::ElementFactory::make("appsink")
+    let sink = gst_app::AppSink::builder()
         .name("appsink")
-        .property("sync", false)
-        .property("async", false)
-        .build()
-        .unwrap();
+        .sync(false)
+        .async_(false)
+        .build();
 
     pipeline
-        .add_many(&[&src, &enc, &pay, &jb, &depay, &dec, &sink])
+        .add_many(&[&src, &enc, &pay, &jb, &depay, &dec, sink.upcast_ref()])
         .unwrap();
-    gst::Element::link_many(&[&src, &enc, &pay, &jb, &depay, &dec, &sink]).unwrap();
+    gst::Element::link_many(&[&src, &enc, &pay, &jb, &depay, &dec, sink.upcast_ref()]).unwrap();
 
-    let appsink = sink.dynamic_cast::<gst_app::AppSink>().unwrap();
     let (sender, receiver) = mpsc::channel();
-    appsink.set_callbacks(
+    sink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
             .new_sample(move |appsink| {
                 let _sample = appsink.pull_sample().unwrap();
@@ -128,7 +126,7 @@ fn jb_ts_pipeline() {
     const LATENCY: u32 = 20;
     const BUFFER_NB: i32 = 3;
 
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
 
     let src = gst::ElementFactory::make("audiotestsrc")
         .name("audiotestsrc")
@@ -170,21 +168,38 @@ fn jb_ts_pipeline() {
         .build()
         .unwrap();
 
-    let sink = gst::ElementFactory::make("appsink")
+    let sink = gst_app::AppSink::builder()
         .name("appsink")
-        .property("sync", false)
-        .property("async", false)
-        .build()
-        .unwrap();
+        .sync(false)
+        .async_(false)
+        .build();
 
     pipeline
-        .add_many(&[&src, &queue, &enc, &pay, &jb, &depay, &dec, &sink])
+        .add_many(&[
+            &src,
+            &queue,
+            &enc,
+            &pay,
+            &jb,
+            &depay,
+            &dec,
+            sink.upcast_ref(),
+        ])
         .unwrap();
-    gst::Element::link_many(&[&src, &queue, &enc, &pay, &jb, &depay, &dec, &sink]).unwrap();
+    gst::Element::link_many(&[
+        &src,
+        &queue,
+        &enc,
+        &pay,
+        &jb,
+        &depay,
+        &dec,
+        sink.upcast_ref(),
+    ])
+    .unwrap();
 
-    let appsink = sink.dynamic_cast::<gst_app::AppSink>().unwrap();
     let (sender, receiver) = mpsc::channel();
-    appsink.set_callbacks(
+    sink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
             .new_sample(move |appsink| {
                 let _sample = appsink.pull_sample().unwrap();

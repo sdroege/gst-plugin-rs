@@ -25,7 +25,7 @@ fn init() {
 fn test_cdgdec() {
     init();
 
-    let pipeline = gst::Pipeline::new(Some("cdgdec-test"));
+    let pipeline = gst::Pipeline::builder().name("cdgdec-test").build();
 
     let input_path = {
         let mut r = PathBuf::new();
@@ -50,14 +50,14 @@ fn test_cdgdec() {
 
     let parse = gst::ElementFactory::make("cdgparse").build().unwrap();
     let dec = gst::ElementFactory::make("cdgdec").build().unwrap();
-    let sink = gst::ElementFactory::make("appsink").build().unwrap();
+    let sink = gst_app::AppSink::builder().build();
 
     pipeline
-        .add_many(&[&filesrc, &parse, &dec, &sink])
+        .add_many(&[&filesrc, &parse, &dec, sink.upcast_ref()])
         .expect("failed to add elements to the pipeline");
-    gst::Element::link_many(&[&filesrc, &parse, &dec, &sink]).expect("failed to link the elements");
+    gst::Element::link_many(&[&filesrc, &parse, &dec, sink.upcast_ref()])
+        .expect("failed to link the elements");
 
-    let sink = sink.downcast::<gst_app::AppSink>().unwrap();
     sink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
             // Add a handler to the "new-sample" signal.

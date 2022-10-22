@@ -442,8 +442,8 @@ impl TranscriberBin {
     }
 
     fn build_state(&self) -> Result<State, Error> {
-        let internal_bin = gst::Bin::new(Some("internal"));
-        let transcription_bin = gst::Bin::new(Some("transcription-bin"));
+        let internal_bin = gst::Bin::builder().name("internal").build();
+        let transcription_bin = gst::Bin::builder().name("transcription-bin").build();
         let audio_tee = gst::ElementFactory::make("tee")
             // Protect passthrough enable (and resulting dynamic reconfigure)
             // from non-streaming thread

@@ -103,7 +103,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .build()
         .unwrap();
 
-    let pipeline = gst::Pipeline::new(Some("test-pipeline"));
+    let pipeline = gst::Pipeline::builder().name("test-pipeline").build();
     pipeline
         .add_many(&[&filesrc, &encrypter, &filesink])
         .expect("failed to add elements to the pipeline");

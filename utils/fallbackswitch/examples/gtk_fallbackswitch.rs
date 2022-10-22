@@ -23,7 +23,7 @@ const FALLBACK_PIPELINE: &str = "videotestsrc is-live=true pattern=snow";
 //const FALLBACK_PIPELINE: &str = "videotestsrc is-live=true pattern=snow ! x264enc tune=zerolatency";
 
 fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element) {
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
 
     let video_src = gst::parse_bin_from_description(MAIN_PIPELINE, true)
         .unwrap()

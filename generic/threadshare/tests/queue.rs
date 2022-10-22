@@ -35,21 +35,22 @@ fn init() {
 fn test_push() {
     init();
 
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
     let fakesrc = gst::ElementFactory::make("fakesrc")
         .property("num-buffers", 3i32)
         .build()
         .unwrap();
     let queue = gst::ElementFactory::make("ts-queue").build().unwrap();
-    let appsink = gst::ElementFactory::make("appsink").build().unwrap();
+    let appsink = gst_app::AppSink::builder().build();
 
-    pipeline.add_many(&[&fakesrc, &queue, &appsink]).unwrap();
+    pipeline
+        .add_many(&[&fakesrc, &queue, appsink.upcast_ref()])
+        .unwrap();
     fakesrc.link(&queue).unwrap();
     queue.link(&appsink).unwrap();
 
     let samples = Arc::new(Mutex::new(Vec::new()));
 
-    let appsink = appsink.dynamic_cast::<gst_app::AppSink>().unwrap();
     let samples_clone = samples.clone();
     appsink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()

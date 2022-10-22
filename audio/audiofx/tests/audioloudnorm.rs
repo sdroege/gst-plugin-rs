@@ -66,7 +66,7 @@ fn run_test(
         .downcast::<gst_app::AppSink>()
         .unwrap();
 
-    sink.set_property("sync", false);
+    sink.set_sync(false);
     let caps = gst_audio::AudioInfo::builder(gst_audio::AUDIO_FORMAT_F64, 192_000, channels)
         .build()
         .unwrap()

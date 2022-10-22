@@ -893,7 +893,7 @@ impl BinImpl for FallbackSrc {
 
 impl FallbackSrc {
     fn create_dummy_audio_source(filter_caps: &gst::Caps, min_latency: gst::ClockTime) -> gst::Bin {
-        let bin = gst::Bin::new(None);
+        let bin = gst::Bin::default();
 
         let audiotestsrc = gst::ElementFactory::make("audiotestsrc")
             .name("audiosrc")
@@ -952,7 +952,7 @@ impl FallbackSrc {
     }
 
     fn create_dummy_video_source(filter_caps: &gst::Caps, min_latency: gst::ClockTime) -> gst::Bin {
-        let bin = gst::Bin::new(None);
+        let bin = gst::Bin::default();
 
         let videotestsrc = gst::ElementFactory::make("videotestsrc")
             .name("videosrc")
@@ -1011,7 +1011,7 @@ impl FallbackSrc {
     }
 
     fn create_main_input(&self, source: &Source, buffer_duration: i64) -> SourceBin {
-        let bin = gst::Bin::new(None);
+        let bin = gst::Bin::default();
 
         let source = match source {
             Source::Uri(ref uri) => {
@@ -1104,7 +1104,7 @@ impl FallbackSrc {
             None => return None,
         };
 
-        let bin = gst::Bin::new(None);
+        let bin = gst::Bin::default();
 
         bin.add(&source).unwrap();
 
@@ -1585,7 +1585,7 @@ impl FallbackSrc {
             return imagefreeze;
         }
 
-        let bin = gst::Bin::new(None);
+        let bin = gst::Bin::default();
         let videoconvert = gst::ElementFactory::make("videoconvert")
             .name("video_videoconvert")
             .build()
@@ -1633,7 +1633,7 @@ impl FallbackSrc {
                 .expect("No identity found");
         }
 
-        let bin = gst::Bin::new(None);
+        let bin = gst::Bin::default();
         let videoconvert = gst::ElementFactory::make("videoconvert")
             .name("video_videoconvert")
             .build()
@@ -1681,7 +1681,7 @@ impl FallbackSrc {
                 .expect("No identity found");
         }
 
-        let bin = gst::Bin::new(None);
+        let bin = gst::Bin::default();
         let audioconvert = gst::ElementFactory::make("audioconvert")
             .name("audio_audioconvert")
             .build()

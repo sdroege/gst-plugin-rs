@@ -128,7 +128,7 @@ fn main() {
 
     let args = args();
 
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
 
     for i in 0..args.streams {
         let ctx_name = format!("standalone {}", i % args.groups);

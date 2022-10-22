@@ -6,7 +6,7 @@ use gtk::{gdk, gio, glib};
 use std::cell::RefCell;
 
 fn create_ui(app: &gtk::Application) {
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
     let src = gst::ElementFactory::make("videotestsrc").build().unwrap();
 
     let overlay = gst::ElementFactory::make("clockoverlay")

@@ -58,7 +58,7 @@ fn multiple_contexts_queue() {
     const FIRST_PORT: u16 = 40000;
 
     let l = glib::MainLoop::new(None, false);
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
 
     let (sender, receiver) = mpsc::channel();
 
@@ -78,19 +78,19 @@ fn multiple_contexts_queue() {
             .build()
             .unwrap();
 
-        let sink = gst::ElementFactory::make("appsink")
+        let sink = gst_app::AppSink::builder()
             .name(format!("sink-{}", i).as_str())
-            .property("sync", false)
-            .property("async", false)
-            .build()
+            .sync(false)
+            .async_(false)
+            .build();
+
+        pipeline
+            .add_many(&[&src, &queue, sink.upcast_ref()])
             .unwrap();
+        gst::Element::link_many(&[&src, &queue, sink.upcast_ref()]).unwrap();
 
-        pipeline.add_many(&[&src, &queue, &sink]).unwrap();
-        gst::Element::link_many(&[&src, &queue, &sink]).unwrap();
-
-        let appsink = sink.dynamic_cast::<gst_app::AppSink>().unwrap();
         let sender_clone = sender.clone();
-        appsink.set_callbacks(
+        sink.set_callbacks(
             gst_app::AppSinkCallbacks::builder()
                 .new_sample(move |appsink| {
                     let _sample = appsink.pull_sample().unwrap();
@@ -192,7 +192,7 @@ fn multiple_contexts_proxy() {
     const FIRST_PORT: u16 = 40000 + OFFSET;
 
     let l = glib::MainLoop::new(None, false);
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
 
     let (sender, receiver) = mpsc::channel();
 
@@ -223,22 +223,20 @@ fn multiple_contexts_proxy() {
             .build()
             .unwrap();
 
-        let sink = gst::ElementFactory::make("appsink")
+        let sink = gst_app::AppSink::builder()
             .name(format!("sink-{}", pipeline_index).as_str())
-            .property("sync", false)
-            .property("async", false)
-            .build()
-            .unwrap();
+            .sync(false)
+            .async_(false)
+            .build();
 
         pipeline
-            .add_many(&[&src, &proxysink, &proxysrc, &sink])
+            .add_many(&[&src, &proxysink, &proxysrc, sink.upcast_ref()])
             .unwrap();
         src.link(&proxysink).unwrap();
         proxysrc.link(&sink).unwrap();
 
-        let appsink = sink.dynamic_cast::<gst_app::AppSink>().unwrap();
         let sender_clone = sender.clone();
-        appsink.set_callbacks(
+        sink.set_callbacks(
             gst_app::AppSinkCallbacks::builder()
                 .new_sample(move |appsink| {
                     let _sample = appsink.pull_sample().unwrap();
@@ -330,7 +328,7 @@ fn eos() {
     init();
 
     let l = glib::MainLoop::new(None, false);
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
 
     let caps = gst::Caps::builder("foo/bar").build();
 
@@ -348,20 +346,20 @@ fn eos() {
         .build()
         .unwrap();
 
-    let appsink = gst::ElementFactory::make("appsink")
+    let sink = gst_app::AppSink::builder()
         .name("sink-eos")
-        .property("sync", false)
-        .property("async", false)
-        .build()
-        .unwrap();
+        .sync(false)
+        .async_(false)
+        .build();
 
-    pipeline.add_many(&[&src, &queue, &appsink]).unwrap();
-    gst::Element::link_many(&[&src, &queue, &appsink]).unwrap();
+    pipeline
+        .add_many(&[&src, &queue, sink.upcast_ref()])
+        .unwrap();
+    gst::Element::link_many(&[&src, &queue, sink.upcast_ref()]).unwrap();
 
     let (sample_notifier, sample_notif_rcv) = mpsc::channel();
     let (eos_notifier, eos_notif_rcv) = mpsc::channel();
-    let appsink = appsink.dynamic_cast::<gst_app::AppSink>().unwrap();
-    appsink.set_callbacks(
+    sink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
             .new_sample(move |appsink| {
                 gst::debug!(CAT, obj: appsink, "eos: pulling sample");
@@ -461,7 +459,7 @@ fn premature_shutdown() {
     const QUEUE_ITEMS_CAPACITY: u32 = 1;
 
     let l = glib::MainLoop::new(None, false);
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
 
     let caps = gst::Caps::builder("foo/bar").build();
 
@@ -482,20 +480,20 @@ fn premature_shutdown() {
         .build()
         .unwrap();
 
-    let appsink = gst::ElementFactory::make("appsink")
+    let sink = gst_app::AppSink::builder()
         .name("sink-ps")
-        .property("sync", false)
-        .property("async", false)
-        .build()
-        .unwrap();
+        .sync(false)
+        .async_(false)
+        .build();
 
-    pipeline.add_many(&[&src, &queue, &appsink]).unwrap();
-    gst::Element::link_many(&[&src, &queue, &appsink]).unwrap();
+    pipeline
+        .add_many(&[&src, &queue, sink.upcast_ref()])
+        .unwrap();
+    gst::Element::link_many(&[&src, &queue, sink.upcast_ref()]).unwrap();
 
     let (appsink_sender, appsink_receiver) = mpsc::channel();
 
-    let appsink = appsink.dynamic_cast::<gst_app::AppSink>().unwrap();
-    appsink.set_callbacks(
+    sink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
             .new_sample(move |appsink| {
                 gst::debug!(CAT, obj: appsink, "premature_shutdown: pulling sample");
@@ -620,7 +618,7 @@ fn socket_play_null_play() {
     init();
 
     let l = glib::MainLoop::new(None, false);
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
 
     let socket = gio::Socket::new(
         SocketFamily::Ipv4,

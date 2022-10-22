@@ -61,7 +61,9 @@ fn init() {
 fn test_pipeline() {
     init();
 
-    let pipeline = gst::Pipeline::new(Some("sodium-decrypter-test"));
+    let pipeline = gst::Pipeline::builder()
+        .name("sodium-decrypter-test")
+        .build();
 
     let input_path = {
         let mut r = PathBuf::new();
@@ -86,17 +88,16 @@ fn test_pipeline() {
     // the typefind element here is cause the decrypter only supports
     // operating in pull mode bu the filesink wants push-mode.
     let typefind = gst::ElementFactory::make("typefind").build().unwrap();
-    let sink = gst::ElementFactory::make("appsink").build().unwrap();
+    let sink = gst_app::AppSink::builder().build();
 
     pipeline
-        .add_many(&[&filesrc, &dec, &typefind, &sink])
+        .add_many(&[&filesrc, &dec, &typefind, sink.upcast_ref()])
         .expect("failed to add elements to the pipeline");
-    gst::Element::link_many(&[&filesrc, &dec, &typefind, &sink])
+    gst::Element::link_many(&[&filesrc, &dec, &typefind, sink.upcast_ref()])
         .expect("failed to link the elements");
 
     let adapter = Arc::new(Mutex::new(gst_base::UniqueAdapter::new()));
 
-    let sink = sink.downcast::<gst_app::AppSink>().unwrap();
     let adapter_clone = adapter.clone();
     sink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
@@ -154,7 +155,9 @@ fn test_pipeline() {
 fn test_pull_range() {
     init();
 
-    let pipeline = gst::Pipeline::new(Some("sodium-decrypter-pull-range-test"));
+    let pipeline = gst::Pipeline::builder()
+        .name("sodium-decrypter-pull-range-test")
+        .build();
     let input_path = {
         let mut r = PathBuf::new();
         r.push(env!("CARGO_MANIFEST_DIR"));

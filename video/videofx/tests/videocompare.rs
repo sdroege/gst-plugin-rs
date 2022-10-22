@@ -60,7 +60,7 @@ fn test_can_find_similar_frames() {
 
     let max_distance = 0.0f64;
 
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
     setup_pipeline(
         &pipeline,
         "red",
@@ -106,7 +106,7 @@ fn test_can_find_similar_frames() {
 fn test_do_not_send_message_when_image_not_found() {
     init();
 
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
     setup_pipeline(&pipeline, "snow", "red", 0f64, HashAlgorithm::Blockhash);
 
     pipeline.set_state(gst::State::Playing).unwrap();
@@ -145,7 +145,7 @@ fn test_use_dssim_to_find_similar_frames() {
 
     let max_distance = 0.0f64;
 
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
     setup_pipeline(&pipeline, "red", "red", max_distance, HashAlgorithm::Dssim);
 
     pipeline.set_state(gst::State::Playing).unwrap();

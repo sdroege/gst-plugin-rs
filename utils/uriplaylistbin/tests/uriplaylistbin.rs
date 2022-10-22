@@ -85,7 +85,7 @@ fn test(
 
     let uris: Vec<String> = medias.iter().map(|t| t.uri.clone()).collect();
 
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
     let playlist = gst::ElementFactory::make("uriplaylistbin")
         .property("uris", &uris)
         .property("iterations", &iterations)

@@ -464,7 +464,7 @@ fn setup_pipeline(
 
     let clock = gst_check::TestClock::new();
     clock.set_time(gst::ClockTime::ZERO);
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
 
     // Running time 0 in our pipeline is going to be clock time 1s. All
     // clock ids before 1s are used for signalling to our clock advancing
@@ -473,23 +473,20 @@ fn setup_pipeline(
     pipeline.set_base_time(gst::ClockTime::SECOND);
     pipeline.set_start_time(gst::ClockTime::NONE);
 
-    let src = gst::ElementFactory::make("appsrc")
+    let src = gst_app::AppSrc::builder()
         .name("src")
-        .build()
-        .unwrap()
-        .downcast::<gst_app::AppSrc>()
-        .unwrap();
-    src.set_is_live(true);
-    src.set_format(gst::Format::Time);
-    src.set_min_latency(LATENCY.nseconds() as i64);
-    src.set_caps(Some(
-        &gst_video::VideoCapsBuilder::new()
-            .format(gst_video::VideoFormat::Argb)
-            .width(320)
-            .height(240)
-            .framerate((0, 1).into())
-            .build(),
-    ));
+        .is_live(true)
+        .format(gst::Format::Time)
+        .min_latency(LATENCY.nseconds() as i64)
+        .caps(
+            &gst_video::VideoCapsBuilder::new()
+                .format(gst_video::VideoFormat::Argb)
+                .width(320)
+                .height(240)
+                .framerate((0, 1).into())
+                .build(),
+        )
+        .build();
 
     let switch = gst::ElementFactory::make("fallbackswitch")
         .name("switch")
@@ -504,13 +501,7 @@ fn setup_pipeline(
         switch.set_property("auto-switch", auto_switch);
     }
 
-    let sink = gst::ElementFactory::make("appsink")
-        .name("sink")
-        .build()
-        .unwrap()
-        .downcast::<gst_app::AppSink>()
-        .unwrap();
-    sink.set_sync(false);
+    let sink = gst_app::AppSink::builder().name("sink").sync(false).build();
 
     let queue = gst::ElementFactory::make("queue").build().unwrap();
 
@@ -525,23 +516,20 @@ fn setup_pipeline(
     sink_pad.set_property("priority", 0u32);
 
     if let Some(live) = with_live_fallback {
-        let fallback_src = gst::ElementFactory::make("appsrc")
+        let fallback_src = gst_app::AppSrc::builder()
             .name("fallback-src")
-            .build()
-            .unwrap()
-            .downcast::<gst_app::AppSrc>()
-            .unwrap();
-        fallback_src.set_is_live(live);
-        fallback_src.set_format(gst::Format::Time);
-        fallback_src.set_min_latency(LATENCY.nseconds() as i64);
-        fallback_src.set_caps(Some(
-            &gst_video::VideoCapsBuilder::new()
-                .format(gst_video::VideoFormat::Argb)
-                .width(160)
-                .height(120)
-                .framerate((0, 1).into())
-                .build(),
-        ));
+            .is_live(live)
+            .format(gst::Format::Time)
+            .min_latency(LATENCY.nseconds() as i64)
+            .caps(
+                &gst_video::VideoCapsBuilder::new()
+                    .format(gst_video::VideoFormat::Argb)
+                    .width(160)
+                    .height(120)
+                    .framerate((0, 1).into())
+                    .build(),
+            )
+            .build();
 
         pipeline.add(&fallback_src).unwrap();
 

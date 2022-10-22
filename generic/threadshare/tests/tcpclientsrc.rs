@@ -54,7 +54,7 @@ fn test_push() {
         }
     });
 
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
 
     let caps = gst::Caps::builder("foo/bar").build();
     let tcpclientsrc = gst::ElementFactory::make("ts-tcpclientsrc")
@@ -62,18 +62,18 @@ fn test_push() {
         .property("port", 5000i32)
         .build()
         .unwrap();
-    let appsink = gst::ElementFactory::make("appsink")
-        .property("sync", false)
-        .property("async", false)
-        .build()
-        .unwrap();
+    let appsink = gst_app::AppSink::builder()
+        .sync(false)
+        .async_(false)
+        .build();
 
-    pipeline.add_many(&[&tcpclientsrc, &appsink]).unwrap();
+    pipeline
+        .add_many(&[&tcpclientsrc, appsink.upcast_ref()])
+        .unwrap();
     tcpclientsrc.link(&appsink).unwrap();
 
     let samples = Arc::new(Mutex::new(Vec::new()));
 
-    let appsink = appsink.dynamic_cast::<gst_app::AppSink>().unwrap();
     let samples_clone = samples.clone();
     appsink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()

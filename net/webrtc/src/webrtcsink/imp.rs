@@ -312,7 +312,7 @@ fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error
 
     let video_info = gst_video::VideoInfo::from_caps(caps)?;
 
-    let ret = gst::Bin::new(None);
+    let ret = gst::Bin::default();
 
     let (head, mut tail) = {
         if let Some(feature) = caps.features(0) {
@@ -1403,7 +1403,9 @@ impl WebRTCSink {
             session_id
         );
 
-        let pipeline = gst::Pipeline::new(Some(&format!("session-pipeline-{}", session_id)));
+        let pipeline = gst::Pipeline::builder()
+            .name(&format!("session-pipeline-{}", session_id))
+            .build();
 
         let webrtcbin = make_element("webrtcbin", Some(&format!("webrtcbin-{}", session_id)))
             .map_err(|err| WebRTCSinkError::SessionPipelineError {
@@ -2068,7 +2070,7 @@ impl WebRTCSink {
         codec: &Codec,
         caps: &gst::Caps,
     ) -> Result<gst::Structure, Error> {
-        let pipe = PipelineWrapper(gst::Pipeline::new(None));
+        let pipe = PipelineWrapper(gst::Pipeline::default());
 
         let src = if codec.is_video() {
             make_element("videotestsrc", None)?

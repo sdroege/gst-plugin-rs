@@ -71,7 +71,7 @@ fn main() {
         .build();
 
     let l = glib::MainLoop::new(None, false);
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
     let counter = Arc::new(AtomicU64::new(0));
 
     for i in 0..n_streams {

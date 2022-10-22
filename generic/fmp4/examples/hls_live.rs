@@ -234,8 +234,6 @@ fn setup_appsink(appsink: &gst_app::AppSink, name: &str, path: &Path, is_video: 
         segment_index: 0,
     }));
 
-    appsink.set_buffer_list(true);
-
     appsink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
             .new_sample(move |sink| {
@@ -395,20 +393,37 @@ impl VideoStream {
             .property("is-live", true)
             .build()?;
 
-        let raw_capsfilter = gst::ElementFactory::make("capsfilter").build()?;
+        let raw_capsfilter = gst::ElementFactory::make("capsfilter")
+            .property(
+                "caps",
+                gst_video::VideoCapsBuilder::new()
+                    .format(gst_video::VideoFormat::I420)
+                    .width(self.width as i32)
+                    .height(self.height as i32)
+                    .framerate(30.into())
+                    .build(),
+            )
+            .build()?;
         let timeoverlay = gst::ElementFactory::make("timeoverlay").build()?;
         let enc = gst::ElementFactory::make("x264enc")
             .property("bframes", 0u32)
             .property("bitrate", self.bitrate as u32 / 1000u32)
             .property_from_str("tune", "zerolatency")
             .build()?;
-        let h264_capsfilter = gst::ElementFactory::make("capsfilter").build()?;
+        let h264_capsfilter = gst::ElementFactory::make("capsfilter")
+            .property(
+                "caps",
+                gst::Caps::builder("video/x-h264")
+                    .field("profile", "main")
+                    .build(),
+            )
+            .build()?;
         let mux = gst::ElementFactory::make("cmafmux")
             .property("fragment-duration", 2500.mseconds())
             .property_from_str("header-update-mode", "update")
             .property("write-mehd", true)
             .build()?;
-        let appsink = gst::ElementFactory::make("appsink").build()?;
+        let appsink = gst_app::AppSink::builder().buffer_list(true).build();
 
         pipeline.add_many(&[
             &src,
@@ -417,25 +432,8 @@ impl VideoStream {
             &enc,
             &h264_capsfilter,
             &mux,
-            &appsink,
+            appsink.upcast_ref(),
         ])?;
-
-        raw_capsfilter.set_property(
-            "caps",
-            gst_video::VideoCapsBuilder::new()
-                .format(gst_video::VideoFormat::I420)
-                .width(self.width as i32)
-                .height(self.height as i32)
-                .framerate(30.into())
-                .build(),
-        );
-
-        h264_capsfilter.set_property(
-            "caps",
-            gst::Caps::builder("video/x-h264")
-                .field("profile", "main")
-                .build(),
-        );
 
         gst::Element::link_many(&[
             &src,
@@ -444,12 +442,10 @@ impl VideoStream {
             &enc,
             &h264_capsfilter,
             &mux,
-            &appsink,
+            appsink.upcast_ref(),
         ])?;
 
         probe_encoder(state, enc);
-
-        let appsink = appsink.downcast::<gst_app::AppSink>().unwrap();
 
         setup_appsink(&appsink, &self.name, path, true);
 
@@ -474,15 +470,13 @@ impl AudioStream {
             .property_from_str("header-update-mode", "update")
             .property("write-mehd", true)
             .build()?;
-        let appsink = gst::ElementFactory::make("appsink").build()?;
+        let appsink = gst_app::AppSink::builder().buffer_list(true).build();
 
-        pipeline.add_many(&[&src, &enc, &mux, &appsink])?;
+        pipeline.add_many(&[&src, &enc, &mux, appsink.upcast_ref()])?;
 
-        gst::Element::link_many(&[&src, &enc, &mux, &appsink])?;
+        gst::Element::link_many(&[&src, &enc, &mux, appsink.upcast_ref()])?;
 
         probe_encoder(state, enc);
-
-        let appsink = appsink.downcast::<gst_app::AppSink>().unwrap();
 
         setup_appsink(&appsink, &self.name, path, false);
 
@@ -497,7 +491,7 @@ fn main() -> Result<(), Error> {
 
     let path = PathBuf::from("hls_live_stream");
 
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
 
     std::fs::create_dir_all(&path).expect("failed to create directory");
 

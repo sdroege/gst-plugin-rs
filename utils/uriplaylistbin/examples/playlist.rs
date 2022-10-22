@@ -24,7 +24,7 @@ struct Opt {
 }
 
 fn create_pipeline(uris: Vec<String>, iterations: u32) -> anyhow::Result<gst::Pipeline> {
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
     let playlist = gst::ElementFactory::make("uriplaylistbin")
         .property("uris", &uris)
         .property("iterations", &iterations)

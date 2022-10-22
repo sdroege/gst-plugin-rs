@@ -90,7 +90,7 @@ fn send_rtp_buffers(n_streams: u16) {
     }
 
     let l = glib::MainLoop::new(None, false);
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
     for i in 0..n_streams {
         let src = gst::ElementFactory::make("audiotestsrc")
             .name(format!("audiotestsrc-{}", i).as_str())

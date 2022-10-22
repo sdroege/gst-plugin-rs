@@ -35,7 +35,7 @@ fn init() {
 fn test_push() {
     init();
 
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
     let fakesrc = gst::ElementFactory::make("fakesrc")
         .property("num-buffers", 3i32)
         .build()
@@ -51,17 +51,16 @@ fn test_push() {
         .property("context", "proxy::test")
         .build()
         .unwrap();
-    let appsink = gst::ElementFactory::make("appsink").build().unwrap();
+    let appsink = gst_app::AppSink::builder().build();
 
     pipeline
-        .add_many(&[&fakesrc, &proxysink, &proxysrc, &appsink])
+        .add_many(&[&fakesrc, &proxysink, &proxysrc, appsink.upcast_ref()])
         .unwrap();
     fakesrc.link(&proxysink).unwrap();
     proxysrc.link(&appsink).unwrap();
 
     let samples = Arc::new(Mutex::new(Vec::new()));
 
-    let appsink = appsink.dynamic_cast::<gst_app::AppSink>().unwrap();
     let samples_clone = samples.clone();
     appsink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
@@ -106,7 +105,7 @@ fn test_push() {
 fn test_from_pipeline_to_pipeline() {
     init();
 
-    let pipe_1 = gst::Pipeline::new(None);
+    let pipe_1 = gst::Pipeline::default();
     let fakesrc = gst::ElementFactory::make("fakesrc").build().unwrap();
     let pxsink = gst::ElementFactory::make("ts-proxysink")
         .name("proxysink::test2")
@@ -114,7 +113,7 @@ fn test_from_pipeline_to_pipeline() {
         .build()
         .unwrap();
 
-    let pipe_2 = gst::Pipeline::new(None);
+    let pipe_2 = gst::Pipeline::default();
     let pxsrc = gst::ElementFactory::make("ts-proxysrc")
         .name("proxysrc::test2")
         .property("proxy-context", "proxy::test2_proxy")
@@ -144,7 +143,7 @@ fn test_from_pipeline_to_pipeline() {
 fn test_from_pipeline_to_pipeline_and_back() {
     init();
 
-    let pipe_1 = gst::Pipeline::new(None);
+    let pipe_1 = gst::Pipeline::default();
     let pxsrc_1 = gst::ElementFactory::make("ts-proxysrc")
         .name("proxysrc1::test3")
         .property("proxy-context", "proxy::test3_proxy1")
@@ -157,7 +156,7 @@ fn test_from_pipeline_to_pipeline_and_back() {
         .build()
         .unwrap();
 
-    let pipe_2 = gst::Pipeline::new(None);
+    let pipe_2 = gst::Pipeline::default();
     let pxsrc_2 = gst::ElementFactory::make("ts-proxysrc")
         .name("proxysrc2::test3")
         .property("proxy-context", "proxy::test3_proxy2")

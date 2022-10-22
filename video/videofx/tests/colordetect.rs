@@ -21,7 +21,7 @@ fn init() {
 #[test]
 fn test_red_color() {
     init();
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
 
     let src = gst::ElementFactory::make("videotestsrc")
         .property_from_str("pattern", "red")

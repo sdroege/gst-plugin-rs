@@ -693,7 +693,7 @@ fn setup(
 ) {
     init();
 
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
 
     // Src
     let src_element = glib::Object::new::<ElementSrcTest>(&[]);

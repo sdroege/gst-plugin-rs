@@ -21,7 +21,7 @@ fn create_pipeline() -> (
     gst::Element,
     gst::Element,
 ) {
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::default();
 
     let video_src = gst::ElementFactory::make("videotestsrc")
         .property("is-live", true)
