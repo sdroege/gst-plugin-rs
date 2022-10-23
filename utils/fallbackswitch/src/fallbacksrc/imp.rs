@@ -1914,7 +1914,7 @@ impl FallbackSrc {
                 Some(gst::PadProbeData::Event(ref ev)) if ev.type_() == gst::EventType::Eos => {
                     gst::debug!(
                         CAT,
-                        obj: &element,
+                        obj: element,
                         "Received EOS from {}source on pad {}",
                         if fallback_source { "fallback " } else { "" },
                         pad.name()
@@ -3083,7 +3083,7 @@ impl FallbackSrc {
                         Some(element) => element,
                     };
 
-                    gst::debug!(CAT, obj: &element, "Woke up, retrying");
+                    gst::debug!(CAT, obj: element, "Woke up, retrying");
                     element.call_async(move |element| {
                         let imp = element.imp();
 

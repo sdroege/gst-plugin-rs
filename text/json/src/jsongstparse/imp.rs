@@ -542,13 +542,13 @@ impl JsonGstParse {
             Ok(buffer) => Some(buffer),
             Err(gst::FlowError::Eos) => None,
             Err(gst::FlowError::Flushing) => {
-                gst::debug!(CAT, obj: &self.sinkpad, "Pausing after pulling buffer, reason: flushing");
+                gst::debug!(CAT, obj: self.sinkpad, "Pausing after pulling buffer, reason: flushing");
 
                 self.sinkpad.pause_task().unwrap();
                 return;
             }
             Err(flow) => {
-                gst::error!(CAT, obj: &self.sinkpad, "Failed to pull, reason: {:?}", flow);
+                gst::error!(CAT, obj: self.sinkpad, "Failed to pull, reason: {:?}", flow);
 
                 gst::element_imp_error!(
                     self,

@@ -1302,7 +1302,7 @@ impl WebRTCSink {
                         Ok(None) => {
                             gst::warning!(
                                 CAT,
-                                obj: &element,
+                                obj: element,
                                 "Promise returned without a reply for {}",
                                 session_id
                             );
@@ -1312,7 +1312,7 @@ impl WebRTCSink {
                         Err(err) => {
                             gst::warning!(
                                 CAT,
-                                obj: &element,
+                                obj: element,
                                 "Promise returned with an error for {}: {:?}",
                                 session_id,
                                 err
@@ -1522,7 +1522,7 @@ impl WebRTCSink {
                         let this = Self::from_instance(&element);
                         gst::warning!(
                             CAT,
-                            obj: &element,
+                            obj: element,
                             "Connection state for in session {} (peer {}) failed",
                             session_id_clone,
                             peer_id_clone
@@ -1532,7 +1532,7 @@ impl WebRTCSink {
                     _ => {
                         gst::log!(
                             CAT,
-                            obj: &element,
+                            obj: element,
                             "Connection state in session {} (peer {}) changed: {:?}",
                             session_id_clone,
                             peer_id_clone,
@@ -1556,7 +1556,7 @@ impl WebRTCSink {
                     gst_webrtc::WebRTCICEConnectionState::Failed => {
                         gst::warning!(
                             CAT,
-                            obj: &element,
+                            obj: element,
                             "Ice connection state in session {} (peer {}) failed",
                             session_id_clone,
                             peer_id_clone,
@@ -1566,7 +1566,7 @@ impl WebRTCSink {
                     _ => {
                         gst::log!(
                             CAT,
-                            obj: &element,
+                            obj: element,
                             "Ice connection state in session {} (peer {}) changed: {:?}",
                             session_id_clone,
                             peer_id_clone,
@@ -1603,7 +1603,7 @@ impl WebRTCSink {
             if let Some(element) = element_clone.upgrade() {
                 gst::log!(
                     CAT,
-                    obj: &element,
+                    obj: element,
                     "Ice gathering state in session {} (peer {}) changed: {:?}",
                     session_id_clone,
                     peer_id_clone,
@@ -1708,7 +1708,7 @@ impl WebRTCSink {
                         }
                         gst::MessageView::Latency(..) => {
                             if let Some(pipeline) = pipeline_clone.upgrade() {
-                                gst::info!(CAT, obj: &pipeline, "Recalculating latency");
+                                gst::info!(CAT, obj: pipeline, "Recalculating latency");
                                 let _ = pipeline.recalculate_latency();
                             }
                         }
@@ -2295,7 +2295,7 @@ impl WebRTCSink {
 
                                 match fut.await {
                                     Ok(Err(err)) => {
-                                        gst::error!(CAT, obj: &element, "error: {}", err);
+                                        gst::error!(CAT, obj: element, "error: {}", err);
                                         gst::element_error!(
                                             element,
                                             gst::StreamError::CodecNotFound,
@@ -2638,7 +2638,7 @@ impl ObjectImpl for WebRTCSink {
 
                         gst::debug!(
                             CAT,
-                            obj: &element,
+                            obj: element,
                             "applying default configuration on encoder {:?}",
                             enc
                         );

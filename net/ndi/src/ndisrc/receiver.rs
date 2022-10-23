@@ -760,13 +760,13 @@ impl Receiver {
             let flushing = {
                 let queue = (receiver.0.queue.0).0.lock().unwrap();
                 if queue.shutdown {
-                    gst::debug!(CAT, obj: &element, "Shutting down");
+                    gst::debug!(CAT, obj: element, "Shutting down");
                     break;
                 }
 
                 // If an error happened in the meantime, just go out of here
                 if queue.error.is_some() {
-                    gst::error!(CAT, obj: &element, "Error while waiting for connection");
+                    gst::error!(CAT, obj: element, "Error while waiting for connection");
                     return;
                 }
 
@@ -781,7 +781,7 @@ impl Receiver {
 
             let res = match recv.capture(50) {
                 _ if flushing => {
-                    gst::debug!(CAT, obj: &element, "Flushing");
+                    gst::debug!(CAT, obj: element, "Flushing");
                     Err(gst::FlowError::Flushing)
                 }
                 Err(_) => {
@@ -793,11 +793,11 @@ impl Receiver {
                     Err(gst::FlowError::Error)
                 }
                 Ok(None) if timeout > 0 && timer.elapsed().as_millis() >= timeout as u128 => {
-                    gst::debug!(CAT, obj: &element, "Timed out -- assuming EOS",);
+                    gst::debug!(CAT, obj: element, "Timed out -- assuming EOS",);
                     Err(gst::FlowError::Eos)
                 }
                 Ok(None) => {
-                    gst::debug!(CAT, obj: &element, "No frame received yet, retry");
+                    gst::debug!(CAT, obj: element, "No frame received yet, retry");
                     continue;
                 }
                 Ok(Some(Frame::Video(frame))) => {
@@ -832,7 +832,7 @@ impl Receiver {
                     if let Some(metadata) = frame.metadata() {
                         gst::debug!(
                             CAT,
-                            obj: &element,
+                            obj: element,
                             "Received metadata at timecode {}: {}",
                             (frame.timecode() as u64 * 100).nseconds(),
                             metadata,
@@ -849,7 +849,7 @@ impl Receiver {
                     while queue.buffer_queue.len() > receiver.0.max_queue_length {
                         gst::warning!(
                             CAT,
-                            obj: &element,
+                            obj: element,
                             "Dropping old buffer -- queue has {} items",
                             queue.buffer_queue.len()
                         );
@@ -860,7 +860,7 @@ impl Receiver {
                     timer = time::Instant::now();
                 }
                 Err(gst::FlowError::Eos) => {
-                    gst::debug!(CAT, obj: &element, "Signalling EOS");
+                    gst::debug!(CAT, obj: element, "Signalling EOS");
                     let mut queue = (receiver.0.queue.0).0.lock().unwrap();
                     queue.timeout = true;
                     (receiver.0.queue.0).1.notify_one();
@@ -874,7 +874,7 @@ impl Receiver {
                     timer = time::Instant::now();
                 }
                 Err(err) => {
-                    gst::error!(CAT, obj: &element, "Signalling error");
+                    gst::error!(CAT, obj: element, "Signalling error");
                     let mut queue = (receiver.0.queue.0).0.lock().unwrap();
                     if queue.error.is_none() {
                         queue.error = Some(err);

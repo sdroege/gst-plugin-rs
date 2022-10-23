@@ -184,12 +184,12 @@ impl TcpClientSrcTask {
         &mut self,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj: &self.element, "Handling {:?}", buffer);
+        gst::log!(CAT, obj: self.element, "Handling {:?}", buffer);
 
         let tcpclientsrc = self.element.imp();
 
         if self.need_initial_events {
-            gst::debug!(CAT, obj: &self.element, "Pushing initial events");
+            gst::debug!(CAT, obj: self.element, "Pushing initial events");
 
             let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
             let stream_start_evt = gst::event::StreamStart::builder(&stream_id)
@@ -228,20 +228,20 @@ impl TcpClientSrcTask {
         let res = tcpclientsrc.src_pad.push(buffer).await;
         match res {
             Ok(_) => {
-                gst::log!(CAT, obj: &self.element, "Successfully pushed buffer");
+                gst::log!(CAT, obj: self.element, "Successfully pushed buffer");
             }
             Err(gst::FlowError::Flushing) => {
-                gst::debug!(CAT, obj: &self.element, "Flushing");
+                gst::debug!(CAT, obj: self.element, "Flushing");
             }
             Err(gst::FlowError::Eos) => {
-                gst::debug!(CAT, obj: &self.element, "EOS");
+                gst::debug!(CAT, obj: self.element, "EOS");
                 tcpclientsrc
                     .src_pad
                     .push_event(gst::event::Eos::new())
                     .await;
             }
             Err(err) => {
-                gst::error!(CAT, obj: &self.element, "Got error {}", err);
+                gst::error!(CAT, obj: self.element, "Got error {}", err);
                 gst::element_error!(
                     self.element,
                     gst::StreamError::Failed,
@@ -260,7 +260,7 @@ impl TaskImpl for TcpClientSrcTask {
 
     fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(CAT, obj: &self.element, "Preparing task connecting to {:?}", self.saddr);
+            gst::log!(CAT, obj: self.element, "Preparing task connecting to {:?}", self.saddr);
 
             let socket = Async::<TcpStream>::connect(self.saddr)
                 .await
@@ -285,7 +285,7 @@ impl TaskImpl for TcpClientSrcTask {
                 })?,
             );
 
-            gst::log!(CAT, obj: &self.element, "Task prepared");
+            gst::log!(CAT, obj: self.element, "Task prepared");
             Ok(())
         }
         .boxed()
@@ -320,7 +320,7 @@ impl TaskImpl for TcpClientSrcTask {
                 .await
                 .map(|(buffer, _saddr)| buffer)
                 .map_err(|err| {
-                    gst::error!(CAT, obj: &self.element, "Got error {:?}", err);
+                    gst::error!(CAT, obj: self.element, "Got error {:?}", err);
                     match err {
                         SocketError::Gst(err) => {
                             gst::element_error!(
@@ -351,9 +351,9 @@ impl TaskImpl for TcpClientSrcTask {
 
     fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(CAT, obj: &self.element, "Stopping task");
+            gst::log!(CAT, obj: self.element, "Stopping task");
             self.need_initial_events = true;
-            gst::log!(CAT, obj: &self.element, "Task stopped");
+            gst::log!(CAT, obj: self.element, "Task stopped");
             Ok(())
         }
         .boxed()
@@ -361,9 +361,9 @@ impl TaskImpl for TcpClientSrcTask {
 
     fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(CAT, obj: &self.element, "Stopping task flush");
+            gst::log!(CAT, obj: self.element, "Stopping task flush");
             self.need_initial_events = true;
-            gst::log!(CAT, obj: &self.element, "Task flush stopped");
+            gst::log!(CAT, obj: self.element, "Task flush stopped");
             Ok(())
         }
         .boxed()

@@ -756,13 +756,13 @@ impl MccParse {
             Ok(buffer) => Some(buffer),
             Err(gst::FlowError::Eos) => None,
             Err(gst::FlowError::Flushing) => {
-                gst::debug!(CAT, obj: &self.sinkpad, "Pausing after pulling buffer, reason: flushing");
+                gst::debug!(CAT, obj: self.sinkpad, "Pausing after pulling buffer, reason: flushing");
 
                 let _ = self.sinkpad.pause_task();
                 return;
             }
             Err(flow) => {
-                gst::error!(CAT, obj: &self.sinkpad, "Failed to pull, reason: {:?}", flow);
+                gst::error!(CAT, obj: self.sinkpad, "Failed to pull, reason: {:?}", flow);
 
                 gst::element_imp_error!(
                     self,

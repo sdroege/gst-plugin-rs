@@ -207,7 +207,7 @@ impl PipelineSnapshot {
 
                         for pipeline in pipelines.into_iter() {
                             let pipeline = pipeline.downcast::<gst::Pipeline>().unwrap();
-                            gst::debug!(CAT, obj: &tracer, "dump {}", pipeline.name());
+                            gst::debug!(CAT, obj: tracer, "dump {}", pipeline.name());
 
                             let dump_name = format!("{}{}", settings.dot_prefix, pipeline.name());
 

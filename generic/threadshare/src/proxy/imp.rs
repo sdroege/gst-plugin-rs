@@ -784,15 +784,15 @@ impl ProxySrcTask {
 
         match item {
             DataQueueItem::Buffer(buffer) => {
-                gst::log!(SRC_CAT, obj: &self.element, "Forwarding {:?}", buffer);
+                gst::log!(SRC_CAT, obj: self.element, "Forwarding {:?}", buffer);
                 proxysrc.src_pad.push(buffer).await.map(drop)
             }
             DataQueueItem::BufferList(list) => {
-                gst::log!(SRC_CAT, obj: &self.element, "Forwarding {:?}", list);
+                gst::log!(SRC_CAT, obj: self.element, "Forwarding {:?}", list);
                 proxysrc.src_pad.push_list(list).await.map(drop)
             }
             DataQueueItem::Event(event) => {
-                gst::log!(SRC_CAT, obj: &self.element, "Forwarding {:?}", event);
+                gst::log!(SRC_CAT, obj: self.element, "Forwarding {:?}", event);
                 proxysrc.src_pad.push_event(event).await;
                 Ok(())
             }
@@ -805,7 +805,7 @@ impl TaskImpl for ProxySrcTask {
 
     fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(SRC_CAT, obj: &self.element, "Starting task");
+            gst::log!(SRC_CAT, obj: self.element, "Starting task");
 
             let proxysrc = self.element.imp();
             let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
@@ -819,7 +819,7 @@ impl TaskImpl for ProxySrcTask {
 
             self.dataqueue.start();
 
-            gst::log!(SRC_CAT, obj: &self.element, "Task started");
+            gst::log!(SRC_CAT, obj: self.element, "Task started");
             Ok(())
         }
         .boxed()
@@ -841,25 +841,25 @@ impl TaskImpl for ProxySrcTask {
             let proxysrc = self.element.imp();
             match res {
                 Ok(()) => {
-                    gst::log!(SRC_CAT, obj: &self.element, "Successfully pushed item");
+                    gst::log!(SRC_CAT, obj: self.element, "Successfully pushed item");
                     let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
                     let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
                     shared_ctx.last_res = Ok(gst::FlowSuccess::Ok);
                 }
                 Err(gst::FlowError::Flushing) => {
-                    gst::debug!(SRC_CAT, obj: &self.element, "Flushing");
+                    gst::debug!(SRC_CAT, obj: self.element, "Flushing");
                     let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
                     let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
                     shared_ctx.last_res = Err(gst::FlowError::Flushing);
                 }
                 Err(gst::FlowError::Eos) => {
-                    gst::debug!(SRC_CAT, obj: &self.element, "EOS");
+                    gst::debug!(SRC_CAT, obj: self.element, "EOS");
                     let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
                     let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
                     shared_ctx.last_res = Err(gst::FlowError::Eos);
                 }
                 Err(err) => {
-                    gst::error!(SRC_CAT, obj: &self.element, "Got error {}", err);
+                    gst::error!(SRC_CAT, obj: self.element, "Got error {}", err);
                     gst::element_error!(
                         &self.element,
                         gst::StreamError::Failed,
@@ -879,7 +879,7 @@ impl TaskImpl for ProxySrcTask {
 
     fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(SRC_CAT, obj: &self.element, "Stopping task");
+            gst::log!(SRC_CAT, obj: self.element, "Stopping task");
 
             let proxysrc = self.element.imp();
             let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
@@ -894,7 +894,7 @@ impl TaskImpl for ProxySrcTask {
                 pending_queue.notify_more_queue_space();
             }
 
-            gst::log!(SRC_CAT, obj: &self.element, "Task stopped");
+            gst::log!(SRC_CAT, obj: self.element, "Task stopped");
             Ok(())
         }
         .boxed()
@@ -902,7 +902,7 @@ impl TaskImpl for ProxySrcTask {
 
     fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(SRC_CAT, obj: &self.element, "Starting task flush");
+            gst::log!(SRC_CAT, obj: self.element, "Starting task flush");
 
             let proxysrc = self.element.imp();
             let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
@@ -912,7 +912,7 @@ impl TaskImpl for ProxySrcTask {
 
             shared_ctx.last_res = Err(gst::FlowError::Flushing);
 
-            gst::log!(SRC_CAT, obj: &self.element, "Task flush started");
+            gst::log!(SRC_CAT, obj: self.element, "Task flush started");
             Ok(())
         }
         .boxed()

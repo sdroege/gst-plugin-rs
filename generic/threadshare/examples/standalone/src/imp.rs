@@ -107,9 +107,9 @@ impl TaskImpl for SrcTask {
             self.raise_log_level = settings.raise_log_level;
 
             if self.raise_log_level {
-                gst::log!(CAT, obj: &self.element, "Preparing Task");
+                gst::log!(CAT, obj: self.element, "Preparing Task");
             } else {
-                gst::trace!(CAT, obj: &self.element, "Preparing Task");
+                gst::trace!(CAT, obj: self.element, "Preparing Task");
             }
 
             self.push_period = settings.push_period;
@@ -123,9 +123,9 @@ impl TaskImpl for SrcTask {
     fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async {
             if self.raise_log_level {
-                gst::log!(CAT, obj: &self.element, "Starting Task");
+                gst::log!(CAT, obj: self.element, "Starting Task");
             } else {
-                gst::trace!(CAT, obj: &self.element, "Starting Task");
+                gst::trace!(CAT, obj: self.element, "Starting Task");
             }
 
             self.timer = Some(
@@ -146,9 +146,9 @@ impl TaskImpl for SrcTask {
     fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             if self.raise_log_level {
-                gst::log!(CAT, obj: &self.element, "Stopping Task");
+                gst::log!(CAT, obj: self.element, "Stopping Task");
             } else {
-                gst::trace!(CAT, obj: &self.element, "Stopping Task");
+                gst::trace!(CAT, obj: self.element, "Stopping Task");
             }
 
             self.buffer_pool.set_active(false).unwrap();
@@ -164,17 +164,17 @@ impl TaskImpl for SrcTask {
     fn try_next(&mut self) -> BoxFuture<'_, Result<gst::Buffer, gst::FlowError>> {
         async move {
             if self.raise_log_level {
-                gst::log!(CAT, obj: &self.element, "Awaiting timer");
+                gst::log!(CAT, obj: self.element, "Awaiting timer");
             } else {
-                gst::trace!(CAT, obj: &self.element, "Awaiting timer");
+                gst::trace!(CAT, obj: self.element, "Awaiting timer");
             }
 
             self.timer.as_mut().unwrap().next().await;
 
             if self.raise_log_level {
-                gst::log!(CAT, obj: &self.element, "Timer ticked");
+                gst::log!(CAT, obj: self.element, "Timer ticked");
             } else {
-                gst::trace!(CAT, obj: &self.element, "Timer ticked");
+                gst::trace!(CAT, obj: self.element, "Timer ticked");
             }
 
             self.buffer_pool
@@ -188,7 +188,7 @@ impl TaskImpl for SrcTask {
                     buffer
                 })
                 .map_err(|err| {
-                    gst::error!(CAT, obj: &self.element, "Failed to acquire buffer {}", err);
+                    gst::error!(CAT, obj: self.element, "Failed to acquire buffer {}", err);
                     err
                 })
         }
@@ -201,16 +201,16 @@ impl TaskImpl for SrcTask {
             match res {
                 Ok(_) => {
                     if self.raise_log_level {
-                        gst::log!(CAT, obj: &self.element, "Successfully pushed buffer");
+                        gst::log!(CAT, obj: self.element, "Successfully pushed buffer");
                     } else {
-                        gst::trace!(CAT, obj: &self.element, "Successfully pushed buffer");
+                        gst::trace!(CAT, obj: self.element, "Successfully pushed buffer");
                     }
                 }
                 Err(gst::FlowError::Eos) => {
                     if self.raise_log_level {
-                        gst::debug!(CAT, obj: &self.element, "EOS");
+                        gst::debug!(CAT, obj: self.element, "EOS");
                     } else {
-                        gst::trace!(CAT, obj: &self.element, "EOS");
+                        gst::trace!(CAT, obj: self.element, "EOS");
                     }
                     let test_src = self.element.imp();
                     test_src.src_pad.push_event(gst::event::Eos::new()).await;
@@ -219,13 +219,13 @@ impl TaskImpl for SrcTask {
                 }
                 Err(gst::FlowError::Flushing) => {
                     if self.raise_log_level {
-                        gst::debug!(CAT, obj: &self.element, "Flushing");
+                        gst::debug!(CAT, obj: self.element, "Flushing");
                     } else {
-                        gst::trace!(CAT, obj: &self.element, "Flushing");
+                        gst::trace!(CAT, obj: self.element, "Flushing");
                     }
                 }
                 Err(err) => {
-                    gst::error!(CAT, obj: &self.element, "Got error {}", err);
+                    gst::error!(CAT, obj: self.element, "Got error {}", err);
                     gst::element_error!(
                         &self.element,
                         gst::StreamError::Failed,
@@ -244,18 +244,18 @@ impl TaskImpl for SrcTask {
 impl SrcTask {
     async fn push(&mut self, buffer: gst::Buffer) -> Result<gst::FlowSuccess, gst::FlowError> {
         if self.raise_log_level {
-            gst::debug!(CAT, obj: &self.element, "Pushing {:?}", buffer);
+            gst::debug!(CAT, obj: self.element, "Pushing {:?}", buffer);
         } else {
-            gst::trace!(CAT, obj: &self.element, "Pushing {:?}", buffer);
+            gst::trace!(CAT, obj: self.element, "Pushing {:?}", buffer);
         }
 
         let test_src = self.element.imp();
 
         if self.need_initial_events {
             if self.raise_log_level {
-                gst::debug!(CAT, obj: &self.element, "Pushing initial events");
+                gst::debug!(CAT, obj: self.element, "Pushing initial events");
             } else {
-                gst::trace!(CAT, obj: &self.element, "Pushing initial events");
+                gst::trace!(CAT, obj: self.element, "Pushing initial events");
             }
 
             let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
@@ -283,9 +283,9 @@ impl SrcTask {
         }
 
         if self.raise_log_level {
-            gst::debug!(CAT, obj: &self.element, "Forwarding buffer");
+            gst::debug!(CAT, obj: self.element, "Forwarding buffer");
         } else {
-            gst::trace!(CAT, obj: &self.element, "Forwarding buffer");
+            gst::trace!(CAT, obj: self.element, "Forwarding buffer");
         }
 
         let ok = test_src.src_pad.push(buffer).await?;
@@ -294,14 +294,14 @@ impl SrcTask {
 
         if self.num_buffers.opt_eq(self.buffer_count).unwrap_or(false) {
             if self.raise_log_level {
-                gst::debug!(CAT, obj: &self.element, "Pushing EOS");
+                gst::debug!(CAT, obj: self.element, "Pushing EOS");
             } else {
-                gst::trace!(CAT, obj: &self.element, "Pushing EOS");
+                gst::trace!(CAT, obj: self.element, "Pushing EOS");
             }
 
             let test_src = self.element.imp();
             if !test_src.src_pad.push_event(gst::event::Eos::new()).await {
-                gst::error!(CAT, obj: &self.element, "Error pushing EOS");
+                gst::error!(CAT, obj: self.element, "Error pushing EOS");
             }
             return Err(gst::FlowError::Eos);
         }

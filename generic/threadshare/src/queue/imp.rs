@@ -264,15 +264,15 @@ impl QueueTask {
 
         match item {
             DataQueueItem::Buffer(buffer) => {
-                gst::log!(CAT, obj: &self.element, "Forwarding {:?}", buffer);
+                gst::log!(CAT, obj: self.element, "Forwarding {:?}", buffer);
                 queue.src_pad.push(buffer).await.map(drop)
             }
             DataQueueItem::BufferList(list) => {
-                gst::log!(CAT, obj: &self.element, "Forwarding {:?}", list);
+                gst::log!(CAT, obj: self.element, "Forwarding {:?}", list);
                 queue.src_pad.push_list(list).await.map(drop)
             }
             DataQueueItem::Event(event) => {
-                gst::log!(CAT, obj: &self.element, "Forwarding {:?}", event);
+                gst::log!(CAT, obj: self.element, "Forwarding {:?}", event);
                 queue.src_pad.push_event(event).await;
                 Ok(())
             }
@@ -285,7 +285,7 @@ impl TaskImpl for QueueTask {
 
     fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(CAT, obj: &self.element, "Starting task");
+            gst::log!(CAT, obj: self.element, "Starting task");
 
             let queue = self.element.imp();
             let mut last_res = queue.last_res.lock().unwrap();
@@ -294,7 +294,7 @@ impl TaskImpl for QueueTask {
 
             *last_res = Ok(gst::FlowSuccess::Ok);
 
-            gst::log!(CAT, obj: &self.element, "Task started");
+            gst::log!(CAT, obj: self.element, "Task started");
             Ok(())
         }
         .boxed()
@@ -316,20 +316,20 @@ impl TaskImpl for QueueTask {
             let queue = self.element.imp();
             match res {
                 Ok(()) => {
-                    gst::log!(CAT, obj: &self.element, "Successfully pushed item");
+                    gst::log!(CAT, obj: self.element, "Successfully pushed item");
                     *queue.last_res.lock().unwrap() = Ok(gst::FlowSuccess::Ok);
                 }
                 Err(gst::FlowError::Flushing) => {
-                    gst::debug!(CAT, obj: &self.element, "Flushing");
+                    gst::debug!(CAT, obj: self.element, "Flushing");
                     *queue.last_res.lock().unwrap() = Err(gst::FlowError::Flushing);
                 }
                 Err(gst::FlowError::Eos) => {
-                    gst::debug!(CAT, obj: &self.element, "EOS");
+                    gst::debug!(CAT, obj: self.element, "EOS");
                     *queue.last_res.lock().unwrap() = Err(gst::FlowError::Eos);
                     queue.src_pad.push_event(gst::event::Eos::new()).await;
                 }
                 Err(err) => {
-                    gst::error!(CAT, obj: &self.element, "Got error {}", err);
+                    gst::error!(CAT, obj: self.element, "Got error {}", err);
                     gst::element_error!(
                         &self.element,
                         gst::StreamError::Failed,
@@ -347,7 +347,7 @@ impl TaskImpl for QueueTask {
 
     fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(CAT, obj: &self.element, "Stopping task");
+            gst::log!(CAT, obj: self.element, "Stopping task");
 
             let queue = self.element.imp();
             let mut last_res = queue.last_res.lock().unwrap();
@@ -361,7 +361,7 @@ impl TaskImpl for QueueTask {
 
             *last_res = Err(gst::FlowError::Flushing);
 
-            gst::log!(CAT, obj: &self.element, "Task stopped");
+            gst::log!(CAT, obj: self.element, "Task stopped");
             Ok(())
         }
         .boxed()
@@ -369,7 +369,7 @@ impl TaskImpl for QueueTask {
 
     fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(CAT, obj: &self.element, "Starting task flush");
+            gst::log!(CAT, obj: self.element, "Starting task flush");
 
             let queue = self.element.imp();
             let mut last_res = queue.last_res.lock().unwrap();
@@ -382,7 +382,7 @@ impl TaskImpl for QueueTask {
 
             *last_res = Err(gst::FlowError::Flushing);
 
-            gst::log!(CAT, obj: &self.element, "Task flush started");
+            gst::log!(CAT, obj: self.element, "Task flush started");
             Ok(())
         }
         .boxed()

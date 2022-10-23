@@ -84,7 +84,7 @@ impl PadSinkHandler for TestSinkPadHandler {
         let sender = elem.imp().clone_item_sender();
         async move {
             if sender.send_async(StreamItem::Buffer(buffer)).await.is_err() {
-                gst::debug!(CAT, obj: &elem, "Flushing");
+                gst::debug!(CAT, obj: elem, "Flushing");
                 return Err(gst::FlowError::Flushing);
             }
 
@@ -103,7 +103,7 @@ impl PadSinkHandler for TestSinkPadHandler {
         async move {
             for buffer in list.iter_owned() {
                 if sender.send_async(StreamItem::Buffer(buffer)).await.is_err() {
-                    gst::debug!(CAT, obj: &elem, "Flushing");
+                    gst::debug!(CAT, obj: elem, "Flushing");
                     return Err(gst::FlowError::Flushing);
                 }
             }
@@ -125,7 +125,7 @@ impl PadSinkHandler for TestSinkPadHandler {
                 let imp = elem.imp();
                 return imp.task.flush_stop().await_maybe_on_context().is_ok();
             } else if sender.send_async(StreamItem::Event(event)).await.is_err() {
-                gst::debug!(CAT, obj: &elem, "Flushing");
+                gst::debug!(CAT, obj: elem, "Flushing");
             }
 
             true
@@ -441,9 +441,9 @@ impl TaskImpl for TestSinkTask {
             self.raise_log_level = settings.raise_log_level;
 
             if self.raise_log_level {
-                gst::log!(CAT, obj: &self.element, "Preparing Task");
+                gst::log!(CAT, obj: self.element, "Preparing Task");
             } else {
-                gst::trace!(CAT, obj: &self.element, "Preparing Task");
+                gst::trace!(CAT, obj: self.element, "Preparing Task");
             }
 
             self.stats.must_log = settings.logs_stats;
@@ -458,9 +458,9 @@ impl TaskImpl for TestSinkTask {
     fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async {
             if self.raise_log_level {
-                gst::log!(CAT, obj: &self.element, "Starting Task");
+                gst::log!(CAT, obj: self.element, "Starting Task");
             } else {
-                gst::trace!(CAT, obj: &self.element, "Starting Task");
+                gst::trace!(CAT, obj: self.element, "Starting Task");
             }
 
             self.last_dts = None;
@@ -473,9 +473,9 @@ impl TaskImpl for TestSinkTask {
     fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async {
             if self.raise_log_level {
-                gst::log!(CAT, obj: &self.element, "Stopping Task");
+                gst::log!(CAT, obj: self.element, "Stopping Task");
             } else {
-                gst::trace!(CAT, obj: &self.element, "Stopping Task");
+                gst::trace!(CAT, obj: self.element, "Stopping Task");
             }
 
             self.flush().await;
@@ -489,9 +489,9 @@ impl TaskImpl for TestSinkTask {
             let item = self.item_receiver.next().await.unwrap();
 
             if self.raise_log_level {
-                gst::log!(CAT, obj: &self.element, "Popped item");
+                gst::log!(CAT, obj: self.element, "Popped item");
             } else {
-                gst::trace!(CAT, obj: &self.element, "Popped item");
+                gst::trace!(CAT, obj: self.element, "Popped item");
             }
 
             Ok(item)
@@ -502,9 +502,9 @@ impl TaskImpl for TestSinkTask {
     fn handle_item(&mut self, item: StreamItem) -> BoxFuture<'_, Result<(), gst::FlowError>> {
         async move {
             if self.raise_log_level {
-                gst::debug!(CAT, obj: &self.element, "Received {:?}", item);
+                gst::debug!(CAT, obj: self.element, "Received {:?}", item);
             } else {
-                gst::trace!(CAT, obj: &self.element, "Received {:?}", item);
+                gst::trace!(CAT, obj: self.element, "Received {:?}", item);
             }
 
             match item {
@@ -527,28 +527,28 @@ impl TaskImpl for TestSinkTask {
                         self.stats.add_buffer(latency, interval);
 
                         if self.raise_log_level {
-                            gst::debug!(CAT, obj: &self.element, "o latency {:.2?}", latency);
-                            gst::debug!(CAT, obj: &self.element, "o interval {:.2?}", interval);
+                            gst::debug!(CAT, obj: self.element, "o latency {:.2?}", latency);
+                            gst::debug!(CAT, obj: self.element, "o interval {:.2?}", interval);
                         } else {
-                            gst::trace!(CAT, obj: &self.element, "o latency {:.2?}", latency);
-                            gst::trace!(CAT, obj: &self.element, "o interval {:.2?}", interval);
+                            gst::trace!(CAT, obj: self.element, "o latency {:.2?}", latency);
+                            gst::trace!(CAT, obj: self.element, "o interval {:.2?}", interval);
                         }
                     }
 
                     self.last_dts = Some(dts);
 
                     if self.raise_log_level {
-                        gst::log!(CAT, obj: &self.element, "Buffer processed");
+                        gst::log!(CAT, obj: self.element, "Buffer processed");
                     } else {
-                        gst::trace!(CAT, obj: &self.element, "Buffer processed");
+                        gst::trace!(CAT, obj: self.element, "Buffer processed");
                     }
                 }
                 StreamItem::Event(event) => match event.view() {
                     EventView::Eos(_) => {
                         if self.raise_log_level {
-                            gst::debug!(CAT, obj: &self.element, "EOS");
+                            gst::debug!(CAT, obj: self.element, "EOS");
                         } else {
-                            gst::trace!(CAT, obj: &self.element, "EOS");
+                            gst::trace!(CAT, obj: self.element, "EOS");
                         }
 
                         let elem = self.element.clone();

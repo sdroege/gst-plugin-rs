@@ -85,7 +85,7 @@ impl Signaller {
         let send_task_handle = task::spawn(async move {
             while let Some(msg) = websocket_receiver.next().await {
                 if let Some(element) = element_clone.upgrade() {
-                    gst::trace!(CAT, obj: &element, "Sending websocket message {:?}", msg);
+                    gst::trace!(CAT, obj: element, "Sending websocket message {:?}", msg);
                 }
                 ws_sink
                     .send(WsMessage::Text(serde_json::to_string(&msg).unwrap()))
@@ -93,7 +93,7 @@ impl Signaller {
             }
 
             if let Some(element) = element_clone.upgrade() {
-                gst::info!(CAT, obj: &element, "Done sending");
+                gst::info!(CAT, obj: element, "Done sending");
             }
 
             ws_sink.send(WsMessage::Close(None)).await?;
@@ -121,14 +121,14 @@ impl Signaller {
                 if let Some(element) = element_clone.upgrade() {
                     match msg {
                         Ok(WsMessage::Text(msg)) => {
-                            gst::trace!(CAT, obj: &element, "Received message {}", msg);
+                            gst::trace!(CAT, obj: element, "Received message {}", msg);
 
                             if let Ok(msg) = serde_json::from_str::<p::OutgoingMessage>(&msg) {
                                 match msg {
                                     p::OutgoingMessage::Welcome { peer_id } => {
                                         gst::info!(
                                             CAT,
-                                            obj: &element,
+                                            obj: element,
                                             "We are registered with the server, our peer id is {}",
                                             peer_id
                                         );
@@ -140,14 +140,14 @@ impl Signaller {
                                         if let Err(err) =
                                             element.start_session(&session_id, &peer_id)
                                         {
-                                            gst::warning!(CAT, obj: &element, "{}", err);
+                                            gst::warning!(CAT, obj: element, "{}", err);
                                         }
                                     }
                                     p::OutgoingMessage::EndSession(session_info) => {
                                         if let Err(err) =
                                             element.end_session(&session_info.session_id)
                                         {
-                                            gst::warning!(CAT, obj: &element, "{}", err);
+                                            gst::warning!(CAT, obj: element, "{}", err);
                                         }
                                     }
                                     p::OutgoingMessage::Peer(p::PeerMessage {
@@ -165,7 +165,7 @@ impl Signaller {
                                                     .unwrap(),
                                                 ),
                                             ) {
-                                                gst::warning!(CAT, obj: &element, "{}", err);
+                                                gst::warning!(CAT, obj: element, "{}", err);
                                             }
                                         }
                                         p::PeerMessageInner::Sdp(p::SdpMessage::Offer {
@@ -173,7 +173,7 @@ impl Signaller {
                                         }) => {
                                             gst::warning!(
                                                 CAT,
-                                                obj: &element,
+                                                obj: element,
                                                 "Ignoring offer from peer"
                                             );
                                         }
@@ -187,14 +187,14 @@ impl Signaller {
                                                 None,
                                                 &candidate,
                                             ) {
-                                                gst::warning!(CAT, obj: &element, "{}", err);
+                                                gst::warning!(CAT, obj: element, "{}", err);
                                             }
                                         }
                                     },
                                     _ => {
                                         gst::warning!(
                                             CAT,
-                                            obj: &element,
+                                            obj: element,
                                             "Ignoring unsupported message {:?}",
                                             msg
                                         );
@@ -203,7 +203,7 @@ impl Signaller {
                             } else {
                                 gst::error!(
                                     CAT,
-                                    obj: &element,
+                                    obj: element,
                                     "Unknown message from server: {}",
                                     msg
                                 );
@@ -215,7 +215,7 @@ impl Signaller {
                         Ok(WsMessage::Close(reason)) => {
                             gst::info!(
                                 CAT,
-                                obj: &element,
+                                obj: element,
                                 "websocket connection closed: {:?}",
                                 reason
                             );
@@ -235,7 +235,7 @@ impl Signaller {
             }
 
             if let Some(element) = element_clone.upgrade() {
-                gst::info!(CAT, obj: &element, "Stopped websocket receiving");
+                gst::info!(CAT, obj: element, "Stopped websocket receiving");
             }
         });
 

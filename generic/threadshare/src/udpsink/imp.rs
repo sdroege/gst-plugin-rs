@@ -141,7 +141,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
         let sender = elem.imp().clone_item_sender();
         async move {
             if sender.send_async(TaskItem::Buffer(buffer)).await.is_err() {
-                gst::debug!(CAT, obj: &elem, "Flushing");
+                gst::debug!(CAT, obj: elem, "Flushing");
                 return Err(gst::FlowError::Flushing);
             }
 
@@ -160,7 +160,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
         async move {
             for buffer in list.iter_owned() {
                 if sender.send_async(TaskItem::Buffer(buffer)).await.is_err() {
-                    gst::debug!(CAT, obj: &elem, "Flushing");
+                    gst::debug!(CAT, obj: elem, "Flushing");
                     return Err(gst::FlowError::Flushing);
                 }
             }
@@ -182,7 +182,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
                 let imp = elem.imp();
                 return imp.task.flush_stop().await_maybe_on_context().is_ok();
             } else if sender.send_async(TaskItem::Event(event)).await.is_err() {
-                gst::debug!(CAT, obj: &elem, "Flushing");
+                gst::debug!(CAT, obj: elem, "Flushing");
             }
 
             true
@@ -306,7 +306,7 @@ impl UdpSinkTask {
             };
 
             let saddr = SocketAddr::new(bind_addr, bind_port as u16);
-            gst::debug!(CAT, obj: &self.element, "Binding to {:?}", saddr);
+            gst::debug!(CAT, obj: self.element, "Binding to {:?}", saddr);
 
             let socket = match family {
                 SocketFamily::Ipv4 => socket2::Socket::new(
@@ -326,7 +326,7 @@ impl UdpSinkTask {
                 Err(err) => {
                     gst::warning!(
                         CAT,
-                        obj: &self.element,
+                        obj: self.element,
                         "Failed to create {} socket: {}",
                         match family {
                             SocketFamily::Ipv4 => "IPv4",
@@ -378,7 +378,7 @@ impl UdpSinkTask {
 
     fn add_client(&mut self, addr: SocketAddr) {
         if self.clients.contains(&addr) {
-            gst::warning!(CAT, obj: &self.element, "Not adding client {:?} again", &addr);
+            gst::warning!(CAT, obj: self.element, "Not adding client {:?} again", &addr);
             return;
         }
 
@@ -386,11 +386,11 @@ impl UdpSinkTask {
         let mut settings = udpsink.settings.lock().unwrap();
         match self.configure_client(&settings, &addr) {
             Ok(()) => {
-                gst::info!(CAT, obj: &self.element, "Added client {:?}", addr);
+                gst::info!(CAT, obj: self.element, "Added client {:?}", addr);
                 self.clients.insert(addr);
             }
             Err(err) => {
-                gst::error!(CAT, obj: &self.element, "Failed to add client {:?}: {}", addr, err);
+                gst::error!(CAT, obj: self.element, "Failed to add client {:?}: {}", addr, err);
                 settings.clients = self.clients.clone();
                 self.element.post_error_message(err);
             }
@@ -399,7 +399,7 @@ impl UdpSinkTask {
 
     fn remove_client(&mut self, addr: &SocketAddr) {
         if self.clients.take(addr).is_none() {
-            gst::warning!(CAT, obj: &self.element, "Not removing unknown client {:?}", &addr);
+            gst::warning!(CAT, obj: self.element, "Not removing unknown client {:?}", &addr);
             return;
         }
 
@@ -407,10 +407,10 @@ impl UdpSinkTask {
         let mut settings = udpsink.settings.lock().unwrap();
         match self.unconfigure_client(&settings, addr) {
             Ok(()) => {
-                gst::info!(CAT, obj: &self.element, "Removed client {:?}", addr);
+                gst::info!(CAT, obj: self.element, "Removed client {:?}", addr);
             }
             Err(err) => {
-                gst::error!(CAT, obj: &self.element, "Failed to remove client {:?}: {}", addr, err);
+                gst::error!(CAT, obj: self.element, "Failed to remove client {:?}: {}", addr, err);
                 settings.clients = self.clients.clone();
                 self.element.post_error_message(err);
             }
@@ -419,9 +419,9 @@ impl UdpSinkTask {
 
     fn replace_with_clients(&mut self, mut clients_to_add: BTreeSet<SocketAddr>) {
         if clients_to_add.is_empty() {
-            gst::info!(CAT, obj: &self.element, "Clearing clients");
+            gst::info!(CAT, obj: self.element, "Clearing clients");
         } else {
-            gst::info!(CAT, obj: &self.element, "Replacing clients");
+            gst::info!(CAT, obj: self.element, "Replacing clients");
         }
 
         let old_clients = std::mem::take(&mut self.clients);
@@ -435,19 +435,19 @@ impl UdpSinkTask {
                 // client is already configured
                 self.clients.insert(*addr);
             } else if let Err(err) = self.unconfigure_client(&settings, addr) {
-                gst::error!(CAT, obj: &self.element, "Failed to remove client {:?}: {}", addr, err);
+                gst::error!(CAT, obj: self.element, "Failed to remove client {:?}: {}", addr, err);
                 res = Err(err);
             } else {
-                gst::info!(CAT, obj: &self.element, "Removed client {:?}", addr);
+                gst::info!(CAT, obj: self.element, "Removed client {:?}", addr);
             }
         }
 
         for addr in clients_to_add.into_iter() {
             if let Err(err) = self.configure_client(&settings, &addr) {
-                gst::error!(CAT, obj: &self.element, "Failed to add client {:?}: {}", addr, err);
+                gst::error!(CAT, obj: self.element, "Failed to add client {:?}: {}", addr, err);
                 res = Err(err);
             } else {
-                gst::info!(CAT, obj: &self.element, "Added client {:?}", addr);
+                gst::info!(CAT, obj: self.element, "Added client {:?}", addr);
                 self.clients.insert(addr);
             }
         }
@@ -627,7 +627,7 @@ impl UdpSinkTask {
             };
 
             if let Some(socket) = socket.as_mut() {
-                gst::log!(CAT, obj: &self.element, "Sending to {:?}", &client);
+                gst::log!(CAT, obj: self.element, "Sending to {:?}", &client);
                 socket.send_to(&data, *client).await.map_err(|err| {
                     element_error!(
                         self.element,
@@ -650,7 +650,7 @@ impl UdpSinkTask {
 
         gst::log!(
             CAT,
-            obj: &self.element,
+            obj: self.element,
             "Sent buffer {:?} to all clients",
             &buffer
         );
@@ -663,7 +663,7 @@ impl UdpSinkTask {
         let now = self.element.current_running_time();
 
         if let Ok(Some(delay)) = running_time.opt_checked_sub(now) {
-            gst::trace!(CAT, obj: &self.element, "sync: waiting {}", delay);
+            gst::trace!(CAT, obj: self.element, "sync: waiting {}", delay);
             runtime::timer::delay_for(delay.into()).await;
         }
     }
@@ -674,7 +674,7 @@ impl TaskImpl for UdpSinkTask {
 
     fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::info!(CAT, obj: &self.element, "Preparing Task");
+            gst::info!(CAT, obj: self.element, "Preparing Task");
             assert!(self.clients.is_empty());
             let clients = {
                 let udpsink = self.element.imp();
@@ -695,7 +695,7 @@ impl TaskImpl for UdpSinkTask {
 
     fn unprepare(&mut self) -> BoxFuture<'_, ()> {
         async move {
-            gst::info!(CAT, obj: &self.element, "Unpreparing Task");
+            gst::info!(CAT, obj: self.element, "Unpreparing Task");
 
             let udpsink = self.element.imp();
             let settings = udpsink.settings.lock().unwrap();
@@ -709,7 +709,7 @@ impl TaskImpl for UdpSinkTask {
     fn try_next(&mut self) -> BoxFuture<'_, Result<TaskItem, gst::FlowError>> {
         async move {
             loop {
-                gst::info!(CAT, obj: &self.element, "Awaiting next item or command");
+                gst::info!(CAT, obj: self.element, "Awaiting next item or command");
                 futures::select_biased! {
                     cmd = self.cmd_receiver.recv_async() => {
                         self.process_command(cmd.unwrap());
@@ -751,7 +751,7 @@ impl TaskImpl for UdpSinkTask {
 
     fn handle_item(&mut self, item: TaskItem) -> BoxFuture<'_, Result<(), gst::FlowError>> {
         async move {
-            gst::info!(CAT, obj: &self.element, "Handling {:?}", item);
+            gst::info!(CAT, obj: self.element, "Handling {:?}", item);
 
             match item {
                 TaskItem::Buffer(buffer) => self.render(buffer).await.map_err(|err| {
@@ -785,7 +785,7 @@ impl TaskImpl for UdpSinkTask {
 
     fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async {
-            gst::info!(CAT, obj: &self.element, "Stopping Task");
+            gst::info!(CAT, obj: self.element, "Stopping Task");
             self.flush().await;
             Ok(())
         }
@@ -794,7 +794,7 @@ impl TaskImpl for UdpSinkTask {
 
     fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async {
-            gst::info!(CAT, obj: &self.element, "Starting Task Flush");
+            gst::info!(CAT, obj: self.element, "Starting Task Flush");
             self.flush().await;
             Ok(())
         }

@@ -129,7 +129,7 @@ mod imp_src {
             while let Ok(Some(_item)) = self.receiver.try_next() {}
         }
         async fn push_item(&self, item: Item) -> Result<gst::FlowSuccess, gst::FlowError> {
-            gst::debug!(SRC_CAT, obj: &self.element, "Handling {:?}", item);
+            gst::debug!(SRC_CAT, obj: self.element, "Handling {:?}", item);
 
             let elementsrctest = self.element.imp();
             match item {
@@ -150,7 +150,7 @@ mod imp_src {
         fn try_next(&mut self) -> BoxFuture<'_, Result<Item, gst::FlowError>> {
             async move {
                 self.receiver.next().await.ok_or_else(|| {
-                    gst::log!(SRC_CAT, obj: &self.element, "SrcPad channel aborted");
+                    gst::log!(SRC_CAT, obj: self.element, "SrcPad channel aborted");
                     gst::FlowError::Eos
                 })
             }
@@ -161,9 +161,9 @@ mod imp_src {
             async move {
                 let res = self.push_item(item).await.map(drop);
                 match res {
-                    Ok(_) => gst::log!(SRC_CAT, obj: &self.element, "Successfully pushed item"),
+                    Ok(_) => gst::log!(SRC_CAT, obj: self.element, "Successfully pushed item"),
                     Err(gst::FlowError::Flushing) => {
-                        gst::debug!(SRC_CAT, obj: &self.element, "Flushing")
+                        gst::debug!(SRC_CAT, obj: self.element, "Flushing")
                     }
                     Err(err) => panic!("Got error {}", err),
                 }
@@ -175,9 +175,9 @@ mod imp_src {
 
         fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
             async move {
-                gst::log!(SRC_CAT, obj: &self.element, "Stopping task");
+                gst::log!(SRC_CAT, obj: self.element, "Stopping task");
                 self.flush();
-                gst::log!(SRC_CAT, obj: &self.element, "Task stopped");
+                gst::log!(SRC_CAT, obj: self.element, "Task stopped");
                 Ok(())
             }
             .boxed()
@@ -185,9 +185,9 @@ mod imp_src {
 
         fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
             async move {
-                gst::log!(SRC_CAT, obj: &self.element, "Starting task flush");
+                gst::log!(SRC_CAT, obj: self.element, "Starting task flush");
                 self.flush();
-                gst::log!(SRC_CAT, obj: &self.element, "Task flush started");
+                gst::log!(SRC_CAT, obj: self.element, "Task flush started");
                 Ok(())
             }
             .boxed()

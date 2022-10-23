@@ -1033,7 +1033,7 @@ impl TaskImpl for JitterBufferTask {
 
     fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(CAT, obj: &self.element, "Starting task");
+            gst::log!(CAT, obj: self.element, "Starting task");
 
             self.src_pad_handler.clear();
             self.sink_pad_handler.clear();
@@ -1046,7 +1046,7 @@ impl TaskImpl for JitterBufferTask {
             state.jbuf.set_delay(latency);
             *jb.state.lock().unwrap() = state;
 
-            gst::log!(CAT, obj: &self.element, "Task started");
+            gst::log!(CAT, obj: self.element, "Task started");
             Ok(())
         }
         .boxed()
@@ -1106,9 +1106,9 @@ impl TaskImpl for JitterBufferTask {
 
                 // Got aborted, reschedule if needed
                 if let Some(delay_fut) = delay_fut {
-                    gst::debug!(CAT, obj: &self.element, "Waiting");
+                    gst::debug!(CAT, obj: self.element, "Waiting");
                     if let Err(Aborted) = delay_fut.await {
-                        gst::debug!(CAT, obj: &self.element, "Waiting aborted");
+                        gst::debug!(CAT, obj: self.element, "Waiting aborted");
                         return Ok(());
                     }
                 }
@@ -1126,7 +1126,7 @@ impl TaskImpl for JitterBufferTask {
 
                     gst::debug!(
                         CAT,
-                        obj: &self.element,
+                        obj: self.element,
                         "Woke up at {}, earliest_pts {}",
                         now.display(),
                         state.earliest_pts.display()
@@ -1182,13 +1182,13 @@ impl TaskImpl for JitterBufferTask {
                 if let Err(err) = res {
                     match err {
                         gst::FlowError::Eos => {
-                            gst::debug!(CAT, obj: &self.element, "Pushing EOS event");
+                            gst::debug!(CAT, obj: self.element, "Pushing EOS event");
                             let _ = jb.src_pad.push_event(gst::event::Eos::new()).await;
                         }
                         gst::FlowError::Flushing => {
-                            gst::debug!(CAT, obj: &self.element, "Flushing")
+                            gst::debug!(CAT, obj: self.element, "Flushing")
                         }
-                        err => gst::error!(CAT, obj: &self.element, "Error {}", err),
+                        err => gst::error!(CAT, obj: self.element, "Error {}", err),
                     }
 
                     return Err(err);
@@ -1204,7 +1204,7 @@ impl TaskImpl for JitterBufferTask {
 
     fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(CAT, obj: &self.element, "Stopping task");
+            gst::log!(CAT, obj: self.element, "Stopping task");
 
             let jb = self.element.imp();
             let mut jb_state = jb.state.lock().unwrap();
@@ -1218,7 +1218,7 @@ impl TaskImpl for JitterBufferTask {
 
             *jb_state = State::default();
 
-            gst::log!(CAT, obj: &self.element, "Task stopped");
+            gst::log!(CAT, obj: self.element, "Task stopped");
             Ok(())
         }
         .boxed()

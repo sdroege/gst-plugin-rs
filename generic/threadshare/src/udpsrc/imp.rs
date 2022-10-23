@@ -204,7 +204,7 @@ impl TaskImpl for UdpSrcTask {
             let udpsrc = self.element.imp();
             let mut settings = udpsrc.settings.lock().unwrap();
 
-            gst::debug!(CAT, obj: &self.element, "Preparing Task");
+            gst::debug!(CAT, obj: self.element, "Preparing Task");
 
             self.retrieve_sender_address = settings.retrieve_sender_address;
 
@@ -261,7 +261,7 @@ impl TaskImpl for UdpSrcTask {
                     let saddr = SocketAddr::new(bind_addr, port as u16);
                     gst::debug!(
                         CAT,
-                        obj: &self.element,
+                        obj: self.element,
                         "Binding to {:?} for multicast group {:?}",
                         saddr,
                         addr
@@ -270,7 +270,7 @@ impl TaskImpl for UdpSrcTask {
                     saddr
                 } else {
                     let saddr = SocketAddr::new(addr, port as u16);
-                    gst::debug!(CAT, obj: &self.element, "Binding to {:?}", saddr);
+                    gst::debug!(CAT, obj: self.element, "Binding to {:?}", saddr);
 
                     saddr
                 };
@@ -398,7 +398,7 @@ impl TaskImpl for UdpSrcTask {
 
     fn unprepare(&mut self) -> BoxFuture<'_, ()> {
         async move {
-            gst::debug!(CAT, obj: &self.element, "Unpreparing Task");
+            gst::debug!(CAT, obj: self.element, "Unpreparing Task");
             let udpsrc = self.element.imp();
             udpsrc.settings.lock().unwrap().used_socket = None;
             self.element.notify("used-socket");
@@ -408,12 +408,12 @@ impl TaskImpl for UdpSrcTask {
 
     fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(CAT, obj: &self.element, "Starting task");
+            gst::log!(CAT, obj: self.element, "Starting task");
             self.socket
                 .as_mut()
                 .unwrap()
                 .set_clock(self.element.clock(), self.element.base_time());
-            gst::log!(CAT, obj: &self.element, "Task started");
+            gst::log!(CAT, obj: self.element, "Task started");
             Ok(())
         }
         .boxed()
@@ -438,7 +438,7 @@ impl TaskImpl for UdpSrcTask {
                     buffer
                 })
                 .map_err(|err| {
-                    gst::error!(CAT, obj: &self.element, "Got error {:?}", err);
+                    gst::error!(CAT, obj: self.element, "Got error {:?}", err);
                     match err {
                         SocketError::Gst(err) => {
                             gst::element_error!(
@@ -465,11 +465,11 @@ impl TaskImpl for UdpSrcTask {
 
     fn handle_item(&mut self, buffer: gst::Buffer) -> BoxFuture<'_, Result<(), gst::FlowError>> {
         async {
-            gst::log!(CAT, obj: &self.element, "Handling {:?}", buffer);
+            gst::log!(CAT, obj: self.element, "Handling {:?}", buffer);
             let udpsrc = self.element.imp();
 
             if self.need_initial_events {
-                gst::debug!(CAT, obj: &self.element, "Pushing initial events");
+                gst::debug!(CAT, obj: self.element, "Pushing initial events");
 
                 let stream_id =
                     format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
@@ -500,14 +500,14 @@ impl TaskImpl for UdpSrcTask {
 
             let res = udpsrc.src_pad.push(buffer).await.map(drop);
             match res {
-                Ok(_) => gst::log!(CAT, obj: &self.element, "Successfully pushed buffer"),
-                Err(gst::FlowError::Flushing) => gst::debug!(CAT, obj: &self.element, "Flushing"),
+                Ok(_) => gst::log!(CAT, obj: self.element, "Successfully pushed buffer"),
+                Err(gst::FlowError::Flushing) => gst::debug!(CAT, obj: self.element, "Flushing"),
                 Err(gst::FlowError::Eos) => {
-                    gst::debug!(CAT, obj: &self.element, "EOS");
+                    gst::debug!(CAT, obj: self.element, "EOS");
                     udpsrc.src_pad.push_event(gst::event::Eos::new()).await;
                 }
                 Err(err) => {
-                    gst::error!(CAT, obj: &self.element, "Got error {}", err);
+                    gst::error!(CAT, obj: self.element, "Got error {}", err);
                     gst::element_error!(
                         self.element,
                         gst::StreamError::Failed,
@@ -524,10 +524,10 @@ impl TaskImpl for UdpSrcTask {
 
     fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(CAT, obj: &self.element, "Stopping task");
+            gst::log!(CAT, obj: self.element, "Stopping task");
             self.need_initial_events = true;
             self.need_segment = true;
-            gst::log!(CAT, obj: &self.element, "Task stopped");
+            gst::log!(CAT, obj: self.element, "Task stopped");
             Ok(())
         }
         .boxed()
@@ -535,9 +535,9 @@ impl TaskImpl for UdpSrcTask {
 
     fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(CAT, obj: &self.element, "Stopping task flush");
+            gst::log!(CAT, obj: self.element, "Stopping task flush");
             self.need_segment = true;
-            gst::log!(CAT, obj: &self.element, "Stopped task flush");
+            gst::log!(CAT, obj: self.element, "Stopped task flush");
             Ok(())
         }
         .boxed()

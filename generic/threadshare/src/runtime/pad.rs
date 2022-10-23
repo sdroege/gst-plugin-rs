@@ -241,7 +241,7 @@ impl PadSrcInner {
             err
         })?;
 
-        gst::log!(RUNTIME_CAT, obj: &self.gst_pad, "Processing any pending sub tasks");
+        gst::log!(RUNTIME_CAT, obj: self.gst_pad, "Processing any pending sub tasks");
         Context::drain_sub_tasks().await?;
 
         Ok(success)
@@ -260,18 +260,18 @@ impl PadSrcInner {
             err
         })?;
 
-        gst::log!(RUNTIME_CAT, obj: &self.gst_pad, "Processing any pending sub tasks");
+        gst::log!(RUNTIME_CAT, obj: self.gst_pad, "Processing any pending sub tasks");
         Context::drain_sub_tasks().await?;
 
         Ok(success)
     }
 
     pub async fn push_event(&self, event: gst::Event) -> bool {
-        gst::log!(RUNTIME_CAT, obj: &self.gst_pad, "Pushing {:?}", event);
+        gst::log!(RUNTIME_CAT, obj: self.gst_pad, "Pushing {:?}", event);
 
         let was_handled = self.gst_pad().push_event(event);
 
-        gst::log!(RUNTIME_CAT, obj: &self.gst_pad, "Processing any pending sub tasks");
+        gst::log!(RUNTIME_CAT, obj: self.gst_pad, "Processing any pending sub tasks");
         if Context::drain_sub_tasks().await.is_err() {
             return false;
         }

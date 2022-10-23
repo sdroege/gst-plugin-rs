@@ -1421,7 +1421,7 @@ impl UriPlaylistBin {
                     // block pad until next item is ready
                     gst::log!(
                         CAT,
-                        obj: &element,
+                        obj: element,
                         "blocking pad {}:{} until next item is ready",
                         parent.name(),
                         pad.name()
@@ -1438,7 +1438,7 @@ impl UriPlaylistBin {
 
                     gst::log!(
                         CAT,
-                        obj: &element,
+                        obj: element,
                         "pad {}:{} has been unblocked",
                         parent.name(),
                         pad.name()
@@ -1454,7 +1454,7 @@ impl UriPlaylistBin {
                                 // all the streams are eos, item is now done
                                 gst::log!(
                                     CAT,
-                                    obj: &element,
+                                    obj: element,
                                     "all streams of item #{} are eos",
                                     item.index()
                                 );

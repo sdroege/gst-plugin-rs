@@ -170,11 +170,11 @@ impl AppSrcTask {
     }
 
     async fn push_item(&mut self, item: StreamItem) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj: &self.element, "Handling {:?}", item);
+        gst::log!(CAT, obj: self.element, "Handling {:?}", item);
         let appsrc = self.element.imp();
 
         if self.need_initial_events {
-            gst::debug!(CAT, obj: &self.element, "Pushing initial events");
+            gst::debug!(CAT, obj: self.element, "Pushing initial events");
 
             let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
             let stream_start_evt = gst::event::StreamStart::builder(&stream_id)
@@ -204,7 +204,7 @@ impl AppSrcTask {
 
         match item {
             StreamItem::Buffer(buffer) => {
-                gst::log!(CAT, obj: &self.element, "Forwarding {:?}", buffer);
+                gst::log!(CAT, obj: self.element, "Forwarding {:?}", buffer);
                 appsrc.src_pad.push(buffer).await
             }
             StreamItem::Event(event) => {
@@ -214,7 +214,7 @@ impl AppSrcTask {
                         Err(gst::FlowError::Eos)
                     }
                     _ => {
-                        gst::log!(CAT, obj: &self.element, "Forwarding {:?}", event);
+                        gst::log!(CAT, obj: self.element, "Forwarding {:?}", event);
                         appsrc.src_pad.push_event(event).await;
                         Ok(gst::FlowSuccess::Ok)
                     }
@@ -242,18 +242,18 @@ impl TaskImpl for AppSrcTask {
             let res = self.push_item(item).await;
             match res {
                 Ok(_) => {
-                    gst::log!(CAT, obj: &self.element, "Successfully pushed item");
+                    gst::log!(CAT, obj: self.element, "Successfully pushed item");
                 }
                 Err(gst::FlowError::Eos) => {
-                    gst::debug!(CAT, obj: &self.element, "EOS");
+                    gst::debug!(CAT, obj: self.element, "EOS");
                     let appsrc = self.element.imp();
                     appsrc.src_pad.push_event(gst::event::Eos::new()).await;
                 }
                 Err(gst::FlowError::Flushing) => {
-                    gst::debug!(CAT, obj: &self.element, "Flushing");
+                    gst::debug!(CAT, obj: self.element, "Flushing");
                 }
                 Err(err) => {
-                    gst::error!(CAT, obj: &self.element, "Got error {}", err);
+                    gst::error!(CAT, obj: self.element, "Got error {}", err);
                     gst::element_error!(
                         &self.element,
                         gst::StreamError::Failed,
@@ -270,13 +270,13 @@ impl TaskImpl for AppSrcTask {
 
     fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(CAT, obj: &self.element, "Stopping task");
+            gst::log!(CAT, obj: self.element, "Stopping task");
 
             self.flush();
             self.need_initial_events = true;
             self.need_segment = true;
 
-            gst::log!(CAT, obj: &self.element, "Task stopped");
+            gst::log!(CAT, obj: self.element, "Task stopped");
             Ok(())
         }
         .boxed()
@@ -284,12 +284,12 @@ impl TaskImpl for AppSrcTask {
 
     fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(CAT, obj: &self.element, "Starting task flush");
+            gst::log!(CAT, obj: self.element, "Starting task flush");
 
             self.flush();
             self.need_segment = true;
 
-            gst::log!(CAT, obj: &self.element, "Task flush started");
+            gst::log!(CAT, obj: self.element, "Task flush started");
             Ok(())
         }
         .boxed()

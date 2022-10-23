@@ -464,13 +464,13 @@ impl Decrypter {
         self.sinkpad.pull_range(pull_offset, total_size).map_err(|err| {
             match err {
                 gst::FlowError::Flushing => {
-                    gst::debug!(CAT, obj: &self.sinkpad, "Pausing after pulling buffer, reason: flushing");
+                    gst::debug!(CAT, obj: self.sinkpad, "Pausing after pulling buffer, reason: flushing");
                 }
                 gst::FlowError::Eos => {
-                    gst::debug!(CAT, obj: &self.sinkpad, "Eos");
+                    gst::debug!(CAT, obj: self.sinkpad, "Eos");
                 }
                 flow => {
-                    gst::error!(CAT, obj: &self.sinkpad, "Failed to pull, reason: {:?}", flow);
+                    gst::error!(CAT, obj: self.sinkpad, "Failed to pull, reason: {:?}", flow);
                 }
             };
 
