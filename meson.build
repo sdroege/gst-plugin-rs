@@ -61,9 +61,9 @@ plugins = {
   'gst-plugin-webrtc': 'libgstrswebrtc',
 
   'gst-plugin-textahead': 'libgsttextahead',
-  'gst-plugin-json': 'libgstrsjson',
-  'gst-plugin-regex': 'libgstrsregex',
-  'gst-plugin-textwrap': 'libgstrstextwrap',
+  'gst-plugin-json': 'libgstjson',
+  'gst-plugin-regex': 'libgstregex',
+  'gst-plugin-textwrap': 'libgsttextwrap',
 
   'gst-plugin-fallbackswitch': 'libgstfallbackswitch',
   'gst-plugin-togglerecord': 'libgsttogglerecord',
@@ -78,8 +78,8 @@ plugins = {
   'gst-plugin-gif': 'libgstgif',
   # gtk4 has an external dependency, see below
   'gst-plugin-hsv': 'libgsthsv',
+  'gst-plugin-png': 'libgstrspng',
   'gst-plugin-rav1e': 'libgstrav1e',
-  'gst-plugin-rspng': 'libgstrspng',
   # videofx has an external dependency, see below
 
   # FIXME: libwebp-sys2 will build its bundled version on msvc and apple platforms
@@ -90,7 +90,7 @@ plugins = {
 extra_env = {}
 
 if dependency('cairo-gobject', required : get_option('videofx')).found()
-  plugins += {'gst-plugin-videofx': 'libgstvideofx',}
+  plugins += {'gst-plugin-videofx': 'libgstrsvideofx',}
 endif
 
 if dependency('pangocairo', required : get_option('closedcaption')).found()
@@ -98,7 +98,7 @@ if dependency('pangocairo', required : get_option('closedcaption')).found()
 endif
 
 if dependency('dav1d', version : '>= 1.0.0', required : get_option('dav1d')).found()
-  plugins += {'gst-plugin-dav1d' : 'libgstrsdav1d'}
+  plugins += {'gst-plugin-dav1d' : 'libgstdav1d'}
 endif
 
 sodium = get_option ('sodium')

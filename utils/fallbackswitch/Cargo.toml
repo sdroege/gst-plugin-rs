@@ -6,7 +6,7 @@ repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
 edition = "2021"
 rust-version = "1.63"
-description = "Fallback Switcher Plugin"
+description = "GStreamer Fallback Switcher and Source Plugin"
 
 [dependencies]
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }

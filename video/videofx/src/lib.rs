@@ -9,7 +9,7 @@
 #![allow(clippy::non_send_fields_in_send_ty, unused_doc_comments)]
 
 /**
- * plugin-videofx:
+ * plugin-rsvideofx:
  *
  * Since: plugins-rs-0.8.0
  */
@@ -32,7 +32,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), gst::glib::BoolError> {
 }
 
 gst::plugin_define!(
-    videofx,
+    rsvideofx,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
     concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),

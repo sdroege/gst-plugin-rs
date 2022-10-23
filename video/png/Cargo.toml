@@ -1,12 +1,12 @@
 [package]
-name = "gst-plugin-rspng"
+name = "gst-plugin-png"
 version = "0.9.0-alpha.1"
 authors = ["Natanael Mojica <neithanmo@gmail.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT OR Apache-2.0"
 edition = "2021"
 rust-version = "1.63"
-description = "An PNG encoder/decoder written in pure Rust"
+description = "GStreamer Rust PNG encoder/decoder"
 
 [dependencies]
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }

@@ -10,7 +10,7 @@
 #![allow(clippy::non_send_fields_in_send_ty, unused_doc_comments)]
 
 /**
- * plugin-rsdav1d:
+ * plugin-dav1d:
  *
  * Since: plugins-rs-0.6.0
  */
@@ -24,7 +24,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 gst::plugin_define!(
-    rsdav1d,
+    dav1d,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
     concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),

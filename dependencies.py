@@ -26,17 +26,18 @@ RENAMES = {
     'rsaudiofx': 'audiofx',
     'rsfile': 'file',
     'rsflv': 'flavors',
-    'rstextwrap': 'wrap',
-    'rsjson': 'json',
-    'rsregex': 'regex',
+    'rsrtp': 'rtp',
     'rswebp': 'webp',
     'textahead': 'ahead',
+    'textwrap': 'wrap',
     'rsonvif': 'onvif',
     'rstracers': 'tracers',
     'rsclosedcaption': 'closedcaption',
     'rsdav1d': 'dav1d',
     'webrtchttp': 'webrtc-http',
     'rswebrtc': 'webrtc',
+    'rspng': 'png',
+    'rsvideofx': 'videofx',
 }
 
 

@@ -9,7 +9,7 @@
 #![recursion_limit = "128"]
 
 /**
- * plugin-rsjson:
+ * plugin-json:
  *
  * Since: plugins-rs-0.5.0
  */
@@ -26,7 +26,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 gst::plugin_define!(
-    rsjson,
+    json,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
     concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),

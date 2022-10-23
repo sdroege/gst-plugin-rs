@@ -4,7 +4,7 @@ version = "0.9.0"
 edition = "2021"
 authors = ["Mathieu Duponchelle <mathieu@centricular.com>", "Thibault Saunier <tsaunier@igalia.com>"]
 license = "MPL-2.0"
-description = "High level GStreamer WebRTC elements and simple signaling server"
+description = "GStreamer plugin for high level WebRTC elements and a simple signaling server"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 rust-version = "1.63"
 

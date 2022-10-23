@@ -4,7 +4,7 @@ version = "0.9.0-alpha.1"
 authors = ["Sanchayan Maity <sanchayan@asymptotic.io>", "Rafael Caricio <rafael@caricio.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
-description = "Video Effects Plugin"
+description = "GStreamer Rust Video Effects Plugin"
 edition = "2021"
 rust-version = "1.63"
 
@@ -39,7 +39,7 @@ git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
 package = "gstreamer-check"
 
 [lib]
-name = "gstvideofx"
+name = "gstrsvideofx"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 

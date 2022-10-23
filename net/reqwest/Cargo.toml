@@ -4,7 +4,7 @@ version = "0.9.0-alpha.1"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT OR Apache-2.0"
-description = "Rust HTTP Plugin"
+description = "GStreamer reqwest HTTP Source Plugin"
 edition = "2021"
 rust-version = "1.63"
 

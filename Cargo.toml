@@ -22,7 +22,7 @@ members = [
     "net/raptorq",
     "net/reqwest",
     "net/rtp",
-    "net/webrtc-http",
+    "net/webrtchttp",
     "net/webrtc",
     "net/webrtc/protocol",
     "net/webrtc/signalling",
@@ -45,8 +45,8 @@ members = [
     "video/gif",
     "video/gtk4",
     "video/hsv",
+    "video/png",
     "video/rav1e",
-    "video/rspng",
     "video/videofx",
     "video/webp",
 ]
@@ -68,7 +68,7 @@ default-members = [
     "net/raptorq",
     "net/reqwest",
     "net/rtp",
-    "net/webrtc-http",
+    "net/webrtchttp",
     "net/webrtc",
     "net/webrtc/protocol",
     "net/webrtc/signalling",
@@ -88,8 +88,8 @@ default-members = [
     "video/ffv1",
     "video/gif",
     "video/hsv",
+    "video/png",
     "video/rav1e",
-    "video/rspng",
 ]
 
 [profile.release]

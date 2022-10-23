@@ -6,7 +6,7 @@ repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
 edition = "2021"
 rust-version = "1.63"
-description = "GTK 4 Sink element and Paintable widget"
+description = "GStreamer GTK 4 Sink element and Paintable widget"
 
 [dependencies]
 gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs" }

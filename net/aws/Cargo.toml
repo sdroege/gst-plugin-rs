@@ -6,7 +6,7 @@ authors = ["Arun Raghavan <arun@arunraghavan.net>",
            "Mathieu Duponchelle <mathieu@centricular.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
-description = "Amazon Web Services plugin"
+description = "GStreamer Amazon Web Services plugin"
 edition = "2021"
 rust-version = "1.63"
 

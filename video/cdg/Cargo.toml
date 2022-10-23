@@ -4,7 +4,7 @@ version = "0.9.0-alpha.1"
 authors = ["Guillaume Desmottes <guillaume.desmottes@collabora.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT OR Apache-2.0"
-description = "CDG Plugin"
+description = "GStreamer CDG codec Plugin"
 edition = "2021"
 rust-version = "1.63"
 

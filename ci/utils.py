@@ -1,14 +1,34 @@
 import os
 
-DIRS = ['audio', 'generic', 'net', 'text', 'utils', 'video']
+DIRS = [
+    'audio',
+    'generic',
+    'mux',
+    'net',
+    'text',
+    'utils',
+    'video',
+]
+
 # Plugins whose name is prefixed by 'rs'
-RS_PREFIXED = ['audiofx', 'closedcaption',
-               'dav1d', 'file', 'json', 'onvif', 'regex', 'webp']
-OVERRIDE = {'wrap': 'rstextwrap', 'flavors': 'rsflv',
-            'ahead': 'textahead', 'tracers': 'rstracers',
-            'webrtc-http': 'webrtchttp',
-            'webrtc': 'rswebrtc'
-            }
+RS_PREFIXED = [
+    'audiofx',
+    'closedcaption',
+    'file',
+    'onvif',
+    'webp',
+    'videofx',
+    'webrtc',
+    'png',
+    'tracers',
+    'rtp',
+]
+
+OVERRIDE = {
+    'ahead': 'textahead',
+    'flavors': 'rsflv',
+    'wrap': 'textwrap',
+}
 
 
 def iterate_plugins():

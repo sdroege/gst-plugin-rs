@@ -4,7 +4,7 @@ version = "0.9.0-alpha.1"
 authors = ["Guillaume Desmottes <guillaume@desmottes.be>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
-description = "Spotify GStreamer Plugin"
+description = "GStreamer Spotify Plugin"
 edition = "2021"
 rust-version = "1.63"
 

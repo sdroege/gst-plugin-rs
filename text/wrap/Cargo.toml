@@ -5,7 +5,7 @@ authors = ["Mathieu Duponchelle <mathieu@centricular.com>"]
 license = "MPL-2.0"
 edition = "2021"
 rust-version = "1.63"
-description = "Rust Text Wrap Plugin"
+description = "GStreamer Text Wrap Plugin"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 
 [dependencies]
@@ -18,7 +18,7 @@ git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
 package="gstreamer"
 
 [lib]
-name = "gstrstextwrap"
+name = "gsttextwrap"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 

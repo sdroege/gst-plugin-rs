@@ -6,7 +6,7 @@ edition = "2021"
 rust-version = "1.63"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT OR Apache-2.0"
-description = "Dav1d Plugin"
+description = "GStreamer dav1d AV1 decoder Plugin"
 
 [dependencies]
 dav1d = "0.9"
@@ -17,7 +17,7 @@ num_cpus = "1.0"
 once_cell = "1.0"
 
 [lib]
-name = "gstrsdav1d"
+name = "gstdav1d"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 

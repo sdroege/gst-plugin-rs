@@ -5,7 +5,7 @@ authors = ["Mathieu Duponchelle <mathieu@centricular.com>"]
 license = "MPL-2.0"
 edition = "2021"
 rust-version = "1.63"
-description = "Rust JSON Plugin"
+description = "GStreamer JSON Plugin"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 
 [dependencies]
@@ -19,7 +19,7 @@ package="gstreamer"
 features=["serde"]
 
 [lib]
-name = "gstrsjson"
+name = "gstjson"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 

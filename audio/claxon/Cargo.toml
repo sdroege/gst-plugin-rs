@@ -4,7 +4,7 @@ version = "0.9.0-alpha.1"
 authors = ["Ruben Gonzalez <rgonzalez@fluendo.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT OR Apache-2.0"
-description = "Claxon FLAC Decoder Plugin"
+description = "GStreamer Claxon FLAC Decoder Plugin"
 edition = "2021"
 rust-version = "1.63"
 

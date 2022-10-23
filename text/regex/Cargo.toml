@@ -5,7 +5,7 @@ authors = ["Mathieu Duponchelle <mathieu@centricular.com>"]
 license = "MPL-2.0"
 edition = "2021"
 rust-version = "1.63"
-description = "Rust Regular Expression Plugin"
+description = "GStreamer Regular Expression Plugin"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 
 [dependencies]
@@ -17,7 +17,7 @@ git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
 package="gstreamer"
 
 [lib]
-name = "gstrsregex"
+name = "gstregex"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
