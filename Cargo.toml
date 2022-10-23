@@ -3,17 +3,21 @@
 members = [
     "tutorial",
     "version-helper",
+
     "audio/audiofx",
     "audio/claxon",
     "audio/csound",
     "audio/lewton",
     "audio/spotify",
+
     "generic/file",
     "generic/fmp4",
     "generic/sodium",
     "generic/threadshare",
+
     "net/aws",
     "net/hlssink3",
+    "net/ndi",
     "net/onvif",
     "net/raptorq",
     "net/reqwest",
@@ -22,15 +26,17 @@ members = [
     "net/webrtc",
     "net/webrtc/protocol",
     "net/webrtc/signalling",
-    "net/ndi",
+
     "text/ahead",
     "text/json",
     "text/regex",
     "text/wrap",
+
     "utils/fallbackswitch",
     "utils/togglerecord",
     "utils/tracers",
     "utils/uriplaylistbin",
+
     "video/cdg",
     "video/closedcaption",
     "video/dav1d",
@@ -48,11 +54,14 @@ members = [
 # Only plugins without external dependencies
 default-members = [
     "version-helper",
+
     "audio/audiofx",
     "audio/claxon",
     "audio/lewton",
+
     "generic/fmp4",
     "generic/threadshare",
+
     "net/aws",
     "net/hlssink3",
     "net/onvif",
@@ -60,18 +69,21 @@ default-members = [
     "net/reqwest",
     "net/rtpav1",
     "net/webrtc-http",
-    "net/webrtc/",
+    "net/webrtc",
     "net/webrtc/protocol",
     "net/webrtc/signalling",
     "net/ndi",
+
     "text/ahead",
     "text/json",
     "text/regex",
     "text/wrap",
+
     "utils/fallbackswitch",
     "utils/togglerecord",
     "utils/tracers",
     "utils/uriplaylistbin",
+
     "video/cdg",
     "video/ffv1",
     "video/gif",

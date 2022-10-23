@@ -37,41 +37,54 @@ else
 endif
 
 # workspace name -> lib name
+# kept in the same order as the `members` list in Cargo.toml
 plugins = {
   'gst-plugin-audiofx': 'libgstrsaudiofx',
-  'gst-plugin-cdg': 'libgstcdg',
   'gst-plugin-claxon': 'libgstclaxon',
-  'gst-plugin-fallbackswitch': 'libgstfallbackswitch',
-  'gst-plugin-ffv1': 'libgstffv1',
-  'gst-plugin-file': 'libgstrsfile',
-  'gst-plugin-flavors': 'libgstrsflv',
-  'gst-plugin-gif': 'libgstgif',
+  # csound has an external dependency, see below
   'gst-plugin-lewton': 'libgstlewton',
-  'gst-plugin-raptorq': 'libgstraptorq',
-  'gst-plugin-rav1e': 'libgstrav1e',
-  'gst-plugin-reqwest': 'libgstreqwest',
-  'gst-plugin-hlssink3': 'libgsthlssink3',
-  'gst-plugin-rspng': 'libgstrspng',
-  'gst-plugin-aws': 'libgstaws',
-  'gst-plugin-textwrap': 'libgstrstextwrap',
+  'gst-plugin-spotify': 'libgstspotify',
+
+  'gst-plugin-file': 'libgstrsfile',
   'gst-plugin-fmp4': 'libgstfmp4',
+  # sodium has an external dependency, see below
   'gst-plugin-threadshare': 'libgstthreadshare',
-  'gst-plugin-togglerecord': 'libgsttogglerecord',
-  'gst-plugin-hsv': 'libgsthsv',
+
+  'gst-plugin-aws': 'libgstaws',
+  'gst-plugin-hlssink3': 'libgsthlssink3',
+  'gst-plugin-ndi': 'libgstndi',
+  'gst-plugin-onvif': 'libgstrsonvif',
+  'gst-plugin-raptorq': 'libgstraptorq',
+  'gst-plugin-reqwest': 'libgstreqwest',
+  'gst-plugin-rtpav1': 'libgstrtpav1',
+  'gst-plugin-webrtchttp': 'libgstwebrtchttp',
+  'gst-plugin-webrtc': 'libgstrswebrtc',
+
+  'gst-plugin-textahead': 'libgsttextahead',
   'gst-plugin-json': 'libgstrsjson',
   'gst-plugin-regex': 'libgstrsregex',
+  'gst-plugin-textwrap': 'libgstrstextwrap',
+
+  'gst-plugin-fallbackswitch': 'libgstfallbackswitch',
+  'gst-plugin-togglerecord': 'libgsttogglerecord',
+  'gst-plugin-tracers': 'libgstrstracers',
+  'gst-plugin-uriplaylistbin': 'libgsturiplaylistbin',
+
+  'gst-plugin-cdg': 'libgstcdg',
+  # closedcaption has an external dependency, see below
+  # dav1d has an external dependency, see below
+  'gst-plugin-ffv1': 'libgstffv1',
+  'gst-plugin-flavors': 'libgstrsflv',
+  'gst-plugin-gif': 'libgstgif',
+  # gtk4 has an external dependency, see below
+  'gst-plugin-hsv': 'libgsthsv',
+  'gst-plugin-rav1e': 'libgstrav1e',
+  'gst-plugin-rspng': 'libgstrspng',
+  # videofx has an external dependency, see below
+
   # FIXME: libwebp-sys2 will build its bundled version on msvc and apple platforms
   # https://github.com/qnighy/libwebp-sys2-rs/issues/4
   'gst-plugin-webp': 'libgstrswebp',
-  'gst-plugin-uriplaylistbin': 'libgsturiplaylistbin',
-  'gst-plugin-spotify': 'libgstspotify',
-  'gst-plugin-textahead': 'libgsttextahead',
-  'gst-plugin-onvif': 'libgstrsonvif',
-  'gst-plugin-tracers': 'libgstrstracers',
-  'gst-plugin-webrtc': 'libgstrswebrtc',
-  'gst-plugin-webrtchttp': 'libgstwebrtchttp',
-  'gst-plugin-rtpav1': 'libgstrtpav1',
-  'gst-plugin-ndi': 'libgstndi',
 }
 
 extra_env = {}
