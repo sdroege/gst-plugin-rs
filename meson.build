@@ -46,9 +46,10 @@ plugins = {
   'gst-plugin-spotify': 'libgstspotify',
 
   'gst-plugin-file': 'libgstrsfile',
-  'gst-plugin-fmp4': 'libgstfmp4',
   # sodium has an external dependency, see below
   'gst-plugin-threadshare': 'libgstthreadshare',
+
+  'gst-plugin-fmp4': 'libgstfmp4',
 
   'gst-plugin-aws': 'libgstaws',
   'gst-plugin-hlssink3': 'libgsthlssink3',

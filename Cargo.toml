@@ -11,9 +11,11 @@ members = [
     "audio/spotify",
 
     "generic/file",
-    "generic/fmp4",
     "generic/sodium",
     "generic/threadshare",
+
+    "mux/flavors",
+    "mux/fmp4",
 
     "net/aws",
     "net/hlssink3",
@@ -41,7 +43,6 @@ members = [
     "video/closedcaption",
     "video/dav1d",
     "video/ffv1",
-    "video/flavors",
     "video/gif",
     "video/gtk4",
     "video/hsv",
@@ -59,8 +60,9 @@ default-members = [
     "audio/claxon",
     "audio/lewton",
 
-    "generic/fmp4",
     "generic/threadshare",
+
+    "mux/fmp4",
 
     "net/aws",
     "net/hlssink3",
