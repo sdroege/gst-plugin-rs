@@ -1,12 +1,12 @@
 {
     "aws": {
-        "description": "Amazon Web Services plugin",
+        "description": "GStreamer Amazon Web Services plugin",
         "elements": {
             "awss3hlssink": {
                 "author": "Daily. Co",
                 "description": "Streams HLS data to S3",
                 "hierarchy": [
-                    "S3HlsSink",
+                    "GstAwsS3HlsSink",
                     "GstBin",
                     "GstElement",
                     "GstObject",
@@ -173,7 +173,7 @@
                 "author": "Marcin Kolny <mkolny@amazon.com>",
                 "description": "Writes an object to Amazon S3",
                 "hierarchy": [
-                    "AwsS3Sink",
+                    "GstAwsS3Sink",
                     "GstBaseSink",
                     "GstElement",
                     "GstObject",
@@ -431,7 +431,7 @@
                 "author": "Arun Raghavan <arun@arunraghavan.net>",
                 "description": "Reads an object from Amazon S3",
                 "hierarchy": [
-                    "AwsS3Src",
+                    "GstAwsS3Src",
                     "GstBaseSrc",
                     "GstElement",
                     "GstObject",
@@ -560,7 +560,7 @@
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Parses AWS transcripts into timed text buffers",
                 "hierarchy": [
-                    "RsAWSTranscribeParse",
+                    "GstAwsTranscribeParse",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -586,7 +586,7 @@
                 "author": "Jordan Petridis <jordan@centricular.com>, Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Speech to Text filter, using AWS transcribe",
                 "hierarchy": [
-                    "RsAwsTranscriber",
+                    "GstAwsTranscriber",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -817,13 +817,13 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "cdg": {
-        "description": "CDG Plugin",
+        "description": "GStreamer CDG codec Plugin",
         "elements": {
             "cdgdec": {
                 "author": "Guillaume Desmottes <guillaume.desmottes@collabora.com>",
                 "description": "CDG decoder",
                 "hierarchy": [
-                    "CdgDec",
+                    "GstCdgDec",
                     "GstVideoDecoder",
                     "GstElement",
                     "GstObject",
@@ -850,7 +850,7 @@
                 "author": "Guillaume Desmottes <guillaume.desmottes@collabora.com>",
                 "description": "CDG parser",
                 "hierarchy": [
-                    "CdgParse",
+                    "GstCdgParse",
                     "GstBaseParse",
                     "GstElement",
                     "GstObject",
@@ -883,13 +883,13 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "claxon": {
-        "description": "Claxon FLAC Decoder Plugin",
+        "description": "GStreamer Claxon FLAC Decoder Plugin",
         "elements": {
             "claxondec": {
                 "author": "Ruben Gonzalez <rgonzalez@fluendo.com>",
                 "description": "Claxon FLAC decoder",
                 "hierarchy": [
-                    "ClaxonDec",
+                    "GstClaxonDec",
                     "GstAudioDecoder",
                     "GstElement",
                     "GstObject",
@@ -922,13 +922,13 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "csound": {
-        "description": "An Audio filter plugin based on Csound",
+        "description": "GStreamer Audio Filter plugin based on Csound",
         "elements": {
             "csoundfilter": {
                 "author": "Natanael Mojica <neithanmo@gmail.com>",
                 "description": "Implement an audio filter/effects using Csound",
                 "hierarchy": [
-                    "CsoundFilter",
+                    "GstCsoundFilter",
                     "GstBaseTransform",
                     "GstElement",
                     "GstObject",
@@ -1012,14 +1012,83 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "dav1d": {
+        "description": "GStreamer dav1d AV1 decoder Plugin",
+        "elements": {
+            "dav1ddec": {
+                "author": "Philippe Normand <philn@igalia.com>",
+                "description": "Decode AV1 video streams with dav1d",
+                "hierarchy": [
+                    "GstDav1dDec",
+                    "GstVideoDecoder",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Decoder/Video",
+                "long-name": "Dav1d AV1 Decoder",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-av1:\n  stream-format: obu-stream\n      alignment: { (string)frame, (string)tu }\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-raw:\n         format: { GRAY8, GRAY16_LE, I420, Y42B, Y444, I420_10LE, I422_10LE, Y444_10LE, I420_12LE, I422_12LE, Y444_12LE }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "max-frame-delay": {
+                        "blurb": "Maximum delay in frames for the decoder (set to 1 for low latency, 0 to be equal to the number of logical cores. -1 to choose between these two based on pipeline liveness)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "18446744073709551615",
+                        "max": "4294967295",
+                        "min": "-1",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gint64",
+                        "writable": true
+                    },
+                    "n-threads": {
+                        "blurb": "Number of threads to use while decoding (set to 0 to use number of logical cores)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                },
+                "rank": "primary + 1"
+            }
+        },
+        "filename": "gstdav1d",
+        "license": "MIT/X11",
+        "other-types": {},
+        "package": "gst-plugin-dav1d",
+        "source": "gst-plugin-dav1d",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "fallbackswitch": {
-        "description": "Fallback Switcher Plugin",
+        "description": "GStreamer Fallback Switcher and Source Plugin",
         "elements": {
             "fallbacksrc": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Live source with uridecodebin3 or custom source, and fallback stream",
                 "hierarchy": [
-                    "FallbackSrc",
+                    "GstFallbackSrc",
                     "GstBin",
                     "GstElement",
                     "GstObject",
@@ -1282,7 +1351,7 @@
                 "author": "Jan Schmidt <jan@centricular.com>",
                 "description": "Priority-based automatic input selector element",
                 "hierarchy": [
-                    "FallbackSwitch",
+                    "GstFallbackSwitch",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -1298,7 +1367,7 @@
                         "caps": "ANY",
                         "direction": "sink",
                         "presence": "request",
-                        "type": "FallbackSwitchSinkPad"
+                        "type": "GstFallbackSwitchSinkPad"
                     },
                     "src": {
                         "caps": "ANY",
@@ -1391,9 +1460,34 @@
         "filename": "gstfallbackswitch",
         "license": "MPL",
         "other-types": {
-            "FallbackSwitchSinkPad": {
+            "GstFallbackSourceStatus": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Stopped",
+                        "name": "stopped",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Buffering",
+                        "name": "buffering",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Retrying",
+                        "name": "retrying",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "Running",
+                        "name": "running",
+                        "value": "3"
+                    }
+                ]
+            },
+            "GstFallbackSwitchSinkPad": {
                 "hierarchy": [
-                    "FallbackSwitchSinkPad",
+                    "GstFallbackSwitchSinkPad",
                     "GstPad",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -1428,31 +1522,6 @@
                         "writable": true
                     }
                 }
-            },
-            "GstFallbackSourceStatus": {
-                "kind": "enum",
-                "values": [
-                    {
-                        "desc": "Stopped",
-                        "name": "stopped",
-                        "value": "0"
-                    },
-                    {
-                        "desc": "Buffering",
-                        "name": "buffering",
-                        "value": "1"
-                    },
-                    {
-                        "desc": "Retrying",
-                        "name": "retrying",
-                        "value": "2"
-                    },
-                    {
-                        "desc": "Running",
-                        "name": "running",
-                        "value": "3"
-                    }
-                ]
             }
         },
         "package": "gst-plugin-fallbackswitch",
@@ -1461,13 +1530,13 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "ffv1": {
-        "description": "FFV1 Decoder Plugin",
+        "description": "GStreamer FFV1 Decoder Plugin",
         "elements": {
             "ffv1dec": {
                 "author": "Arun Raghavan <arun@asymptotic.io>",
                 "description": "Decode FFV1 video streams",
                 "hierarchy": [
-                    "Ffv1Dec",
+                    "GstFfv1Dec",
                     "GstVideoDecoder",
                     "GstElement",
                     "GstObject",
@@ -1500,7 +1569,7 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "fmp4": {
-        "description": "Fragmented MP4 Plugin",
+        "description": "GStreamer Fragmented MP4 Plugin",
         "elements": {
             "cmafmux": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
@@ -1742,7 +1811,7 @@
                 "author": "Markus Ebner <info@ebner-markus.de>",
                 "description": "GIF encoder",
                 "hierarchy": [
-                    "GifEnc",
+                    "GstGifEnc",
                     "GstVideoEncoder",
                     "GstElement",
                     "GstObject",
@@ -1808,13 +1877,13 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "gtk4": {
-        "description": "GTK 4 Sink element and Paintable widget",
+        "description": "GStreamer GTK 4 Sink element and Paintable widget",
         "elements": {
             "gtk4paintablesink": {
                 "author": "Bilal Elmoussaoui <bil.elmoussaoui@gmail.com>, Jordan Petridis <jordan@centricular.com>, Sebastian Dröge <sebastian@centricular.com>",
                 "description": "A GTK 4 Paintable sink",
                 "hierarchy": [
-                    "Gtk4PaintableSink",
+                    "GstGtk4PaintableSink",
                     "GstVideoSink",
                     "GstBaseSink",
                     "GstElement",
@@ -1856,7 +1925,7 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "hlssink3": {
-        "description": "HLS (HTTP Live Streaming) Plugin",
+        "description": "GStreamer HLS (HTTP Live Streaming) Plugin",
         "elements": {
             "hlssink3": {
                 "author": "Alessandro Decina <alessandro.d@gmail.com>, Sebastian Dröge <sebastian@centricular.com>, Rafael Caricio <rafael@caricio.com>",
@@ -2055,13 +2124,13 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "hsv": {
-        "description": "HSV manipulation elements, written in Rust",
+        "description": "GStreamer plugin with HSV manipulation elements",
         "elements": {
             "hsvdetector": {
                 "author": "Julien Bardagi <julien.bardagi@gmail.com>",
                 "description": "Works within the HSV colorspace to mark positive pixels",
                 "hierarchy": [
-                    "HsvDetector",
+                    "GstHsvDetector",
                     "GstVideoFilter",
                     "GstBaseTransform",
                     "GstElement",
@@ -2175,7 +2244,7 @@
                 "author": "Julien Bardagi <julien.bardagi@gmail.com>",
                 "description": "Works within the HSV colorspace to apply tranformations to incoming frames",
                 "hierarchy": [
-                    "HsvFilter",
+                    "GstHsvFilter",
                     "GstVideoFilter",
                     "GstBaseTransform",
                     "GstElement",
@@ -2280,14 +2349,78 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "json": {
+        "description": "GStreamer JSON Plugin",
+        "elements": {
+            "jsongstenc": {
+                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
+                "description": "Wraps buffers containing any valid top-level JSON structures into higher level JSON objects, and outputs those as ndjson",
+                "hierarchy": [
+                    "GstJsonGstEnc",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Encoder/JSON",
+                "long-name": "GStreamer buffers to JSON",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-json:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-json:\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "none"
+            },
+            "jsongstparse": {
+                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
+                "description": "Parses ndjson as output by jsongstenc",
+                "hierarchy": [
+                    "GstJsonGstParse",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Parser/JSON",
+                "long-name": "JSON GStreamer parser",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-json:\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "primary"
+            }
+        },
+        "filename": "gstjson",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-json",
+        "source": "gst-plugin-json",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "lewton": {
-        "description": "lewton Vorbis Decoder Plugin",
+        "description": "GStreamer lewton Vorbis Decoder Plugin",
         "elements": {
             "lewtondec": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "lewton Vorbis decoder",
                 "hierarchy": [
-                    "LewtonDec",
+                    "GstLewtonDec",
                     "GstAudioDecoder",
                     "GstElement",
                     "GstObject",
@@ -2320,7 +2453,7 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "ndi": {
-        "description": "NewTek NDI Plugin",
+        "description": "GStreamer NewTek NDI Plugin",
         "elements": {
             "ndisink": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
@@ -2645,7 +2778,7 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "raptorq": {
-        "description": "Rust Raptorq FEC Plugin",
+        "description": "GStreamer RaptorQ FEC Plugin",
         "elements": {
             "raptorqdec": {
                 "author": "Tomasz Andrzejak <andreiltd@gmail.com>",
@@ -2847,13 +2980,13 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "rav1e": {
-        "description": "rav1e AV1 Encoder Plugin",
+        "description": "GStreamer rav1e AV1 Encoder Plugin",
         "elements": {
             "rav1enc": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "rav1e AV1 encoder",
                 "hierarchy": [
-                    "Rav1Enc",
+                    "GstRav1Enc",
                     "GstVideoEncoder",
                     "GstElement",
                     "GstObject",
@@ -3124,14 +3257,65 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "regex": {
+        "description": "GStreamer Regular Expression Plugin",
+        "elements": {
+            "regex": {
+                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
+                "description": "Applies operations according to regular expressions",
+                "hierarchy": [
+                    "GstRegEx",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Text/Filter",
+                "long-name": "Regular Expression processor",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "commands": {
+                        "blurb": "A set of commands to apply on input text",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstregex",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-regex",
+        "source": "gst-plugin-regex",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "reqwest": {
-        "description": "Rust HTTP Plugin",
+        "description": "GStreamer reqwest HTTP Source Plugin",
         "elements": {
             "reqwesthttpsrc": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Read stream from an HTTP/HTTPS location",
                 "hierarchy": [
-                    "ReqwestHttpSrc",
+                    "GstReqwestHttpSrc",
                     "GstPushSrc",
                     "GstBaseSrc",
                     "GstElement",
@@ -3333,13 +3517,97 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "rsaudiofx": {
-        "description": "Rust AudioFx Plugin",
+        "description": "GStreamer Rust Audio Effects Plugin",
         "elements": {
+            "audioloudnorm": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Normalizes perceived loudness of an audio stream",
+                "hierarchy": [
+                    "GstAudioLoudNorm",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Filter/Effect/Audio",
+                "long-name": "Audio loudness normalizer",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/x-raw:\n           rate: 192000\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: F64LE\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "audio/x-raw:\n           rate: 192000\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: F64LE\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "loudness-range-target": {
+                        "blurb": "Loudness range target in LU",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "7",
+                        "max": "20",
+                        "min": "1",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gdouble",
+                        "writable": true
+                    },
+                    "loudness-target": {
+                        "blurb": "Loudness target in LUFS",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-24",
+                        "max": "-5",
+                        "min": "-70",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gdouble",
+                        "writable": true
+                    },
+                    "max-true-peak": {
+                        "blurb": "Maximum True Peak in dbTP",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-2",
+                        "max": "0",
+                        "min": "-9",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gdouble",
+                        "writable": true
+                    },
+                    "offset": {
+                        "blurb": "Offset Gain in LU",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "99",
+                        "min": "-99",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gdouble",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
             "audiornnoise": {
                 "author": "Philippe Normand <philn@igalia.com>",
                 "description": "Removes noise from an audio stream",
                 "hierarchy": [
-                    "AudioRNNoise",
+                    "GstAudioRNNoise",
                     "GstBaseTransform",
                     "GstElement",
                     "GstObject",
@@ -3366,7 +3634,7 @@
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Measures different loudness metrics according to EBU R128",
                 "hierarchy": [
-                    "EbuR128Level",
+                    "GstEbuR128Level",
                     "GstBaseTransform",
                     "GstElement",
                     "GstObject",
@@ -3411,7 +3679,7 @@
                         "default": "true-peak+sample-peak+loudness-range+global+short-term+momentary",
                         "mutable": "ready",
                         "readable": true,
-                        "type": "EbuR128LevelMode",
+                        "type": "GstEbuR128LevelMode",
                         "writable": true
                     },
                     "post-messages": {
@@ -3441,7 +3709,7 @@
                 "author": "Tomasz Andrzejak <andreiltd@gmail.com>",
                 "description": "Renders spatial sounds to a given position",
                 "hierarchy": [
-                    "HrtfRender",
+                    "GstHrtfRender",
                     "GstBaseTransform",
                     "GstElement",
                     "GstObject",
@@ -3532,7 +3800,7 @@
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Adds an echo or reverb effect to an audio stream",
                 "hierarchy": [
-                    "RsAudioEcho",
+                    "GstRsAudioEcho",
                     "GstBaseTransform",
                     "GstElement",
                     "GstObject",
@@ -3612,96 +3880,12 @@
                     }
                 },
                 "rank": "none"
-            },
-            "rsaudioloudnorm": {
-                "author": "Sebastian Dröge <sebastian@centricular.com>",
-                "description": "Normalizes perceived loudness of an audio stream",
-                "hierarchy": [
-                    "RsAudioLoudNorm",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Filter/Effect/Audio",
-                "long-name": "Audio loudness normalizer",
-                "pad-templates": {
-                    "sink": {
-                        "caps": "audio/x-raw:\n           rate: 192000\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: F64LE\n",
-                        "direction": "sink",
-                        "presence": "always"
-                    },
-                    "src": {
-                        "caps": "audio/x-raw:\n           rate: 192000\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: F64LE\n",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "properties": {
-                    "loudness-range-target": {
-                        "blurb": "Loudness range target in LU",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "7",
-                        "max": "20",
-                        "min": "1",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "gdouble",
-                        "writable": true
-                    },
-                    "loudness-target": {
-                        "blurb": "Loudness target in LUFS",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "-24",
-                        "max": "-5",
-                        "min": "-70",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "gdouble",
-                        "writable": true
-                    },
-                    "max-true-peak": {
-                        "blurb": "Maximum True Peak in dbTP",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "-2",
-                        "max": "0",
-                        "min": "-9",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "gdouble",
-                        "writable": true
-                    },
-                    "offset": {
-                        "blurb": "Offset Gain in LU",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "0",
-                        "max": "99",
-                        "min": "-99",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "gdouble",
-                        "writable": true
-                    }
-                },
-                "rank": "none"
             }
         },
         "filename": "gstrsaudiofx",
         "license": "MPL",
         "other-types": {
-            "EbuR128LevelMode": {
+            "GstEbuR128LevelMode": {
                 "kind": "flags",
                 "values": [
                     {
@@ -3743,13 +3927,13 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "rsclosedcaption": {
-        "description": "Rust Closed Caption Plugin",
+        "description": "GStreamer Rust Closed Caption Plugin",
         "elements": {
             "ccdetect": {
                 "author": "Matthew Waters <matthew@centricular.com>",
                 "description": "Detect if valid closed captions are present in a stream",
                 "hierarchy": [
-                    "CCDetect",
+                    "GstCCDetect",
                     "GstBaseTransform",
                     "GstElement",
                     "GstObject",
@@ -3816,7 +4000,7 @@
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Renders CEA 608 closed caption meta over raw video frames",
                 "hierarchy": [
-                    "RsCea608Overlay",
+                    "GstCea608Overlay",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -3884,7 +4068,7 @@
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Converts CEA-608 Closed Captions to JSON",
                 "hierarchy": [
-                    "Cea608ToJson",
+                    "GstCea608ToJson",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -3924,7 +4108,7 @@
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Converts CEA-608 Closed Captions to SRT/VTT timed text",
                 "hierarchy": [
-                    "Cea608ToTt",
+                    "GstCea608ToTt",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -3950,7 +4134,7 @@
                 "author": "Jan Schmidt <jan@centricular.com>",
                 "description": "Converts JSON to WebVTT",
                 "hierarchy": [
-                    "JsonToVtt",
+                    "GstJsonToVtt",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -3992,7 +4176,7 @@
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Encodes MCC Closed Caption Files",
                 "hierarchy": [
-                    "RsMccEnc",
+                    "GstMccEnc",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -4043,7 +4227,7 @@
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Parses MCC Closed Caption Files",
                 "hierarchy": [
-                    "RsMccParse",
+                    "GstMccParse",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -4069,7 +4253,7 @@
                 "author": "Sebastian Dröge <sebastian@centricular.com>, Jordan Petridis <jordan@centricular.com>",
                 "description": "Encodes SCC Closed Caption Files",
                 "hierarchy": [
-                    "RsSccEnc",
+                    "GstSccEnc",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -4109,7 +4293,7 @@
                 "author": "Sebastian Dröge <sebastian@centricular.com>, Jordan Petridis <jordan@centricular.com>",
                 "description": "Parses SCC Closed Caption Files",
                 "hierarchy": [
-                    "RsSccParse",
+                    "GstSccParse",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -4135,7 +4319,7 @@
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Transcribes audio and adds it as closed captions",
                 "hierarchy": [
-                    "RsTranscriberBin",
+                    "GstTranscriberBin",
                     "GstBin",
                     "GstElement",
                     "GstObject",
@@ -4264,7 +4448,7 @@
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Converts timed text to CEA-608 Closed Captions",
                 "hierarchy": [
-                    "TtToCea608",
+                    "GstTtToCea608",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -4346,7 +4530,7 @@
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Encodes Timed Text to JSON",
                 "hierarchy": [
-                    "RsTtToJson",
+                    "GstTtToJson",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -4442,83 +4626,14 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
-    "rsdav1d": {
-        "description": "Dav1d Plugin",
-        "elements": {
-            "rsdav1ddec": {
-                "author": "Philippe Normand <philn@igalia.com>",
-                "description": "Decode AV1 video streams with dav1d",
-                "hierarchy": [
-                    "RsDav1dDec",
-                    "GstVideoDecoder",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Codec/Decoder/Video",
-                "long-name": "Dav1d AV1 Decoder",
-                "pad-templates": {
-                    "sink": {
-                        "caps": "video/x-av1:\n  stream-format: obu-stream\n      alignment: { (string)frame, (string)tu }\n",
-                        "direction": "sink",
-                        "presence": "always"
-                    },
-                    "src": {
-                        "caps": "video/x-raw:\n         format: { GRAY8, GRAY16_LE, I420, Y42B, Y444, I420_10LE, I422_10LE, Y444_10LE, I420_12LE, I422_12LE, Y444_12LE }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "properties": {
-                    "max-frame-delay": {
-                        "blurb": "Maximum delay in frames for the decoder (set to 1 for low latency, 0 to be equal to the number of logical cores. -1 to choose between these two based on pipeline liveness)",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "18446744073709551615",
-                        "max": "4294967295",
-                        "min": "-1",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "gint64",
-                        "writable": true
-                    },
-                    "n-threads": {
-                        "blurb": "Number of threads to use while decoding (set to 0 to use number of logical cores)",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "0",
-                        "max": "-1",
-                        "min": "0",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "guint",
-                        "writable": true
-                    }
-                },
-                "rank": "primary + 1"
-            }
-        },
-        "filename": "gstrsdav1d",
-        "license": "MIT/X11",
-        "other-types": {},
-        "package": "gst-plugin-dav1d",
-        "source": "gst-plugin-dav1d",
-        "tracers": {},
-        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-    },
     "rsfile": {
-        "description": "Rust File Plugin",
+        "description": "GStreamer Rust File Source/Sink Plugin",
         "elements": {
             "rsfilesink": {
                 "author": "François Laignel <fengalin@free.fr>, Luis de Bethencourt <luisbg@osg.samsung.com>",
                 "description": "Write stream to a file",
                 "hierarchy": [
-                    "RsFileSink",
+                    "GstRsFileSink",
                     "GstBaseSink",
                     "GstElement",
                     "GstObject",
@@ -4557,7 +4672,7 @@
                 "author": "François Laignel <fengalin@free.fr>, Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Read stream from a file",
                 "hierarchy": [
-                    "RsFileSrc",
+                    "GstRsFileSrc",
                     "GstBaseSrc",
                     "GstElement",
                     "GstObject",
@@ -4602,13 +4717,13 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "rsflv": {
-        "description": "Rust FLV Plugin",
+        "description": "GStreamer Rust FLV Plugin",
         "elements": {
             "rsflvdemux": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Demuxes FLV Streams",
                 "hierarchy": [
-                    "RsFlvDemux",
+                    "GstRsFlvDemux",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -4644,72 +4759,8 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
-    "rsjson": {
-        "description": "Rust JSON Plugin",
-        "elements": {
-            "jsongstenc": {
-                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
-                "description": "Wraps buffers containing any valid top-level JSON structures into higher level JSON objects, and outputs those as ndjson",
-                "hierarchy": [
-                    "RsJsonGstEnc",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Encoder/JSON",
-                "long-name": "GStreamer buffers to JSON",
-                "pad-templates": {
-                    "sink": {
-                        "caps": "application/x-json:\n",
-                        "direction": "sink",
-                        "presence": "always"
-                    },
-                    "src": {
-                        "caps": "application/x-json:\n",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "rank": "none"
-            },
-            "jsongstparse": {
-                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
-                "description": "Parses ndjson as output by jsongstenc",
-                "hierarchy": [
-                    "RsJsonGstParse",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Parser/JSON",
-                "long-name": "JSON GStreamer parser",
-                "pad-templates": {
-                    "sink": {
-                        "caps": "ANY",
-                        "direction": "sink",
-                        "presence": "always"
-                    },
-                    "src": {
-                        "caps": "application/x-json:\n",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "rank": "primary"
-            }
-        },
-        "filename": "gstrsjson",
-        "license": "MPL",
-        "other-types": {},
-        "package": "gst-plugin-json",
-        "source": "gst-plugin-json",
-        "tracers": {},
-        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-    },
     "rsonvif": {
-        "description": "Rust ONVIF Plugin",
+        "description": "GStreamer Rust ONVIF Plugin",
         "elements": {
             "onvifaggregator": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
@@ -4823,7 +4874,7 @@
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Parses ONVIF Timed XML Metadata",
                 "hierarchy": [
-                    "OnvifMetadataParse",
+                    "GstOnvifMetadataParse",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -5033,13 +5084,13 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "rspng": {
-        "description": "An PNG encoder/decoder written in pure Rust",
+        "description": "GStreamer Rust PNG encoder/decoder",
         "elements": {
             "rspngenc": {
                 "author": "Natanael Mojica <neithanmo@gmail>",
                 "description": "PNG encoder",
                 "hierarchy": [
-                    "PngEncoder",
+                    "GstRsPngEnc",
                     "GstVideoEncoder",
                     "GstElement",
                     "GstObject",
@@ -5156,217 +5207,73 @@
                 ]
             }
         },
-        "package": "gst-plugin-rspng",
-        "source": "gst-plugin-rspng",
+        "package": "gst-plugin-png",
+        "source": "gst-plugin-png",
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
-    "rsregex": {
-        "description": "Rust Regular Expression Plugin",
+    "rsrtp": {
+        "description": "GStreamer Rust RTP Plugin",
         "elements": {
-            "regex": {
-                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
-                "description": "Applies operations according to regular expressions",
+            "rtpav1depay": {
+                "author": "Vivienne Watermeier <vwatermeier@igalia.com>",
+                "description": "Depayload AV1 from RTP packets",
                 "hierarchy": [
-                    "RsRegEx",
+                    "GstRtpAv1Depay",
+                    "GstRTPBaseDepayload",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
                     "GObject"
                 ],
-                "klass": "Text/Filter",
-                "long-name": "Regular Expression processor",
+                "klass": "Codec/Depayloader/Network/RTP",
+                "long-name": "RTP AV1 Depayloader",
                 "pad-templates": {
                     "sink": {
-                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "caps": "application/x-rtp:\n          media: video\n        payload: [ 96, 127 ]\n     clock-rate: 90000\n  encoding-name: AV1\n",
                         "direction": "sink",
                         "presence": "always"
                     },
                     "src": {
-                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "caps": "video/x-av1:\n         parsed: true\n  stream-format: obu-stream\n      alignment: tu\n",
                         "direction": "src",
                         "presence": "always"
                     }
                 },
-                "properties": {
-                    "commands": {
-                        "blurb": "A set of commands to apply on input text",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "mutable": "playing",
-                        "readable": true,
-                        "type": "GstValueArray",
-                        "writable": true
-                    }
-                },
-                "rank": "none"
-            }
-        },
-        "filename": "gstrsregex",
-        "license": "MPL",
-        "other-types": {},
-        "package": "gst-plugin-regex",
-        "source": "gst-plugin-regex",
-        "tracers": {},
-        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-    },
-    "rstextwrap": {
-        "description": "Rust Text Wrap Plugin",
-        "elements": {
-            "textwrap": {
-                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
-                "description": "Breaks text into fixed-size lines, with optional hyphenation",
+                "rank": "marginal"
+            },
+            "rtpav1pay": {
+                "author": "Vivienne Watermeier <vwatermeier@igalia.com>",
+                "description": "Payload AV1 as RTP packets",
                 "hierarchy": [
-                    "RsTextWrap",
+                    "GstRtpAv1Pay",
+                    "GstRTPBasePayload",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
                     "GObject"
                 ],
-                "klass": "Text/Filter",
-                "long-name": "Text Wrapper",
+                "klass": "Codec/Payloader/Network/RTP",
+                "long-name": "RTP AV1 payloader",
                 "pad-templates": {
                     "sink": {
-                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "caps": "video/x-av1:\n         parsed: true\n  stream-format: obu-stream\n      alignment: obu\n",
                         "direction": "sink",
                         "presence": "always"
                     },
                     "src": {
-                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "caps": "application/x-rtp:\n          media: video\n        payload: [ 96, 127 ]\n     clock-rate: 90000\n  encoding-name: AV1\n",
                         "direction": "src",
                         "presence": "always"
                     }
                 },
-                "properties": {
-                    "accumulate-time": {
-                        "blurb": "Cut-off time for input text accumulation (0=do not accumulate)",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "0",
-                        "max": "18446744073709551614",
-                        "min": "0",
-                        "mutable": "playing",
-                        "readable": true,
-                        "type": "guint64",
-                        "writable": true
-                    },
-                    "columns": {
-                        "blurb": "Maximum number of columns for any given line",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "32",
-                        "max": "-1",
-                        "min": "1",
-                        "mutable": "playing",
-                        "readable": true,
-                        "type": "guint",
-                        "writable": true
-                    },
-                    "dictionary": {
-                        "blurb": "Path to a dictionary to load at runtime to perform hyphenation, see <https://docs.rs/crate/hyphenation/0.7.1> for more information",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "NULL",
-                        "mutable": "playing",
-                        "readable": true,
-                        "type": "gchararray",
-                        "writable": true
-                    },
-                    "lines": {
-                        "blurb": "Split input buffer into output buffers with max lines (0=do not split)",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "0",
-                        "max": "-1",
-                        "min": "0",
-                        "mutable": "playing",
-                        "readable": true,
-                        "type": "guint",
-                        "writable": true
-                    }
-                },
-                "rank": "none"
-            }
-        },
-        "filename": "gstrstextwrap",
-        "license": "MPL",
-        "other-types": {},
-        "package": "gst-plugin-textwrap",
-        "source": "gst-plugin-textwrap",
-        "tracers": {},
-        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-    },
-    "rstracers": {
-        "description": "GStreamer tracers plugin",
-        "elements": {},
-        "filename": "gstrstracers",
-        "license": "MPL",
-        "other-types": {},
-        "package": "gst-plugin-tracers",
-        "source": "gst-plugin-tracers",
-        "tracers": {
-            "buffer-lateness": {},
-            "pipeline-snapshot": {},
-            "queue-levels": {}
-        },
-        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-    },
-    "rswebp": {
-        "description": "WebP Plugin",
-        "elements": {
-            "webpdec-rs": {
-                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
-                "description": "Decodes potentially animated WebP images",
-                "hierarchy": [
-                    "RsWebPDec",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Codec/Decoder/Video",
-                "long-name": "WebP decoder",
-                "pad-templates": {
-                    "sink": {
-                        "caps": "image/webp:\n",
-                        "direction": "sink",
-                        "presence": "always"
-                    },
-                    "src": {
-                        "caps": "video/x-raw:\n         format: RGBA\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "rank": "primary"
-            }
-        },
-        "filename": "gstrswebp",
-        "license": "MPL",
-        "other-types": {},
-        "package": "gst-plugin-webp",
-        "source": "gst-plugin-webp",
-        "tracers": {},
-        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-    },
-    "rswebrtc": {
-        "description": "High level GStreamer WebRTC elements and simple signaling server",
-        "elements": {
+                "rank": "marginal"
+            },
             "rtpgccbwe": {
                 "author": "Thibault Saunier <tsaunier@igalia.com>",
                 "description": "Estimates current network bandwidth using the Google Congestion Control algorithm notifying about it through the 'bitrate' property",
                 "hierarchy": [
-                    "GstRTPGCCBwE",
+                    "GstRtpGCCBwE",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -5431,12 +5338,278 @@
                     }
                 },
                 "rank": "none"
+            }
+        },
+        "filename": "gstrsrtp",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-rtp",
+        "source": "gst-plugin-rtp",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
+    "rstracers": {
+        "description": "GStreamer Rust tracers plugin",
+        "elements": {},
+        "filename": "gstrstracers",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-tracers",
+        "source": "gst-plugin-tracers",
+        "tracers": {
+            "buffer-lateness": {},
+            "pipeline-snapshot": {},
+            "queue-levels": {}
+        },
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
+    "rsvideofx": {
+        "description": "GStreamer Rust Video Effects Plugin",
+        "elements": {
+            "colordetect": {
+                "author": "Philippe Normand <philn@igalia.com>",
+                "description": "Detects the dominant color of a video",
+                "hierarchy": [
+                    "GstColorDetect",
+                    "GstBaseTransform",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Filter/Video",
+                "long-name": "Dominant color detection",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-raw:\n         format: { RGB, RGBA, ARGB, BGR, BGRA }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-raw:\n         format: { RGB, RGBA, ARGB, BGR, BGRA }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "max-colors": {
+                        "blurb": "Actual colors count can be lower depending on the image",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "2",
+                        "max": "255",
+                        "min": "2",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "quality": {
+                        "blurb": "A step in pixels to improve performance",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "10",
+                        "max": "10",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
             },
+            "roundedcorners": {
+                "author": "Sanchayan Maity <sanchayan@asymptotic.io>",
+                "description": "Adds rounded corners to video",
+                "hierarchy": [
+                    "GstRoundedCorners",
+                    "GstBaseTransform",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Filter/Effect/Converter/Video",
+                "long-name": "Rounded Corners",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-raw:\n         format: I420\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-raw:\n         format: { I420, A420 }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "border-radius-px": {
+                        "blurb": "Draw rounded corners with given border radius",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
+            "videocompare": {
+                "author": "Rafael Caricio <rafael@caricio.com>",
+                "description": "Compare similarity of video frames",
+                "hierarchy": [
+                    "GstVideoCompare",
+                    "GstVideoAggregator",
+                    "GstAggregator",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Filter/Video",
+                "long-name": "Image comparison",
+                "pad-templates": {
+                    "sink_%%u": {
+                        "caps": "video/x-raw:\n         format: { RGB, RGBA }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "GstVideoAggregatorPad"
+                    },
+                    "src": {
+                        "caps": "video/x-raw:\n         format: { RGB, RGBA }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "src",
+                        "presence": "always",
+                        "type": "GstVideoAggregatorPad"
+                    }
+                },
+                "properties": {
+                    "hash-algo": {
+                        "blurb": "Which hashing algorithm to use for image comparisons",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "blockhash (4)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstVideoCompareHashAlgorithm",
+                        "writable": true
+                    },
+                    "max-dist-threshold": {
+                        "blurb": "Maximum distance threshold to emit messages when an image is detected, by default emits only on exact match",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "1.79769e+308",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gdouble",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstrsvideofx",
+        "license": "MPL",
+        "other-types": {
+            "GstVideoCompareHashAlgorithm": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Mean: The Mean hashing algorithm.",
+                        "name": "mean",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Gradient: The Gradient hashing algorithm.",
+                        "name": "gradient",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "VertGradient: The Vertical-Gradient hashing algorithm.",
+                        "name": "vertgradient",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "DoubleGradient: The Double-Gradient hashing algorithm.",
+                        "name": "doublegradient",
+                        "value": "3"
+                    },
+                    {
+                        "desc": "Blockhash: The Blockhash (block median value perceptual hash) algorithm.",
+                        "name": "blockhash",
+                        "value": "4"
+                    }
+                ]
+            }
+        },
+        "package": "gst-plugin-videofx",
+        "source": "gst-plugin-videofx",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
+    "rswebp": {
+        "description": "GStreamer WebP Plugin",
+        "elements": {
+            "rswebpdec": {
+                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
+                "description": "Decodes potentially animated WebP images",
+                "hierarchy": [
+                    "GstRsWebPDec",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Decoder/Video",
+                "long-name": "WebP decoder",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "image/webp:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-raw:\n         format: RGBA\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "primary"
+            }
+        },
+        "filename": "gstrswebp",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-webp",
+        "source": "gst-plugin-webp",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
+    "rswebrtc": {
+        "description": "GStreamer plugin for high level WebRTC elements and a simple signaling server",
+        "elements": {
             "webrtcsink": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "WebRTC sink",
                 "hierarchy": [
-                    "GstRSWebRTCSink",
+                    "GstWebRTCSink",
                     "GstBin",
                     "GstElement",
                     "GstObject",
@@ -5710,80 +5883,14 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
-    "rtpav1": {
-        "description": "AV1 RTP (De)payloader Plugins",
-        "elements": {
-            "rtpav1depay": {
-                "author": "Vivienne Watermeier <vwatermeier@igalia.com>",
-                "description": "Depayload AV1 from RTP packets",
-                "hierarchy": [
-                    "GstRtpAv1Depay",
-                    "GstRTPBaseDepayload",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Codec/Depayloader/Network/RTP",
-                "long-name": "RTP AV1 Depayloader",
-                "pad-templates": {
-                    "sink": {
-                        "caps": "application/x-rtp:\n          media: video\n        payload: [ 96, 127 ]\n     clock-rate: 90000\n  encoding-name: AV1\n",
-                        "direction": "sink",
-                        "presence": "always"
-                    },
-                    "src": {
-                        "caps": "video/x-av1:\n         parsed: true\n  stream-format: obu-stream\n      alignment: tu\n",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "rank": "marginal"
-            },
-            "rtpav1pay": {
-                "author": "Vivienne Watermeier <vwatermeier@igalia.com>",
-                "description": "Payload AV1 as RTP packets",
-                "hierarchy": [
-                    "GstRtpAv1Pay",
-                    "GstRTPBasePayload",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Codec/Payloader/Network/RTP",
-                "long-name": "RTP AV1 payloader",
-                "pad-templates": {
-                    "sink": {
-                        "caps": "video/x-av1:\n         parsed: true\n  stream-format: obu-stream\n      alignment: obu\n",
-                        "direction": "sink",
-                        "presence": "always"
-                    },
-                    "src": {
-                        "caps": "application/x-rtp:\n          media: video\n        payload: [ 96, 127 ]\n     clock-rate: 90000\n  encoding-name: AV1\n",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "rank": "marginal"
-            }
-        },
-        "filename": "gstrtpav1",
-        "license": "MPL",
-        "other-types": {},
-        "package": "gst-plugin-rtpav1",
-        "source": "gst-plugin-rtpav1",
-        "tracers": {},
-        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-    },
     "sodium": {
-        "description": "libsodium-based file encryption and decryption",
+        "description": "GStreamer plugin for libsodium-based file encryption and decryption",
         "elements": {
             "sodiumdecrypter": {
                 "author": "Jordan Petridis <jordan@centricular.com>",
                 "description": "libsodium-based file decrypter",
                 "hierarchy": [
-                    "RsSodiumDecryptor",
+                    "GstSodiumDecryptor",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -5833,7 +5940,7 @@
                 "author": "Jordan Petridis <jordan@centricular.com>",
                 "description": "libsodium-based file encrypter",
                 "hierarchy": [
-                    "RsSodiumEncrypter",
+                    "GstSodiumEncrypter",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -5903,7 +6010,7 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "spotify": {
-        "description": "Spotify GStreamer Plugin",
+        "description": "GStreamer Spotify Plugin",
         "elements": {
             "spotifyaudiosrc": {
                 "author": "Guillaume Desmottes <guillaume@desmottes.be>",
@@ -6017,7 +6124,7 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "textahead": {
-        "description": "GStreamer Plugin displaying upcoming text buffers ahead",
+        "description": "GStreamer Plugin for displaying upcoming text buffers ahead of time",
         "elements": {
             "textahead": {
                 "author": "Guillaume Desmottes <guillaume@desmottes.be>",
@@ -6118,14 +6225,108 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "textwrap": {
+        "description": "GStreamer Text Wrap Plugin",
+        "elements": {
+            "textwrap": {
+                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
+                "description": "Breaks text into fixed-size lines, with optional hyphenation",
+                "hierarchy": [
+                    "GstTextWrap",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Text/Filter",
+                "long-name": "Text Wrapper",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "accumulate-time": {
+                        "blurb": "Cut-off time for input text accumulation (0=do not accumulate)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551614",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "columns": {
+                        "blurb": "Maximum number of columns for any given line",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "32",
+                        "max": "-1",
+                        "min": "1",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "dictionary": {
+                        "blurb": "Path to a dictionary to load at runtime to perform hyphenation, see <https://docs.rs/crate/hyphenation/0.7.1> for more information",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "lines": {
+                        "blurb": "Split input buffer into output buffers with max lines (0=do not split)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gsttextwrap",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-textwrap",
+        "source": "gst-plugin-textwrap",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "threadshare": {
-        "description": "Threadshare Plugin",
+        "description": "GStreamer Threadshare Plugin",
         "elements": {
             "ts-appsrc": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Thread-sharing app source",
                 "hierarchy": [
-                    "RsTsAppSrc",
+                    "GstTsAppSrc",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -6230,7 +6431,7 @@
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Simple input selector element",
                 "hierarchy": [
-                    "RsTsInputSelector",
+                    "GstTsInputSelector",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -6295,7 +6496,7 @@
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Simple jitterbuffer",
                 "hierarchy": [
-                    "RsTsJitterBuffer",
+                    "GstTsJitterBuffer",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -6433,7 +6634,7 @@
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Thread-sharing proxy sink",
                 "hierarchy": [
-                    "RsTsProxySink",
+                    "GstTsProxySink",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -6468,7 +6669,7 @@
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Thread-sharing proxy source",
                 "hierarchy": [
-                    "RsTsProxySrc",
+                    "GstTsProxySrc",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -6571,7 +6772,7 @@
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Simple data queue",
                 "hierarchy": [
-                    "RsTsQueue",
+                    "GstTsQueue",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -6667,7 +6868,7 @@
                 "author": "Sebastian Dröge <sebastian@centricular.com>, LEE Dongjun <redongjun@gmail.com>",
                 "description": "Receives data over the network via TCP",
                 "hierarchy": [
-                    "RsTsTcpClientSrc",
+                    "GstTsTcpClientSrc",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -6767,7 +6968,7 @@
                 "author": "Mathieu <mathieu@centricular.com>",
                 "description": "Thread-sharing UDP sink",
                 "hierarchy": [
-                    "RsTsUdpSink",
+                    "GstTsUdpSink",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -7040,7 +7241,7 @@
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Receives data over the network via UDP",
                 "hierarchy": [
-                    "RsTsUdpSrc",
+                    "GstTsUdpSrc",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -7192,13 +7393,13 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "togglerecord": {
-        "description": "Toggle Record Plugin",
+        "description": "GStreamer Toggle Record Plugin",
         "elements": {
             "togglerecord": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Valve that ensures multiple streams start/end at the same time",
                 "hierarchy": [
-                    "RsToggleRecord",
+                    "GstToggleRecord",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -7278,7 +7479,7 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "uriplaylistbin": {
-        "description": "Playlist Plugin",
+        "description": "GStreamer Playlist Playback Plugin",
         "elements": {
             "uriplaylistbin": {
                 "author": "Guillaume Desmottes <guillaume.desmottes@onestream.live>",
@@ -7379,215 +7580,14 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
-    "videofx": {
-        "description": "Video Effects Plugin",
-        "elements": {
-            "colordetect": {
-                "author": "Philippe Normand <philn@igalia.com>",
-                "description": "Detects the dominant color of a video",
-                "hierarchy": [
-                    "GstColorDetect",
-                    "GstBaseTransform",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Filter/Video",
-                "long-name": "Dominant color detection",
-                "pad-templates": {
-                    "sink": {
-                        "caps": "video/x-raw:\n         format: { RGB, RGBA, ARGB, BGR, BGRA }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
-                        "direction": "sink",
-                        "presence": "always"
-                    },
-                    "src": {
-                        "caps": "video/x-raw:\n         format: { RGB, RGBA, ARGB, BGR, BGRA }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "properties": {
-                    "max-colors": {
-                        "blurb": "Actual colors count can be lower depending on the image",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "2",
-                        "max": "255",
-                        "min": "2",
-                        "mutable": "playing",
-                        "readable": true,
-                        "type": "guint",
-                        "writable": true
-                    },
-                    "quality": {
-                        "blurb": "A step in pixels to improve performance",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "10",
-                        "max": "10",
-                        "min": "0",
-                        "mutable": "playing",
-                        "readable": true,
-                        "type": "guint",
-                        "writable": true
-                    }
-                },
-                "rank": "none"
-            },
-            "roundedcorners": {
-                "author": "Sanchayan Maity <sanchayan@asymptotic.io>",
-                "description": "Adds rounded corners to video",
-                "hierarchy": [
-                    "RoundedCorners",
-                    "GstBaseTransform",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Filter/Effect/Converter/Video",
-                "long-name": "Rounded Corners",
-                "pad-templates": {
-                    "sink": {
-                        "caps": "video/x-raw:\n         format: I420\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
-                        "direction": "sink",
-                        "presence": "always"
-                    },
-                    "src": {
-                        "caps": "video/x-raw:\n         format: { I420, A420 }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "properties": {
-                    "border-radius-px": {
-                        "blurb": "Draw rounded corners with given border radius",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "0",
-                        "max": "-1",
-                        "min": "0",
-                        "mutable": "playing",
-                        "readable": true,
-                        "type": "guint",
-                        "writable": true
-                    }
-                },
-                "rank": "none"
-            },
-            "videocompare": {
-                "author": "Rafael Caricio <rafael@caricio.com>",
-                "description": "Compare similarity of video frames",
-                "hierarchy": [
-                    "GstVideoCompare",
-                    "GstVideoAggregator",
-                    "GstAggregator",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Filter/Video",
-                "long-name": "Image comparison",
-                "pad-templates": {
-                    "sink_%%u": {
-                        "caps": "video/x-raw:\n         format: { RGB, RGBA }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
-                        "direction": "sink",
-                        "presence": "request",
-                        "type": "GstVideoAggregatorPad"
-                    },
-                    "src": {
-                        "caps": "video/x-raw:\n         format: { RGB, RGBA }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
-                        "direction": "src",
-                        "presence": "always",
-                        "type": "GstVideoAggregatorPad"
-                    }
-                },
-                "properties": {
-                    "hash-algo": {
-                        "blurb": "Which hashing algorithm to use for image comparisons",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "blockhash (4)",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "GstVideoCompareHashAlgorithm",
-                        "writable": true
-                    },
-                    "max-dist-threshold": {
-                        "blurb": "Maximum distance threshold to emit messages when an image is detected, by default emits only on exact match",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "0",
-                        "max": "1.79769e+308",
-                        "min": "0",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "gdouble",
-                        "writable": true
-                    }
-                },
-                "rank": "none"
-            }
-        },
-        "filename": "gstvideofx",
-        "license": "MPL",
-        "other-types": {
-            "GstVideoCompareHashAlgorithm": {
-                "kind": "enum",
-                "values": [
-                    {
-                        "desc": "Mean: The Mean hashing algorithm.",
-                        "name": "mean",
-                        "value": "0"
-                    },
-                    {
-                        "desc": "Gradient: The Gradient hashing algorithm.",
-                        "name": "gradient",
-                        "value": "1"
-                    },
-                    {
-                        "desc": "VertGradient: The Vertical-Gradient hashing algorithm.",
-                        "name": "vertgradient",
-                        "value": "2"
-                    },
-                    {
-                        "desc": "DoubleGradient: The Double-Gradient hashing algorithm.",
-                        "name": "doublegradient",
-                        "value": "3"
-                    },
-                    {
-                        "desc": "Blockhash: The Blockhash (block median value perceptual hash) algorithm.",
-                        "name": "blockhash",
-                        "value": "4"
-                    }
-                ]
-            }
-        },
-        "package": "gst-plugin-videofx",
-        "source": "gst-plugin-videofx",
-        "tracers": {},
-        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-    },
     "webrtchttp": {
-        "description": "Plugin for WebRTC HTTP protocols",
+        "description": "GStreamer WebRTC Plugin for WebRTC HTTP protocols (WHIP)",
         "elements": {
             "whipsink": {
                 "author": "Taruntej Kanakamalla <taruntej@asymptotic.io>",
                 "description": "A bin to stream media using the WebRTC HTTP Ingestion Protocol (WHIP)",
                 "hierarchy": [
-                    "WhipSink",
+                    "GstWhipSink",
                     "GstBin",
                     "GstElement",
                     "GstObject",
