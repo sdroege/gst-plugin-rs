@@ -78,7 +78,7 @@ pub enum HashAlgorithm {
     DoubleGradient = 3,
 
     #[enum_value(
-        name = "Blockhash: The [Blockhash](https://github.com/commonsmachinery/blockhash-rfc) algorithm.",
+        name = "Blockhash: The Blockhash (block median value perceptual hash) algorithm.",
         nick = "blockhash"
     )]
     Blockhash = 4,

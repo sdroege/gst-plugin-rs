@@ -7568,7 +7568,7 @@
                         "value": "3"
                     },
                     {
-                        "desc": "Blockhash: The [Blockhash](https://github.com/commonsmachinery/blockhash-rfc) algorithm.",
+                        "desc": "Blockhash: The Blockhash (block median value perceptual hash) algorithm.",
                         "name": "blockhash",
                         "value": "4"
                     }
