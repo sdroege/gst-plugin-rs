@@ -32,7 +32,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-#[glib::flags(name = "EbuR128LevelMode")]
+#[glib::flags(name = "GstEbuR128LevelMode")]
 pub(crate) enum Mode {
     #[flags_value(name = "Calculate momentary loudness (400ms)", nick = "momentary")]
     MOMENTARY = 0b00000001,
@@ -116,7 +116,7 @@ pub struct EbuR128Level {
 
 #[glib::object_subclass]
 impl ObjectSubclass for EbuR128Level {
-    const NAME: &'static str = "EbuR128Level";
+    const NAME: &'static str = "GstEbuR128Level";
     type Type = super::EbuR128Level;
     type ParentType = gst_base::BaseTransform;
 }

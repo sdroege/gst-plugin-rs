@@ -951,7 +951,7 @@ impl Cea608ToJson {
 
 #[glib::object_subclass]
 impl ObjectSubclass for Cea608ToJson {
-    const NAME: &'static str = "Cea608ToJson";
+    const NAME: &'static str = "GstCea608ToJson";
     type Type = super::Cea608ToJson;
     type ParentType = gst::Element;
 

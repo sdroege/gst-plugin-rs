@@ -36,7 +36,7 @@ pub struct SinkPaintable {
 
 #[glib::object_subclass]
 impl ObjectSubclass for SinkPaintable {
-    const NAME: &'static str = "Gtk4PaintableSinkPaintable";
+    const NAME: &'static str = "GstGtk4PaintableSinkPaintable";
     type Type = super::SinkPaintable;
     type ParentType = glib::Object;
     type Interfaces = (gdk::Paintable,);

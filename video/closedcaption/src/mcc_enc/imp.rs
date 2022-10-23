@@ -415,7 +415,7 @@ impl MccEnc {
 
 #[glib::object_subclass]
 impl ObjectSubclass for MccEnc {
-    const NAME: &'static str = "RsMccEnc";
+    const NAME: &'static str = "GstMccEnc";
     type Type = super::MccEnc;
     type ParentType = gst::Element;
 

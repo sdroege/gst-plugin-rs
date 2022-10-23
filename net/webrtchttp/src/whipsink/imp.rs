@@ -354,7 +354,7 @@ impl ObjectImpl for WhipSink {
 
 #[glib::object_subclass]
 impl ObjectSubclass for WhipSink {
-    const NAME: &'static str = "WhipSink";
+    const NAME: &'static str = "GstWhipSink";
     type Type = super::WhipSink;
     type ParentType = gst::Bin;
 }

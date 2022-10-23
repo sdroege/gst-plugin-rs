@@ -19,9 +19,9 @@ use std::marker::PhantomData;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "webpdec-rs",
+        "rswebpdec",
         gst::DebugColorFlags::empty(),
-        Some("WebP decoder"),
+        Some("Rust WebP decoder"),
     )
 });
 
@@ -267,7 +267,7 @@ impl WebPDec {
 
 #[glib::object_subclass]
 impl ObjectSubclass for WebPDec {
-    const NAME: &'static str = "RsWebPDec";
+    const NAME: &'static str = "GstRsWebPDec";
     type Type = super::WebPDec;
     type ParentType = gst::Element;
 

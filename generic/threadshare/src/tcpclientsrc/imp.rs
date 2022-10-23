@@ -477,7 +477,7 @@ impl TcpClientSrc {
 
 #[glib::object_subclass]
 impl ObjectSubclass for TcpClientSrc {
-    const NAME: &'static str = "RsTsTcpClientSrc";
+    const NAME: &'static str = "GstTsTcpClientSrc";
     type Type = super::TcpClientSrc;
     type ParentType = gst::Element;
 

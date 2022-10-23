@@ -522,7 +522,7 @@ impl Decrypter {
 
 #[glib::object_subclass]
 impl ObjectSubclass for Decrypter {
-    const NAME: &'static str = "RsSodiumDecryptor";
+    const NAME: &'static str = "GstSodiumDecryptor";
     type Type = super::Decrypter;
     type ParentType = gst::Element;
 

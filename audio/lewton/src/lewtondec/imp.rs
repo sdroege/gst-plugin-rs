@@ -47,7 +47,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 #[glib::object_subclass]
 impl ObjectSubclass for LewtonDec {
-    const NAME: &'static str = "LewtonDec";
+    const NAME: &'static str = "GstLewtonDec";
     type Type = super::LewtonDec;
     type ParentType = gst_audio::AudioDecoder;
 }

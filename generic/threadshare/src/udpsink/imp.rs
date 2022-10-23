@@ -924,7 +924,7 @@ fn try_into_socket_addr(imp: &UdpSink, host: &str, port: i32) -> Result<SocketAd
 
 #[glib::object_subclass]
 impl ObjectSubclass for UdpSink {
-    const NAME: &'static str = "RsTsUdpSink";
+    const NAME: &'static str = "GstTsUdpSink";
     type Type = super::UdpSink;
     type ParentType = gst::Element;
 

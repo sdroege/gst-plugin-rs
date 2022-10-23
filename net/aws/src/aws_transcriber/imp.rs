@@ -1071,7 +1071,7 @@ impl Transcriber {
 
 #[glib::object_subclass]
 impl ObjectSubclass for Transcriber {
-    const NAME: &'static str = "RsAwsTranscriber";
+    const NAME: &'static str = "GstAwsTranscriber";
     type Type = super::Transcriber;
     type ParentType = gst::Element;
 

@@ -299,7 +299,7 @@ impl CsoundFilter {
 
 #[glib::object_subclass]
 impl ObjectSubclass for CsoundFilter {
-    const NAME: &'static str = "CsoundFilter";
+    const NAME: &'static str = "GstCsoundFilter";
     type Type = super::CsoundFilter;
     type ParentType = gst_base::BaseTransform;
 

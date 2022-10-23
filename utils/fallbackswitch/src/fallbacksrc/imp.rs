@@ -223,7 +223,7 @@ pub struct FallbackSrc {
 
 #[glib::object_subclass]
 impl ObjectSubclass for FallbackSrc {
-    const NAME: &'static str = "FallbackSrc";
+    const NAME: &'static str = "GstFallbackSrc";
     type Type = super::FallbackSrc;
     type ParentType = gst::Bin;
 }

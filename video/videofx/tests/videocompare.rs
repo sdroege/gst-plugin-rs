@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use gst::prelude::*;
-use gstvideofx::{HashAlgorithm, VideoCompareMessage};
+use gstrsvideofx::{HashAlgorithm, VideoCompareMessage};
 
 fn init() {
     use std::sync::Once;
@@ -15,7 +15,7 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
-        gstvideofx::plugin_register_static().expect("Failed to register videofx plugin");
+        gstrsvideofx::plugin_register_static().expect("Failed to register videofx plugin");
     });
 }
 

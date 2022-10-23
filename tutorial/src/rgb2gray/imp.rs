@@ -86,7 +86,7 @@ impl Rgb2Gray {
 // up the class data
 #[glib::object_subclass]
 impl ObjectSubclass for Rgb2Gray {
-    const NAME: &'static str = "RsRgb2Gray";
+    const NAME: &'static str = "GstRsRgb2Gray";
     type Type = super::Rgb2Gray;
     type ParentType = gst_video::VideoFilter;
 }

@@ -209,7 +209,7 @@ pub struct HrtfRender {
 
 #[glib::object_subclass]
 impl ObjectSubclass for HrtfRender {
-    const NAME: &'static str = "HrtfRender";
+    const NAME: &'static str = "GstHrtfRender";
     type Type = super::HrtfRender;
     type ParentType = gst_base::BaseTransform;
 }

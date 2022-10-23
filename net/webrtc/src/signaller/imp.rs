@@ -363,7 +363,7 @@ impl Signaller {
 
 #[glib::object_subclass]
 impl ObjectSubclass for Signaller {
-    const NAME: &'static str = "GstRSWebRTCSinkSignaller";
+    const NAME: &'static str = "GstWebRTCSinkSignaller";
     type Type = super::Signaller;
     type ParentType = glib::Object;
 }

@@ -118,7 +118,7 @@ pub struct FallbackSwitchSinkPad {
 
 #[glib::object_subclass]
 impl ObjectSubclass for FallbackSwitchSinkPad {
-    const NAME: &'static str = "FallbackSwitchSinkPad";
+    const NAME: &'static str = "GstFallbackSwitchSinkPad";
     type Type = super::FallbackSwitchSinkPad;
     type ParentType = gst::Pad;
 
@@ -1036,7 +1036,7 @@ impl FallbackSwitch {
 
 #[glib::object_subclass]
 impl ObjectSubclass for FallbackSwitch {
-    const NAME: &'static str = "FallbackSwitch";
+    const NAME: &'static str = "GstFallbackSwitch";
     type Type = super::FallbackSwitch;
     type ParentType = gst::Element;
     type Interfaces = (gst::ChildProxy,);

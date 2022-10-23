@@ -105,7 +105,7 @@ impl FileSink {
 
 #[glib::object_subclass]
 impl ObjectSubclass for FileSink {
-    const NAME: &'static str = "RsFileSink";
+    const NAME: &'static str = "GstRsFileSink";
     type Type = super::FileSink;
     type ParentType = gst_base::BaseSink;
     type Interfaces = (gst::URIHandler,);

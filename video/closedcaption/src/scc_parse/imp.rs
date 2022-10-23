@@ -947,7 +947,7 @@ impl SccParse {
 
 #[glib::object_subclass]
 impl ObjectSubclass for SccParse {
-    const NAME: &'static str = "RsSccParse";
+    const NAME: &'static str = "GstSccParse";
     type Type = super::SccParse;
     type ParentType = gst::Element;
 

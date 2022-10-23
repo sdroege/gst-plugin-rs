@@ -291,7 +291,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 #[glib::object_subclass]
 impl ObjectSubclass for Ffv1Dec {
-    const NAME: &'static str = "Ffv1Dec";
+    const NAME: &'static str = "GstFfv1Dec";
     type Type = super::Ffv1Dec;
     type ParentType = gst_video::VideoDecoder;
 }

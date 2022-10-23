@@ -168,7 +168,7 @@ impl Rgb2Gray {}
 
 #[glib::object_subclass]
 impl ObjectSubclass for Rgb2Gray {
-    const NAME: &'static str = "RsRgb2Gray";
+    const NAME: &'static str = "GstRsRgb2Gray";
     type Type = super::Rgb2Gray;
     type ParentType = gst_base::BaseTransform;
 }
@@ -268,7 +268,7 @@ impl Rgb2Gray {}
 
 #[glib::object_subclass]
 impl ObjectSubclass for Rgb2Gray {
-    const NAME: &'static str = "RsRgb2Gray";
+    const NAME: &'static str = "GstRsRgb2Gray";
     type Type = super::Rgb2Gray;
     type ParentType = gst_base::BaseTransform;
 }

@@ -40,7 +40,7 @@ pub struct ClaxonDec {
 
 #[glib::object_subclass]
 impl ObjectSubclass for ClaxonDec {
-    const NAME: &'static str = "ClaxonDec";
+    const NAME: &'static str = "GstClaxonDec";
     type Type = super::ClaxonDec;
     type ParentType = gst_audio::AudioDecoder;
 }

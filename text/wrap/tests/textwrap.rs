@@ -14,7 +14,7 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
-        gstrstextwrap::plugin_register_static().expect("textwrap test");
+        gsttextwrap::plugin_register_static().expect("textwrap test");
     });
 }
 

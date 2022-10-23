@@ -28,9 +28,9 @@ use atomic_refcell::AtomicRefCell;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "rsaudioloudnorm",
+        "audioloudnorm",
         gst::DebugColorFlags::empty(),
-        Some("Rust Audio Loudless Normalization Filter"),
+        Some("Audio Loudless Normalization Filter"),
     )
 });
 
@@ -1685,7 +1685,7 @@ impl AudioLoudNorm {
 
 #[glib::object_subclass]
 impl ObjectSubclass for AudioLoudNorm {
-    const NAME: &'static str = "RsAudioLoudNorm";
+    const NAME: &'static str = "GstAudioLoudNorm";
     type Type = super::AudioLoudNorm;
     type ParentType = gst::Element;
 

@@ -40,7 +40,7 @@ fn run_test(
 
     let pipeline = if let Some(second_input) = second_input {
         gst::parse_launch(&format!(
-        "audiotestsrc {first_input} num-buffers={num_buffers} samplesperbuffer={samples_per_buffer} ! {format} ! audiomixer name=mixer output-buffer-duration={output_buffer_duration} ! {format} ! rsaudioloudnorm ! appsink name=sink  audiotestsrc {second_input} num-buffers={num_buffers} samplesperbuffer={samples_per_buffer} ! {format} ! mixer.",
+        "audiotestsrc {first_input} num-buffers={num_buffers} samplesperbuffer={samples_per_buffer} ! {format} ! audiomixer name=mixer output-buffer-duration={output_buffer_duration} ! {format} ! audioloudnorm ! appsink name=sink  audiotestsrc {second_input} num-buffers={num_buffers} samplesperbuffer={samples_per_buffer} ! {format} ! mixer.",
         first_input = first_input,
         second_input = second_input,
         num_buffers = num_buffers,
@@ -50,7 +50,7 @@ fn run_test(
         ))
     } else {
         gst::parse_launch(&format!(
-        "audiotestsrc {first_input} num-buffers={num_buffers} samplesperbuffer={samples_per_buffer} ! {format} ! rsaudioloudnorm ! appsink name=sink",
+        "audiotestsrc {first_input} num-buffers={num_buffers} samplesperbuffer={samples_per_buffer} ! {format} ! audioloudnorm ! appsink name=sink",
         first_input = first_input,
         num_buffers = num_buffers,
         samples_per_buffer = samples_per_buffer,

@@ -23,7 +23,7 @@ const DEFAULT_OUTPUT_TYPE: ProgressBinOutput = ProgressBinOutput::Println;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "progressbin",
+        "rsprogressbin",
         gst::DebugColorFlags::empty(),
         Some("Rust Progress Reporter"),
     )
@@ -45,7 +45,7 @@ pub struct ProgressBin {
 // up the class data
 #[glib::object_subclass]
 impl ObjectSubclass for ProgressBin {
-    const NAME: &'static str = "RsProgressBin";
+    const NAME: &'static str = "GstRsProgressBin";
     type Type = super::ProgressBin;
     type ParentType = gst::Bin;
 

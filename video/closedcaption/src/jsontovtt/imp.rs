@@ -531,7 +531,7 @@ impl JsonToVtt {
 
 #[glib::object_subclass]
 impl ObjectSubclass for JsonToVtt {
-    const NAME: &'static str = "JsonToVtt";
+    const NAME: &'static str = "GstJsonToVtt";
     type Type = super::JsonToVtt;
     type ParentType = gst::Element;
 

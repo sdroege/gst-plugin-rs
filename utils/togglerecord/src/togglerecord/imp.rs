@@ -1699,7 +1699,7 @@ impl ToggleRecord {
 
 #[glib::object_subclass]
 impl ObjectSubclass for ToggleRecord {
-    const NAME: &'static str = "RsToggleRecord";
+    const NAME: &'static str = "GstToggleRecord";
     type Type = super::ToggleRecord;
     type ParentType = gst::Element;
 

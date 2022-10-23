@@ -114,7 +114,7 @@ fn proxy_from_str(s: Option<String>) -> Result<Option<String>, glib::Error> {
 const REQWEST_CLIENT_CONTEXT: &str = "gst.reqwest.client";
 
 #[derive(Clone, Debug, glib::Boxed)]
-#[boxed_type(name = "ReqwestClientContext")]
+#[boxed_type(name = "GstReqwestClientContext")]
 struct ClientContext(Arc<ClientContextInner>);
 
 #[derive(Debug)]
@@ -1280,7 +1280,7 @@ impl URIHandlerImpl for ReqwestHttpSrc {
 
 #[glib::object_subclass]
 impl ObjectSubclass for ReqwestHttpSrc {
-    const NAME: &'static str = "ReqwestHttpSrc";
+    const NAME: &'static str = "GstReqwestHttpSrc";
     type Type = super::ReqwestHttpSrc;
     type ParentType = gst_base::PushSrc;
     type Interfaces = (gst::URIHandler,);

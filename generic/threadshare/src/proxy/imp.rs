@@ -535,7 +535,7 @@ impl ProxySink {
 
 #[glib::object_subclass]
 impl ObjectSubclass for ProxySink {
-    const NAME: &'static str = "RsTsProxySink";
+    const NAME: &'static str = "GstTsProxySink";
     type Type = super::ProxySink;
     type ParentType = gst::Element;
 
@@ -1041,7 +1041,7 @@ impl ProxySrc {
 
 #[glib::object_subclass]
 impl ObjectSubclass for ProxySrc {
-    const NAME: &'static str = "RsTsProxySrc";
+    const NAME: &'static str = "GstTsProxySrc";
     type Type = super::ProxySrc;
     type ParentType = gst::Element;
 

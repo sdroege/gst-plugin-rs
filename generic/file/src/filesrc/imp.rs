@@ -119,7 +119,7 @@ impl FileSrc {
 
 #[glib::object_subclass]
 impl ObjectSubclass for FileSrc {
-    const NAME: &'static str = "RsFileSrc";
+    const NAME: &'static str = "GstRsFileSrc";
     type Type = super::FileSrc;
     type ParentType = gst_base::BaseSrc;
     type Interfaces = (gst::URIHandler,);

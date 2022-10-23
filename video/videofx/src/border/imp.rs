@@ -270,7 +270,7 @@ impl RoundedCorners {
 
 #[glib::object_subclass]
 impl ObjectSubclass for RoundedCorners {
-    const NAME: &'static str = "RoundedCorners";
+    const NAME: &'static str = "GstRoundedCorners";
     type Type = super::RoundedCorners;
     type ParentType = gst_base::BaseTransform;
 }

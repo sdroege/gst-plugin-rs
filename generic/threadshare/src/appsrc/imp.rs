@@ -425,7 +425,7 @@ impl AppSrc {
 
 #[glib::object_subclass]
 impl ObjectSubclass for AppSrc {
-    const NAME: &'static str = "RsTsAppSrc";
+    const NAME: &'static str = "GstTsAppSrc";
     type Type = super::AppSrc;
     type ParentType = gst::Element;
 

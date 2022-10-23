@@ -349,7 +349,7 @@ impl SccEnc {
 
 #[glib::object_subclass]
 impl ObjectSubclass for SccEnc {
-    const NAME: &'static str = "RsSccEnc";
+    const NAME: &'static str = "GstSccEnc";
     type Type = super::SccEnc;
     type ParentType = gst::Element;
 

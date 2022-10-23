@@ -123,7 +123,7 @@ struct Metadata {
 
 #[glib::object_subclass]
 impl ObjectSubclass for FlvDemux {
-    const NAME: &'static str = "RsFlvDemux";
+    const NAME: &'static str = "GstRsFlvDemux";
     type Type = super::FlvDemux;
     type ParentType = gst::Element;
 

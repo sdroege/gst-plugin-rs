@@ -49,7 +49,7 @@ pub struct CustomSource {
 
 #[glib::object_subclass]
 impl ObjectSubclass for CustomSource {
-    const NAME: &'static str = "FallbackSrcCustomSource";
+    const NAME: &'static str = "GstFallbackSrcCustomSource";
     type Type = super::CustomSource;
     type ParentType = gst::Bin;
 }

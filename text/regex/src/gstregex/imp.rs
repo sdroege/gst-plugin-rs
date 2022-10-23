@@ -105,7 +105,7 @@ impl RegEx {
 
 #[glib::object_subclass]
 impl ObjectSubclass for RegEx {
-    const NAME: &'static str = "RsRegEx";
+    const NAME: &'static str = "GstRegEx";
     type Type = super::RegEx;
     type ParentType = gst::Element;
 

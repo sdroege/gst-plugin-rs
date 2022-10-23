@@ -91,7 +91,7 @@ pub struct S3HlsSink {
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "s3hlssink",
+        "awss3hlssink",
         gst::DebugColorFlags::empty(),
         Some("S3 HLS sink"),
     )
@@ -404,7 +404,7 @@ impl S3HlsSink {
 
 #[glib::object_subclass]
 impl ObjectSubclass for S3HlsSink {
-    const NAME: &'static str = "S3HlsSink";
+    const NAME: &'static str = "GstAwsS3HlsSink";
     type Type = super::S3HlsSink;
     type ParentType = gst::Bin;
 

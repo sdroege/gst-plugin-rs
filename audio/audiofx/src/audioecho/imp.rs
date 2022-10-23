@@ -87,7 +87,7 @@ impl AudioEcho {
 
 #[glib::object_subclass]
 impl ObjectSubclass for AudioEcho {
-    const NAME: &'static str = "RsAudioEcho";
+    const NAME: &'static str = "GstRsAudioEcho";
     type Type = super::AudioEcho;
     type ParentType = gst_base::BaseTransform;
 }

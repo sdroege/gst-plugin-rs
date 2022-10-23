@@ -246,7 +246,7 @@ impl TranscribeParse {
 
 #[glib::object_subclass]
 impl ObjectSubclass for TranscribeParse {
-    const NAME: &'static str = "RsAWSTranscribeParse";
+    const NAME: &'static str = "GstAwsTranscribeParse";
     type Type = super::TranscribeParse;
     type ParentType = gst::Element;
 

@@ -190,7 +190,7 @@ impl AudioRNNoise {
 
 #[glib::object_subclass]
 impl ObjectSubclass for AudioRNNoise {
-    const NAME: &'static str = "AudioRNNoise";
+    const NAME: &'static str = "GstAudioRNNoise";
     type Type = super::AudioRNNoise;
     type ParentType = gst_base::BaseTransform;
 }

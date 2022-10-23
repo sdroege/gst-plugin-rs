@@ -1068,7 +1068,7 @@ impl MccParse {
 
 #[glib::object_subclass]
 impl ObjectSubclass for MccParse {
-    const NAME: &'static str = "RsMccParse";
+    const NAME: &'static str = "GstMccParse";
     type Type = super::MccParse;
     type ParentType = gst::Element;
 

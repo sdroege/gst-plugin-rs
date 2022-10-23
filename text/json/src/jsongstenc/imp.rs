@@ -177,7 +177,7 @@ impl JsonGstEnc {
 
 #[glib::object_subclass]
 impl ObjectSubclass for JsonGstEnc {
-    const NAME: &'static str = "RsJsonGstEnc";
+    const NAME: &'static str = "GstJsonGstEnc";
     type Type = super::JsonGstEnc;
     type ParentType = gst::Element;
 

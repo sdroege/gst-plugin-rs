@@ -41,7 +41,7 @@ const DEFAULT_MAX_BITRATE: Bitrate = 8_192_000;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "gcc",
+        "rtpgccbwe",
         gst::DebugColorFlags::empty(),
         Some("Google Congestion Controller based bandwidth estimator"),
     )
@@ -1146,7 +1146,7 @@ impl BandwidthEstimator {
 
 #[glib::object_subclass]
 impl ObjectSubclass for BandwidthEstimator {
-    const NAME: &'static str = "GstRTPGCCBwE";
+    const NAME: &'static str = "GstRtpGCCBwE";
     type Type = super::BandwidthEstimator;
     type ParentType = gst::Element;
 

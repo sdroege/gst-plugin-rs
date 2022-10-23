@@ -818,7 +818,7 @@ impl JsonGstParse {
 
 #[glib::object_subclass]
 impl ObjectSubclass for JsonGstParse {
-    const NAME: &'static str = "RsJsonGstParse";
+    const NAME: &'static str = "GstJsonGstParse";
     type Type = super::JsonGstParse;
     type ParentType = gst::Element;
 

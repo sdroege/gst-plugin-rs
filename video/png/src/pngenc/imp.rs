@@ -167,7 +167,7 @@ pub struct PngEncoder {
 
 #[glib::object_subclass]
 impl ObjectSubclass for PngEncoder {
-    const NAME: &'static str = "PngEncoder";
+    const NAME: &'static str = "GstRsPngEnc";
     type Type = super::PngEncoder;
     type ParentType = gst_video::VideoEncoder;
 }

@@ -16,7 +16,7 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
-        gstrsjson::plugin_register_static().expect("json test");
+        gstjson::plugin_register_static().expect("json test");
     });
 }
 

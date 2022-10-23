@@ -105,7 +105,7 @@ impl Identity {
 // up the class data
 #[glib::object_subclass]
 impl ObjectSubclass for Identity {
-    const NAME: &'static str = "RsIdentity";
+    const NAME: &'static str = "GstRsIdentity";
     type Type = super::Identity;
     type ParentType = gst::Element;
 

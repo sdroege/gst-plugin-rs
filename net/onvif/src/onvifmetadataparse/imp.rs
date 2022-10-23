@@ -1401,7 +1401,7 @@ impl OnvifMetadataParse {
 
 #[glib::object_subclass]
 impl ObjectSubclass for OnvifMetadataParse {
-    const NAME: &'static str = "OnvifMetadataParse";
+    const NAME: &'static str = "GstOnvifMetadataParse";
     type Type = super::OnvifMetadataParse;
     type ParentType = gst::Element;
 

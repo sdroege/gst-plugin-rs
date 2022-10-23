@@ -157,7 +157,7 @@ impl SineSrc {
 // up the class data
 #[glib::object_subclass]
 impl ObjectSubclass for SineSrc {
-    const NAME: &'static str = "RsSineSrc";
+    const NAME: &'static str = "GstRsSineSrc";
     type Type = super::SineSrc;
     type ParentType = gst_base::PushSrc;
 }

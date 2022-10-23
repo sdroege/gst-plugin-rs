@@ -353,7 +353,7 @@ impl InputSelector {
 
 #[glib::object_subclass]
 impl ObjectSubclass for InputSelector {
-    const NAME: &'static str = "RsTsInputSelector";
+    const NAME: &'static str = "GstTsInputSelector";
     type Type = super::InputSelector;
     type ParentType = gst::Element;
 

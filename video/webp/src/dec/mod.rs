@@ -8,7 +8,7 @@
 
 // Example command-line:
 //
-// gst-launch-1.0 filesrc location=animated.webp ! webpdec-rs ! videoconvert ! autovideosink
+// gst-launch-1.0 filesrc location=animated.webp ! rswebpdec ! videoconvert ! autovideosink
 
 use gst::glib;
 use gst::prelude::*;
@@ -22,7 +22,7 @@ glib::wrapper! {
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
-        "webpdec-rs",
+        "rswebpdec",
         gst::Rank::Primary,
         WebPDec::static_type(),
     )

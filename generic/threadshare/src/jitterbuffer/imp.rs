@@ -1299,7 +1299,7 @@ impl JitterBuffer {
 
 #[glib::object_subclass]
 impl ObjectSubclass for JitterBuffer {
-    const NAME: &'static str = "RsTsJitterBuffer";
+    const NAME: &'static str = "GstTsJitterBuffer";
     type Type = super::JitterBuffer;
     type ParentType = gst::Element;
 

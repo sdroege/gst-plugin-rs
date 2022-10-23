@@ -516,7 +516,7 @@ impl Cea608Overlay {
 
 #[glib::object_subclass]
 impl ObjectSubclass for Cea608Overlay {
-    const NAME: &'static str = "RsCea608Overlay";
+    const NAME: &'static str = "GstCea608Overlay";
     type Type = super::Cea608Overlay;
     type ParentType = gst::Element;
 

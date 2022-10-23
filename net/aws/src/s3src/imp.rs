@@ -277,7 +277,7 @@ impl S3Src {
 
 #[glib::object_subclass]
 impl ObjectSubclass for S3Src {
-    const NAME: &'static str = "AwsS3Src";
+    const NAME: &'static str = "GstAwsS3Src";
     type Type = super::S3Src;
     type ParentType = gst_base::BaseSrc;
     type Interfaces = (gst::URIHandler,);

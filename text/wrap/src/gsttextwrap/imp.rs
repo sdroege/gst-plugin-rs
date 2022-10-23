@@ -395,7 +395,7 @@ impl TextWrap {
 
 #[glib::object_subclass]
 impl ObjectSubclass for TextWrap {
-    const NAME: &'static str = "RsTextWrap";
+    const NAME: &'static str = "GstTextWrap";
     type Type = super::TextWrap;
     type ParentType = gst::Element;
 

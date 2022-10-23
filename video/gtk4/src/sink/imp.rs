@@ -60,7 +60,7 @@ impl Drop for PaintableSink {
 
 #[glib::object_subclass]
 impl ObjectSubclass for PaintableSink {
-    const NAME: &'static str = "Gtk4PaintableSink";
+    const NAME: &'static str = "GstGtk4PaintableSink";
     type Type = super::PaintableSink;
     type ParentType = gst_video::VideoSink;
 }

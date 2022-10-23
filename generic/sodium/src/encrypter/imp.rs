@@ -325,7 +325,7 @@ impl Encrypter {
 
 #[glib::object_subclass]
 impl ObjectSubclass for Encrypter {
-    const NAME: &'static str = "RsSodiumEncrypter";
+    const NAME: &'static str = "GstSodiumEncrypter";
     type Type = super::Encrypter;
     type ParentType = gst::Element;
 

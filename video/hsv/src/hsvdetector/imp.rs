@@ -69,7 +69,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 #[glib::object_subclass]
 impl ObjectSubclass for HsvDetector {
-    const NAME: &'static str = "HsvDetector";
+    const NAME: &'static str = "GstHsvDetector";
     type Type = super::HsvDetector;
     type ParentType = gst_video::VideoFilter;
 }

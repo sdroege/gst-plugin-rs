@@ -959,7 +959,7 @@ impl TtToCea608 {
 
 #[glib::object_subclass]
 impl ObjectSubclass for TtToCea608 {
-    const NAME: &'static str = "TtToCea608";
+    const NAME: &'static str = "GstTtToCea608";
     type Type = super::TtToCea608;
     type ParentType = gst::Element;
 

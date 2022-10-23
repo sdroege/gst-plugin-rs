@@ -20,7 +20,7 @@ glib::wrapper! {
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
-        "rsdav1ddec",
+        "dav1ddec",
         gst::Rank::Primary + 1,
         Dav1dDec::static_type(),
     )

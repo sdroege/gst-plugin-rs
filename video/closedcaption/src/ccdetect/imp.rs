@@ -220,7 +220,7 @@ impl CCDetect {
 
 #[glib::object_subclass]
 impl ObjectSubclass for CCDetect {
-    const NAME: &'static str = "CCDetect";
+    const NAME: &'static str = "GstCCDetect";
     type Type = super::CCDetect;
     type ParentType = gst_base::BaseTransform;
 }

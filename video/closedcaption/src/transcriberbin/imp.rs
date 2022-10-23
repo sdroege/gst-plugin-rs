@@ -529,7 +529,7 @@ impl TranscriberBin {
 
 #[glib::object_subclass]
 impl ObjectSubclass for TranscriberBin {
-    const NAME: &'static str = "RsTranscriberBin";
+    const NAME: &'static str = "GstTranscriberBin";
     type Type = super::TranscriberBin;
     type ParentType = gst::Bin;
 

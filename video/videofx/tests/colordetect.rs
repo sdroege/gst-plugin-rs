@@ -14,7 +14,7 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
-        gstvideofx::plugin_register_static().expect("Failed to register videofx plugin");
+        gstrsvideofx::plugin_register_static().expect("Failed to register rsvideofx plugin");
     });
 }
 

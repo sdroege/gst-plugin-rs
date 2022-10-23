@@ -23,7 +23,7 @@ fn init() {
 fn test_decode() {
     init();
     let data = include_bytes!("animated.webp").as_ref();
-    let mut h = gst_check::Harness::new("webpdec-rs");
+    let mut h = gst_check::Harness::new("rswebpdec");
 
     h.set_src_caps_str("image/webp");
 

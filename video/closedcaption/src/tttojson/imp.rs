@@ -185,7 +185,7 @@ impl ElementImpl for TtToJson {
 
 #[glib::object_subclass]
 impl ObjectSubclass for TtToJson {
-    const NAME: &'static str = "RsTtToJson";
+    const NAME: &'static str = "GstTtToJson";
     type Type = super::TtToJson;
     type ParentType = gst::Element;
 

@@ -30,7 +30,7 @@ pub struct CdgDec {
 
 #[glib::object_subclass]
 impl ObjectSubclass for CdgDec {
-    const NAME: &'static str = "CdgDec";
+    const NAME: &'static str = "GstCdgDec";
     type Type = super::CdgDec;
     type ParentType = gst_video::VideoDecoder;
 }

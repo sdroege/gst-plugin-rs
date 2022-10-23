@@ -627,7 +627,7 @@ impl Queue {
 
 #[glib::object_subclass]
 impl ObjectSubclass for Queue {
-    const NAME: &'static str = "RsTsQueue";
+    const NAME: &'static str = "GstTsQueue";
     type Type = super::Queue;
     type ParentType = gst::Element;
 

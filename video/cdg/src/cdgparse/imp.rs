@@ -36,7 +36,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 #[glib::object_subclass]
 impl ObjectSubclass for CdgParse {
-    const NAME: &'static str = "CdgParse";
+    const NAME: &'static str = "GstCdgParse";
     type Type = super::CdgParse;
     type ParentType = gst_base::BaseParse;
 }

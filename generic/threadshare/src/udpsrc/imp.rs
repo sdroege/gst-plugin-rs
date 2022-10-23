@@ -613,7 +613,7 @@ impl UdpSrc {
 
 #[glib::object_subclass]
 impl ObjectSubclass for UdpSrc {
-    const NAME: &'static str = "RsTsUdpSrc";
+    const NAME: &'static str = "GstTsUdpSrc";
     type Type = super::UdpSrc;
     type ParentType = gst::Element;
 
