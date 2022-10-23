@@ -16,10 +16,12 @@
 use gst::glib;
 
 mod av1;
+mod gcc;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     av1::depay::register(plugin)?;
     av1::pay::register(plugin)?;
+    gcc::register(plugin)?;
 
     Ok(())
 }
