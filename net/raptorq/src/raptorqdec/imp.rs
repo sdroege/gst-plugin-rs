@@ -497,7 +497,7 @@ impl RaptorqDec {
             self.reset();
         }
 
-        gst::Pad::event_default(pad, Some(&*self.instance()), event)
+        gst::Pad::event_default(pad, Some(&*self.obj()), event)
     }
 
     fn fec_sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
@@ -516,7 +516,7 @@ impl RaptorqDec {
             }
         }
 
-        gst::Pad::event_default(pad, Some(&*self.instance()), event)
+        gst::Pad::event_default(pad, Some(&*self.obj()), event)
     }
 
     fn iterate_internal_links(&self, pad: &gst::Pad) -> gst::Iterator<gst::Pad> {
@@ -719,7 +719,7 @@ impl ObjectImpl for RaptorqDec {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
@@ -850,7 +850,7 @@ impl ElementImpl for RaptorqDec {
 
         drop(sinkpad_fec_guard);
 
-        self.instance().add_pad(&sinkpad_fec).unwrap();
+        self.obj().add_pad(&sinkpad_fec).unwrap();
 
         Some(sinkpad_fec)
     }
@@ -861,7 +861,7 @@ impl ElementImpl for RaptorqDec {
         if let Some(pad) = pad_guard.take() {
             drop(pad_guard);
             pad.set_active(false).unwrap();
-            self.instance().remove_pad(&pad).unwrap();
+            self.obj().remove_pad(&pad).unwrap();
         }
     }
 }

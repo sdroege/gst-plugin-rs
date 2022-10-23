@@ -435,10 +435,10 @@ impl JsonToVtt {
                         ),
                     }
                 }
-                gst::Pad::event_default(pad, Some(&*self.instance()), event);
+                gst::Pad::event_default(pad, Some(&*self.obj()), event);
                 true
             }
-            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
 
@@ -453,7 +453,7 @@ impl JsonToVtt {
                 let buffers = state.handle_eos(self);
                 drop(state);
                 let _ = self.output(buffers);
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             EventView::Caps(..) => {
                 let mut downstream_caps = match self.srcpad.allowed_caps() {
@@ -506,7 +506,7 @@ impl JsonToVtt {
                 };
 
                 /* FIXME: Handle segment updates by draining? */
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             EventView::Gap(ev) => {
                 gst::log!(CAT, obj: pad, "Handling gap {:?}", ev);
@@ -516,7 +516,7 @@ impl JsonToVtt {
                 let _ = self.output(buffers);
                 true
             }
-            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
 
@@ -626,7 +626,7 @@ impl ObjectImpl for JsonToVtt {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }

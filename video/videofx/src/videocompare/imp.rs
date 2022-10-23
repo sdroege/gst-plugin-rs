@@ -196,7 +196,7 @@ impl ElementImpl for VideoCompare {
             // Since we are releasing the reference pad, we need to select a new pad for the
             // comparisons. At the moment we have no defined criteria to select the next
             // reference sink pad, so we choose the first that comes.
-            for sink_pad in self.instance().sink_pads() {
+            for sink_pad in self.obj().sink_pads() {
                 if current_reference_pad != sink_pad {
                     // Choose the first available left sink pad
                     *reference_pad = Some(sink_pad);
@@ -317,7 +317,7 @@ impl VideoAggregatorImpl for VideoCompare {
 
         // Loop through all remaining sink pads and compare the latest available buffer
         for pad in self
-            .instance()
+            .obj()
             .sink_pads()
             .into_iter()
             .map(|pad| pad.downcast::<gst_video::VideoAggregatorPad>().unwrap())
@@ -369,7 +369,7 @@ impl VideoAggregatorImpl for VideoCompare {
                 "Image detected {}",
                 message.running_time.unwrap().display()
             );
-            let element = self.instance();
+            let element = self.obj();
             let _ = element.post_message(
                 gst::message::Element::builder(message.into())
                     .src(element.as_ref())

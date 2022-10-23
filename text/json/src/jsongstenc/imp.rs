@@ -169,8 +169,8 @@ impl JsonGstEnc {
                 let caps = gst::Caps::builder("application/x-json").build();
                 self.srcpad.push_event(gst::event::Caps::new(&caps))
             }
-            EventView::Eos(_) => gst::Pad::event_default(pad, Some(&*self.instance()), event),
-            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
+            EventView::Eos(_) => gst::Pad::event_default(pad, Some(&*self.obj()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
 }
@@ -215,7 +215,7 @@ impl ObjectImpl for JsonGstEnc {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }

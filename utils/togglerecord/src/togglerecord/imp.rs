@@ -497,7 +497,7 @@ impl ToggleRecord {
 
                 drop(rec_state);
                 drop(state);
-                self.instance().notify("recording");
+                self.obj().notify("recording");
 
                 Ok(HandleResult::Drop)
             }
@@ -583,7 +583,7 @@ impl ToggleRecord {
 
                 drop(rec_state);
                 drop(state);
-                self.instance().notify("recording");
+                self.obj().notify("recording");
 
                 Ok(HandleResult::Pass(data))
             }
@@ -1187,7 +1187,7 @@ impl ToggleRecord {
                 );
 
                 if recording_state_updated {
-                    self.instance().notify("recording");
+                    self.obj().notify("recording");
                 }
 
                 return Err(gst::FlowError::Eos);
@@ -1444,7 +1444,7 @@ impl ToggleRecord {
         };
 
         if recording_state_changed {
-            self.instance().notify("recording");
+            self.obj().notify("recording");
         }
 
         // If a serialized event and coming after Segment and a new Segment is pending,
@@ -1859,7 +1859,7 @@ impl ObjectImpl for ToggleRecord {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.main_stream.sinkpad).unwrap();
         obj.add_pad(&self.main_stream.srcpad).unwrap();
     }
@@ -1982,7 +1982,7 @@ impl ElementImpl for ToggleRecord {
             let mut rec_state = self.state.lock();
             *rec_state = State::default();
             drop(rec_state);
-            self.instance().notify("recording");
+            self.obj().notify("recording");
         }
 
         Ok(success)
@@ -2001,7 +2001,7 @@ impl ElementImpl for ToggleRecord {
         let id = *pad_count;
         *pad_count += 1;
 
-        let templ = self.instance().pad_template("sink_%u").unwrap();
+        let templ = self.obj().pad_template("sink_%u").unwrap();
         let sinkpad =
             gst::Pad::builder_with_template(&templ, Some(format!("sink_{}", id).as_str()))
                 .chain_function(|pad, parent, buffer| {
@@ -2034,7 +2034,7 @@ impl ElementImpl for ToggleRecord {
                 })
                 .build();
 
-        let templ = self.instance().pad_template("src_%u").unwrap();
+        let templ = self.obj().pad_template("src_%u").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some(format!("src_{}", id).as_str()))
             .event_function(|pad, parent, event| {
                 ToggleRecord::catch_panic_pad_function(
@@ -2072,8 +2072,8 @@ impl ElementImpl for ToggleRecord {
         drop(pads);
         drop(other_streams_guard);
 
-        self.instance().add_pad(&sinkpad).unwrap();
-        self.instance().add_pad(&srcpad).unwrap();
+        self.obj().add_pad(&sinkpad).unwrap();
+        self.obj().add_pad(&srcpad).unwrap();
 
         Some(sinkpad)
     }
@@ -2105,7 +2105,7 @@ impl ElementImpl for ToggleRecord {
         stream.srcpad.set_active(false).unwrap();
         stream.sinkpad.set_active(false).unwrap();
 
-        self.instance().remove_pad(&stream.sinkpad).unwrap();
-        self.instance().remove_pad(&stream.srcpad).unwrap();
+        self.obj().remove_pad(&stream.sinkpad).unwrap();
+        self.obj().remove_pad(&stream.srcpad).unwrap();
     }
 }

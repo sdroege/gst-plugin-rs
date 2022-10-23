@@ -315,7 +315,7 @@ impl AppSrc {
 
         let do_timestamp = self.settings.lock().unwrap().do_timestamp;
         if do_timestamp {
-            let elem = self.instance();
+            let elem = self.obj();
             if let Some(clock) = elem.clock() {
                 let base_time = elem.base_time();
                 let now = clock.time();
@@ -384,7 +384,7 @@ impl AppSrc {
         *self.sender.lock().unwrap() = Some(sender);
 
         self.task
-            .prepare(AppSrcTask::new(self.instance().clone(), receiver), context)
+            .prepare(AppSrcTask::new(self.obj().clone(), receiver), context)
             .block_on()?;
 
         gst::debug!(CAT, imp: self, "Prepared");
@@ -556,7 +556,7 @@ impl ObjectImpl for AppSrc {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(self.src_pad.gst_pad()).unwrap();
         obj.set_element_flags(gst::ElementFlags::SOURCE);
     }

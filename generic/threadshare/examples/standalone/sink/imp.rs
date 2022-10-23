@@ -610,7 +610,7 @@ impl TestSink {
 
         // Enable backpressure for items
         let (item_sender, item_receiver) = flume::bounded(0);
-        let task_impl = TestSinkTask::new(&*self.instance(), item_receiver);
+        let task_impl = TestSinkTask::new(&*self.obj(), item_receiver);
         self.task.prepare(task_impl, context).block_on()?;
 
         *self.item_sender.lock().unwrap() = Some(item_sender);
@@ -794,7 +794,7 @@ impl ObjectImpl for TestSink {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(self.sink_pad.gst_pad()).unwrap();
         obj.set_element_flags(gst::ElementFlags::SINK);
     }

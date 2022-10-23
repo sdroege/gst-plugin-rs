@@ -212,7 +212,7 @@ impl ObjectImpl for SineSrc {
         // Call the parent class' ::constructed() implementation first
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         // Initialize live-ness and notify the base class that
         // we'd like to operate in Time format
         obj.set_live(DEFAULT_IS_LIVE);
@@ -236,11 +236,9 @@ impl ObjectImpl for SineSrc {
                 settings.samples_per_buffer = samples_per_buffer;
                 drop(settings);
 
-                let _ = self.instance().post_message(
-                    gst::message::Latency::builder()
-                        .src(&*self.instance())
-                        .build(),
-                );
+                let _ = self
+                    .obj()
+                    .post_message(gst::message::Latency::builder().src(&*self.obj()).build());
             }
             "freq" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -380,8 +378,7 @@ impl ElementImpl for SineSrc {
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         // Configure live'ness once here just before starting the source
         if let gst::StateChange::ReadyToPaused = transition {
-            self.instance()
-                .set_live(self.settings.lock().unwrap().is_live);
+            self.obj().set_live(self.settings.lock().unwrap().is_live);
         }
 
         // Call the parent class' implementation of ::change_state()
@@ -406,7 +403,7 @@ impl BaseSrcImpl for SineSrc {
 
         gst::debug!(CAT, imp: self, "Configuring for caps {}", caps);
 
-        self.instance()
+        self.obj()
             .set_blocksize(info.bpf() * (*self.settings.lock().unwrap()).samples_per_buffer);
 
         let settings = *self.settings.lock().unwrap();
@@ -442,11 +439,9 @@ impl BaseSrcImpl for SineSrc {
 
         drop(state);
 
-        let _ = self.instance().post_message(
-            gst::message::Latency::builder()
-                .src(&*self.instance())
-                .build(),
-        );
+        let _ = self
+            .obj()
+            .post_message(gst::message::Latency::builder().src(&*self.obj()).build());
 
         Ok(())
     }
@@ -748,15 +743,14 @@ impl PushSrcImpl for SineSrc {
         // Waiting happens based on the pipeline clock, which means that a real live source
         // with its own clock would require various translations between the two clocks.
         // This is out of scope for the tutorial though.
-        if self.instance().is_live() {
-            let (clock, base_time) =
-                match Option::zip(self.instance().clock(), self.instance().base_time()) {
-                    None => return Ok(CreateSuccess::NewBuffer(buffer)),
-                    Some(res) => res,
-                };
+        if self.obj().is_live() {
+            let (clock, base_time) = match Option::zip(self.obj().clock(), self.obj().base_time()) {
+                None => return Ok(CreateSuccess::NewBuffer(buffer)),
+                Some(res) => res,
+            };
 
             let segment = self
-                .instance()
+                .obj()
                 .segment()
                 .downcast::<gst::format::Time>()
                 .unwrap();

@@ -300,7 +300,7 @@ impl Decrypter {
             }
             QueryViewMut::Duration(q) => {
                 if q.format() != gst::Format::Bytes {
-                    return gst::Pad::query_default(pad, Some(&*self.instance()), query);
+                    return gst::Pad::query_default(pad, Some(&*self.obj()), query);
                 }
 
                 /* First let's query the bytes duration upstream */
@@ -341,7 +341,7 @@ impl Decrypter {
 
                 true
             }
-            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.obj()), query),
         }
     }
 
@@ -594,7 +594,7 @@ impl ObjectImpl for Decrypter {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }

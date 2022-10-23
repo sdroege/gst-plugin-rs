@@ -89,8 +89,7 @@ impl WebRTCSink {
     pub fn with_signaller(signaller: Box<dyn SignallableObject>) -> Self {
         let ret: WebRTCSink = glib::Object::new(&[]);
 
-        let ws = imp::WebRTCSink::from_instance(&ret);
-
+        let ws = ret.imp();
         ws.set_signaller(signaller).unwrap();
 
         ret
@@ -101,8 +100,7 @@ impl WebRTCSink {
         session_id: &str,
         sdp: &gst_webrtc::WebRTCSessionDescription,
     ) -> Result<(), WebRTCSinkError> {
-        let ws = imp::WebRTCSink::from_instance(self);
-
+        let ws = self.imp();
         ws.handle_sdp(self, session_id, sdp)
     }
 
@@ -116,26 +114,22 @@ impl WebRTCSink {
         sdp_mid: Option<String>,
         candidate: &str,
     ) -> Result<(), WebRTCSinkError> {
-        let ws = imp::WebRTCSink::from_instance(self);
-
+        let ws = self.imp();
         ws.handle_ice(self, session_id, sdp_m_line_index, sdp_mid, candidate)
     }
 
     pub fn handle_signalling_error(&self, error: Box<dyn Error + Send + Sync>) {
-        let ws = imp::WebRTCSink::from_instance(self);
-
+        let ws = self.imp();
         ws.handle_signalling_error(self, anyhow::anyhow!(error));
     }
 
     pub fn start_session(&self, session_id: &str, peer_id: &str) -> Result<(), WebRTCSinkError> {
-        let ws = imp::WebRTCSink::from_instance(self);
-
+        let ws = self.imp();
         ws.start_session(self, session_id, peer_id)
     }
 
     pub fn end_session(&self, session_id: &str) -> Result<(), WebRTCSinkError> {
-        let ws = imp::WebRTCSink::from_instance(self);
-
+        let ws = self.imp();
         ws.remove_session(self, session_id, false)
     }
 }

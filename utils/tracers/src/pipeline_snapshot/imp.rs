@@ -134,7 +134,7 @@ impl ObjectImpl for PipelineSnapshot {
         self.parent_constructed();
 
         let mut settings = Settings::default();
-        if let Some(params) = self.instance().property::<Option<String>>("params") {
+        if let Some(params) = self.obj().property::<Option<String>>("params") {
             settings.update_from_params(self, params);
         }
 
@@ -185,7 +185,7 @@ impl PipelineSnapshot {
         let mut signals = Signals::new(&[SIGUSR1])?;
         let signal_handle = signals.handle();
 
-        let tracer_weak = self.instance().downgrade();
+        let tracer_weak = self.obj().downgrade();
         let pipelines = self.pipelines.clone();
 
         let thread_handle = std::thread::spawn(move || {

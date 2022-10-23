@@ -208,10 +208,10 @@ impl CCDetect {
         }
 
         if notify_cc608 {
-            self.instance().notify("cc608");
+            self.obj().notify("cc608");
         }
         if notify_cc708 {
-            self.instance().notify("cc708");
+            self.obj().notify("cc708");
         }
 
         Ok(())

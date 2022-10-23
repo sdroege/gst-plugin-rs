@@ -61,7 +61,7 @@ impl ObjectImpl for OnvifMetadataCombiner {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.media_sink_pad).unwrap();
         obj.add_pad(&self.meta_sink_pad).unwrap();
     }
@@ -381,7 +381,7 @@ impl AggregatorImpl for OnvifMetadataCombiner {
 
             gst::log!(CAT, imp: self, "Updating position: {:?}", position);
 
-            self.instance().set_position(position);
+            self.obj().set_position(position);
 
             self.finish_buffer(buffer)
         } else if self.media_sink_pad.is_eos() {
@@ -404,7 +404,7 @@ impl AggregatorImpl for OnvifMetadataCombiner {
             | QueryViewMut::Allocation(..) => self.media_sink_pad.peer_query(query),
             QueryViewMut::AcceptCaps(q) => {
                 let caps = q.caps_owned();
-                let aggregator = self.instance();
+                let aggregator = self.obj();
                 let class = aggregator.class();
                 let templ = class.pad_template("media").unwrap();
                 let templ_caps = templ.caps();
@@ -424,14 +424,14 @@ impl AggregatorImpl for OnvifMetadataCombiner {
             EventView::Caps(e) => {
                 if aggregator_pad.upcast_ref::<gst::Pad>() == &self.media_sink_pad {
                     gst::info!(CAT, imp: self, "Pushing caps {}", e.caps());
-                    self.instance().set_src_caps(&e.caps_owned());
+                    self.obj().set_src_caps(&e.caps_owned());
                 }
 
                 true
             }
             EventView::Segment(e) => {
                 if aggregator_pad.upcast_ref::<gst::Pad>() == &self.media_sink_pad {
-                    self.instance().update_segment(e.segment());
+                    self.obj().update_segment(e.segment());
                 }
                 self.parent_sink_event(aggregator_pad, event)
             }
@@ -452,17 +452,17 @@ impl AggregatorImpl for OnvifMetadataCombiner {
             | QueryViewMut::Uri(..)
             | QueryViewMut::Allocation(..) => {
                 if aggregator_pad == &self.media_sink_pad {
-                    self.instance().src_pad().peer_query(query)
+                    self.obj().src_pad().peer_query(query)
                 } else {
                     self.parent_sink_query(aggregator_pad, query)
                 }
             }
             QueryViewMut::Caps(q) => {
                 if aggregator_pad == &self.media_sink_pad {
-                    self.instance().src_pad().peer_query(query)
+                    self.obj().src_pad().peer_query(query)
                 } else {
                     let filter = q.filter_owned();
-                    let aggregator = self.instance();
+                    let aggregator = self.obj();
                     let class = aggregator.class();
                     let templ = class.pad_template("meta").unwrap();
                     let templ_caps = templ.caps();
@@ -480,10 +480,10 @@ impl AggregatorImpl for OnvifMetadataCombiner {
             }
             QueryViewMut::AcceptCaps(q) => {
                 if aggregator_pad.upcast_ref::<gst::Pad>() == &self.media_sink_pad {
-                    self.instance().src_pad().peer_query(query);
+                    self.obj().src_pad().peer_query(query);
                 } else {
                     let caps = q.caps_owned();
-                    let aggregator = self.instance();
+                    let aggregator = self.obj();
                     let class = aggregator.class();
                     let templ = class.pad_template("meta").unwrap();
                     let templ_caps = templ.caps();
@@ -498,7 +498,7 @@ impl AggregatorImpl for OnvifMetadataCombiner {
     }
 
     fn next_time(&self) -> Option<gst::ClockTime> {
-        self.instance().simple_get_next_time()
+        self.obj().simple_get_next_time()
     }
 
     fn negotiate(&self) -> bool {

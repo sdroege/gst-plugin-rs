@@ -189,7 +189,7 @@ impl HlsSink3 {
         state.current_segment_location = Some(segment_file_location.clone());
 
         let fragment_stream = self
-            .instance()
+            .obj()
             .emit_by_name::<Option<gio::OutputStream>>(
                 SIGNAL_GET_FRAGMENT_STREAM,
                 &[&segment_file_location],
@@ -280,7 +280,7 @@ impl HlsSink3 {
         // Acquires the playlist file handle so we can update it with new content. By default, this
         // is expected to be the same file every time.
         let mut playlist_stream = self
-            .instance()
+            .obj()
             .emit_by_name::<Option<gio::OutputStream>>(
                 SIGNAL_GET_PLAYLIST_STREAM,
                 &[&playlist_location],
@@ -323,7 +323,7 @@ impl HlsSink3 {
                 for _ in 0..state.old_segment_locations.len() - max_num_segments {
                     let old_segment_location = state.old_segment_locations.remove(0);
                     if !self
-                        .instance()
+                        .obj()
                         .emit_by_name::<bool>(SIGNAL_DELETE_FRAGMENT, &[&old_segment_location])
                     {
                         gst::error!(CAT, imp: self, "Could not delete fragment");
@@ -617,7 +617,7 @@ impl ObjectImpl for HlsSink3 {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.set_element_flags(gst::ElementFlags::SINK);
         obj.set_suppressed_flags(gst::ElementFlags::SINK | gst::ElementFlags::SOURCE);
 
@@ -772,7 +772,7 @@ impl ElementImpl for HlsSink3 {
                 let sink_pad =
                     gst::GhostPad::from_template_with_target(templ, Some("audio"), &peer_pad)
                         .unwrap();
-                self.instance().add_pad(&sink_pad).unwrap();
+                self.obj().add_pad(&sink_pad).unwrap();
                 sink_pad.set_active(true).unwrap();
                 settings.audio_sink = true;
 
@@ -792,7 +792,7 @@ impl ElementImpl for HlsSink3 {
                 let sink_pad =
                     gst::GhostPad::from_template_with_target(templ, Some("video"), &peer_pad)
                         .unwrap();
-                self.instance().add_pad(&sink_pad).unwrap();
+                self.obj().add_pad(&sink_pad).unwrap();
                 sink_pad.set_active(true).unwrap();
                 settings.video_sink = true;
 
@@ -823,7 +823,7 @@ impl ElementImpl for HlsSink3 {
         }
 
         pad.set_active(false).unwrap();
-        self.instance().remove_pad(pad).unwrap();
+        self.obj().remove_pad(pad).unwrap();
 
         if "audio" == ghost_pad.name() {
             settings.audio_sink = false;

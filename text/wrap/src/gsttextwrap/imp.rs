@@ -324,7 +324,7 @@ impl TextWrap {
                 if state.start_ts.is_some() {
                     true
                 } else {
-                    gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                    gst::Pad::event_default(pad, Some(&*self.obj()), event)
                 }
             }
             EventView::FlushStart(_) => {
@@ -333,7 +333,7 @@ impl TextWrap {
                 *state = State::default();
                 state.options = options;
                 drop(state);
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             EventView::Eos(_) => {
                 let mut state = self.state.lock().unwrap();
@@ -357,9 +357,9 @@ impl TextWrap {
                 } else {
                     drop(state);
                 }
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
-            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
 
@@ -388,7 +388,7 @@ impl TextWrap {
                 }
                 ret
             }
-            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.obj()), query),
         }
     }
 }
@@ -483,7 +483,7 @@ impl ObjectImpl for TextWrap {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }
@@ -518,11 +518,9 @@ impl ObjectImpl for TextWrap {
                         settings.accumulate_time.display(),
                     );
                     drop(settings);
-                    let _ = self.instance().post_message(
-                        gst::message::Latency::builder()
-                            .src(&*self.instance())
-                            .build(),
-                    );
+                    let _ = self
+                        .obj()
+                        .post_message(gst::message::Latency::builder().src(&*self.obj()).build());
                 }
             }
             _ => unimplemented!(),

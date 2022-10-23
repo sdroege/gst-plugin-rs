@@ -275,7 +275,7 @@ impl VideoEncoderImpl for GifEnc {
             *self.state.borrow_mut() = Some(state);
         }
 
-        let instance = self.instance();
+        let instance = self.obj();
         let output_state = instance
             .set_output_state(gst::Caps::builder("image/gif").build(), Some(state))
             .map_err(|_| gst::loggable_error!(CAT, "Failed to set output state"))?;
@@ -397,7 +397,7 @@ impl VideoEncoderImpl for GifEnc {
         // Currently not using incremental frames -> every frame is a keyframe
         frame.set_flags(gst_video::VideoCodecFrameFlags::SYNC_POINT);
         frame.set_output_buffer(output_buffer);
-        self.instance().finish_frame(Some(frame))
+        self.obj().finish_frame(Some(frame))
     }
 }
 
@@ -425,7 +425,7 @@ impl GifEnc {
         });
         if let Some(trailer_buffer) = trailer_buffer {
             // manually push GIF trailer to the encoder's src pad
-            self.instance().src_pad().push(trailer_buffer)?;
+            self.obj().src_pad().push(trailer_buffer)?;
         }
 
         Ok(gst::FlowSuccess::Ok)

@@ -174,7 +174,7 @@ impl ObjectImpl for BufferLateness {
     fn constructed(&self) {
         self.parent_constructed();
 
-        if let Some(params) = self.instance().property::<Option<String>>("params") {
+        if let Some(params) = self.obj().property::<Option<String>>("params") {
             let mut state = self.state.lock().unwrap();
             state.settings.update_from_params(self, params);
         }

@@ -69,7 +69,7 @@ impl ObjectImpl for NdiSrcDemux {
     fn constructed(&self) {
         self.parent_constructed();
 
-        self.instance().add_pad(&self.sinkpad).unwrap();
+        self.obj().add_pad(&self.sinkpad).unwrap();
     }
 }
 
@@ -139,7 +139,7 @@ impl ElementImpl for NdiSrcDemux {
                     .iter()
                     .flatten()
                 {
-                    self.instance().remove_pad(pad).unwrap();
+                    self.obj().remove_pad(pad).unwrap();
                 }
                 *state = State::default();
             }
@@ -179,11 +179,7 @@ impl NdiSrcDemux {
                 } else {
                     gst::debug!(CAT, imp: self, "Adding audio pad with caps {}", caps);
 
-                    let templ = self
-                        .instance()
-                        .element_class()
-                        .pad_template("audio")
-                        .unwrap();
+                    let templ = self.obj().element_class().pad_template("audio").unwrap();
                     let pad = gst::Pad::builder_with_template(&templ, Some("audio"))
                         .flags(gst::PadFlags::FIXED_CAPS)
                         .build();
@@ -232,11 +228,7 @@ impl NdiSrcDemux {
                 } else {
                     gst::debug!(CAT, imp: self, "Adding video pad with caps {}", caps);
 
-                    let templ = self
-                        .instance()
-                        .element_class()
-                        .pad_template("video")
-                        .unwrap();
+                    let templ = self.obj().element_class().pad_template("video").unwrap();
                     let pad = gst::Pad::builder_with_template(&templ, Some("video"))
                         .flags(gst::PadFlags::FIXED_CAPS)
                         .build();
@@ -284,9 +276,9 @@ impl NdiSrcDemux {
         meta.remove().unwrap();
 
         if add_pad {
-            self.instance().add_pad(&srcpad).unwrap();
-            if self.instance().num_src_pads() == 2 {
-                self.instance().no_more_pads();
+            self.obj().add_pad(&srcpad).unwrap();
+            if self.obj().num_src_pads() == 2 {
+                self.obj().no_more_pads();
             }
         }
 
@@ -305,7 +297,7 @@ impl NdiSrcDemux {
 
         gst::log!(CAT, imp: self, "Handling event {:?}", event);
         if let EventView::Eos(_) = event.view() {
-            if self.instance().num_src_pads() == 0 {
+            if self.obj().num_src_pads() == 0 {
                 // error out on EOS if no src pad are available
                 gst::element_imp_error!(
                     self,
@@ -314,6 +306,6 @@ impl NdiSrcDemux {
                 );
             }
         }
-        gst::Pad::event_default(pad, Some(&*self.instance()), event)
+        gst::Pad::event_default(pad, Some(&*self.obj()), event)
     }
 }

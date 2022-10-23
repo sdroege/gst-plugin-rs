@@ -932,7 +932,7 @@ impl Cea608ToJson {
                 *state = State::default();
                 state.settings = old_settings;
                 drop(state);
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             EventView::Eos(..) => {
                 if let Some(lines) = self.state.borrow_mut().drain_pending(self) {
@@ -942,9 +942,9 @@ impl Cea608ToJson {
                     let _ = self.output(lines);
                 }
 
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
-            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
 }
@@ -993,7 +993,7 @@ impl ObjectImpl for Cea608ToJson {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }

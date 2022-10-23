@@ -177,14 +177,14 @@ impl DeviceProvider {
         current_devices_guard.retain(|d| !expired_devices.contains(d));
         // And also notify the device provider of them having disappeared
         for old_device in expired_devices {
-            self.instance().device_remove(&old_device);
+            self.obj().device_remove(&old_device);
         }
 
         // Now go through all new devices and announce them
         for source in sources {
             gst::log!(CAT, imp: self, "Source {:?} appeared", source);
             let device = super::Device::new(&source);
-            self.instance().device_add(&device);
+            self.obj().device_add(&device);
             current_devices_guard.push(device);
         }
     }

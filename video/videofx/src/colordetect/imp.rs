@@ -105,7 +105,7 @@ impl ColorDetect {
                 .map(|c| ((c.r as u32) << 16) | ((c.g as u32) << 8) | (c.b as u32)),
         );
 
-        self.instance()
+        self.obj()
             .post_message(
                 gst::message::Element::builder(
                     gst::structure::Structure::builder("colordetect")

@@ -85,7 +85,7 @@ impl ObjectImpl for PaintableSink {
             "paintable" => {
                 let mut paintable = self.paintable.lock().unwrap();
                 if paintable.is_none() {
-                    self.instance().initialize_paintable(&mut paintable);
+                    self.obj().initialize_paintable(&mut paintable);
                 }
 
                 let paintable = match &*paintable {
@@ -183,7 +183,7 @@ impl ElementImpl for PaintableSink {
             gst::StateChange::NullToReady => {
                 let mut paintable = self.paintable.lock().unwrap();
                 if paintable.is_none() {
-                    self.instance().initialize_paintable(&mut paintable);
+                    self.obj().initialize_paintable(&mut paintable);
                 }
 
                 if paintable.is_none() {

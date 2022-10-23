@@ -73,7 +73,7 @@ impl ObjectImpl for CustomSource {
             "source" => {
                 let source = value.get::<gst::Element>().unwrap();
                 self.source.set(source.clone()).unwrap();
-                self.instance().add(&source).unwrap();
+                self.obj().add(&source).unwrap();
             }
             _ => unreachable!(),
         }
@@ -82,7 +82,7 @@ impl ObjectImpl for CustomSource {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.set_suppressed_flags(gst::ElementFlags::SOURCE | gst::ElementFlags::SINK);
         obj.set_element_flags(gst::ElementFlags::SOURCE);
         obj.set_bin_flags(gst::BinFlags::STREAMS_AWARE);
@@ -285,11 +285,11 @@ impl CustomSource {
         let (templ, name) = if stream_type.contains(gst::StreamType::AUDIO) {
             let name = format!("audio_{}", state.num_audio);
             state.num_audio += 1;
-            (self.instance().pad_template("audio_%u").unwrap(), name)
+            (self.obj().pad_template("audio_%u").unwrap(), name)
         } else {
             let name = format!("video_{}", state.num_video);
             state.num_video += 1;
-            (self.instance().pad_template("video_%u").unwrap(), name)
+            (self.obj().pad_template("video_%u").unwrap(), name)
         };
 
         let ghost_pad = gst::GhostPad::builder_with_template(&templ, Some(&name))
@@ -306,7 +306,7 @@ impl CustomSource {
         drop(state);
 
         ghost_pad.set_active(true).unwrap();
-        self.instance().add_pad(&ghost_pad).unwrap();
+        self.obj().add_pad(&ghost_pad).unwrap();
 
         Ok(())
     }
@@ -331,7 +331,7 @@ impl CustomSource {
 
         ghost_pad.set_active(false).unwrap();
         let _ = ghost_pad.set_target(None::<&gst::Pad>);
-        let _ = self.instance().remove_pad(&ghost_pad);
+        let _ = self.obj().remove_pad(&ghost_pad);
     }
 
     fn handle_source_no_more_pads(&self) {
@@ -348,11 +348,11 @@ impl CustomSource {
             .build();
         drop(state);
 
-        self.instance().no_more_pads();
+        self.obj().no_more_pads();
 
-        let _ = self.instance().post_message(
+        let _ = self.obj().post_message(
             gst::message::StreamsSelected::builder(&collection)
-                .src(&*self.instance())
+                .src(&*self.obj())
                 .build(),
         );
     }
@@ -381,7 +381,7 @@ impl CustomSource {
 
         for pad in pads {
             let _ = pad.ghost_pad.set_target(None::<&gst::Pad>);
-            let _ = self.instance().remove_pad(&pad.ghost_pad);
+            let _ = self.obj().remove_pad(&pad.ghost_pad);
         }
     }
 }

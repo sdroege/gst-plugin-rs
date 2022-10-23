@@ -470,7 +470,7 @@ impl ObjectImpl for InputSelector {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(self.src_pad.gst_pad()).unwrap();
         obj.set_element_flags(gst::ElementFlags::PROVIDE_CLOCK | gst::ElementFlags::REQUIRE_CLOCK);
     }
@@ -554,7 +554,7 @@ impl ElementImpl for InputSelector {
             gst::Pad::from_template(templ, Some(format!("sink_{}", pads.pad_serial).as_str()));
         pads.pad_serial += 1;
         sink_pad.set_active(true).unwrap();
-        self.instance().add_pad(&sink_pad).unwrap();
+        self.obj().add_pad(&sink_pad).unwrap();
         let sink_pad = PadSink::new(sink_pad, InputSelectorPadSinkHandler::default());
         let ret = sink_pad.gst_pad().clone();
 
@@ -567,11 +567,9 @@ impl ElementImpl for InputSelector {
         drop(pads);
         drop(state);
 
-        let _ = self.instance().post_message(
-            gst::message::Latency::builder()
-                .src(&*self.instance())
-                .build(),
-        );
+        let _ = self
+            .obj()
+            .post_message(gst::message::Latency::builder().src(&*self.obj()).build());
 
         Some(ret)
     }
@@ -580,14 +578,12 @@ impl ElementImpl for InputSelector {
         let mut pads = self.pads.lock().unwrap();
         let sink_pad = pads.sink_pads.remove(pad).unwrap();
         drop(sink_pad);
-        self.instance().remove_pad(pad).unwrap();
+        self.obj().remove_pad(pad).unwrap();
         drop(pads);
 
-        let _ = self.instance().post_message(
-            gst::message::Latency::builder()
-                .src(&*self.instance())
-                .build(),
-        );
+        let _ = self
+            .obj()
+            .post_message(gst::message::Latency::builder().src(&*self.obj()).build());
     }
 
     fn provide_clock(&self) -> Option<gst::Clock> {

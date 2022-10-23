@@ -436,7 +436,7 @@ impl FMP4Mux {
         // If this is a multi-stream element then we need to update the PTS/DTS positions according
         // to the output segment, specifically to re-timestamp them with the running time and
         // adjust for the segment shift to compensate for negative DTS.
-        let aggregator = self.instance();
+        let aggregator = self.obj();
         let class = aggregator.class();
         let (pts_position, dts_position) = if class.as_ref().variant.is_single_stream() {
             (pts_position, dts_position)
@@ -898,7 +898,7 @@ impl FMP4Mux {
             VecDeque<Buffer>,
         )],
     ) -> Result<Option<gst::ClockTime>, gst::FlowError> {
-        let aggregator = self.instance();
+        let aggregator = self.obj();
         if aggregator.class().as_ref().variant != super::Variant::ONVIF {
             return Ok(None);
         }
@@ -1297,7 +1297,7 @@ impl FMP4Mux {
             state.sequence_number += 1;
             let (mut fmp4_fragment_header, moof_offset) =
                 boxes::create_fmp4_fragment_header(super::FragmentHeaderConfiguration {
-                    variant: self.instance().class().as_ref().variant,
+                    variant: self.obj().class().as_ref().variant,
                     sequence_number,
                     streams: streams.as_slice(),
                     buffers: interleaved_buffers.as_slice(),
@@ -1429,7 +1429,7 @@ impl FMP4Mux {
 
     fn create_streams(&self, state: &mut State) -> Result<(), gst::FlowError> {
         for pad in self
-            .instance()
+            .obj()
             .sink_pads()
             .into_iter()
             .map(|pad| pad.downcast::<gst_base::AggregatorPad>().unwrap())
@@ -1528,7 +1528,7 @@ impl FMP4Mux {
         settings: &Settings,
         at_eos: bool,
     ) -> Result<Option<(gst::BufferList, gst::Caps)>, gst::FlowError> {
-        let aggregator = self.instance();
+        let aggregator = self.obj();
         let class = aggregator.class();
         let variant = class.as_ref().variant;
 
@@ -1666,7 +1666,7 @@ impl ObjectImpl for FMP4Mux {
                 if settings.fragment_duration != fragment_duration {
                     settings.fragment_duration = fragment_duration;
                     drop(settings);
-                    self.instance().set_latency(fragment_duration, None);
+                    self.obj().set_latency(fragment_duration, None);
                 }
             }
 
@@ -1744,7 +1744,7 @@ impl ObjectImpl for FMP4Mux {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         let class = obj.class();
         for templ in class.pad_template_list().filter(|templ| {
             templ.presence() == gst::PadPresence::Always
@@ -1866,7 +1866,7 @@ impl AggregatorImpl for FMP4Mux {
                 // Only forward the segment event verbatim if this is a single stream variant.
                 // Otherwise we have to produce a default segment and re-timestamp all buffers
                 // with their running time.
-                let aggregator = self.instance();
+                let aggregator = self.obj();
                 let class = aggregator.class();
                 if class.as_ref().variant.is_single_stream() {
                     aggregator.update_segment(&segment);
@@ -1945,7 +1945,7 @@ impl AggregatorImpl for FMP4Mux {
 
         // For non-single-stream variants configure a default segment that allows for negative
         // DTS so that we can correctly re-timestamp buffers with their running times.
-        let aggregator = self.instance();
+        let aggregator = self.obj();
         let class = aggregator.class();
         if !class.as_ref().variant.is_single_stream() {
             let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
@@ -2127,12 +2127,12 @@ impl AggregatorImpl for FMP4Mux {
 
         if let Some(caps) = caps {
             gst::debug!(CAT, imp: self, "Setting caps on source pad: {:?}", caps);
-            self.instance().set_src_caps(&caps);
+            self.obj().set_src_caps(&caps);
         }
 
         if let Some(buffers) = buffers {
             gst::trace!(CAT, imp: self, "Pushing buffer list {:?}", buffers);
-            self.instance().finish_buffer_list(buffers)?;
+            self.obj().finish_buffer_list(buffers)?;
         }
 
         if all_eos {
@@ -2147,8 +2147,8 @@ impl AggregatorImpl for FMP4Mux {
                             super::HeaderUpdateMode::None => unreachable!(),
                             super::HeaderUpdateMode::Rewrite => {
                                 let mut q = gst::query::Seeking::new(gst::Format::Bytes);
-                                if self.instance().src_pad().peer_query(&mut q) && q.result().0 {
-                                    let aggregator = self.instance();
+                                if self.obj().src_pad().peer_query(&mut q) && q.result().0 {
+                                    let aggregator = self.obj();
 
                                     aggregator.set_src_caps(&caps);
 
@@ -2175,7 +2175,7 @@ impl AggregatorImpl for FMP4Mux {
                                 }
                             }
                             super::HeaderUpdateMode::Update => {
-                                let aggregator = self.instance();
+                                let aggregator = self.obj();
 
                                 aggregator.set_src_caps(&caps);
                                 if let Err(err) = aggregator.finish_buffer_list(buffer_list) {

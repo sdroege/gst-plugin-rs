@@ -304,7 +304,7 @@ impl ObjectImpl for RoundedCorners {
                         border_radius
                     );
                     settings.border_radius_px = border_radius;
-                    self.instance().reconfigure_src();
+                    self.obj().reconfigure_src();
                 }
             }
             _ => unimplemented!(),
@@ -462,10 +462,10 @@ impl BaseTransformImpl for RoundedCorners {
         );
 
         if out_info.format() == VideoFormat::I420 {
-            self.instance().set_passthrough(true);
+            self.obj().set_passthrough(true);
             return Ok(());
         } else {
-            self.instance().set_passthrough(false);
+            self.obj().set_passthrough(false);
         }
 
         // See "A420" planar 4:4:2:0 AYUV section
@@ -487,7 +487,7 @@ impl BaseTransformImpl for RoundedCorners {
         &self,
         inbuf: InputBuffer,
     ) -> Result<PrepareOutputBufferSuccess, gst::FlowError> {
-        if self.instance().is_passthrough() {
+        if self.obj().is_passthrough() {
             return Ok(PrepareOutputBufferSuccess::InputBuffer);
         }
 

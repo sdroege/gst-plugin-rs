@@ -183,7 +183,7 @@ impl ObjectImpl for TextAhead {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.sink_pad).unwrap();
         obj.add_pad(&self.src_pad).unwrap();
     }
@@ -304,11 +304,11 @@ impl TextAhead {
                 while !state.pending.is_empty() {
                     let _ = self.push_pending(&mut state);
                 }
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             gst::EventView::Caps(_caps) => {
                 // set caps on src pad
-                let element = self.instance();
+                let element = self.obj();
                 let templ = element.class().pad_template("src").unwrap();
                 let _ = self.src_pad.push_event(gst::event::Caps::new(templ.caps()));
                 true
@@ -326,9 +326,9 @@ impl TextAhead {
                     }
                 }
 
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
-            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
 

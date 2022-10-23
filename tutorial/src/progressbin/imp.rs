@@ -139,7 +139,7 @@ impl ObjectImpl for ProgressBin {
         // Here we actually add the pads we created in ProgressBin::new() to the
         // element so that GStreamer is aware of their existence.
 
-        let obj = self.instance();
+        let obj = self.obj();
 
         // Add the progressreport element to the bin.
         obj.add(&self.progress).unwrap();

@@ -261,14 +261,14 @@ impl ReqwestHttpSrc {
         // unless using proxy, because proxy is client specific.
         if proxy.is_none() {
             let mut q = gst::query::Context::new(REQWEST_CLIENT_CONTEXT);
-            if self.instance().src_pad().peer_query(&mut q) {
+            if self.obj().src_pad().peer_query(&mut q) {
                 if let Some(context) = q.context_owned() {
-                    self.instance().set_context(&context);
+                    self.obj().set_context(&context);
                 }
             } else {
-                let _ = self.instance().post_message(
+                let _ = self.obj().post_message(
                     gst::message::NeedContext::builder(REQWEST_CLIENT_CONTEXT)
-                        .src(&*self.instance())
+                        .src(&*self.obj())
                         .build(),
                 );
             }
@@ -317,10 +317,10 @@ impl ReqwestHttpSrc {
                 let s = context.structure_mut();
                 s.set("client", &client);
             }
-            self.instance().set_context(&context);
-            let _ = self.instance().post_message(
+            self.obj().set_context(&context);
+            let _ = self.obj().post_message(
                 gst::message::HaveContext::builder(context)
-                    .src(&*self.instance())
+                    .src(&*self.obj())
                     .build(),
             );
         }
@@ -793,7 +793,7 @@ impl ObjectImpl for ReqwestHttpSrc {
             }
             "is-live" => {
                 let is_live = value.get().expect("type checked upstream");
-                self.instance().set_live(is_live);
+                self.obj().set_live(is_live);
                 Ok(())
             }
             "user-id" => {
@@ -897,7 +897,7 @@ impl ObjectImpl for ReqwestHttpSrc {
                 let settings = self.settings.lock().unwrap();
                 settings.user_agent.to_value()
             }
-            "is-live" => self.instance().is_live().to_value(),
+            "is-live" => self.obj().is_live().to_value(),
             "user-id" => {
                 let settings = self.settings.lock().unwrap();
                 settings.user_id.to_value()
@@ -948,7 +948,7 @@ impl ObjectImpl for ReqwestHttpSrc {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.set_automatic_eos(false);
         obj.set_format(gst::Format::Bytes);
     }
@@ -1173,16 +1173,14 @@ impl PushSrcImpl for ReqwestHttpSrc {
 
         if let Some(caps) = caps {
             gst::debug!(CAT, imp: self, "Setting caps {:?}", caps);
-            self.instance()
+            self.obj()
                 .set_caps(&caps)
                 .map_err(|_| gst::FlowError::NotNegotiated)?;
         }
 
         if let Some(tags) = tags {
             gst::debug!(CAT, imp: self, "Sending iradio tags {:?}", tags);
-            self.instance()
-                .src_pad()
-                .push_event(gst::event::Tag::new(tags));
+            self.obj().src_pad().push_event(gst::event::Tag::new(tags));
         }
 
         let future = async {

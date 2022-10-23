@@ -290,14 +290,14 @@ impl BaseSinkImpl for NdiSink {
             // Skip empty/gap buffers from ndisinkcombiner
             if buffer.size() != 0 {
                 let timecode = self
-                    .instance()
+                    .obj()
                     .segment()
                     .downcast::<gst::ClockTime>()
                     .ok()
                     .and_then(|segment| {
                         segment
                             .to_running_time(buffer.pts())
-                            .zip(self.instance().base_time())
+                            .zip(self.obj().base_time())
                     })
                     .and_then(|(running_time, base_time)| running_time.checked_add(base_time))
                     .map(|time| (time.nseconds() / 100) as i64)
@@ -331,14 +331,14 @@ impl BaseSinkImpl for NdiSink {
             }
         } else if let Some(ref info) = state.audio_info {
             let timecode = self
-                .instance()
+                .obj()
                 .segment()
                 .downcast::<gst::ClockTime>()
                 .ok()
                 .and_then(|segment| {
                     segment
                         .to_running_time(buffer.pts())
-                        .zip(self.instance().base_time())
+                        .zip(self.obj().base_time())
                 })
                 .and_then(|(running_time, base_time)| running_time.checked_add(base_time))
                 .map(|time| (time.nseconds() / 100) as i64)

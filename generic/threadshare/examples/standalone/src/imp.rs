@@ -337,7 +337,7 @@ impl TestSrc {
         drop(settings);
 
         self.task
-            .prepare(SrcTask::new(self.instance().clone()), context)
+            .prepare(SrcTask::new(self.obj().clone()), context)
             .block_on()?;
 
         if raise_log_level {
@@ -528,7 +528,7 @@ impl ObjectImpl for TestSrc {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(self.src_pad.gst_pad()).unwrap();
         obj.set_element_flags(gst::ElementFlags::SOURCE);
     }

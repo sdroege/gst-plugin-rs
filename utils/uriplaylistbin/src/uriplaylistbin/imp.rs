@@ -205,7 +205,7 @@ impl State {
 
             // send pending messages then unblock pads
             for msg in messages {
-                let _ = imp.instance().post_message(msg);
+                let _ = imp.obj().post_message(msg);
             }
 
             channels.send(true);
@@ -826,7 +826,7 @@ impl ObjectImpl for UriPlaylistBin {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.set_suppressed_flags(gst::ElementFlags::SOURCE | gst::ElementFlags::SINK);
         obj.set_element_flags(gst::ElementFlags::SOURCE);
     }
@@ -978,7 +978,7 @@ impl UriPlaylistBin {
                 .build()
                 .map_err(|e| PlaylistError::PluginMissing { error: e.into() })?;
 
-            self.instance().add(&streamsynchronizer).unwrap();
+            self.obj().add(&streamsynchronizer).unwrap();
 
             let settings = self.settings.lock().unwrap();
 
@@ -1015,7 +1015,7 @@ impl UriPlaylistBin {
                 let _ = uridecodebin.set_state(gst::State::Null);
             });
 
-            self.instance().remove(&uridecodebin).unwrap();
+            self.obj().remove(&uridecodebin).unwrap();
         }
 
         if state.waiting_for_stream_collection.is_some()
@@ -1062,7 +1062,7 @@ impl UriPlaylistBin {
 
         let uridecodebin = item.uridecodebin();
 
-        self.instance().add(&uridecodebin).unwrap();
+        self.obj().add(&uridecodebin).unwrap();
 
         let item_clone = item.clone();
         assert!(state.waiting_for_stream_collection.is_none());
@@ -1217,7 +1217,7 @@ impl UriPlaylistBin {
     }
 
     fn process_decodebin_pad(&self, src_pad: &gst::Pad) {
-        let element = self.instance();
+        let element = self.obj();
 
         let start_next = {
             let mut state_guard = self.state.lock().unwrap();
@@ -1561,7 +1561,7 @@ impl UriPlaylistBin {
                     streamsynchronizer.release_request_pad(&ss_sink);
 
                     // remove associated ghost pad
-                    let src_pads = imp.instance().src_pads();
+                    let src_pads = imp.obj().src_pads();
                     let ghost = src_pads
                         .iter()
                         .find(|pad| {
@@ -1569,9 +1569,9 @@ impl UriPlaylistBin {
                             ghost.target().is_none()
                         })
                         .unwrap();
-                    imp.instance().remove_pad(ghost).unwrap();
+                    imp.obj().remove_pad(ghost).unwrap();
 
-                    imp.instance().remove(&concat).unwrap();
+                    imp.obj().remove(&concat).unwrap();
                     let _ = concat.set_state(gst::State::Null);
                 }
             }
@@ -1636,7 +1636,7 @@ impl UriPlaylistBin {
                 uridecodebin.call_async(move |uridecodebin| {
                     let _ = uridecodebin.set_state(gst::State::Null);
                 });
-                let _ = self.instance().remove(&uridecodebin);
+                let _ = self.obj().remove(&uridecodebin);
 
                 let details = gst::Structure::builder("details");
                 let details = details.field("uri", item.uri());
@@ -1672,7 +1672,7 @@ impl UriPlaylistBin {
                     current_iteration = 0;
                 }
 
-                let element = self.instance();
+                let element = self.obj();
                 if current_iteration != state.current_iteration {
                     state.current_iteration = current_iteration;
                     element.notify("current-iteration");

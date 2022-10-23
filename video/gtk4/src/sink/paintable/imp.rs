@@ -158,10 +158,10 @@ impl SinkPaintable {
                     old_size,
                     new_size,
                 );
-                self.instance().invalidate_size();
+                self.obj().invalidate_size();
             }
 
-            self.instance().invalidate_contents();
+            self.obj().invalidate_contents();
         }
     }
 }

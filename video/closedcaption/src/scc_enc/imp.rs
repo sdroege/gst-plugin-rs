@@ -307,9 +307,9 @@ impl SccEnc {
                     gst::error!(CAT, obj: pad, "Failed to write a line after EOS: {:?}", err);
                     return false;
                 }
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
-            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
 
@@ -322,7 +322,7 @@ impl SccEnc {
                 gst::log!(CAT, obj: pad, "Dropping seek event");
                 false
             }
-            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
 
@@ -342,7 +342,7 @@ impl SccEnc {
                 );
                 true
             }
-            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.obj()), query),
         }
     }
 }
@@ -391,7 +391,7 @@ impl ObjectImpl for SccEnc {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }

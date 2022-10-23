@@ -230,7 +230,7 @@ impl CsoundFilter {
         drop(state_lock);
         drop(csound);
 
-        self.instance().src_pad().push(buffer)
+        self.obj().src_pad().push(buffer)
     }
 
     fn generate_output(&self, state: &mut State) -> Result<GenerateOutputSuccess, gst::FlowError> {

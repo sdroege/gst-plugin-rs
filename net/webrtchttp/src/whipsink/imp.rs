@@ -137,7 +137,7 @@ impl ElementImpl for WhipSink {
         let sink_pad = gst::GhostPad::new(Some(&wb_sink_pad.name()), gst::PadDirection::Sink);
 
         sink_pad.set_target(Some(&wb_sink_pad)).unwrap();
-        self.instance().add_pad(&sink_pad).unwrap();
+        self.obj().add_pad(&sink_pad).unwrap();
 
         Some(sink_pad.upcast())
     }
@@ -234,7 +234,7 @@ impl ObjectImpl for WhipSink {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.set_suppressed_flags(gst::ElementFlags::SINK | gst::ElementFlags::SOURCE);
         obj.set_element_flags(gst::ElementFlags::SINK);
         obj.add(&self.webrtcbin).unwrap();

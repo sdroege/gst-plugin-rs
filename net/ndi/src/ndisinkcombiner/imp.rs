@@ -59,7 +59,7 @@ impl ObjectImpl for NdiSinkCombiner {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.video_pad).unwrap();
     }
 }
@@ -161,7 +161,7 @@ impl AggregatorImpl for NdiSinkCombiner {
             return None;
         }
 
-        let sink_templ = self.instance().pad_template("audio").unwrap();
+        let sink_templ = self.obj().pad_template("audio").unwrap();
         if templ != &sink_templ {
             gst::error!(CAT, imp: self, "Wrong pad template");
             return None;
@@ -467,7 +467,7 @@ impl AggregatorImpl for NdiSinkCombiner {
                 .unwrap_or(true)
             {
                 let timecode = self
-                    .instance()
+                    .obj()
                     .base_time()
                     .zip(audio_running_time)
                     .map(|(base_time, audio_running_time)| {
@@ -522,7 +522,7 @@ impl AggregatorImpl for NdiSinkCombiner {
             "Finishing video buffer {:?}",
             current_video_buffer
         );
-        self.instance().finish_buffer(current_video_buffer)
+        self.obj().finish_buffer(current_video_buffer)
     }
 
     fn sink_event(&self, pad: &gst_base::AggregatorPad, event: gst::Event) -> bool {
@@ -562,10 +562,10 @@ impl AggregatorImpl for NdiSinkCombiner {
 
                     drop(state_storage);
 
-                    self.instance().set_latency(latency, gst::ClockTime::NONE);
+                    self.obj().set_latency(latency, gst::ClockTime::NONE);
 
                     // The video caps are passed through as the audio is included only in a meta
-                    self.instance().set_src_caps(&caps);
+                    self.obj().set_src_caps(&caps);
                 } else {
                     let info = match gst_audio::AudioInfo::from_caps(&caps) {
                         Ok(info) => info,
@@ -582,7 +582,7 @@ impl AggregatorImpl for NdiSinkCombiner {
             EventView::Segment(segment) if pad == &self.video_pad => {
                 let segment = segment.segment();
                 gst::debug!(CAT, obj: pad, "Updating segment {:?}", segment);
-                self.instance().update_segment(segment);
+                self.obj().update_segment(segment);
             }
             _ => (),
         }
@@ -596,7 +596,7 @@ impl AggregatorImpl for NdiSinkCombiner {
         match query.view_mut() {
             QueryViewMut::Caps(_) if pad == &self.video_pad => {
                 // Directly forward caps queries
-                let srcpad = self.instance().static_pad("src").unwrap();
+                let srcpad = self.obj().static_pad("src").unwrap();
                 return srcpad.peer_query(query);
             }
             _ => (),

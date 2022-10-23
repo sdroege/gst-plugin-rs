@@ -295,7 +295,7 @@ impl VideoEncoderImpl for PngEncoder {
             *self.state.lock() = Some(state);
         }
 
-        let instance = self.instance();
+        let instance = self.obj();
         let output_state = instance
             .set_output_state(gst::Caps::builder("image/png").build(), Some(state))
             .map_err(|_| gst::loggable_error!(CAT, "Failed to set output state"))?;
@@ -335,6 +335,6 @@ impl VideoEncoderImpl for PngEncoder {
         // There are no such incremental frames in the png format
         frame.set_flags(gst_video::VideoCodecFrameFlags::SYNC_POINT);
         frame.set_output_buffer(output_buffer);
-        self.instance().finish_frame(Some(frame))
+        self.obj().finish_frame(Some(frame))
     }
 }

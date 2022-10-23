@@ -412,7 +412,7 @@ impl BaseTransformImpl for EbuR128Level {
         })?;
 
         let mut timestamp = buf.pts();
-        let segment = self.instance().segment().downcast::<gst::ClockTime>().ok();
+        let segment = self.obj().segment().downcast::<gst::ClockTime>().ok();
 
         let buf = gst_audio::AudioBufferRef::from_buffer_ref_readable(buf, &state.info).map_err(
             |_| {
@@ -563,14 +563,12 @@ impl BaseTransformImpl for EbuR128Level {
 
                     gst::debug!(CAT, imp: self, "Posting message {}", s);
 
-                    let msg = gst::message::Element::builder(s)
-                        .src(&*self.instance())
-                        .build();
+                    let msg = gst::message::Element::builder(s).src(&*self.obj()).build();
 
                     // Release lock while posting the message to avoid deadlocks
                     drop(state_guard);
 
-                    let _ = self.instance().post_message(msg);
+                    let _ = self.obj().post_message(msg);
 
                     state_guard = self.state.borrow_mut();
                     state = state_guard.as_mut().ok_or_else(|| {

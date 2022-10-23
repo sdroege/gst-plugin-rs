@@ -933,7 +933,7 @@ impl TtToCea608 {
                     drop(state);
                 }
 
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             EventView::FlushStop(_) => {
                 let mut state = self.state.lock().unwrap();
@@ -950,9 +950,9 @@ impl TtToCea608 {
                 drop(settings);
                 drop(state);
 
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
-            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
 }
@@ -1036,7 +1036,7 @@ impl ObjectImpl for TtToCea608 {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }

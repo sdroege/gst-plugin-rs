@@ -1178,7 +1178,7 @@ impl ObjectSubclass for BandwidthEstimator {
                     parent,
                     || false,
                     |this| {
-                        let bwe = this.instance();
+                        let bwe = this.obj();
 
                         if let Some(structure) = event.structure() {
                             if structure.name() == "RTPTWCCPackets" {
@@ -1220,7 +1220,7 @@ impl ObjectSubclass for BandwidthEstimator {
                             "Panic activating src pad with mode"
                         ))
                     },
-                    |this| this.src_activatemode(pad, &this.instance(), mode, active),
+                    |this| this.src_activatemode(pad, &this.obj(), mode, active),
                 )
             })
             .flags(gst::PadFlags::PROXY_CAPS | gst::PadFlags::PROXY_ALLOCATION)
@@ -1238,7 +1238,7 @@ impl ObjectImpl for BandwidthEstimator {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }

@@ -248,10 +248,10 @@ impl Signaller {
     }
 
     pub fn start(&self, element: &WebRTCSink) {
-        let this = self.instance().clone();
+        let this = self.obj().clone();
         let element_clone = element.clone();
         task::spawn(async move {
-            let this = Self::from_instance(&this);
+            let this = this.imp();
             if let Err(err) = this.connect(&element_clone).await {
                 element_clone.handle_signalling_error(err.into());
             }

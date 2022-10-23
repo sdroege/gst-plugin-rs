@@ -805,7 +805,7 @@ impl VideoEncoderImpl for Rav1Enc {
             video_info,
         });
 
-        let instance = self.instance();
+        let instance = self.obj();
         let output_state = instance
             .set_output_state(
                 gst::Caps::builder("video/x-av1")
@@ -913,7 +913,7 @@ impl Rav1Enc {
                         packet_type
                     );
 
-                    let instance = self.instance();
+                    let instance = self.obj();
                     let mut frame = instance
                         .frame(frame_number as i32)
                         .expect("frame not found");

@@ -1655,7 +1655,7 @@ impl AudioLoudNorm {
             _ => (),
         }
 
-        gst::Pad::event_default(pad, Some(&*self.instance()), event)
+        gst::Pad::event_default(pad, Some(&*self.obj()), event)
     }
 
     #[allow(clippy::single_match)]
@@ -1678,7 +1678,7 @@ impl AudioLoudNorm {
                     false
                 }
             }
-            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.obj()), query),
         }
     }
 }
@@ -1767,7 +1767,7 @@ impl ObjectImpl for AudioLoudNorm {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }

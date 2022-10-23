@@ -412,7 +412,7 @@ impl ObjectImpl for S3Src {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.set_format(gst::Format::Bytes);
         /* Set a larger default blocksize to make read more efficient */
         obj.set_blocksize(256 * 1024);

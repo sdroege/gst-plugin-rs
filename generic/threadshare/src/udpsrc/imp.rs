@@ -575,7 +575,7 @@ impl UdpSrc {
 
         *self.configured_caps.lock().unwrap() = None;
         self.task
-            .prepare(UdpSrcTask::new(self.instance().clone()), context)
+            .prepare(UdpSrcTask::new(self.obj().clone()), context)
             .block_on()?;
 
         gst::debug!(CAT, imp: self, "Prepared");
@@ -775,7 +775,7 @@ impl ObjectImpl for UdpSrc {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(self.src_pad.gst_pad()).unwrap();
         obj.set_element_flags(gst::ElementFlags::SOURCE);
     }

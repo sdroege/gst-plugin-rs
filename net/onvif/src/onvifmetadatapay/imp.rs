@@ -140,7 +140,7 @@ impl RTPBasePayloadImpl for OnvifMetadataPay {
             return Err(gst::FlowError::Error);
         }
 
-        let mtu = self.instance().mtu();
+        let mtu = self.obj().mtu();
         let payload_size = gst_rtp::calc_payload_len(mtu, 0, 0) as usize;
 
         let mut chunks = utf8.as_bytes().chunks(payload_size).peekable();
@@ -180,11 +180,11 @@ impl RTPBasePayloadImpl for OnvifMetadataPay {
             }
         }
 
-        self.instance().push_list(buflist)
+        self.obj().push_list(buflist)
     }
 
     fn set_caps(&self, _caps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        self.instance()
+        self.obj()
             .set_options("application", true, "VND.ONVIF.METADATA", 90000);
 
         Ok(())

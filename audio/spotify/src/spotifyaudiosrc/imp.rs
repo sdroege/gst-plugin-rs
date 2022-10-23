@@ -442,7 +442,7 @@ impl URIHandlerImpl for SpotifyAudioSrc {
         for (key, value) in url.query_pairs() {
             match key.as_ref() {
                 "username" | "password" | "cache-credentials" | "cache-files" => {
-                    self.instance().set_property(&key, value.as_ref());
+                    self.obj().set_property(&key, value.as_ref());
                 }
                 _ => {
                     gst::warning!(CAT, imp: self, "unsupported query: {}={}", key, value);
@@ -450,7 +450,7 @@ impl URIHandlerImpl for SpotifyAudioSrc {
             }
         }
 
-        self.instance()
+        self.obj()
             .set_property("track", format!("{}:{}", url.scheme(), url.path()));
 
         Ok(())

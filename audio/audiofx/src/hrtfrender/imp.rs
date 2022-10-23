@@ -394,7 +394,7 @@ impl HrtfRender {
         state.reset_processors();
 
         drop(state_guard);
-        self.instance().src_pad().push(outbuf)
+        self.obj().src_pad().push(outbuf)
     }
 }
 

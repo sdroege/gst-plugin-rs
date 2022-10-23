@@ -576,7 +576,7 @@ impl ObjectImpl for S3HlsSink {
     fn constructed(&self) {
         self.parent_constructed();
 
-        self.instance().add(&self.hlssink).unwrap();
+        self.obj().add(&self.hlssink).unwrap();
 
         let mut settings = self.settings.lock().unwrap();
 
@@ -830,7 +830,7 @@ impl ElementImpl for S3HlsSink {
                 let sink_pad =
                     gst::GhostPad::from_template_with_target(templ, Some("audio"), &audio_pad)
                         .unwrap();
-                self.instance().add_pad(&sink_pad).unwrap();
+                self.obj().add_pad(&sink_pad).unwrap();
                 sink_pad.set_active(true).unwrap();
                 settings.audio_sink = true;
 
@@ -850,7 +850,7 @@ impl ElementImpl for S3HlsSink {
                 let sink_pad =
                     gst::GhostPad::from_template_with_target(templ, Some("video"), &video_pad)
                         .unwrap();
-                self.instance().add_pad(&sink_pad).unwrap();
+                self.obj().add_pad(&sink_pad).unwrap();
                 sink_pad.set_active(true).unwrap();
                 settings.video_sink = true;
 

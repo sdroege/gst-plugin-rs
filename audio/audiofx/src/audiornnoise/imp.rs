@@ -154,7 +154,7 @@ impl AudioRNNoise {
             state.process(in_data, out_data);
         }
 
-        self.instance().src_pad().push(buffer)
+        self.obj().src_pad().push(buffer)
     }
 
     fn generate_output(&self, state: &mut State) -> Result<GenerateOutputSuccess, gst::FlowError> {
@@ -329,7 +329,7 @@ impl BaseTransformImpl for AudioRNNoise {
         if direction == gst::PadDirection::Src {
             if let gst::QueryViewMut::Latency(q) = query.view_mut() {
                 let mut upstream_query = gst::query::Latency::new();
-                if self.instance().sink_pad().peer_query(&mut upstream_query) {
+                if self.obj().sink_pad().peer_query(&mut upstream_query) {
                     let (live, mut min, mut max) = upstream_query.result();
                     gst::debug!(
                         CAT,

@@ -40,9 +40,7 @@ impl PullState {
     fn new(imp: &SccParse, pad: &gst::Pad) -> Self {
         Self {
             need_stream_start: true,
-            stream_id: pad
-                .create_stream_id(&*imp.instance(), Some("src"))
-                .to_string(),
+            stream_id: pad.create_stream_id(&*imp.obj(), Some("src")).to_string(),
             offset: 0,
             duration: gst::ClockTime::NONE,
         }
@@ -762,14 +760,14 @@ impl SccParse {
                 let state = self.flush(state);
                 drop(state);
 
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             EventView::Eos(_) => {
                 gst::log!(CAT, obj: pad, "Draining");
                 if let Err(err) = self.handle_buffer(None) {
                     gst::error!(CAT, obj: pad, "Failed to drain parser: {:?}", err);
                 }
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             _ => {
                 if event.is_sticky()
@@ -781,7 +779,7 @@ impl SccParse {
                     state.pending_events.push(event);
                     true
                 } else {
-                    gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                    gst::Pad::event_default(pad, Some(&*self.obj()), event)
                 }
             }
         }
@@ -886,7 +884,7 @@ impl SccParse {
         gst::log!(CAT, obj: pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Seek(e) => self.perform_seek(e),
-            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
 
@@ -940,7 +938,7 @@ impl SccParse {
                     self.sinkpad.peer_query(query)
                 }
             }
-            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.obj()), query),
         }
     }
 }
@@ -1019,7 +1017,7 @@ impl ObjectImpl for SccParse {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }

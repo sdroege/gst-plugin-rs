@@ -83,7 +83,7 @@ impl ElementImpl for OnvifMetadataDepay {
 
 impl RTPBaseDepayloadImpl for OnvifMetadataDepay {
     fn set_caps(&self, _caps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        let element = self.instance();
+        let element = self.obj();
         let src_pad = element.src_pad();
         let src_caps = src_pad.pad_template_caps();
         src_pad.push_event(gst::event::Caps::builder(&src_caps).build());

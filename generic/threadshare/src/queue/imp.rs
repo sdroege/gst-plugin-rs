@@ -559,7 +559,7 @@ impl Queue {
         let settings = self.settings.lock().unwrap().clone();
 
         let dataqueue = DataQueue::new(
-            &self.instance().clone().upcast(),
+            &self.obj().clone().upcast(),
             self.src_pad.gst_pad(),
             if settings.max_size_buffers == 0 {
                 None
@@ -589,7 +589,7 @@ impl Queue {
             })?;
 
         self.task
-            .prepare(QueueTask::new(self.instance().clone(), dataqueue), context)
+            .prepare(QueueTask::new(self.obj().clone(), dataqueue), context)
             .block_on()?;
 
         gst::debug!(CAT, imp: self, "Prepared");
@@ -729,7 +729,7 @@ impl ObjectImpl for Queue {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(self.sink_pad.gst_pad()).unwrap();
         obj.add_pad(self.src_pad.gst_pad()).unwrap();
     }

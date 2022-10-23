@@ -170,7 +170,7 @@ impl ObjectImpl for NdiSrc {
 
         // Initialize live-ness and notify the base class that
         // we'd like to operate in Time format
-        let obj = self.instance();
+        let obj = self.obj();
         obj.set_live(true);
         obj.set_format(gst::Format::Time);
     }
@@ -285,11 +285,9 @@ impl ObjectImpl for NdiSrc {
                     timestamp_mode
                 );
                 if settings.timestamp_mode != timestamp_mode {
-                    let _ = self.instance().post_message(
-                        gst::message::Latency::builder()
-                            .src(&*self.instance())
-                            .build(),
-                    );
+                    let _ = self
+                        .obj()
+                        .post_message(gst::message::Latency::builder().src(&*self.obj()).build());
                 }
                 settings.timestamp_mode = timestamp_mode;
             }
@@ -407,7 +405,7 @@ impl ElementImpl for NdiSrc {
 
 impl BaseSrcImpl for NdiSrc {
     fn negotiate(&self) -> Result<(), gst::LoggableError> {
-        self.instance()
+        self.obj()
             .set_caps(&gst::Caps::builder("application/x-ndi").build())
             .map_err(|_| gst::loggable_error!(CAT, "Failed to negotiate caps",))
     }
@@ -440,7 +438,7 @@ impl BaseSrcImpl for NdiSrc {
         }
 
         let receiver = Receiver::connect(
-            self.instance().upcast_ref(),
+            self.obj().upcast_ref(),
             settings.ndi_name.as_deref(),
             settings.url_address.as_deref(),
             &settings.receiver_ndi_name,
@@ -593,10 +591,8 @@ impl BaseSrcImpl for NdiSrc {
 
                         drop(state);
                         if latency_changed {
-                            let _ = self.instance().post_message(
-                                gst::message::Latency::builder()
-                                    .src(&*self.instance())
-                                    .build(),
+                            let _ = self.obj().post_message(
+                                gst::message::Latency::builder().src(&*self.obj()).build(),
                             );
                         }
 

@@ -2,7 +2,7 @@
 
 use crate::webrtcsink::{Signallable, WebRTCSink};
 use gst::glib;
-use gst::subclass::prelude::ObjectSubclassExt;
+use gst::subclass::prelude::*;
 use std::error::Error;
 
 mod imp;
@@ -16,7 +16,7 @@ unsafe impl Sync for Signaller {}
 
 impl Signallable for Signaller {
     fn start(&mut self, element: &WebRTCSink) -> Result<(), Box<dyn Error>> {
-        let signaller = imp::Signaller::from_instance(self);
+        let signaller = self.imp();
         signaller.start(element);
 
         Ok(())
@@ -28,7 +28,7 @@ impl Signallable for Signaller {
         peer_id: &str,
         sdp: &gst_webrtc::WebRTCSessionDescription,
     ) -> Result<(), Box<dyn Error>> {
-        let signaller = imp::Signaller::from_instance(self);
+        let signaller = self.imp();
         signaller.handle_sdp(element, peer_id, sdp);
         Ok(())
     }
@@ -41,18 +41,18 @@ impl Signallable for Signaller {
         sdp_mline_index: Option<u32>,
         sdp_mid: Option<String>,
     ) -> Result<(), Box<dyn Error>> {
-        let signaller = imp::Signaller::from_instance(self);
+        let signaller = self.imp();
         signaller.handle_ice(element, session_id, candidate, sdp_mline_index, sdp_mid);
         Ok(())
     }
 
     fn stop(&mut self, element: &WebRTCSink) {
-        let signaller = imp::Signaller::from_instance(self);
+        let signaller = self.imp();
         signaller.stop(element);
     }
 
     fn session_ended(&mut self, element: &WebRTCSink, session_id: &str) {
-        let signaller = imp::Signaller::from_instance(self);
+        let signaller = self.imp();
         signaller.end_session(element, session_id);
     }
 }

@@ -157,7 +157,7 @@ impl Dav1dDec {
         let input_state = state.input_state.clone();
         drop(state_guard);
 
-        let instance = self.instance();
+        let instance = self.obj();
         let output_state =
             instance.set_output_state(format, pic.width(), pic.height(), Some(&input_state))?;
         instance.negotiate(output_state)?;
@@ -214,9 +214,9 @@ impl Dav1dDec {
             }
             Err(err) => {
                 gst::error!(CAT, "Sending data failed (error code: {})", err);
-                self.instance().release_frame(frame);
+                self.obj().release_frame(frame);
                 gst_video::video_decoder_error!(
-                    &*self.instance(),
+                    &*self.obj(),
                     1,
                     gst::StreamError::Decode,
                     ["Sending data failed (error code {})", err]
@@ -246,7 +246,7 @@ impl Dav1dDec {
             Err(err) => {
                 gst::error!(CAT, "Sending data failed (error code: {})", err);
                 gst_video::video_decoder_error!(
-                    &*self.instance(),
+                    &*self.obj(),
                     1,
                     gst::StreamError::Decode,
                     ["Sending data failed (error code {})", err]
@@ -359,7 +359,7 @@ impl Dav1dDec {
 
         state_guard = self.handle_resolution_change(state_guard, pic)?;
 
-        let instance = self.instance();
+        let instance = self.obj();
         let output_state = instance
             .output_state()
             .expect("Output state not set. Shouldn't happen!");
@@ -412,7 +412,7 @@ impl Dav1dDec {
                 );
 
                 gst_video::video_decoder_error!(
-                    &*self.instance(),
+                    &*self.obj(),
                     1,
                     gst::StreamError::Decode,
                     ["Retrieving decoded picture failed (error code {})", err]
@@ -596,7 +596,7 @@ impl VideoDecoderImpl for Dav1dDec {
                         Some(ref info) => {
                             let mut upstream_latency = gst::query::Latency::new();
 
-                            if self.instance().sink_pad().peer_query(&mut upstream_latency) {
+                            if self.obj().sink_pad().peer_query(&mut upstream_latency) {
                                 let (live, mut min, mut max) = upstream_latency.result();
                                 // For autodetection: 1 if live, else whatever dav1d gives us
                                 let frame_latency: u64 = if max_frame_delay < 0 && live {
@@ -665,7 +665,7 @@ impl VideoDecoderImpl for Dav1dDec {
             let mut latency_query = gst::query::Latency::new();
             let mut is_live = false;
 
-            if self.instance().sink_pad().peer_query(&mut latency_query) {
+            if self.obj().sink_pad().peer_query(&mut latency_query) {
                 is_live = latency_query.result().0;
             }
 

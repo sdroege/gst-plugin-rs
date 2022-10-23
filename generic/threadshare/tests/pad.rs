@@ -237,7 +237,7 @@ mod imp_src {
 
             self.task
                 .prepare(
-                    ElementSrcTestTask::new(self.instance().clone(), receiver),
+                    ElementSrcTestTask::new(self.obj().clone(), receiver),
                     context,
                 )
                 .block_on()?;
@@ -325,7 +325,7 @@ mod imp_src {
         fn constructed(&self) {
             self.parent_constructed();
 
-            let obj = self.instance();
+            let obj = self.obj();
             obj.add_pad(self.src_pad.gst_pad()).unwrap();
             obj.set_element_flags(gst::ElementFlags::SOURCE);
         }
@@ -617,7 +617,7 @@ mod imp_sink {
         fn constructed(&self) {
             self.parent_constructed();
 
-            let obj = self.instance();
+            let obj = self.obj();
             obj.add_pad(self.sink_pad.gst_pad()).unwrap();
             obj.set_element_flags(gst::ElementFlags::SINK);
         }

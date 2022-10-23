@@ -110,7 +110,7 @@ impl VideoDecoderImpl for CdgDec {
         {
             let mut out_info = self.output_info.lock().unwrap();
             if out_info.is_none() {
-                let instance = self.instance();
+                let instance = self.obj();
                 let output_state = instance.set_output_state(
                     gst_video::VideoFormat::Rgba,
                     CDG_WIDTH,
@@ -144,7 +144,7 @@ impl VideoDecoderImpl for CdgDec {
             Some(cmd) => cmd,
             None => {
                 // Not a CDG command
-                self.instance().release_frame(frame);
+                self.obj().release_frame(frame);
                 return Ok(gst::FlowSuccess::Ok);
             }
         };
@@ -152,7 +152,7 @@ impl VideoDecoderImpl for CdgDec {
         let mut cdg_inter = self.cdg_inter.lock().unwrap();
         cdg_inter.handle_cmd(cmd);
 
-        self.instance().allocate_output_frame(&mut frame, None)?;
+        self.obj().allocate_output_frame(&mut frame, None)?;
         {
             let output = frame.output_buffer_mut().unwrap();
             let info = self.output_info.lock().unwrap();
@@ -190,7 +190,7 @@ impl VideoDecoderImpl for CdgDec {
 
         gst::debug!(CAT, imp: self, "Finish frame pts={}", frame.pts().display());
 
-        self.instance().finish_frame(frame)
+        self.obj().finish_frame(frame)
     }
 
     fn decide_allocation(

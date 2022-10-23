@@ -183,7 +183,7 @@ impl ObjectImpl for FlvDemux {
     fn constructed(&self) {
         self.parent_constructed();
 
-        self.instance().add_pad(&self.sinkpad).unwrap();
+        self.obj().add_pad(&self.sinkpad).unwrap();
     }
 }
 
@@ -351,12 +351,12 @@ impl FlvDemux {
 
         let mut flow_combiner = self.flow_combiner.lock().unwrap();
         if let Some(pad) = self.audio_srcpad.lock().unwrap().take() {
-            self.instance().remove_pad(&pad).unwrap();
+            self.obj().remove_pad(&pad).unwrap();
             flow_combiner.remove_pad(&pad);
         }
 
         if let Some(pad) = self.video_srcpad.lock().unwrap().take() {
-            self.instance().remove_pad(&pad).unwrap();
+            self.obj().remove_pad(&pad).unwrap();
             flow_combiner.remove_pad(&pad);
         }
 
@@ -370,21 +370,21 @@ impl FlvDemux {
         match event.view() {
             EventView::Eos(..) => {
                 // TODO implement
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             EventView::Segment(..) => {
                 // TODO implement
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             EventView::FlushStart(..) => {
                 // TODO implement
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             EventView::FlushStop(..) => {
                 // TODO implement
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
-            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
 
@@ -432,7 +432,7 @@ impl FlvDemux {
                     false
                 }
             }
-            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.obj()), query),
         }
     }
 
@@ -444,7 +444,7 @@ impl FlvDemux {
                 // TODO: Implement
                 false
             }
-            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
 
@@ -610,7 +610,7 @@ impl FlvDemux {
                     }
                 }
                 Event::HaveAllStreams => {
-                    self.instance().no_more_pads();
+                    self.obj().no_more_pads();
                 }
             }
         }
@@ -619,7 +619,7 @@ impl FlvDemux {
     }
 
     fn create_srcpad(&self, name: &str, caps: &gst::Caps) -> gst::Pad {
-        let templ = self.instance().element_class().pad_template(name).unwrap();
+        let templ = self.obj().element_class().pad_template(name).unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some(name))
             .event_function(|pad, parent, event| {
                 FlvDemux::catch_panic_pad_function(
@@ -639,7 +639,7 @@ impl FlvDemux {
 
         srcpad.set_active(true).unwrap();
 
-        let full_stream_id = srcpad.create_stream_id(&*self.instance(), Some(name));
+        let full_stream_id = srcpad.create_stream_id(&*self.obj(), Some(name));
         // FIXME group id
         srcpad.push_event(gst::event::StreamStart::new(&full_stream_id));
         srcpad.push_event(gst::event::Caps::new(caps));
@@ -650,7 +650,7 @@ impl FlvDemux {
 
         self.flow_combiner.lock().unwrap().add_pad(&srcpad);
 
-        self.instance().add_pad(&srcpad).unwrap();
+        self.obj().add_pad(&srcpad).unwrap();
 
         srcpad
     }

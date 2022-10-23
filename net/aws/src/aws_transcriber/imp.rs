@@ -223,7 +223,7 @@ impl Transcriber {
         /* First, check our pending buffers */
         let mut items = vec![];
 
-        let now = match self.instance().current_running_time() {
+        let now = match self.obj().current_running_time() {
             Some(now) => now,
             None => {
                 return true;
@@ -645,7 +645,7 @@ impl Transcriber {
                     false
                 }
             }
-            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.obj()), query),
         }
     }
 
@@ -664,7 +664,7 @@ impl Transcriber {
             },
             EventView::FlushStart(_) => {
                 gst::info!(CAT, imp: self, "Received flush start, disconnecting");
-                let mut ret = gst::Pad::event_default(pad, Some(&*self.instance()), event);
+                let mut ret = gst::Pad::event_default(pad, Some(&*self.obj()), event);
 
                 match self.srcpad.stop_task() {
                     Err(err) => {
@@ -684,7 +684,7 @@ impl Transcriber {
             EventView::FlushStop(_) => {
                 gst::info!(CAT, imp: self, "Received flush stop, restarting task");
 
-                if gst::Pad::event_default(pad, Some(&*self.instance()), event) {
+                if gst::Pad::event_default(pad, Some(&*self.obj()), event) {
                     match self.start_task() {
                         Err(err) => {
                             gst::error!(CAT, imp: self, "Failed to start srcpad task: {}", err);
@@ -722,7 +722,7 @@ impl Transcriber {
                 true
             }
             EventView::StreamStart(_) => true,
-            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
 
@@ -737,7 +737,7 @@ impl Transcriber {
 
             if let Some(buffer) = &buffer {
                 let running_time = state.in_segment.to_running_time(buffer.pts());
-                let now = self.instance().current_running_time();
+                let now = self.obj().current_running_time();
 
                 delay = running_time.opt_checked_sub(now).ok().flatten();
             }
@@ -1202,7 +1202,7 @@ impl ObjectImpl for Transcriber {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
         obj.set_element_flags(gst::ElementFlags::PROVIDE_CLOCK | gst::ElementFlags::REQUIRE_CLOCK);

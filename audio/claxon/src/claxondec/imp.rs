@@ -136,7 +136,7 @@ impl AudioDecoderImpl for ClaxonDec {
                     } else if let Ok(tstreaminfo) = claxon_streaminfo(&inmap[13..]) {
                         if let Ok(taudio_info) = gstaudioinfo(&tstreaminfo) {
                             // To speed up negotiation
-                            let element = self.instance();
+                            let element = self.obj();
                             if element.set_output_format(&taudio_info).is_err()
                                 || element.negotiate().is_err()
                             {
@@ -198,7 +198,7 @@ impl AudioDecoderImpl for ClaxonDec {
             );
         }
 
-        self.instance().finish_frame(None, 1)
+        self.obj().finish_frame(None, 1)
     }
 }
 
@@ -225,7 +225,7 @@ impl ClaxonDec {
             audio_info
         );
 
-        let element = self.instance();
+        let element = self.obj();
         element.set_output_format(&audio_info)?;
         element.negotiate()?;
 
@@ -260,10 +260,10 @@ impl ClaxonDec {
         let mut reader = claxon::frame::FrameReader::new(&mut cursor);
         let result = match reader.read_next_or_eof(buffer) {
             Ok(Some(result)) => result,
-            Ok(None) => return self.instance().finish_frame(None, 1),
+            Ok(None) => return self.obj().finish_frame(None, 1),
             Err(err) => {
                 return gst_audio::audio_decoder_error!(
-                    self.instance(),
+                    self.obj(),
                     1,
                     gst::StreamError::Decode,
                     ["Failed to decode packet: {:?}", err]
@@ -288,7 +288,7 @@ impl ClaxonDec {
 
         let depth_adjusted = depth.adjust_samples(v);
         let outbuf = gst::Buffer::from_mut_slice(depth_adjusted);
-        self.instance().finish_frame(Some(outbuf), 1)
+        self.obj().finish_frame(Some(outbuf), 1)
     }
 }
 

@@ -186,7 +186,7 @@ impl AudioDecoderImpl for LewtonDec {
 
         // Ignore empty packets unless we have no headers yet
         if inmap.len() == 0 {
-            self.instance().finish_frame(None, 1)?;
+            self.obj().finish_frame(None, 1)?;
 
             if state.headerset.is_some() {
                 return Ok(gst::FlowSuccess::Ok);
@@ -243,7 +243,7 @@ impl LewtonDec {
             }
         }
 
-        self.instance().finish_frame(None, 1)
+        self.obj().finish_frame(None, 1)
     }
 
     fn initialize(&self, state: &mut State) -> Result<(), gst::FlowError> {
@@ -351,8 +351,8 @@ impl LewtonDec {
         state.audio_info = Some(audio_info.clone());
         state.reorder_map = reorder_map;
 
-        self.instance().set_output_format(&audio_info)?;
-        self.instance().negotiate()?;
+        self.obj().set_output_format(&audio_info)?;
+        self.obj().negotiate()?;
 
         Ok(())
     }
@@ -374,7 +374,7 @@ impl LewtonDec {
             Ok(decoded) => decoded,
             Err(err) => {
                 return audio_decoder_error!(
-                    self.instance(),
+                    self.obj(),
                     1,
                     gst::StreamError::Decode,
                     ["Failed to decode packet: {:?}", err]
@@ -384,7 +384,7 @@ impl LewtonDec {
 
         if decoded.channel_count != audio_info.channels() as usize {
             return audio_decoder_error!(
-                self.instance(),
+                self.obj(),
                 1,
                 gst::StreamError::Decode,
                 [
@@ -399,12 +399,12 @@ impl LewtonDec {
         gst::debug!(CAT, imp: self, "Got {} decoded samples", sample_count);
 
         if sample_count == 0 {
-            return self.instance().finish_frame(None, 1);
+            return self.obj().finish_frame(None, 1);
         }
 
         let outbuf = if let Some(ref reorder_map) = state.reorder_map {
             let mut outbuf = self
-                .instance()
+                .obj()
                 .allocate_output_buffer(sample_count as usize * audio_info.bpf() as usize);
             {
                 // And copy the decoded data into our output buffer while reordering the channels to the
@@ -451,7 +451,7 @@ impl LewtonDec {
             gst::Buffer::from_mut_slice(CastVec(decoded.samples))
         };
 
-        self.instance().finish_frame(Some(outbuf), 1)
+        self.obj().finish_frame(Some(outbuf), 1)
     }
 }
 

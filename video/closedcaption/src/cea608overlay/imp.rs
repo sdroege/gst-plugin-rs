@@ -507,9 +507,9 @@ impl Cea608Overlay {
                 let mut state = self.state.lock().unwrap();
                 state.caption_frame = CaptionFrame::default();
                 state.composition = None;
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
-            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
 }
@@ -644,7 +644,7 @@ impl ObjectImpl for Cea608Overlay {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }

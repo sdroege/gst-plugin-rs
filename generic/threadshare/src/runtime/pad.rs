@@ -163,7 +163,7 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
     fn src_event(&self, pad: &PadSrcRef, imp: &Self::ElementImpl, event: gst::Event) -> bool {
         gst::log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
-        let elem = imp.instance();
+        let elem = imp.obj();
         // FIXME with GAT on `Self::ElementImpl`, we should be able to
         // use `.upcast::<gst::Element>()`
         //
@@ -199,7 +199,7 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
         } else {
             gst::log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
-            let elem = imp.instance();
+            let elem = imp.obj();
             // FIXME with GAT on `Self::ElementImpl`, we should be able to
             // use `.upcast::<gst::Element>()`
             //
@@ -571,7 +571,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         assert!(!event.is_serialized());
         gst::log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
-        let elem = imp.instance();
+        let elem = imp.obj();
         // FIXME with GAT on `Self::ElementImpl`, we should be able to
         // use `.upcast::<gst::Element>()`
         //
@@ -646,7 +646,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         } else {
             gst::log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
-            let elem = imp.instance();
+            let elem = imp.obj();
             // FIXME with GAT on `Self::ElementImpl`, we should be able to
             // use `.upcast::<gst::Element>()`
             //
@@ -845,7 +845,7 @@ impl PadSink {
                         || Err(FlowError::Error),
                         move |imp| {
                             let this_weak = PadSinkWeak(Arc::downgrade(&inner_arc));
-                            let elem = imp.instance().clone();
+                            let elem = imp.obj().clone();
 
                             if let Some((ctx, task_id)) = Context::current_task() {
                                 let delayed_fut = async move {
@@ -874,7 +874,7 @@ impl PadSink {
                         || Err(FlowError::Error),
                         move |imp| {
                             let this_weak = PadSinkWeak(Arc::downgrade(&inner_arc));
-                            let elem = imp.instance().clone();
+                            let elem = imp.obj().clone();
 
                             if let Some((ctx, task_id)) = Context::current_task() {
                                 let delayed_fut = async move {
@@ -907,7 +907,7 @@ impl PadSink {
                         move |imp| {
                             if event.is_serialized() {
                                 let this_weak = PadSinkWeak(Arc::downgrade(&inner_arc));
-                                let elem = imp.instance().clone();
+                                let elem = imp.obj().clone();
 
                                 if let Some((ctx, task_id)) = Context::current_task() {
                                     let delayed_fut = async move {

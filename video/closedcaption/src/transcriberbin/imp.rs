@@ -220,7 +220,7 @@ impl TranscriberBin {
             gst::PadProbeReturn::Ok
         });
 
-        self.instance().add(&state.internal_bin)?;
+        self.obj().add(&state.internal_bin)?;
 
         state.cccombiner.set_property("latency", 100.mseconds());
 
@@ -411,8 +411,7 @@ impl TranscriberBin {
             QueryViewMut::Latency(q) => {
                 let mut upstream_query = gst::query::Latency::new();
 
-                let ret =
-                    gst::Pad::query_default(pad, Some(&*self.instance()), &mut upstream_query);
+                let ret = gst::Pad::query_default(pad, Some(&*self.obj()), &mut upstream_query);
 
                 if ret {
                     let (_, mut min, _) = upstream_query.result();
@@ -437,7 +436,7 @@ impl TranscriberBin {
 
                 ret
             }
-            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.obj()), query),
         }
     }
 
@@ -520,9 +519,9 @@ impl TranscriberBin {
                     }
                 }
 
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
-            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
 }
@@ -750,7 +749,7 @@ impl ObjectImpl for TranscriberBin {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.audio_srcpad).unwrap();
         obj.add_pad(&self.audio_sinkpad).unwrap();
         obj.add_pad(&self.video_srcpad).unwrap();
@@ -890,8 +889,8 @@ impl BinImpl for TranscriberBin {
                         let mut settings = self.settings.lock().unwrap();
                         settings.passthrough = true;
                         drop(settings);
-                        self.instance().notify("passthrough");
-                        self.instance().call_async(move |bin| {
+                        self.obj().notify("passthrough");
+                        self.obj().call_async(move |bin| {
                             let thiz = bin.imp();
                             thiz.block_and_update(true);
                         });

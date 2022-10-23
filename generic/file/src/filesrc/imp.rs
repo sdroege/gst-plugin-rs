@@ -174,7 +174,7 @@ impl ObjectImpl for FileSrc {
     fn constructed(&self) {
         self.parent_constructed();
 
-        self.instance().set_format(gst::Format::Bytes);
+        self.obj().set_format(gst::Format::Bytes);
     }
 }
 

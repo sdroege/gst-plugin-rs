@@ -110,14 +110,14 @@ fn time_to_bytes(time: gst::ClockTime) -> Bytes {
 
 impl BaseParseImpl for CdgParse {
     fn start(&self) -> Result<(), gst::ErrorMessage> {
-        self.instance().set_min_frame_size(CDG_PACKET_SIZE as u32);
+        self.obj().set_min_frame_size(CDG_PACKET_SIZE as u32);
 
         /* Set duration */
         let mut query = gst::query::Duration::new(gst::Format::Bytes);
-        if self.instance().src_pad().query(&mut query) {
+        if self.obj().src_pad().query(&mut query) {
             let size = query.result();
             let bytes: Option<Bytes> = size.try_into().unwrap();
-            self.instance().set_duration(bytes.map(bytes_to_time), 0);
+            self.obj().set_duration(bytes.map(bytes_to_time), 0);
         }
 
         Ok(())
@@ -127,7 +127,7 @@ impl BaseParseImpl for CdgParse {
         &self,
         mut frame: gst_base::BaseParseFrame,
     ) -> Result<(gst::FlowSuccess, u32), gst::FlowError> {
-        if self.instance().src_pad().current_caps().is_none() {
+        if self.obj().src_pad().current_caps().is_none() {
             // Set src pad caps
             let src_caps = gst::Caps::builder("video/x-cdg")
                 .field("width", CDG_WIDTH as i32)
@@ -136,7 +136,7 @@ impl BaseParseImpl for CdgParse {
                 .field("parsed", true)
                 .build();
 
-            self.instance()
+            self.obj()
                 .src_pad()
                 .push_event(gst::event::Caps::new(&src_caps));
         }
@@ -202,8 +202,7 @@ impl BaseParseImpl for CdgParse {
 
         gst::debug!(CAT, imp: self, "Found frame pts={}", pts);
 
-        self.instance()
-            .finish_frame(frame, CDG_PACKET_SIZE as u32)?;
+        self.obj().finish_frame(frame, CDG_PACKET_SIZE as u32)?;
 
         Ok((gst::FlowSuccess::Ok, skip))
     }

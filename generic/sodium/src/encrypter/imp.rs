@@ -243,9 +243,9 @@ impl Encrypter {
                     }
                 }
 
-                gst::Pad::event_default(pad, Some(&*self.instance()), event)
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
-            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
 
@@ -256,7 +256,7 @@ impl Encrypter {
 
         match event.view() {
             EventView::Seek(_) => false,
-            _ => gst::Pad::event_default(pad, Some(&*self.instance()), event),
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
 
@@ -278,7 +278,7 @@ impl Encrypter {
             }
             QueryViewMut::Duration(q) => {
                 if q.format() != gst::Format::Bytes {
-                    return gst::Pad::query_default(pad, Some(&*self.instance()), query);
+                    return gst::Pad::query_default(pad, Some(&*self.obj()), query);
                 }
 
                 /* First let's query the bytes duration upstream */
@@ -318,7 +318,7 @@ impl Encrypter {
 
                 true
             }
-            _ => gst::Pad::query_default(pad, Some(&*self.instance()), query),
+            _ => gst::Pad::query_default(pad, Some(&*self.obj()), query),
         }
     }
 }
@@ -406,7 +406,7 @@ impl ObjectImpl for Encrypter {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }

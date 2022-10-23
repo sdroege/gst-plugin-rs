@@ -588,7 +588,7 @@ impl ObjectImpl for ProxySink {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(self.sink_pad.gst_pad()).unwrap();
         obj.set_element_flags(gst::ElementFlags::SINK);
     }
@@ -957,7 +957,7 @@ impl ProxySrc {
         })?;
 
         let dataqueue = DataQueue::new(
-            &self.instance().clone().upcast(),
+            &self.obj().clone().upcast(),
             self.src_pad.gst_pad(),
             if settings.max_size_buffers == 0 {
                 None
@@ -989,10 +989,7 @@ impl ProxySrc {
         *self.dataqueue.lock().unwrap() = Some(dataqueue.clone());
 
         self.task
-            .prepare(
-                ProxySrcTask::new(self.instance().clone(), dataqueue),
-                ts_ctx,
-            )
+            .prepare(ProxySrcTask::new(self.obj().clone(), dataqueue), ts_ctx)
             .block_on()?;
 
         gst::debug!(SRC_CAT, imp: self, "Prepared");
@@ -1150,7 +1147,7 @@ impl ObjectImpl for ProxySrc {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(self.src_pad.gst_pad()).unwrap();
         obj.set_element_flags(gst::ElementFlags::SOURCE);
     }

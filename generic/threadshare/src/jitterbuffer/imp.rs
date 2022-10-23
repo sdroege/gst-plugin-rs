@@ -341,7 +341,7 @@ impl SinkHandler {
             pt
         );
 
-        let element = jb.instance();
+        let element = jb.obj();
 
         if dts.is_none() {
             dts = pts;
@@ -523,7 +523,7 @@ impl SinkHandler {
         // Reschedule if needed
         let (_, next_wakeup) =
             jb.src_pad_handler
-                .next_wakeup(&jb.instance(), &state, latency, context_wait);
+                .next_wakeup(&jb.obj(), &state, latency, context_wait);
         if let Some((next_wakeup, _)) = next_wakeup {
             if let Some((previous_next_wakeup, ref abort_handle)) = state.wait_handle {
                 if previous_next_wakeup.is_none()
@@ -1262,11 +1262,7 @@ impl JitterBuffer {
 
         self.task
             .prepare(
-                JitterBufferTask::new(
-                    &*self.instance(),
-                    &self.src_pad_handler,
-                    &self.sink_pad_handler,
-                ),
+                JitterBufferTask::new(&*self.obj(), &self.src_pad_handler, &self.sink_pad_handler),
                 context,
             )
             .block_on()?;
@@ -1407,11 +1403,9 @@ impl ObjectImpl for JitterBuffer {
                 let state = self.state.lock().unwrap();
                 state.jbuf.set_delay(latency);
 
-                let _ = self.instance().post_message(
-                    gst::message::Latency::builder()
-                        .src(&*self.instance())
-                        .build(),
-                );
+                let _ = self
+                    .obj()
+                    .post_message(gst::message::Latency::builder().src(&*self.obj()).build());
             }
             "do-lost" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -1484,7 +1478,7 @@ impl ObjectImpl for JitterBuffer {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(self.sink_pad.gst_pad()).unwrap();
         obj.add_pad(self.src_pad.gst_pad()).unwrap();
         obj.set_element_flags(gst::ElementFlags::PROVIDE_CLOCK | gst::ElementFlags::REQUIRE_CLOCK);

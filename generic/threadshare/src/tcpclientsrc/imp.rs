@@ -437,7 +437,7 @@ impl TcpClientSrc {
         let _ = self
             .task
             .prepare(
-                TcpClientSrcTask::new(self.instance().clone(), saddr, buffer_pool),
+                TcpClientSrcTask::new(self.obj().clone(), saddr, buffer_pool),
                 context,
             )
             .check()?;
@@ -582,7 +582,7 @@ impl ObjectImpl for TcpClientSrc {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(self.src_pad.gst_pad()).unwrap();
         obj.set_element_flags(gst::ElementFlags::SOURCE);
     }

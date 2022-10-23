@@ -181,7 +181,7 @@ impl ObjectImpl for Identity {
 
         // Here we actually add the pads we created in Identity::new() to the
         // element so that GStreamer is aware of their existence.
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }

@@ -200,7 +200,7 @@ fn create_navigation_event(sink: &super::WebRTCSink, msg: &str) {
         gst::log!(CAT, obj: sink, "Processing navigation event: {:?}", event);
 
         if let Some(mid) = event.mid {
-            let this = WebRTCSink::from_instance(sink);
+            let this = sink.imp();
 
             let state = this.state.lock().unwrap();
             if let Some(stream_name) = state.mids.get(&mid) {
@@ -213,7 +213,7 @@ fn create_navigation_event(sink: &super::WebRTCSink, msg: &str) {
                 }
             }
         } else {
-            let this = WebRTCSink::from_instance(sink);
+            let this = sink.imp();
 
             let state = this.state.lock().unwrap();
             let event = gst::event::Navigation::new(event.event.structure());
@@ -1296,7 +1296,7 @@ impl WebRTCSink {
                 gst::debug!(CAT, "Created offer for session {}", session_id);
 
                 if let Some(element) = element.upgrade() {
-                    let this = Self::from_instance(&element);
+                    let this = element.imp();
                     let reply = match reply {
                         Ok(Some(reply)) => reply,
                         Ok(None) => {
@@ -1496,7 +1496,7 @@ impl WebRTCSink {
         let session_id_clone = session_id.clone();
         webrtcbin.connect("on-ice-candidate", false, move |values| {
             if let Some(element) = element_clone.upgrade() {
-                let this = Self::from_instance(&element);
+                let this = element.imp();
                 let sdp_m_line_index = values[1].get::<u32>().expect("Invalid argument");
                 let candidate = values[2].get::<String>().expect("Invalid argument");
                 this.on_ice_candidate(
@@ -1519,7 +1519,7 @@ impl WebRTCSink {
 
                 match state {
                     gst_webrtc::WebRTCPeerConnectionState::Failed => {
-                        let this = Self::from_instance(&element);
+                        let this = element.imp();
                         gst::warning!(
                             CAT,
                             obj: element,
@@ -1550,7 +1550,7 @@ impl WebRTCSink {
             if let Some(element) = element_clone.upgrade() {
                 let state = webrtcbin
                     .property::<gst_webrtc::WebRTCICEConnectionState>("ice-connection-state");
-                let this = Self::from_instance(&element);
+                let this = element.imp();
 
                 match state {
                     gst_webrtc::WebRTCICEConnectionState::Failed => {
@@ -1679,7 +1679,7 @@ impl WebRTCSink {
         task::spawn(async move {
             while let Some(msg) = bus_stream.next().await {
                 if let Some(element) = element_clone.upgrade() {
-                    let this = Self::from_instance(&element);
+                    let this = element.imp();
                     match msg.view() {
                         gst::MessageView::Error(err) => {
                             gst::error!(
@@ -2049,7 +2049,7 @@ impl WebRTCSink {
             let promise = gst::Promise::with_change_func(move |reply| {
                 gst::debug!(CAT, "received reply {:?}", reply);
                 if let Some(element) = element.upgrade() {
-                    let this = Self::from_instance(&element);
+                    let this = element.imp();
 
                     this.on_remote_description_set(&element, session_id);
                 }
@@ -2278,7 +2278,7 @@ impl WebRTCSink {
                         let element_clone = element.downgrade();
                         task::spawn(async move {
                             if let Some(element) = element_clone.upgrade() {
-                                let this = Self::from_instance(&element);
+                                let this = element.imp();
                                 let (fut, handle) =
                                     futures::future::abortable(this.lookup_streams_caps(&element));
 
@@ -2660,7 +2660,7 @@ impl ObjectImpl for WebRTCSink {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.set_suppressed_flags(gst::ElementFlags::SINK | gst::ElementFlags::SOURCE);
         obj.set_element_flags(gst::ElementFlags::SINK);
     }
@@ -2728,7 +2728,7 @@ impl ElementImpl for WebRTCSink {
         _name: Option<&str>,
         _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
-        let element = self.instance();
+        let element = self.obj();
         if element.current_state() > gst::State::Ready {
             gst::error!(CAT, "element pads can only be requested before starting");
             return None;
@@ -2751,7 +2751,7 @@ impl ElementImpl for WebRTCSink {
                 WebRTCSink::catch_panic_pad_function(
                     parent,
                     || false,
-                    |this| this.sink_event(pad.upcast_ref(), &*this.instance(), event),
+                    |this| this.sink_event(pad.upcast_ref(), &*this.obj(), event),
                 )
             })
             .build();
@@ -2778,7 +2778,7 @@ impl ElementImpl for WebRTCSink {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        let element = self.instance();
+        let element = self.obj();
         if let gst::StateChange::ReadyToPaused = transition {
             if let Err(err) = self.prepare(&*element) {
                 gst::element_error!(

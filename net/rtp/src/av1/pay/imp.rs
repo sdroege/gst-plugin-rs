@@ -217,7 +217,7 @@ impl RTPAv1Pay {
             state.obus.len()
         );
 
-        let payload_limit = gst_rtp::calc_payload_len(self.instance().mtu(), 0, 0);
+        let payload_limit = gst_rtp::calc_payload_len(self.obj().mtu(), 0, 0);
 
         // Create information about the packet that can be created now while iterating over the
         // OBUs and return this if a full packet can indeed be created now.
@@ -601,8 +601,7 @@ impl ElementImpl for RTPAv1Pay {
 
 impl RTPBasePayloadImpl for RTPAv1Pay {
     fn set_caps(&self, _caps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        self.instance()
-            .set_options("video", true, "AV1", CLOCK_RATE);
+        self.obj().set_options("video", true, "AV1", CLOCK_RATE);
 
         gst::debug!(CAT, imp: self, "setting caps");
 
@@ -636,7 +635,7 @@ impl RTPBasePayloadImpl for RTPAv1Pay {
         drop(state);
 
         if !list.is_empty() {
-            self.instance().push_list(list)
+            self.obj().push_list(list)
         } else {
             Ok(gst::FlowSuccess::Ok)
         }
@@ -663,7 +662,7 @@ impl RTPBasePayloadImpl for RTPAv1Pay {
                     self.reset(&mut state);
                 }
                 if !list.is_empty() {
-                    let _ = self.instance().push_list(list);
+                    let _ = self.obj().push_list(list);
                 }
             }
             gst::EventView::FlushStop(_) => {

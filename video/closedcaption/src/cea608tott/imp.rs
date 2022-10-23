@@ -367,7 +367,7 @@ impl Cea608ToTt {
             _ => (),
         }
 
-        gst::Pad::event_default(pad, Some(&*self.instance()), event)
+        gst::Pad::event_default(pad, Some(&*self.obj()), event)
     }
 }
 
@@ -414,7 +414,7 @@ impl ObjectImpl for Cea608ToTt {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
     }

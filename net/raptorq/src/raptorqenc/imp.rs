@@ -180,7 +180,7 @@ impl RaptorqEnc {
             .map(|n| ((n * delay_step) as u64).mseconds())
             .collect::<Vec<_>>();
 
-        let base_time = self.instance().base_time();
+        let base_time = self.obj().base_time();
         let running_time = state.segment.to_running_time(now_pts);
 
         for (target_time, repair_packet) in Iterator::zip(
@@ -313,7 +313,7 @@ impl RaptorqEnc {
                                 }
                             };
 
-                            let clock = match self_.instance().clock() {
+                            let clock = match self_.obj().clock() {
                                 Some(clock) => clock,
                                 None => {
                                     // No clock provided, push buffer immediately
@@ -505,7 +505,7 @@ impl RaptorqEnc {
                     // Push stream events on FEC srcpad as well
                     let stream_id = self
                         .srcpad_fec
-                        .create_stream_id(&*self.instance(), Some("fec"))
+                        .create_stream_id(&*self.obj(), Some("fec"))
                         .to_string();
 
                     let kmax = extended_source_block_symbols(state.symbols_per_block as u32);
@@ -543,7 +543,7 @@ impl RaptorqEnc {
             _ => (),
         }
 
-        gst::Pad::event_default(pad, Some(&*self.instance()), event)
+        gst::Pad::event_default(pad, Some(&*self.obj()), event)
     }
 
     fn iterate_internal_links(&self, pad: &gst::Pad) -> gst::Iterator<gst::Pad> {
@@ -846,7 +846,7 @@ impl ObjectImpl for RaptorqEnc {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.instance();
+        let obj = self.obj();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
         obj.add_pad(&self.srcpad_fec).unwrap();

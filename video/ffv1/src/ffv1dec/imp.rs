@@ -371,7 +371,7 @@ impl VideoDecoderImpl for Ffv1Dec {
         let format = get_output_format(decoder.config_record())
             .ok_or_else(|| gst::loggable_error!(CAT, "Unsupported format"))?;
 
-        let instance = self.instance();
+        let instance = self.obj();
         let output_state = instance
             .set_output_state(format, info.width(), info.height(), Some(state))
             .map_err(|err| gst::loggable_error!(CAT, "Failed to set output params: {}", err))?;
@@ -437,7 +437,7 @@ impl VideoDecoderImpl for Ffv1Dec {
         drop(state);
 
         frame.set_output_buffer(buf);
-        self.instance().finish_frame(frame)?;
+        self.obj().finish_frame(frame)?;
 
         Ok(gst::FlowSuccess::Ok)
     }
