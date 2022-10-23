@@ -56,7 +56,7 @@ plugins = {
   'gst-plugin-onvif': 'libgstrsonvif',
   'gst-plugin-raptorq': 'libgstraptorq',
   'gst-plugin-reqwest': 'libgstreqwest',
-  'gst-plugin-rtpav1': 'libgstrtpav1',
+  'gst-plugin-rtp': 'libgstrsrtp',
   'gst-plugin-webrtchttp': 'libgstwebrtchttp',
   'gst-plugin-webrtc': 'libgstrswebrtc',
 

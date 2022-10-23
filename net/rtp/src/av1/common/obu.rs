@@ -7,7 +7,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::common::{leb128_size, parse_leb128};
+use crate::av1::common::{leb128_size, parse_leb128};
 use bitstream_io::{BitRead, BitReader, Endianness};
 use std::io::{self, Read, Seek};
 

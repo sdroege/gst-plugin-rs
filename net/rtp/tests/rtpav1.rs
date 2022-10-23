@@ -17,7 +17,7 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
-        gstrtpav1::plugin_register_static().expect("rtpav1 test");
+        gstrsrtp::plugin_register_static().expect("rtpav1 test");
     });
 }
 

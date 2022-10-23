@@ -9,24 +9,23 @@
 #![allow(unused_doc_comments)]
 
 /**
- * plugin-rtpav1:
+ * plugin-rsrtp:
  *
  * Since: plugins-rs-0.9.0
  */
 use gst::glib;
 
-mod common;
-pub mod depay;
-pub mod pay;
+mod av1;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    depay::register(plugin)?;
-    pay::register(plugin)?;
+    av1::depay::register(plugin)?;
+    av1::pay::register(plugin)?;
+
     Ok(())
 }
 
 gst::plugin_define!(
-    rtpav1,
+    rsrtp,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
     concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),

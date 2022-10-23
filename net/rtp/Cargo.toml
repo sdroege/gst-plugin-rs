@@ -1,11 +1,11 @@
 [package]
-name = "gst-plugin-rtpav1"
+name = "gst-plugin-rtp"
 version = "0.9.0-alpha.1"
-authors = ["Vivienne Watermeier <vwatermeier@igalia.com>"]
+authors = ["Vivienne Watermeier <vwatermeier@igalia.com>", "Sebastian Dröge <sebastian@centricular.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
 edition = "2021"
-description = "AV1 RTP (De)payloader Plugins"
+description = "GStreamer Rust RTP Plugin"
 rust-version = "1.63"
 
 [dependencies]
@@ -22,7 +22,7 @@ gst-check = { package = "gstreamer-check",  git = "https://gitlab.freedesktop.or
 gst-plugin-version-helper = { path = "../../version-helper" }
 
 [lib]
-name = "gstrtpav1"
+name = "gstrsrtp"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 

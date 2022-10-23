@@ -19,7 +19,7 @@ use std::{
 use bitstream_io::{BitReader, BitWriter};
 use once_cell::sync::Lazy;
 
-use crate::common::{
+use crate::av1::common::{
     err_flow, leb128_size, write_leb128, ObuType, SizedObu, CLOCK_RATE, ENDIANNESS,
 };
 
@@ -680,7 +680,7 @@ impl RTPBasePayloadImpl for RTPAv1Pay {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::*;
+    use crate::av1::common::*;
 
     #[test]
     fn test_consider_new_packet() {

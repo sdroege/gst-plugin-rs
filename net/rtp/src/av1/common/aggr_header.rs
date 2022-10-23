@@ -54,7 +54,7 @@ impl From<AggregationHeader> for u8 {
 
 #[cfg(test)]
 mod tests {
-    use crate::common::*;
+    use crate::av1::common::*;
 
     const HEADERS: [(u8, AggregationHeader); 3] = [
         (
