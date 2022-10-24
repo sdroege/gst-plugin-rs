@@ -113,7 +113,7 @@ struct UdpSrcPadHandler;
 impl PadSrcHandler for UdpSrcPadHandler {
     type ElementImpl = UdpSrc;
 
-    fn src_event(&self, pad: &PadSrcRef, imp: &UdpSrc, event: gst::Event) -> bool {
+    fn src_event(self, pad: &PadSrcRef, imp: &UdpSrc, event: gst::Event) -> bool {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         use gst::EventView;
@@ -134,7 +134,7 @@ impl PadSrcHandler for UdpSrcPadHandler {
         ret
     }
 
-    fn src_query(&self, pad: &PadSrcRef, imp: &UdpSrc, query: &mut gst::QueryRef) -> bool {
+    fn src_query(self, pad: &PadSrcRef, imp: &UdpSrc, query: &mut gst::QueryRef) -> bool {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
         use gst::QueryViewMut;

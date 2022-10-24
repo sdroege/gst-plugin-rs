@@ -113,7 +113,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
         .boxed()
     }
 
-    fn sink_event(&self, pad: &PadSinkRef, imp: &Queue, event: gst::Event) -> bool {
+    fn sink_event(self, pad: &PadSinkRef, imp: &Queue, event: gst::Event) -> bool {
         gst::debug!(CAT, obj: pad.gst_pad(), "Handling non-serialized {:?}", event);
 
         if let gst::EventView::FlushStart(..) = event.view() {
@@ -164,7 +164,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
         .boxed()
     }
 
-    fn sink_query(&self, pad: &PadSinkRef, imp: &Queue, query: &mut gst::QueryRef) -> bool {
+    fn sink_query(self, pad: &PadSinkRef, imp: &Queue, query: &mut gst::QueryRef) -> bool {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
         if query.is_serialized() {
@@ -184,7 +184,7 @@ struct QueuePadSrcHandler;
 impl PadSrcHandler for QueuePadSrcHandler {
     type ElementImpl = Queue;
 
-    fn src_event(&self, pad: &PadSrcRef, imp: &Queue, event: gst::Event) -> bool {
+    fn src_event(self, pad: &PadSrcRef, imp: &Queue, event: gst::Event) -> bool {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         use gst::EventView;
@@ -213,7 +213,7 @@ impl PadSrcHandler for QueuePadSrcHandler {
         imp.sink_pad.gst_pad().push_event(event)
     }
 
-    fn src_query(&self, pad: &PadSrcRef, imp: &Queue, query: &mut gst::QueryRef) -> bool {
+    fn src_query(self, pad: &PadSrcRef, imp: &Queue, query: &mut gst::QueryRef) -> bool {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
         if let gst::QueryViewMut::Scheduling(q) = query.view_mut() {

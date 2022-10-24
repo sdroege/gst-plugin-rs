@@ -122,7 +122,7 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
     type ElementImpl: ElementImpl + ObjectSubclass;
 
     fn src_activate(
-        &self,
+        self,
         pad: &PadSrcRef,
         _imp: &Self::ElementImpl,
     ) -> Result<(), gst::LoggableError> {
@@ -151,7 +151,7 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
     }
 
     fn src_activatemode(
-        &self,
+        self,
         _pad: &PadSrcRef,
         _imp: &Self::ElementImpl,
         _mode: gst::PadMode,
@@ -160,7 +160,7 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
         Ok(())
     }
 
-    fn src_event(&self, pad: &PadSrcRef, imp: &Self::ElementImpl, event: gst::Event) -> bool {
+    fn src_event(self, pad: &PadSrcRef, imp: &Self::ElementImpl, event: gst::Event) -> bool {
         gst::log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         let elem = imp.obj();
@@ -174,7 +174,7 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
     }
 
     fn src_event_full(
-        &self,
+        self,
         pad: &PadSrcRef,
         imp: &Self::ElementImpl,
         event: gst::Event,
@@ -186,7 +186,7 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
     }
 
     fn src_query(
-        &self,
+        self,
         pad: &PadSrcRef,
         imp: &Self::ElementImpl,
         query: &mut gst::QueryRef,
@@ -406,7 +406,7 @@ impl PadSrc {
                                 "Panic in PadSrc activate"
                             ))
                         },
-                        move |imp| handler.src_activate(&PadSrcRef::new(inner_arc), imp),
+                        move |imp| H::src_activate(handler, &PadSrcRef::new(inner_arc), imp),
                     )
                 });
 
@@ -428,7 +428,7 @@ impl PadSrc {
                         move |imp| {
                             let this_ref = PadSrcRef::new(inner_arc);
                             this_ref.activate_mode_hook(mode, active)?;
-                            handler.src_activatemode(&this_ref, imp, mode, active)
+                            H::src_activatemode(handler, &this_ref, imp, mode, active)
                         },
                     )
                 });
@@ -444,7 +444,9 @@ impl PadSrc {
                     H::ElementImpl::catch_panic_pad_function(
                         parent,
                         || Err(FlowError::Error),
-                        move |imp| handler.src_event_full(&PadSrcRef::new(inner_arc), imp, event),
+                        move |imp| {
+                            H::src_event_full(handler, &PadSrcRef::new(inner_arc), imp, event)
+                        },
                     )
                 });
 
@@ -458,7 +460,7 @@ impl PadSrc {
                     || false,
                     move |imp| {
                         if !query.is_serialized() {
-                            handler.src_query(&PadSrcRef::new(inner_arc), imp, query)
+                            H::src_query(handler, &PadSrcRef::new(inner_arc), imp, query)
                         } else {
                             gst::fixme!(RUNTIME_CAT, obj: inner_arc.gst_pad(), "Serialized Query not supported");
                             false
@@ -511,7 +513,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
     type ElementImpl: ElementImpl + ObjectSubclass;
 
     fn sink_activate(
-        &self,
+        self,
         pad: &PadSinkRef,
         _imp: &Self::ElementImpl,
     ) -> Result<(), gst::LoggableError> {
@@ -540,7 +542,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
     }
 
     fn sink_activatemode(
-        &self,
+        self,
         _pad: &PadSinkRef,
         _imp: &Self::ElementImpl,
         _mode: gst::PadMode,
@@ -567,7 +569,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         future::err(FlowError::NotSupported).boxed()
     }
 
-    fn sink_event(&self, pad: &PadSinkRef, imp: &Self::ElementImpl, event: gst::Event) -> bool {
+    fn sink_event(self, pad: &PadSinkRef, imp: &Self::ElementImpl, event: gst::Event) -> bool {
         assert!(!event.is_serialized());
         gst::log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
@@ -604,7 +606,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
     }
 
     fn sink_event_full(
-        &self,
+        self,
         pad: &PadSinkRef,
         imp: &Self::ElementImpl,
         event: gst::Event,
@@ -633,7 +635,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
     }
 
     fn sink_query(
-        &self,
+        self,
         pad: &PadSinkRef,
         imp: &Self::ElementImpl,
         query: &mut gst::QueryRef,
@@ -807,7 +809,7 @@ impl PadSink {
                                 "Panic in PadSink activate"
                             ))
                         },
-                        move |imp| handler.sink_activate(&PadSinkRef::new(inner_arc), imp),
+                        move |imp| H::sink_activate(handler, &PadSinkRef::new(inner_arc), imp),
                     )
                 });
 
@@ -829,7 +831,7 @@ impl PadSink {
                         move |imp| {
                             let this_ref = PadSinkRef::new(inner_arc);
                             this_ref.activate_mode_hook(mode, active)?;
-                            handler.sink_activatemode(&this_ref, imp, mode, active)
+                            H::sink_activatemode(handler, &this_ref, imp, mode, active)
                         },
                     )
                 });
@@ -945,7 +947,7 @@ impl PadSink {
                     || false,
                     move |imp| {
                         if !query.is_serialized() {
-                            handler.sink_query(&PadSinkRef::new(inner_arc), imp, query)
+                            H::sink_query(handler, &PadSinkRef::new(inner_arc), imp, query)
                         } else {
                             gst::fixme!(RUNTIME_CAT, obj: inner_arc.gst_pad(), "Serialized Query not supported");
                             false

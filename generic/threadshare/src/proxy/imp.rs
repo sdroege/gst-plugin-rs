@@ -243,7 +243,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
         .boxed()
     }
 
-    fn sink_event(&self, pad: &PadSinkRef, imp: &ProxySink, event: gst::Event) -> bool {
+    fn sink_event(self, pad: &PadSinkRef, imp: &ProxySink, event: gst::Event) -> bool {
         gst::debug!(SINK_CAT, obj: pad.gst_pad(), "Handling non-serialized {:?}", event);
 
         let src_pad = {
@@ -666,7 +666,7 @@ struct ProxySrcPadHandler;
 impl PadSrcHandler for ProxySrcPadHandler {
     type ElementImpl = ProxySrc;
 
-    fn src_event(&self, pad: &PadSrcRef, imp: &ProxySrc, event: gst::Event) -> bool {
+    fn src_event(self, pad: &PadSrcRef, imp: &ProxySrc, event: gst::Event) -> bool {
         gst::log!(SRC_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         let sink_pad = {
@@ -718,7 +718,7 @@ impl PadSrcHandler for ProxySrcPadHandler {
         }
     }
 
-    fn src_query(&self, pad: &PadSrcRef, _proxysrc: &ProxySrc, query: &mut gst::QueryRef) -> bool {
+    fn src_query(self, pad: &PadSrcRef, _proxysrc: &ProxySrc, query: &mut gst::QueryRef) -> bool {
         gst::log!(SRC_CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
         use gst::QueryViewMut;

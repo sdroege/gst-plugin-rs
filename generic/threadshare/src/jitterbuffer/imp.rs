@@ -562,7 +562,7 @@ impl PadSinkHandler for SinkHandler {
         .boxed()
     }
 
-    fn sink_event(&self, pad: &PadSinkRef, jb: &JitterBuffer, event: gst::Event) -> bool {
+    fn sink_event(self, pad: &PadSinkRef, jb: &JitterBuffer, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
@@ -870,7 +870,7 @@ impl SrcHandler {
 impl PadSrcHandler for SrcHandler {
     type ElementImpl = JitterBuffer;
 
-    fn src_event(&self, pad: &PadSrcRef, jb: &JitterBuffer, event: gst::Event) -> bool {
+    fn src_event(self, pad: &PadSrcRef, jb: &JitterBuffer, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
@@ -907,7 +907,7 @@ impl PadSrcHandler for SrcHandler {
         jb.sink_pad.gst_pad().push_event(event)
     }
 
-    fn src_query(&self, pad: &PadSrcRef, jb: &JitterBuffer, query: &mut gst::QueryRef) -> bool {
+    fn src_query(self, pad: &PadSrcRef, jb: &JitterBuffer, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
         gst::log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", query);

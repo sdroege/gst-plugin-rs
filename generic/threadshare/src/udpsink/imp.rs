@@ -190,7 +190,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
         .boxed()
     }
 
-    fn sink_event(&self, _pad: &PadSinkRef, imp: &UdpSink, event: gst::Event) -> bool {
+    fn sink_event(self, _pad: &PadSinkRef, imp: &UdpSink, event: gst::Event) -> bool {
         if let EventView::FlushStart(..) = event.view() {
             return imp.task.flush_start().await_maybe_on_context().is_ok();
         }

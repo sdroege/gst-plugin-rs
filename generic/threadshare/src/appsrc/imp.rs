@@ -82,7 +82,7 @@ struct AppSrcPadHandler;
 impl PadSrcHandler for AppSrcPadHandler {
     type ElementImpl = AppSrc;
 
-    fn src_event(&self, pad: &PadSrcRef, imp: &AppSrc, event: gst::Event) -> bool {
+    fn src_event(self, pad: &PadSrcRef, imp: &AppSrc, event: gst::Event) -> bool {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         use gst::EventView;
@@ -103,7 +103,7 @@ impl PadSrcHandler for AppSrcPadHandler {
         ret
     }
 
-    fn src_query(&self, pad: &PadSrcRef, imp: &AppSrc, query: &mut gst::QueryRef) -> bool {
+    fn src_query(self, pad: &PadSrcRef, imp: &AppSrc, query: &mut gst::QueryRef) -> bool {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
         use gst::QueryViewMut;

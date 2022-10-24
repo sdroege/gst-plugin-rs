@@ -219,7 +219,7 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
         .boxed()
     }
 
-    fn sink_event(&self, _pad: &PadSinkRef, imp: &InputSelector, event: gst::Event) -> bool {
+    fn sink_event(self, _pad: &PadSinkRef, imp: &InputSelector, event: gst::Event) -> bool {
         /* Drop all events for now */
         if let gst::EventView::FlushStart(..) = event.view() {
             /* Unblock downstream */
@@ -234,7 +234,7 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
         true
     }
 
-    fn sink_query(&self, pad: &PadSinkRef, imp: &InputSelector, query: &mut gst::QueryRef) -> bool {
+    fn sink_query(self, pad: &PadSinkRef, imp: &InputSelector, query: &mut gst::QueryRef) -> bool {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling query {:?}", query);
 
         if query.is_serialized() {
@@ -254,7 +254,7 @@ struct InputSelectorPadSrcHandler;
 impl PadSrcHandler for InputSelectorPadSrcHandler {
     type ElementImpl = InputSelector;
 
-    fn src_query(&self, pad: &PadSrcRef, imp: &InputSelector, query: &mut gst::QueryRef) -> bool {
+    fn src_query(self, pad: &PadSrcRef, imp: &InputSelector, query: &mut gst::QueryRef) -> bool {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
         use gst::QueryViewMut;

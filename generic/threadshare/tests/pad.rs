@@ -89,7 +89,7 @@ mod imp_src {
     impl PadSrcHandler for PadSrcTestHandler {
         type ElementImpl = ElementSrcTest;
 
-        fn src_event(&self, pad: &PadSrcRef, imp: &ElementSrcTest, event: gst::Event) -> bool {
+        fn src_event(self, pad: &PadSrcRef, imp: &ElementSrcTest, event: gst::Event) -> bool {
             gst::log!(SRC_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
             let ret = match event.view() {
@@ -465,7 +465,7 @@ mod imp_sink {
             .boxed()
         }
 
-        fn sink_event(&self, pad: &PadSinkRef, imp: &ElementSinkTest, event: gst::Event) -> bool {
+        fn sink_event(self, pad: &PadSinkRef, imp: &ElementSinkTest, event: gst::Event) -> bool {
             gst::debug!(SINK_CAT, obj: pad.gst_pad(), "Handling non-serialized {:?}", event);
 
             match event.view() {

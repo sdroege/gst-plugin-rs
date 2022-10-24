@@ -96,7 +96,7 @@ struct TcpClientSrcPadHandler;
 impl PadSrcHandler for TcpClientSrcPadHandler {
     type ElementImpl = TcpClientSrc;
 
-    fn src_event(&self, pad: &PadSrcRef, imp: &TcpClientSrc, event: gst::Event) -> bool {
+    fn src_event(self, pad: &PadSrcRef, imp: &TcpClientSrc, event: gst::Event) -> bool {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         use gst::EventView;
@@ -117,7 +117,7 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
         ret
     }
 
-    fn src_query(&self, pad: &PadSrcRef, imp: &TcpClientSrc, query: &mut gst::QueryRef) -> bool {
+    fn src_query(self, pad: &PadSrcRef, imp: &TcpClientSrc, query: &mut gst::QueryRef) -> bool {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
         use gst::QueryViewMut;

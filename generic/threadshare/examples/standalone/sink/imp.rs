@@ -133,7 +133,7 @@ impl PadSinkHandler for TestSinkPadHandler {
         .boxed()
     }
 
-    fn sink_event(&self, _pad: &PadSinkRef, imp: &TestSink, event: gst::Event) -> bool {
+    fn sink_event(self, _pad: &PadSinkRef, imp: &TestSink, event: gst::Event) -> bool {
         if let EventView::FlushStart(..) = event.view() {
             return imp.task.flush_start().await_maybe_on_context().is_ok();
         }
