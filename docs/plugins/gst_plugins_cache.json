@@ -7749,8 +7749,145 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "webrtchttp": {
-        "description": "GStreamer WebRTC Plugin for WebRTC HTTP protocols (WHIP)",
+        "description": "GStreamer WebRTC Plugin for WebRTC HTTP protocols (WHIP/WHEP)",
         "elements": {
+            "whepsrc": {
+                "author": "Sanchayan Maity <sanchayan@asymptotic.io>",
+                "description": "A bin to stream media using the WebRTC HTTP Egress Protocol (WHEP)",
+                "hierarchy": [
+                    "GstWhepSrc",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
+                "klass": "Source/Network/WebRTC",
+                "long-name": "WHEP Source Bin",
+                "pad-templates": {
+                    "src_%%u": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    }
+                },
+                "properties": {
+                    "audio-caps": {
+                        "blurb": "Governs what audio codecs will be proposed",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "audio/x-opus",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstCaps",
+                        "writable": true
+                    },
+                    "auth-token": {
+                        "blurb": "Authentication token to use, will be sent in the HTTP Header as 'Bearer <auth-token>'",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "ice-transport-policy": {
+                        "blurb": "The policy to apply for ICE transport",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "all (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstRsWebRTCICETransportPolicy",
+                        "writable": true
+                    },
+                    "stun-server": {
+                        "blurb": "The STUN server of the form stun://hostname:port",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "timeout": {
+                        "blurb": "Value in seconds to timeout WHEP endpoint requests (0 = No timeout).",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "15",
+                        "max": "3600",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "turn-server": {
+                        "blurb": "The TURN server of the form turn(s)://username:password@host:port.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "use-link-headers": {
+                        "blurb": "Use link headers to configure ICE servers from the WHEP server response.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "video-caps": {
+                        "blurb": "Governs what video codecs will be proposed",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "video/x-vp8; video/x-h264; video/x-vp9; video/x-h265",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstCaps",
+                        "writable": true
+                    },
+                    "whep-endpoint": {
+                        "blurb": "The WHEP server endpoint to POST SDP offer to. Example: http://localhost:7090/whep/endpoint/abc123",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "marginal"
+            },
             "whipsink": {
                 "author": "Taruntej Kanakamalla <taruntej@asymptotic.io>",
                 "description": "A bin to stream media using the WebRTC HTTP Ingestion Protocol (WHIP)",
@@ -7817,7 +7954,23 @@
         },
         "filename": "gstwebrtchttp",
         "license": "MPL",
-        "other-types": {},
+        "other-types": {
+            "GstRsWebRTCICETransportPolicy": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "All: get both STUN and TURN candidate pairs",
+                        "name": "all",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Relay: get only TURN candidate pairs",
+                        "name": "relay",
+                        "value": "1"
+                    },
+                ]
+            },
+        },
         "package": "gst-plugin-webrtchttp",
         "source": "gst-plugin-webrtchttp",
         "tracers": {},
