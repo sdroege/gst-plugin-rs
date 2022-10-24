@@ -33,7 +33,7 @@ use std::time::Duration;
 use std::u32;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{Context, PadSrc, PadSrcRef, Task, TaskState};
+use crate::runtime::{Context, PadSrc, Task, TaskState};
 
 const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: Duration = Duration::ZERO;
@@ -82,8 +82,8 @@ struct AppSrcPadHandler;
 impl PadSrcHandler for AppSrcPadHandler {
     type ElementImpl = AppSrc;
 
-    fn src_event(self, pad: &PadSrcRef, imp: &AppSrc, event: gst::Event) -> bool {
-        gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
+    fn src_event(self, pad: &gst::Pad, imp: &AppSrc, event: gst::Event) -> bool {
+        gst::log!(CAT, obj: pad, "Handling {:?}", event);
 
         use gst::EventView;
         let ret = match event.view() {
@@ -95,16 +95,16 @@ impl PadSrcHandler for AppSrcPadHandler {
         };
 
         if ret {
-            gst::log!(CAT, obj: pad.gst_pad(), "Handled {:?}", event);
+            gst::log!(CAT, obj: pad, "Handled {:?}", event);
         } else {
-            gst::log!(CAT, obj: pad.gst_pad(), "Didn't handle {:?}", event);
+            gst::log!(CAT, obj: pad, "Didn't handle {:?}", event);
         }
 
         ret
     }
 
-    fn src_query(self, pad: &PadSrcRef, imp: &AppSrc, query: &mut gst::QueryRef) -> bool {
-        gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
+    fn src_query(self, pad: &gst::Pad, imp: &AppSrc, query: &mut gst::QueryRef) -> bool {
+        gst::log!(CAT, obj: pad, "Handling {:?}", query);
 
         use gst::QueryViewMut;
         let ret = match query.view_mut() {
@@ -136,9 +136,9 @@ impl PadSrcHandler for AppSrcPadHandler {
         };
 
         if ret {
-            gst::log!(CAT, obj: pad.gst_pad(), "Handled {:?}", query);
+            gst::log!(CAT, obj: pad, "Handled {:?}", query);
         } else {
-            gst::log!(CAT, obj: pad.gst_pad(), "Didn't handle {:?}", query);
+            gst::log!(CAT, obj: pad, "Didn't handle {:?}", query);
         }
         ret
     }

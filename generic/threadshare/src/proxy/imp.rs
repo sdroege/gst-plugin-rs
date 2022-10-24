@@ -34,9 +34,7 @@ use std::time::Duration;
 use std::{u32, u64};
 
 use crate::runtime::prelude::*;
-use crate::runtime::{
-    Context, PadSink, PadSinkRef, PadSinkWeak, PadSrc, PadSrcRef, PadSrcWeak, Task,
-};
+use crate::runtime::{Context, PadSink, PadSinkWeak, PadSrc, PadSrcWeak, Task};
 
 use crate::dataqueue::{DataQueue, DataQueueItem};
 
@@ -215,13 +213,12 @@ impl PadSinkHandler for ProxySinkPadHandler {
 
     fn sink_chain(
         self,
-        pad: PadSinkWeak,
+        pad: gst::Pad,
         elem: super::ProxySink,
         buffer: gst::Buffer,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
         async move {
-            let pad = pad.upgrade().expect("PadSink no longer exists");
-            gst::log!(SINK_CAT, obj: pad.gst_pad(), "Handling {:?}", buffer);
+            gst::log!(SINK_CAT, obj: pad, "Handling {:?}", buffer);
             let imp = elem.imp();
             imp.enqueue_item(DataQueueItem::Buffer(buffer)).await
         }
@@ -230,21 +227,20 @@ impl PadSinkHandler for ProxySinkPadHandler {
 
     fn sink_chain_list(
         self,
-        pad: PadSinkWeak,
+        pad: gst::Pad,
         elem: super::ProxySink,
         list: gst::BufferList,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
         async move {
-            let pad = pad.upgrade().expect("PadSink no longer exists");
-            gst::log!(SINK_CAT, obj: pad.gst_pad(), "Handling {:?}", list);
+            gst::log!(SINK_CAT, obj: pad, "Handling {:?}", list);
             let imp = elem.imp();
             imp.enqueue_item(DataQueueItem::BufferList(list)).await
         }
         .boxed()
     }
 
-    fn sink_event(self, pad: &PadSinkRef, imp: &ProxySink, event: gst::Event) -> bool {
-        gst::debug!(SINK_CAT, obj: pad.gst_pad(), "Handling non-serialized {:?}", event);
+    fn sink_event(self, pad: &gst::Pad, imp: &ProxySink, event: gst::Event) -> bool {
+        gst::debug!(SINK_CAT, obj: pad, "Handling non-serialized {:?}", event);
 
         let src_pad = {
             let proxy_ctx = imp.proxy_ctx.lock().unwrap();
@@ -262,23 +258,27 @@ impl PadSinkHandler for ProxySinkPadHandler {
         }
 
         if let Some(src_pad) = src_pad {
-            gst::log!(SINK_CAT, obj: pad.gst_pad(), "Forwarding non-serialized {:?}", event);
+            gst::log!(SINK_CAT, obj: pad, "Forwarding non-serialized {:?}", event);
             src_pad.push_event(event)
         } else {
-            gst::error!(SINK_CAT, obj: pad.gst_pad(), "No src pad to forward non-serialized {:?} to", event);
+            gst::error!(
+                SINK_CAT,
+                obj: pad,
+                "No src pad to forward non-serialized {:?} to",
+                event
+            );
             true
         }
     }
 
     fn sink_event_serialized(
         self,
-        pad: PadSinkWeak,
+        pad: gst::Pad,
         elem: super::ProxySink,
         event: gst::Event,
     ) -> BoxFuture<'static, bool> {
         async move {
-            let pad = pad.upgrade().expect("PadSink no longer exists");
-            gst::log!(SINK_CAT, obj: pad.gst_pad(), "Handling serialized {:?}", event);
+            gst::log!(SINK_CAT, obj: pad, "Handling serialized {:?}", event);
 
             let imp = elem.imp();
 
@@ -291,7 +291,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
                 _ => (),
             }
 
-            gst::log!(SINK_CAT, obj: pad.gst_pad(), "Queuing serialized {:?}", event);
+            gst::log!(SINK_CAT, obj: pad, "Queuing serialized {:?}", event);
             imp.enqueue_item(DataQueueItem::Event(event)).await.is_ok()
         }
         .boxed()
@@ -666,8 +666,8 @@ struct ProxySrcPadHandler;
 impl PadSrcHandler for ProxySrcPadHandler {
     type ElementImpl = ProxySrc;
 
-    fn src_event(self, pad: &PadSrcRef, imp: &ProxySrc, event: gst::Event) -> bool {
-        gst::log!(SRC_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
+    fn src_event(self, pad: &gst::Pad, imp: &ProxySrc, event: gst::Event) -> bool {
+        gst::log!(SRC_CAT, obj: pad, "Handling {:?}", event);
 
         let sink_pad = {
             let proxy_ctx = imp.proxy_ctx.lock().unwrap();
@@ -684,7 +684,7 @@ impl PadSrcHandler for ProxySrcPadHandler {
         match event.view() {
             EventView::FlushStart(..) => {
                 if let Err(err) = imp.task.flush_start().await_maybe_on_context() {
-                    gst::error!(SRC_CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
+                    gst::error!(SRC_CAT, obj: pad, "FlushStart failed {:?}", err);
                     gst::element_imp_error!(
                         imp,
                         gst::StreamError::Failed,
@@ -696,7 +696,7 @@ impl PadSrcHandler for ProxySrcPadHandler {
             }
             EventView::FlushStop(..) => {
                 if let Err(err) = imp.task.flush_stop().await_maybe_on_context() {
-                    gst::error!(SRC_CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
+                    gst::error!(SRC_CAT, obj: pad, "FlushStop failed {:?}", err);
                     gst::element_imp_error!(
                         imp,
                         gst::StreamError::Failed,
@@ -710,16 +710,16 @@ impl PadSrcHandler for ProxySrcPadHandler {
         }
 
         if let Some(sink_pad) = sink_pad {
-            gst::log!(SRC_CAT, obj: pad.gst_pad(), "Forwarding {:?}", event);
+            gst::log!(SRC_CAT, obj: pad, "Forwarding {:?}", event);
             sink_pad.push_event(event)
         } else {
-            gst::error!(SRC_CAT, obj: pad.gst_pad(), "No sink pad to forward {:?} to", event);
+            gst::error!(SRC_CAT, obj: pad, "No sink pad to forward {:?} to", event);
             false
         }
     }
 
-    fn src_query(self, pad: &PadSrcRef, _proxysrc: &ProxySrc, query: &mut gst::QueryRef) -> bool {
-        gst::log!(SRC_CAT, obj: pad.gst_pad(), "Handling {:?}", query);
+    fn src_query(self, pad: &gst::Pad, _proxysrc: &ProxySrc, query: &mut gst::QueryRef) -> bool {
+        gst::log!(SRC_CAT, obj: pad, "Handling {:?}", query);
 
         use gst::QueryViewMut;
         let ret = match query.view_mut() {
@@ -733,7 +733,7 @@ impl PadSrcHandler for ProxySrcPadHandler {
                 true
             }
             QueryViewMut::Caps(q) => {
-                let caps = if let Some(ref caps) = pad.gst_pad().current_caps() {
+                let caps = if let Some(ref caps) = pad.current_caps() {
                     q.filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
                         .unwrap_or_else(|| caps.clone())
@@ -751,9 +751,9 @@ impl PadSrcHandler for ProxySrcPadHandler {
         };
 
         if ret {
-            gst::log!(SRC_CAT, obj: pad.gst_pad(), "Handled {:?}", query);
+            gst::log!(SRC_CAT, obj: pad, "Handled {:?}", query);
         } else {
-            gst::log!(SRC_CAT, obj: pad.gst_pad(), "Didn't handle {:?}", query);
+            gst::log!(SRC_CAT, obj: pad, "Didn't handle {:?}", query);
         }
 
         ret

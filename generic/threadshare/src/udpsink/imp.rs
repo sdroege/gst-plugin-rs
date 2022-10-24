@@ -30,7 +30,7 @@ use gst::{element_error, error_msg};
 use once_cell::sync::Lazy;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{self, Async, Context, PadSink, PadSinkRef, PadSinkWeak, Task};
+use crate::runtime::{self, Async, Context, PadSink, Task};
 use crate::socket::{wrap_socket, GioSocketWrapper};
 
 use std::collections::BTreeSet;
@@ -134,7 +134,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
 
     fn sink_chain(
         self,
-        _pad: PadSinkWeak,
+        _pad: gst::Pad,
         elem: super::UdpSink,
         buffer: gst::Buffer,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
@@ -152,7 +152,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
 
     fn sink_chain_list(
         self,
-        _pad: PadSinkWeak,
+        _pad: gst::Pad,
         elem: super::UdpSink,
         list: gst::BufferList,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
@@ -172,7 +172,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
 
     fn sink_event_serialized(
         self,
-        _pad: PadSinkWeak,
+        _pad: gst::Pad,
         elem: super::UdpSink,
         event: gst::Event,
     ) -> BoxFuture<'static, bool> {
@@ -190,7 +190,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
         .boxed()
     }
 
-    fn sink_event(self, _pad: &PadSinkRef, imp: &UdpSink, event: gst::Event) -> bool {
+    fn sink_event(self, _pad: &gst::Pad, imp: &UdpSink, event: gst::Event) -> bool {
         if let EventView::FlushStart(..) = event.view() {
             return imp.task.flush_start().await_maybe_on_context().is_ok();
         }

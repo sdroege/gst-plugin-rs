@@ -123,36 +123,28 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
 
     fn src_activate(
         self,
-        pad: &PadSrcRef,
+        pad: &gst::Pad,
         _imp: &Self::ElementImpl,
     ) -> Result<(), gst::LoggableError> {
-        let gst_pad = pad.gst_pad();
-        if gst_pad.is_active() {
+        if pad.is_active() {
             gst::debug!(
                 RUNTIME_CAT,
-                obj: gst_pad,
+                obj: pad,
                 "Already activated in {:?} mode ",
-                gst_pad.mode()
+                pad.mode()
             );
             return Ok(());
         }
 
-        gst_pad
-            .activate_mode(gst::PadMode::Push, true)
-            .map_err(|err| {
-                gst::error!(
-                    RUNTIME_CAT,
-                    obj: gst_pad,
-                    "Error in PadSrc activate: {:?}",
-                    err
-                );
-                gst::loggable_error!(RUNTIME_CAT, "Error in PadSrc activate: {:?}", err)
-            })
+        pad.activate_mode(gst::PadMode::Push, true).map_err(|err| {
+            gst::error!(RUNTIME_CAT, obj: pad, "Error in PadSrc activate: {:?}", err);
+            gst::loggable_error!(RUNTIME_CAT, "Error in PadSrc activate: {:?}", err)
+        })
     }
 
     fn src_activatemode(
         self,
-        _pad: &PadSrcRef,
+        _pad: &gst::Pad,
         _imp: &Self::ElementImpl,
         _mode: gst::PadMode,
         _active: bool,
@@ -160,8 +152,8 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
         Ok(())
     }
 
-    fn src_event(self, pad: &PadSrcRef, imp: &Self::ElementImpl, event: gst::Event) -> bool {
-        gst::log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
+    fn src_event(self, pad: &gst::Pad, imp: &Self::ElementImpl, event: gst::Event) -> bool {
+        gst::log!(RUNTIME_CAT, obj: pad, "Handling {:?}", event);
 
         let elem = imp.obj();
         // FIXME with GAT on `Self::ElementImpl`, we should be able to
@@ -170,12 +162,12 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
         // Safety: `Self::ElementImpl` is bound to `gst::subclass::ElementImpl`.
         let element = unsafe { elem.unsafe_cast_ref::<gst::Element>() };
 
-        gst::Pad::event_default(pad.gst_pad(), Some(element), event)
+        gst::Pad::event_default(pad, Some(element), event)
     }
 
     fn src_event_full(
         self,
-        pad: &PadSrcRef,
+        pad: &gst::Pad,
         imp: &Self::ElementImpl,
         event: gst::Event,
     ) -> Result<FlowSuccess, FlowError> {
@@ -185,19 +177,14 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
         event_to_event_full(self.src_event(pad, imp, event), event_type)
     }
 
-    fn src_query(
-        self,
-        pad: &PadSrcRef,
-        imp: &Self::ElementImpl,
-        query: &mut gst::QueryRef,
-    ) -> bool {
-        gst::log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", query);
+    fn src_query(self, pad: &gst::Pad, imp: &Self::ElementImpl, query: &mut gst::QueryRef) -> bool {
+        gst::log!(RUNTIME_CAT, obj: pad, "Handling {:?}", query);
         if query.is_serialized() {
             // FIXME serialized queries should be handled with the dataflow
             // but we can't return a `Future` because we couldn't honor QueryRef's lifetime
             false
         } else {
-            gst::log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", query);
+            gst::log!(RUNTIME_CAT, obj: pad, "Handling {:?}", query);
 
             let elem = imp.obj();
             // FIXME with GAT on `Self::ElementImpl`, we should be able to
@@ -206,7 +193,7 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
             // Safety: `Self::ElementImpl` is bound to `gst::subclass::ElementImpl`.
             let element = unsafe { elem.unsafe_cast_ref::<gst::Element>() };
 
-            gst::Pad::query_default(pad.gst_pad(), Some(element), query)
+            gst::Pad::query_default(pad, Some(element), query)
         }
     }
 }
@@ -230,11 +217,11 @@ impl PadSrcInner {
     }
 
     pub async fn push(&self, buffer: gst::Buffer) -> Result<FlowSuccess, FlowError> {
-        gst::log!(RUNTIME_CAT, obj: self.gst_pad(), "Pushing {:?}", buffer);
+        gst::log!(RUNTIME_CAT, obj: self.gst_pad, "Pushing {:?}", buffer);
 
         let success = self.gst_pad.push(buffer).map_err(|err| {
             gst::error!(RUNTIME_CAT,
-                obj: self.gst_pad(),
+                obj: self.gst_pad,
                 "Failed to push Buffer to PadSrc: {:?}",
                 err,
             );
@@ -248,12 +235,12 @@ impl PadSrcInner {
     }
 
     pub async fn push_list(&self, list: gst::BufferList) -> Result<FlowSuccess, FlowError> {
-        gst::log!(RUNTIME_CAT, obj: self.gst_pad(), "Pushing {:?}", list);
+        gst::log!(RUNTIME_CAT, obj: self.gst_pad, "Pushing {:?}", list);
 
         let success = self.gst_pad.push_list(list).map_err(|err| {
             gst::error!(
                 RUNTIME_CAT,
-                obj: self.gst_pad(),
+                obj: self.gst_pad,
                 "Failed to push BufferList to PadSrc: {:?}",
                 err,
             );
@@ -269,7 +256,7 @@ impl PadSrcInner {
     pub async fn push_event(&self, event: gst::Event) -> bool {
         gst::log!(RUNTIME_CAT, obj: self.gst_pad, "Pushing {:?}", event);
 
-        let was_handled = self.gst_pad().push_event(event);
+        let was_handled = self.gst_pad.push_event(event);
 
         gst::log!(RUNTIME_CAT, obj: self.gst_pad, "Processing any pending sub tasks");
         if Context::drain_sub_tasks().await.is_err() {
@@ -326,26 +313,6 @@ impl<'a> PadSrcRef<'a> {
     pub fn downgrade(&self) -> PadSrcWeak {
         PadSrcWeak(Arc::downgrade(&self.strong))
     }
-
-    fn activate_mode_hook(
-        &self,
-        mode: gst::PadMode,
-        active: bool,
-    ) -> Result<(), gst::LoggableError> {
-        // Important: don't panic here as the hook is used without `catch_panic_pad_function`
-        // in the default `activatemode` handling
-        gst::log!(RUNTIME_CAT, obj: self.gst_pad(), "ActivateMode {:?}, {}", mode, active);
-
-        if mode == gst::PadMode::Pull {
-            gst::error!(RUNTIME_CAT, obj: self.gst_pad(), "Pull mode not supported by PadSrc");
-            return Err(gst::loggable_error!(
-                RUNTIME_CAT,
-                "Pull mode not supported by PadSrc"
-            ));
-        }
-
-        Ok(())
-    }
 }
 
 impl<'a> Deref for PadSrcRef<'a> {
@@ -384,19 +351,17 @@ impl PadSrc {
     }
 
     pub fn check_reconfigure(&self) -> bool {
-        self.0.gst_pad().check_reconfigure()
+        self.0.gst_pad.check_reconfigure()
     }
 
     fn init_pad_functions<H: PadSrcHandler>(&self, handler: H) {
         // FIXME: Do this better
         unsafe {
             let handler_clone = handler.clone();
-            let inner_arc = Arc::clone(&self.0);
             self.0
-                .gst_pad()
+                .gst_pad
                 .set_activate_function(move |gst_pad, parent| {
                     let handler = handler_clone.clone();
-                    let inner_arc = inner_arc.clone();
                     H::ElementImpl::catch_panic_pad_function(
                         parent,
                         || {
@@ -406,16 +371,15 @@ impl PadSrc {
                                 "Panic in PadSrc activate"
                             ))
                         },
-                        move |imp| H::src_activate(handler, &PadSrcRef::new(inner_arc), imp),
+                        move |imp| H::src_activate(handler, gst_pad, imp),
                     )
                 });
 
             let handler_clone = handler.clone();
-            let inner_arc = Arc::clone(&self.0);
-            self.gst_pad()
+            self.0
+                .gst_pad
                 .set_activatemode_function(move |gst_pad, parent, mode, active| {
                     let handler = handler_clone.clone();
-                    let inner_arc = inner_arc.clone();
                     H::ElementImpl::catch_panic_pad_function(
                         parent,
                         || {
@@ -426,9 +390,27 @@ impl PadSrc {
                             ))
                         },
                         move |imp| {
-                            let this_ref = PadSrcRef::new(inner_arc);
-                            this_ref.activate_mode_hook(mode, active)?;
-                            H::src_activatemode(handler, &this_ref, imp, mode, active)
+                            gst::log!(
+                                RUNTIME_CAT,
+                                obj: gst_pad,
+                                "ActivateMode {:?}, {}",
+                                mode,
+                                active
+                            );
+
+                            if mode == gst::PadMode::Pull {
+                                gst::error!(
+                                    RUNTIME_CAT,
+                                    obj: gst_pad,
+                                    "Pull mode not supported by PadSrc"
+                                );
+                                return Err(gst::loggable_error!(
+                                    RUNTIME_CAT,
+                                    "Pull mode not supported by PadSrc"
+                                ));
+                            }
+
+                            H::src_activatemode(handler, gst_pad, imp, mode, active)
                         },
                     )
                 });
@@ -436,38 +418,38 @@ impl PadSrc {
             // No need to `set_event_function` since `set_event_full_function`
             // overrides it and dispatches to `src_event` when necessary
             let handler_clone = handler.clone();
-            let inner_arc = Arc::clone(&self.0);
-            self.gst_pad()
-                .set_event_full_function(move |_gst_pad, parent, event| {
+            self.0
+                .gst_pad
+                .set_event_full_function(move |gst_pad, parent, event| {
                     let handler = handler_clone.clone();
-                    let inner_arc = inner_arc.clone();
                     H::ElementImpl::catch_panic_pad_function(
                         parent,
                         || Err(FlowError::Error),
-                        move |imp| {
-                            H::src_event_full(handler, &PadSrcRef::new(inner_arc), imp, event)
-                        },
+                        move |imp| H::src_event_full(handler, gst_pad, imp, event),
                     )
                 });
 
-            let inner_arc = Arc::clone(&self.0);
-            self.gst_pad()
-            .set_query_function(move |_gst_pad, parent, query| {
-                let handler = handler.clone();
-                let inner_arc = inner_arc.clone();
-                H::ElementImpl::catch_panic_pad_function(
-                    parent,
-                    || false,
-                    move |imp| {
-                        if !query.is_serialized() {
-                            H::src_query(handler, &PadSrcRef::new(inner_arc), imp, query)
-                        } else {
-                            gst::fixme!(RUNTIME_CAT, obj: inner_arc.gst_pad(), "Serialized Query not supported");
-                            false
-                        }
-                    },
-                )
-            });
+            self.0
+                .gst_pad
+                .set_query_function(move |gst_pad, parent, query| {
+                    let handler = handler.clone();
+                    H::ElementImpl::catch_panic_pad_function(
+                        parent,
+                        || false,
+                        move |imp| {
+                            if !query.is_serialized() {
+                                H::src_query(handler, gst_pad, imp, query)
+                            } else {
+                                gst::fixme!(
+                                    RUNTIME_CAT,
+                                    obj: gst_pad,
+                                    "Serialized Query not supported"
+                                );
+                                false
+                            }
+                        },
+                    )
+                });
         }
     }
 }
@@ -476,19 +458,24 @@ impl Drop for PadSrc {
     fn drop(&mut self) {
         // FIXME: Do this better
         unsafe {
-            self.gst_pad()
+            self.0
+                .gst_pad
                 .set_activate_function(move |_gst_pad, _parent| {
                     Err(gst::loggable_error!(RUNTIME_CAT, "PadSrc no longer exists"))
                 });
-            self.gst_pad()
+            self.0
+                .gst_pad
                 .set_activatemode_function(move |_gst_pad, _parent, _mode, _active| {
                     Err(gst::loggable_error!(RUNTIME_CAT, "PadSrc no longer exists"))
                 });
-            self.gst_pad()
+            self.0
+                .gst_pad
                 .set_event_function(move |_gst_pad, _parent, _event| false);
-            self.gst_pad()
+            self.0
+                .gst_pad
                 .set_event_full_function(move |_gst_pad, _parent, _event| Err(FlowError::Flushing));
-            self.gst_pad()
+            self.0
+                .gst_pad
                 .set_query_function(move |_gst_pad, _parent, _query| false);
         }
     }
@@ -514,36 +501,33 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
 
     fn sink_activate(
         self,
-        pad: &PadSinkRef,
+        pad: &gst::Pad,
         _imp: &Self::ElementImpl,
     ) -> Result<(), gst::LoggableError> {
-        let gst_pad = pad.gst_pad();
-        if gst_pad.is_active() {
+        if pad.is_active() {
             gst::debug!(
                 RUNTIME_CAT,
-                obj: gst_pad,
+                obj: pad,
                 "Already activated in {:?} mode ",
-                gst_pad.mode()
+                pad.mode()
             );
             return Ok(());
         }
 
-        gst_pad
-            .activate_mode(gst::PadMode::Push, true)
-            .map_err(|err| {
-                gst::error!(
-                    RUNTIME_CAT,
-                    obj: gst_pad,
-                    "Error in PadSink activate: {:?}",
-                    err
-                );
-                gst::loggable_error!(RUNTIME_CAT, "Error in PadSink activate: {:?}", err)
-            })
+        pad.activate_mode(gst::PadMode::Push, true).map_err(|err| {
+            gst::error!(
+                RUNTIME_CAT,
+                obj: pad,
+                "Error in PadSink activate: {:?}",
+                err
+            );
+            gst::loggable_error!(RUNTIME_CAT, "Error in PadSink activate: {:?}", err)
+        })
     }
 
     fn sink_activatemode(
         self,
-        _pad: &PadSinkRef,
+        _pad: &gst::Pad,
         _imp: &Self::ElementImpl,
         _mode: gst::PadMode,
         _active: bool,
@@ -553,7 +537,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
 
     fn sink_chain(
         self,
-        _pad: PadSinkWeak,
+        _pad: gst::Pad,
         _elem: <Self::ElementImpl as ObjectSubclass>::Type,
         _buffer: gst::Buffer,
     ) -> BoxFuture<'static, Result<FlowSuccess, FlowError>> {
@@ -562,16 +546,16 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
 
     fn sink_chain_list(
         self,
-        _pad: PadSinkWeak,
+        _pad: gst::Pad,
         _elem: <Self::ElementImpl as ObjectSubclass>::Type,
         _buffer_list: gst::BufferList,
     ) -> BoxFuture<'static, Result<FlowSuccess, FlowError>> {
         future::err(FlowError::NotSupported).boxed()
     }
 
-    fn sink_event(self, pad: &PadSinkRef, imp: &Self::ElementImpl, event: gst::Event) -> bool {
+    fn sink_event(self, pad: &gst::Pad, imp: &Self::ElementImpl, event: gst::Event) -> bool {
         assert!(!event.is_serialized());
-        gst::log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
+        gst::log!(RUNTIME_CAT, obj: pad, "Handling {:?}", event);
 
         let elem = imp.obj();
         // FIXME with GAT on `Self::ElementImpl`, we should be able to
@@ -580,12 +564,12 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         // Safety: `Self::ElementImpl` is bound to `gst::subclass::ElementImpl`.
         let element = unsafe { elem.unsafe_cast_ref::<gst::Element>() };
 
-        gst::Pad::event_default(pad.gst_pad(), Some(element), event)
+        gst::Pad::event_default(pad, Some(element), event)
     }
 
     fn sink_event_serialized(
         self,
-        pad: PadSinkWeak,
+        pad: gst::Pad,
         elem: <Self::ElementImpl as ObjectSubclass>::Type,
         event: gst::Event,
     ) -> BoxFuture<'static, bool> {
@@ -597,17 +581,16 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         let element = unsafe { elem.unsafe_cast::<gst::Element>() };
 
         async move {
-            let pad = pad.upgrade().expect("PadSink no longer exists");
-            gst::log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
+            gst::log!(RUNTIME_CAT, obj: pad, "Handling {:?}", event);
 
-            gst::Pad::event_default(pad.gst_pad(), Some(&element), event)
+            gst::Pad::event_default(&pad, Some(&element), event)
         }
         .boxed()
     }
 
     fn sink_event_full(
         self,
-        pad: &PadSinkRef,
+        pad: &gst::Pad,
         imp: &Self::ElementImpl,
         event: gst::Event,
     ) -> Result<FlowSuccess, FlowError> {
@@ -620,7 +603,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
 
     fn sink_event_full_serialized(
         self,
-        pad: PadSinkWeak,
+        pad: gst::Pad,
         elem: <Self::ElementImpl as ObjectSubclass>::Type,
         event: gst::Event,
     ) -> BoxFuture<'static, Result<FlowSuccess, FlowError>> {
@@ -636,17 +619,17 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
 
     fn sink_query(
         self,
-        pad: &PadSinkRef,
+        pad: &gst::Pad,
         imp: &Self::ElementImpl,
         query: &mut gst::QueryRef,
     ) -> bool {
         if query.is_serialized() {
-            gst::log!(RUNTIME_CAT, obj: pad.gst_pad(), "Dropping {:?}", query);
+            gst::log!(RUNTIME_CAT, obj: pad, "Dropping {:?}", query);
             // FIXME serialized queries should be handled with the dataflow
             // but we can't return a `Future` because we couldn't honor QueryRef's lifetime
             false
         } else {
-            gst::log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", query);
+            gst::log!(RUNTIME_CAT, obj: pad, "Handling {:?}", query);
 
             let elem = imp.obj();
             // FIXME with GAT on `Self::ElementImpl`, we should be able to
@@ -655,7 +638,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
             // Safety: `Self::ElementImpl` is bound to `gst::subclass::ElementImpl`.
             let element = unsafe { elem.unsafe_cast_ref::<gst::Element>() };
 
-            gst::Pad::query_default(pad.gst_pad(), Some(element), query)
+            gst::Pad::query_default(pad, Some(element), query)
         }
     }
 }
@@ -724,26 +707,6 @@ impl<'a> PadSinkRef<'a> {
     pub fn downgrade(&self) -> PadSinkWeak {
         PadSinkWeak(Arc::downgrade(&self.strong))
     }
-
-    fn activate_mode_hook(
-        &self,
-        mode: gst::PadMode,
-        active: bool,
-    ) -> Result<(), gst::LoggableError> {
-        // Important: don't panic here as the hook is used without `catch_panic_pad_function`
-        // in the default `activatemode` handling
-        gst::log!(RUNTIME_CAT, obj: self.gst_pad(), "ActivateMode {:?}, {}", mode, active);
-
-        if mode == gst::PadMode::Pull {
-            gst::error!(RUNTIME_CAT, obj: self.gst_pad(), "Pull mode not supported by PadSink");
-            return Err(gst::loggable_error!(
-                RUNTIME_CAT,
-                "Pull mode not supported by PadSink"
-            ));
-        }
-
-        Ok(())
-    }
 }
 
 impl<'a> Deref for PadSinkRef<'a> {
@@ -794,12 +757,10 @@ impl PadSink {
     {
         unsafe {
             let handler_clone = handler.clone();
-            let inner_arc = Arc::clone(&self.0);
-            self.gst_pad()
+            self.0
+                .gst_pad
                 .set_activate_function(move |gst_pad, parent| {
                     let handler = handler_clone.clone();
-                    let inner_arc = inner_arc.clone();
-
                     H::ElementImpl::catch_panic_pad_function(
                         parent,
                         || {
@@ -809,16 +770,15 @@ impl PadSink {
                                 "Panic in PadSink activate"
                             ))
                         },
-                        move |imp| H::sink_activate(handler, &PadSinkRef::new(inner_arc), imp),
+                        move |imp| H::sink_activate(handler, gst_pad, imp),
                     )
                 });
 
             let handler_clone = handler.clone();
-            let inner_arc = Arc::clone(&self.0);
-            self.gst_pad()
+            self.0
+                .gst_pad
                 .set_activatemode_function(move |gst_pad, parent, mode, active| {
                     let handler = handler_clone.clone();
-                    let inner_arc = inner_arc.clone();
                     H::ElementImpl::catch_panic_pad_function(
                         parent,
                         || {
@@ -829,36 +789,53 @@ impl PadSink {
                             ))
                         },
                         move |imp| {
-                            let this_ref = PadSinkRef::new(inner_arc);
-                            this_ref.activate_mode_hook(mode, active)?;
-                            H::sink_activatemode(handler, &this_ref, imp, mode, active)
+                            gst::log!(
+                                RUNTIME_CAT,
+                                obj: gst_pad,
+                                "ActivateMode {:?}, {}",
+                                mode,
+                                active
+                            );
+
+                            if mode == gst::PadMode::Pull {
+                                gst::error!(
+                                    RUNTIME_CAT,
+                                    obj: gst_pad,
+                                    "Pull mode not supported by PadSink"
+                                );
+                                return Err(gst::loggable_error!(
+                                    RUNTIME_CAT,
+                                    "Pull mode not supported by PadSink"
+                                ));
+                            }
+
+                            H::sink_activatemode(handler, gst_pad, imp, mode, active)
                         },
                     )
                 });
 
             let handler_clone = handler.clone();
-            let inner_arc = Arc::clone(&self.0);
-            self.gst_pad()
-                .set_chain_function(move |_gst_pad, parent, buffer| {
+            self.0
+                .gst_pad
+                .set_chain_function(move |gst_pad, parent, buffer| {
                     let handler = handler_clone.clone();
-                    let inner_arc = inner_arc.clone();
                     H::ElementImpl::catch_panic_pad_function(
                         parent,
                         || Err(FlowError::Error),
                         move |imp| {
-                            let this_weak = PadSinkWeak(Arc::downgrade(&inner_arc));
                             let elem = imp.obj().clone();
+                            let gst_pad = gst_pad.clone();
 
                             if let Some((ctx, task_id)) = Context::current_task() {
                                 let delayed_fut = async move {
-                                    H::sink_chain(handler, this_weak, elem, buffer).await
+                                    H::sink_chain(handler, gst_pad, elem, buffer).await
                                 };
                                 let _ =
                                     ctx.add_sub_task(task_id, delayed_fut.map(|res| res.map(drop)));
 
                                 Ok(gst::FlowSuccess::Ok)
                             } else {
-                                let chain_fut = H::sink_chain(handler, this_weak, elem, buffer);
+                                let chain_fut = H::sink_chain(handler, gst_pad, elem, buffer);
                                 executor::block_on(chain_fut)
                             }
                         },
@@ -866,21 +843,20 @@ impl PadSink {
                 });
 
             let handler_clone = handler.clone();
-            let inner_arc = Arc::clone(&self.0);
-            self.gst_pad()
-                .set_chain_list_function(move |_gst_pad, parent, list| {
+            self.0
+                .gst_pad
+                .set_chain_list_function(move |gst_pad, parent, list| {
                     let handler = handler_clone.clone();
-                    let inner_arc = inner_arc.clone();
                     H::ElementImpl::catch_panic_pad_function(
                         parent,
                         || Err(FlowError::Error),
                         move |imp| {
-                            let this_weak = PadSinkWeak(Arc::downgrade(&inner_arc));
                             let elem = imp.obj().clone();
+                            let gst_pad = gst_pad.clone();
 
                             if let Some((ctx, task_id)) = Context::current_task() {
                                 let delayed_fut = async move {
-                                    H::sink_chain_list(handler, this_weak, elem, list).await
+                                    H::sink_chain_list(handler, gst_pad, elem, list).await
                                 };
                                 let _ =
                                     ctx.add_sub_task(task_id, delayed_fut.map(|res| res.map(drop)));
@@ -888,7 +864,7 @@ impl PadSink {
                                 Ok(gst::FlowSuccess::Ok)
                             } else {
                                 let chain_list_fut =
-                                    H::sink_chain_list(handler, this_weak, elem, list);
+                                    H::sink_chain_list(handler, gst_pad, elem, list);
                                 executor::block_on(chain_list_fut)
                             }
                         },
@@ -898,25 +874,22 @@ impl PadSink {
             // No need to `set_event_function` since `set_event_full_function`
             // overrides it and dispatches to `sink_event` when necessary
             let handler_clone = handler.clone();
-            let inner_arc = Arc::clone(&self.0);
-            self.gst_pad()
-                .set_event_full_function(move |_gst_pad, parent, event| {
+            self.0
+                .gst_pad
+                .set_event_full_function(move |gst_pad, parent, event| {
                     let handler = handler_clone.clone();
-                    let inner_arc = inner_arc.clone();
                     H::ElementImpl::catch_panic_pad_function(
                         parent,
                         || Err(FlowError::Error),
                         move |imp| {
                             if event.is_serialized() {
-                                let this_weak = PadSinkWeak(Arc::downgrade(&inner_arc));
                                 let elem = imp.obj().clone();
+                                let gst_pad = gst_pad.clone();
 
                                 if let Some((ctx, task_id)) = Context::current_task() {
                                     let delayed_fut = async move {
-                                        H::sink_event_full_serialized(
-                                            handler, this_weak, elem, event,
-                                        )
-                                        .await
+                                        H::sink_event_full_serialized(handler, gst_pad, elem, event)
+                                            .await
                                     };
                                     let _ = ctx.add_sub_task(
                                         task_id,
@@ -926,35 +899,38 @@ impl PadSink {
                                     Ok(gst::FlowSuccess::Ok)
                                 } else {
                                     let event_fut = H::sink_event_full_serialized(
-                                        handler, this_weak, elem, event,
+                                        handler, gst_pad, elem, event,
                                     );
                                     executor::block_on(event_fut)
                                 }
                             } else {
-                                handler.sink_event_full(&PadSinkRef::new(inner_arc), imp, event)
+                                handler.sink_event_full(gst_pad, imp, event)
                             }
                         },
                     )
                 });
 
-            let inner_arc = Arc::clone(&self.0);
-            self.gst_pad()
-            .set_query_function(move |_gst_pad, parent, query| {
-                let handler = handler.clone();
-                let inner_arc = inner_arc.clone();
-                H::ElementImpl::catch_panic_pad_function(
-                    parent,
-                    || false,
-                    move |imp| {
-                        if !query.is_serialized() {
-                            H::sink_query(handler, &PadSinkRef::new(inner_arc), imp, query)
-                        } else {
-                            gst::fixme!(RUNTIME_CAT, obj: inner_arc.gst_pad(), "Serialized Query not supported");
-                            false
-                        }
-                    },
-                )
-            });
+            self.0
+                .gst_pad
+                .set_query_function(move |gst_pad, parent, query| {
+                    let handler = handler.clone();
+                    H::ElementImpl::catch_panic_pad_function(
+                        parent,
+                        || false,
+                        move |imp| {
+                            if !query.is_serialized() {
+                                H::sink_query(handler, gst_pad, imp, query)
+                            } else {
+                                gst::fixme!(
+                                    RUNTIME_CAT,
+                                    obj: gst_pad,
+                                    "Serialized Query not supported"
+                                );
+                                false
+                            }
+                        },
+                    )
+                });
         }
     }
 }
@@ -963,29 +939,36 @@ impl Drop for PadSink {
     fn drop(&mut self) {
         // FIXME: Do this better
         unsafe {
-            self.gst_pad()
+            self.0
+                .gst_pad
                 .set_activate_function(move |_gst_pad, _parent| {
                     Err(gst::loggable_error!(
                         RUNTIME_CAT,
                         "PadSink no longer exists"
                     ))
                 });
-            self.gst_pad()
+            self.0
+                .gst_pad
                 .set_activatemode_function(move |_gst_pad, _parent, _mode, _active| {
                     Err(gst::loggable_error!(
                         RUNTIME_CAT,
                         "PadSink no longer exists"
                     ))
                 });
-            self.gst_pad()
+            self.0
+                .gst_pad
                 .set_chain_function(move |_gst_pad, _parent, _buffer| Err(FlowError::Flushing));
-            self.gst_pad()
+            self.0
+                .gst_pad
                 .set_chain_list_function(move |_gst_pad, _parent, _list| Err(FlowError::Flushing));
-            self.gst_pad()
+            self.0
+                .gst_pad
                 .set_event_function(move |_gst_pad, _parent, _event| false);
-            self.gst_pad()
+            self.0
+                .gst_pad
                 .set_event_full_function(move |_gst_pad, _parent, _event| Err(FlowError::Flushing));
-            self.gst_pad()
+            self.0
+                .gst_pad
                 .set_query_function(move |_gst_pad, _parent, _query| false);
         }
     }

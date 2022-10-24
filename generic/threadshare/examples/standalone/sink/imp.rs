@@ -19,7 +19,7 @@ use gst::EventView;
 use once_cell::sync::Lazy;
 
 use gstthreadshare::runtime::prelude::*;
-use gstthreadshare::runtime::{Context, PadSink, PadSinkRef, PadSinkWeak, Task};
+use gstthreadshare::runtime::{Context, PadSink, Task};
 
 use std::sync::Mutex;
 use std::task::Poll;
@@ -77,7 +77,7 @@ impl PadSinkHandler for TestSinkPadHandler {
 
     fn sink_chain(
         self,
-        _pad: PadSinkWeak,
+        _pad: gst::Pad,
         elem: super::TestSink,
         buffer: gst::Buffer,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
@@ -95,7 +95,7 @@ impl PadSinkHandler for TestSinkPadHandler {
 
     fn sink_chain_list(
         self,
-        _pad: PadSinkWeak,
+        _pad: gst::Pad,
         elem: super::TestSink,
         list: gst::BufferList,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
@@ -115,7 +115,7 @@ impl PadSinkHandler for TestSinkPadHandler {
 
     fn sink_event_serialized(
         self,
-        _pad: PadSinkWeak,
+        _pad: gst::Pad,
         elem: super::TestSink,
         event: gst::Event,
     ) -> BoxFuture<'static, bool> {
@@ -133,7 +133,7 @@ impl PadSinkHandler for TestSinkPadHandler {
         .boxed()
     }
 
-    fn sink_event(self, _pad: &PadSinkRef, imp: &TestSink, event: gst::Event) -> bool {
+    fn sink_event(self, _pad: &gst::Pad, imp: &TestSink, event: gst::Event) -> bool {
         if let EventView::FlushStart(..) = event.view() {
             return imp.task.flush_start().await_maybe_on_context().is_ok();
         }

@@ -33,7 +33,7 @@ use std::time::Duration;
 use std::{u32, u64};
 
 use crate::runtime::prelude::*;
-use crate::runtime::{Context, PadSink, PadSinkRef, PadSinkWeak, PadSrc, PadSrcRef, Task};
+use crate::runtime::{Context, PadSink, PadSrc, Task};
 
 use crate::dataqueue::{DataQueue, DataQueueItem};
 
@@ -85,13 +85,12 @@ impl PadSinkHandler for QueuePadSinkHandler {
 
     fn sink_chain(
         self,
-        pad: PadSinkWeak,
+        pad: gst::Pad,
         elem: super::Queue,
         buffer: gst::Buffer,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
         async move {
-            let pad = pad.upgrade().expect("PadSink no longer exists");
-            gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", buffer);
+            gst::log!(CAT, obj: pad, "Handling {:?}", buffer);
             let imp = elem.imp();
             imp.enqueue_item(DataQueueItem::Buffer(buffer)).await
         }
@@ -100,25 +99,24 @@ impl PadSinkHandler for QueuePadSinkHandler {
 
     fn sink_chain_list(
         self,
-        pad: PadSinkWeak,
+        pad: gst::Pad,
         elem: super::Queue,
         list: gst::BufferList,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
         async move {
-            let pad = pad.upgrade().expect("PadSink no longer exists");
-            gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", list);
+            gst::log!(CAT, obj: pad, "Handling {:?}", list);
             let imp = elem.imp();
             imp.enqueue_item(DataQueueItem::BufferList(list)).await
         }
         .boxed()
     }
 
-    fn sink_event(self, pad: &PadSinkRef, imp: &Queue, event: gst::Event) -> bool {
-        gst::debug!(CAT, obj: pad.gst_pad(), "Handling non-serialized {:?}", event);
+    fn sink_event(self, pad: &gst::Pad, imp: &Queue, event: gst::Event) -> bool {
+        gst::debug!(CAT, obj: pad, "Handling non-serialized {:?}", event);
 
         if let gst::EventView::FlushStart(..) = event.view() {
             if let Err(err) = imp.task.flush_start().await_maybe_on_context() {
-                gst::error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
+                gst::error!(CAT, obj: pad, "FlushStart failed {:?}", err);
                 gst::element_imp_error!(
                     imp,
                     gst::StreamError::Failed,
@@ -129,25 +127,24 @@ impl PadSinkHandler for QueuePadSinkHandler {
             }
         }
 
-        gst::log!(CAT, obj: pad.gst_pad(), "Forwarding non-serialized {:?}", event);
+        gst::log!(CAT, obj: pad, "Forwarding non-serialized {:?}", event);
         imp.src_pad.gst_pad().push_event(event)
     }
 
     fn sink_event_serialized(
         self,
-        pad: PadSinkWeak,
+        pad: gst::Pad,
         elem: super::Queue,
         event: gst::Event,
     ) -> BoxFuture<'static, bool> {
         async move {
-            let pad = pad.upgrade().expect("PadSink no longer exists");
-            gst::log!(CAT, obj: pad.gst_pad(), "Handling serialized {:?}", event);
+            gst::log!(CAT, obj: pad, "Handling serialized {:?}", event);
 
             let imp = elem.imp();
 
             if let gst::EventView::FlushStop(..) = event.view() {
                 if let Err(err) = imp.task.flush_stop().await_maybe_on_context() {
-                    gst::error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
+                    gst::error!(CAT, obj: pad, "FlushStop failed {:?}", err);
                     gst::element_imp_error!(
                         imp,
                         gst::StreamError::Failed,
@@ -158,21 +155,21 @@ impl PadSinkHandler for QueuePadSinkHandler {
                 }
             }
 
-            gst::log!(CAT, obj: pad.gst_pad(), "Queuing serialized {:?}", event);
+            gst::log!(CAT, obj: pad, "Queuing serialized {:?}", event);
             imp.enqueue_item(DataQueueItem::Event(event)).await.is_ok()
         }
         .boxed()
     }
 
-    fn sink_query(self, pad: &PadSinkRef, imp: &Queue, query: &mut gst::QueryRef) -> bool {
-        gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
+    fn sink_query(self, pad: &gst::Pad, imp: &Queue, query: &mut gst::QueryRef) -> bool {
+        gst::log!(CAT, obj: pad, "Handling {:?}", query);
 
         if query.is_serialized() {
             // FIXME: How can we do this?
-            gst::log!(CAT, obj: pad.gst_pad(), "Dropping serialized {:?}", query);
+            gst::log!(CAT, obj: pad, "Dropping serialized {:?}", query);
             false
         } else {
-            gst::log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", query);
+            gst::log!(CAT, obj: pad, "Forwarding {:?}", query);
             imp.src_pad.gst_pad().peer_query(query)
         }
     }
@@ -184,19 +181,19 @@ struct QueuePadSrcHandler;
 impl PadSrcHandler for QueuePadSrcHandler {
     type ElementImpl = Queue;
 
-    fn src_event(self, pad: &PadSrcRef, imp: &Queue, event: gst::Event) -> bool {
-        gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
+    fn src_event(self, pad: &gst::Pad, imp: &Queue, event: gst::Event) -> bool {
+        gst::log!(CAT, obj: pad, "Handling {:?}", event);
 
         use gst::EventView;
         match event.view() {
             EventView::FlushStart(..) => {
                 if let Err(err) = imp.task.flush_start().await_maybe_on_context() {
-                    gst::error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
+                    gst::error!(CAT, obj: pad, "FlushStart failed {:?}", err);
                 }
             }
             EventView::FlushStop(..) => {
                 if let Err(err) = imp.task.flush_stop().await_maybe_on_context() {
-                    gst::error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
+                    gst::error!(CAT, obj: pad, "FlushStop failed {:?}", err);
                     gst::element_imp_error!(
                         imp,
                         gst::StreamError::Failed,
@@ -209,12 +206,12 @@ impl PadSrcHandler for QueuePadSrcHandler {
             _ => (),
         }
 
-        gst::log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", event);
+        gst::log!(CAT, obj: pad, "Forwarding {:?}", event);
         imp.sink_pad.gst_pad().push_event(event)
     }
 
-    fn src_query(self, pad: &PadSrcRef, imp: &Queue, query: &mut gst::QueryRef) -> bool {
-        gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
+    fn src_query(self, pad: &gst::Pad, imp: &Queue, query: &mut gst::QueryRef) -> bool {
+        gst::log!(CAT, obj: pad, "Handling {:?}", query);
 
         if let gst::QueryViewMut::Scheduling(q) = query.view_mut() {
             let mut new_query = gst::query::Scheduling::new();
@@ -223,7 +220,7 @@ impl PadSrcHandler for QueuePadSrcHandler {
                 return res;
             }
 
-            gst::log!(CAT, obj: pad.gst_pad(), "Upstream returned {:?}", new_query);
+            gst::log!(CAT, obj: pad, "Upstream returned {:?}", new_query);
 
             let (flags, min, max, align) = new_query.result();
             q.set(flags, min, max, align);
@@ -235,11 +232,11 @@ impl PadSrcHandler for QueuePadSrcHandler {
                     .filter(|m| m != &gst::PadMode::Pull)
                     .collect::<Vec<_>>(),
             );
-            gst::log!(CAT, obj: pad.gst_pad(), "Returning {:?}", q.query_mut());
+            gst::log!(CAT, obj: pad, "Returning {:?}", q.query_mut());
             return true;
         }
 
-        gst::log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", query);
+        gst::log!(CAT, obj: pad, "Forwarding {:?}", query);
         imp.sink_pad.gst_pad().peer_query(query)
     }
 }

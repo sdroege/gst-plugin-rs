@@ -33,7 +33,7 @@ use std::time::Duration;
 use std::u32;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{self, PadSink, PadSinkRef, PadSinkWeak, PadSrc, PadSrcRef};
+use crate::runtime::{self, PadSink, PadSrc};
 
 const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: Duration = Duration::ZERO;
@@ -88,7 +88,7 @@ impl InputSelectorPadSinkHandler {
 
     async fn handle_item(
         &self,
-        pad: &PadSinkRef<'_>,
+        pad: &gst::Pad,
         elem: &super::InputSelector,
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -111,9 +111,9 @@ impl InputSelectorPadSinkHandler {
             }
 
             let is_active = {
-                if state.active_sinkpad.as_ref() == Some(pad.gst_pad()) {
+                if state.active_sinkpad.as_ref() == Some(pad) {
                     if inner.send_sticky || state.switched_pad {
-                        pad.gst_pad().sticky_events_foreach(|event| {
+                        pad.sticky_events_foreach(|event| {
                             use std::ops::ControlFlow;
                             stickies.push(event.clone());
                             ControlFlow::Continue(gst::EventForeachAction::Keep)
@@ -140,7 +140,7 @@ impl InputSelectorPadSinkHandler {
         }
 
         if is_active {
-            gst::log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", buffer);
+            gst::log!(CAT, obj: pad, "Forwarding {:?}", buffer);
 
             if switched_pad && !buffer.flags().contains(gst::BufferFlags::DISCONT) {
                 let buffer = buffer.make_mut();
@@ -159,26 +159,21 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
 
     fn sink_chain(
         self,
-        pad: PadSinkWeak,
+        pad: gst::Pad,
         elem: super::InputSelector,
         buffer: gst::Buffer,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-        async move {
-            let pad = pad.upgrade().expect("PadSink no longer exists");
-            self.handle_item(&pad, &elem, buffer).await
-        }
-        .boxed()
+        async move { self.handle_item(&pad, &elem, buffer).await }.boxed()
     }
 
     fn sink_chain_list(
         self,
-        pad: PadSinkWeak,
+        pad: gst::Pad,
         elem: super::InputSelector,
         list: gst::BufferList,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
         async move {
-            let pad = pad.upgrade().expect("PadSink no longer exists");
-            gst::log!(CAT, obj: pad.gst_pad(), "Handling buffer list {:?}", list);
+            gst::log!(CAT, obj: pad, "Handling buffer list {:?}", list);
             // TODO: Ideally we would keep the list intact and forward it in one go
             for buffer in list.iter_owned() {
                 self.handle_item(&pad, &elem, buffer).await?;
@@ -191,7 +186,7 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
 
     fn sink_event_serialized(
         self,
-        _pad: PadSinkWeak,
+        _pad: gst::Pad,
         _elem: super::InputSelector,
         event: gst::Event,
     ) -> BoxFuture<'static, bool> {
@@ -219,7 +214,7 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
         .boxed()
     }
 
-    fn sink_event(self, _pad: &PadSinkRef, imp: &InputSelector, event: gst::Event) -> bool {
+    fn sink_event(self, _pad: &gst::Pad, imp: &InputSelector, event: gst::Event) -> bool {
         /* Drop all events for now */
         if let gst::EventView::FlushStart(..) = event.view() {
             /* Unblock downstream */
@@ -234,15 +229,15 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
         true
     }
 
-    fn sink_query(self, pad: &PadSinkRef, imp: &InputSelector, query: &mut gst::QueryRef) -> bool {
-        gst::log!(CAT, obj: pad.gst_pad(), "Handling query {:?}", query);
+    fn sink_query(self, pad: &gst::Pad, imp: &InputSelector, query: &mut gst::QueryRef) -> bool {
+        gst::log!(CAT, obj: pad, "Handling query {:?}", query);
 
         if query.is_serialized() {
             // FIXME: How can we do this (drops ALLOCATION and DRAIN)?
-            gst::log!(CAT, obj: pad.gst_pad(), "Dropping serialized query {:?}", query);
+            gst::log!(CAT, obj: pad, "Dropping serialized query {:?}", query);
             false
         } else {
-            gst::log!(CAT, obj: pad.gst_pad(), "Forwarding query {:?}", query);
+            gst::log!(CAT, obj: pad, "Forwarding query {:?}", query);
             imp.src_pad.gst_pad().peer_query(query)
         }
     }
@@ -254,8 +249,8 @@ struct InputSelectorPadSrcHandler;
 impl PadSrcHandler for InputSelectorPadSrcHandler {
     type ElementImpl = InputSelector;
 
-    fn src_query(self, pad: &PadSrcRef, imp: &InputSelector, query: &mut gst::QueryRef) -> bool {
-        gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
+    fn src_query(self, pad: &gst::Pad, imp: &InputSelector, query: &mut gst::QueryRef) -> bool {
+        gst::log!(CAT, obj: pad, "Handling {:?}", query);
 
         use gst::QueryViewMut;
         match query.view_mut() {

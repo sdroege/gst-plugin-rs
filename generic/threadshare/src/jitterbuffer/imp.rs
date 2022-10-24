@@ -36,7 +36,7 @@ use std::sync::Mutex as StdMutex;
 use std::time::Duration;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{self, Context, PadSink, PadSinkRef, PadSinkWeak, PadSrc, PadSrcRef, Task};
+use crate::runtime::{self, Context, PadSink, PadSrc, Task};
 
 use super::jitterbuffer::{RTPJitterBuffer, RTPJitterBufferItem, RTPPacketRateCtx};
 
@@ -488,7 +488,7 @@ impl SinkHandler {
 
     fn enqueue_item(
         &self,
-        pad: &gst::Pad,
+        pad: gst::Pad,
         jb: &JitterBuffer,
         buffer: Option<gst::Buffer>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -501,7 +501,7 @@ impl SinkHandler {
 
         // This is to avoid recursion with `store`, `reset` and `enqueue_item`
         while let Some(buf) = buffers.pop_front() {
-            if let Err(err) = self.store(&mut inner, pad, jb, buf) {
+            if let Err(err) = self.store(&mut inner, &pad, jb, buf) {
                 match err {
                     gst::FlowError::CustomError => {
                         for gap_packet in self.reset(&mut inner, jb) {
@@ -550,26 +550,25 @@ impl PadSinkHandler for SinkHandler {
 
     fn sink_chain(
         self,
-        pad: PadSinkWeak,
+        pad: gst::Pad,
         elem: super::JitterBuffer,
         buffer: gst::Buffer,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
         async move {
-            let pad = pad.upgrade().expect("PadSink no longer exists");
-            gst::debug!(CAT, obj: pad.gst_pad(), "Handling {:?}", buffer);
-            self.enqueue_item(pad.gst_pad(), elem.imp(), Some(buffer))
+            gst::debug!(CAT, obj: pad, "Handling {:?}", buffer);
+            self.enqueue_item(pad, elem.imp(), Some(buffer))
         }
         .boxed()
     }
 
-    fn sink_event(self, pad: &PadSinkRef, jb: &JitterBuffer, event: gst::Event) -> bool {
+    fn sink_event(self, pad: &gst::Pad, jb: &JitterBuffer, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling {:?}", event);
 
         if let EventView::FlushStart(..) = event.view() {
             if let Err(err) = jb.task.flush_start().await_maybe_on_context() {
-                gst::error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
+                gst::error!(CAT, obj: pad, "FlushStart failed {:?}", err);
                 gst::element_imp_error!(
                     jb,
                     gst::StreamError::Failed,
@@ -580,20 +579,18 @@ impl PadSinkHandler for SinkHandler {
             }
         }
 
-        gst::log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", event);
+        gst::log!(CAT, obj: pad, "Forwarding {:?}", event);
         jb.src_pad.gst_pad().push_event(event)
     }
 
     fn sink_event_serialized(
         self,
-        pad: PadSinkWeak,
+        pad: gst::Pad,
         elem: super::JitterBuffer,
         event: gst::Event,
     ) -> BoxFuture<'static, bool> {
         async move {
-            let pad = pad.upgrade().expect("PadSink no longer exists");
-
-            gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
+            gst::log!(CAT, obj: pad, "Handling {:?}", event);
 
             let jb = elem.imp();
 
@@ -606,7 +603,7 @@ impl PadSinkHandler for SinkHandler {
                 }
                 EventView::FlushStop(..) => {
                     if let Err(err) = jb.task.flush_stop().await_maybe_on_context() {
-                        gst::error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
+                        gst::error!(CAT, obj: pad, "FlushStop failed {:?}", err);
                         gst::element_error!(
                             elem,
                             gst::StreamError::Failed,
@@ -629,7 +626,7 @@ impl PadSinkHandler for SinkHandler {
 
             if forward {
                 // FIXME: These events should really be queued up and stay in order
-                gst::log!(CAT, obj: pad.gst_pad(), "Forwarding serialized {:?}", event);
+                gst::log!(CAT, obj: pad, "Forwarding serialized {:?}", event);
                 jb.src_pad.push_event(event).await
             } else {
                 true
@@ -870,15 +867,15 @@ impl SrcHandler {
 impl PadSrcHandler for SrcHandler {
     type ElementImpl = JitterBuffer;
 
-    fn src_event(self, pad: &PadSrcRef, jb: &JitterBuffer, event: gst::Event) -> bool {
+    fn src_event(self, pad: &gst::Pad, jb: &JitterBuffer, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling {:?}", event);
 
         match event.view() {
             EventView::FlushStart(..) => {
                 if let Err(err) = jb.task.flush_start().await_maybe_on_context() {
-                    gst::error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
+                    gst::error!(CAT, obj: pad, "FlushStart failed {:?}", err);
                     gst::element_imp_error!(
                         jb,
                         gst::StreamError::Failed,
@@ -890,7 +887,7 @@ impl PadSrcHandler for SrcHandler {
             }
             EventView::FlushStop(..) => {
                 if let Err(err) = jb.task.flush_stop().await_maybe_on_context() {
-                    gst::error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
+                    gst::error!(CAT, obj: pad, "FlushStop failed {:?}", err);
                     gst::element_imp_error!(
                         jb,
                         gst::StreamError::Failed,
@@ -903,14 +900,14 @@ impl PadSrcHandler for SrcHandler {
             _ => (),
         }
 
-        gst::log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", event);
+        gst::log!(CAT, obj: pad, "Forwarding {:?}", event);
         jb.sink_pad.gst_pad().push_event(event)
     }
 
-    fn src_query(self, pad: &PadSrcRef, jb: &JitterBuffer, query: &mut gst::QueryRef) -> bool {
+    fn src_query(self, pad: &gst::Pad, jb: &JitterBuffer, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
-        gst::log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", query);
+        gst::log!(CAT, obj: pad, "Forwarding {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Latency(q) => {
