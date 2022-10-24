@@ -9,9 +9,9 @@ edition = "2021"
 rust-version = "1.63"
 
 [dependencies]
-gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"] }
-gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"] }
-gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"] }
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.19", version = "0.19.1", features = ["v1_16"] }
+gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.19", version = "0.19", features = ["v1_16"] }
+gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.19", version = "0.19", features = ["v1_16"] }
 anyhow = "1"
 byte-slice-cast = "1.0"
 num-traits = "0.2"
@@ -29,11 +29,11 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [dev-dependencies]
-gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_18"] }
-gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.19", version = "0.19", features = ["v1_18"] }
+gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.19", version = "0.19" }
 
 [build-dependencies]
-gst-plugin-version-helper = { path="../../version-helper" }
+gst-plugin-version-helper = { version = "0.7", path="../../version-helper" }
 
 [features]
 static = []

@@ -9,10 +9,10 @@ rust-version = "1.63"
 description = "GStreamer Rust Tutorial Plugin"
 
 [dependencies]
-gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.19", version = "0.19.1" }
+gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.19", version = "0.19" }
+gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.19", version = "0.19" }
+gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.19", version = "0.19" }
 byte-slice-cast = "1.0"
 num-traits = "0.2"
 once_cell = "1.0"
@@ -23,4 +23,4 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [build-dependencies]
-gst-plugin-version-helper = { path="../version-helper" }
+gst-plugin-version-helper = { version = "0.7", path="../version-helper" }
