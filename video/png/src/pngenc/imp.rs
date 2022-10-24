@@ -8,15 +8,12 @@
 //
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::{io, io::Write, sync::Arc};
-
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 
-use atomic_refcell::AtomicRefCell;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 
@@ -33,56 +30,6 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
         Some("PNG encoder"),
     )
 });
-
-// Inner buffer where the result of frame encoding  is written
-// before relay them downstream
-struct CacheBuffer {
-    buffer: AtomicRefCell<Vec<u8>>,
-}
-
-impl CacheBuffer {
-    pub fn new() -> Self {
-        Self {
-            buffer: AtomicRefCell::new(Vec::new()),
-        }
-    }
-
-    pub fn clear(&self) {
-        self.buffer.borrow_mut().clear();
-    }
-
-    pub fn write(&self, buf: &[u8]) {
-        let mut buffer = self.buffer.borrow_mut();
-        buffer.extend_from_slice(buf);
-    }
-
-    pub fn consume(&self) -> Vec<u8> {
-        let mut buffer = self.buffer.borrow_mut();
-        std::mem::take(&mut *buffer)
-    }
-}
-// The Encoder requires a Writer, so we use here and intermediate structure
-// for caching encoded frames
-struct CacheWriter {
-    cache: Arc<CacheBuffer>,
-}
-
-impl CacheWriter {
-    pub fn new(cache: Arc<CacheBuffer>) -> Self {
-        Self { cache }
-    }
-}
-
-impl Write for CacheWriter {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.cache.write(buf);
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
 
 #[derive(Debug, Clone, Copy)]
 struct Settings {
@@ -101,62 +48,6 @@ impl Default for Settings {
 
 struct State {
     video_info: gst_video::VideoInfo,
-    cache: Arc<CacheBuffer>,
-    writer: Option<png::Writer<CacheWriter>>,
-}
-
-impl State {
-    fn new(video_info: gst_video::VideoInfo) -> Self {
-        let cache = Arc::new(CacheBuffer::new());
-        Self {
-            video_info,
-            cache,
-            writer: None,
-        }
-    }
-
-    fn reset(&mut self, settings: Settings) -> Result<(), gst::LoggableError> {
-        // clear the cache
-        self.cache.clear();
-        let width = self.video_info.width();
-        let height = self.video_info.height();
-        let mut encoder = png::Encoder::new(CacheWriter::new(self.cache.clone()), width, height);
-        let color = match self.video_info.format() {
-            gst_video::VideoFormat::Gray8 | gst_video::VideoFormat::Gray16Be => {
-                png::ColorType::Grayscale
-            }
-            gst_video::VideoFormat::Rgb => png::ColorType::Rgb,
-            gst_video::VideoFormat::Rgba => png::ColorType::Rgba,
-            _ => {
-                gst::error!(CAT, "format is not supported yet");
-                unreachable!()
-            }
-        };
-        let depth = if self.video_info.format() == gst_video::VideoFormat::Gray16Be {
-            png::BitDepth::Sixteen
-        } else {
-            png::BitDepth::Eight
-        };
-
-        encoder.set_color(color);
-        encoder.set_depth(depth);
-        encoder.set_compression(png::Compression::from(settings.compression));
-        encoder.set_filter(png::FilterType::from(settings.filter));
-        // Write the header for this video format into our inner buffer
-        let writer = encoder.write_header().map_err(|e| {
-            gst::loggable_error!(CAT, "Failed to create encoder error: {}", e.to_string())
-        })?;
-        self.writer = Some(writer);
-        Ok(())
-    }
-
-    fn write_data(&mut self, data: &[u8]) -> Result<(), png::EncodingError> {
-        if let Some(writer) = self.writer.as_mut() {
-            writer.write_image_data(data)
-        } else {
-            unreachable!()
-        }
-    }
 }
 
 #[derive(Default)]
@@ -288,12 +179,8 @@ impl VideoEncoderImpl for PngEncoder {
     ) -> Result<(), gst::LoggableError> {
         let video_info = state.info();
         gst::debug!(CAT, imp: self, "Setting format {:?}", video_info);
-        {
-            let settings = self.settings.lock();
-            let mut state = State::new(video_info);
-            state.reset(*settings)?;
-            *self.state.lock() = Some(state);
-        }
+
+        *self.state.lock() = Some(State { video_info });
 
         let instance = self.obj();
         let output_state = instance
@@ -308,6 +195,7 @@ impl VideoEncoderImpl for PngEncoder {
         &self,
         mut frame: gst_video::VideoCodecFrame,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let settings = *self.settings.lock();
         let mut state_guard = self.state.lock();
         let state = state_guard.as_mut().ok_or(gst::FlowError::NotNegotiated)?;
 
@@ -317,18 +205,54 @@ impl VideoEncoderImpl for PngEncoder {
             "Sending frame {}",
             frame.system_frame_number()
         );
+
+        let mut buffer = Vec::with_capacity(4096);
+        let mut encoder = png::Encoder::new(
+            &mut buffer,
+            state.video_info.width(),
+            state.video_info.height(),
+        );
+        let color = match state.video_info.format() {
+            gst_video::VideoFormat::Gray8 | gst_video::VideoFormat::Gray16Be => {
+                png::ColorType::Grayscale
+            }
+            gst_video::VideoFormat::Rgb => png::ColorType::Rgb,
+            gst_video::VideoFormat::Rgba => png::ColorType::Rgba,
+            _ => unreachable!(),
+        };
+        let depth = if state.video_info.format() == gst_video::VideoFormat::Gray16Be {
+            png::BitDepth::Sixteen
+        } else {
+            png::BitDepth::Eight
+        };
+
+        encoder.set_color(color);
+        encoder.set_depth(depth);
+        encoder.set_compression(png::Compression::from(settings.compression));
+        encoder.set_filter(png::FilterType::from(settings.filter));
+
+        let mut writer = encoder.write_header().map_err(|e| {
+            gst::error!(CAT, imp: self, "Failed to create encoder: {}", e);
+            gst::element_imp_error!(self, gst::CoreError::Failed, [&e.to_string()]);
+            gst::FlowError::Error
+        })?;
+
         {
             let input_buffer = frame.input_buffer().expect("frame without input buffer");
-
             let input_map = input_buffer.map_readable().unwrap();
-            let data = input_map.as_slice();
-            state.write_data(data).map_err(|e| {
+            writer.write_image_data(&input_map).map_err(|e| {
+                gst::error!(CAT, imp: self, "Failed to write image data: {}", e);
                 gst::element_imp_error!(self, gst::CoreError::Failed, [&e.to_string()]);
                 gst::FlowError::Error
             })?;
         }
 
-        let buffer = state.cache.consume();
+        writer.finish().map_err(|e| {
+            gst::error!(CAT, imp: self, "Failed to finish encoder: {}", e);
+            gst::element_imp_error!(self, gst::CoreError::Failed, [&e.to_string()]);
+            gst::FlowError::Error
+        })?;
+
         drop(state_guard);
 
         let output_buffer = gst::Buffer::from_mut_slice(buffer);
