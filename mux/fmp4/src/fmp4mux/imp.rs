@@ -1454,6 +1454,7 @@ impl FMP4Mux {
                         return Err(gst::FlowError::NotNegotiated);
                     }
                 }
+                "video/x-vp9" => (),
                 "image/jpeg" => {
                     intra_only = true;
                 }
@@ -2299,6 +2300,14 @@ impl ElementImpl for ISOFMP4Mux {
                         .field("width", gst::IntRange::new(1, u16::MAX as i32))
                         .field("height", gst::IntRange::new(1, u16::MAX as i32))
                         .build(),
+                    gst::Structure::builder("video/x-vp9")
+                        .field("profile", gst::List::new(["0", "1", "2", "3"]))
+                        .field("chroma-format", gst::List::new(["4:2:0", "4:2:2", "4:4:4"]))
+                        .field("bit-depth-luma", gst::List::new([8u32, 10u32, 12u32]))
+                        .field("bit-depth-chroma", gst::List::new([8u32, 10u32, 12u32]))
+                        .field("width", gst::IntRange::new(1, u16::MAX as i32))
+                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
+                        .build(),
                     gst::Structure::builder("audio/mpeg")
                         .field("mpegversion", 4i32)
                         .field("stream-format", "raw")
@@ -2378,6 +2387,14 @@ impl ElementImpl for CMAFMux {
                     gst::Structure::builder("video/x-h265")
                         .field("stream-format", gst::List::new(["hvc1", "hev1"]))
                         .field("alignment", "au")
+                        .field("width", gst::IntRange::new(1, u16::MAX as i32))
+                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
+                        .build(),
+                    gst::Structure::builder("video/x-vp9")
+                        .field("profile", gst::List::new(["0", "1", "2", "3"]))
+                        .field("chroma-format", gst::List::new(["4:2:0", "4:2:2", "4:4:4"]))
+                        .field("bit-depth-luma", gst::List::new([8u32, 10u32, 12u32]))
+                        .field("bit-depth-chroma", gst::List::new([8u32, 10u32, 12u32]))
                         .field("width", gst::IntRange::new(1, u16::MAX as i32))
                         .field("height", gst::IntRange::new(1, u16::MAX as i32))
                         .build(),
@@ -2462,6 +2479,14 @@ impl ElementImpl for DASHMP4Mux {
                         .field("alignment", "au")
                         .field("width", gst::IntRange::<i32>::new(1, u16::MAX as i32))
                         .field("height", gst::IntRange::<i32>::new(1, u16::MAX as i32))
+                        .build(),
+                    gst::Structure::builder("video/x-vp9")
+                        .field("profile", gst::List::new(["0", "1", "2", "3"]))
+                        .field("chroma-format", gst::List::new(["4:2:0", "4:2:2", "4:4:4"]))
+                        .field("bit-depth-luma", gst::List::new([8u32, 10u32, 12u32]))
+                        .field("bit-depth-chroma", gst::List::new([8u32, 10u32, 12u32]))
+                        .field("width", gst::IntRange::new(1, u16::MAX as i32))
+                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
                         .build(),
                     gst::Structure::builder("audio/mpeg")
                         .field("mpegversion", 4i32)

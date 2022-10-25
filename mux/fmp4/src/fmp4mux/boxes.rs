@@ -731,7 +731,9 @@ fn write_hdlr(
 
     let s = caps.structure(0).unwrap();
     let (handler_type, name) = match s.name() {
-        "video/x-h264" | "video/x-h265" | "image/jpeg" => (b"vide", b"VideoHandler\0".as_slice()),
+        "video/x-h264" | "video/x-h265" | "video/x-vp9" | "image/jpeg" => {
+            (b"vide", b"VideoHandler\0".as_slice())
+        }
         "audio/mpeg" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
             (b"soun", b"SoundHandler\0".as_slice())
         }
@@ -759,7 +761,7 @@ fn write_minf(
     let s = caps.structure(0).unwrap();
 
     match s.name() {
-        "video/x-h264" | "video/x-h265" | "image/jpeg" => {
+        "video/x-h264" | "video/x-h265" | "video/x-vp9" | "image/jpeg" => {
             // Flags are always 1 for unspecified reasons
             write_full_box(v, b"vmhd", FULL_BOX_VERSION_0, 1, |v| write_vmhd(v, cfg))?
         }
@@ -874,7 +876,9 @@ fn write_stsd(
 
     let s = caps.structure(0).unwrap();
     match s.name() {
-        "video/x-h264" | "video/x-h265" | "image/jpeg" => write_visual_sample_entry(v, cfg, caps)?,
+        "video/x-h264" | "video/x-h265" | "video/x-vp9" | "image/jpeg" => {
+            write_visual_sample_entry(v, cfg, caps)?
+        }
         "audio/mpeg" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
             write_audio_sample_entry(v, cfg, caps)?
         }
@@ -925,6 +929,7 @@ fn write_visual_sample_entry(
             }
         }
         "image/jpeg" => b"jpeg",
+        "video/x-vp9" => b"vp09",
         _ => unreachable!(),
     };
 
@@ -990,6 +995,69 @@ fn write_visual_sample_entry(
                     .context("codec_data not mappable")?;
                 write_box(v, b"hvcC", move |v| {
                     v.extend_from_slice(&map);
+                    Ok(())
+                })?;
+            }
+            "video/x-vp9" => {
+                let profile: u8 = match s.get::<&str>("profile").expect("no vp9 profile") {
+                    "0" => Some(0),
+                    "1" => Some(1),
+                    "2" => Some(2),
+                    "3" => Some(3),
+                    _ => None,
+                }
+                .context("unsupported vp9 profile")?;
+                let colorimetry = gst_video::VideoColorimetry::from_str(
+                    s.get::<&str>("colorimetry").expect("no colorimetry"),
+                )
+                .context("failed to parse colorimetry")?;
+                let video_full_range =
+                    colorimetry.range() == gst_video::VideoColorRange::Range0_255;
+                let chroma_format: u8 =
+                    match s.get::<&str>("chroma-format").expect("no chroma-format") {
+                        "4:2:0" =>
+                        // chroma-site is optional
+                        {
+                            match s
+                                .get::<&str>("chroma-site")
+                                .ok()
+                                .and_then(|cs| gst_video::VideoChromaSite::from_str(cs).ok())
+                            {
+                                Some(gst_video::VideoChromaSite::V_COSITED) => Some(0),
+                                // COSITED
+                                _ => Some(1),
+                            }
+                        }
+                        "4:2:2" => Some(2),
+                        "4:4:4" => Some(3),
+                        _ => None,
+                    }
+                    .context("unsupported chroma-format")?;
+                let bit_depth: u8 = {
+                    let bit_depth_luma = s.get::<u32>("bit-depth-luma").expect("no bit-depth-luma");
+                    let bit_depth_chroma = s
+                        .get::<u32>("bit-depth-chroma")
+                        .expect("no bit-depth-chroma");
+                    if bit_depth_luma != bit_depth_chroma {
+                        return Err(anyhow!("bit-depth-luma and bit-depth-chroma have different values which is an unsupported configuration"));
+                    }
+                    bit_depth_luma as u8
+                };
+                write_full_box(v, b"vpcC", 1, 0, move |v| {
+                    v.push(profile);
+                    // XXX: hardcoded level 1
+                    v.push(10);
+                    let mut byte: u8 = 0;
+                    byte |= (bit_depth & 0xF) << 4;
+                    byte |= (chroma_format & 0x7) << 1;
+                    byte |= video_full_range as u8;
+                    v.push(byte);
+                    v.push(colorimetry.primaries().to_iso() as u8);
+                    v.push(colorimetry.transfer().to_iso() as u8);
+                    v.push(colorimetry.matrix().to_iso() as u8);
+                    // 16-bit length field for codec initialization, unused
+                    v.push(0);
+                    v.push(0);
                     Ok(())
                 })?;
             }
@@ -1977,7 +2045,7 @@ pub(crate) fn create_mfra(
 }
 
 // Copy from std while this is still nightly-only
-use std::fmt;
+use std::{fmt, str::FromStr};
 
 /// An iterator over slice in (non-overlapping) chunks separated by a predicate.
 ///
