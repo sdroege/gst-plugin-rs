@@ -13,6 +13,8 @@ ignore = [
     "RUSTSEC-2020-0071",
     # sodiumoxide is deprecated
     "RUSTSEC-2021-0137",
+    # https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/256
+    "RUSTSEC-2022-0048",
 ]
 
 [licenses]
@@ -55,12 +57,6 @@ wildcards = "allow"
 name = "time"
 version = "0.1"
 
-# ignore duplicated textwrap dependency because clap depends on an old version
-# https://github.com/clap-rs/clap/pull/1994
-[[bans.skip]]
-name = "textwrap"
-version = "0.11"
-
 # ignore duplicated rustc_version dependency because rav1e depends on an old version
 [[bans.skip]]
 name = "rustc_version"
@@ -69,15 +65,13 @@ version = "0.3"
 name = "semver"
 version = "0.11"
 
-# ignore duplicated system-deps dependency because dav1d depends on an old version
+# ignore duplicated system-deps dependency because rav1e depends on an old version
 [[bans.skip]]
 name = "system-deps"
 version = "3"
-
 [[bans.skip]]
 name = "version-compare"
 version = "0.0"
-
 [[bans.skip]]
 name = "cfg-expr"
 version = "0.7"
@@ -113,6 +107,45 @@ version = "0.10"
 [[bans.skip]]
 name = "spin"
 version = "0.5"
+
+# Various crates depend on older versions of the windows crates
+[[bans.skip]]
+name = "windows-sys"
+version = "0.36"
+[[bans.skip]]
+name = "windows_aarch64_msvc"
+version = "0.36"
+[[bans.skip]]
+name = "windows_i686_gnu"
+version = "0.36"
+[[bans.skip]]
+name = "windows_i686_msvc"
+version = "0.36"
+[[bans.skip]]
+name = "windows_x86_64_gnu"
+version = "0.36"
+[[bans.skip]]
+name = "windows_x86_64_msvc"
+version = "0.36"
+
+# Various crates depend on older miniz_oxide
+# https://github.com/rust-lang/backtrace-rs/pull/483
+# https://github.com/rust-lang/flate2-rs/pull/317
+# https://github.com/image-rs/image-png/pull/355
+[[bans.skip]]
+name = "miniz_oxide"
+version = "0.5"
+
+# cookie_store depends on older idna
+# https://github.com/pfernie/cookie_store/commit/b9c710f45550c5c8997f18a83e6fcc5998cf1726
+[[bans.skip]]
+name = "idna"
+version = "0.2"
+
+# image_hasher depends on an alpha version of base64
+[[bans.skip]]
+name = "base64"
+version = "0.20.0-alpha.1"
 
 [sources]
 unknown-registry = "deny"
