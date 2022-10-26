@@ -422,7 +422,12 @@ impl WhipSink {
 
                     match parse_redirect_location(resp.headers(), &endpoint) {
                         Ok(redirect_url) => {
-                            gst::debug!(CAT, "Redirecting endpoint to {}", redirect_url.as_str());
+                            gst::debug!(
+                                CAT,
+                                imp: self,
+                                "Redirecting endpoint to {}",
+                                redirect_url.as_str()
+                            );
                             self.lookup_ice_servers(redirect_url)
                         }
                         Err(e) => Err(e),
@@ -456,7 +461,7 @@ impl WhipSink {
 
             let item_map = parse_link_header::parse_with_rel(link);
             if let Err(e) = item_map {
-                gst::error!(CAT, "set_ice_servers {} - Error {:?}", link, e);
+                gst::error!(CAT, imp: self, "set_ice_servers {} - Error {:?}", link, e);
                 continue;
             }
 
@@ -504,7 +509,12 @@ impl WhipSink {
                     .expect("strip 'scheme:' from raw uri");
             }
 
-            gst::debug!(CAT, "Setting STUN/TURN server {}", ice_server_url);
+            gst::debug!(
+                CAT,
+                imp: self,
+                "Setting STUN/TURN server {}",
+                ice_server_url
+            );
 
             // It's icer to not collapse the `else if` and its inner `if`
             #[allow(clippy::collapsible_if)]
@@ -516,7 +526,12 @@ impl WhipSink {
                     .webrtcbin
                     .emit_by_name::<bool>("add-turn-server", &[&ice_server_url.as_str()])
                 {
-                    gst::error!(CAT, "Falied to set turn server {}", ice_server_url);
+                    gst::error!(
+                        CAT,
+                        imp: self,
+                        "Falied to set turn server {}",
+                        ice_server_url
+                    );
                 }
             }
         }
@@ -586,7 +601,7 @@ impl WhipSink {
         let sdp = offer.sdp();
         let body = sdp.as_text().unwrap();
 
-        gst::debug!(CAT, "Using endpoint {}", endpoint.as_str());
+        gst::debug!(CAT, imp: self, "Using endpoint {}", endpoint.as_str());
         let mut headermap = HeaderMap::new();
         headermap.insert(
             reqwest::header::CONTENT_TYPE,
@@ -669,7 +684,12 @@ impl WhipSink {
 
                     match parse_redirect_location(resp.headers(), &endpoint) {
                         Ok(redirect_url) => {
-                            gst::debug!(CAT, "Redirecting endpoint to {}", redirect_url.as_str());
+                            gst::debug!(
+                                CAT,
+                                imp: self,
+                                "Redirecting endpoint to {}",
+                                redirect_url.as_str()
+                            );
                             self.do_post(offer, redirect_url)
                         }
                         Err(e) => return Err(e),
@@ -717,7 +737,7 @@ impl WhipSink {
                 ref whip_resource_url,
             } => whip_resource_url.clone(),
             _ => {
-                gst::error!(CAT, "Terminated in unexpected state");
+                gst::error!(CAT, imp: self, "Terminated in unexpected state");
                 return;
             }
         };
@@ -733,17 +753,17 @@ impl WhipSink {
             );
         }
 
-        gst::debug!(CAT, "DELETE request on {}", resource_url);
+        gst::debug!(CAT, imp: self, "DELETE request on {}", resource_url);
         let client = build_reqwest_client(reqwest::redirect::Policy::default());
         let future = client.delete(resource_url).headers(headermap).send();
 
         let res = self.wait(future);
         match res {
             Ok(r) => {
-                gst::debug!(CAT, "Response to DELETE : {}", r.status());
+                gst::debug!(CAT, imp: self, "Response to DELETE : {}", r.status());
             }
             Err(e) => {
-                gst::error!(CAT, "{}", e);
+                gst::error!(CAT, imp: self, "{}", e);
             }
         };
     }
