@@ -689,7 +689,9 @@ impl FMP4Mux {
                 // If this GOP starts after the fragment end then don't dequeue it yet unless this is
                 // the first stream and no GOPs were dequeued at all yet. This would mean that the
                 // GOP is bigger than the fragment duration.
-                if gop.end_pts > dequeue_end_pts && (fragment_end_pts.is_some() || !gops.is_empty())
+                if !at_eos
+                    && gop.end_pts > dequeue_end_pts
+                    && (fragment_end_pts.is_some() || !gops.is_empty())
                 {
                     break;
                 }
