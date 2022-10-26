@@ -1409,6 +1409,7 @@ impl FMP4Mux {
         }
 
         if settings.write_mfra && at_eos {
+            gst::debug!(CAT, imp: self, "Writing mfra box");
             match boxes::create_mfra(&streams[0].0, &state.fragment_offsets) {
                 Ok(mut mfra) => {
                     {
