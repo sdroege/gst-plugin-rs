@@ -18,7 +18,7 @@ fn init() {
     });
 }
 
-fn test_buffer_flags_single_stream(cmaf: bool) {
+fn test_buffer_flags_single_stream(cmaf: bool, set_dts: bool, caps: gst::Caps) {
     let mut h = if cmaf {
         gst_check::Harness::new("cmafmux")
     } else {
@@ -30,16 +30,7 @@ fn test_buffer_flags_single_stream(cmaf: bool) {
         .unwrap()
         .set_property("fragment-duration", 5.seconds());
 
-    h.set_src_caps(
-        gst::Caps::builder("video/x-h264")
-            .field("width", 1920i32)
-            .field("height", 1080i32)
-            .field("framerate", gst::Fraction::new(30, 1))
-            .field("stream-format", "avc")
-            .field("alignment", "au")
-            .field("codec_data", gst::Buffer::with_size(1).unwrap())
-            .build(),
-    );
+    h.set_src_caps(caps);
     h.play();
 
     let output_offset = if cmaf {
@@ -54,7 +45,9 @@ fn test_buffer_flags_single_stream(cmaf: bool) {
         {
             let buffer = buffer.get_mut().unwrap();
             buffer.set_pts(i.seconds());
-            buffer.set_dts(i.seconds());
+            if set_dts {
+                buffer.set_dts(i.seconds());
+            }
             buffer.set_duration(gst::ClockTime::SECOND);
             if i != 0 && i != 5 {
                 buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
@@ -90,7 +83,9 @@ fn test_buffer_flags_single_stream(cmaf: bool) {
         gst::BufferFlags::HEADER | gst::BufferFlags::DISCONT
     );
     assert_eq!(header.pts(), Some(gst::ClockTime::ZERO + output_offset));
-    assert_eq!(header.dts(), Some(gst::ClockTime::ZERO + output_offset));
+    if set_dts {
+        assert_eq!(header.dts(), Some(gst::ClockTime::ZERO + output_offset));
+    }
 
     let fragment_header = h.pull().unwrap();
     assert_eq!(fragment_header.flags(), gst::BufferFlags::HEADER);
@@ -98,10 +93,12 @@ fn test_buffer_flags_single_stream(cmaf: bool) {
         fragment_header.pts(),
         Some(gst::ClockTime::ZERO + output_offset)
     );
-    assert_eq!(
-        fragment_header.dts(),
-        Some(gst::ClockTime::ZERO + output_offset)
-    );
+    if set_dts {
+        assert_eq!(
+            fragment_header.dts(),
+            Some(gst::ClockTime::ZERO + output_offset)
+        );
+    }
     assert_eq!(fragment_header.duration(), Some(5.seconds()));
 
     for i in 0..5 {
@@ -115,7 +112,9 @@ fn test_buffer_flags_single_stream(cmaf: bool) {
             assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
         }
         assert_eq!(buffer.pts(), Some(i.seconds() + output_offset));
-        assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
+        if set_dts {
+            assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
+        }
         assert_eq!(buffer.duration(), Some(gst::ClockTime::SECOND));
     }
 
@@ -124,7 +123,9 @@ fn test_buffer_flags_single_stream(cmaf: bool) {
     let fragment_header = h.pull().unwrap();
     assert_eq!(fragment_header.flags(), gst::BufferFlags::HEADER);
     assert_eq!(fragment_header.pts(), Some(5.seconds() + output_offset));
-    assert_eq!(fragment_header.dts(), Some(5.seconds() + output_offset));
+    if set_dts {
+        assert_eq!(fragment_header.dts(), Some(5.seconds() + output_offset));
+    }
     assert_eq!(fragment_header.duration(), Some(2.seconds()));
 
     for i in 5..7 {
@@ -138,7 +139,9 @@ fn test_buffer_flags_single_stream(cmaf: bool) {
             assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
         }
         assert_eq!(buffer.pts(), Some(i.seconds() + output_offset));
-        assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
+        if set_dts {
+            assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
+        }
         assert_eq!(buffer.duration(), Some(gst::ClockTime::SECOND));
     }
 
@@ -153,17 +156,71 @@ fn test_buffer_flags_single_stream(cmaf: bool) {
 }
 
 #[test]
-fn test_buffer_flags_single_stream_cmaf() {
+fn test_buffer_flags_single_h264_stream_cmaf() {
     init();
 
-    test_buffer_flags_single_stream(true);
+    let caps = gst::Caps::builder("video/x-h264")
+        .field("width", 1920i32)
+        .field("height", 1080i32)
+        .field("framerate", gst::Fraction::new(30, 1))
+        .field("stream-format", "avc")
+        .field("alignment", "au")
+        .field("codec_data", gst::Buffer::with_size(1).unwrap())
+        .build();
+
+    test_buffer_flags_single_stream(true, true, caps);
 }
 
 #[test]
-fn test_buffer_flags_single_stream_iso() {
+fn test_buffer_flags_single_h264_stream_iso() {
     init();
 
-    test_buffer_flags_single_stream(false);
+    let caps = gst::Caps::builder("video/x-h264")
+        .field("width", 1920i32)
+        .field("height", 1080i32)
+        .field("framerate", gst::Fraction::new(30, 1))
+        .field("stream-format", "avc")
+        .field("alignment", "au")
+        .field("codec_data", gst::Buffer::with_size(1).unwrap())
+        .build();
+
+    test_buffer_flags_single_stream(false, true, caps);
+}
+
+#[test]
+fn test_buffer_flags_single_vp9_stream_cmaf() {
+    init();
+
+    let caps = gst::Caps::builder("video/x-vp9")
+        .field("width", 1920i32)
+        .field("height", 1080i32)
+        .field("framerate", gst::Fraction::new(30, 1))
+        .field("profile", "0")
+        .field("chroma-format", "4:2:0")
+        .field("bit-depth-luma", 8u32)
+        .field("bit-depth-chroma", 8u32)
+        .field("colorimetry", "bt709")
+        .build();
+
+    test_buffer_flags_single_stream(true, false, caps);
+}
+
+#[test]
+fn test_buffer_flags_single_vp9_stream_iso() {
+    init();
+
+    let caps = gst::Caps::builder("video/x-vp9")
+        .field("width", 1920i32)
+        .field("height", 1080i32)
+        .field("framerate", gst::Fraction::new(30, 1))
+        .field("profile", "0")
+        .field("chroma-format", "4:2:0")
+        .field("bit-depth-luma", 8u32)
+        .field("bit-depth-chroma", 8u32)
+        .field("colorimetry", "bt709")
+        .build();
+
+    test_buffer_flags_single_stream(false, false, caps);
 }
 
 #[test]

@@ -19,6 +19,7 @@ use once_cell::sync::Lazy;
 
 use super::boxes;
 use super::Buffer;
+use super::DeltaFrames;
 
 /// Offset for the segment in non-single-stream variants.
 const SEGMENT_OFFSET: gst::ClockTime = gst::ClockTime::from_seconds(60 * 60 * 1000);
@@ -124,7 +125,7 @@ struct Stream {
     sinkpad: gst_base::AggregatorPad,
 
     caps: gst::Caps,
-    intra_only: bool,
+    delta_frames: DeltaFrames,
 
     queued_gops: VecDeque<Gop>,
     fragment_filled: bool,
@@ -286,14 +287,14 @@ impl FMP4Mux {
 
         gst::trace!(CAT, obj: stream.sinkpad, "Handling buffer {:?}", buffer);
 
-        let intra_only = stream.intra_only;
+        let delta_frames = stream.delta_frames;
 
-        if !intra_only && buffer.dts().is_none() {
+        if delta_frames.requires_dts() && buffer.dts().is_none() {
             gst::error!(CAT, obj: stream.sinkpad, "Require DTS for video streams");
             return Err(gst::FlowError::Error);
         }
 
-        if intra_only && buffer.flags().contains(gst::BufferFlags::DELTA_UNIT) {
+        if delta_frames.intra_only() && buffer.flags().contains(gst::BufferFlags::DELTA_UNIT) {
             gst::error!(CAT, obj: stream.sinkpad, "Intra-only stream with delta units");
             return Err(gst::FlowError::Error);
         }
@@ -328,12 +329,12 @@ impl FMP4Mux {
             })?;
 
         // Enforce monotonically increasing PTS for intra-only streams
-        if intra_only {
+        if !delta_frames.requires_dts() {
             if pts < stream.current_position {
                 gst::warning!(
                     CAT,
                     obj: stream.sinkpad,
-                    "Decreasing PTS {} < {} for intra-only stream",
+                    "Decreasing PTS {} < {}",
                     pts,
                     stream.current_position,
                 );
@@ -344,7 +345,7 @@ impl FMP4Mux {
             end_pts = std::cmp::max(end_pts, pts);
         }
 
-        let (dts_position, dts, end_dts) = if intra_only {
+        let (dts_position, dts, end_dts) = if !delta_frames.requires_dts() {
             (None, None, None)
         } else {
             // Negative DTS are handled via the dts_offset and by having negative composition time
@@ -466,10 +467,14 @@ impl FMP4Mux {
             let gop = Gop {
                 start_pts: pts,
                 start_dts: dts,
-                start_dts_position: if intra_only { None } else { dts_position },
+                start_dts_position: if !delta_frames.requires_dts() {
+                    None
+                } else {
+                    dts_position
+                },
                 earliest_pts: pts,
                 earliest_pts_position: pts_position,
-                final_earliest_pts: intra_only,
+                final_earliest_pts: !delta_frames.requires_dts(),
                 end_pts,
                 end_dts,
                 final_end_pts: false,
@@ -490,14 +495,14 @@ impl FMP4Mux {
                 prev_gop.end_pts = std::cmp::max(prev_gop.end_pts, pts);
                 prev_gop.end_dts = std::cmp::max(prev_gop.end_dts, dts);
 
-                if intra_only {
+                if !delta_frames.requires_dts() {
                     prev_gop.final_end_pts = true;
                 }
 
                 if !prev_gop.final_earliest_pts {
                     // Don't bother logging this for intra-only streams as it would be for every
                     // single buffer.
-                    if !intra_only {
+                    if delta_frames.requires_dts() {
                         gst::debug!(
                             CAT,
                             obj: stream.sinkpad,
@@ -513,63 +518,59 @@ impl FMP4Mux {
                 }
             }
         } else if let Some(gop) = stream.queued_gops.front_mut() {
-            assert!(!intra_only);
-
-            // We require DTS for non-intra-only streams
-            let dts = dts.unwrap();
-            let end_dts = end_dts.unwrap();
+            assert!(!delta_frames.intra_only());
 
             gop.end_pts = std::cmp::max(gop.end_pts, end_pts);
-            gop.end_dts = Some(std::cmp::max(gop.end_dts.expect("no end DTS"), end_dts));
-            gop.buffers.push(GopBuffer {
-                buffer,
-                pts,
-                dts: Some(dts),
-            });
+            gop.end_dts = gop.end_dts.opt_max(end_dts);
+            gop.buffers.push(GopBuffer { buffer, pts, dts });
 
-            if gop.earliest_pts > pts && !gop.final_earliest_pts {
-                gst::debug!(
-                    CAT,
-                    obj: stream.sinkpad,
-                    "Updating current GOP earliest PTS from {} to {}",
-                    gop.earliest_pts,
-                    pts
-                );
-                gop.earliest_pts = pts;
-                gop.earliest_pts_position = pts_position;
+            if delta_frames.requires_dts() {
+                let dts = dts.unwrap();
 
-                if let Some(prev_gop) = stream.queued_gops.get_mut(1) {
-                    if prev_gop.end_pts < pts {
-                        gst::debug!(
-                            CAT,
-                            obj: stream.sinkpad,
-                            "Updating previous GOP starting PTS {} end time from {} to {}",
-                            pts,
-                            prev_gop.end_pts,
-                            pts
-                        );
-                        prev_gop.end_pts = pts;
+                if gop.earliest_pts > pts && !gop.final_earliest_pts {
+                    gst::debug!(
+                        CAT,
+                        obj: stream.sinkpad,
+                        "Updating current GOP earliest PTS from {} to {}",
+                        gop.earliest_pts,
+                        pts
+                    );
+                    gop.earliest_pts = pts;
+                    gop.earliest_pts_position = pts_position;
+
+                    if let Some(prev_gop) = stream.queued_gops.get_mut(1) {
+                        if prev_gop.end_pts < pts {
+                            gst::debug!(
+                                CAT,
+                                obj: stream.sinkpad,
+                                "Updating previous GOP starting PTS {} end time from {} to {}",
+                                pts,
+                                prev_gop.end_pts,
+                                pts
+                            );
+                            prev_gop.end_pts = pts;
+                        }
                     }
                 }
-            }
 
-            let gop = stream.queued_gops.front_mut().unwrap();
+                let gop = stream.queued_gops.front_mut().unwrap();
 
-            // The earliest PTS is known when the current DTS is bigger or equal to the first
-            // PTS that was observed in this GOP. If there was another frame later that had a
-            // lower PTS then it wouldn't be possible to display it in time anymore, i.e. the
-            // stream would be invalid.
-            if gop.start_pts <= dts && !gop.final_earliest_pts {
-                gst::debug!(
-                    CAT,
-                    obj: stream.sinkpad,
-                    "GOP has final earliest PTS at {}",
-                    gop.earliest_pts
-                );
-                gop.final_earliest_pts = true;
+                // The earliest PTS is known when the current DTS is bigger or equal to the first
+                // PTS that was observed in this GOP. If there was another frame later that had a
+                // lower PTS then it wouldn't be possible to display it in time anymore, i.e. the
+                // stream would be invalid.
+                if gop.start_pts <= dts && !gop.final_earliest_pts {
+                    gst::debug!(
+                        CAT,
+                        obj: stream.sinkpad,
+                        "GOP has final earliest PTS at {}",
+                        gop.earliest_pts
+                    );
+                    gop.final_earliest_pts = true;
 
-                if let Some(prev_gop) = stream.queued_gops.get_mut(1) {
-                    prev_gop.final_end_pts = true;
+                    if let Some(prev_gop) = stream.queued_gops.get_mut(1) {
+                        prev_gop.final_end_pts = true;
+                    }
                 }
             }
         } else {
@@ -801,7 +802,7 @@ impl FMP4Mux {
                     .unwrap_or(gst::ClockTime::ZERO)
             );
 
-            let start_time = if stream.intra_only {
+            let start_time = if !stream.delta_frames.requires_dts() {
                 earliest_pts
             } else {
                 start_dts.unwrap()
@@ -812,7 +813,7 @@ impl FMP4Mux {
             for gop in gops {
                 let mut gop_buffers = gop.buffers.into_iter().peekable();
                 while let Some(buffer) = gop_buffers.next() {
-                    let timestamp = if stream.intra_only {
+                    let timestamp = if !stream.delta_frames.requires_dts() {
                         buffer.pts
                     } else {
                         buffer.dts.unwrap()
@@ -820,14 +821,14 @@ impl FMP4Mux {
 
                     let end_timestamp = match gop_buffers.peek() {
                         Some(buffer) => {
-                            if stream.intra_only {
+                            if !stream.delta_frames.requires_dts() {
                                 buffer.pts
                             } else {
                                 buffer.dts.unwrap()
                             }
                         }
                         None => {
-                            if stream.intra_only {
+                            if !stream.delta_frames.requires_dts() {
                                 gop.end_pts
                             } else {
                                 gop.end_dts.unwrap()
@@ -840,7 +841,7 @@ impl FMP4Mux {
                         .checked_sub(timestamp)
                         .expect("Timestamps going backwards");
 
-                    let composition_time_offset = if stream.intra_only {
+                    let composition_time_offset = if !stream.delta_frames.requires_dts() {
                         None
                     } else {
                         let pts = buffer.pts;
@@ -874,7 +875,7 @@ impl FMP4Mux {
                 stream.caps.clone(),
                 Some(super::FragmentTimingInfo {
                     start_time,
-                    intra_only: stream.intra_only,
+                    delta_frames: stream.delta_frames,
                 }),
                 buffers,
             ));
@@ -1446,41 +1447,39 @@ impl FMP4Mux {
 
             let s = caps.structure(0).unwrap();
 
-            let mut intra_only = false;
+            let mut delta_frames = DeltaFrames::IntraOnly;
             match s.name() {
                 "video/x-h264" | "video/x-h265" => {
                     if !s.has_field_with_type("codec_data", gst::Buffer::static_type()) {
                         gst::error!(CAT, obj: pad, "Received caps without codec_data");
                         return Err(gst::FlowError::NotNegotiated);
                     }
+                    delta_frames = DeltaFrames::Bidirectional;
                 }
-                "video/x-vp9" => (),
-                "image/jpeg" => {
-                    intra_only = true;
+                "video/x-vp9" => {
+                    if !s.has_field_with_type("colorimetry", str::static_type()) {
+                        gst::error!(CAT, obj: pad, "Received caps without colorimetry");
+                        return Err(gst::FlowError::NotNegotiated);
+                    }
+                    delta_frames = DeltaFrames::PredictiveOnly;
                 }
+                "image/jpeg" => (),
                 "audio/mpeg" => {
                     if !s.has_field_with_type("codec_data", gst::Buffer::static_type()) {
                         gst::error!(CAT, obj: pad, "Received caps without codec_data");
                         return Err(gst::FlowError::NotNegotiated);
                     }
-                    intra_only = true;
                 }
-                "audio/x-alaw" | "audio/x-mulaw" => {
-                    intra_only = true;
-                }
-                "audio/x-adpcm" => {
-                    intra_only = true;
-                }
-                "application/x-onvif-metadata" => {
-                    intra_only = true;
-                }
+                "audio/x-alaw" | "audio/x-mulaw" => (),
+                "audio/x-adpcm" => (),
+                "application/x-onvif-metadata" => (),
                 _ => unreachable!(),
             }
 
             state.streams.push(Stream {
                 sinkpad: pad,
                 caps,
-                intra_only,
+                delta_frames,
                 queued_gops: VecDeque::new(),
                 fragment_filled: false,
                 dts_offset: None,

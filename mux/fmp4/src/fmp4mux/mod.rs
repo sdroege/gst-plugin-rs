@@ -90,7 +90,28 @@ pub(crate) struct FragmentTimingInfo {
     /// Start time of this fragment
     start_time: gst::ClockTime,
     /// Set if this is an intra-only stream
-    intra_only: bool,
+    delta_frames: DeltaFrames,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub(crate) enum DeltaFrames {
+    /// Only single completely decodable frames
+    IntraOnly,
+    /// Frames may depend on past frames
+    PredictiveOnly,
+    /// Frames may depend on past or future frames
+    Bidirectional,
+}
+
+impl DeltaFrames {
+    /// Whether dts is required to order buffers differently from presentation order
+    pub(crate) fn requires_dts(&self) -> bool {
+        matches!(self, Self::Bidirectional)
+    }
+    /// Whether this coding structure does not allow delta flags on buffers
+    pub(crate) fn intra_only(&self) -> bool {
+        matches!(self, Self::IntraOnly)
+    }
 }
 
 #[derive(Debug)]

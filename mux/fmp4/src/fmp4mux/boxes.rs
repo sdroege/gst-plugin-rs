@@ -1623,7 +1623,7 @@ fn sample_flags_from_buffer(
     timing_info: &super::FragmentTimingInfo,
     buffer: &gst::BufferRef,
 ) -> u32 {
-    if timing_info.intra_only {
+    if timing_info.delta_frames.intra_only() {
         (0b00u32 << (16 + 10)) | // leading: unknown
         (0b10u32 << (16 + 8)) | // depends: no
         (0b10u32 << (16 + 6)) | // depended: no
@@ -1749,7 +1749,7 @@ fn analyze_buffers(
         }
 
         if let Some(composition_time_offset) = *composition_time_offset {
-            assert!(!timing_info.intra_only);
+            assert!(timing_info.delta_frames.requires_dts());
             if composition_time_offset != 0 {
                 tr_flags |= SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT;
             }
