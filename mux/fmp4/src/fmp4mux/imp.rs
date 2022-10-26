@@ -1239,12 +1239,16 @@ impl FMP4Mux {
         ) = self.drain_buffers(state, settings, timeout, at_eos)?;
 
         // Remove all GAP buffers before processing them further
-        for (_, _, buffers) in &mut drained_streams {
+        for (_, timing_info, buffers) in &mut drained_streams {
             buffers.retain(|buf| {
                 !buf.buffer.flags().contains(gst::BufferFlags::GAP)
                     || !buf.buffer.flags().contains(gst::BufferFlags::DROPPABLE)
                     || buf.buffer.size() != 0
             });
+
+            if buffers.is_empty() {
+                *timing_info = None;
+            }
         }
 
         // For ONVIF, replace all timestamps with timestamps based on UTC times.
