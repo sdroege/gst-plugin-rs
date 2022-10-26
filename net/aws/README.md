@@ -1,4 +1,4 @@
-# gst-plugin-s3
+# gst-plugin-aws
 
 This is a [GStreamer](https://gstreamer.freedesktop.org/) plugin to interact
 with [Amazon Web Services](https://aws.amazon.com/). We currently have elements
