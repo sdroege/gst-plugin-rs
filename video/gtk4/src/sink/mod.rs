@@ -22,7 +22,7 @@ mod imp;
 mod paintable;
 
 use frame::Frame;
-use paintable::SinkPaintable;
+use paintable::Paintable;
 
 enum SinkEvent {
     FrameChanged,

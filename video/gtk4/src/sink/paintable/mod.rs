@@ -17,23 +17,23 @@ use gtk::{gdk, glib};
 mod imp;
 
 glib::wrapper! {
-    pub struct SinkPaintable(ObjectSubclass<imp::SinkPaintable>)
+    pub struct Paintable(ObjectSubclass<imp::Paintable>)
         @implements gdk::Paintable;
 }
 
-impl SinkPaintable {
+impl Paintable {
     pub fn new() -> Self {
         glib::Object::new(&[])
     }
 }
 
-impl Default for SinkPaintable {
+impl Default for Paintable {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl SinkPaintable {
+impl Paintable {
     pub(crate) fn handle_frame_changed(&self, frame: Option<Frame>) {
         let imp = self.imp();
         imp.handle_frame_changed(frame);
