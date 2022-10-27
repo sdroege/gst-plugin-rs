@@ -7924,6 +7924,56 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "ice-transport-policy": {
+                        "blurb": "The policy to apply for ICE transport",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "all (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstRsWebRTCICETransportPolicy",
+                        "writable": true
+                    },
+                    "stun-server": {
+                        "blurb": "The STUN server of the form stun://hostname:port",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "timeout": {
+                        "blurb": "Value in seconds to timeout WHIP endpoint requests (0 = No timeout).",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "15",
+                        "max": "3600",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "turn-server": {
+                        "blurb": "The TURN server of the form turn(s)://username:password@host:port.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "use-link-headers": {
                         "blurb": "Use link headers to configure ice-servers from the WHIP server response to the POST or OPTIONS request.\n                        If set to TRUE and the WHIP server returns valid ice-servers,\n                        this property overrides the ice-servers values set using the stun-server and turn-server properties.",
                         "conditionally-available": false,
