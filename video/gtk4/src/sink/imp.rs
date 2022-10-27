@@ -11,7 +11,7 @@
 
 use super::SinkEvent;
 use crate::sink::frame::Frame;
-use crate::sink::paintable::SinkPaintable;
+use crate::sink::paintable::Paintable;
 
 use glib::prelude::*;
 use glib::Sender;
@@ -29,7 +29,7 @@ use fragile::Fragile;
 
 pub(super) static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "gtk4paintablesink",
+        "gstgtk4paintablesink",
         gst::DebugColorFlags::empty(),
         Some("GTK4 Paintable sink"),
     )
@@ -37,7 +37,7 @@ pub(super) static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 #[derive(Default)]
 pub struct PaintableSink {
-    pub(super) paintable: Mutex<Option<Fragile<SinkPaintable>>>,
+    pub(super) paintable: Mutex<Option<Fragile<Paintable>>>,
     info: Mutex<Option<gst_video::VideoInfo>>,
     pub(super) sender: Mutex<Option<Sender<SinkEvent>>>,
     pub(super) pending_frame: Mutex<Option<Frame>>,

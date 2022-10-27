@@ -22,29 +22,29 @@ use once_cell::sync::Lazy;
 
 pub(super) static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "gtk4paintablesink-paintable",
+        "gstgtk4paintable",
         gst::DebugColorFlags::empty(),
         Some("GTK4 Paintable Sink Paintable"),
     )
 });
 
 #[derive(Default)]
-pub struct SinkPaintable {
+pub struct Paintable {
     paintables: RefCell<Vec<Texture>>,
     cached_textures: RefCell<HashMap<usize, gdk::Texture>>,
 }
 
 #[glib::object_subclass]
-impl ObjectSubclass for SinkPaintable {
-    const NAME: &'static str = "GstGtk4PaintableSinkPaintable";
-    type Type = super::SinkPaintable;
+impl ObjectSubclass for Paintable {
+    const NAME: &'static str = "GstGtk4Paintable";
+    type Type = super::Paintable;
     type ParentType = glib::Object;
     type Interfaces = (gdk::Paintable,);
 }
 
-impl ObjectImpl for SinkPaintable {}
+impl ObjectImpl for Paintable {}
 
-impl PaintableImpl for SinkPaintable {
+impl PaintableImpl for Paintable {
     fn intrinsic_height(&self) -> i32 {
         if let Some(paintable) = self.paintables.borrow().first() {
             f32::round(paintable.height) as i32
@@ -134,7 +134,7 @@ impl PaintableImpl for SinkPaintable {
     }
 }
 
-impl SinkPaintable {
+impl Paintable {
     pub(super) fn handle_frame_changed(&self, frame: Option<Frame>) {
         if let Some(frame) = frame {
             gst::trace!(CAT, imp: self, "Received new frame");
