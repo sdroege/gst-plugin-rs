@@ -1388,15 +1388,35 @@ impl FMP4Mux {
             );
             state.fragment_start_pts = Some(fragment_end_pts);
 
-            gst::debug!(
-                CAT,
-                imp: self,
-                "Sending force-keyunit events for running time {}",
-                fragment_end_pts + settings.fragment_duration,
-            );
+            let fku_time = fragment_end_pts + settings.fragment_duration;
+            let max_position = state
+                .streams
+                .iter()
+                .map(|s| s.current_position)
+                .max()
+                .unwrap();
+
+            let fku_time = if max_position > fku_time {
+                gst::warning!(
+                    CAT,
+                    imp: self,
+                    "Sending force-keyunit event late for running time {} at {}",
+                    fku_time,
+                    max_position,
+                );
+                None
+            } else {
+                gst::debug!(
+                    CAT,
+                    imp: self,
+                    "Sending force-keyunit event for running time {}",
+                    fku_time,
+                );
+                Some(fku_time)
+            };
 
             let fku = gst_video::UpstreamForceKeyUnitEvent::builder()
-                .running_time(fragment_end_pts + settings.fragment_duration)
+                .running_time(fku_time)
                 .all_headers(true)
                 .build();
 
@@ -2063,15 +2083,35 @@ impl AggregatorImpl for FMP4Mux {
                     state.earliest_pts = Some(earliest_pts);
                     state.fragment_start_pts = Some(earliest_pts);
 
-                    gst::debug!(
-                        CAT,
-                        imp: self,
-                        "Sending first force-keyunit event for running time {}",
-                        earliest_pts + settings.fragment_duration,
-                    );
+                    let fku_time = earliest_pts + settings.fragment_duration;
+                    let max_position = state
+                        .streams
+                        .iter()
+                        .map(|s| s.current_position)
+                        .max()
+                        .unwrap();
+
+                    let fku_time = if max_position > fku_time {
+                        gst::warning!(
+                            CAT,
+                            imp: self,
+                            "Sending first force-keyunit event late for running time {} at {}",
+                            fku_time,
+                            max_position,
+                        );
+                        None
+                    } else {
+                        gst::debug!(
+                            CAT,
+                            imp: self,
+                            "Sending first force-keyunit event for running time {}",
+                            fku_time,
+                        );
+                        Some(fku_time)
+                    };
 
                     let fku = gst_video::UpstreamForceKeyUnitEvent::builder()
-                        .running_time(earliest_pts + settings.fragment_duration)
+                        .running_time(fku_time)
                         .all_headers(true)
                         .build();
 
