@@ -15,6 +15,7 @@
  * Since: plugins-rs-0.9.0
  */
 use gst::glib;
+mod utils;
 mod whepsrc;
 mod whipsink;
 

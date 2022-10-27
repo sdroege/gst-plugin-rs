@@ -7,8 +7,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use crate::utils::{build_reqwest_client, parse_redirect_location, wait};
 use futures::future;
-use futures::prelude::*;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -19,22 +19,11 @@ use once_cell::sync::Lazy;
 use parse_link_header;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
-use reqwest::redirect::Policy;
 use reqwest::StatusCode;
-use std::fmt::Display;
 use std::sync::Mutex;
-use tokio::runtime;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new("whipsink", gst::DebugColorFlags::empty(), Some("WHIP Sink"))
-});
-
-static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
-    runtime::Builder::new_multi_thread()
-        .enable_all()
-        .worker_threads(1)
-        .build()
-        .unwrap()
 });
 
 const MAX_REDIRECTS: u8 = 10;
@@ -400,7 +389,7 @@ impl WhipSink {
             .headers(headermap)
             .send();
 
-        let resp = match self.wait(future) {
+        let resp = match wait(&self.canceller, future) {
             Ok(r) => r,
             Err(e) => {
                 return Err(e);
@@ -444,7 +433,7 @@ impl WhipSink {
                 [
                     "lookup_ice_servers - Unexpected response {} {:?}",
                     status,
-                    self.wait(resp.bytes()).unwrap()
+                    wait(&self.canceller, resp.bytes()).unwrap()
                 ]
             )),
         }
@@ -624,7 +613,7 @@ impl WhipSink {
             .body(body)
             .send();
 
-        let resp = match self.wait(future) {
+        let resp = match wait(&self.canceller, future) {
             Ok(r) => r,
             Err(e) => {
                 return Err(e);
@@ -654,7 +643,7 @@ impl WhipSink {
                 };
                 drop(state);
 
-                let ans_bytes = match self.wait(resp.bytes()) {
+                let ans_bytes = match wait(&self.canceller, resp.bytes()) {
                     Ok(ans) => ans.to_vec(),
                     Err(e) => return Err(e),
                 };
@@ -709,7 +698,7 @@ impl WhipSink {
                     [
                         "Server returned error: {} - {}",
                         s.as_str(),
-                        self.wait(resp.bytes())
+                        wait(&self.canceller, resp.bytes())
                             .map(|x| x.escape_ascii().to_string())
                             .unwrap_or_else(|_| "(no further details)".to_string())
                     ]
@@ -721,7 +710,7 @@ impl WhipSink {
                 [
                     "Unexpected response {:?} {:?}",
                     s,
-                    self.wait(resp.bytes()).unwrap()
+                    wait(&self.canceller, resp.bytes()).unwrap()
                 ]
             )),
         };
@@ -757,7 +746,7 @@ impl WhipSink {
         let client = build_reqwest_client(reqwest::redirect::Policy::default());
         let future = client.delete(resource_url).headers(headermap).send();
 
-        let res = self.wait(future);
+        let res = wait(&self.canceller, future);
         match res {
             Ok(r) => {
                 gst::debug!(CAT, imp: self, "Response to DELETE : {}", r.status());
@@ -767,79 +756,4 @@ impl WhipSink {
             }
         };
     }
-
-    fn wait<F, T, E>(&self, future: F) -> Result<T, ErrorMessage>
-    where
-        F: Send + Future<Output = Result<T, E>>,
-        T: Send + 'static,
-        E: Send + Display,
-    {
-        let mut canceller = self.canceller.lock().unwrap();
-        let (abort_handle, abort_registration) = future::AbortHandle::new_pair();
-
-        canceller.replace(abort_handle);
-        drop(canceller);
-
-        // make abortable
-        let future = async {
-            match future::Abortable::new(future, abort_registration).await {
-                // Future resolved successfully
-                Ok(Ok(res)) => Ok(res),
-
-                // Future resolved with an error
-                Ok(Err(err)) => Err(gst::error_msg!(
-                    gst::ResourceError::Failed,
-                    ["Future resolved with an error {}", err.to_string()]
-                )),
-
-                // Canceller called before future resolved
-                Err(future::Aborted) => Err(gst::error_msg!(
-                    gst::ResourceError::Failed,
-                    ["Canceller called before future resolved"]
-                )),
-            }
-        };
-
-        let res = {
-            let _enter = RUNTIME.enter();
-            futures::executor::block_on(future)
-        };
-
-        /* Clear out the canceller */
-        let _ = self.canceller.lock().unwrap().take();
-        res
-    }
-}
-
-fn parse_redirect_location(
-    headermap: &HeaderMap,
-    old_url: &reqwest::Url,
-) -> Result<reqwest::Url, ErrorMessage> {
-    let location = headermap.get(reqwest::header::LOCATION).unwrap();
-    if let Err(e) = location.to_str() {
-        return Err(gst::error_msg!(
-            gst::ResourceError::Failed,
-            [
-                "Failed to convert the redirect location to string {}",
-                e.to_string()
-            ]
-        ));
-    }
-    let location = location.to_str().unwrap();
-
-    if location.to_ascii_lowercase().starts_with("http") {
-        // location url is an absolute path
-        reqwest::Url::parse(location)
-            .map_err(|e| gst::error_msg!(gst::ResourceError::Failed, ["{}", e.to_string()]))
-    } else {
-        // location url is a relative path
-        let mut new_url = old_url.clone();
-        new_url.set_path(location);
-        Ok(new_url)
-    }
-}
-
-fn build_reqwest_client(pol: Policy) -> reqwest::Client {
-    let client_builder = reqwest::Client::builder();
-    client_builder.redirect(pol).build().unwrap()
 }
