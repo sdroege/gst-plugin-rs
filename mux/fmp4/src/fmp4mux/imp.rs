@@ -312,10 +312,11 @@ impl FMP4Mux {
                 gst::error!(CAT, obj: stream.sinkpad, "Couldn't convert PTS to running time");
                 gst::FlowError::Error
             })?
-            .positive_or_else(|_| {
-                gst::error!(CAT, obj: stream.sinkpad, "Negative PTSs are not supported");
-                gst::FlowError::Error
-            })?;
+            .positive()
+            .unwrap_or_else(|| {
+                gst::warning!(CAT, obj: stream.sinkpad, "Negative PTSs are not supported");
+                gst::ClockTime::ZERO
+            });
 
         let mut end_pts = segment
             .to_running_time_full(end_pts_position)
@@ -323,10 +324,11 @@ impl FMP4Mux {
                 gst::error!(CAT, obj: stream.sinkpad, "Couldn't convert end PTS to running time");
                 gst::FlowError::Error
             })?
-            .positive_or_else(|_| {
-                gst::error!(CAT, obj: stream.sinkpad, "Negative PTSs are not supported");
-                gst::FlowError::Error
-            })?;
+            .positive()
+            .unwrap_or_else(|| {
+                gst::warning!(CAT, obj: stream.sinkpad, "Negative PTSs are not supported");
+                gst::ClockTime::ZERO
+            });
 
         // Enforce monotonically increasing PTS for intra-only streams
         if !delta_frames.requires_dts() {
