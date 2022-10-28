@@ -15,7 +15,6 @@ gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/g
 gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.19", version = "0.19" }
 gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.19", version = "0.19" }
 once_cell = "1.0"
-uuid = { version = "1", features = ["v4"] }
 
 [lib]
 name = "gstfmp4"
