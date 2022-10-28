@@ -30,6 +30,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 const DEFAULT_ICE_TRANSPORT_POLICY: GstRsWebRTCICETransportPolicy =
     GstRsWebRTCICETransportPolicy::All;
 const MAX_REDIRECTS: u8 = 10;
+const DEFAULT_TIMEOUT: u32 = 15;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -39,6 +40,7 @@ struct Settings {
     turn_server: Option<String>,
     stun_server: Option<String>,
     ice_transport_policy: GstRsWebRTCICETransportPolicy,
+    timeout: u32,
 }
 
 #[allow(clippy::derivable_impls)]
@@ -51,6 +53,7 @@ impl Default for Settings {
             stun_server: None,
             turn_server: None,
             ice_transport_policy: DEFAULT_ICE_TRANSPORT_POLICY,
+            timeout: DEFAULT_TIMEOUT,
         }
     }
 }
@@ -232,6 +235,13 @@ impl ObjectImpl for WhipSink {
                     .nick("ICE transport policy")
                     .blurb("The policy to apply for ICE transport")
                     .build(),
+
+                glib::ParamSpecUInt::builder("timeout")
+                    .nick("Timeout")
+                    .blurb("Value in seconds to timeout WHIP endpoint requests (0 = No timeout).")
+                    .maximum(3600)
+                    .default_value(DEFAULT_TIMEOUT)
+                    .build(),
             ]
         });
         PROPERTIES.as_ref()
@@ -283,6 +293,10 @@ impl ObjectImpl for WhipSink {
                         .set_property_from_str("ice-transport-policy", "all");
                 }
             }
+            "timeout" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.timeout = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -312,6 +326,10 @@ impl ObjectImpl for WhipSink {
             "ice-transport-policy" => {
                 let settings = self.settings.lock().unwrap();
                 settings.ice_transport_policy.to_value()
+            }
+            "timeout" => {
+                let settings = self.settings.lock().unwrap();
+                settings.timeout.to_value()
             }
             _ => unimplemented!(),
         }
@@ -472,6 +490,7 @@ impl WhipSink {
     fn lookup_ice_servers(&self, endpoint: reqwest::Url) -> Result<(), ErrorMessage> {
         let settings = self.settings.lock().unwrap();
         let state = self.state.lock().unwrap();
+        let timeout = settings.timeout;
 
         let redirects = match *state {
             State::Options { redirects } => redirects,
@@ -505,12 +524,21 @@ impl WhipSink {
             );
         }
 
-        let future = client
-            .request(reqwest::Method::OPTIONS, endpoint.as_ref())
-            .headers(headermap)
-            .send();
+        let future = async {
+            client
+                .request(reqwest::Method::OPTIONS, endpoint.as_ref())
+                .headers(headermap)
+                .send()
+                .await
+                .map_err(|err| {
+                    gst::error_msg!(
+                        gst::ResourceError::Failed,
+                        ["OPTIONS request failed: {:?}", err]
+                    )
+                })
+        };
 
-        let resp = wait(&self.canceller, future)?;
+        let resp = wait(&self.canceller, future, timeout)?;
 
         match resp.status() {
             StatusCode::NO_CONTENT => {
@@ -544,14 +572,27 @@ impl WhipSink {
                     ))
                 }
             }
-            status => Err(gst::error_msg!(
-                gst::ResourceError::Failed,
-                [
-                    "lookup_ice_servers - Unexpected response {} {:?}",
-                    status,
-                    wait(&self.canceller, resp.bytes()).unwrap()
-                ]
-            )),
+            status => {
+                let future = async {
+                    resp.bytes().await.map_err(|err| {
+                        gst::error_msg!(
+                            gst::ResourceError::Failed,
+                            ["Failed to get response body: {:?}", err]
+                        )
+                    })
+                };
+
+                let res = wait(&self.canceller, future, timeout);
+
+                Err(gst::error_msg!(
+                    gst::ResourceError::Failed,
+                    [
+                        "lookup_ice_servers - Unexpected response {} {:?}",
+                        status,
+                        res
+                    ]
+                ))
+            }
         }
     }
 
@@ -621,6 +662,7 @@ impl WhipSink {
     ) -> Result<gst_webrtc::WebRTCSessionDescription, gst::ErrorMessage> {
         let settings = self.settings.lock().unwrap();
         let state = self.state.lock().unwrap();
+        let timeout = settings.timeout;
 
         let redirects = match *state {
             State::Post { redirects } => redirects,
@@ -658,13 +700,22 @@ impl WhipSink {
             );
         }
 
-        let future = client
-            .request(reqwest::Method::POST, endpoint.as_ref())
-            .headers(headermap)
-            .body(body)
-            .send();
+        let future = async {
+            client
+                .request(reqwest::Method::POST, endpoint.as_ref())
+                .headers(headermap)
+                .body(body)
+                .send()
+                .await
+                .map_err(|err| {
+                    gst::error_msg!(
+                        gst::ResourceError::Failed,
+                        ["POST request failed: {:?}", err]
+                    )
+                })
+        };
 
-        let resp = wait(&self.canceller, future)?;
+        let resp = wait(&self.canceller, future, timeout)?;
 
         let res = match resp.status() {
             StatusCode::OK | StatusCode::CREATED => {
@@ -716,7 +767,16 @@ impl WhipSink {
                 };
                 drop(state);
 
-                let ans_bytes = wait(&self.canceller, resp.bytes())?;
+                let future = async {
+                    resp.bytes().await.map_err(|err| {
+                        gst::error_msg!(
+                            gst::ResourceError::Failed,
+                            ["Failed to get response body: {:?}", err]
+                        )
+                    })
+                };
+
+                let ans_bytes = wait(&self.canceller, future, timeout)?;
 
                 match sdp_message::SDPMessage::parse_buffer(&ans_bytes) {
                     Ok(ans_sdp) => {
@@ -762,28 +822,26 @@ impl WhipSink {
                 }
             }
 
-            s if s.is_server_error() => {
+            s => {
+                let future = async {
+                    resp.bytes().await.map_err(|err| {
+                        gst::error_msg!(
+                            gst::ResourceError::Failed,
+                            ["Failed to get response body: {:?}", err]
+                        )
+                    })
+                };
+
+                let resp = wait(&self.canceller, future, timeout)
+                    .map(|x| x.escape_ascii().to_string())
+                    .unwrap_or_else(|_| "(no further details)".to_string());
+
                 // FIXME: Check and handle 'Retry-After' header in case of server error
                 Err(gst::error_msg!(
                     gst::ResourceError::Failed,
-                    [
-                        "Server returned error: {} - {}",
-                        s.as_str(),
-                        wait(&self.canceller, resp.bytes())
-                            .map(|x| x.escape_ascii().to_string())
-                            .unwrap_or_else(|_| "(no further details)".to_string())
-                    ]
+                    ["Server returned error: {} - {}", s.as_str(), resp]
                 ))
             }
-
-            s => Err(gst::error_msg!(
-                gst::ResourceError::Failed,
-                [
-                    "Unexpected response {:?} {:?}",
-                    s,
-                    wait(&self.canceller, resp.bytes()).unwrap()
-                ]
-            )),
         };
 
         res
@@ -792,6 +850,7 @@ impl WhipSink {
     fn terminate_session(&self) {
         let settings = self.settings.lock().unwrap();
         let state = self.state.lock().unwrap();
+        let timeout = settings.timeout;
         let resource_url = match *state {
             State::Running {
                 ref whip_resource_url,
@@ -815,9 +874,21 @@ impl WhipSink {
 
         gst::debug!(CAT, imp: self, "DELETE request on {}", resource_url);
         let client = build_reqwest_client(reqwest::redirect::Policy::default());
-        let future = client.delete(resource_url).headers(headermap).send();
+        let future = async {
+            client
+                .delete(resource_url.clone())
+                .headers(headermap)
+                .send()
+                .await
+                .map_err(|err| {
+                    gst::error_msg!(
+                        gst::ResourceError::Failed,
+                        ["DELETE request failed {}: {:?}", resource_url, err]
+                    )
+                })
+        };
 
-        let res = wait(&self.canceller, future);
+        let res = wait(&self.canceller, future, timeout);
         match res {
             Ok(r) => {
                 gst::debug!(CAT, imp: self, "Response to DELETE : {}", r.status());

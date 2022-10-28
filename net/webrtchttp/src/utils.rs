@@ -5,8 +5,8 @@ use once_cell::sync::Lazy;
 use parse_link_header;
 use reqwest::header::HeaderMap;
 use reqwest::redirect::Policy;
-use std::fmt::Display;
 use std::sync::Mutex;
+use std::time::Duration;
 use tokio::runtime;
 
 pub static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
@@ -18,14 +18,14 @@ pub static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
         .unwrap()
 });
 
-pub fn wait<F, T, E>(
+pub fn wait<F, T>(
     canceller: &Mutex<Option<future::AbortHandle>>,
     future: F,
+    timeout: u32
 ) -> Result<T, ErrorMessage>
 where
-    F: Send + Future<Output = Result<T, E>>,
+    F: Send + Future<Output = Result<T, ErrorMessage>>,
     T: Send + 'static,
-    E: Send + Display,
 {
     let mut canceller_guard = canceller.lock().unwrap();
     let (abort_handle, abort_registration) = future::AbortHandle::new_pair();
@@ -39,6 +39,22 @@ where
 
     canceller_guard.replace(abort_handle);
     drop(canceller_guard);
+
+    let future = async {
+        if timeout == 0 {
+            future.await
+        } else {
+            let res = tokio::time::timeout(Duration::from_secs(timeout.into()), future).await;
+
+            match res {
+                Ok(r) => r,
+                Err(e) => Err(gst::error_msg!(
+                    gst::ResourceError::Read,
+                    ["Request timeout, elapsed: {}", e.to_string()]
+                )),
+            }
+        }
+    };
 
     let future = async {
         match future::Abortable::new(future, abort_registration).await {
