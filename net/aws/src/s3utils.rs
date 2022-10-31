@@ -7,11 +7,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use aws_config::meta::region::RegionProviderChain;
-use aws_sdk_s3::{Credentials, Region};
+use aws_sdk_s3::{config::timeout::TimeoutConfig, Credentials, Region};
 use aws_types::sdk_config::SdkConfig;
 
 use aws_smithy_http::byte_stream::{ByteStream, Error};
-use aws_smithy_types::{timeout, tristate::TriState};
 
 use bytes::{buf::BufMut, Bytes, BytesMut};
 use futures::stream::TryStreamExt;
@@ -96,19 +95,16 @@ pub fn wait_stream(
 }
 
 // See setting-timeouts example in aws-sdk-rust.
-pub fn timeout_config(request_timeout: Duration) -> timeout::Config {
-    timeout::Config::new().with_api_timeouts(
-        timeout::Api::new()
-            // This timeout acts at the "HTTP request" level and sets a separate timeout for each
-            // HTTP request made as part of a "service request."
-            .with_call_attempt_timeout(TriState::Set(request_timeout)),
-    )
+pub fn timeout_config(request_timeout: Duration) -> TimeoutConfig {
+    TimeoutConfig::builder()
+        .operation_attempt_timeout(request_timeout)
+        .build()
 }
 
 pub fn wait_config(
     canceller: &Mutex<Option<future::AbortHandle>>,
     region: Region,
-    timeout_config: timeout::Config,
+    timeout_config: TimeoutConfig,
     credentials: Option<Credentials>,
 ) -> Result<SdkConfig, WaitError<Error>> {
     let region_provider = RegionProviderChain::first_try(region)

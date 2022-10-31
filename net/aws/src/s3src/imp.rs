@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use aws_sdk_s3::config;
 use aws_sdk_s3::Endpoint;
-use aws_sdk_s3::{Client, Credentials, RetryConfig};
+use aws_sdk_s3::{config::retry::RetryConfig, Client, Credentials};
 use http::Uri;
 
 use gst::glib;
