@@ -23,7 +23,7 @@ use aws_sdk_s3::config;
 use aws_sdk_s3::model::ObjectCannedAcl;
 use aws_sdk_s3::types::ByteStream;
 use aws_sdk_s3::Endpoint;
-use aws_sdk_s3::{Client, Credentials, Region, RetryConfig};
+use aws_sdk_s3::{config::retry::RetryConfig, Client, Credentials, Region};
 use aws_types::sdk_config::SdkConfig;
 use http::Uri;
 
