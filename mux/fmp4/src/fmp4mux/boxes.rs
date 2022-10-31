@@ -621,7 +621,7 @@ fn write_tkhd(
 
     // Width/height
     match s.name() {
-        "video/x-h264" | "video/x-h265" | "image/jpeg" => {
+        "video/x-h264" | "video/x-h265" | "video/x-vp9" | "image/jpeg" => {
             let width = s.get::<i32>("width").context("video caps without width")? as u32;
             let height = s
                 .get::<i32>("height")
@@ -855,7 +855,7 @@ fn write_stbl(
     // For video write a sync sample box as indication that not all samples are sync samples
     let s = caps.structure(0).unwrap();
     match s.name() {
-        "video/x-h264" | "video/x-h265" => {
+        "video/x-h264" | "video/x-h265" | "video/x-vp9" => {
             write_full_box(v, b"stss", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
                 write_stss(v, cfg)
             })?
