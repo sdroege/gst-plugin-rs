@@ -380,7 +380,7 @@ clippy:
   rules:
     - when: 'always'
   script:
-    - cargo clippy --locked --color=always --all --all-features --all-targets -- -D warnings
+    - cargo clippy --locked --color=always --all --all-features --all-targets -- -D warnings -A unknown-lints
 
 deny:
   extends: .img-stable
