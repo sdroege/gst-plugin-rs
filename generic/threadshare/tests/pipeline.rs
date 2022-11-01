@@ -336,13 +336,13 @@ fn eos() {
         .name("src-eos")
         .property("caps", &caps)
         .property("do-timestamp", true)
-        .property("context", &CONTEXT)
+        .property("context", CONTEXT)
         .build()
         .unwrap();
 
     let queue = gst::ElementFactory::make("ts-queue")
         .name("queue-eos")
-        .property("context", &CONTEXT)
+        .property("context", CONTEXT)
         .build()
         .unwrap();
 
@@ -636,7 +636,7 @@ fn socket_play_null_play() {
     let sink = gst::ElementFactory::make("ts-udpsink")
         .name(format!("sink-{}", TEST).as_str())
         .property("socket", &socket)
-        .property("context", &TEST)
+        .property("context", TEST)
         .property("context-wait", 20u32)
         .build()
         .unwrap();

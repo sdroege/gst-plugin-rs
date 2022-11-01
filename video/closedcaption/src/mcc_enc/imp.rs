@@ -297,7 +297,7 @@ impl MccEnc {
         };
 
         let checksum = map.iter().fold(0u8, |sum, b| sum.wrapping_add(*b));
-        Self::encode_payload(outbuf, &*map);
+        Self::encode_payload(outbuf, &map);
 
         if checksum == 0 {
             outbuf.push(b'Z');
@@ -322,10 +322,10 @@ impl MccEnc {
         let mut outbuf = Vec::new();
         if state.need_headers {
             state.need_headers = false;
-            self.generate_headers(&*state, &mut outbuf)?;
+            self.generate_headers(&state, &mut outbuf)?;
         }
 
-        self.generate_caption(&*state, &buffer, &mut outbuf)?;
+        self.generate_caption(&state, &buffer, &mut outbuf)?;
 
         let mut buf = gst::Buffer::from_mut_slice(outbuf);
         buffer

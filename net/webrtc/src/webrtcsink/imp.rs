@@ -519,7 +519,7 @@ fn setup_encoding(
             // Firefox). In any case, restrict to exclude RGB formats altogether,
             // and let videoconvert do the conversion properly if needed.
             structure_builder =
-                structure_builder.field("format", &gst::List::new(&[&"NV12", &"YV12", &"I420"]));
+                structure_builder.field("format", gst::List::new(["NV12", "YV12", "I420"]));
         }
 
         gst::Caps::builder_full_with_any_features()
@@ -2751,7 +2751,7 @@ impl ElementImpl for WebRTCSink {
                 WebRTCSink::catch_panic_pad_function(
                     parent,
                     || false,
-                    |this| this.sink_event(pad.upcast_ref(), &*this.obj(), event),
+                    |this| this.sink_event(pad.upcast_ref(), &this.obj(), event),
                 )
             })
             .build();
@@ -2780,7 +2780,7 @@ impl ElementImpl for WebRTCSink {
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         let element = self.obj();
         if let gst::StateChange::ReadyToPaused = transition {
-            if let Err(err) = self.prepare(&*element) {
+            if let Err(err) = self.prepare(&element) {
                 gst::element_error!(
                     element,
                     gst::StreamError::Failed,
@@ -2794,7 +2794,7 @@ impl ElementImpl for WebRTCSink {
 
         match transition {
             gst::StateChange::PausedToReady => {
-                if let Err(err) = self.unprepare(&*element) {
+                if let Err(err) = self.unprepare(&element) {
                     gst::element_error!(
                         element,
                         gst::StreamError::Failed,
@@ -2808,7 +2808,7 @@ impl ElementImpl for WebRTCSink {
             }
             gst::StateChange::PausedToPlaying => {
                 let mut state = self.state.lock().unwrap();
-                state.maybe_start_signaller(&*element);
+                state.maybe_start_signaller(&element);
             }
             _ => (),
         }

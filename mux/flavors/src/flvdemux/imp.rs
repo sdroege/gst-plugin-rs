@@ -463,7 +463,7 @@ impl FlvDemux {
             match *state {
                 State::Stopped => unreachable!(),
                 State::NeedHeader => {
-                    let header = match self.find_header(&mut *adapter) {
+                    let header = match self.find_header(&mut adapter) {
                         Ok(header) => header,
                         Err(_) => {
                             gst::trace!(CAT, imp: self, "Need more data");
@@ -503,7 +503,7 @@ impl FlvDemux {
                     *skip_left -= skip as u32;
                 }
                 State::Streaming(ref mut sstate) => {
-                    let res = sstate.handle_tag(self, &mut *adapter);
+                    let res = sstate.handle_tag(self, &mut adapter);
 
                     match res {
                         Ok(None) => {
@@ -533,7 +533,7 @@ impl FlvDemux {
         while adapter.available() >= 9 {
             let data = adapter.map(9).unwrap();
 
-            if let Ok((_, header)) = flavors::header(&*data) {
+            if let Ok((_, header)) = flavors::header(&data) {
                 gst::debug!(CAT, imp: self, "Found FLV header: {:?}", header);
                 drop(data);
                 adapter.flush(9);
@@ -745,7 +745,7 @@ impl StreamingState {
 
         let data = adapter.map(tag_header.data_size as usize).unwrap();
 
-        match flavors::script_data(&*data) {
+        match flavors::script_data(&data) {
             Ok((_, ref script_data)) if script_data.name == "onMetaData" => {
                 gst::trace!(CAT, imp: imp, "Got script tag: {:?}", script_data);
 
@@ -823,7 +823,9 @@ impl StreamingState {
             }
         }
 
-        if (!self.expect_video || self.video != None) && self.audio != None && !self.got_all_streams
+        if (!self.expect_video || self.video.is_some())
+            && self.audio.is_some()
+            && !self.got_all_streams
         {
             gst::debug!(CAT, imp: imp, "Have all expected streams now");
             self.got_all_streams = true;
@@ -853,7 +855,7 @@ impl StreamingState {
 
         let data = adapter.map(1).unwrap();
 
-        match flavors::aac_audio_packet_header(&*data) {
+        match flavors::aac_audio_packet_header(&data) {
             Err(nom::Err::Error(err)) | Err(nom::Err::Failure(err)) => {
                 gst::error!(CAT, imp: imp, "Invalid AAC audio packet header: {:?}", err);
                 drop(data);
@@ -894,7 +896,7 @@ impl StreamingState {
         assert!(adapter.available() >= tag_header.data_size as usize);
 
         let data = adapter.map(1).unwrap();
-        let data_header = match flavors::audio_data_header(&*data) {
+        let data_header = match flavors::audio_data_header(&data) {
             Err(nom::Err::Error(err)) | Err(nom::Err::Failure(err)) => {
                 gst::error!(CAT, imp: imp, "Invalid audio data header: {:?}", err);
                 drop(data);
@@ -925,7 +927,7 @@ impl StreamingState {
             return Ok(events);
         }
 
-        if self.audio == None {
+        if self.audio.is_none() {
             adapter.flush((tag_header.data_size - offset) as usize);
             return Ok(events);
         }
@@ -983,7 +985,9 @@ impl StreamingState {
             }
         }
 
-        if (!self.expect_audio || self.audio != None) && self.video != None && !self.got_all_streams
+        if (!self.expect_audio || self.audio.is_some())
+            && self.video.is_some()
+            && !self.got_all_streams
         {
             gst::debug!(CAT, imp: imp, "Have all expected streams now");
             self.got_all_streams = true;
@@ -1012,7 +1016,7 @@ impl StreamingState {
         }
 
         let data = adapter.map(4).unwrap();
-        match flavors::avc_video_packet_header(&*data) {
+        match flavors::avc_video_packet_header(&data) {
             Err(nom::Err::Error(err)) | Err(nom::Err::Failure(err)) => {
                 gst::error!(CAT, imp: imp, "Invalid AVC video packet header: {:?}", err);
                 drop(data);
@@ -1065,7 +1069,7 @@ impl StreamingState {
         assert!(adapter.available() >= tag_header.data_size as usize);
 
         let data = adapter.map(1).unwrap();
-        let data_header = match flavors::video_data_header(&*data) {
+        let data_header = match flavors::video_data_header(&data) {
             Err(nom::Err::Error(err)) | Err(nom::Err::Failure(err)) => {
                 gst::error!(CAT, imp: imp, "Invalid video data header: {:?}", err);
                 drop(data);
@@ -1101,7 +1105,7 @@ impl StreamingState {
             return Ok(events);
         }
 
-        if self.video == None {
+        if self.video.is_none() {
             adapter.flush((tag_header.data_size - offset) as usize);
             return Ok(events);
         }
@@ -1419,7 +1423,7 @@ impl VideoFormat {
             flavors::CodecId::H264 => self.avc_sequence_header.as_ref().map(|header| {
                 gst::Caps::builder("video/x-h264")
                     .field("stream-format", "avc")
-                    .field("codec_data", &header)
+                    .field("codec_data", header)
                     .build()
             }),
             flavors::CodecId::H263 => Some(gst::Caps::builder("video/x-h263").build()),

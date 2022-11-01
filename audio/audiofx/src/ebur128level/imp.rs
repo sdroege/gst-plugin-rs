@@ -138,7 +138,7 @@ impl ObjectImpl for EbuR128Level {
                 .build()]
         });
 
-        &*SIGNALS
+        &SIGNALS
     }
 
     fn properties() -> &'static [glib::ParamSpec] {
@@ -482,7 +482,7 @@ impl BaseTransformImpl for EbuR128Level {
 
                     if state.ebur128.mode().contains(ebur128::Mode::M) {
                         match state.ebur128.loudness_momentary() {
-                            Ok(loudness) => s.set("momentary-loudness", &loudness),
+                            Ok(loudness) => s.set("momentary-loudness", loudness),
                             Err(err) => gst::error!(
                                 CAT,
                                 imp: self,
@@ -494,7 +494,7 @@ impl BaseTransformImpl for EbuR128Level {
 
                     if state.ebur128.mode().contains(ebur128::Mode::S) {
                         match state.ebur128.loudness_shortterm() {
-                            Ok(loudness) => s.set("shortterm-loudness", &loudness),
+                            Ok(loudness) => s.set("shortterm-loudness", loudness),
                             Err(err) => gst::error!(
                                 CAT,
                                 imp: self,
@@ -506,7 +506,7 @@ impl BaseTransformImpl for EbuR128Level {
 
                     if state.ebur128.mode().contains(ebur128::Mode::I) {
                         match state.ebur128.loudness_global() {
-                            Ok(loudness) => s.set("global-loudness", &loudness),
+                            Ok(loudness) => s.set("global-loudness", loudness),
                             Err(err) => gst::error!(
                                 CAT,
                                 imp: self,
@@ -516,7 +516,7 @@ impl BaseTransformImpl for EbuR128Level {
                         }
 
                         match state.ebur128.relative_threshold() {
-                            Ok(threshold) => s.set("relative-threshold", &threshold),
+                            Ok(threshold) => s.set("relative-threshold", threshold),
                             Err(err) => gst::error!(
                                 CAT,
                                 imp: self,
@@ -528,7 +528,7 @@ impl BaseTransformImpl for EbuR128Level {
 
                     if state.ebur128.mode().contains(ebur128::Mode::LRA) {
                         match state.ebur128.loudness_range() {
-                            Ok(range) => s.set("loudness-range", &range),
+                            Ok(range) => s.set("loudness-range", range),
                             Err(err) => {
                                 gst::error!(CAT, imp: self, "Failed to get loudness range: {}", err)
                             }

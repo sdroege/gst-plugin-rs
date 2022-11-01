@@ -517,15 +517,15 @@ impl BaseTransformImpl for CsoundFilter {
                 let ichannels = csound.input_channels() as i32;
                 let ochannels = csound.output_channels() as i32;
                 for s in new_caps.make_mut().iter_mut() {
-                    s.set("format", &gst_audio::AUDIO_FORMAT_F64.to_str());
-                    s.set("rate", &sr);
+                    s.set("format", gst_audio::AUDIO_FORMAT_F64.to_str());
+                    s.set("rate", sr);
 
                     // replace the channel property with our values,
                     // if they are not supported, the negotiation will fail.
                     if direction == gst::PadDirection::Src {
-                        s.set("channels", &ichannels);
+                        s.set("channels", ichannels);
                     } else {
-                        s.set("channels", &ochannels);
+                        s.set("channels", ochannels);
                     }
                     // Csound does not have a concept of channel-mask
                     s.remove_field("channel-mask");

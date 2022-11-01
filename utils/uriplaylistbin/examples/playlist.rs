@@ -27,7 +27,7 @@ fn create_pipeline(uris: Vec<String>, iterations: u32) -> anyhow::Result<gst::Pi
     let pipeline = gst::Pipeline::default();
     let playlist = gst::ElementFactory::make("uriplaylistbin")
         .property("uris", &uris)
-        .property("iterations", &iterations)
+        .property("iterations", iterations)
         .build()?;
 
     pipeline.add(&playlist)?;

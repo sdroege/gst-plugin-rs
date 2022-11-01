@@ -1620,7 +1620,7 @@ impl FMP4Mux {
         };
         let caps = gst::Caps::builder("video/quicktime")
             .field("variant", variant)
-            .field("streamheader", gst::Array::new(&[&buffer]))
+            .field("streamheader", gst::Array::new([&buffer]))
             .build();
 
         let mut list = gst::BufferList::new_sized(1);
@@ -1684,7 +1684,7 @@ impl ObjectImpl for FMP4Mux {
             ]
         });
 
-        &*PROPERTIES
+        &PROPERTIES
     }
 
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
@@ -2517,13 +2517,13 @@ impl ElementImpl for DASHMP4Mux {
                 gst::PadPresence::Always,
                 &[
                     gst::Structure::builder("video/x-h264")
-                        .field("stream-format", gst::List::new(&[&"avc", &"avc3"]))
+                        .field("stream-format", gst::List::new(["avc", "avc3"]))
                         .field("alignment", "au")
                         .field("width", gst::IntRange::<i32>::new(1, u16::MAX as i32))
                         .field("height", gst::IntRange::<i32>::new(1, u16::MAX as i32))
                         .build(),
                     gst::Structure::builder("video/x-h265")
-                        .field("stream-format", gst::List::new(&[&"hvc1", &"hev1"]))
+                        .field("stream-format", gst::List::new(["hvc1", "hev1"]))
                         .field("alignment", "au")
                         .field("width", gst::IntRange::<i32>::new(1, u16::MAX as i32))
                         .field("height", gst::IntRange::<i32>::new(1, u16::MAX as i32))
@@ -2607,13 +2607,13 @@ impl ElementImpl for ONVIFFMP4Mux {
                 gst::PadPresence::Request,
                 &[
                     gst::Structure::builder("video/x-h264")
-                        .field("stream-format", gst::List::new(&[&"avc", &"avc3"]))
+                        .field("stream-format", gst::List::new(["avc", "avc3"]))
                         .field("alignment", "au")
                         .field("width", gst::IntRange::<i32>::new(1, u16::MAX as i32))
                         .field("height", gst::IntRange::<i32>::new(1, u16::MAX as i32))
                         .build(),
                     gst::Structure::builder("video/x-h265")
-                        .field("stream-format", gst::List::new(&[&"hvc1", &"hev1"]))
+                        .field("stream-format", gst::List::new(["hvc1", "hev1"]))
                         .field("alignment", "au")
                         .field("width", gst::IntRange::<i32>::new(1, u16::MAX as i32))
                         .field("height", gst::IntRange::<i32>::new(1, u16::MAX as i32))

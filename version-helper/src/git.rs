@@ -12,7 +12,7 @@ pub fn repo_hash<P: AsRef<Path>>(path: P) -> Option<(String, String)> {
         Some(path) => vec!["-C", path],
         None => vec![],
     };
-    args.extend(&["log", "-1", "--format=%h_%cd", "--date=short"]);
+    args.extend(["log", "-1", "--format=%h_%cd", "--date=short"]);
     let output = Command::new("git").args(&args).output().ok()?;
     if !output.status.success() {
         return None;
@@ -38,7 +38,7 @@ fn dirty<P: AsRef<Path>>(path: P) -> bool {
         Some(path) => vec!["-C", path],
         None => vec![],
     };
-    args.extend(&["ls-files", "-m"]);
+    args.extend(["ls-files", "-m"]);
     match Command::new("git").args(&args).output() {
         Ok(modified_files) => !modified_files.stdout.is_empty(),
         Err(_) => false,

@@ -55,7 +55,7 @@ impl CaptionFrame {
             let len = ffi::caption_frame_to_text(
                 &self.0 as *const _ as *mut _,
                 data.as_ptr() as *mut _,
-                if full { 1 } else { 0 },
+                i32::from(full),
             );
             data.set_len(len as usize);
 

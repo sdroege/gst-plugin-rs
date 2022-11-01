@@ -90,10 +90,10 @@ fn run() -> Result<(), Error> {
             let new_z = -x * f32::sin(ROTATION) + z * f32::cos(ROTATION);
 
             let objs = [gst::Structure::builder("application/spatial-object")
-                .field("x", &new_x)
-                .field("y", &y)
-                .field("z", &new_z)
-                .field("distance-gain", &gain)
+                .field("x", new_x)
+                .field("y", y)
+                .field("z", new_z)
+                .field("distance-gain", gain)
                 .build()];
 
             hrtf.set_property("spatial-objects", gst::Array::new(objs));

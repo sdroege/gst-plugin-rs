@@ -203,7 +203,7 @@ impl State {
                 outbuf.push(b' ');
             }
 
-            Self::encode_payload(&mut outbuf, &*map);
+            Self::encode_payload(&mut outbuf, &map);
         }
 
         outbuf.extend_from_slice(b"\r\n\r\n".as_ref());

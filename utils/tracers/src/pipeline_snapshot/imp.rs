@@ -182,7 +182,7 @@ impl PipelineSnapshot {
         use signal_hook::consts::signal::*;
         use signal_hook::iterator::Signals;
 
-        let mut signals = Signals::new(&[SIGUSR1])?;
+        let mut signals = Signals::new([SIGUSR1])?;
         let signal_handle = signals.handle();
 
         let tracer_weak = self.obj().downgrade();

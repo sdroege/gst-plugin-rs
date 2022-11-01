@@ -74,7 +74,7 @@ impl FileLocation {
             .parent()
             .expect("FileSink::set_location `location` with filename but without a parent")
             .to_owned();
-        if parent_dir.is_relative() && parent_dir.components().next() == None {
+        if parent_dir.is_relative() && parent_dir.components().next().is_none() {
             // `location` only contains the filename
             // need to specify "." for `canonicalize` to resolve the actual path
             parent_dir = PathBuf::from(".");

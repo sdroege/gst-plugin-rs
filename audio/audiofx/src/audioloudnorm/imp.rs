@@ -1560,7 +1560,7 @@ impl AudioLoudNorm {
             }
 
             // Need to reset the state now
-            *state = State::new(&*self.settings.lock().unwrap(), state.info.clone());
+            *state = State::new(&self.settings.lock().unwrap(), state.info.clone());
         }
 
         state.adapter.push(buffer);
@@ -1602,7 +1602,7 @@ impl AudioLoudNorm {
                         Err(_) => return false,
                     };
                 }
-                *state = Some(State::new(&*self.settings.lock().unwrap(), info));
+                *state = Some(State::new(&self.settings.lock().unwrap(), info));
                 drop(state);
 
                 if let Some(outbuf) = outbuf {
@@ -1623,7 +1623,7 @@ impl AudioLoudNorm {
                         Err(gst::FlowError::Eos) => None,
                         Err(_) => return false,
                     };
-                    *state = State::new(&*self.settings.lock().unwrap(), state.info.clone());
+                    *state = State::new(&self.settings.lock().unwrap(), state.info.clone());
                 }
                 drop(state);
 

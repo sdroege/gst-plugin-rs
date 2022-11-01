@@ -51,7 +51,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 static TEMPORAL_DELIMITER: Lazy<gst::Memory> =
-    Lazy::new(|| gst::Memory::from_slice(&[0b0001_0010, 0]));
+    Lazy::new(|| gst::Memory::from_slice([0b0001_0010, 0]));
 
 impl RTPAv1Depay {
     fn reset(&self, state: &mut State) {
