@@ -54,7 +54,7 @@ impl Stats {
     fn to_structure(&self) -> gst::Structure {
         gst::Structure::builder("application/x-fallbacksrc-stats")
             .field("num-retry", self.num_retry)
-            .field("num-fallback-retry", &self.num_fallback_retry)
+            .field("num-fallback-retry", self.num_fallback_retry)
             .field("last-retry-reason", self.last_retry_reason)
             .field(
                 "last-fallback-retry-reason",
@@ -1893,7 +1893,7 @@ impl FallbackSrc {
 
         // Link the new source pad in
         let switch_pad = switch.request_pad_simple("sink_%u").unwrap();
-        switch_pad.set_property("priority", if fallback_source { 1u32 } else { 0u32 });
+        switch_pad.set_property("priority", u32::from(fallback_source));
         ghostpad.link(&switch_pad).unwrap();
 
         pad.add_probe(gst::PadProbeType::EVENT_DOWNSTREAM, move |pad, info| {

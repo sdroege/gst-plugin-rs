@@ -1259,7 +1259,7 @@ impl JitterBuffer {
 
         self.task
             .prepare(
-                JitterBufferTask::new(&*self.obj(), &self.src_pad_handler, &self.sink_pad_handler),
+                JitterBufferTask::new(&self.obj(), &self.src_pad_handler, &self.sink_pad_handler),
                 context,
             )
             .block_on()?;

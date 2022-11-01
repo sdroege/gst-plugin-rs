@@ -215,16 +215,12 @@ impl GstObjectImpl for Device {}
 impl DeviceImpl for Device {
     fn create_element(&self, name: Option<&str>) -> Result<gst::Element, gst::LoggableError> {
         let source_info = self.source.get().unwrap();
-        let element = glib::Object::with_type(
-            crate::ndisrc::NdiSrc::static_type(),
-            &[
-                ("name", &name),
-                ("ndi-name", &source_info.ndi_name()),
-                ("url-address", &source_info.url_address()),
-            ],
-        )
-        .dynamic_cast::<gst::Element>()
-        .unwrap();
+        let element = glib::Object::builder::<crate::ndisrc::NdiSrc>()
+            .property("name", name)
+            .property("ndi-name", source_info.ndi_name())
+            .property("url-address", source_info.url_address())
+            .build()
+            .upcast::<gst::Element>();
 
         Ok(element)
     }
@@ -242,16 +238,16 @@ impl super::Device {
 
         // Put the url-address into the extra properties
         let extra_properties = gst::Structure::builder("properties")
-            .field("ndi-name", &source.ndi_name())
-            .field("url-address", &source.url_address())
+            .field("ndi-name", source.ndi_name())
+            .field("url-address", source.url_address())
             .build();
 
-        let device = glib::Object::new::<super::Device>(&[
-            ("caps", &caps),
-            ("display-name", &display_name),
-            ("device-class", &device_class),
-            ("properties", &extra_properties),
-        ]);
+        let device = glib::Object::builder::<super::Device>()
+            .property("caps", caps)
+            .property("display-name", display_name)
+            .property("device-class", device_class)
+            .property("properties", extra_properties)
+            .build();
 
         let imp = device.imp();
         imp.source.set(source.to_owned()).unwrap();

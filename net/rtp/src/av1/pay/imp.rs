@@ -390,7 +390,7 @@ impl RTPAv1Pay {
 
                 let aggr_header: [u8; 1] = [
                     (state.open_obu_fragment as u8) << 7 |                  // Z
-                    ((packet.last_obu_fragment_size != None) as u8) << 6 |  // Y
+                    ((packet.last_obu_fragment_size.is_some()) as u8) << 6 |  // Y
                     (w as u8) << 4 |                                        // W
                     (state.first_packet_in_seq as u8) << 3                  // N
                 ; 1];

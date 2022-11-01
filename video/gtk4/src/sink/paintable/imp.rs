@@ -139,7 +139,7 @@ impl SinkPaintable {
         if let Some(frame) = frame {
             gst::trace!(CAT, imp: self, "Received new frame");
 
-            let new_paintables = frame.into_textures(&mut *self.cached_textures.borrow_mut());
+            let new_paintables = frame.into_textures(&mut self.cached_textures.borrow_mut());
             let new_size = new_paintables
                 .first()
                 .map(|p| (f32::round(p.width) as u32, f32::round(p.height) as u32))

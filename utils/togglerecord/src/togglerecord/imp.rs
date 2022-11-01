@@ -744,7 +744,7 @@ impl ToggleRecord {
             // FIXME it would help a lot if we could expect current_running_time
             // and possibly current_running_time_end at some point.
 
-            if data.can_clip(&*state)
+            if data.can_clip(&state)
                 && current_running_time.map_or(false, |cur_rt| cur_rt < last_recording_start)
                 && current_running_time_end
                     .map_or(false, |cur_rt_end| cur_rt_end > last_recording_start)
@@ -778,7 +778,7 @@ impl ToggleRecord {
 
                 gst::log!(CAT, obj: pad, "Clipping to segment {:?}", segment);
 
-                if let Some(data) = data.clip(&*state, &segment) {
+                if let Some(data) = data.clip(&state, &segment) {
                     return Ok(HandleResult::Pass(data));
                 } else {
                     gst::warning!(CAT, obj: pad, "Complete buffer clipped!");
@@ -799,7 +799,7 @@ impl ToggleRecord {
                     last_recording_start,
                 );
                 return Ok(HandleResult::Drop);
-            } else if data.can_clip(&*state)
+            } else if data.can_clip(&state)
                 && current_running_time
                     .opt_lt(rec_state.last_recording_stop)
                     .unwrap_or(false)
@@ -836,7 +836,7 @@ impl ToggleRecord {
 
                 gst::log!(CAT, obj: pad, "Clipping to segment {:?}", segment,);
 
-                if let Some(data) = data.clip(&*state, &segment) {
+                if let Some(data) = data.clip(&state, &segment) {
                     return Ok(HandleResult::Pass(data));
                 } else {
                     gst::warning!(CAT, obj: pad, "Complete buffer clipped!");
@@ -935,7 +935,7 @@ impl ToggleRecord {
                         last_recording_stop,
                     );
                     Ok(HandleResult::Pass(data))
-                } else if data.can_clip(&*state)
+                } else if data.can_clip(&state)
                     && current_running_time < last_recording_stop
                     && current_running_time_end
                         .map_or(false, |cur_rt_end| cur_rt_end > last_recording_stop)
@@ -960,7 +960,7 @@ impl ToggleRecord {
 
                     gst::log!(CAT, obj: pad, "Clipping to segment {:?}", segment,);
 
-                    if let Some(data) = data.clip(&*state, &segment) {
+                    if let Some(data) = data.clip(&state, &segment) {
                         Ok(HandleResult::Pass(data))
                     } else {
                         gst::warning!(CAT, obj: pad, "Complete buffer clipped!");
@@ -1016,7 +1016,7 @@ impl ToggleRecord {
                         last_recording_start,
                     );
                     Ok(HandleResult::Pass(data))
-                } else if data.can_clip(&*state)
+                } else if data.can_clip(&state)
                     && current_running_time < last_recording_start
                     && current_running_time_end
                         .map_or(false, |cur_rt_end| cur_rt_end > last_recording_start)
@@ -1041,7 +1041,7 @@ impl ToggleRecord {
 
                     gst::log!(CAT, obj: pad, "Clipping to segment {:?}", segment);
 
-                    if let Some(data) = data.clip(&*state, &segment) {
+                    if let Some(data) = data.clip(&state, &segment) {
                         Ok(HandleResult::Pass(data))
                     } else {
                         gst::warning!(CAT, obj: pad, "Complete buffer clipped!");

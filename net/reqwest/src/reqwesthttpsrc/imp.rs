@@ -562,7 +562,7 @@ impl ReqwestHttpSrc {
             if let Some(ref mut caps) = caps {
                 let caps = caps.get_mut().unwrap();
                 let s = caps.structure_mut(0).unwrap();
-                s.set("content-type", &content_type.as_ref());
+                s.set("content-type", content_type.as_ref());
             } else if content_type.type_() == "audio" && content_type.subtype() == "L16" {
                 let channels = content_type
                     .get_param("channels")

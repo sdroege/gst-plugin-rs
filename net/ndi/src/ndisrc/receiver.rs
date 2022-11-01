@@ -1299,14 +1299,14 @@ impl Receiver {
 
             gst::ReferenceTimestampMeta::add(
                 buffer,
-                &*crate::TIMECODE_CAPS,
+                &crate::TIMECODE_CAPS,
                 (video_frame.timecode() as u64 * 100).nseconds(),
                 gst::ClockTime::NONE,
             );
             if video_frame.timestamp() != ndisys::NDIlib_recv_timestamp_undefined {
                 gst::ReferenceTimestampMeta::add(
                     buffer,
-                    &*crate::TIMESTAMP_CAPS,
+                    &crate::TIMESTAMP_CAPS,
                     (video_frame.timestamp() as u64 * 100).nseconds(),
                     gst::ClockTime::NONE,
                 );
@@ -1670,14 +1670,14 @@ impl Receiver {
 
                     gst::ReferenceTimestampMeta::add(
                         buffer,
-                        &*crate::TIMECODE_CAPS,
+                        &crate::TIMECODE_CAPS,
                         (audio_frame.timecode() as u64 * 100).nseconds(),
                         gst::ClockTime::NONE,
                     );
                     if audio_frame.timestamp() != ndisys::NDIlib_recv_timestamp_undefined {
                         gst::ReferenceTimestampMeta::add(
                             buffer,
-                            &*crate::TIMESTAMP_CAPS,
+                            &crate::TIMESTAMP_CAPS,
                             (audio_frame.timestamp() as u64 * 100).nseconds(),
                             gst::ClockTime::NONE,
                         );

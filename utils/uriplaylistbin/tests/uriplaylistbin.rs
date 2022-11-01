@@ -88,7 +88,7 @@ fn test(
     let pipeline = gst::Pipeline::default();
     let playlist = gst::ElementFactory::make("uriplaylistbin")
         .property("uris", &uris)
-        .property("iterations", &iterations)
+        .property("iterations", iterations)
         .build()
         .unwrap();
     let mq = gst::ElementFactory::make("multiqueue").build().unwrap();

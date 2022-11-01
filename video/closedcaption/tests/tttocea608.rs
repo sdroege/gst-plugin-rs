@@ -39,7 +39,7 @@ fn test_non_timed_buffer() {
     let mut h = gst_check::Harness::new_parse("tttocea608 mode=pop-on");
     h.set_src_caps_str("text/x-raw");
 
-    let inbuf = gst::Buffer::from_slice(&"Hello");
+    let inbuf = gst::Buffer::from_slice("Hello");
 
     assert_eq!(h.push(inbuf), Err(gst::FlowError::Error));
 }
@@ -56,7 +56,7 @@ fn test_one_timed_buffer_and_eos() {
         let _event = h.pull_event().unwrap();
     }
 
-    let inbuf = new_timed_buffer(&"Hello", ClockTime::SECOND, ClockTime::SECOND);
+    let inbuf = new_timed_buffer("Hello", ClockTime::SECOND, ClockTime::SECOND);
 
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
@@ -155,10 +155,10 @@ fn test_erase_display_memory_non_spliced() {
         let _event = h.pull_event().unwrap();
     }
 
-    let inbuf = new_timed_buffer(&"Hello", 1_000_000_000.nseconds(), ClockTime::SECOND);
+    let inbuf = new_timed_buffer("Hello", 1_000_000_000.nseconds(), ClockTime::SECOND);
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
-    let inbuf = new_timed_buffer(&"World", 3_000_000_000.nseconds(), ClockTime::SECOND);
+    let inbuf = new_timed_buffer("World", 3_000_000_000.nseconds(), ClockTime::SECOND);
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
     let mut erase_display_buffers = 0;
@@ -197,11 +197,11 @@ fn test_erase_display_memory_spliced() {
         let _event = h.pull_event().unwrap();
     }
 
-    let inbuf = new_timed_buffer(&"Hello", 1_000_000_000.nseconds(), ClockTime::SECOND);
+    let inbuf = new_timed_buffer("Hello", 1_000_000_000.nseconds(), ClockTime::SECOND);
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
     let inbuf = new_timed_buffer(
-        &"World, Lorem Ipsum",
+        "World, Lorem Ipsum",
         2_000_000_000.nseconds(),
         ClockTime::SECOND,
     );
@@ -243,10 +243,10 @@ fn test_output_gaps() {
         let _event = h.pull_event().unwrap();
     }
 
-    let inbuf = new_timed_buffer(&"Hello", 1_000_000_000.nseconds(), ClockTime::SECOND);
+    let inbuf = new_timed_buffer("Hello", 1_000_000_000.nseconds(), ClockTime::SECOND);
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
-    let inbuf = new_timed_buffer(&"World", 3_000_000_000.nseconds(), ClockTime::SECOND);
+    let inbuf = new_timed_buffer("World", 3_000_000_000.nseconds(), ClockTime::SECOND);
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
     h.push_event(gst::event::Eos::new());
@@ -317,10 +317,10 @@ fn test_one_timed_buffer_and_eos_roll_up2() {
         let _event = h.pull_event().unwrap();
     }
 
-    let inbuf = new_timed_buffer(&"Hello", ClockTime::SECOND, ClockTime::SECOND);
+    let inbuf = new_timed_buffer("Hello", ClockTime::SECOND, ClockTime::SECOND);
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
-    let inbuf = new_timed_buffer(&"World", 2.seconds(), 1.nseconds());
+    let inbuf = new_timed_buffer("World", 2.seconds(), 1.nseconds());
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
     let expected: [(ClockTime, ClockTime, [u8; 2usize]); 5] = [
@@ -433,7 +433,7 @@ fn test_word_wrap_roll_up() {
         let _event = h.pull_event().unwrap();
     }
 
-    let inbuf = new_timed_buffer(&"Hello World", ClockTime::SECOND, ClockTime::SECOND);
+    let inbuf = new_timed_buffer("Hello World", ClockTime::SECOND, ClockTime::SECOND);
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
     let expected: [(ClockTime, ClockTime, [u8; 2usize]); 11] = [

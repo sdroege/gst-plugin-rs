@@ -673,7 +673,7 @@ fn write_tref(
     references: &[TrackReference],
 ) -> Result<(), Error> {
     for reference in references {
-        write_box(v, &reference.reference_type, |v| {
+        write_box(v, reference.reference_type, |v| {
             for track_id in &reference.track_ids {
                 v.extend(track_id.to_be_bytes());
             }
@@ -1619,6 +1619,7 @@ fn write_mfhd(v: &mut Vec<u8>, cfg: &super::FragmentHeaderConfiguration) -> Resu
 }
 
 #[allow(clippy::identity_op)]
+#[allow(clippy::bool_to_int_with_if)]
 fn sample_flags_from_buffer(
     timing_info: &super::FragmentTimingInfo,
     buffer: &gst::BufferRef,

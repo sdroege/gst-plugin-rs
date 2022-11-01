@@ -840,7 +840,7 @@ impl UdpSink {
         // Enable backpressure for items
         let (item_sender, item_receiver) = flume::bounded(0);
         let (cmd_sender, cmd_receiver) = flume::unbounded();
-        let task_impl = UdpSinkTask::new(&*self.obj(), item_receiver, cmd_receiver);
+        let task_impl = UdpSinkTask::new(&self.obj(), item_receiver, cmd_receiver);
         self.task.prepare(task_impl, context).block_on()?;
 
         *self.item_sender.lock().unwrap() = Some(item_sender);

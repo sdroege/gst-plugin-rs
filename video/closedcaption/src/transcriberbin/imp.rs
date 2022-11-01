@@ -245,13 +245,13 @@ impl TranscriberBin {
         let cc_caps_mut = cc_caps.make_mut();
         let s = cc_caps_mut.structure_mut(0).unwrap();
 
-        s.set("framerate", &state.framerate.unwrap());
+        s.set("framerate", state.framerate.unwrap());
 
         state.cccapsfilter.set_property("caps", &cc_caps);
 
         let max_size_time = settings.latency + settings.accumulate_time;
 
-        for queue in &[&state.audio_queue_passthrough, &state.video_queue] {
+        for queue in [&state.audio_queue_passthrough, &state.video_queue] {
             queue.set_property("max-size-bytes", 0u32);
             queue.set_property("max-size-buffers", 0u32);
             queue.set_property("max-size-time", max_size_time);

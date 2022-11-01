@@ -404,7 +404,7 @@ impl BaseSrcImpl for SineSrc {
         gst::debug!(CAT, imp: self, "Configuring for caps {}", caps);
 
         self.obj()
-            .set_blocksize(info.bpf() * (*self.settings.lock().unwrap()).samples_per_buffer);
+            .set_blocksize(info.bpf() * (self.settings.lock().unwrap()).samples_per_buffer);
 
         let settings = *self.settings.lock().unwrap();
         let mut state = self.state.lock().unwrap();

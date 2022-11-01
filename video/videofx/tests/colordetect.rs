@@ -25,7 +25,7 @@ fn test_red_color() {
 
     let src = gst::ElementFactory::make("videotestsrc")
         .property_from_str("pattern", "red")
-        .property("num-buffers", &2i32)
+        .property("num-buffers", 2i32)
         .build()
         .unwrap();
 

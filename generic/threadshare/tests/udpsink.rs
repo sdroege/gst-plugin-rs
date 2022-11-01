@@ -100,6 +100,6 @@ fn test_chain() {
         assert!(buf == [42, 43, 44, 45, 0]);
     });
 
-    let buf = gst::Buffer::from_slice(&[42, 43, 44, 45]);
+    let buf = gst::Buffer::from_slice([42, 43, 44, 45]);
     assert!(h.push(buf) == Ok(gst::FlowSuccess::Ok));
 }

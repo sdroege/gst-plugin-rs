@@ -75,7 +75,7 @@ fn test_pipeline() {
     };
 
     let filesrc = gst::ElementFactory::make("filesrc")
-        .property("location", &input_path.to_str().unwrap())
+        .property("location", input_path.to_str().unwrap())
         .build()
         .unwrap();
 

@@ -121,23 +121,23 @@ impl ElementImpl for NdiSink {
                     gst::Structure::builder("video/x-raw")
                         .field(
                             "format",
-                            &gst::List::new(&[
-                                &gst_video::VideoFormat::Uyvy.to_str(),
-                                &gst_video::VideoFormat::I420.to_str(),
-                                &gst_video::VideoFormat::Nv12.to_str(),
-                                &gst_video::VideoFormat::Nv21.to_str(),
-                                &gst_video::VideoFormat::Yv12.to_str(),
-                                &gst_video::VideoFormat::Bgra.to_str(),
-                                &gst_video::VideoFormat::Bgrx.to_str(),
-                                &gst_video::VideoFormat::Rgba.to_str(),
-                                &gst_video::VideoFormat::Rgbx.to_str(),
+                            gst::List::new([
+                                gst_video::VideoFormat::Uyvy.to_str(),
+                                gst_video::VideoFormat::I420.to_str(),
+                                gst_video::VideoFormat::Nv12.to_str(),
+                                gst_video::VideoFormat::Nv21.to_str(),
+                                gst_video::VideoFormat::Yv12.to_str(),
+                                gst_video::VideoFormat::Bgra.to_str(),
+                                gst_video::VideoFormat::Bgrx.to_str(),
+                                gst_video::VideoFormat::Rgba.to_str(),
+                                gst_video::VideoFormat::Rgbx.to_str(),
                             ]),
                         )
-                        .field("width", &gst::IntRange::<i32>::new(1, std::i32::MAX))
-                        .field("height", &gst::IntRange::<i32>::new(1, std::i32::MAX))
+                        .field("width", gst::IntRange::<i32>::new(1, std::i32::MAX))
+                        .field("height", gst::IntRange::<i32>::new(1, std::i32::MAX))
                         .field(
                             "framerate",
-                            &gst::FractionRange::new(
+                            gst::FractionRange::new(
                                 gst::Fraction::new(0, 1),
                                 gst::Fraction::new(std::i32::MAX, 1),
                             ),
@@ -146,10 +146,10 @@ impl ElementImpl for NdiSink {
                 )
                 .structure(
                     gst::Structure::builder("audio/x-raw")
-                        .field("format", &gst_audio::AUDIO_FORMAT_F32.to_str())
-                        .field("rate", &gst::IntRange::<i32>::new(1, i32::MAX))
-                        .field("channels", &gst::IntRange::<i32>::new(1, i32::MAX))
-                        .field("layout", &"interleaved")
+                        .field("format", gst_audio::AUDIO_FORMAT_F32.to_str())
+                        .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
+                        .field("channels", gst::IntRange::<i32>::new(1, i32::MAX))
+                        .field("layout", "interleaved")
                         .build(),
                 )
                 .build();

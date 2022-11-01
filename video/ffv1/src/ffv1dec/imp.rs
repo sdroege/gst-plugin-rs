@@ -350,7 +350,7 @@ impl ElementImpl for Ffv1Dec {
             vec![sink_pad_template, src_pad_template]
         });
 
-        &*PAD_TEMPLATES
+        &PAD_TEMPLATES
     }
 }
 

@@ -53,7 +53,7 @@ struct Keys {
 
 impl Keys {
     fn from_file(file: &Path) -> Result<Self, Box<dyn Error>> {
-        let f = File::open(&file)?;
+        let f = File::open(file)?;
         serde_json::from_reader(f).map_err(From::from)
     }
 }

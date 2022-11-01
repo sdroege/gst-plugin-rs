@@ -669,7 +669,7 @@ impl VideoDecoderImpl for Dav1dDec {
                 is_live = latency_query.result().0;
             }
 
-            max_frame_delay = if is_live { 1 } else { 0 };
+            max_frame_delay = u32::from(is_live);
         } else {
             max_frame_delay = settings.max_frame_delay.try_into().unwrap();
         }

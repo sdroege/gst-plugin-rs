@@ -102,7 +102,7 @@ pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
         Some(_) => return Err("Bad query, only 'version' is supported".to_owned()),
     };
 
-    if q.next() != None {
+    if q.next().is_some() {
         return Err("Extra query terms, only 'version' is supported".to_owned());
     }
 
