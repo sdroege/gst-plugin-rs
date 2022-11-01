@@ -14,23 +14,24 @@ use gtk::{gdk, glib};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
-pub struct Frame {
-    pub frame: gst_video::VideoFrame<gst_video::video_frame::Readable>,
-    pub overlays: Vec<Overlay>,
+pub(crate) struct Frame {
+    frame: gst_video::VideoFrame<gst_video::video_frame::Readable>,
+    overlays: Vec<Overlay>,
 }
 
 #[derive(Debug)]
-pub struct Overlay {
-    pub frame: gst_video::VideoFrame<gst_video::video_frame::Readable>,
-    pub x: i32,
-    pub y: i32,
-    pub width: u32,
-    pub height: u32,
-    pub global_alpha: f32,
+struct Overlay {
+    frame: gst_video::VideoFrame<gst_video::video_frame::Readable>,
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    global_alpha: f32,
 }
 
 #[derive(Debug)]
-pub struct Texture {
+pub(crate) struct Texture {
+    //FIXME: create getters instead of having the fields public
     pub texture: gdk::Texture,
     pub x: f32,
     pub y: f32,
