@@ -63,7 +63,7 @@ fn main() {
     };
     let is_rtp = args.len() > 6 && (args[6] == "rtp");
 
-    let rtp_caps = gst::Caps::builder("audio/x-rtp")
+    let rtp_caps = gst::Caps::builder("application/x-rtp")
         .field("media", "audio")
         .field("payload", 8i32)
         .field("clock-rate", 8000)
@@ -97,7 +97,7 @@ fn main() {
             "udpsrc" => {
                 let source = gst::ElementFactory::make("udpsrc")
                     .name(format!("source-{}", i).as_str())
-                    .property("port", 40000i32 + i as i32)
+                    .property("port", 5004i32 + i as i32)
                     .property("retrieve-sender-address", false)
                     .build()
                     .unwrap();
@@ -108,7 +108,7 @@ fn main() {
                 let context = build_context();
                 let source = gst::ElementFactory::make("ts-udpsrc")
                     .name(format!("source-{}", i).as_str())
-                    .property("port", 40000i32 + i as i32)
+                    .property("port", 5004i32 + i as i32)
                     .property("context", &context)
                     .property("context-wait", wait)
                     .build()
@@ -184,22 +184,7 @@ fn main() {
             pipeline.add_many(elements).unwrap();
             gst::Element::link_many(elements).unwrap();
         } else {
-            let queue = if let Some(context) = context {
-                let queue = gst::ElementFactory::make("ts-queue")
-                    .name(format!("queue-{}", i).as_str())
-                    .property("context", &context)
-                    .property("context-wait", wait)
-                    .build()
-                    .unwrap();
-                queue
-            } else {
-                gst::ElementFactory::make("queue")
-                    .name(format!("queue-{}", i).as_str())
-                    .build()
-                    .unwrap()
-            };
-
-            let elements = &[&source, &queue, &sink];
+            let elements = &[&source, &sink];
             pipeline.add_many(elements).unwrap();
             gst::Element::link_many(elements).unwrap();
         }
@@ -268,14 +253,14 @@ fn main() {
                 let elapsed = init.elapsed();
                 gst::info!(
                     CAT,
-                    "{:>6.2} / s / stream",
+                    "Thrpt: {:>6.2}",
                     total_count * 1_000.0 / elapsed.as_millis() as f32
                 );
 
                 #[cfg(feature = "tuning")]
                 gst::info!(
                     CAT,
-                    "{:>6.2}% parked",
+                    "Parked: {:>6.2}%",
                     (ctx_0.parked_duration() - parked_init).as_nanos() as f32 * 100.0
                         / elapsed.as_nanos() as f32
                 );

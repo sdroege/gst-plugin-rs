@@ -6467,6 +6467,106 @@
                     }
                 }
             },
+            "ts-audiotestsrc": {
+                "author": "François Laignel <fengalin@free.fr>",
+                "description": "Thread-sharing audio test source",
+                "hierarchy": [
+                    "TsAudioTestSrc",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Source/Test",
+                "pad-templates": {
+                    "src": {
+                        "caps": "audio/x-raw:\n           rate: [ 8000, 2147483646 ]\n       channels: [ 1, 2147483646 ]\n         layout: interleaved\n         format: S16LE\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "buffer-duration": {
+                        "blurb": "Buffer duration in ms",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "10",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "context": {
+                        "blurb": "Context name to share threads with",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "context-wait": {
+                        "blurb": "Throttle poll loop to run at most once every this many ms",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "1000",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "do-timestamp": {
+                        "blurb": "Apply current stream time to buffers",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "is-live": {
+                        "blurb": "Whether to act as a live source",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "num-buffers": {
+                        "blurb": "Number of buffers to output before sending EOS (-1 = unlimited)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-1",
+                        "max": "2147483647",
+                        "min": "-1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
             "ts-input-selector": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Simple input selector element",
