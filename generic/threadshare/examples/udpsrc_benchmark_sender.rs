@@ -17,19 +17,45 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
+use gst::glib;
+use gst::prelude::*;
+
+use once_cell::sync::Lazy;
+
 use std::net;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::{env, thread, time};
 
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
+        "ts-udpsrc-benchmark-sender",
+        gst::DebugColorFlags::empty(),
+        Some("Thread-sharing UDP src benchmark sender"),
+    )
+});
+
 fn main() {
+    gst::init().unwrap();
+    gstthreadshare::plugin_register_static().unwrap();
+
     let args = env::args().collect::<Vec<_>>();
     assert!(args.len() > 1);
     let n_streams: u16 = args[1].parse().unwrap();
 
-    if args.len() > 2 && args[2] == "rtp" {
-        send_rtp_buffers(n_streams);
+    let num_buffers: Option<i32> = if args.len() > 3 {
+        args[3].parse().ok()
     } else {
-        send_raw_buffers(n_streams);
+        None
+    };
+
+    if args.len() > 2 {
+        match args[2].as_str() {
+            "raw" => send_raw_buffers(n_streams),
+            "rtp" => send_rtp_buffers(n_streams, num_buffers),
+            _ => send_test_buffers(n_streams, num_buffers),
+        }
+    } else {
+        send_test_buffers(n_streams, num_buffers);
     }
 }
 
@@ -38,7 +64,7 @@ fn send_raw_buffers(n_streams: u16) {
     let socket = net::UdpSocket::bind("0.0.0.0:0").unwrap();
 
     let ipaddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-    let destinations = (40000..(40000 + n_streams))
+    let destinations = (5004..(5004 + n_streams))
         .map(|port| SocketAddr::new(ipaddr, port))
         .collect::<Vec<_>>();
 
@@ -60,43 +86,60 @@ fn send_raw_buffers(n_streams: u16) {
     }
 }
 
-fn send_rtp_buffers(n_streams: u16) {
-    use gst::glib;
-    use gst::prelude::*;
-
-    gst::init().unwrap();
-
-    #[cfg(debug_assertions)]
-    {
-        use std::path::Path;
-
-        let mut path = Path::new("target/debug");
-        if !path.exists() {
-            path = Path::new("../../target/debug");
-        }
-
-        gst::Registry::get().scan_path(path);
-    }
-    #[cfg(not(debug_assertions))]
-    {
-        use std::path::Path;
-
-        let mut path = Path::new("target/release");
-        if !path.exists() {
-            path = Path::new("../../target/release");
-        }
-
-        gst::Registry::get().scan_path(path);
-    }
-
-    let l = glib::MainLoop::new(None, false);
+fn send_test_buffers(n_streams: u16, num_buffers: Option<i32>) {
     let pipeline = gst::Pipeline::default();
     for i in 0..n_streams {
-        let src = gst::ElementFactory::make("audiotestsrc")
-            .name(format!("audiotestsrc-{}", i).as_str())
+        let src = gst::ElementFactory::make("ts-audiotestsrc")
+            .name(format!("ts-audiotestsrc-{}", i).as_str())
+            .property("context-wait", 20u32)
+            .property("is-live", true)
+            .property("do-timestamp", true)
             .build()
             .unwrap();
-        src.set_property("is-live", true);
+
+        if let Some(num_buffers) = num_buffers {
+            src.set_property("num-buffers", num_buffers);
+        }
+
+        #[cfg(feature = "tuning")]
+        if i == 0 {
+            src.set_property("main-elem", true);
+        }
+
+        let sink = gst::ElementFactory::make("ts-udpsink")
+            .name(format!("udpsink-{}", i).as_str())
+            .property("clients", format!("127.0.0.1:{}", i + 5004))
+            .property("context-wait", 20u32)
+            .build()
+            .unwrap();
+
+        let elements = &[&src, &sink];
+        pipeline.add_many(elements).unwrap();
+        gst::Element::link_many(elements).unwrap();
+    }
+
+    run(pipeline);
+}
+
+fn send_rtp_buffers(n_streams: u16, num_buffers: Option<i32>) {
+    let pipeline = gst::Pipeline::default();
+    for i in 0..n_streams {
+        let src = gst::ElementFactory::make("ts-audiotestsrc")
+            .name(format!("ts-audiotestsrc-{}", i).as_str())
+            .property("context-wait", 20u32)
+            .property("is-live", true)
+            .property("do-timestamp", true)
+            .build()
+            .unwrap();
+
+        if let Some(num_buffers) = num_buffers {
+            src.set_property("num-buffers", num_buffers);
+        }
+
+        #[cfg(feature = "tuning")]
+        if i == 0 {
+            src.set_property("main-elem", true);
+        }
 
         let enc = gst::ElementFactory::make("alawenc")
             .name(format!("alawenc-{}", i).as_str())
@@ -106,11 +149,11 @@ fn send_rtp_buffers(n_streams: u16) {
             .name(format!("rtppcmapay-{}", i).as_str())
             .build()
             .unwrap();
+
         let sink = gst::ElementFactory::make("ts-udpsink")
             .name(format!("udpsink-{}", i).as_str())
-            .property("clients", format!("127.0.0.1:{}", i + 40000))
-            .property("context", "context-udpsink")
             .property("context-wait", 20u32)
+            .property("clients", format!("127.0.0.1:{}", i + 5004))
             .build()
             .unwrap();
 
@@ -119,6 +162,42 @@ fn send_rtp_buffers(n_streams: u16) {
         gst::Element::link_many(elements).unwrap();
     }
 
+    run(pipeline);
+}
+
+fn run(pipeline: gst::Pipeline) {
+    let l = glib::MainLoop::new(None, false);
+
+    let bus = pipeline.bus().unwrap();
+    let l_clone = l.clone();
+    bus.add_watch(move |_, msg| {
+        use gst::MessageView;
+        match msg.view() {
+            MessageView::Eos(_) => {
+                gst::info!(CAT, "Received eos");
+                l_clone.quit();
+
+                glib::Continue(false)
+            }
+            MessageView::Error(msg) => {
+                gst::error!(
+                    CAT,
+                    "Error from {:?}: {} ({:?})",
+                    msg.src().map(|s| s.path_string()),
+                    msg.error(),
+                    msg.debug()
+                );
+                l_clone.quit();
+
+                glib::Continue(false)
+            }
+            _ => glib::Continue(true),
+        }
+    })
+    .expect("Failed to add bus watch");
+
     pipeline.set_state(gst::State::Playing).unwrap();
     l.run();
+
+    pipeline.set_state(gst::State::Null).unwrap();
 }

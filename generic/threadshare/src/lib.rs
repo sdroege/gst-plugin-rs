@@ -16,29 +16,30 @@
 #[macro_use]
 pub mod runtime;
 
-pub mod socket;
-mod tcpclientsrc;
-mod udpsink;
-mod udpsrc;
-
 mod appsrc;
+mod audiotestsrc;
 pub mod dataqueue;
 mod inputselector;
 mod jitterbuffer;
 mod proxy;
 mod queue;
+pub mod socket;
+mod tcpclientsrc;
+mod udpsink;
+mod udpsrc;
 
 use gst::glib;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    udpsrc::register(plugin)?;
-    udpsink::register(plugin)?;
-    tcpclientsrc::register(plugin)?;
-    queue::register(plugin)?;
-    proxy::register(plugin)?;
     appsrc::register(plugin)?;
-    jitterbuffer::register(plugin)?;
+    audiotestsrc::register(plugin)?;
     inputselector::register(plugin)?;
+    jitterbuffer::register(plugin)?;
+    proxy::register(plugin)?;
+    queue::register(plugin)?;
+    tcpclientsrc::register(plugin)?;
+    udpsink::register(plugin)?;
+    udpsrc::register(plugin)?;
 
     Ok(())
 }
