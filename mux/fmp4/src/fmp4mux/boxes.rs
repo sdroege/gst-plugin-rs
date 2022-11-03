@@ -593,7 +593,7 @@ fn write_tkhd(
     // Volume
     let s = caps.structure(0).unwrap();
     match s.name() {
-        "audio/mpeg" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
+        "audio/mpeg" | "audio/x-opus" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
             v.extend((1u16 << 8).to_be_bytes())
         }
         _ => v.extend(0u16.to_be_bytes()),
@@ -734,7 +734,7 @@ fn write_hdlr(
         "video/x-h264" | "video/x-h265" | "video/x-vp9" | "image/jpeg" => {
             (b"vide", b"VideoHandler\0".as_slice())
         }
-        "audio/mpeg" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
+        "audio/mpeg" | "audio/x-opus" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
             (b"soun", b"SoundHandler\0".as_slice())
         }
         "application/x-onvif-metadata" => (b"meta", b"MetadataHandler\0".as_slice()),
@@ -765,7 +765,7 @@ fn write_minf(
             // Flags are always 1 for unspecified reasons
             write_full_box(v, b"vmhd", FULL_BOX_VERSION_0, 1, |v| write_vmhd(v, cfg))?
         }
-        "audio/mpeg" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
+        "audio/mpeg" | "audio/x-opus" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
             write_full_box(v, b"smhd", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
                 write_smhd(v, cfg)
             })?
@@ -879,7 +879,7 @@ fn write_stsd(
         "video/x-h264" | "video/x-h265" | "video/x-vp9" | "image/jpeg" => {
             write_visual_sample_entry(v, cfg, caps)?
         }
-        "audio/mpeg" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
+        "audio/mpeg" | "audio/x-opus" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
             write_audio_sample_entry(v, cfg, caps)?
         }
         "application/x-onvif-metadata" => write_xml_meta_data_sample_entry(v, cfg, caps)?,
@@ -1216,6 +1216,7 @@ fn write_audio_sample_entry(
     let s = caps.structure(0).unwrap();
     let fourcc = match s.name() {
         "audio/mpeg" => b"mp4a",
+        "audio/x-opus" => b"Opus",
         "audio/x-alaw" => b"alaw",
         "audio/x-mulaw" => b"ulaw",
         "audio/x-adpcm" => {
@@ -1272,6 +1273,9 @@ fn write_audio_sample_entry(
                     bail!("too small codec_data");
                 }
                 write_esds_aac(v, &map)?;
+            }
+            "audio/x-opus" => {
+                write_dops(v, caps)?;
             }
             "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
                 // Nothing to do here
@@ -1406,6 +1410,70 @@ fn write_esds_aac(v: &mut Vec<u8>, codec_data: &[u8]) -> Result<(), Error> {
             Ok(())
         },
     )
+}
+
+fn write_dops(v: &mut Vec<u8>, caps: &gst::CapsRef) -> Result<(), Error> {
+    let rate;
+    let channels;
+    let channel_mapping_family;
+    let stream_count;
+    let coupled_count;
+    let pre_skip;
+    let output_gain;
+    let mut channel_mapping = [0; 256];
+
+    // TODO: Use audio clipping meta to calculate pre_skip
+
+    if let Some(header) = caps
+        .structure(0)
+        .unwrap()
+        .get::<gst::ArrayRef>("streamheader")
+        .ok()
+        .and_then(|a| a.get(0).and_then(|v| v.get::<gst::Buffer>().ok()))
+    {
+        (
+            rate,
+            channels,
+            channel_mapping_family,
+            stream_count,
+            coupled_count,
+            pre_skip,
+            output_gain,
+        ) = gst_pbutils::codec_utils_opus_parse_header(&header, Some(&mut channel_mapping))
+            .unwrap();
+    } else {
+        // FIXME: Workaround for below function taking a &Caps instead of &CapsRef
+        // SAFETY: This is OK because we only get an immutable reference and don't
+        // clone it, so nobody will be able to get a mutable reference to the caps.
+        let caps = unsafe { &*(&caps as *const &gst::CapsRef as *const gst::Caps) };
+
+        (
+            rate,
+            channels,
+            channel_mapping_family,
+            stream_count,
+            coupled_count,
+        ) = gst_pbutils::codec_utils_opus_parse_caps(caps, Some(&mut channel_mapping)).unwrap();
+        output_gain = 0;
+        pre_skip = 0;
+    }
+
+    write_box(v, b"dOps", move |v| {
+        // Version number
+        v.push(0);
+        v.push(channels);
+        v.extend(pre_skip.to_le_bytes());
+        v.extend(rate.to_le_bytes());
+        v.extend(output_gain.to_le_bytes());
+        v.push(channel_mapping_family);
+        if channel_mapping_family > 0 {
+            v.push(stream_count);
+            v.push(coupled_count);
+            v.extend(&channel_mapping[..channels as usize]);
+        }
+
+        Ok(())
+    })
 }
 
 fn write_xml_meta_data_sample_entry(
