@@ -42,6 +42,7 @@ stages:
   - "lint"
   - "test"
   - "extras"
+  - "integration"
 
 .debian:11:
   variables:
@@ -246,6 +247,7 @@ meson static:
 # Check that the gstreamer documentation keeps working
 documentation:
   image: $GSTREAMER_DOC_IMAGE
+  stage: 'integration'
   variables:
     MESON_ARGS: >
       -Ddoc=enabled
