@@ -21,6 +21,8 @@ const LIBRARY_NAME: &str = "Processing.NDI.Lib.x86.dll";
 const LIBRARY_NAME: &str = "libndi.so.5";
 #[cfg(target_os = "macos")]
 const LIBRARY_NAME: &str = "libndi.dylib";
+#[cfg(all(unix, not(any(target_os = "linux", target_os = "macos"))))]
+const LIBRARY_NAME: &str = "libndi.so";
 
 #[allow(clippy::type_complexity)]
 struct FFI {
