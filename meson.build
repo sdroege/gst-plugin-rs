@@ -49,6 +49,7 @@ plugins = {
   # sodium has an external dependency, see below
   'gst-plugin-threadshare': 'libgstthreadshare',
 
+  'gst-plugin-mp4': 'libgstmp4',
   'gst-plugin-fmp4': 'libgstfmp4',
 
   'gst-plugin-aws': 'libgstaws',
