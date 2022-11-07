@@ -48,6 +48,7 @@ gst-plugin-version-helper = { path = "../../version-helper" }
 static = []
 capi = []
 gst1_22 = ["gst/v1_22", "gst-app/v1_22", "gst-video/v1_22", "gst-webrtc/v1_22", "gst-sdp/v1_22", "gst-rtp/v1_22"]
+doc = []
 
 [package.metadata.capi]
 min_version = "0.8.0"
