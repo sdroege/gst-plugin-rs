@@ -355,7 +355,8 @@ fn brands_from_variant_and_caps<'a>(
 pub(super) fn create_fmp4_header(cfg: super::HeaderConfiguration) -> Result<gst::Buffer, Error> {
     let mut v = vec![];
 
-    let (brand, compatible_brands) = brands_from_variant_and_caps(cfg.variant, cfg.streams.iter());
+    let (brand, compatible_brands) =
+        brands_from_variant_and_caps(cfg.variant, cfg.streams.iter().map(|s| &s.caps));
 
     write_box(&mut v, b"ftyp", |v| {
         // major brand
@@ -420,17 +421,17 @@ fn write_moov(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), E
     write_full_box(v, b"mvhd", FULL_BOX_VERSION_1, FULL_BOX_FLAGS_NONE, |v| {
         write_mvhd(v, cfg, creation_time)
     })?;
-    for (idx, caps) in cfg.streams.iter().enumerate() {
+    for (idx, stream) in cfg.streams.iter().enumerate() {
         write_box(v, b"trak", |v| {
             let mut references = vec![];
 
             // Reference the video track for ONVIF metadata tracks
             if cfg.variant == super::Variant::ONVIF
-                && caps.structure(0).unwrap().name() == "application/x-onvif-metadata"
+                && stream.caps.structure(0).unwrap().name() == "application/x-onvif-metadata"
             {
                 // Find the first video track
-                for (idx, caps) in cfg.streams.iter().enumerate() {
-                    let s = caps.structure(0).unwrap();
+                for (idx, other_stream) in cfg.streams.iter().enumerate() {
+                    let s = other_stream.caps.structure(0).unwrap();
 
                     if matches!(s.name(), "video/x-h264" | "video/x-h265" | "image/jpeg") {
                         references.push(TrackReference {
@@ -442,7 +443,7 @@ fn write_moov(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), E
                 }
             }
 
-            write_trak(v, cfg, idx, caps, creation_time, &references)
+            write_trak(v, cfg, idx, stream, creation_time, &references)
         })?;
     }
     write_box(v, b"mvex", |v| write_mvex(v, cfg))?;
@@ -480,6 +481,31 @@ fn caps_to_timescale(caps: &gst::CapsRef) -> u32 {
     }
 }
 
+fn header_stream_to_timescale(stream: &super::HeaderStream) -> u32 {
+    if stream.trak_timescale > 0 {
+        stream.trak_timescale
+    } else {
+        caps_to_timescale(&stream.caps)
+    }
+}
+
+fn header_configuration_to_timescale(cfg: &super::HeaderConfiguration) -> u32 {
+    if cfg.movie_timescale > 0 {
+        cfg.movie_timescale
+    } else {
+        // Use the reference track timescale
+        header_stream_to_timescale(&cfg.streams[0])
+    }
+}
+
+fn fragment_header_stream_to_timescale(stream: &super::FragmentHeaderStream) -> u32 {
+    if stream.trak_timescale > 0 {
+        stream.trak_timescale
+    } else {
+        caps_to_timescale(&stream.caps)
+    }
+}
+
 fn write_mvhd(
     v: &mut Vec<u8>,
     cfg: &super::HeaderConfiguration,
@@ -489,8 +515,8 @@ fn write_mvhd(
     v.extend(creation_time.to_be_bytes());
     // Modification time
     v.extend(creation_time.to_be_bytes());
-    // Timescale: uses the reference track timescale
-    v.extend(caps_to_timescale(&cfg.streams[0]).to_be_bytes());
+    // Timescale
+    v.extend(header_configuration_to_timescale(cfg).to_be_bytes());
     // Duration
     v.extend(0u64.to_be_bytes());
 
@@ -540,7 +566,7 @@ fn write_trak(
     v: &mut Vec<u8>,
     cfg: &super::HeaderConfiguration,
     idx: usize,
-    caps: &gst::CapsRef,
+    stream: &super::HeaderStream,
     creation_time: u64,
     references: &[TrackReference],
 ) -> Result<(), Error> {
@@ -549,13 +575,13 @@ fn write_trak(
         b"tkhd",
         FULL_BOX_VERSION_1,
         TKHD_FLAGS_TRACK_ENABLED | TKHD_FLAGS_TRACK_IN_MOVIE | TKHD_FLAGS_TRACK_IN_PREVIEW,
-        |v| write_tkhd(v, cfg, idx, caps, creation_time),
+        |v| write_tkhd(v, cfg, idx, stream, creation_time),
     )?;
 
     // TODO: write edts if necessary: for audio tracks to remove initialization samples
     // TODO: write edts optionally for negative DTS instead of offsetting the DTS
 
-    write_box(v, b"mdia", |v| write_mdia(v, cfg, caps, creation_time))?;
+    write_box(v, b"mdia", |v| write_mdia(v, cfg, stream, creation_time))?;
 
     if !references.is_empty() {
         write_box(v, b"tref", |v| write_tref(v, cfg, references))?;
@@ -568,7 +594,7 @@ fn write_tkhd(
     v: &mut Vec<u8>,
     _cfg: &super::HeaderConfiguration,
     idx: usize,
-    caps: &gst::CapsRef,
+    stream: &super::HeaderStream,
     creation_time: u64,
 ) -> Result<(), Error> {
     // Creation time
@@ -591,7 +617,7 @@ fn write_tkhd(
     v.extend(0u16.to_be_bytes());
 
     // Volume
-    let s = caps.structure(0).unwrap();
+    let s = stream.caps.structure(0).unwrap();
     match s.name() {
         "audio/mpeg" | "audio/x-opus" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
             v.extend((1u16 << 8).to_be_bytes())
@@ -650,19 +676,19 @@ fn write_tkhd(
 fn write_mdia(
     v: &mut Vec<u8>,
     cfg: &super::HeaderConfiguration,
-    caps: &gst::CapsRef,
+    stream: &super::HeaderStream,
     creation_time: u64,
 ) -> Result<(), Error> {
     write_full_box(v, b"mdhd", FULL_BOX_VERSION_1, FULL_BOX_FLAGS_NONE, |v| {
-        write_mdhd(v, cfg, caps, creation_time)
+        write_mdhd(v, cfg, stream, creation_time)
     })?;
     write_full_box(v, b"hdlr", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
-        write_hdlr(v, cfg, caps)
+        write_hdlr(v, cfg, stream)
     })?;
 
     // TODO: write elng if needed
 
-    write_box(v, b"minf", |v| write_minf(v, cfg, caps))?;
+    write_box(v, b"minf", |v| write_minf(v, cfg, stream))?;
 
     Ok(())
 }
@@ -699,7 +725,7 @@ fn language_code(lang: impl std::borrow::Borrow<[u8; 3]>) -> u16 {
 fn write_mdhd(
     v: &mut Vec<u8>,
     _cfg: &super::HeaderConfiguration,
-    caps: &gst::CapsRef,
+    stream: &super::HeaderStream,
     creation_time: u64,
 ) -> Result<(), Error> {
     // Creation time
@@ -707,7 +733,7 @@ fn write_mdhd(
     // Modification time
     v.extend(creation_time.to_be_bytes());
     // Timescale
-    v.extend(caps_to_timescale(caps).to_be_bytes());
+    v.extend(header_stream_to_timescale(stream).to_be_bytes());
     // Duration
     v.extend(0u64.to_be_bytes());
 
@@ -724,12 +750,12 @@ fn write_mdhd(
 fn write_hdlr(
     v: &mut Vec<u8>,
     _cfg: &super::HeaderConfiguration,
-    caps: &gst::CapsRef,
+    stream: &super::HeaderStream,
 ) -> Result<(), Error> {
     // Pre-defined
     v.extend([0u8; 4]);
 
-    let s = caps.structure(0).unwrap();
+    let s = stream.caps.structure(0).unwrap();
     let (handler_type, name) = match s.name() {
         "video/x-h264" | "video/x-h265" | "video/x-vp9" | "image/jpeg" => {
             (b"vide", b"VideoHandler\0".as_slice())
@@ -756,9 +782,9 @@ fn write_hdlr(
 fn write_minf(
     v: &mut Vec<u8>,
     cfg: &super::HeaderConfiguration,
-    caps: &gst::CapsRef,
+    stream: &super::HeaderStream,
 ) -> Result<(), Error> {
-    let s = caps.structure(0).unwrap();
+    let s = stream.caps.structure(0).unwrap();
 
     match s.name() {
         "video/x-h264" | "video/x-h265" | "video/x-vp9" | "image/jpeg" => {
@@ -780,7 +806,7 @@ fn write_minf(
 
     write_box(v, b"dinf", |v| write_dinf(v, cfg))?;
 
-    write_box(v, b"stbl", |v| write_stbl(v, cfg, caps))?;
+    write_box(v, b"stbl", |v| write_stbl(v, cfg, stream))?;
 
     Ok(())
 }
@@ -833,10 +859,10 @@ fn write_dref(v: &mut Vec<u8>, _cfg: &super::HeaderConfiguration) -> Result<(), 
 fn write_stbl(
     v: &mut Vec<u8>,
     cfg: &super::HeaderConfiguration,
-    caps: &gst::CapsRef,
+    stream: &super::HeaderStream,
 ) -> Result<(), Error> {
     write_full_box(v, b"stsd", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
-        write_stsd(v, cfg, caps)
+        write_stsd(v, cfg, stream)
     })?;
     write_full_box(v, b"stts", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
         write_stts(v, cfg)
@@ -853,14 +879,10 @@ fn write_stbl(
     })?;
 
     // For video write a sync sample box as indication that not all samples are sync samples
-    let s = caps.structure(0).unwrap();
-    match s.name() {
-        "video/x-h264" | "video/x-h265" | "video/x-vp9" => {
-            write_full_box(v, b"stss", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
-                write_stss(v, cfg)
-            })?
-        }
-        _ => (),
+    if !stream.delta_frames.intra_only() {
+        write_full_box(v, b"stss", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
+            write_stss(v, cfg)
+        })?
     }
 
     Ok(())
@@ -869,20 +891,20 @@ fn write_stbl(
 fn write_stsd(
     v: &mut Vec<u8>,
     cfg: &super::HeaderConfiguration,
-    caps: &gst::CapsRef,
+    stream: &super::HeaderStream,
 ) -> Result<(), Error> {
     // Entry count
     v.extend(1u32.to_be_bytes());
 
-    let s = caps.structure(0).unwrap();
+    let s = stream.caps.structure(0).unwrap();
     match s.name() {
         "video/x-h264" | "video/x-h265" | "video/x-vp9" | "image/jpeg" => {
-            write_visual_sample_entry(v, cfg, caps)?
+            write_visual_sample_entry(v, cfg, stream)?
         }
         "audio/mpeg" | "audio/x-opus" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
-            write_audio_sample_entry(v, cfg, caps)?
+            write_audio_sample_entry(v, cfg, stream)?
         }
-        "application/x-onvif-metadata" => write_xml_meta_data_sample_entry(v, cfg, caps)?,
+        "application/x-onvif-metadata" => write_xml_meta_data_sample_entry(v, cfg, stream)?,
         _ => unreachable!(),
     }
 
@@ -908,9 +930,9 @@ fn write_sample_entry_box<T, F: FnOnce(&mut Vec<u8>) -> Result<T, Error>>(
 fn write_visual_sample_entry(
     v: &mut Vec<u8>,
     _cfg: &super::HeaderConfiguration,
-    caps: &gst::CapsRef,
+    stream: &super::HeaderStream,
 ) -> Result<(), Error> {
-    let s = caps.structure(0).unwrap();
+    let s = stream.caps.structure(0).unwrap();
     let fourcc = match s.name() {
         "video/x-h264" => {
             let stream_format = s.get::<&str>("stream-format").context("no stream-format")?;
@@ -1146,7 +1168,7 @@ fn write_visual_sample_entry(
 
         #[cfg(feature = "v1_18")]
         {
-            if let Ok(cll) = gst_video::VideoContentLightLevel::from_caps(caps) {
+            if let Ok(cll) = gst_video::VideoContentLightLevel::from_caps(&stream.caps) {
                 write_box(v, b"clli", move |v| {
                     v.extend((cll.max_content_light_level() as u16).to_be_bytes());
                     v.extend((cll.max_frame_average_light_level() as u16).to_be_bytes());
@@ -1154,7 +1176,7 @@ fn write_visual_sample_entry(
                 })?;
             }
 
-            if let Ok(mastering) = gst_video::VideoMasteringDisplayInfo::from_caps(caps) {
+            if let Ok(mastering) = gst_video::VideoMasteringDisplayInfo::from_caps(&stream.caps) {
                 write_box(v, b"mdcv", move |v| {
                     for primary in mastering.display_primaries() {
                         v.extend(primary.x.to_be_bytes());
@@ -1211,9 +1233,9 @@ fn write_visual_sample_entry(
 fn write_audio_sample_entry(
     v: &mut Vec<u8>,
     _cfg: &super::HeaderConfiguration,
-    caps: &gst::CapsRef,
+    stream: &super::HeaderStream,
 ) -> Result<(), Error> {
-    let s = caps.structure(0).unwrap();
+    let s = stream.caps.structure(0).unwrap();
     let fourcc = match s.name() {
         "audio/mpeg" => b"mp4a",
         "audio/x-opus" => b"Opus",
@@ -1275,7 +1297,7 @@ fn write_audio_sample_entry(
                 write_esds_aac(v, &map)?;
             }
             "audio/x-opus" => {
-                write_dops(v, caps)?;
+                write_dops(v, &stream.caps)?;
             }
             "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
                 // Nothing to do here
@@ -1412,7 +1434,7 @@ fn write_esds_aac(v: &mut Vec<u8>, codec_data: &[u8]) -> Result<(), Error> {
     )
 }
 
-fn write_dops(v: &mut Vec<u8>, caps: &gst::CapsRef) -> Result<(), Error> {
+fn write_dops(v: &mut Vec<u8>, caps: &gst::Caps) -> Result<(), Error> {
     let rate;
     let channels;
     let channel_mapping_family;
@@ -1442,11 +1464,6 @@ fn write_dops(v: &mut Vec<u8>, caps: &gst::CapsRef) -> Result<(), Error> {
         ) = gst_pbutils::codec_utils_opus_parse_header(&header, Some(&mut channel_mapping))
             .unwrap();
     } else {
-        // FIXME: Workaround for below function taking a &Caps instead of &CapsRef
-        // SAFETY: This is OK because we only get an immutable reference and don't
-        // clone it, so nobody will be able to get a mutable reference to the caps.
-        let caps = unsafe { &*(&caps as *const &gst::CapsRef as *const gst::Caps) };
-
         (
             rate,
             channels,
@@ -1479,9 +1496,9 @@ fn write_dops(v: &mut Vec<u8>, caps: &gst::CapsRef) -> Result<(), Error> {
 fn write_xml_meta_data_sample_entry(
     v: &mut Vec<u8>,
     _cfg: &super::HeaderConfiguration,
-    caps: &gst::CapsRef,
+    stream: &super::HeaderStream,
 ) -> Result<(), Error> {
-    let s = caps.structure(0).unwrap();
+    let s = stream.caps.structure(0).unwrap();
     let namespace = match s.name() {
         "application/x-onvif-metadata" => b"http://www.onvif.org/ver10/schema",
         _ => unreachable!(),
@@ -1560,7 +1577,7 @@ fn write_mvex(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), E
         }
     }
 
-    for (idx, _caps) in cfg.streams.iter().enumerate() {
+    for (idx, _stream) in cfg.streams.iter().enumerate() {
         write_full_box(v, b"trex", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
             write_trex(v, cfg, idx)
         })?;
@@ -1571,7 +1588,7 @@ fn write_mvex(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), E
 
 fn write_mehd(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), Error> {
     // Use the reference track timescale
-    let timescale = caps_to_timescale(&cfg.streams[0]);
+    let timescale = header_configuration_to_timescale(cfg);
 
     let duration = cfg
         .duration
@@ -1614,7 +1631,7 @@ pub(super) fn create_fmp4_fragment_header(
     let mut v = vec![];
 
     let (brand, compatible_brands) =
-        brands_from_variant_and_caps(cfg.variant, cfg.streams.iter().map(|s| &s.0));
+        brands_from_variant_and_caps(cfg.variant, cfg.streams.iter().map(|s| &s.caps));
 
     write_box(&mut v, b"styp", |v| {
         // major brand
@@ -1665,15 +1682,14 @@ fn write_moof(
     })?;
 
     let mut data_offset_offsets = vec![];
-    for (idx, (caps, timing_info)) in cfg.streams.iter().enumerate() {
+    for (idx, stream) in cfg.streams.iter().enumerate() {
         // Skip tracks without any buffers for this fragment.
-        let timing_info = match timing_info {
-            None => continue,
-            Some(ref timing_info) => timing_info,
-        };
+        if stream.start_time.is_none() {
+            continue;
+        }
 
         write_box(v, b"traf", |v| {
-            write_traf(v, cfg, &mut data_offset_offsets, idx, caps, timing_info)
+            write_traf(v, cfg, &mut data_offset_offsets, idx, stream)
         })?;
     }
 
@@ -1688,11 +1704,8 @@ fn write_mfhd(v: &mut Vec<u8>, cfg: &super::FragmentHeaderConfiguration) -> Resu
 
 #[allow(clippy::identity_op)]
 #[allow(clippy::bool_to_int_with_if)]
-fn sample_flags_from_buffer(
-    timing_info: &super::FragmentTimingInfo,
-    buffer: &gst::BufferRef,
-) -> u32 {
-    if timing_info.delta_frames.intra_only() {
+fn sample_flags_from_buffer(stream: &super::FragmentHeaderStream, buffer: &gst::BufferRef) -> u32 {
+    if stream.delta_frames.intra_only() {
         (0b00u32 << (16 + 10)) | // leading: unknown
         (0b10u32 << (16 + 8)) | // depends: no
         (0b10u32 << (16 + 6)) | // depended: no
@@ -1743,7 +1756,7 @@ const SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT: u32 = 0x8_00;
 fn analyze_buffers(
     cfg: &super::FragmentHeaderConfiguration,
     idx: usize,
-    timing_info: &super::FragmentTimingInfo,
+    stream: &super::FragmentHeaderStream,
     timescale: u32,
 ) -> Result<
     (
@@ -1802,7 +1815,7 @@ fn analyze_buffers(
             tr_flags |= SAMPLE_DURATION_PRESENT;
         }
 
-        let f = sample_flags_from_buffer(timing_info, buffer);
+        let f = sample_flags_from_buffer(stream, buffer);
         if first_buffer_flags.is_none() {
             first_buffer_flags = Some(f);
         } else {
@@ -1818,7 +1831,7 @@ fn analyze_buffers(
         }
 
         if let Some(composition_time_offset) = *composition_time_offset {
-            assert!(timing_info.delta_frames.requires_dts());
+            assert!(stream.delta_frames.requires_dts());
             if composition_time_offset != 0 {
                 tr_flags |= SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT;
             }
@@ -1869,10 +1882,9 @@ fn write_traf(
     cfg: &super::FragmentHeaderConfiguration,
     data_offset_offsets: &mut Vec<usize>,
     idx: usize,
-    caps: &gst::CapsRef,
-    timing_info: &super::FragmentTimingInfo,
+    stream: &super::FragmentHeaderStream,
 ) -> Result<(), Error> {
-    let timescale = caps_to_timescale(caps);
+    let timescale = fragment_header_stream_to_timescale(stream);
 
     // Analyze all buffers to know what values can be put into the tfhd for all samples and what
     // has to be stored for every single sample
@@ -1883,7 +1895,7 @@ fn write_traf(
         default_duration,
         default_flags,
         negative_composition_time_offsets,
-    ) = analyze_buffers(cfg, idx, timing_info, timescale)?;
+    ) = analyze_buffers(cfg, idx, stream, timescale)?;
 
     assert!((tf_flags & DEFAULT_SAMPLE_SIZE_PRESENT == 0) ^ default_size.is_some());
     assert!((tf_flags & DEFAULT_SAMPLE_DURATION_PRESENT == 0) ^ default_duration.is_some());
@@ -1893,7 +1905,7 @@ fn write_traf(
         write_tfhd(v, cfg, idx, default_size, default_duration, default_flags)
     })?;
     write_full_box(v, b"tfdt", FULL_BOX_VERSION_1, FULL_BOX_FLAGS_NONE, |v| {
-        write_tfdt(v, cfg, idx, timing_info, timescale)
+        write_tfdt(v, cfg, idx, stream, timescale)
     })?;
 
     let mut current_data_offset = 0;
@@ -1923,7 +1935,7 @@ fn write_traf(
                     current_data_offset,
                     tr_flags,
                     timescale,
-                    timing_info,
+                    stream,
                     run,
                 )
             },
@@ -1973,11 +1985,12 @@ fn write_tfdt(
     v: &mut Vec<u8>,
     _cfg: &super::FragmentHeaderConfiguration,
     _idx: usize,
-    timing_info: &super::FragmentTimingInfo,
+    stream: &super::FragmentHeaderStream,
     timescale: u32,
 ) -> Result<(), Error> {
-    let base_time = timing_info
+    let base_time = stream
         .start_time
+        .unwrap()
         .mul_div_floor(timescale as u64, gst::ClockTime::SECOND.nseconds())
         .context("base time overflow")?;
 
@@ -1993,7 +2006,7 @@ fn write_trun(
     current_data_offset: u32,
     tr_flags: u32,
     timescale: u32,
-    timing_info: &super::FragmentTimingInfo,
+    stream: &super::FragmentHeaderStream,
     buffers: &[Buffer],
 ) -> Result<usize, Error> {
     // Sample count
@@ -2004,7 +2017,7 @@ fn write_trun(
     v.extend(current_data_offset.to_be_bytes());
 
     if (tr_flags & FIRST_SAMPLE_FLAGS_PRESENT) != 0 {
-        v.extend(sample_flags_from_buffer(timing_info, &buffers[0].buffer).to_be_bytes());
+        v.extend(sample_flags_from_buffer(stream, &buffers[0].buffer).to_be_bytes());
     }
 
     for Buffer {
@@ -2036,7 +2049,7 @@ fn write_trun(
             assert!((tr_flags & FIRST_SAMPLE_FLAGS_PRESENT) == 0);
 
             // Sample flags
-            v.extend(sample_flags_from_buffer(timing_info, buffer).to_be_bytes());
+            v.extend(sample_flags_from_buffer(stream, buffer).to_be_bytes());
         }
 
         if (tr_flags & SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT) != 0 {
