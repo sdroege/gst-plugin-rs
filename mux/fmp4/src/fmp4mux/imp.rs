@@ -76,6 +76,7 @@ struct Settings {
     write_mehd: bool,
     interleave_bytes: Option<u64>,
     interleave_time: Option<gst::ClockTime>,
+    movie_timescale: u32,
 }
 
 impl Default for Settings {
@@ -87,6 +88,7 @@ impl Default for Settings {
             write_mehd: DEFAULT_WRITE_MEHD,
             interleave_bytes: DEFAULT_INTERLEAVE_BYTES,
             interleave_time: DEFAULT_INTERLEAVE_TIME,
+            movie_timescale: 0,
         }
     }
 }
@@ -122,7 +124,7 @@ struct Gop {
 }
 
 struct Stream {
-    sinkpad: gst_base::AggregatorPad,
+    sinkpad: super::FMP4MuxPad,
 
     caps: gst::Caps,
     delta_frames: DeltaFrames,
@@ -617,11 +619,7 @@ impl FMP4Mux {
     ) -> Result<
         (
             // Drained streams
-            Vec<(
-                gst::Caps,
-                Option<super::FragmentTimingInfo>,
-                VecDeque<Buffer>,
-            )>,
+            Vec<(super::FragmentHeaderStream, VecDeque<Buffer>)>,
             // Minimum earliest PTS position of all streams
             Option<gst::ClockTime>,
             // Minimum earliest PTS of all streams
@@ -658,6 +656,8 @@ impl FMP4Mux {
         );
 
         for (idx, stream) in state.streams.iter_mut().enumerate() {
+            let stream_settings = stream.sinkpad.imp().settings.lock().unwrap().clone();
+
             assert!(
                 timeout
                     || at_eos
@@ -742,7 +742,16 @@ impl FMP4Mux {
                     "Draining no buffers",
                 );
 
-                drained_streams.push((stream.caps.clone(), None, VecDeque::new()));
+                drained_streams.push((
+                    super::FragmentHeaderStream {
+                        caps: stream.caps.clone(),
+                        start_time: None,
+                        delta_frames: stream.delta_frames,
+                        trak_timescale: stream_settings.trak_timescale,
+                    },
+                    VecDeque::new(),
+                ));
+
                 continue;
             }
 
@@ -876,11 +885,12 @@ impl FMP4Mux {
             }
 
             drained_streams.push((
-                stream.caps.clone(),
-                Some(super::FragmentTimingInfo {
-                    start_time,
+                super::FragmentHeaderStream {
+                    caps: stream.caps.clone(),
+                    start_time: Some(start_time),
                     delta_frames: stream.delta_frames,
-                }),
+                    trak_timescale: stream_settings.trak_timescale,
+                },
                 buffers,
             ));
         }
@@ -897,11 +907,7 @@ impl FMP4Mux {
     fn preprocess_drained_streams_onvif(
         &self,
         state: &mut State,
-        drained_streams: &mut [(
-            gst::Caps,
-            Option<super::FragmentTimingInfo>,
-            VecDeque<Buffer>,
-        )],
+        drained_streams: &mut [(super::FragmentHeaderStream, VecDeque<Buffer>)],
     ) -> Result<Option<gst::ClockTime>, gst::FlowError> {
         let aggregator = self.obj();
         if aggregator.class().as_ref().variant != super::Variant::ONVIF {
@@ -925,7 +931,7 @@ impl FMP4Mux {
         // If this is the first fragment then allow the first buffers to not have a reference
         // timestamp meta and backdate them
         if state.stream_header.is_none() {
-            for (idx, (_, _, drain_buffers)) in drained_streams.iter_mut().enumerate() {
+            for (idx, (_, drain_buffers)) in drained_streams.iter_mut().enumerate() {
                 let (buffer_idx, utc_time, buffer) =
                     match drain_buffers.iter().enumerate().find_map(|(idx, buffer)| {
                         get_utc_time_from_buffer(&buffer.buffer)
@@ -979,7 +985,7 @@ impl FMP4Mux {
         if state.start_utc_time.is_none() {
             let mut start_utc_time = None;
 
-            for (idx, (_, _, drain_buffers)) in drained_streams.iter().enumerate() {
+            for (idx, (_, drain_buffers)) in drained_streams.iter().enumerate() {
                 for buffer in drain_buffers {
                     let utc_time = match get_utc_time_from_buffer(&buffer.buffer) {
                         None => {
@@ -1010,7 +1016,7 @@ impl FMP4Mux {
 
         // Update all buffer timestamps based on the UTC time and offset to the start UTC time
         let start_utc_time = state.start_utc_time.unwrap();
-        for (idx, (_, timing_info, drain_buffers)) in drained_streams.iter_mut().enumerate() {
+        for (idx, (stream, drain_buffers)) in drained_streams.iter_mut().enumerate() {
             let mut start_time = None;
 
             for buffer in drain_buffers.iter_mut() {
@@ -1128,9 +1134,9 @@ impl FMP4Mux {
 
             if let Some(start_time) = start_time {
                 gst::debug!(CAT, obj: state.streams[idx].sinkpad, "Fragment starting at UTC time {}", start_time);
-                timing_info.as_mut().unwrap().start_time = start_time;
+                *stream.start_time.as_mut().unwrap() = start_time;
             } else {
-                assert!(timing_info.is_none());
+                assert!(stream.start_time.is_none());
             }
         }
 
@@ -1141,35 +1147,28 @@ impl FMP4Mux {
     fn interleave_buffers(
         &self,
         settings: &Settings,
-        mut drained_streams: Vec<(
-            gst::Caps,
-            Option<super::FragmentTimingInfo>,
-            VecDeque<Buffer>,
-        )>,
-    ) -> Result<
-        (
-            Vec<Buffer>,
-            Vec<(gst::Caps, Option<super::FragmentTimingInfo>)>,
-        ),
-        gst::FlowError,
-    > {
+        mut drained_streams: Vec<(super::FragmentHeaderStream, VecDeque<Buffer>)>,
+    ) -> Result<(Vec<Buffer>, Vec<super::FragmentHeaderStream>), gst::FlowError> {
         let mut interleaved_buffers =
-            Vec::with_capacity(drained_streams.iter().map(|(_, _, bufs)| bufs.len()).sum());
-        while let Some((_idx, (_, _, bufs))) = drained_streams.iter_mut().enumerate().min_by(
-            |(a_idx, (_, _, a)), (b_idx, (_, _, b))| {
-                let (a, b) = match (a.front(), b.front()) {
-                    (None, None) => return std::cmp::Ordering::Equal,
-                    (None, _) => return std::cmp::Ordering::Greater,
-                    (_, None) => return std::cmp::Ordering::Less,
-                    (Some(a), Some(b)) => (a, b),
-                };
+            Vec::with_capacity(drained_streams.iter().map(|(_, bufs)| bufs.len()).sum());
+        while let Some((_idx, (_, bufs))) =
+            drained_streams
+                .iter_mut()
+                .enumerate()
+                .min_by(|(a_idx, (_, a)), (b_idx, (_, b))| {
+                    let (a, b) = match (a.front(), b.front()) {
+                        (None, None) => return std::cmp::Ordering::Equal,
+                        (None, _) => return std::cmp::Ordering::Greater,
+                        (_, None) => return std::cmp::Ordering::Less,
+                        (Some(a), Some(b)) => (a, b),
+                    };
 
-                match a.timestamp.cmp(&b.timestamp) {
-                    std::cmp::Ordering::Equal => a_idx.cmp(b_idx),
-                    cmp => cmp,
-                }
-            },
-        ) {
+                    match a.timestamp.cmp(&b.timestamp) {
+                        std::cmp::Ordering::Equal => a_idx.cmp(b_idx),
+                        cmp => cmp,
+                    }
+                })
+        {
             let start_time = match bufs.front() {
                 None => {
                     // No more buffers now
@@ -1201,11 +1200,11 @@ impl FMP4Mux {
         }
 
         // All buffers should be consumed now
-        assert!(drained_streams.iter().all(|(_, _, bufs)| bufs.is_empty()));
+        assert!(drained_streams.iter().all(|(_, bufs)| bufs.is_empty()));
 
         let streams = drained_streams
             .into_iter()
-            .map(|(caps, timing_info, _)| (caps, timing_info))
+            .map(|(stream, _)| stream)
             .collect::<Vec<_>>();
 
         Ok((interleaved_buffers, streams))
@@ -1217,7 +1216,7 @@ impl FMP4Mux {
         settings: &Settings,
         timeout: bool,
         at_eos: bool,
-        upstream_events: &mut Vec<(gst_base::AggregatorPad, gst::Event)>,
+        upstream_events: &mut Vec<(super::FMP4MuxPad, gst::Event)>,
     ) -> Result<(Option<gst::Caps>, Option<gst::BufferList>), gst::FlowError> {
         if at_eos {
             gst::info!(CAT, imp: self, "Draining at EOS");
@@ -1241,7 +1240,7 @@ impl FMP4Mux {
         ) = self.drain_buffers(state, settings, timeout, at_eos)?;
 
         // Remove all GAP buffers before processing them further
-        for (_, timing_info, buffers) in &mut drained_streams {
+        for (stream, buffers) in &mut drained_streams {
             buffers.retain(|buf| {
                 !buf.buffer.flags().contains(gst::BufferFlags::GAP)
                     || !buf.buffer.flags().contains(gst::BufferFlags::DROPPABLE)
@@ -1249,7 +1248,7 @@ impl FMP4Mux {
             });
 
             if buffers.is_empty() {
-                *timing_info = None;
+                stream.start_time = None;
             }
         }
 
@@ -1371,9 +1370,13 @@ impl FMP4Mux {
 
             // Write mfra only for the main stream, and if there are no buffers for the main stream
             // in this segment then don't write anything.
-            if let Some((_caps, Some(ref timing_info))) = streams.get(0) {
+            if let Some(super::FragmentHeaderStream {
+                start_time: Some(start_time),
+                ..
+            }) = streams.get(0)
+            {
                 state.fragment_offsets.push(super::FragmentOffset {
-                    time: timing_info.start_time,
+                    time: *start_time,
                     offset: moof_offset,
                 });
             }
@@ -1432,7 +1435,7 @@ impl FMP4Mux {
 
         if settings.write_mfra && at_eos {
             gst::debug!(CAT, imp: self, "Writing mfra box");
-            match boxes::create_mfra(&streams[0].0, &state.fragment_offsets) {
+            match boxes::create_mfra(&streams[0].caps, &state.fragment_offsets) {
                 Ok(mut mfra) => {
                     {
                         let mfra = mfra.get_mut().unwrap();
@@ -1462,7 +1465,7 @@ impl FMP4Mux {
             .obj()
             .sink_pads()
             .into_iter()
-            .map(|pad| pad.downcast::<gst_base::AggregatorPad>().unwrap())
+            .map(|pad| pad.downcast::<super::FMP4MuxPad>().unwrap())
         {
             let caps = match pad.current_caps() {
                 Some(caps) => caps,
@@ -1599,13 +1602,18 @@ impl FMP4Mux {
         let streams = state
             .streams
             .iter()
-            .map(|s| s.caps.clone())
+            .map(|s| super::HeaderStream {
+                trak_timescale: s.sinkpad.imp().settings.lock().unwrap().trak_timescale,
+                delta_frames: s.delta_frames,
+                caps: s.caps.clone(),
+            })
             .collect::<Vec<_>>();
 
         let mut buffer = boxes::create_fmp4_header(super::HeaderConfiguration {
             variant,
             update: at_eos,
-            streams: streams.as_slice(),
+            movie_timescale: settings.movie_timescale,
+            streams,
             write_mehd: settings.write_mehd,
             duration: if at_eos { duration } else { None },
             start_utc_time: state
@@ -1696,6 +1704,11 @@ impl ObjectImpl for FMP4Mux {
                     .default_value(DEFAULT_INTERLEAVE_TIME.map(gst::ClockTime::nseconds).unwrap_or(u64::MAX))
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecUInt::builder("movie-timescale")
+                    .nick("Movie Timescale")
+                    .blurb("Timescale to use for the movie (units per second, 0 is automatic)")
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -1745,6 +1758,11 @@ impl ObjectImpl for FMP4Mux {
                 };
             }
 
+            "movie-timescale" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.movie_timescale = value.get().expect("type checked upstream");
+            }
+
             _ => unimplemented!(),
         }
     }
@@ -1779,6 +1797,11 @@ impl ObjectImpl for FMP4Mux {
             "interleave-time" => {
                 let settings = self.settings.lock().unwrap();
                 settings.interleave_time.to_value()
+            }
+
+            "movie-timescale" => {
+                let settings = self.settings.lock().unwrap();
+                settings.movie_timescale.to_value()
             }
 
             _ => unimplemented!(),
@@ -1954,8 +1977,6 @@ impl AggregatorImpl for FMP4Mux {
     }
 
     fn flush(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
-        self.parent_flush()?;
-
         let mut state = self.state.lock().unwrap();
 
         for stream in &mut state.streams {
@@ -1969,7 +1990,9 @@ impl AggregatorImpl for FMP4Mux {
         state.current_offset = 0;
         state.fragment_offsets.clear();
 
-        Ok(gst::FlowSuccess::Ok)
+        drop(state);
+
+        self.parent_flush()
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
@@ -2346,7 +2369,7 @@ impl ElementImpl for ISOFMP4Mux {
             )
             .unwrap();
 
-            let sink_pad_template = gst::PadTemplate::new(
+            let sink_pad_template = gst::PadTemplate::with_gtype(
                 "sink_%u",
                 gst::PadDirection::Sink,
                 gst::PadPresence::Request,
@@ -2385,6 +2408,7 @@ impl ElementImpl for ISOFMP4Mux {
                 ]
                 .into_iter()
                 .collect::<gst::Caps>(),
+                super::FMP4MuxPad::static_type(),
             )
             .unwrap();
 
@@ -2441,7 +2465,7 @@ impl ElementImpl for CMAFMux {
             )
             .unwrap();
 
-            let sink_pad_template = gst::PadTemplate::new(
+            let sink_pad_template = gst::PadTemplate::with_gtype(
                 "sink",
                 gst::PadDirection::Sink,
                 gst::PadPresence::Always,
@@ -2467,6 +2491,7 @@ impl ElementImpl for CMAFMux {
                 ]
                 .into_iter()
                 .collect::<gst::Caps>(),
+                super::FMP4MuxPad::static_type(),
             )
             .unwrap();
 
@@ -2523,7 +2548,7 @@ impl ElementImpl for DASHMP4Mux {
             )
             .unwrap();
 
-            let sink_pad_template = gst::PadTemplate::new(
+            let sink_pad_template = gst::PadTemplate::with_gtype(
                 "sink",
                 gst::PadDirection::Sink,
                 gst::PadPresence::Always,
@@ -2562,6 +2587,7 @@ impl ElementImpl for DASHMP4Mux {
                 ]
                 .into_iter()
                 .collect::<gst::Caps>(),
+                super::FMP4MuxPad::static_type(),
             )
             .unwrap();
 
@@ -2618,7 +2644,7 @@ impl ElementImpl for ONVIFFMP4Mux {
             )
             .unwrap();
 
-            let sink_pad_template = gst::PadTemplate::new(
+            let sink_pad_template = gst::PadTemplate::with_gtype(
                 "sink_%u",
                 gst::PadDirection::Sink,
                 gst::PadPresence::Request,
@@ -2665,6 +2691,7 @@ impl ElementImpl for ONVIFFMP4Mux {
                 ]
                 .into_iter()
                 .collect::<gst::Caps>(),
+                super::FMP4MuxPad::static_type(),
             )
             .unwrap();
 
@@ -2679,4 +2706,83 @@ impl AggregatorImpl for ONVIFFMP4Mux {}
 
 impl FMP4MuxImpl for ONVIFFMP4Mux {
     const VARIANT: super::Variant = super::Variant::ONVIF;
+}
+
+#[derive(Default, Clone)]
+struct PadSettings {
+    trak_timescale: u32,
+}
+
+#[derive(Default)]
+pub(crate) struct FMP4MuxPad {
+    settings: Mutex<PadSettings>,
+}
+
+#[glib::object_subclass]
+impl ObjectSubclass for FMP4MuxPad {
+    const NAME: &'static str = "GstFMP4MuxPad";
+    type Type = super::FMP4MuxPad;
+    type ParentType = gst_base::AggregatorPad;
+}
+
+impl ObjectImpl for FMP4MuxPad {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![glib::ParamSpecUInt::builder("trak-timescale")
+                .nick("Track Timescale")
+                .blurb("Timescale to use for the track (units per second, 0 is automatic)")
+                .mutable_ready()
+                .build()]
+        });
+
+        &PROPERTIES
+    }
+
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        match pspec.name() {
+            "trak-timescale" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.trak_timescale = value.get().expect("type checked upstream");
+            }
+
+            _ => unimplemented!(),
+        }
+    }
+
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.name() {
+            "trak-timescale" => {
+                let settings = self.settings.lock().unwrap();
+                settings.trak_timescale.to_value()
+            }
+
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl GstObjectImpl for FMP4MuxPad {}
+
+impl PadImpl for FMP4MuxPad {}
+
+impl AggregatorPadImpl for FMP4MuxPad {
+    fn flush(&self, aggregator: &gst_base::Aggregator) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let mux = aggregator.downcast_ref::<super::FMP4Mux>().unwrap();
+        let mut mux_state = mux.imp().state.lock().unwrap();
+
+        for stream in &mut mux_state.streams {
+            if stream.sinkpad == *self.obj() {
+                stream.queued_gops.clear();
+                stream.dts_offset = None;
+                stream.current_position = gst::ClockTime::ZERO;
+                stream.current_utc_time = gst::ClockTime::ZERO;
+                stream.fragment_filled = false;
+                break;
+            }
+        }
+
+        drop(mux_state);
+
+        self.parent_flush(aggregator)
+    }
 }

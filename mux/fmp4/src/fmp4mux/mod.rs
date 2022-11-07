@@ -13,6 +13,10 @@ mod boxes;
 mod imp;
 
 glib::wrapper! {
+    pub(crate) struct FMP4MuxPad(ObjectSubclass<imp::FMP4MuxPad>) @extends gst_base::AggregatorPad, gst::Pad, gst::Object;
+}
+
+glib::wrapper! {
     pub(crate) struct FMP4Mux(ObjectSubclass<imp::FMP4Mux>) @extends gst_base::Aggregator, gst::Element, gst::Object;
 }
 
@@ -33,8 +37,12 @@ glib::wrapper! {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    FMP4Mux::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
-    HeaderUpdateMode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    #[cfg(feature = "doc")]
+    {
+        FMP4Mux::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        FMP4MuxPad::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        HeaderUpdateMode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    }
     gst::Element::register(
         Some(plugin),
         "isofmp4mux",
@@ -64,33 +72,63 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 #[derive(Debug)]
-pub(crate) struct HeaderConfiguration<'a> {
+pub(crate) struct HeaderConfiguration {
     variant: Variant,
     update: bool,
+
+    /// Pre-defined movie timescale if not 0.
+    movie_timescale: u32,
+
     /// First caps must be the video/reference stream. Must be in the order the tracks are going to
     /// be used later for the fragments too.
-    streams: &'a [gst::Caps],
+    streams: Vec<HeaderStream>,
+
     write_mehd: bool,
     duration: Option<gst::ClockTime>,
+
     /// Start UTC time in ONVIF mode.
     /// Since Jan 1 1601 in 100ns units.
     start_utc_time: Option<u64>,
 }
 
 #[derive(Debug)]
+pub(crate) struct HeaderStream {
+    /// Caps of this stream
+    caps: gst::Caps,
+
+    /// Set if this is an intra-only stream
+    delta_frames: DeltaFrames,
+
+    /// Pre-defined trak timescale if not 0.
+    trak_timescale: u32,
+}
+
+#[derive(Debug)]
 pub(crate) struct FragmentHeaderConfiguration<'a> {
     variant: Variant,
+
+    /// Sequence number for this fragment.
     sequence_number: u32,
-    streams: &'a [(gst::Caps, Option<FragmentTimingInfo>)],
+
+    streams: &'a [FragmentHeaderStream],
     buffers: &'a [Buffer],
 }
 
 #[derive(Debug)]
-pub(crate) struct FragmentTimingInfo {
-    /// Start time of this fragment
-    start_time: gst::ClockTime,
+pub(crate) struct FragmentHeaderStream {
+    /// Caps of this stream
+    caps: gst::Caps,
+
     /// Set if this is an intra-only stream
     delta_frames: DeltaFrames,
+
+    /// Pre-defined trak timescale if not 0.
+    trak_timescale: u32,
+
+    /// Start time of this fragment
+    ///
+    /// `None` if this stream has no buffers in this fragment.
+    start_time: Option<gst::ClockTime>,
 }
 
 #[derive(Debug, Copy, Clone)]
