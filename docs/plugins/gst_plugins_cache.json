@@ -2497,6 +2497,129 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "mp4": {
+        "description": "GStreamer Rust MP4 Plugin",
+        "elements": {
+            "isomp4mux": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "ISO MP4 muxer",
+                "hierarchy": [
+                    "GstISOMP4Mux",
+                    "GstRsMP4Mux",
+                    "GstAggregator",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Muxer",
+                "pad-templates": {
+                    "sink_%%u": {
+                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-vp9:\n        profile: { (string)0, (string)1, (string)2, (string)3 }\n  chroma-format: { (string)4:2:0, (string)4:2:2, (string)4:4:4 }\n bit-depth-luma: { (uint)8, (uint)10, (uint)12 }\nbit-depth-chroma: { (uint)8, (uint)10, (uint)12 }\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\naudio/mpeg:\n    mpegversion: 4\n  stream-format: raw\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\naudio/x-opus:\nchannel-mapping-family: [ 0, 255 ]\n       channels: [ 1, 8 ]\n           rate: [ 1, 2147483647 ]\n",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "GstRsMP4MuxPad"
+                    },
+                    "src": {
+                        "caps": "video/quicktime:\n        variant: iso\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            }
+        },
+        "filename": "gstmp4",
+        "license": "MPL",
+        "other-types": {
+            "GstRsMP4Mux": {
+                "hierarchy": [
+                    "GstRsMP4Mux",
+                    "GstAggregator",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "interleave-bytes": {
+                        "blurb": "Interleave between streams in bytes",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "interleave-time": {
+                        "blurb": "Interleave between streams in nanoseconds",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "500000000",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "movie-timescale": {
+                        "blurb": "Timescale to use for the movie (units per second, 0 is automatic)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                }
+            },
+            "GstRsMP4MuxPad": {
+                "hierarchy": [
+                    "GstRsMP4MuxPad",
+                    "GstAggregatorPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "trak-timescale": {
+                        "blurb": "Timescale to use for the track (units per second, 0 is automatic)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                }
+            }
+        },
+        "package": "gst-plugin-mp4",
+        "source": "gst-plugin-mp4",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "ndi": {
         "description": "GStreamer NewTek NDI Plugin",
         "elements": {

@@ -16,6 +16,7 @@ members = [
 
     "mux/flavors",
     "mux/fmp4",
+    "mux/mp4",
 
     "net/aws",
     "net/hlssink3",
@@ -63,6 +64,7 @@ default-members = [
     "generic/threadshare",
 
     "mux/fmp4",
+    "mux/mp4",
 
     "net/aws",
     "net/hlssink3",
