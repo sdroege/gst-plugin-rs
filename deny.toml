@@ -147,6 +147,13 @@ version = "0.2"
 name = "base64"
 version = "0.20.0-alpha.1"
 
+# async-io / async-channel depend on an old version of concurrent-queue
+# https://github.com/smol-rs/async-channel/pull/50
+# https://github.com/smol-rs/async-io/pull/99
+[[bans.skip]]
+name = "concurrent-queue"
+version = "1"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
