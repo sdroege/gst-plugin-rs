@@ -96,9 +96,7 @@ fn test_basic() {
 
     let audio_streams = info.audio_streams();
     assert_eq!(audio_streams.len(), 1);
-    let audio_stream = audio_streams[0]
-        .downcast_ref::<gst_pbutils::DiscovererAudioInfo>()
-        .unwrap();
+    let audio_stream = &audio_streams[0];
     assert_eq!(audio_stream.channels(), 1);
     assert_eq!(audio_stream.sample_rate(), 44_100);
     let caps = audio_stream.caps().unwrap();
@@ -115,9 +113,7 @@ fn test_basic() {
 
     let video_streams = info.video_streams();
     assert_eq!(video_streams.len(), 1);
-    let video_stream = video_streams[0]
-        .downcast_ref::<gst_pbutils::DiscovererVideoInfo>()
-        .unwrap();
+    let video_stream = &video_streams[0];
     assert_eq!(video_stream.width(), 320);
     assert_eq!(video_stream.height(), 240);
     assert_eq!(video_stream.framerate(), gst::Fraction::new(30, 1));
