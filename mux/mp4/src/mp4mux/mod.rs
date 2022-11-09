@@ -24,6 +24,10 @@ glib::wrapper! {
     pub(crate) struct ISOMP4Mux(ObjectSubclass<imp::ISOMP4Mux>) @extends MP4Mux, gst_base::Aggregator, gst::Element, gst::Object;
 }
 
+glib::wrapper! {
+    pub(crate) struct ONVIFMP4Mux(ObjectSubclass<imp::ONVIFMP4Mux>) @extends MP4Mux, gst_base::Aggregator, gst::Element, gst::Object;
+}
+
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "doc")]
     {
@@ -35,6 +39,12 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         "isomp4mux",
         gst::Rank::Marginal,
         ISOMP4Mux::static_type(),
+    )?;
+    gst::Element::register(
+        Some(plugin),
+        "onvifmp4mux",
+        gst::Rank::Marginal,
+        ONVIFMP4Mux::static_type(),
     )?;
 
     Ok(())
@@ -131,4 +141,5 @@ pub(crate) struct Header {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Variant {
     ISO,
+    ONVIF,
 }

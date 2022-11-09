@@ -60,7 +60,7 @@ pub(super) fn create_ftyp(variant: super::Variant) -> Result<gst::Buffer, Error>
     let mut v = vec![];
 
     let (brand, compatible_brands) = match variant {
-        super::Variant::ISO => (b"isom", vec![b"mp41", b"mp42"]),
+        super::Variant::ISO | super::Variant::ONVIF => (b"iso4", vec![b"mp41", b"mp42", b"isom"]),
     };
 
     write_box(&mut v, b"ftyp", |v| {
@@ -102,13 +102,69 @@ pub(super) fn create_mdat_header(size: Option<u64>) -> Result<gst::Buffer, Error
     Ok(gst::Buffer::from_mut_slice(v))
 }
 
+/// Offset between UNIX epoch and Jan 1 1601 epoch in seconds.
+/// 1601 = UNIX + UNIX_1601_OFFSET.
+const UNIX_1601_OFFSET: u64 = 11_644_473_600;
+
 /// Creates `moov` box
 pub(super) fn create_moov(header: super::Header) -> Result<gst::Buffer, Error> {
     let mut v = vec![];
 
     write_box(&mut v, b"moov", |v| write_moov(v, &header))?;
 
+    if header.variant == super::Variant::ONVIF {
+        write_full_box(
+            &mut v,
+            b"meta",
+            FULL_BOX_VERSION_0,
+            FULL_BOX_FLAGS_NONE,
+            |v| {
+                write_full_box(v, b"hdlr", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
+                    // Handler type
+                    v.extend(b"null");
+
+                    // Reserved
+                    v.extend([0u8; 3 * 4]);
+
+                    // Name
+                    v.extend(b"MetadataHandler");
+
+                    Ok(())
+                })?;
+
+                write_box(v, b"cstb", |v| {
+                    // entry count
+                    v.extend(1u32.to_be_bytes());
+
+                    // track id
+                    v.extend(0u32.to_be_bytes());
+
+                    // start UTC time in 100ns units since Jan 1 1601
+                    // This is the UTC time of the earliest stream, which has to be converted to
+                    // the correct epoch and scale.
+                    let start_utc_time = header
+                        .streams
+                        .iter()
+                        .map(|s| s.earliest_pts)
+                        .min()
+                        .unwrap()
+                        .nseconds()
+                        / 100;
+                    let start_utc_time = start_utc_time + UNIX_1601_OFFSET * 10_000_000;
+                    v.extend(start_utc_time.to_be_bytes());
+
+                    Ok(())
+                })
+            },
+        )?;
+    }
+
     Ok(gst::Buffer::from_mut_slice(v))
+}
+
+struct TrackReference {
+    reference_type: [u8; 4],
+    track_ids: Vec<u32>,
 }
 
 fn write_moov(v: &mut Vec<u8>, header: &super::Header) -> Result<(), Error> {
@@ -124,7 +180,27 @@ fn write_moov(v: &mut Vec<u8>, header: &super::Header) -> Result<(), Error> {
     })?;
     for (idx, stream) in header.streams.iter().enumerate() {
         write_box(v, b"trak", |v| {
-            write_trak(v, header, idx, stream, creation_time)
+            let mut references = Vec::new();
+
+            // Reference the video track for ONVIF metadata tracks
+            if header.variant == super::Variant::ONVIF
+                && stream.caps.structure(0).unwrap().name() == "application/x-onvif-metadata"
+            {
+                // Find the first video track
+                for (idx, other_stream) in header.streams.iter().enumerate() {
+                    let s = other_stream.caps.structure(0).unwrap();
+
+                    if matches!(s.name(), "video/x-h264" | "video/x-h265" | "image/jpeg") {
+                        references.push(TrackReference {
+                            reference_type: *b"cdsc",
+                            track_ids: vec![idx as u32 + 1],
+                        });
+                        break;
+                    }
+                }
+            }
+
+            write_trak(v, header, idx, stream, creation_time, &references)
         })?;
     }
 
@@ -240,6 +316,7 @@ fn write_trak(
     idx: usize,
     stream: &super::Stream,
     creation_time: u64,
+    references: &[TrackReference],
 ) -> Result<(), Error> {
     write_full_box(
         v,
@@ -250,6 +327,9 @@ fn write_trak(
     )?;
 
     write_box(v, b"mdia", |v| write_mdia(v, header, stream, creation_time))?;
+    if !references.is_empty() {
+        write_box(v, b"tref", |v| write_tref(v, header, references))?;
+    }
     write_box(v, b"edts", |v| write_edts(v, header, stream))?;
 
     Ok(())
@@ -430,6 +510,7 @@ fn write_hdlr(
         "audio/mpeg" | "audio/x-opus" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
             (b"soun", b"SoundHandler\0".as_slice())
         }
+        "application/x-onvif-metadata" => (b"meta", b"MetadataHandler\0".as_slice()),
         _ => unreachable!(),
     };
 
@@ -460,6 +541,11 @@ fn write_minf(
         "audio/mpeg" | "audio/x-opus" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
             write_full_box(v, b"smhd", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
                 write_smhd(v, header)
+            })?
+        }
+        "application/x-onvif-metadata" => {
+            write_full_box(v, b"nmhd", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |_v| {
+                Ok(())
             })?
         }
         _ => unreachable!(),
@@ -613,6 +699,7 @@ fn write_stsd(
         "audio/mpeg" | "audio/x-opus" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
             write_audio_sample_entry(v, header, stream)?
         }
+        "application/x-onvif-metadata" => write_xml_meta_data_sample_entry(v, header, stream)?,
         _ => unreachable!(),
     }
 
@@ -1201,6 +1288,34 @@ fn write_dops(v: &mut Vec<u8>, caps: &gst::Caps) -> Result<(), Error> {
     })
 }
 
+fn write_xml_meta_data_sample_entry(
+    v: &mut Vec<u8>,
+    _header: &super::Header,
+    stream: &super::Stream,
+) -> Result<(), Error> {
+    let s = stream.caps.structure(0).unwrap();
+    let namespace = match s.name() {
+        "application/x-onvif-metadata" => b"http://www.onvif.org/ver10/schema",
+        _ => unreachable!(),
+    };
+
+    write_sample_entry_box(v, b"metx", move |v| {
+        // content_encoding, empty string
+        v.push(0);
+
+        // namespace
+        v.extend_from_slice(namespace);
+        v.push(0);
+
+        // schema_location, empty string list
+        v.push(0);
+
+        Ok(())
+    })?;
+
+    Ok(())
+}
+
 fn write_stts(
     v: &mut Vec<u8>,
     _header: &super::Header,
@@ -1523,6 +1638,24 @@ fn write_stco(
         } else {
             v.extend(u32::try_from(chunk.offset).unwrap().to_be_bytes());
         }
+    }
+
+    Ok(())
+}
+
+fn write_tref(
+    v: &mut Vec<u8>,
+    _header: &super::Header,
+    references: &[TrackReference],
+) -> Result<(), Error> {
+    for reference in references {
+        write_box(v, reference.reference_type, |v| {
+            for track_id in &reference.track_ids {
+                v.extend(track_id.to_be_bytes());
+            }
+
+            Ok(())
+        })?;
     }
 
     Ok(())
