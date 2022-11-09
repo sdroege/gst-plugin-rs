@@ -24,7 +24,7 @@ path = "src/lib.rs"
 
 [dev-dependencies]
 tempfile = "3"
-url = "1"
+url = "2"
 
 [build-dependencies]
 gst-plugin-version-helper = { path="../../version-helper" }
