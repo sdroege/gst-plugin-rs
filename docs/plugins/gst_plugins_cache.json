@@ -5840,16 +5840,15 @@
                         "type": "gchararray",
                         "writable": true
                     },
-                    "turn-server": {
-                        "blurb": "The TURN server of the form turn(s)://username:password@host:port.",
+                    "turn-servers": {
+                        "blurb": "The TURN servers of the form <\"turn(s)://username:password@host:port\", \"turn(s)://username1:password1@host1:port1\">",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
-                        "default": "NULL",
-                        "mutable": "null",
+                        "mutable": "ready",
                         "readable": true,
-                        "type": "gchararray",
+                        "type": "GstValueArray",
                         "writable": true
                     },
                     "video-caps": {
