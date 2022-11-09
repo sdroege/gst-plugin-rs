@@ -2066,7 +2066,7 @@ impl WebRTCSink {
     }
 
     async fn run_discovery_pipeline(
-        _element: &super::WebRTCSink,
+        element: &super::WebRTCSink,
         codec: &Codec,
         caps: &gst::Caps,
     ) -> Result<gst::Structure, Error> {
@@ -2082,6 +2082,12 @@ impl WebRTCSink {
         if codec.is_video() {
             elements.push(make_converter_for_video_caps(caps)?);
         }
+
+        gst::debug!(
+            CAT,
+            obj: element,
+            "Running discovery pipeline for caps {caps} with codec {codec:?}"
+        );
 
         let capsfilter = make_element("capsfilter", None)?;
         elements.push(capsfilter.clone());
@@ -2108,6 +2114,8 @@ impl WebRTCSink {
         pipe.0
             .set_state(gst::State::Playing)
             .with_context(|| format!("Running discovery pipeline for caps {}", caps))?;
+
+        let in_caps = caps;
 
         while let Some(msg) = stream.next().await {
             match msg.view() {
@@ -2136,6 +2144,11 @@ impl WebRTCSink {
                             "a-framerate",
                         ]);
                         s.set("payload", codec.payload);
+                        gst::debug!(
+                            CAT,
+                            obj: element,
+                            "Codec discovery pipeline for caps {in_caps} with codec {codec:?} succeeded: {s}"
+                        );
                         return Ok(s);
                     } else {
                         return Err(anyhow!("Discovered empty caps"));
@@ -2196,6 +2209,9 @@ impl WebRTCSink {
 
     async fn lookup_streams_caps(&self, element: &super::WebRTCSink) -> Result<(), Error> {
         let codecs = self.lookup_codecs();
+
+        gst::debug!(CAT, obj: element, "Looked up codecs {codecs:?}");
+
         let futs: Vec<_> = self
             .state
             .lock()
