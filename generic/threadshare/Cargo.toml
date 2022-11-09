@@ -10,7 +10,7 @@ rust-version = "1.63"
 
 [dependencies]
 async-task = "4.3.0"
-concurrent-queue = "1.2.2"
+concurrent-queue = "2"
 flume = "0.10.13"
 futures = "0.3.21"
 libc = "0.2"
