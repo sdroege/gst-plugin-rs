@@ -2527,6 +2527,34 @@
                     }
                 },
                 "rank": "marginal"
+            },
+            "onvifmp4mux": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "ONVIF MP4 muxer",
+                "hierarchy": [
+                    "GstONVIFMP4Mux",
+                    "GstRsMP4Mux",
+                    "GstAggregator",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Muxer",
+                "pad-templates": {
+                    "sink_%%u": {
+                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nimage/jpeg:\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\naudio/mpeg:\n    mpegversion: 4\n  stream-format: raw\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\naudio/x-alaw:\n       channels: [ 1, 2 ]\n           rate: [ 1, 2147483647 ]\naudio/x-mulaw:\n       channels: [ 1, 2 ]\n           rate: [ 1, 2147483647 ]\naudio/x-adpcm:\n         layout: g726\n       channels: 1\n           rate: 8000\n        bitrate: { (int)16000, (int)24000, (int)32000, (int)40000 }\napplication/x-onvif-metadata:\n         parsed: true\n",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "GstRsMP4MuxPad"
+                    },
+                    "src": {
+                        "caps": "video/quicktime:\n        variant: iso\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
             }
         },
         "filename": "gstmp4",
