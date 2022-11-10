@@ -783,6 +783,14 @@ impl MP4Mux {
             let stream = &mut state.streams[idx];
             let buffer = stream.pending_buffer.take().unwrap();
 
+            if buffer.buffer.flags().contains(gst::BufferFlags::GAP)
+                && buffer.buffer.flags().contains(gst::BufferFlags::DROPPABLE)
+                && buffer.buffer.size() == 0
+            {
+                gst::trace!(CAT, obj: stream.sinkpad, "Skipping gap buffer {buffer:?}");
+                continue;
+            }
+
             gst::trace!(CAT, obj: stream.sinkpad, "Handling buffer {buffer:?} at offset {}", state.current_offset);
 
             let duration = buffer.duration.unwrap();
