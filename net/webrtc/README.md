@@ -21,8 +21,8 @@ useful alternative.
 
 * Application-provided signalling: `webrtcsink` can be instantiated by an application
   with a custom signaller. That signaller must be a GObject, and must implement the
-  `Signallable` interface as defined [here](plugins/src/webrtcsink/mod.rs). The
-  [default signaller](plugins/src/signaller/mod.rs) can be used as an example.
+  `Signallable` interface as defined [here](src/webrtcsink/mod.rs). The
+  [default signaller](src/signaller/mod.rs) can be used as an example.
 
   An [example project] is also available to use as a boilerplate for implementing
   and using a custom signaller.
