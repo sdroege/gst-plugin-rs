@@ -85,10 +85,12 @@ fn cargo_mtime_date(crate_dir: path::PathBuf) -> Option<chrono::DateTime<chrono:
     let metadata = fs::metadata(&cargo_toml).ok()?;
     let mtime = metadata.modified().ok()?;
     let unix_time = mtime.duration_since(SystemTime::UNIX_EPOCH).ok()?;
-    let dt = chrono::Utc.timestamp(unix_time.as_secs().try_into().ok()?, 0);
+    let dt = chrono::Utc
+        .timestamp_opt(unix_time.as_secs().try_into().ok()?, 0)
+        .latest()?;
 
     // FIXME: Work around https://github.com/rust-lang/cargo/issues/10285
-    if dt.date().year() < 2015 {
+    if dt.date_naive().year() < 2015 {
         return None;
     }
 
