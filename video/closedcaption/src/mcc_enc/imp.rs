@@ -99,20 +99,23 @@ impl MccEnc {
         );
 
         if let Some(ref creation_date) = settings.creation_date {
-            let creation_date = Utc
-                .ymd(
-                    creation_date.year() as i32,
-                    creation_date.month() as u32,
-                    creation_date.day_of_month() as u32,
-                )
-                .and_hms(
-                    creation_date.hour() as u32,
-                    creation_date.minute() as u32,
-                    creation_date.seconds() as u32,
-                )
-                .with_timezone(&FixedOffset::east(
-                    creation_date.utc_offset().as_seconds() as i32
-                ));
+            let creation_date =
+                FixedOffset::east_opt(creation_date.utc_offset().as_seconds() as i32)
+                    .and_then(|tz| {
+                        tz.with_ymd_and_hms(
+                            creation_date.year() as i32,
+                            creation_date.month() as u32,
+                            creation_date.day_of_month() as u32,
+                            creation_date.hour() as u32,
+                            creation_date.minute() as u32,
+                            creation_date.seconds() as u32,
+                        )
+                        .latest()
+                    })
+                    .ok_or_else(|| {
+                        gst::error!(CAT, imp: self, "Invalid creation datetime");
+                        gst::FlowError::Error
+                    })?;
 
             let _ = write!(
                 buffer,
