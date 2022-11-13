@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-fmp4"
-version = "0.9.0"
+version = "0.9.1"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 license = "MPL-2.0"
 description = "GStreamer Fragmented MP4 Plugin"

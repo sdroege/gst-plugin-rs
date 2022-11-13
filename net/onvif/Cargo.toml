@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-onvif"
-version = "0.9.0"
+version = "0.9.1"
 authors = ["Mathieu Duponchelle <mathieu@centricular.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
