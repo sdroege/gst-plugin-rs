@@ -202,7 +202,7 @@ impl<T: AsRef<[u8]>> LineReader<T> {
 
         // Otherwise we have to copy everything that is remaining into our
         // internal buffer and then return a slice from that
-        let len = self.queue.iter().map(|v| v.as_ref().len()).sum();
+        let len = self.queue.iter().map(|v| v.as_ref().len()).sum::<usize>();
         if self.buf.capacity() < len {
             self.buf.reserve(len - self.buf.capacity());
         }
