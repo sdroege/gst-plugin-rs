@@ -116,7 +116,7 @@ struct Stream {
     end_pts: Option<gst::ClockTime>,
 
     /// In ONVIF mode, the mapping between running time and UTC time (UNIX)
-    running_time_utc_time_mapping: Option<(gst::ClockTime, gst::ClockTime)>,
+    running_time_utc_time_mapping: Option<(gst::Signed<gst::ClockTime>, gst::ClockTime)>,
 }
 
 #[derive(Default)]
@@ -173,7 +173,7 @@ impl MP4Mux {
         sinkpad: &super::MP4MuxPad,
         delta_frames: super::DeltaFrames,
         pre_queue: &mut VecDeque<(gst::FormattedSegment<gst::ClockTime>, gst::Buffer)>,
-        running_time_utc_time_mapping: &Option<(gst::ClockTime, gst::ClockTime)>,
+        running_time_utc_time_mapping: &Option<(gst::Signed<gst::ClockTime>, gst::ClockTime)>,
     ) -> Result<Option<(gst::FormattedSegment<gst::ClockTime>, gst::Buffer)>, gst::FlowError> {
         if let Some((segment, buffer)) = pre_queue.front() {
             return Ok(Some((segment.clone(), buffer.clone())));
@@ -214,7 +214,7 @@ impl MP4Mux {
                 None => {
                     // Calculate from the mapping
                     gst::Signed::Positive(running_time_utc_time_mapping.1)
-                        .checked_sub_unsigned(running_time_utc_time_mapping.0)
+                        .checked_sub(running_time_utc_time_mapping.0)
                         .and_then(|res| res.checked_add(pts))
                         .and_then(|res| res.positive())
                         .ok_or_else(|| {
@@ -268,7 +268,7 @@ impl MP4Mux {
         sinkpad: &super::MP4MuxPad,
         delta_frames: super::DeltaFrames,
         pre_queue: &mut VecDeque<(gst::FormattedSegment<gst::ClockTime>, gst::Buffer)>,
-        running_time_utc_time_mapping: &mut Option<(gst::ClockTime, gst::ClockTime)>,
+        running_time_utc_time_mapping: &mut Option<(gst::Signed<gst::ClockTime>, gst::ClockTime)>,
     ) -> Result<Option<(gst::FormattedSegment<gst::ClockTime>, gst::Buffer)>, gst::FlowError> {
         // In ONVIF mode we need to get UTC times for each buffer and synchronize based on that.
         // Queue up to 6s of data to get the first UTC time and then backdate.
@@ -331,17 +331,12 @@ impl MP4Mux {
                 }
             };
 
-            let running_time = segment.to_running_time_full(buffer.pts()).unwrap();
+            let running_time = segment.to_running_time_full(buffer.pts().unwrap()).unwrap();
             gst::info!(
                 CAT,
                 obj: sinkpad,
                 "Got initial UTC time {utc_time} at PTS running time {running_time}",
             );
-
-            let running_time = running_time.positive().unwrap_or_else(|| {
-                gst::error!(CAT, obj: sinkpad, "Stream has negative PTS running time");
-                gst::ClockTime::ZERO
-            });
 
             *running_time_utc_time_mapping = Some((running_time, utc_time));
 
@@ -354,7 +349,7 @@ impl MP4Mux {
 
                 let pts = segment.to_running_time_full(buffer.pts().unwrap()).unwrap();
                 let pts_utc_time = gst::Signed::Positive(utc_time)
-                    .checked_sub_unsigned(running_time)
+                    .checked_sub(running_time)
                     .and_then(|res| res.checked_add(pts))
                     .and_then(|res| res.positive())
                     .ok_or_else(|| {
