@@ -11,7 +11,7 @@ description = "GStreamer GIF plugin"
 [dependencies]
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gif = "0.11"
+gif = "0.12"
 atomic_refcell = "0.1"
 once_cell = "1"
 
