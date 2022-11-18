@@ -230,9 +230,13 @@ fn stream_to_timescale(stream: &super::Stream) -> u32 {
                 }
             }
 
-            (fps.numer() as u32)
-                .mul_div_round(100, fps.denom() as u32)
-                .unwrap_or(10_000)
+            if fps.denom() == 1001 {
+                fps.numer() as u32
+            } else {
+                (fps.numer() as u32)
+                    .mul_div_round(100, fps.denom() as u32)
+                    .unwrap_or(10_000)
+            }
         } else if let Ok(rate) = s.get::<i32>("rate") {
             rate as u32
         } else {
