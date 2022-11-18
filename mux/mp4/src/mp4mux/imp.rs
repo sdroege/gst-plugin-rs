@@ -44,6 +44,17 @@ fn get_utc_time_from_buffer(buffer: &gst::BufferRef) -> Option<gst::ClockTime> {
         })
 }
 
+/// Converts a running time to an UTC time.
+fn running_time_to_utc_time(
+    running_time: gst::Signed<gst::ClockTime>,
+    running_time_utc_time_mapping: (gst::Signed<gst::ClockTime>, gst::ClockTime),
+) -> Option<gst::ClockTime> {
+    gst::Signed::Positive(running_time_utc_time_mapping.1)
+        .checked_sub(running_time_utc_time_mapping.0)
+        .and_then(|res| res.checked_add(running_time))
+        .and_then(|res| res.positive())
+}
+
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "mp4mux",
@@ -213,14 +224,12 @@ impl MP4Mux {
             let utc_time = match get_utc_time_from_buffer(&buffer) {
                 None => {
                     // Calculate from the mapping
-                    gst::Signed::Positive(running_time_utc_time_mapping.1)
-                        .checked_sub(running_time_utc_time_mapping.0)
-                        .and_then(|res| res.checked_add(pts))
-                        .and_then(|res| res.positive())
-                        .ok_or_else(|| {
+                    running_time_to_utc_time(pts, running_time_utc_time_mapping).ok_or_else(
+                        || {
                             gst::error!(CAT, obj: sinkpad, "Stream has negative PTS UTC time");
                             gst::FlowError::Error
-                        })?
+                        },
+                    )?
                 }
                 Some(utc_time) => utc_time,
             };
@@ -236,11 +245,8 @@ impl MP4Mux {
                 buffer.set_pts(utc_time);
 
                 if let Some(dts) = dts {
-                    let dts_utc_time = gst::Signed::Positive(utc_time)
-                        .checked_sub(pts)
-                        .and_then(|res| res.checked_add(dts))
-                        .and_then(|res| res.positive())
-                        .ok_or_else(|| {
+                    let dts_utc_time =
+                        running_time_to_utc_time(dts, (pts, utc_time)).ok_or_else(|| {
                             gst::error!(CAT, obj: sinkpad, "Stream has negative DTS UTC time");
                             gst::FlowError::Error
                         })?;
@@ -338,7 +344,8 @@ impl MP4Mux {
                 "Got initial UTC time {utc_time} at PTS running time {running_time}",
             );
 
-            *running_time_utc_time_mapping = Some((running_time, utc_time));
+            let mapping = (running_time, utc_time);
+            *running_time_utc_time_mapping = Some(mapping);
 
             // Push the buffer onto the pre-queue and re-timestamp it and all other buffers
             // based on the mapping above.
@@ -348,14 +355,10 @@ impl MP4Mux {
                 let buffer = buffer.make_mut();
 
                 let pts = segment.to_running_time_full(buffer.pts().unwrap()).unwrap();
-                let pts_utc_time = gst::Signed::Positive(utc_time)
-                    .checked_sub(running_time)
-                    .and_then(|res| res.checked_add(pts))
-                    .and_then(|res| res.positive())
-                    .ok_or_else(|| {
-                        gst::error!(CAT, obj: sinkpad, "Stream has negative PTS UTC time");
-                        gst::FlowError::Error
-                    })?;
+                let pts_utc_time = running_time_to_utc_time(pts, mapping).ok_or_else(|| {
+                    gst::error!(CAT, obj: sinkpad, "Stream has negative PTS UTC time");
+                    gst::FlowError::Error
+                })?;
                 gst::trace!(
                     CAT,
                     obj: sinkpad,
@@ -365,14 +368,10 @@ impl MP4Mux {
 
                 if let Some(dts) = buffer.dts() {
                     let dts = segment.to_running_time_full(dts).unwrap();
-                    let dts_utc_time = gst::Signed::Positive(pts_utc_time)
-                        .checked_sub(pts)
-                        .and_then(|res| res.checked_add(dts))
-                        .and_then(|res| res.positive())
-                        .ok_or_else(|| {
-                            gst::error!(CAT, obj: sinkpad, "Stream has negative DTS UTC time");
-                            gst::FlowError::Error
-                        })?;
+                    let dts_utc_time = running_time_to_utc_time(dts, mapping).ok_or_else(|| {
+                        gst::error!(CAT, obj: sinkpad, "Stream has negative DTS UTC time");
+                        gst::FlowError::Error
+                    })?;
                     gst::trace!(
                         CAT,
                         obj: sinkpad,
