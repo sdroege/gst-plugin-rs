@@ -295,7 +295,7 @@ impl OnvifMetadataOverlay {
         if state.layout.is_none() {
             let fontmap = pangocairo::FontMap::new();
             let context = fontmap.create_context();
-            context.set_language(Some(&pango::Language::from_string(Some("en_US")).unwrap()));
+            context.set_language(Some(&pango::Language::from_string("en_US")));
             context.set_base_dir(pango::Direction::Ltr);
             let layout = pango::Layout::new(&context);
             layout.set_alignment(pango::Alignment::Left);
