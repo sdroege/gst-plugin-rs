@@ -594,18 +594,10 @@ impl MP4Mux {
                         let pts = gst::Signed::Positive(pts);
                         let dts = dts.unwrap(); // set above
 
-                        if pts > dts {
-                            Some(i64::try_from((pts - dts).nseconds().positive().unwrap()).map_err(|_| {
-                                gst::error!(CAT, obj: stream.sinkpad, "Too big PTS/DTS difference");
-                                gst::FlowError::Error
-                            })?)
-                        } else {
-                            let diff = i64::try_from((dts - pts).nseconds().positive().unwrap()).map_err(|_| {
-                                gst::error!(CAT, obj: stream.sinkpad, "Too big PTS/DTS difference");
-                                gst::FlowError::Error
-                            })?;
-                            Some(-diff)
-                        }
+                        Some(i64::try_from((pts - dts).nseconds()).map_err(|_| {
+                            gst::error!(CAT, obj: stream.sinkpad, "Too big PTS/DTS difference");
+                            gst::FlowError::Error
+                        })?)
                     } else {
                         None
                     };
