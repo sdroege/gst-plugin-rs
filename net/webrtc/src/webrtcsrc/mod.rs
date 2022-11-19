@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: MPL-2.0
-
-use crate::webrtcsrc::signaller::WebRTCSignallerRole;
-use gst::prelude::*;
-use gst::{glib, prelude::StaticType};
-
 /**
  * element-webrtcsrc:
  *
@@ -38,11 +33,11 @@ use gst::{glib, prelude::StaticType};
  */
 mod imp;
 mod pad;
-pub mod signaller;
 
-pub use signaller::{SignallableImpl, SignallableImplExt};
-
-use self::signaller::Signallable;
+use crate::signaller::Signallable;
+use crate::signaller::WebRTCSignallerRole;
+use gst::prelude::*;
+use gst::{glib, prelude::StaticType};
 
 glib::wrapper! {
     pub struct WebRTCSrc(ObjectSubclass<imp::WebRTCSrc>) @extends gst::Bin, gst::Element, gst::Object, @implements gst::URIHandler, gst::ChildProxy;

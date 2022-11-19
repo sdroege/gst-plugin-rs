@@ -2,7 +2,7 @@
 
 use gst::prelude::*;
 
-use crate::webrtcsrc::signaller::{prelude::*, Signallable, Signaller};
+use crate::signaller::{prelude::*, Signallable, Signaller};
 use crate::webrtcsrc::WebRTCSrcPad;
 use anyhow::{Context, Error};
 use core::ops::Deref;

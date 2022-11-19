@@ -102,7 +102,11 @@ unsafe impl prelude::ObjectInterface for Signallable {
                  *           session
                  */
                 Signal::builder("session-requested")
-                    .param_types([str::static_type(), str::static_type()])
+                    .param_types([
+                        str::static_type(),
+                        str::static_type(),
+                        gst_webrtc::WebRTCSessionDescription::static_type(),
+                    ])
                     .build(),
                 /**
                  * GstRSWebRTCSignallableIface::error:
@@ -196,6 +200,34 @@ unsafe impl prelude::ObjectInterface for Signallable {
 
                         None
                     })
+                    .build(),
+                /**
+                 * GstRSWebRTCSignallableIface::shutdown:
+                 * @self: The object implementing #GstRSWebRTCSignallableIface
+                 */
+                Signal::builder("shutdown").build(),
+                /**
+                 * GstRSWebRTCSignallableIface::consumer-added:
+                 * @self: The object implementing #GstRSWebRTCSignallableIface
+                 * @peer_id: Id of the consumer
+                 * @webrtcbin: The internal WebRTCBin element
+                 *
+                 * This signal can be used to tweak @webrtcbin, creating a data
+                 * channel for example.
+                 */
+                Signal::builder("consumer-added")
+                    .param_types([String::static_type(), gst::Element::static_type()])
+                    .build(),
+                /**
+                 * GstRSWebRTCSignallableIface::consumer-removed:
+                 * @consumer_id: Identifier of the consumer that was removed
+                 * @webrtcbin: The webrtcbin connected to the newly removed consumer
+                 *
+                 * This signal is emitted right after the connection with a consumer
+                 * has been dropped.
+                 */
+                glib::subclass::Signal::builder("consumer-removed")
+                    .param_types([String::static_type(), gst::Element::static_type()])
                     .build(),
             ]
         });

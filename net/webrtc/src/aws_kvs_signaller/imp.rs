@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use super::protocol as p;
-use crate::webrtcsink::WebRTCSink;
+use crate::signaller::{Signallable, SignallableImpl};
 use crate::RUNTIME;
 use anyhow::{anyhow, Error};
 use async_tungstenite::tungstenite::Message as WsMessage;
@@ -84,7 +84,7 @@ pub struct Signaller {
 }
 
 impl Signaller {
-    fn handle_message(element: &WebRTCSink, msg: String) {
+    fn handle_message(&self, msg: String) {
         if let Ok(msg) = serde_json::from_str::<p::IncomingMessage>(&msg) {
             match BASE64.decode(&msg.message_payload.into_bytes()) {
                 Ok(payload) => {
@@ -98,21 +98,27 @@ impl Signaller {
                                     msg.sender_client_id,
                                     sdp_msg.sdp
                                 );
-                                if let Err(err) = element.start_session(
-                                    &msg.sender_client_id,
-                                    &msg.sender_client_id,
-                                    Some(&gst_webrtc::WebRTCSessionDescription::new(
-                                        gst_webrtc::WebRTCSDPType::Offer,
-                                        gst_sdp::SDPMessage::parse_buffer(sdp_msg.sdp.as_bytes())
+                                self.obj().emit_by_name::<()>(
+                                    "session-requested",
+                                    &[&msg.sender_client_id, &msg.sender_client_id],
+                                );
+                                self.obj().emit_by_name::<()>(
+                                    "session-description",
+                                    &[
+                                        &msg.sender_client_id,
+                                        &gst_webrtc::WebRTCSessionDescription::new(
+                                            gst_webrtc::WebRTCSDPType::Offer,
+                                            gst_sdp::SDPMessage::parse_buffer(
+                                                sdp_msg.sdp.as_bytes(),
+                                            )
                                             .unwrap(),
-                                    )),
-                                ) {
-                                    gst::warning!(CAT, obj: element, "{err}");
-                                }
+                                        ),
+                                    ],
+                                );
                             } else {
                                 gst::warning!(
                                     CAT,
-                                    obj: element,
+                                    imp: self,
                                     "Failed to parse SDP_OFFER: {payload}"
                                 );
                             }
@@ -127,18 +133,19 @@ impl Signaller {
                                     ice_msg.sdp_m_line_index,
                                     ice_msg.sdp_mid
                                 );
-                                if let Err(err) = element.handle_ice(
-                                    &msg.sender_client_id,
-                                    Some(ice_msg.sdp_m_line_index),
-                                    Some(ice_msg.sdp_mid),
-                                    &ice_msg.candidate,
-                                ) {
-                                    gst::warning!(CAT, obj: element, "{err}");
-                                }
+                                self.obj().emit_by_name::<()>(
+                                    "handle-ice",
+                                    &[
+                                        &msg.sender_client_id,
+                                        &ice_msg.sdp_m_line_index,
+                                        &Some(ice_msg.sdp_mid),
+                                        &ice_msg.candidate,
+                                    ],
+                                );
                             } else {
                                 gst::warning!(
                                     CAT,
-                                    obj: element,
+                                    imp: self,
                                     "Failed to parse ICE_CANDIDATE: {payload}"
                                 );
                             }
@@ -146,7 +153,7 @@ impl Signaller {
                         _ => {
                             gst::log!(
                                 CAT,
-                                obj: element,
+                                imp: self,
                                 "Ignoring unsupported message type {}",
                                 msg.message_type
                             );
@@ -156,20 +163,24 @@ impl Signaller {
                 Err(e) => {
                     gst::error!(
                         CAT,
-                        obj: element,
+                        imp: self,
                         "Failed to decode message payload from server: {e}"
                     );
-                    element.handle_signalling_error(
-                        anyhow!("Failed to decode message payload from server: {e}").into(),
+                    self.obj().emit_by_name::<()>(
+                        "error",
+                        &[&format!(
+                            "{:?}",
+                            anyhow!("Failed to decode message payload from server: {e}")
+                        )],
                     );
                 }
             }
         } else {
-            gst::log!(CAT, obj: element, "Unknown message from server: [{msg}]");
+            gst::log!(CAT, imp: self, "Unknown message from server: [{msg}]");
         }
     }
 
-    async fn connect(&self, element: &WebRTCSink) -> Result<(), Error> {
+    async fn connect(&self) -> Result<(), Error> {
         let settings = self.settings.lock().unwrap().clone();
 
         let connector = if let Some(path) = settings.cafile {
@@ -341,8 +352,7 @@ impl Signaller {
             .collect();
 
         gst::info!(CAT, "Ice servers: {:?}", ice_servers);
-
-        element.connect_closure(
+        self.obj().connect_closure(
             "consumer-added",
             false,
             glib::closure!(|_webrtcsink: &gst::Element,
@@ -409,7 +419,7 @@ impl Signaller {
         let (ws, _) =
             async_tungstenite::tokio::connect_async_with_tls_connector(url, connector).await?;
 
-        gst::info!(CAT, obj: element, "connected");
+        gst::info!(CAT, imp: self, "connected");
 
         // Channel for asynchronously sending out websocket message
         let (mut ws_sink, mut ws_stream) = ws.split();
@@ -418,7 +428,7 @@ impl Signaller {
         // up of messages as with unbounded
         let (mut _websocket_sender, mut websocket_receiver) =
             mpsc::channel::<p::OutgoingMessage>(1000);
-        let element_clone = element.downgrade();
+        let imp = self.downgrade();
         let ping_timeout = settings.ping_timeout;
         let send_task_handle = task::spawn(async move {
             loop {
@@ -429,10 +439,10 @@ impl Signaller {
                 .await
                 {
                     Ok(Some(msg)) => {
-                        if let Some(element) = element_clone.upgrade() {
+                        if let Some(imp) = imp.upgrade() {
                             gst::trace!(
                                 CAT,
-                                obj: element,
+                                imp: imp,
                                 "Sending websocket message {}",
                                 serde_json::to_string(&msg).unwrap()
                             );
@@ -450,8 +460,8 @@ impl Signaller {
                 }
             }
 
-            if let Some(element) = element_clone.upgrade() {
-                gst::info!(CAT, obj: element, "Done sending");
+            if let Some(imp) = imp.upgrade() {
+                gst::info!(CAT, imp: imp, "Done sending");
             }
 
             ws_sink.send(WsMessage::Close(None)).await?;
@@ -460,29 +470,26 @@ impl Signaller {
             Ok::<(), Error>(())
         });
 
-        let element_clone = element.downgrade();
+        let imp = self.downgrade();
         let receive_task_handle = task::spawn(async move {
             while let Some(msg) = tokio_stream::StreamExt::next(&mut ws_stream).await {
-                if let Some(element) = element_clone.upgrade() {
+                if let Some(imp) = imp.upgrade() {
                     match msg {
                         Ok(WsMessage::Text(msg)) => {
                             gst::trace!(CAT, "received message [{msg}]");
-                            Signaller::handle_message(&element, msg);
+                            imp.handle_message(msg);
                         }
                         Ok(WsMessage::Close(reason)) => {
-                            gst::info!(
-                                CAT,
-                                obj: element,
-                                "websocket connection closed: {:?}",
-                                reason
-                            );
-                            element.shutdown();
+                            gst::info!(CAT, imp: imp, "websocket connection closed: {:?}", reason);
+                            imp.obj().emit_by_name::<()>("shutdown", &[]);
                             break;
                         }
                         Ok(_) => (),
                         Err(err) => {
-                            element
-                                .handle_signalling_error(anyhow!("Error receiving: {err}").into());
+                            imp.obj().emit_by_name::<()>(
+                                "error",
+                                &[&format!("{:?}", anyhow!("Error receiving: {err}"))],
+                            );
                             break;
                         }
                     }
@@ -491,8 +498,8 @@ impl Signaller {
                 }
             }
 
-            if let Some(element) = element_clone.upgrade() {
-                gst::info!(CAT, obj: element, "Stopped websocket receiving");
+            if let Some(imp) = imp.upgrade() {
+                gst::info!(CAT, imp: imp, "Stopped websocket receiving");
             }
         });
 
@@ -503,24 +510,22 @@ impl Signaller {
 
         Ok(())
     }
+}
 
-    pub fn start(&self, element: &WebRTCSink) {
+impl SignallableImpl for Signaller {
+    fn start(&self) {
         let this = self.obj().clone();
-        let element_clone = element.clone();
+        let imp = self.downgrade();
         task::spawn(async move {
-            let this = this.imp();
-            if let Err(err) = this.connect(&element_clone).await {
-                element_clone.handle_signalling_error(err.into());
+            if let Some(imp) = imp.upgrade() {
+                if let Err(err) = imp.connect().await {
+                    this.emit_by_name::<()>("error", &[&format!("{:?}", anyhow!(err))]);
+                }
             }
         });
     }
 
-    pub fn handle_sdp(
-        &self,
-        element: &WebRTCSink,
-        session_id: &str,
-        sdp: &gst_webrtc::WebRTCSessionDescription,
-    ) {
+    fn send_sdp(&self, session_id: &str, sdp: &gst_webrtc::WebRTCSessionDescription) {
         let state = self.state.lock().unwrap();
 
         let msg = p::OutgoingMessage {
@@ -537,20 +542,22 @@ impl Signaller {
         };
 
         if let Some(mut sender) = state.websocket_sender.clone() {
-            let element = element.downgrade();
+            let imp = self.downgrade();
             RUNTIME.spawn(async move {
                 if let Err(err) = sender.send(msg).await {
-                    if let Some(element) = element.upgrade() {
-                        element.handle_signalling_error(anyhow!("Error: {err}").into());
+                    if let Some(imp) = imp.upgrade() {
+                        imp.obj().emit_by_name::<()>(
+                            "error",
+                            &[&format!("{:?}", anyhow!("Error: {err}"))],
+                        );
                     }
                 }
             });
         }
     }
 
-    pub fn handle_ice(
+    fn add_ice(
         &self,
-        element: &WebRTCSink,
         session_id: &str,
         candidate: &str,
         sdp_m_line_index: Option<u32>,
@@ -573,48 +580,43 @@ impl Signaller {
         };
 
         if let Some(mut sender) = state.websocket_sender.clone() {
-            let element = element.downgrade();
+            let imp = self.downgrade();
             RUNTIME.spawn(async move {
                 if let Err(err) = sender.send(msg).await {
-                    if let Some(element) = element.upgrade() {
-                        element.handle_signalling_error(anyhow!("Error: {err}").into());
+                    if let Some(imp) = imp.upgrade() {
+                        imp.obj().emit_by_name::<()>(
+                            "error",
+                            &[&format!("{:?}", anyhow!("Error: {err}"))],
+                        );
                     }
                 }
             });
         }
     }
 
-    pub fn stop(&self, element: &WebRTCSink) {
-        gst::info!(CAT, obj: element, "Stopping now");
+    fn stop(&self) {
+        gst::info!(CAT, imp: self, "Stopping now");
 
         let mut state = self.state.lock().unwrap();
         let send_task_handle = state.send_task_handle.take();
         let receive_task_handle = state.receive_task_handle.take();
         if let Some(mut sender) = state.websocket_sender.take() {
-            let element = element.downgrade();
+            let imp = self.downgrade();
             RUNTIME.block_on(async move {
                 sender.close_channel();
 
                 if let Some(handle) = send_task_handle {
                     if let Err(err) = handle.await {
-                        if let Some(element) = element.upgrade() {
-                            gst::warning!(
-                                CAT,
-                                obj: element,
-                                "Error while joining send task: {err}"
-                            );
+                        if let Some(imp) = imp.upgrade() {
+                            gst::warning!(CAT, imp: imp, "Error while joining send task: {err}");
                         }
                     }
                 }
 
                 if let Some(handle) = receive_task_handle {
                     if let Err(err) = handle.await {
-                        if let Some(element) = element.upgrade() {
-                            gst::warning!(
-                                CAT,
-                                obj: element,
-                                "Error while joining receive task: {err}"
-                            );
+                        if let Some(imp) = imp.upgrade() {
+                            gst::warning!(CAT, imp: imp, "Error while joining receive task: {err}");
                         }
                     }
                 }
@@ -622,8 +624,8 @@ impl Signaller {
         }
     }
 
-    pub fn end_session(&self, element: &WebRTCSink, session_id: &str) {
-        gst::info!(CAT, obj: element, "Signalling session {session_id} ended");
+    fn end_session(&self, session_id: &str) {
+        gst::info!(CAT, imp: self, "Signalling session {session_id} ended");
 
         // We can seemingly not do anything beyond that
     }
@@ -634,6 +636,7 @@ impl ObjectSubclass for Signaller {
     const NAME: &'static str = "GstAwsKvsWebRTCSinkSignaller";
     type Type = super::AwsKvsSignaller;
     type ParentType = glib::Object;
+    type Interfaces = (Signallable,);
 }
 
 impl ObjectImpl for Signaller {

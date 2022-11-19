@@ -1,64 +1,46 @@
-// SPDX-License-Identifier: MPL-2.0
-
-use crate::webrtcsink::{Signallable, WebRTCSink};
-use gst::glib;
-use gst::subclass::prelude::*;
-use std::error::Error;
-
+mod iface;
 mod imp;
+use gst::glib;
 
-glib::wrapper! {
-    pub struct Signaller(ObjectSubclass<imp::Signaller>);
+use once_cell::sync::Lazy;
+// Expose traits and objects from the module itself so it exactly looks like
+// generated bindings
+pub use imp::WebRTCSignallerRole;
+pub mod prelude {
+    pub use {super::SignallableExt, super::SignallableImpl};
 }
 
-unsafe impl Send for Signaller {}
-unsafe impl Sync for Signaller {}
+pub static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
+        "webrtcsrc-signaller",
+        gst::DebugColorFlags::empty(),
+        Some("WebRTC src signaller"),
+    )
+});
 
-impl Signallable for Signaller {
-    fn start(&mut self, element: &WebRTCSink) -> Result<(), Box<dyn Error>> {
-        let signaller = self.imp();
-        signaller.start(element);
+glib::wrapper! {
+    pub struct Signallable(ObjectInterface<iface::Signallable>);
+}
 
-        Ok(())
-    }
-
-    fn handle_sdp(
-        &mut self,
-        element: &WebRTCSink,
-        peer_id: &str,
-        sdp: &gst_webrtc::WebRTCSessionDescription,
-    ) -> Result<(), Box<dyn Error>> {
-        let signaller = self.imp();
-        signaller.handle_sdp(element, peer_id, sdp);
-        Ok(())
-    }
-
-    fn handle_ice(
-        &mut self,
-        element: &WebRTCSink,
-        session_id: &str,
-        candidate: &str,
-        sdp_mline_index: Option<u32>,
-        sdp_mid: Option<String>,
-    ) -> Result<(), Box<dyn Error>> {
-        let signaller = self.imp();
-        signaller.handle_ice(element, session_id, candidate, sdp_mline_index, sdp_mid);
-        Ok(())
-    }
-
-    fn stop(&mut self, element: &WebRTCSink) {
-        let signaller = self.imp();
-        signaller.stop(element);
-    }
-
-    fn session_ended(&mut self, element: &WebRTCSink, session_id: &str) {
-        let signaller = self.imp();
-        signaller.end_session(element, session_id);
-    }
+glib::wrapper! {
+    pub struct Signaller(ObjectSubclass <imp::Signaller>) @implements Signallable;
 }
 
 impl Default for Signaller {
     fn default() -> Self {
-        glib::Object::new()
+        glib::Object::builder().build()
     }
 }
+
+impl Signaller {
+    pub fn new(mode: WebRTCSignallerRole) -> Self {
+        glib::Object::builder().property("role", &mode).build()
+    }
+}
+
+pub use iface::SignallableExt;
+pub use iface::SignallableImpl;
+pub use iface::SignallableImplExt;
+
+unsafe impl Send for Signallable {}
+unsafe impl Sync for Signallable {}
