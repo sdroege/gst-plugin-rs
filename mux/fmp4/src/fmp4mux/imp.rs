@@ -1175,10 +1175,16 @@ impl FMP4Mux {
                         let pts = buffer.pts;
                         let dts = buffer.dts.unwrap();
 
-                        Some(i64::try_from((pts - dts).nseconds()).map_err(|_| {
-                            gst::error!(CAT, obj: stream.sinkpad, "Too big PTS/DTS difference");
-                            gst::FlowError::Error
-                        })?)
+                        Some(
+                            i64::try_from(
+                                (gst::Signed::Positive(pts) - gst::Signed::Positive(dts))
+                                    .nseconds(),
+                            )
+                            .map_err(|_| {
+                                gst::error!(CAT, obj: stream.sinkpad, "Too big PTS/DTS difference");
+                                gst::FlowError::Error
+                            })?,
+                        )
                     };
 
                     buffers.push_back(Buffer {
