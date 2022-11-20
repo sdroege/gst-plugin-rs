@@ -154,6 +154,12 @@ version = "0.20.0-alpha.1"
 name = "concurrent-queue"
 version = "1"
 
+# image depends on older gif
+# https://github.com/image-rs/image/pull/1826
+[[bans.skip]]
+name = "gif"
+version = "0.11"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
