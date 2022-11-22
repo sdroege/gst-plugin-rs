@@ -359,7 +359,7 @@ impl TracerImpl for BufferLateness {
     }
 
     #[allow(clippy::single_match)]
-    fn pad_query_post(&self, _ts: u64, pad: &gst::Pad, query: &gst::Query, res: bool) {
+    fn pad_query_post(&self, _ts: u64, pad: &gst::Pad, query: &gst::QueryRef, res: bool) {
         if !res {
             return;
         }
