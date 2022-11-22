@@ -368,7 +368,7 @@ fn probe_encoder(state: Arc<Mutex<State>>, enc: gst::Element) {
         move |_pad, info| match info.data {
             Some(gst::PadProbeData::Event(ref ev)) => match ev.view() {
                 gst::EventView::Caps(e) => {
-                    let mime = gst_pbutils::codec_utils_caps_get_mime_codec(&e.caps().to_owned());
+                    let mime = gst_pbutils::codec_utils_caps_get_mime_codec(e.caps());
 
                     let mut state = state.lock().unwrap();
                     state.all_mimes.push(mime.unwrap().into());
