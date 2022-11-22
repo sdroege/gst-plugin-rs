@@ -2,12 +2,17 @@ use futures::future;
 use futures::prelude::*;
 use gst::{prelude::*, ErrorMessage};
 use once_cell::sync::Lazy;
-use parse_link_header;
 use reqwest::header::HeaderMap;
 use reqwest::redirect::Policy;
 use std::sync::Mutex;
 use std::time::Duration;
 use tokio::runtime;
+
+#[derive(Debug)]
+pub enum WaitError {
+    FutureAborted,
+    FutureError(ErrorMessage),
+}
 
 pub static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
     runtime::Builder::new_multi_thread()
@@ -21,8 +26,8 @@ pub static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
 pub fn wait<F, T>(
     canceller: &Mutex<Option<future::AbortHandle>>,
     future: F,
-    timeout: u32
-) -> Result<T, ErrorMessage>
+    timeout: u32,
+) -> Result<T, WaitError>
 where
     F: Send + Future<Output = Result<T, ErrorMessage>>,
     T: Send + 'static,
@@ -31,10 +36,10 @@ where
     let (abort_handle, abort_registration) = future::AbortHandle::new_pair();
 
     if canceller_guard.is_some() {
-        return Err(gst::error_msg!(
+        return Err(WaitError::FutureError(gst::error_msg!(
             gst::ResourceError::Failed,
             ["Old Canceller should not exist"]
-        ));
+        )));
     }
 
     canceller_guard.replace(abort_handle);
@@ -60,15 +65,12 @@ where
         match future::Abortable::new(future, abort_registration).await {
             Ok(Ok(res)) => Ok(res),
 
-            Ok(Err(err)) => Err(gst::error_msg!(
+            Ok(Err(err)) => Err(WaitError::FutureError(gst::error_msg!(
                 gst::ResourceError::Failed,
-                ["Future resolved with an error {}", err.to_string()]
-            )),
+                ["Future resolved with an error {:?}", err]
+            ))),
 
-            Err(future::Aborted) => Err(gst::error_msg!(
-                gst::ResourceError::Failed,
-                ["Canceller called before future resolved"]
-            )),
+            Err(future::Aborted) => Err(WaitError::FutureAborted),
         }
     };
 
