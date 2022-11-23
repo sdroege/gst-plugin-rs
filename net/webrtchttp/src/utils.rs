@@ -161,34 +161,27 @@ pub fn set_ice_servers(
         // for changing <scheme>:<host> to <scheme>://<user>:<password>@<host>.
         // So preferred to use the String rather
 
-        let mut ice_server_url;
-
         // check if uri has ://
-        if link.uri.has_authority() {
+        let ice_server_url = if link.uri.has_authority() {
             // use raw_uri as is
             // username and password in the link.uri.params ignored
-            ice_server_url = link.raw_uri.as_str().to_string();
+            link.uri.clone()
         } else {
             // No builder pattern is provided by reqwest::Url. Use string operation.
             // construct url as '<scheme>://<user:pass>@<url>'
-            ice_server_url = format!("{}://", link.uri.scheme());
+            let url = format!("{}://{}", link.uri.scheme(), link.uri.path());
+
+            let Ok(mut new_url) = reqwest::Url::parse(url.as_str()) else { continue };
+
             if let Some(user) = link.params.get("username") {
-                ice_server_url += user.as_str();
+                new_url.set_username(user.as_str()).unwrap();
                 if let Some(pass) = link.params.get("credential") {
-                    ice_server_url = ice_server_url + ":" + pass.as_str();
+                    new_url.set_password(Some(pass.as_str())).unwrap();
                 }
-                ice_server_url += "@";
             }
 
-            // the raw_uri contains the ice-server in the form <scheme>:<url>
-            // so strip the scheme and the ':' from the beginning of raw_uri and use
-            // the rest of raw_uri to append it the url which will be in the form
-            // <scheme>://<user:pass>@<url> as expected
-            ice_server_url += link
-                .raw_uri
-                .strip_prefix((link.uri.scheme().to_owned() + ":").as_str())
-                .expect("strip 'scheme:' from raw uri");
-        }
+            new_url
+        };
 
         // It's nicer to not collapse the `else if` and its inner `if`
         #[allow(clippy::collapsible_if)]
