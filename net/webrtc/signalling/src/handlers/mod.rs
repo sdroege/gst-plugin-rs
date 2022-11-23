@@ -264,7 +264,7 @@ impl Handler {
     #[instrument(level = "debug", skip(self))]
     fn start_session(&mut self, producer_id: &str, consumer_id: &str) -> Result<(), Error> {
         self.peers.get(producer_id).map_or_else(
-            || Err(anyhow!("Peer '{producer_id}' hasn't been welcomed")),
+            || Err(anyhow!("No producer with ID: '{producer_id}'")),
             |peer| {
                 if !peer.producing() {
                     Err(anyhow!(
@@ -277,10 +277,9 @@ impl Handler {
             },
         )?;
 
-        self.peers.get(consumer_id).map_or_else(
-            || Err(anyhow!("Peer '{consumer_id}' hasn't been welcomed")),
-            Ok,
-        )?;
+        self.peers
+            .get(consumer_id)
+            .map_or_else(|| Err(anyhow!("No consumer with ID: '{consumer_id}'")), Ok)?;
 
         let session_id = uuid::Uuid::new_v4().to_string();
         self.sessions.insert(
@@ -1083,7 +1082,7 @@ mod tests {
         assert_eq!(
             sent_message,
             p::OutgoingMessage::Error {
-                details: "Peer 'producer' hasn't been welcomed".into()
+                details: "No producer with ID: 'producer'".into()
             }
         );
     }
@@ -1285,7 +1284,7 @@ mod tests {
         assert_eq!(
             sent_message,
             p::OutgoingMessage::Error {
-                details: "Peer 'consumer' hasn't been welcomed".into()
+                details: "No consumer with ID: 'consumer'".into()
             }
         );
     }
