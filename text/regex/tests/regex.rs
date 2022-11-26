@@ -36,7 +36,7 @@ fn test_replace_all() {
             .field("replacement", "trap")
             .build();
 
-        let commands = gst::Array::from(vec![command.to_send_value()]);
+        let commands = gst::Array::new([command]);
 
         regex.set_property("commands", &commands);
     }

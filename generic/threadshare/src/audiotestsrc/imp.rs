@@ -217,9 +217,11 @@ impl AudioTestSrcTask {
             self.channels = s.get::<i32>("channels").unwrap() as usize;
 
             if self.channels > 2 {
-                s.set::<gst::Bitmask>(
+                s.set(
                     "channel-mask",
-                    gst_audio::AudioChannelPosition::fallback_mask(self.channels as u32).into(),
+                    gst::Bitmask::from(gst_audio::AudioChannelPosition::fallback_mask(
+                        self.channels as u32,
+                    )),
                 );
             }
         }

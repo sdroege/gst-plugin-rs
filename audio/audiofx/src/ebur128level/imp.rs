@@ -538,10 +538,10 @@ impl BaseTransformImpl for EbuR128Level {
                     if state.ebur128.mode().contains(ebur128::Mode::SAMPLE_PEAK) {
                         let peaks = (0..state.info.channels())
                             .map(|c| state.ebur128.sample_peak(c).map(|p| p.to_send_value()))
-                            .collect::<Result<Vec<_>, _>>();
+                            .collect::<Result<gst::Array, _>>();
 
                         match peaks {
-                            Ok(peaks) => s.set("sample-peak", gst::Array::from(peaks)),
+                            Ok(peaks) => s.set("sample-peak", peaks),
                             Err(err) => {
                                 gst::error!(CAT, imp: self, "Failed to get sample peaks: {}", err)
                             }
@@ -551,10 +551,10 @@ impl BaseTransformImpl for EbuR128Level {
                     if state.ebur128.mode().contains(ebur128::Mode::TRUE_PEAK) {
                         let peaks = (0..state.info.channels())
                             .map(|c| state.ebur128.true_peak(c).map(|p| p.to_send_value()))
-                            .collect::<Result<Vec<_>, _>>();
+                            .collect::<Result<gst::Array, _>>();
 
                         match peaks {
-                            Ok(peaks) => s.set("true-peak", gst::Array::from(peaks)),
+                            Ok(peaks) => s.set("true-peak", peaks),
                             Err(err) => {
                                 gst::error!(CAT, imp: self, "Failed to get true peaks: {}", err)
                             }

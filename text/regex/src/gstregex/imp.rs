@@ -235,21 +235,20 @@ impl ObjectImpl for RegEx {
         match pspec.name() {
             "commands" => {
                 let state = self.state.lock().unwrap();
-                let mut commands = vec![];
+                let mut commands = gst::Array::default();
                 for command in &state.commands {
                     match command.operation {
                         Operation::ReplaceAll(ref replacement) => {
-                            commands.push(
+                            commands.append(
                                 gst::Structure::builder("replace-all")
                                     .field("pattern", &command.pattern)
                                     .field("replacement", replacement)
-                                    .build()
-                                    .to_send_value(),
+                                    .build(),
                             );
                         }
                     }
                 }
-                gst::Array::from(commands).to_value()
+                commands.to_value()
             }
             _ => unimplemented!(),
         }

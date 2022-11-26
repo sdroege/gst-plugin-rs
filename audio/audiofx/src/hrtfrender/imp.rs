@@ -514,15 +514,15 @@ impl ObjectImpl for HrtfRender {
             }
             "spatial-objects" => {
                 let settings = self.settings.lock().unwrap();
-                let spatial_objects = settings
+
+                settings
                     .spatial_objects
                     .as_ref()
                     .unwrap_or(&Vec::new())
                     .iter()
                     .map(|x| gst::Structure::from(*x).to_send_value())
-                    .collect::<Vec<_>>();
-
-                gst::Array::from(spatial_objects).to_value()
+                    .collect::<gst::Array>()
+                    .to_value()
             }
             _ => unimplemented!(),
         }

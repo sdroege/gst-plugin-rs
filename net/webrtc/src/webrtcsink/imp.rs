@@ -806,15 +806,15 @@ impl Session {
     fn gather_stats(&self) -> gst::Structure {
         let mut ret = self.stats.to_owned();
 
-        let encoder_stats: Vec<_> = self
+        let encoder_stats = self
             .encoders
             .iter()
             .map(VideoEncoder::gather_stats)
             .map(|s| s.to_send_value())
-            .collect();
+            .collect::<gst::Array>();
 
         let our_stats = gst::Structure::builder("application/x-webrtcsink-consumer-stats")
-            .field("video-encoders", gst::Array::from(encoder_stats))
+            .field("video-encoders", encoder_stats)
             .build();
 
         ret.set("consumer-stats", our_stats);
