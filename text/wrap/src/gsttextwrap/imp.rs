@@ -176,8 +176,8 @@ impl TextWrap {
                 state.end_ts = None;
             }
 
-            let duration_per_word: gst::ClockTime =
-                duration / data.split_whitespace().count() as u64;
+            let num_words = data.split_whitespace().count() as u64;
+            let duration_per_word = (num_words != 0).then(|| duration / num_words);
 
             if state.start_ts.is_none() {
                 state.start_ts = buffer.pts();
