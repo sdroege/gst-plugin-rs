@@ -13,7 +13,7 @@ use crate::utils::{
 use crate::GstRsWebRTCICETransportPolicy;
 use bytes::Bytes;
 use futures::future;
-use gst::{element_imp_error, glib, prelude::*, subclass::prelude::*, ErrorMessage};
+use gst::{glib, prelude::*, subclass::prelude::*, ErrorMessage};
 use gst_sdp::*;
 use gst_webrtc::*;
 use once_cell::sync::Lazy;
@@ -469,7 +469,7 @@ impl WhepSrc {
                     }
                     WebRTCICEConnectionState::Failed => {
                         self_.terminate_session();
-                        element_imp_error!(self_, gst::ResourceError::Failed, ["ICE failed"]);
+                        gst::element_imp_error!(self_, gst::ResourceError::Failed, ["ICE failed"]);
                     }
                     WebRTCICEConnectionState::Disconnected => (),
                     WebRTCICEConnectionState::Closed => (),
@@ -498,7 +498,7 @@ impl WhepSrc {
                     WebRTCPeerConnectionState::Disconnected => (),
                     WebRTCPeerConnectionState::Failed => {
                         self_.terminate_session();
-                        element_imp_error!(
+                        gst::element_imp_error!(
                             self_,
                             gst::ResourceError::Failed,
                             ["PeerConnection failed"]
@@ -550,7 +550,7 @@ impl WhepSrc {
                 let endpoint =
                     reqwest::Url::parse(settings.whep_endpoint.as_ref().unwrap().as_str());
                 if let Err(e) = endpoint {
-                    element_imp_error!(
+                    gst::element_imp_error!(
                         self_,
                         gst::ResourceError::Failed,
                         ["Could not parse WHEP endpoint URL :{}", e]
@@ -568,7 +568,7 @@ impl WhepSrc {
                 drop(state);
 
                 if let Err(e) = self_.initial_post_request(endpoint.unwrap()) {
-                    element_imp_error!(
+                    gst::element_imp_error!(
                         self_,
                         gst::ResourceError::Failed,
                         ["Error in initial post request - {}", e.to_string()]
@@ -801,7 +801,7 @@ impl WhepSrc {
             let reply = match reply {
                 Ok(Some(reply)) => reply,
                 Ok(None) => {
-                    element_imp_error!(
+                    gst::element_imp_error!(
                         self_,
                         gst::LibraryError::Failed,
                         ["generate offer::Promise returned with no reply"]
@@ -809,7 +809,7 @@ impl WhepSrc {
                     return;
                 }
                 Err(e) => {
-                    element_imp_error!(
+                    gst::element_imp_error!(
                         self_,
                         gst::LibraryError::Failed,
                         ["generate offer::Promise returned with error {:?}", e]
@@ -835,7 +835,7 @@ impl WhepSrc {
                 );
             } else {
                 gst::error!(CAT, imp: self_, "Reply without an offer: {}", reply);
-                element_imp_error!(
+                gst::element_imp_error!(
                     self_,
                     gst::LibraryError::Failed,
                     ["generate offer::Promise returned with no reply"]
@@ -907,7 +907,7 @@ impl WhepSrc {
 
         let offer_sdp = match local_desc {
             None => {
-                element_imp_error!(
+                gst::element_imp_error!(
                     self,
                     gst::ResourceError::Failed,
                     ["Local description is not set"]
@@ -925,7 +925,7 @@ impl WhepSrc {
         );
 
         if let Err(e) = self.send_sdp(offer_sdp.sdp()) {
-            element_imp_error!(
+            gst::element_imp_error!(
                 self,
                 gst::ResourceError::Failed,
                 ["Error in sending answer - {}", e.to_string()]
@@ -1034,7 +1034,7 @@ impl WhepSrc {
                 (State::Stopped, whep_resource_url.clone())
             }
             _ => {
-                element_imp_error!(
+                gst::element_imp_error!(
                     self,
                     gst::ResourceError::Failed,
                     ["Terminated in unexpected state"]

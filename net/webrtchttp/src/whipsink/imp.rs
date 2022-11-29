@@ -12,7 +12,6 @@ use crate::utils::{
 };
 use crate::GstRsWebRTCICETransportPolicy;
 use futures::future;
-use gst::element_imp_error;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -498,7 +497,7 @@ impl WhipSink {
         /* Note that we check for a valid WHIP endpoint in change_state */
         let endpoint = reqwest::Url::parse(settings.whip_endpoint.as_ref().unwrap().as_str());
         if let Err(e) = endpoint {
-            element_imp_error!(
+            gst::element_imp_error!(
                 self,
                 gst::ResourceError::Failed,
                 ["Could not parse endpoint URL: {}", e]
@@ -520,7 +519,7 @@ impl WhipSink {
 
         let offer_sdp = match local_desc {
             None => {
-                element_imp_error!(
+                gst::element_imp_error!(
                     self,
                     gst::ResourceError::Failed,
                     ["Local description is not set"]
@@ -540,7 +539,7 @@ impl WhipSink {
         match self.do_post(offer_sdp, endpoint.unwrap()) {
             Ok(_) => (),
             Err(e) => {
-                element_imp_error!(
+                gst::element_imp_error!(
                     self,
                     gst::ResourceError::Failed,
                     ["Failed to send offer: {}", e]
@@ -831,7 +830,7 @@ impl WhipSink {
                 (State::Stopped, resource_url.clone())
             }
             _ => {
-                element_imp_error!(
+                gst::element_imp_error!(
                     self,
                     gst::ResourceError::Failed,
                     ["Terminated in unexpected state"]
