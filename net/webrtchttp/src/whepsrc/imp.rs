@@ -10,7 +10,7 @@
 use crate::utils::{
     build_reqwest_client, parse_redirect_location, set_ice_servers, wait, WaitError,
 };
-use crate::GstRsWebRTCICETransportPolicy;
+use crate::IceTransportPolicy;
 use bytes::Bytes;
 use futures::future;
 use gst::{glib, prelude::*, subclass::prelude::*, ErrorMessage};
@@ -30,8 +30,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-const DEFAULT_ICE_TRANSPORT_POLICY: GstRsWebRTCICETransportPolicy =
-    GstRsWebRTCICETransportPolicy::All;
+const DEFAULT_ICE_TRANSPORT_POLICY: IceTransportPolicy = IceTransportPolicy::All;
 const MAX_REDIRECTS: u8 = 10;
 const DEFAULT_TIMEOUT: u32 = 15;
 
@@ -44,7 +43,7 @@ struct Settings {
     whep_endpoint: Option<String>,
     auth_token: Option<String>,
     use_link_headers: bool,
-    ice_transport_policy: GstRsWebRTCICETransportPolicy,
+    ice_transport_policy: IceTransportPolicy,
     timeout: u32,
 }
 
@@ -248,7 +247,7 @@ impl ObjectImpl for WhepSrc {
                     .nick("Authorization Token")
                     .blurb("Authentication token to use, will be sent in the HTTP Header as 'Bearer <auth-token>'")
                     .build(),
-                glib::ParamSpecEnum::builder::<GstRsWebRTCICETransportPolicy>("ice-transport-policy", DEFAULT_ICE_TRANSPORT_POLICY)
+                glib::ParamSpecEnum::builder::<IceTransportPolicy>("ice-transport-policy", DEFAULT_ICE_TRANSPORT_POLICY)
                     .nick("ICE transport policy")
                     .blurb("The policy to apply for ICE transport")
                     .build(),
@@ -313,10 +312,10 @@ impl ObjectImpl for WhepSrc {
             "ice-transport-policy" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.ice_transport_policy = value
-                    .get::<GstRsWebRTCICETransportPolicy>()
+                    .get::<IceTransportPolicy>()
                     .expect("ice-transport-policy should be an enum value");
 
-                if settings.ice_transport_policy == GstRsWebRTCICETransportPolicy::Relay {
+                if settings.ice_transport_policy == IceTransportPolicy::Relay {
                     self.webrtcbin
                         .set_property_from_str("ice-transport-policy", "relay");
                 } else {

@@ -23,7 +23,7 @@ mod whipsink;
 #[repr(u32)]
 #[enum_type(name = "GstRsWebRTCICETransportPolicy")]
 #[non_exhaustive]
-pub enum GstRsWebRTCICETransportPolicy {
+pub enum IceTransportPolicy {
     #[enum_value(name = "All: get both STUN and TURN candidate pairs", nick = "all")]
     All = 0,
     #[enum_value(name = "Relay: get only TURN candidate pairs", nick = "relay")]
@@ -33,7 +33,7 @@ pub enum GstRsWebRTCICETransportPolicy {
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "doc")]
     {
-        GstRsWebRTCICETransportPolicy::static_type()
+        IceTransportPolicy::static_type()
             .mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }
     whipsink::register(plugin)?;
