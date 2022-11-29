@@ -282,13 +282,13 @@ foreach plugin : plugins
     warning('Static plugin @0@ is known to fail. It will not be included in libgstreamer-full.'.format(plugin_name))
   else
     gst_plugins += dep
-  endif
 
-  pc_files += [plugin_name + '.pc']
-  if plugin_name.startswith('gst')
-    plugin_names += [plugin_name.substring(3)]
-  else
-    plugin_names += [plugin_name]
+    pc_files += [plugin_name + '.pc']
+    if plugin_name.startswith('gst')
+      plugin_names += [plugin_name.substring(3)]
+    else
+      plugin_names += [plugin_name]
+    endif
   endif
 endforeach
 
