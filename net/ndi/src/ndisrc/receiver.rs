@@ -1591,7 +1591,7 @@ impl Receiver {
             let mut positions = [gst_audio::AudioChannelPosition::None; 64];
             let _ = gst_audio::AudioChannelPosition::positions_from_mask(
                 gst_audio::AudioChannelPosition::fallback_mask(channels),
-                &mut positions,
+                &mut positions[..channels as usize],
             );
 
             let builder = gst_audio::AudioInfo::builder(
@@ -1599,7 +1599,7 @@ impl Receiver {
                 audio_frame.sample_rate() as u32,
                 channels,
             )
-            .positions(&positions[..audio_frame.no_channels() as usize]);
+            .positions(&positions[..channels as usize]);
 
             let info = builder.build().map_err(|_| {
                 gst::element_error!(
