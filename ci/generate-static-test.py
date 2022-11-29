@@ -7,6 +7,7 @@ import os
 from utils import iterate_plugins
 
 # the csound version used on ci does not ship a .pc file
+# threadshare we skip in meson static build as well
 IGNORE = ['csound', 'threadshare']
 
 outdir = sys.argv[1]
