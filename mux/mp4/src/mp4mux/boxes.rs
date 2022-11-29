@@ -904,50 +904,11 @@ fn write_visual_sample_entry(
             write_box(v, b"colr", move |v| {
                 v.extend(b"nclx");
                 let (primaries, transfer, matrix) = {
-                    #[cfg(feature = "v1_18")]
-                    {
-                        (
-                            (colorimetry.primaries().to_iso() as u16),
-                            (colorimetry.transfer().to_iso() as u16),
-                            (colorimetry.matrix().to_iso() as u16),
-                        )
-                    }
-                    #[cfg(not(feature = "v1_18"))]
-                    {
-                        let primaries = match colorimetry.primaries() {
-                            gst_video::VideoColorPrimaries::Bt709 => 1u16,
-                            gst_video::VideoColorPrimaries::Bt470m => 4u16,
-                            gst_video::VideoColorPrimaries::Bt470bg => 5u16,
-                            gst_video::VideoColorPrimaries::Smpte170m => 6u16,
-                            gst_video::VideoColorPrimaries::Smpte240m => 7u16,
-                            gst_video::VideoColorPrimaries::Film => 8u16,
-                            gst_video::VideoColorPrimaries::Bt2020 => 9u16,
-                            _ => 2,
-                        };
-                        let transfer = match colorimetry.transfer() {
-                            gst_video::VideoTransferFunction::Bt709 => 1u16,
-                            gst_video::VideoTransferFunction::Gamma22 => 4u16,
-                            gst_video::VideoTransferFunction::Gamma28 => 5u16,
-                            gst_video::VideoTransferFunction::Smpte240m => 7u16,
-                            gst_video::VideoTransferFunction::Gamma10 => 8u16,
-                            gst_video::VideoTransferFunction::Log100 => 9u16,
-                            gst_video::VideoTransferFunction::Log316 => 10u16,
-                            gst_video::VideoTransferFunction::Srgb => 13u16,
-                            gst_video::VideoTransferFunction::Bt202012 => 15u16,
-                            _ => 2,
-                        };
-                        let matrix = match colorimetry.matrix() {
-                            gst_video::VideoColorMatrix::Rgb => 0u16,
-                            gst_video::VideoColorMatrix::Bt709 => 1u16,
-                            gst_video::VideoColorMatrix::Fcc => 4u16,
-                            gst_video::VideoColorMatrix::Bt601 => 6u16,
-                            gst_video::VideoColorMatrix::Smpte240m => 7u16,
-                            gst_video::VideoColorMatrix::Bt2020 => 9u16,
-                            _ => 2,
-                        };
-
-                        (primaries, transfer, matrix)
-                    }
+                    (
+                        (colorimetry.primaries().to_iso() as u16),
+                        (colorimetry.transfer().to_iso() as u16),
+                        (colorimetry.matrix().to_iso() as u16),
+                    )
                 };
 
                 let full_range = match colorimetry.range() {
@@ -965,29 +926,26 @@ fn write_visual_sample_entry(
             })?;
         }
 
-        #[cfg(feature = "v1_18")]
-        {
-            if let Ok(cll) = gst_video::VideoContentLightLevel::from_caps(&stream.caps) {
-                write_box(v, b"clli", move |v| {
-                    v.extend((cll.max_content_light_level() as u16).to_be_bytes());
-                    v.extend((cll.max_frame_average_light_level() as u16).to_be_bytes());
-                    Ok(())
-                })?;
-            }
+        if let Ok(cll) = gst_video::VideoContentLightLevel::from_caps(&stream.caps) {
+            write_box(v, b"clli", move |v| {
+                v.extend((cll.max_content_light_level() as u16).to_be_bytes());
+                v.extend((cll.max_frame_average_light_level() as u16).to_be_bytes());
+                Ok(())
+            })?;
+        }
 
-            if let Ok(mastering) = gst_video::VideoMasteringDisplayInfo::from_caps(&stream.caps) {
-                write_box(v, b"mdcv", move |v| {
-                    for primary in mastering.display_primaries() {
-                        v.extend(primary.x.to_be_bytes());
-                        v.extend(primary.y.to_be_bytes());
-                    }
-                    v.extend(mastering.white_point().x.to_be_bytes());
-                    v.extend(mastering.white_point().y.to_be_bytes());
-                    v.extend(mastering.max_display_mastering_luminance().to_be_bytes());
-                    v.extend(mastering.max_display_mastering_luminance().to_be_bytes());
-                    Ok(())
-                })?;
-            }
+        if let Ok(mastering) = gst_video::VideoMasteringDisplayInfo::from_caps(&stream.caps) {
+            write_box(v, b"mdcv", move |v| {
+                for primary in mastering.display_primaries() {
+                    v.extend(primary.x.to_be_bytes());
+                    v.extend(primary.y.to_be_bytes());
+                }
+                v.extend(mastering.white_point().x.to_be_bytes());
+                v.extend(mastering.white_point().y.to_be_bytes());
+                v.extend(mastering.max_display_mastering_luminance().to_be_bytes());
+                v.extend(mastering.max_display_mastering_luminance().to_be_bytes());
+                Ok(())
+            })?;
         }
 
         // Write fiel box for codecs that require it
