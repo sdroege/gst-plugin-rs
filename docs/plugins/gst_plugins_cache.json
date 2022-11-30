@@ -1070,7 +1070,7 @@
                         "writable": true
                     }
                 },
-                "rank": "primary + 1"
+                "rank": "primary"
             }
         },
         "filename": "gstdav1d",
