@@ -42,7 +42,21 @@ fn create_ui(app: &gtk::Application) {
         (src, sink)
     } else {
         let src = gst::ElementFactory::make("videotestsrc").build().unwrap();
-        (src, gtksink)
+
+        let sink = gst::Bin::default();
+        let convert = gst::ElementFactory::make("videoconvert").build().unwrap();
+
+        sink.add(&convert).unwrap();
+        sink.add(&gtksink).unwrap();
+        convert.link(&gtksink).unwrap();
+
+        sink.add_pad(
+            &gst::GhostPad::with_target(Some("sink"), &convert.static_pad("sink").unwrap())
+                .unwrap(),
+        )
+        .unwrap();
+
+        (src, sink.upcast())
     };
 
     pipeline.add_many(&[&src, &overlay, &sink]).unwrap();
