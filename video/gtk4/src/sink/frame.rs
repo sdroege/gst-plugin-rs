@@ -9,6 +9,9 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use gst_video::prelude::*;
+
+#[cfg(feature = "gst_gl")]
 use gst_gl::prelude::*;
 use gtk::{gdk, glib};
 use std::collections::{HashMap, HashSet};
@@ -17,6 +20,7 @@ use std::collections::{HashMap, HashSet};
 pub(crate) struct Frame {
     frame: gst_video::VideoFrame<gst_video::video_frame::Readable>,
     overlays: Vec<Overlay>,
+    #[cfg(feature = "gst_gl")]
     gst_context: Option<gst_gl::GLContext>,
 }
 
@@ -90,6 +94,7 @@ fn video_frame_to_memory_texture(
     (texture, pixel_aspect_ratio)
 }
 
+#[cfg(feature = "gst_gl")]
 fn video_frame_to_gl_texture(
     frame: &gst_video::VideoFrame<gst_video::video_frame::Readable>,
     cached_textures: &mut HashMap<usize, gdk::Texture>,
@@ -127,7 +132,7 @@ fn video_frame_to_gl_texture(
 impl Frame {
     pub(crate) fn into_textures(
         self,
-        gdk_context: Option<&gdk::GLContext>,
+        #[allow(unused_variables)] gdk_context: Option<&gdk::GLContext>,
         cached_textures: &mut HashMap<usize, gdk::Texture>,
     ) -> Vec<Texture> {
         let mut textures = Vec::with_capacity(1 + self.overlays.len());
@@ -135,18 +140,26 @@ impl Frame {
 
         let width = self.frame.width();
         let height = self.frame.height();
-        let (texture, pixel_aspect_ratio) =
-            if let (Some(gdk_ctx), Some(gst_ctx)) = (gdk_context, self.gst_context.as_ref()) {
-                video_frame_to_gl_texture(
-                    &self.frame,
-                    cached_textures,
-                    &mut used_textures,
-                    gdk_ctx,
-                    gst_ctx,
-                )
-            } else {
+        let (texture, pixel_aspect_ratio) = {
+            #[cfg(not(feature = "gst_gl"))]
+            {
                 video_frame_to_memory_texture(self.frame, cached_textures, &mut used_textures)
-            };
+            }
+            #[cfg(feature = "gst_gl")]
+            {
+                if let (Some(gdk_ctx), Some(gst_ctx)) = (gdk_context, self.gst_context.as_ref()) {
+                    video_frame_to_gl_texture(
+                        &self.frame,
+                        cached_textures,
+                        &mut used_textures,
+                        gdk_ctx,
+                        gst_ctx,
+                    )
+                } else {
+                    video_frame_to_memory_texture(self.frame, cached_textures, &mut used_textures)
+                }
+            }
+        };
 
         textures.push(Texture {
             texture,
@@ -182,47 +195,67 @@ impl Frame {
     pub(crate) fn new(
         buffer: &gst::Buffer,
         info: &gst_video::VideoInfo,
-        have_gl_context: bool,
+        #[allow(unused_variables)] have_gl_context: bool,
     ) -> Result<Self, gst::FlowError> {
-        let mut gst_context = None;
-
         // Empty buffers get filtered out in show_frame
         debug_assert!(buffer.n_memory() > 0);
 
-        let is_buffer_gl = buffer
-            .peek_memory(0)
-            .downcast_memory_ref::<gst_gl::GLBaseMemory>()
-            .is_some();
+        let mut frame;
 
-        let frame = if !is_buffer_gl || !have_gl_context {
-            gst_video::VideoFrame::from_buffer_readable(buffer.clone(), info)
-                .map_err(|_| gst::FlowError::Error)?
-        } else {
-            let gst_ctx = buffer
+        #[cfg(not(feature = "gst_gl"))]
+        {
+            frame = Self {
+                frame: gst_video::VideoFrame::from_buffer_readable(buffer.clone(), info)
+                    .map_err(|_| gst::FlowError::Error)?,
+                overlays: vec![],
+            };
+        }
+        #[cfg(feature = "gst_gl")]
+        {
+            let is_buffer_gl = buffer
                 .peek_memory(0)
                 .downcast_memory_ref::<gst_gl::GLBaseMemory>()
-                .map(|m| m.context())
-                .expect("Failed to retrieve the GstGL Context.");
+                .is_some();
 
-            gst_context = Some(gst_ctx.clone());
-
-            if let Some(meta) = buffer.meta::<gst_gl::GLSyncMeta>() {
-                meta.set_sync_point(gst_ctx);
-                gst_video::VideoFrame::from_buffer_readable_gl(buffer.clone(), info)
-                    .map_err(|_| gst::FlowError::Error)?
+            if !is_buffer_gl || !have_gl_context {
+                frame = Self {
+                    frame: gst_video::VideoFrame::from_buffer_readable(buffer.clone(), info)
+                        .map_err(|_| gst::FlowError::Error)?,
+                    overlays: vec![],
+                    gst_context: None,
+                };
             } else {
-                let mut buffer = buffer.clone();
-                {
-                    let buffer = buffer.make_mut();
-                    let meta = gst_gl::GLSyncMeta::add(buffer, gst_ctx);
-                    meta.set_sync_point(gst_ctx);
-                }
-                gst_video::VideoFrame::from_buffer_readable_gl(buffer, info)
-                    .map_err(|_| gst::FlowError::Error)?
-            }
-        };
+                let gst_ctx = buffer
+                    .peek_memory(0)
+                    .downcast_memory_ref::<gst_gl::GLBaseMemory>()
+                    .map(|m| m.context())
+                    .expect("Failed to retrieve the GstGL Context.");
 
-        let overlays = frame
+                let mapped_frame = if let Some(meta) = buffer.meta::<gst_gl::GLSyncMeta>() {
+                    meta.set_sync_point(gst_ctx);
+                    gst_video::VideoFrame::from_buffer_readable_gl(buffer.clone(), info)
+                        .map_err(|_| gst::FlowError::Error)?
+                } else {
+                    let mut buffer = buffer.clone();
+                    {
+                        let buffer = buffer.make_mut();
+                        let meta = gst_gl::GLSyncMeta::add(buffer, gst_ctx);
+                        meta.set_sync_point(gst_ctx);
+                    }
+                    gst_video::VideoFrame::from_buffer_readable_gl(buffer, info)
+                        .map_err(|_| gst::FlowError::Error)?
+                };
+
+                frame = Self {
+                    frame: mapped_frame,
+                    overlays: vec![],
+                    gst_context: Some(gst_ctx.clone()),
+                };
+            }
+        }
+
+        frame.overlays = frame
+            .frame
             .buffer()
             .iter_meta::<gst_video::VideoOverlayCompositionMeta>()
             .flat_map(|meta| {
@@ -258,10 +291,6 @@ impl Frame {
             })
             .collect();
 
-        Ok(Self {
-            frame,
-            overlays,
-            gst_context,
-        })
+        Ok(frame)
     }
 }

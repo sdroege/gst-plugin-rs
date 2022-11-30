@@ -13,24 +13,28 @@ use super::SinkEvent;
 use crate::sink::frame::Frame;
 use crate::sink::paintable::Paintable;
 
-use glib::translate::*;
 use glib::Sender;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
-use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_base::subclass::prelude::*;
-use gst_gl::prelude::GLContextExt as GstGLContextExt;
-use gst_gl::prelude::*;
 use gst_video::subclass::prelude::*;
 
 use once_cell::sync::Lazy;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard};
 
 use crate::utils;
 use fragile::Fragile;
+
+#[cfg(feature = "gst_gl")]
+use glib::translate::*;
+#[cfg(feature = "gst_gl")]
+use gst_gl::prelude::GLContextExt as GstGLContextExt;
+#[cfg(feature = "gst_gl")]
+use gst_gl::prelude::*;
+#[cfg(feature = "gst_gl")]
+use std::sync::atomic::{AtomicBool, Ordering};
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -46,10 +50,14 @@ pub struct PaintableSink {
     info: Mutex<Option<gst_video::VideoInfo>>,
     sender: Mutex<Option<Sender<SinkEvent>>>,
     pending_frame: Mutex<Option<Frame>>,
+    #[cfg(feature = "gst_gl")]
     gst_display: Mutex<Option<gst_gl::GLDisplay>>,
+    #[cfg(feature = "gst_gl")]
     gst_app_context: Mutex<Option<gst_gl::GLContext>>,
+    #[cfg(feature = "gst_gl")]
     gst_context: Mutex<Option<gst_gl::GLContext>>,
     cached_caps: Mutex<Option<gst::Caps>>,
+    #[cfg(feature = "gst_gl")]
     have_gl_context: AtomicBool,
 }
 
@@ -274,78 +282,87 @@ impl BaseSinkImpl for PaintableSink {
         // TODO: Provide a preferred "window size" here for higher-resolution rendering
         query.add_allocation_meta::<gst_video::VideoOverlayCompositionMeta>(None);
 
+        #[cfg(not(feature = "gst_gl"))]
         {
-            // Early return if there is no context initialized
-            let gst_context_guard = self.gst_context.lock().unwrap();
-            if gst_context_guard.is_none() {
-                gst::debug!(
-                    CAT,
-                    imp: self,
-                    "Found no GL Context during propose_allocation."
-                );
-                return Ok(());
-            }
+            Ok(())
         }
 
-        // GL specific things
-        let (caps, need_pool) = query.get_owned();
-
-        if caps.is_empty() {
-            return Err(gst::loggable_error!(CAT, "No caps where specified."));
-        }
-
-        if let Some(f) = caps.features(0) {
-            if !f.contains("memory:GLMemory") {
-                gst::debug!(
-                    CAT,
-                    imp: self,
-                    "No 'memory:GLMemory' feature in caps: {}",
-                    caps
-                )
-            }
-        }
-
-        let info = gst_video::VideoInfo::from_caps(&caps)
-            .map_err(|_| gst::loggable_error!(CAT, "Failed to get VideoInfo from caps"))?;
-
-        let size = info.size() as u32;
-
+        #[cfg(feature = "gst_gl")]
         {
-            let gst_context = { self.gst_context.lock().unwrap().clone().unwrap() };
-            let buffer_pool = gst_gl::GLBufferPool::new(&gst_context);
-
-            if need_pool {
-                gst::debug!(CAT, imp: self, "Creating new Pool");
-
-                let mut config = buffer_pool.config();
-                config.set_params(Some(&caps), size, 0, 0);
-                config.add_option("GstBufferPoolOptionGLSyncMeta");
-
-                if let Err(err) = buffer_pool.set_config(config) {
-                    return Err(gst::loggable_error!(
+            {
+                // Early return if there is no context initialized
+                let gst_context_guard = self.gst_context.lock().unwrap();
+                if gst_context_guard.is_none() {
+                    gst::debug!(
                         CAT,
-                        format!("Failed to set config in the GL BufferPool.: {}", err)
-                    ));
+                        imp: self,
+                        "Found no GL Context during propose_allocation."
+                    );
+                    return Ok(());
                 }
             }
 
-            // we need at least 2 buffer because we hold on to the last one
-            query.add_allocation_pool(Some(&buffer_pool), size, 2, 0);
+            // GL specific things
+            let (caps, need_pool) = query.get_owned();
 
-            if gst_context.check_feature("GL_ARB_sync")
-                || gst_context.check_feature("GL_EXT_EGL_sync")
-            {
-                query.add_allocation_meta::<gst_gl::GLSyncMeta>(None)
+            if caps.is_empty() {
+                return Err(gst::loggable_error!(CAT, "No caps where specified."));
             }
-        }
 
-        Ok(())
+            if let Some(f) = caps.features(0) {
+                if !f.contains("memory:GLMemory") {
+                    gst::debug!(
+                        CAT,
+                        imp: self,
+                        "No 'memory:GLMemory' feature in caps: {}",
+                        caps
+                    )
+                }
+            }
+
+            let info = gst_video::VideoInfo::from_caps(&caps)
+                .map_err(|_| gst::loggable_error!(CAT, "Failed to get VideoInfo from caps"))?;
+
+            let size = info.size() as u32;
+
+            {
+                let gst_context = { self.gst_context.lock().unwrap().clone().unwrap() };
+                let buffer_pool = gst_gl::GLBufferPool::new(&gst_context);
+
+                if need_pool {
+                    gst::debug!(CAT, imp: self, "Creating new Pool");
+
+                    let mut config = buffer_pool.config();
+                    config.set_params(Some(&caps), size, 0, 0);
+                    config.add_option("GstBufferPoolOptionGLSyncMeta");
+
+                    if let Err(err) = buffer_pool.set_config(config) {
+                        return Err(gst::loggable_error!(
+                            CAT,
+                            format!("Failed to set config in the GL BufferPool.: {}", err)
+                        ));
+                    }
+                }
+
+                // we need at least 2 buffer because we hold on to the last one
+                query.add_allocation_pool(Some(&buffer_pool), size, 2, 0);
+
+                if gst_context.check_feature("GL_ARB_sync")
+                    || gst_context.check_feature("GL_EXT_EGL_sync")
+                {
+                    query.add_allocation_meta::<gst_gl::GLSyncMeta>(None)
+                }
+            }
+
+            Ok(())
+        }
     }
 
     fn query(&self, query: &mut gst::QueryRef) -> bool {
         gst::log!(CAT, imp: self, "Handling query {:?}", query);
 
         match query.view_mut() {
+            #[cfg(feature = "gst_gl")]
             gst::QueryViewMut::Context(q) => {
                 // Avoid holding the locks while we respond to the query
                 // The objects are ref-counted anyway.
@@ -396,11 +413,20 @@ impl VideoSinkImpl for PaintableSink {
             gst::FlowError::NotNegotiated
         })?;
 
-        let frame = Frame::new(buffer, info, self.have_gl_context.load(Ordering::Relaxed))
-            .map_err(|err| {
-                gst::error!(CAT, imp: self, "Failed to map video frame");
-                err
-            })?;
+        let have_gl_context = {
+            #[cfg(not(feature = "gst_gl"))]
+            {
+                false
+            }
+            #[cfg(feature = "gst_gl")]
+            {
+                self.have_gl_context.load(Ordering::Relaxed)
+            }
+        };
+        let frame = Frame::new(buffer, info, have_gl_context).map_err(|err| {
+            gst::error!(CAT, imp: self, "Failed to map video frame");
+            err
+        })?;
         self.pending_frame.lock().unwrap().replace(frame);
 
         let sender = self.sender.lock().unwrap();
@@ -441,15 +467,19 @@ impl PaintableSink {
     }
 
     fn configure_caps(&self) {
+        #[allow(unused_mut)]
         let mut tmp_caps = Self::pad_templates()[0].caps().clone();
 
-        // Filter out GL caps from the template pads if we have no context
-        if !self.have_gl_context.load(Ordering::Relaxed) {
-            tmp_caps = tmp_caps
-                .iter_with_features()
-                .filter(|(_, features)| !features.contains("memory:GLMemory"))
-                .map(|(s, c)| (s.to_owned(), c.to_owned()))
-                .collect::<gst::Caps>();
+        #[cfg(feature = "gst_gl")]
+        {
+            // Filter out GL caps from the template pads if we have no context
+            if !self.have_gl_context.load(Ordering::Relaxed) {
+                tmp_caps = tmp_caps
+                    .iter_with_features()
+                    .filter(|(_, features)| !features.contains("memory:GLMemory"))
+                    .map(|(s, c)| (s.to_owned(), c.to_owned()))
+                    .collect::<gst::Caps>();
+            }
         }
 
         self.cached_caps
@@ -459,18 +489,18 @@ impl PaintableSink {
     }
 
     fn create_paintable(&self, paintable_storage: &mut MutexGuard<Option<Fragile<Paintable>>>) {
-        let ctx = self.realize_context();
+        #[allow(unused_mut)]
+        let mut ctx = None;
 
-        let ctx = if let Some(c) = ctx {
-            if let Ok(c) = self.initialize_gl_wrapper(c) {
-                self.have_gl_context.store(true, Ordering::Relaxed);
-                Some(c)
-            } else {
-                None
+        #[cfg(feature = "gst_gl")]
+        {
+            if let Some(c) = self.realize_context() {
+                if let Ok(c) = self.initialize_gl_wrapper(c) {
+                    self.have_gl_context.store(true, Ordering::Relaxed);
+                    ctx = Some(c);
+                }
             }
-        } else {
-            None
-        };
+        }
 
         self.configure_caps();
         self.initialize_paintable(ctx, paintable_storage);
@@ -505,6 +535,7 @@ impl PaintableSink {
         *self.sender.lock().unwrap() = Some(sender);
     }
 
+    #[cfg(feature = "gst_gl")]
     fn realize_context(&self) -> Option<Fragile<gdk::GLContext>> {
         gst::debug!(CAT, imp: self, "Realizing GDK GL Context");
 
@@ -551,6 +582,7 @@ impl PaintableSink {
         utils::invoke_on_main_thread(cb)
     }
 
+    #[cfg(feature = "gst_gl")]
     fn initialize_gl_wrapper(
         &self,
         context: Fragile<gdk::GLContext>,
@@ -560,6 +592,7 @@ impl PaintableSink {
         utils::invoke_on_main_thread(move || self_.imp().initialize_gl(context))
     }
 
+    #[cfg(feature = "gst_gl")]
     fn initialize_gl(
         &self,
         context: Fragile<gdk::GLContext>,

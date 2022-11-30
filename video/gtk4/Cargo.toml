@@ -16,7 +16,7 @@ gdk_x11 = { package = "gdk4-x11", git = "https://github.com/gtk-rs/gtk4-rs", fea
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"] }
 gst_base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst_video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gst_gl = { package = "gstreamer-gl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"] }
+gst_gl = { package = "gstreamer-gl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"], optional = true }
 
 gst_gl_wayland = { package = "gstreamer-gl-wayland", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"], optional = true }
 gst_gl_x11 = { package = "gstreamer-gl-x11", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"], optional = true }
@@ -36,9 +36,9 @@ gst-plugin-version-helper = { path="../../version-helper" }
 [features]
 default = []
 static = []
-wayland = ["gdk_wayland", "gst_gl_wayland"]
-x11glx = ["gdk_x11", "gst_gl_x11"]
-x11egl = ["gdk_x11", "gst_gl_egl"]
+wayland = ["gdk_wayland", "gst_gl", "gst_gl_wayland"]
+x11glx = ["gdk_x11", "gst_gl", "gst_gl_x11"]
+x11egl = ["gdk_x11", "gst_gl", "gst_gl_egl"]
 capi = []
 doc = ["gst/v1_18"]
 
