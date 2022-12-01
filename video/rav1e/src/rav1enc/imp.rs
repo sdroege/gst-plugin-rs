@@ -166,6 +166,7 @@ impl Context {
                             rav1e::prelude::FrameTypeOverride::No
                         },
                         opaque: Some(rav1e::prelude::Opaque::new(frame_number)),
+                        t35_metadata: Box::default(),
                     }),
                 ))
             }
@@ -199,6 +200,7 @@ impl Context {
                             rav1e::prelude::FrameTypeOverride::No
                         },
                         opaque: Some(rav1e::prelude::Opaque::new(frame_number)),
+                        t35_metadata: Box::default(),
                     }),
                 ))
             }
@@ -581,6 +583,10 @@ impl VideoEncoderImpl for Rav1Enc {
             .with_encoder_config(config::EncoderConfig {
                 width: video_info.width() as usize,
                 height: video_info.height() as usize,
+                sample_aspect_ratio: rav1e::data::Rational {
+                    num: video_info.par().numer() as u64,
+                    den: video_info.par().denom() as u64,
+                },
                 bit_depth: video_info.format_info().depth()[0] as usize,
                 chroma_sampling: match video_info.format() {
                     gst_video::VideoFormat::I420
@@ -748,7 +754,7 @@ impl VideoEncoderImpl for Rav1Enc {
                         None
                     }
                 },
-                speed_settings: config::SpeedSettings::from_preset(settings.speed_preset as usize),
+                speed_settings: config::SpeedSettings::from_preset(settings.speed_preset as u8),
                 time_base: if video_info.fps() != gst::Fraction::new(0, 1) {
                     data::Rational {
                         num: video_info.fps().numer() as u64,
@@ -767,11 +773,6 @@ impl VideoEncoderImpl for Rav1Enc {
                 tile_cols: settings.tile_cols,
                 tile_rows: settings.tile_rows,
                 tiles: settings.tiles,
-                rdo_lookahead_frames: if settings.rdo_lookahead_frames < 0 {
-                    config::SpeedSettings::rdo_lookahead_frames(settings.speed_preset as usize)
-                } else {
-                    settings.rdo_lookahead_frames as usize
-                },
                 tune: match settings.tune {
                     Tune::Psnr => rav1e::prelude::Tune::Psnr,
                     Tune::Psychovisual => rav1e::prelude::Tune::Psychovisual,
