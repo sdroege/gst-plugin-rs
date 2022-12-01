@@ -8,19 +8,20 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::utils::{
-    build_reqwest_client, parse_redirect_location, set_ice_servers, wait, WaitError,
+    build_reqwest_client, parse_redirect_location, set_ice_servers, wait, wait_async, WaitError,
+    RUNTIME,
 };
 use crate::IceTransportPolicy;
+use async_recursion::async_recursion;
 use bytes::Bytes;
 use futures::future;
-use gst::{glib, prelude::*, subclass::prelude::*, ErrorMessage};
+use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_sdp::*;
 use gst_webrtc::*;
 use once_cell::sync::Lazy;
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::StatusCode;
 use std::sync::Mutex;
-use std::thread::{spawn, JoinHandle};
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -79,14 +80,8 @@ impl Default for Settings {
 #[derive(Debug)]
 enum State {
     Stopped,
-    Post {
-        redirects: u8,
-        thread_handle: Option<JoinHandle<()>>,
-    },
-    Running {
-        whep_resource: String,
-        thread_handle: Option<JoinHandle<()>>,
-    },
+    Post { redirects: u8 },
+    Running { whep_resource: String },
 }
 
 impl Default for State {
@@ -407,6 +402,22 @@ impl BinImpl for WhepSrc {
 }
 
 impl WhepSrc {
+    fn raise_error(&self, resource_error: gst::ResourceError, msg: String) {
+        gst::error_msg!(resource_error, [msg.as_str()]);
+        gst::element_imp_error!(self, resource_error, [msg.as_str()]);
+    }
+
+    fn handle_future_error(&self, err: WaitError) {
+        match err {
+            WaitError::FutureAborted => {
+                gst::warning!(CAT, imp: self, "Future aborted")
+            }
+            WaitError::FutureError(err) => {
+                self.raise_error(gst::ResourceError::Failed, err.to_string())
+            }
+        };
+    }
+
     fn setup_webrtcbin(&self) {
         // The specification requires all m= lines to be bundled (section 4.5)
         self.webrtcbin
@@ -429,17 +440,18 @@ impl WhepSrc {
                     WebRTCICEGatheringState::Complete => {
                         gst::info!(CAT, imp: self_, "ICE gathering completed");
 
-                        let mut state = self_.state.lock().unwrap();
                         let self_ref = self_.ref_counted();
 
-                        gst::debug!(CAT, imp: self_, "Spawning thread to send offer");
-                        let handle = spawn(move || self_ref.whep_offer());
-
-                        *state = State::Post {
-                            redirects: 0,
-                            thread_handle: Some(handle),
-                        };
-                        drop(state);
+                        // With tokio's spawn one does not have to .await the
+                        // returned JoinHandle to make the provided future start
+                        // execution. It will start running in the background
+                        // immediately when spawn is called. So silence the clippy
+                        // warning.
+                        #[allow(clippy::let_underscore_future)]
+                        let _ = RUNTIME.spawn(async move {
+                            /* Note that we check for a valid WHEP endpoint in change_state */
+                            self_ref.whep_offer().await
+                        });
                     }
                     _ => (),
                 }
@@ -560,30 +572,27 @@ impl WhepSrc {
                 drop(settings);
 
                 let mut state = self_.state.lock().unwrap();
-                *state = State::Post {
-                    redirects: 0,
-                    thread_handle: None,
-                };
+                *state = State::Post { redirects: 0 };
                 drop(state);
 
-                if let Err(e) = self_.initial_post_request(endpoint.unwrap()) {
-                    gst::element_imp_error!(
-                        self_,
-                        gst::ResourceError::Failed,
-                        ["Error in initial post request - {}", e.to_string()]
-                    );
-                    return None;
-                }
+                self_.initial_post_request(endpoint.unwrap());
 
                 None
             }
         });
     }
 
-    fn sdp_message_parse(&self, sdp_bytes: Bytes) -> Result<(), ErrorMessage> {
-        let sdp = sdp_message::SDPMessage::parse_buffer(&sdp_bytes).map_err(|_| {
-            gst::error_msg!(gst::ResourceError::Failed, ["Could not parse answer SDP"])
-        })?;
+    fn sdp_message_parse(&self, sdp_bytes: Bytes) {
+        let sdp = match sdp_message::SDPMessage::parse_buffer(&sdp_bytes) {
+            Ok(sdp) => sdp,
+            Err(_) => {
+                self.raise_error(
+                    gst::ResourceError::Failed,
+                    "Could not parse answer SDP".to_string(),
+                );
+                return;
+            }
+        };
 
         let remote_sdp = WebRTCSessionDescription::new(WebRTCSDPType::Answer, sdp);
 
@@ -612,55 +621,63 @@ impl WhepSrc {
                     .emit_by_name::<()>("add-ice-candidate", &[&m_line_index, &c]);
             }
         }
-
-        Ok(())
     }
 
-    fn parse_endpoint_response(
+    async fn parse_endpoint_response(
         &self,
-        endpoint: reqwest::Url,
-        redirects: u8,
+        sess_desc: WebRTCSessionDescription,
         resp: reqwest::Response,
-    ) -> Result<(), ErrorMessage> {
+        redirects: u8,
+    ) {
+        let endpoint;
+        let timeout;
+        let use_link_headers;
+
+        {
+            let settings = self.settings.lock().unwrap();
+            endpoint =
+                reqwest::Url::parse(settings.whep_endpoint.as_ref().unwrap().as_str()).unwrap();
+            use_link_headers = settings.use_link_headers;
+            timeout = settings.timeout;
+            drop(settings);
+        }
+
         match resp.status() {
             StatusCode::OK | StatusCode::NO_CONTENT => {
                 gst::info!(CAT, imp: self, "SDP offer successfully send");
-                Ok(())
             }
 
             StatusCode::CREATED => {
                 gst::debug!(CAT, imp: self, "Response headers: {:?}", resp.headers());
 
-                let settings = self
-                    .settings
-                    .lock()
-                    .expect("Failed to acquire settings lock");
-                let timeout = settings.timeout;
-
-                if settings.use_link_headers {
-                    set_ice_servers(&self.webrtcbin, resp.headers())?;
+                if use_link_headers {
+                    if let Err(e) = set_ice_servers(&self.webrtcbin, resp.headers()) {
+                        self.raise_error(gst::ResourceError::Failed, e.to_string());
+                        return;
+                    };
                 }
-
-                drop(settings);
 
                 /* See section 4.2 of the WHEP specification */
                 let location = match resp.headers().get(reqwest::header::LOCATION) {
                     Some(location) => location,
                     None => {
-                        return Err(gst::error_msg!(
+                        self.raise_error(
                             gst::ResourceError::Failed,
-                            ["Location header field should be present for WHEP resource URL"]
-                        ));
+                            "Location header field should be present for WHEP resource URL"
+                                .to_string(),
+                        );
+                        return;
                     }
                 };
 
                 let location = match location.to_str() {
                     Ok(loc) => loc,
                     Err(e) => {
-                        return Err(gst::error_msg!(
+                        self.raise_error(
                             gst::ResourceError::Failed,
-                            ["Failed to convert location to string {}", e]
-                        ));
+                            format!("Failed to convert location to string: {e}"),
+                        );
+                        return;
                     }
                 };
 
@@ -668,123 +685,109 @@ impl WhepSrc {
 
                 gst::debug!(CAT, imp: self, "WHEP resource: {:?}", location);
 
-                let url = url.join(location).map_err(|err| {
-                    gst::error_msg!(
-                        gst::ResourceError::Failed,
-                        ["URL join operation failed: {:?}", err]
-                    )
-                })?;
-
-                let mut state = self.state.lock().unwrap();
-                *state = match *state {
-                    State::Post {
-                        redirects: _r,
-                        thread_handle: ref mut h,
-                    } => State::Running {
-                        whep_resource: url.to_string(),
-                        thread_handle: h.take(),
-                    },
-                    _ => {
-                        return Err(gst::error_msg!(
+                let url = match url.join(location) {
+                    Ok(joined_url) => joined_url,
+                    Err(err) => {
+                        self.raise_error(
                             gst::ResourceError::Failed,
-                            ["Expected to be in POST state"]
-                        ));
+                            format!("URL join operation failed: {err:?}"),
+                        );
+                        return;
                     }
                 };
-                drop(state);
 
-                let future = async {
-                    resp.bytes().await.map_err(|err| {
-                        gst::error_msg!(
-                            gst::ResourceError::Failed,
-                            ["Failed to get response body: {:?}", err]
-                        )
-                    })
-                };
+                match wait_async(&self.canceller, resp.bytes(), timeout).await {
+                    Ok(res) => match res {
+                        Ok(ans_bytes) => {
+                            let mut state = self.state.lock().unwrap();
+                            *state = match *state {
+                                State::Post { redirects: _r } => State::Running {
+                                    whep_resource: url.to_string(),
+                                },
+                                _ => {
+                                    self.raise_error(
+                                        gst::ResourceError::Failed,
+                                        "Expected to be in POST state".to_string(),
+                                    );
+                                    return;
+                                }
+                            };
+                            drop(state);
 
-                match wait(&self.canceller, future, timeout) {
-                    Ok(ans_bytes) => self.sdp_message_parse(ans_bytes),
-                    Err(err) => match err {
-                        WaitError::FutureAborted => Ok(()),
-                        WaitError::FutureError(e) => Err(e),
+                            self.sdp_message_parse(ans_bytes)
+                        }
+                        Err(err) => self.raise_error(gst::ResourceError::Failed, err.to_string()),
                     },
+                    Err(err) => self.handle_future_error(err),
                 }
             }
 
             status if status.is_redirection() => {
                 if redirects < MAX_REDIRECTS {
-                    let mut state = self.state.lock().unwrap();
-                    *state = match *state {
-                        State::Post {
-                            redirects: _r,
-                            thread_handle: ref mut h,
-                        } => State::Post {
-                            redirects: redirects + 1,
-                            thread_handle: h.take(),
-                        },
-                        /*
-                         * As per section 4.6 of the specification, redirection is
-                         * not required to be supported for the PATCH and DELETE
-                         * requests to the final WHEP resource URL. Only the initial
-                         * POST request may support redirection.
-                         */
-                        State::Running { .. } => {
-                            return Err(gst::error_msg!(
-                                gst::ResourceError::Failed,
-                                ["Unexpected redirection in RUNNING state"]
-                            ));
-                        }
-                        State::Stopped => unreachable!(),
-                    };
-
-                    drop(state);
-
                     match parse_redirect_location(resp.headers(), &endpoint) {
                         Ok(redirect_url) => {
+                            {
+                                let mut state = self.state.lock().unwrap();
+                                *state = match *state {
+                                    State::Post { redirects: _r } => State::Post {
+                                        redirects: redirects + 1,
+                                    },
+                                    /*
+                                     * As per section 4.6 of the specification, redirection is
+                                     * not required to be supported for the PATCH and DELETE
+                                     * requests to the final WHEP resource URL. Only the initial
+                                     * POST request may support redirection.
+                                     */
+                                    State::Running { .. } => {
+                                        self.raise_error(
+                                            gst::ResourceError::Failed,
+                                            "Unexpected redirection in RUNNING state".to_string(),
+                                        );
+                                        return;
+                                    }
+                                    State::Stopped => unreachable!(),
+                                };
+                                drop(state);
+                            }
+
                             gst::warning!(
                                 CAT,
                                 imp: self,
                                 "Redirecting endpoint to {}",
                                 redirect_url.as_str()
                             );
-                            self.initial_post_request(redirect_url)
+
+                            if let Err(err) =
+                                wait_async(&self.canceller, self.do_post(sess_desc), timeout).await
+                            {
+                                self.handle_future_error(err);
+                            }
                         }
-                        Err(e) => Err(e),
+                        Err(e) => self.raise_error(gst::ResourceError::Failed, e.to_string()),
                     }
                 } else {
-                    Err(gst::error_msg!(
+                    self.raise_error(
                         gst::ResourceError::Failed,
-                        ["Too many redirects. Unable to connect."]
-                    ))
+                        "Too many redirects. Unable to connect.".to_string(),
+                    );
                 }
             }
 
             s => {
-                let future = async {
-                    resp.bytes().await.map_err(|err| {
-                        gst::error_msg!(
+                match wait_async(&self.canceller, resp.bytes(), timeout).await {
+                    Ok(r) => {
+                        let res = r
+                            .map(|x| x.escape_ascii().to_string())
+                            .unwrap_or_else(|_| "(no further details)".to_string());
+
+                        // FIXME: Check and handle 'Retry-After' header in case of server error
+                        self.raise_error(
                             gst::ResourceError::Failed,
-                            ["Failed to get response body: {:?}", err]
-                        )
-                    })
-                };
-
-                let settings = self
-                    .settings
-                    .lock()
-                    .expect("Failed to acquire settings lock");
-                let timeout = settings.timeout;
-                drop(settings);
-
-                let res = wait(&self.canceller, future, timeout)
-                    .map(|x| x.escape_ascii().to_string())
-                    .unwrap_or_else(|_| "(no further details)".to_string());
-
-                // FIXME: Check and handle 'Retry-After' header in case of server error
-                Err(gst::error_msg!(
-                    gst::ResourceError::Failed,
-                    ["Unexpected response: {} - {}", s.as_str(), res]
-                ))
+                            format!("Unexpected response: {} - {}", s.as_str(), res),
+                        );
+                    }
+                    Err(err) => self.handle_future_error(err),
+                }
             }
         }
     }
@@ -833,11 +836,16 @@ impl WhepSrc {
                     &[&offer_sdp, &None::<gst::Promise>],
                 );
             } else {
-                gst::error!(CAT, imp: self_, "Reply without an offer: {}", reply);
+                let error = reply
+                    .value("error")
+                    .expect("structure must have an error value")
+                    .get::<glib::Error>()
+                    .expect("value must be a GLib error");
+
                 gst::element_imp_error!(
                     self_,
                     gst::LibraryError::Failed,
-                    ["generate offer::Promise returned with no reply"]
+                    ["generate offer::Promise returned with no reply: {}", error]
                 );
             }
         });
@@ -878,7 +886,7 @@ impl WhepSrc {
             .emit_by_name::<()>("create-offer", &[&None::<gst::Structure>, &promise]);
     }
 
-    fn initial_post_request(&self, endpoint: reqwest::Url) -> Result<(), ErrorMessage> {
+    fn initial_post_request(&self, endpoint: reqwest::Url) {
         let state = self.state.lock().unwrap();
 
         gst::info!(CAT, imp: self, "WHEP endpoint url: {}", endpoint.as_str());
@@ -886,20 +894,19 @@ impl WhepSrc {
         match *state {
             State::Post { .. } => (),
             _ => {
-                return Err(gst::error_msg!(
+                self.raise_error(
                     gst::ResourceError::Failed,
-                    ["Trying to do POST in unexpected state"]
-                ));
+                    "Trying to do POST in unexpected state".to_string(),
+                );
+                return;
             }
         };
         drop(state);
 
-        self.generate_offer();
-
-        Ok(())
+        self.generate_offer()
     }
 
-    fn whep_offer(&self) {
+    async fn whep_offer(&self) {
         let local_desc = self
             .webrtcbin
             .property::<Option<WebRTCSessionDescription>>("local-description");
@@ -923,40 +930,34 @@ impl WhepSrc {
             offer_sdp.sdp().as_text()
         );
 
-        if let Err(e) = self.send_sdp(offer_sdp.sdp()) {
-            gst::element_imp_error!(
-                self,
-                gst::ResourceError::Failed,
-                ["Error in sending answer - {}", e.to_string()]
-            );
+        let sess_desc = WebRTCSessionDescription::new(WebRTCSDPType::Offer, offer_sdp.sdp());
+
+        let timeout;
+        {
+            let settings = self.settings.lock().unwrap();
+            timeout = settings.timeout;
+            drop(settings);
+        }
+
+        if let Err(e) = wait_async(&self.canceller, self.do_post(sess_desc), timeout).await {
+            self.handle_future_error(e);
         }
     }
 
-    fn send_sdp(&self, sdp: SDPMessage) -> Result<(), gst::ErrorMessage> {
-        let sess_desc = WebRTCSessionDescription::new(WebRTCSDPType::Offer, sdp);
-        let settings = self.settings.lock().unwrap();
+    #[async_recursion]
+    async fn do_post(&self, offer: WebRTCSessionDescription) {
+        let auth_token;
+        let endpoint;
+        let timeout;
 
-        let endpoint = reqwest::Url::parse(settings.whep_endpoint.as_ref().unwrap().as_str());
-
-        if let Err(e) = endpoint {
-            return Err(gst::error_msg!(
-                gst::ResourceError::Failed,
-                ["Could not parse endpoint URL: {}", e]
-            ));
+        {
+            let settings = self.settings.lock().unwrap();
+            endpoint =
+                reqwest::Url::parse(settings.whep_endpoint.as_ref().unwrap().as_str()).unwrap();
+            auth_token = settings.auth_token.clone();
+            timeout = settings.timeout;
+            drop(settings);
         }
-
-        drop(settings);
-
-        self.do_post(sess_desc, endpoint.unwrap())
-    }
-
-    fn do_post(
-        &self,
-        offer: WebRTCSessionDescription,
-        endpoint: reqwest::Url,
-    ) -> Result<(), gst::ErrorMessage> {
-        let settings = self.settings.lock().unwrap();
-        let timeout = settings.timeout;
 
         let sdp = offer.sdp();
         let body = sdp.as_text().unwrap();
@@ -969,16 +970,14 @@ impl WhepSrc {
             HeaderValue::from_static("application/sdp"),
         );
 
-        if let Some(token) = &settings.auth_token {
-            let bearer_token = "Bearer ".to_owned() + token;
+        if let Some(token) = auth_token.as_ref() {
+            let bearer_token = "Bearer ".to_owned() + token.as_str();
             headermap.insert(
                 reqwest::header::AUTHORIZATION,
                 HeaderValue::from_str(bearer_token.as_str())
                     .expect("Failed to set auth token to header"),
             );
         }
-
-        drop(settings);
 
         gst::debug!(
             CAT,
@@ -987,51 +986,63 @@ impl WhepSrc {
             endpoint.as_str()
         );
 
-        let future = async {
+        let res = wait_async(
+            &self.canceller,
             self.client
                 .request(reqwest::Method::POST, endpoint.clone())
                 .headers(headermap)
                 .body(body)
-                .send()
-                .await
-                .map_err(|err| {
-                    gst::error_msg!(
-                        gst::ResourceError::Failed,
-                        ["HTTP POST request failed {}: {:?}", endpoint.as_str(), err]
-                    )
-                })
-        };
+                .send(),
+            timeout,
+        )
+        .await;
 
-        match wait(&self.canceller, future, timeout) {
-            Ok(resp) => self.parse_endpoint_response(endpoint, 0, resp),
-            Err(err) => match err {
-                WaitError::FutureAborted => Ok(()),
-                WaitError::FutureError(e) => Err(e),
+        match res {
+            Ok(resp) => match resp {
+                Ok(r) => {
+                    #[allow(unused_mut)]
+                    let mut redirects;
+
+                    {
+                        let state = self.state.lock().unwrap();
+                        redirects = match *state {
+                            State::Post { redirects } => redirects,
+                            _ => {
+                                self.raise_error(
+                                    gst::ResourceError::Failed,
+                                    "Trying to do POST in unexpected state".to_string(),
+                                );
+                                return;
+                            }
+                        };
+                        drop(state);
+                    }
+
+                    if let Err(e) = wait_async(
+                        &self.canceller,
+                        self.parse_endpoint_response(offer, r, redirects),
+                        timeout,
+                    )
+                    .await
+                    {
+                        self.handle_future_error(e);
+                    }
+                }
+                Err(err) => self.raise_error(gst::ResourceError::Failed, err.to_string()),
             },
+            Err(err) => self.handle_future_error(err),
         }
     }
 
     fn terminate_session(&self) {
         let settings = self.settings.lock().unwrap();
-        let mut state = self.state.lock().unwrap();
+        let state = self.state.lock().unwrap();
         let timeout = settings.timeout;
-        let resource_url;
 
-        (*state, resource_url) = match *state {
+        let resource_url = match *state {
             State::Running {
                 whep_resource: ref whep_resource_url,
-                thread_handle: ref mut h,
-            } => {
-                if let Some(th) = h.take() {
-                    match th.join() {
-                        Ok(_) => {
-                            gst::debug!(CAT, imp: self, "Send offer thread joined successfully");
-                        }
-                        Err(e) => gst::error!(CAT, imp: self, "Failed to join thread: {:?}", e),
-                    }
-                }
-                (State::Stopped, whep_resource_url.clone())
-            }
+            } => whep_resource_url.clone(),
             _ => {
                 gst::element_imp_error!(
                     self,
