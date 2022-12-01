@@ -66,27 +66,11 @@ version = "0.3"
 name = "semver"
 version = "0.11"
 
-# ignore duplicated system-deps dependency because rav1e depends on an old version
-[[bans.skip]]
-name = "system-deps"
-version = "3"
-[[bans.skip]]
-name = "version-compare"
-version = "0.0"
-[[bans.skip]]
-name = "cfg-expr"
-version = "0.7"
-
 # ignore duplicated crc dependency because ffv1 depends on an old version
 # https://github.com/rust-av/ffv1/issues/21
 [[bans.skip]]
 name = "crc"
 version = "1.8"
-
-# ignore duplicated heck dependency because various crates depend on an old version
-[[bans.skip]]
-name = "heck"
-version = "0.3"
 
 # ignore duplicated sha-1/digest/block-buffer dependencies because librespot depends on an old version
 [[bans.skip]]
