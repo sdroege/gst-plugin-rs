@@ -23,6 +23,59 @@ pub static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
         .unwrap()
 });
 
+pub async fn wait_async<F, T>(
+    canceller: &Mutex<Option<future::AbortHandle>>,
+    future: F,
+    timeout: u32,
+) -> Result<T, WaitError>
+where
+    F: Send + Future<Output = T>,
+    T: Send + 'static,
+{
+    let (abort_handle, abort_registration) = future::AbortHandle::new_pair();
+    {
+        let mut canceller_guard = canceller.lock().unwrap();
+        canceller_guard.replace(abort_handle);
+        drop(canceller_guard);
+    }
+
+    let future = async {
+        if timeout == 0 {
+            Ok(future.await)
+        } else {
+            let res = tokio::time::timeout(Duration::from_secs(timeout.into()), future).await;
+
+            match res {
+                Ok(r) => Ok(r),
+                Err(e) => Err(WaitError::FutureError(gst::error_msg!(
+                    gst::ResourceError::Read,
+                    ["Request timeout, elapsed: {}", e]
+                ))),
+            }
+        }
+    };
+
+    let future = async {
+        match future::Abortable::new(future, abort_registration).await {
+            Ok(Ok(r)) => Ok(r),
+
+            Ok(Err(err)) => Err(WaitError::FutureError(gst::error_msg!(
+                gst::ResourceError::Failed,
+                ["Future resolved with an error {:?}", err]
+            ))),
+
+            Err(future::Aborted) => Err(WaitError::FutureAborted),
+        }
+    };
+
+    let res = future.await;
+
+    let mut canceller_guard = canceller.lock().unwrap();
+    *canceller_guard = None;
+
+    res
+}
+
 pub fn wait<F, T>(
     canceller: &Mutex<Option<future::AbortHandle>>,
     future: F,
