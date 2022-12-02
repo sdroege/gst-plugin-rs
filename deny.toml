@@ -127,13 +127,6 @@ version = "0.5"
 name = "idna"
 version = "0.2"
 
-# async-io / async-channel depend on an old version of concurrent-queue
-# https://github.com/smol-rs/async-channel/pull/50
-# https://github.com/smol-rs/async-io/pull/99
-[[bans.skip]]
-name = "concurrent-queue"
-version = "1"
-
 # image depends on older gif
 # https://github.com/image-rs/image/pull/1826
 [[bans.skip]]
