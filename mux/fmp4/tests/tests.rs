@@ -77,6 +77,9 @@ fn test_buffer_flags_single_stream(cmaf: bool, set_dts: bool, caps: gst::Caps) {
         }
     }
 
+    // Crank the clock: this should bring us to the end of the first fragment
+    h.crank_single_clock_wait().unwrap();
+
     let header = h.pull().unwrap();
     assert_eq!(
         header.flags(),
@@ -312,6 +315,9 @@ fn test_buffer_flags_multi_stream() {
         }
     }
 
+    // Crank the clock: this should bring us to the end of the first fragment
+    h1.crank_single_clock_wait().unwrap();
+
     let header = h1.pull().unwrap();
     assert_eq!(
         header.flags(),
@@ -509,8 +515,7 @@ fn test_live_timeout() {
         }
     }
 
-    // Advance time and crank the clock: this should bring us to the end of the first fragment
-    h1.set_time(5.seconds()).unwrap();
+    // Crank the clock: this should bring us to the end of the first fragment
     h1.crank_single_clock_wait().unwrap();
 
     let header = h1.pull().unwrap();
@@ -728,8 +733,7 @@ fn test_gap_events() {
         }
     }
 
-    // Advance time and crank the clock: this should bring us to the end of the first fragment
-    h1.set_time(5.seconds()).unwrap();
+    // Crank the clock: this should bring us to the end of the first fragment
     h1.crank_single_clock_wait().unwrap();
 
     let header = h1.pull().unwrap();
@@ -1018,6 +1022,9 @@ fn test_single_stream_long_gops() {
             );
         }
     }
+
+    // Crank the clock: this should bring us to the end of the first fragment
+    h.crank_single_clock_wait().unwrap();
 
     let header = h.pull().unwrap();
     assert_eq!(
