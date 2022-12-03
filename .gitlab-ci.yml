@@ -316,48 +316,49 @@ documentation:
       when: 'manual'
 
 # build gst-plugins-rs as a gst-build subproject
-gst-build:
-  extends: .meson
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: 'manual'
-      allow_failure: true
-  variables:
-    MESON_ARGS: >
-      -Domx=disabled
-      -Dpython=disabled
-      -Dlibav=disabled
-      -Dlibnice=disabled
-      -Dugly=disabled
-      -Dbad=disabled
-      -Ddevtools=disabled
-      -Dges=disabled
-      -Drtsp_server=disabled
-      -Dvaapi=disabled
-      -Dsharp=disabled
-      -Dgst-examples=disabled
-      -Drs=enabled
-      -Dgst-plugins-rs:sodium=system
-  script:
-    - P=$(pwd)
-    - cd ..
-    - rm -rf gstreamer
-    - git clone --depth 1 https://gitlab.freedesktop.org/gstreamer/gstreamer.git --branch main
-    - cd gstreamer
-    - ln -s $P subprojects/gst-plugins-rs
-    - meson build $MESON_ARGS
-    - ninja -C build
-    # Check static Rust plugins can be linked into gst-full
-    - meson build-gst-full --default-library=static $MESON_ARGS
-    - ninja -C build-gst-full
-    - meson devenv -C build-gst-full ./gst-inspect-1.0 rsaudiofx
-  artifacts:
-    expire_in: '7 days'
-    when: always
-    paths:
-      - 'build/meson-logs/'
-      - 'build-gst-full/meson-logs/'
+# Disabled because of https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/262
+#gst-build:
+#  extends: .meson
+#  rules:
+#    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+#    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+#      when: 'manual'
+#      allow_failure: true
+#  variables:
+#    MESON_ARGS: >
+#      -Domx=disabled
+#      -Dpython=disabled
+#      -Dlibav=disabled
+#      -Dlibnice=disabled
+#      -Dugly=disabled
+#      -Dbad=disabled
+#      -Ddevtools=disabled
+#      -Dges=disabled
+#      -Drtsp_server=disabled
+#      -Dvaapi=disabled
+#      -Dsharp=disabled
+#      -Dgst-examples=disabled
+#      -Drs=enabled
+#      -Dgst-plugins-rs:sodium=system
+#  script:
+#    - P=$(pwd)
+#    - cd ..
+#    - rm -rf gstreamer
+#    - git clone --depth 1 https://gitlab.freedesktop.org/gstreamer/gstreamer.git --branch main
+#    - cd gstreamer
+#    - ln -s $P subprojects/gst-plugins-rs
+#    - meson build $MESON_ARGS
+#    - ninja -C build
+#    # Check static Rust plugins can be linked into gst-full
+#    - meson build-gst-full --default-library=static $MESON_ARGS
+#    - ninja -C build-gst-full
+#    - meson devenv -C build-gst-full ./gst-inspect-1.0 rsaudiofx
+#  artifacts:
+#    expire_in: '7 days'
+#    when: always
+#    paths:
+#      - 'build/meson-logs/'
+#      - 'build-gst-full/meson-logs/'
 
 .msvc2019 build:
   stage: 'test'
