@@ -33,8 +33,7 @@ pub enum IceTransportPolicy {
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "doc")]
     {
-        IceTransportPolicy::static_type()
-            .mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        IceTransportPolicy::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }
     whipsink::register(plugin)?;
     whepsrc::register(plugin)?;
