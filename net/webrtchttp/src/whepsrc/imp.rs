@@ -845,7 +845,7 @@ impl WhepSrc {
                 gst::element_imp_error!(
                     self_,
                     gst::LibraryError::Failed,
-                    ["generate offer::Promise returned with no reply: {}", error]
+                    ["generate offer::Promise returned with error: {}", error]
                 );
             }
         });
