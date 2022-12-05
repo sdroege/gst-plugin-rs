@@ -226,7 +226,10 @@ pub fn set_ice_servers(
             // construct url as '<scheme>://<user:pass>@<url>'
             let url = format!("{}://{}", link.uri.scheme(), link.uri.path());
 
-            let Ok(mut new_url) = reqwest::Url::parse(url.as_str()) else { continue };
+            let mut new_url = match reqwest::Url::parse(url.as_str()) {
+                Ok(url) => url,
+                Err(_) => continue,
+            };
 
             if let Some(user) = link.params.get("username") {
                 new_url.set_username(user.as_str()).unwrap();
