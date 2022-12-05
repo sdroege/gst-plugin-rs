@@ -7850,7 +7850,7 @@
                         "writable": true
                     },
                     "use-link-headers": {
-                        "blurb": "Use link headers to configure ICE servers from the WHEP server response.",
+                        "blurb": "Use link headers to configure STUN/TURN servers if present in WHEP endpoint response.",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -7867,14 +7867,14 @@
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
-                        "default": "video/x-vp8; video/x-h264; video/x-vp9; video/x-h265",
+                        "default": "video/x-vp8; video/x-h264; video/x-vp9; video/x-h265; video/x-av1",
                         "mutable": "null",
                         "readable": true,
                         "type": "GstCaps",
                         "writable": true
                     },
                     "whep-endpoint": {
-                        "blurb": "The WHEP server endpoint to POST SDP offer to. Example: http://localhost:7090/whep/endpoint/abc123",
+                        "blurb": "The WHEP server endpoint to POST SDP offer to.",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -7957,7 +7957,7 @@
                         "default": "15",
                         "max": "3600",
                         "min": "0",
-                        "mutable": "ready",
+                        "mutable": "null",
                         "readable": true,
                         "type": "guint",
                         "writable": true
@@ -7975,7 +7975,7 @@
                         "writable": true
                     },
                     "use-link-headers": {
-                        "blurb": "Use link headers to configure ice-servers from the WHIP server response to the POST or OPTIONS request.\n                        If set to TRUE and the WHIP server returns valid ice-servers,\n                        this property overrides the ice-servers values set using the stun-server and turn-server properties.",
+                        "blurb": "Use link headers to configure ice-servers from the WHIP server response to the POST request.\n                        If set to TRUE and the WHIP server returns valid ice-servers,\n                        this property overrides the ice-servers values set using the stun-server and turn-server properties.",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -8017,9 +8017,9 @@
                         "desc": "Relay: get only TURN candidate pairs",
                         "name": "relay",
                         "value": "1"
-                    },
+                    }
                 ]
-            },
+            }
         },
         "package": "gst-plugin-webrtchttp",
         "source": "gst-plugin-webrtchttp",
