@@ -670,6 +670,16 @@ impl PaintableSink {
                     "Failed to fill info on the GL Context: {}",
                     &err
                 );
+                // Deactivate the context upon failure
+                if let Err(err) = app_ctx_guard.as_ref().unwrap().activate(false) {
+                    gst::error!(
+                        CAT,
+                        imp: self,
+                        "Failed to deactivate the context after failing fill info: {}",
+                        &err
+                    );
+                }
+
                 return Err(err);
             }
         };
