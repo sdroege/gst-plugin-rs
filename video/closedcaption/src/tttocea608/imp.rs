@@ -900,7 +900,7 @@ impl TtToCea608 {
                     );
                 }
 
-                let frame_no = (timestamp + duration.unwrap())
+                let frame_no = (timestamp + duration.unwrap_or(gst::ClockTime::ZERO))
                     .mul_div_round(fps_n, fps_d)
                     .unwrap()
                     .seconds();
