@@ -7,6 +7,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::sync::Mutex;
+
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -31,7 +33,21 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
+const DEFAULT_VOICE_ACTIVITY_THRESHOLD: f32 = 0.0;
 const FRAME_SIZE: usize = DenoiseState::FRAME_SIZE;
+
+#[derive(Debug, Clone, Copy)]
+struct Settings {
+    vad_threshold: f32,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            vad_threshold: DEFAULT_VOICE_ACTIVITY_THRESHOLD,
+        }
+    }
+}
 
 struct ChannelDenoiser {
     denoiser: Box<DenoiseState<'static>>,
@@ -47,6 +63,7 @@ struct State {
 
 #[derive(Default)]
 pub struct AudioRNNoise {
+    settings: Mutex<Settings>,
     state: AtomicRefCell<Option<State>>,
 }
 
@@ -83,7 +100,7 @@ impl State {
         self.adapter.available() < (FRAME_SIZE * self.in_info.bpf() as usize)
     }
 
-    fn process(&mut self, input_plane: &[f32], output_plane: &mut [f32]) {
+    fn process(&mut self, input_plane: &[f32], output_plane: &mut [f32], settings: &Settings) {
         let channels = self.in_info.channels() as usize;
         let size = FRAME_SIZE * channels;
 
@@ -104,18 +121,26 @@ impl State {
 
             // FIXME: The first chunks coming out of the denoisers contains some
             // fade-in artifacts. We might want to discard those.
+            let mut vad: f32 = 0.0;
             for channel_denoiser in &mut self.denoisers {
-                channel_denoiser.denoiser.process_frame(
-                    &mut channel_denoiser.out_chunk[..],
-                    &channel_denoiser.frame_chunk[..],
+                vad = f32::max(
+                    vad,
+                    channel_denoiser.denoiser.process_frame(
+                        &mut channel_denoiser.out_chunk[..],
+                        &channel_denoiser.frame_chunk[..],
+                    ),
                 );
             }
 
-            for (index, item) in out_frame.iter_mut().enumerate() {
-                let channel_index = index % channels;
-                let channel_denoiser = &self.denoisers[channel_index];
-                let pos = index / channels;
-                *item = channel_denoiser.out_chunk[pos] / 32767.0;
+            if vad < settings.vad_threshold {
+                out_frame.fill(0.0);
+            } else {
+                for (index, item) in out_frame.iter_mut().enumerate() {
+                    let channel_index = index % channels;
+                    let channel_denoiser = &self.denoisers[channel_index];
+                    let pos = index / channels;
+                    *item = channel_denoiser.out_chunk[pos] / 32767.0;
+                }
             }
         }
     }
@@ -131,6 +156,7 @@ impl AudioRNNoise {
             return Ok(gst::FlowSuccess::Ok);
         }
 
+        let settings = *self.settings.lock().unwrap();
         let mut buffer = gst::Buffer::with_size(available).map_err(|e| {
             gst::error!(CAT, imp: self, "Failed to allocate buffer at EOS {:?}", e);
             gst::FlowError::Flushing
@@ -151,7 +177,7 @@ impl AudioRNNoise {
             let mut out_map = buffer.map_writable().map_err(|_| gst::FlowError::Error)?;
             let out_data = out_map.as_mut_slice_of::<f32>().unwrap();
 
-            state.process(in_data, out_data);
+            state.process(in_data, out_data, &settings);
         }
 
         self.obj().src_pad().push(buffer)
@@ -164,6 +190,7 @@ impl AudioRNNoise {
         let duration = state.buffer_duration(output_size as _);
         let pts = state.current_pts();
 
+        let settings = *self.settings.lock().unwrap();
         let mut buffer = gst::Buffer::with_size(output_size).map_err(|_| gst::FlowError::Error)?;
 
         {
@@ -181,7 +208,7 @@ impl AudioRNNoise {
             let mut out_map = buffer.map_writable().map_err(|_| gst::FlowError::Error)?;
             let out_data = out_map.as_mut_slice_of::<f32>().unwrap();
 
-            state.process(in_data, out_data);
+            state.process(in_data, out_data, &settings);
         }
 
         Ok(GenerateOutputSuccess::Buffer(buffer))
@@ -195,7 +222,42 @@ impl ObjectSubclass for AudioRNNoise {
     type ParentType = gst_base::BaseTransform;
 }
 
-impl ObjectImpl for AudioRNNoise {}
+impl ObjectImpl for AudioRNNoise {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![glib::ParamSpecFloat::builder("voice-activity-threshold")
+                .nick("Voice activity threshold")
+                .blurb("Threshold of the voice activity detector below which to mute the output")
+                .minimum(0.0)
+                .maximum(1.0)
+                .default_value(DEFAULT_VOICE_ACTIVITY_THRESHOLD)
+                .mutable_playing()
+                .build()]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        match pspec.name() {
+            "voice-activity-threshold" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.vad_threshold = value.get().expect("type checked upstream");
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.name() {
+            "voice-activity-threshold" => {
+                let settings = self.settings.lock().unwrap();
+                settings.vad_threshold.to_value()
+            }
+            _ => unimplemented!(),
+        }
+    }
+}
 
 impl GstObjectImpl for AudioRNNoise {}
 

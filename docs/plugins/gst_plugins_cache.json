@@ -3824,6 +3824,22 @@
                         "presence": "always"
                     }
                 },
+                "properties": {
+                    "voice-activity-threshold": {
+                        "blurb": "Threshold of the voice activity detector below which to mute the output",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "1",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gfloat",
+                        "writable": true
+                    }
+                },
                 "rank": "none"
             },
             "ebur128level": {
