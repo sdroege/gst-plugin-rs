@@ -1,0 +1,55 @@
+[package]
+name = "gst-plugin-quic"
+version.workspace = true
+authors = ["Sanchayan Maity <sanchayan@asymptotic.io"]
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+license = "MPL-2.0"
+edition = "2021"
+description = "GStreamer Plugin for QUIC"
+rust-version = "1.63"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+once_cell = "1.19"
+tokio = { version = "1.36.0", default-features = false, features = ["time", "rt-multi-thread"] }
+futures = "0.3.30"
+quinn = "0.10.2"
+rustls = { version = "0.21.8", default-features = false, features = ["dangerous_configuration", "quic"] }
+rustls-pemfile = "1.0.3"
+rcgen = "0.12.1"
+bytes = "1.5.0"
+thiserror = "1"
+
+[dev-dependencies]
+gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_20"] }
+serial_test = "3"
+
+[lib]
+name = "gstquic"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+required-features = ["tls-rustls"]
+
+[build-dependencies]
+gst-plugin-version-helper = { path="../../version-helper" }
+
+[features]
+static = []
+capi = []
+doc = []
+
+[package.metadata.capi]
+min_version = "0.8.0"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-base-1.0, gobject-2.0, glib-2.0"

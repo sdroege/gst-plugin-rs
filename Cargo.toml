@@ -34,6 +34,7 @@ members = [
     "net/webrtc",
     "net/webrtc/protocol",
     "net/webrtc/signalling",
+    "net/quic",
 
     "text/ahead",
     "text/json",
