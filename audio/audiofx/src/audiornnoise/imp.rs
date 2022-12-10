@@ -92,7 +92,7 @@ impl State {
                 let channel_index = index % channels;
                 let channel_denoiser = &mut self.denoisers[channel_index];
                 let pos = index / channels;
-                channel_denoiser.frame_chunk[pos] = *item;
+                channel_denoiser.frame_chunk[pos] = *item * 32767.0;
             }
 
             for i in (in_frame.len() / channels)..(size / channels) {
@@ -115,7 +115,7 @@ impl State {
                 let channel_index = index % channels;
                 let channel_denoiser = &self.denoisers[channel_index];
                 let pos = index / channels;
-                *item = channel_denoiser.out_chunk[pos];
+                *item = channel_denoiser.out_chunk[pos] / 32767.0;
             }
         }
     }
