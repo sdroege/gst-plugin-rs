@@ -28,6 +28,8 @@ struct Settings {
     current_attributes: String,
     ahead_attributes: String,
     buffer_start_segment: bool,
+    n_previous: u32,
+    previous_attributes: String,
 }
 
 impl Default for Settings {
@@ -38,6 +40,8 @@ impl Default for Settings {
             current_attributes: "size=\"larger\"".to_string(),
             ahead_attributes: "size=\"smaller\"".to_string(),
             buffer_start_segment: false,
+            n_previous: 0,
+            previous_attributes: "size=\"smaller\"".to_string(),
         }
     }
 }
@@ -50,6 +54,7 @@ struct Input {
 
 #[derive(Default)]
 struct State {
+    previous: Vec<Input>,
     pending: Vec<Input>,
     done: bool,
     /// Segment for which we should send a buffer with ahead text. Only set if `Settings.buffer_start_segment` is set.
@@ -138,6 +143,18 @@ impl ObjectImpl for TextAhead {
                     .default_value(default.buffer_start_segment)
                     .mutable_playing()
                     .build(),
+                glib::ParamSpecUInt::builder("n-previous")
+                    .nick("n-previous")
+                    .blurb("The number of previous text buffers to display before the current one")
+                    .default_value(default.n_previous)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecString::builder("previous-attributes")
+                    .nick("Previous attributes")
+                    .blurb("Pango span attributes to set on the previous text")
+                    .default_value(&*default.previous_attributes)
+                    .mutable_playing()
+                    .build(),
             ]
         });
 
@@ -163,6 +180,12 @@ impl ObjectImpl for TextAhead {
             "buffer-start-segment" => {
                 settings.buffer_start_segment = value.get().expect("type checked upstream");
             }
+            "n-previous" => {
+                settings.n_previous = value.get().expect("type checked upstream");
+            }
+            "previous-attributes" => {
+                settings.previous_attributes = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -176,6 +199,8 @@ impl ObjectImpl for TextAhead {
             "current-attributes" => settings.current_attributes.to_value(),
             "ahead-attributes" => settings.ahead_attributes.to_value(),
             "buffer-start-segment" => settings.buffer_start_segment.to_value(),
+            "n-previous" => settings.n_previous.to_value(),
+            "previous-attributes" => settings.previous_attributes.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -351,19 +376,66 @@ impl TextAhead {
 
             ("".to_string(), pending_segment.start(), duration)
         } else {
-            let first = state.pending.remove(0);
-            let text = if settings.current_attributes.is_empty() {
-                first.text
-            } else {
-                format!(
-                    "<span {}>{}</span>",
-                    settings.current_attributes, first.text
-                )
-            };
+            let mut text = String::new();
+            let mut first_buffer = true;
 
-            (text, first.pts, first.duration)
+            // previous buffers
+            for previous in state.previous.iter() {
+                if !first_buffer && !settings.separator.is_empty() {
+                    text.push_str(&settings.separator);
+                }
+
+                if settings.ahead_attributes.is_empty() {
+                    text.push_str(&previous.text);
+                } else {
+                    use std::fmt::Write;
+
+                    write!(
+                        &mut text,
+                        "<span {}>{}</span>",
+                        settings.previous_attributes, previous.text,
+                    )
+                    .unwrap();
+                }
+
+                first_buffer = false;
+            }
+
+            // current buffer
+            let current = state.pending.remove(0);
+
+            if !first_buffer && !settings.separator.is_empty() {
+                text.push_str(&settings.separator);
+            }
+
+            if settings.current_attributes.is_empty() {
+                text.push_str(&current.text);
+            } else {
+                use std::fmt::Write;
+
+                write!(
+                    &mut text,
+                    "<span {}>{}</span>",
+                    settings.current_attributes, current.text
+                )
+                .unwrap();
+            }
+
+            let pts = current.pts;
+            let duration = current.duration;
+
+            if settings.n_previous > 0 {
+                state.previous.push(current);
+
+                if state.previous.len() > settings.n_previous as usize {
+                    state.previous.pop();
+                }
+            }
+
+            (text, pts, duration)
         };
 
+        // ahead buffers
         for input in state.pending.iter() {
             if !settings.separator.is_empty() {
                 text.push_str(&settings.separator);
