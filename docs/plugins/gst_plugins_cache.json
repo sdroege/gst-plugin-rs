@@ -6269,6 +6269,32 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "n-previous": {
+                        "blurb": "The number of previous text buffers to display before the current one",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "previous-attributes": {
+                        "blurb": "Pango span attributes to set on the previous text",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "size=\"smaller\"",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "separator": {
                         "blurb": "Text inserted between each text buffers",
                         "conditionally-available": false,
