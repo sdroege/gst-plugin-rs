@@ -366,10 +366,8 @@ impl ObjectImpl for WhipSink {
                         // With tokio's spawn one does not have to .await the
                         // returned JoinHandle to make the provided future start
                         // execution. It will start running in the background
-                        // immediately when spawn is called. So silence the clippy
-                        // warning.
-                        #[allow(clippy::let_underscore_future)]
-                        let _ = RUNTIME.spawn(async move {
+                        // immediately when spawn is called.
+                        RUNTIME.spawn(async move {
                             /* Note that we check for a valid WHIP endpoint in change_state */
                             self_ref.send_offer().await
                         });
