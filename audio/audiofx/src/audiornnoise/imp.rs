@@ -99,51 +99,6 @@ impl State {
     fn needs_more_data(&self) -> bool {
         self.adapter.available() < (FRAME_SIZE * self.in_info.bpf() as usize)
     }
-
-    fn process(&mut self, input_plane: &[f32], output_plane: &mut [f32], settings: &Settings) {
-        let channels = self.in_info.channels() as usize;
-        let size = FRAME_SIZE * channels;
-
-        for (out_frame, in_frame) in output_plane.chunks_mut(size).zip(input_plane.chunks(size)) {
-            for (index, item) in in_frame.iter().enumerate() {
-                let channel_index = index % channels;
-                let channel_denoiser = &mut self.denoisers[channel_index];
-                let pos = index / channels;
-                channel_denoiser.frame_chunk[pos] = *item * 32767.0;
-            }
-
-            for i in (in_frame.len() / channels)..(size / channels) {
-                for c in 0..channels {
-                    let channel_denoiser = &mut self.denoisers[c];
-                    channel_denoiser.frame_chunk[i] = 0.0;
-                }
-            }
-
-            // FIXME: The first chunks coming out of the denoisers contains some
-            // fade-in artifacts. We might want to discard those.
-            let mut vad: f32 = 0.0;
-            for channel_denoiser in &mut self.denoisers {
-                vad = f32::max(
-                    vad,
-                    channel_denoiser.denoiser.process_frame(
-                        &mut channel_denoiser.out_chunk[..],
-                        &channel_denoiser.frame_chunk[..],
-                    ),
-                );
-            }
-
-            if vad < settings.vad_threshold {
-                out_frame.fill(0.0);
-            } else {
-                for (index, item) in out_frame.iter_mut().enumerate() {
-                    let channel_index = index % channels;
-                    let channel_denoiser = &self.denoisers[channel_index];
-                    let pos = index / channels;
-                    *item = channel_denoiser.out_chunk[pos] / 32767.0;
-                }
-            }
-        }
-    }
 }
 
 impl AudioRNNoise {
@@ -177,7 +132,7 @@ impl AudioRNNoise {
             let mut out_map = buffer.map_writable().map_err(|_| gst::FlowError::Error)?;
             let out_data = out_map.as_mut_slice_of::<f32>().unwrap();
 
-            state.process(in_data, out_data, &settings);
+            self.process(state, &settings, in_data, out_data);
         }
 
         self.obj().src_pad().push(buffer)
@@ -208,10 +163,63 @@ impl AudioRNNoise {
             let mut out_map = buffer.map_writable().map_err(|_| gst::FlowError::Error)?;
             let out_data = out_map.as_mut_slice_of::<f32>().unwrap();
 
-            state.process(in_data, out_data, &settings);
+            self.process(state, &settings, in_data, out_data);
         }
 
         Ok(GenerateOutputSuccess::Buffer(buffer))
+    }
+
+    fn process(
+        &self,
+        state: &mut State,
+        settings: &Settings,
+        input_plane: &[f32],
+        output_plane: &mut [f32],
+    ) {
+        let channels = state.in_info.channels() as usize;
+        let size = FRAME_SIZE * channels;
+
+        for (out_frame, in_frame) in output_plane.chunks_mut(size).zip(input_plane.chunks(size)) {
+            for (index, item) in in_frame.iter().enumerate() {
+                let channel_index = index % channels;
+                let channel_denoiser = &mut state.denoisers[channel_index];
+                let pos = index / channels;
+                channel_denoiser.frame_chunk[pos] = *item * 32767.0;
+            }
+
+            for i in (in_frame.len() / channels)..(size / channels) {
+                for c in 0..channels {
+                    let channel_denoiser = &mut state.denoisers[c];
+                    channel_denoiser.frame_chunk[i] = 0.0;
+                }
+            }
+
+            // FIXME: The first chunks coming out of the denoisers contains some
+            // fade-in artifacts. We might want to discard those.
+            let mut vad: f32 = 0.0;
+            for channel_denoiser in &mut state.denoisers {
+                vad = f32::max(
+                    vad,
+                    channel_denoiser.denoiser.process_frame(
+                        &mut channel_denoiser.out_chunk[..],
+                        &channel_denoiser.frame_chunk[..],
+                    ),
+                );
+            }
+
+            gst::debug!(CAT, imp: self, "Voice activity: {}", vad);
+
+            if vad < settings.vad_threshold {
+                out_frame.fill(0.0);
+            } else {
+                for (index, item) in out_frame.iter_mut().enumerate() {
+                    let channel_index = index % channels;
+                    let channel_denoiser = &state.denoisers[channel_index];
+                    let pos = index / channels;
+                    *item = channel_denoiser.out_chunk[pos] / 32767.0;
+                }
+            }
+        }
     }
 }
 
