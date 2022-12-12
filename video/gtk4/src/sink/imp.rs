@@ -648,17 +648,17 @@ impl PaintableSink {
 
         match app_ctx_guard.as_ref().unwrap().fill_info() {
             Ok(_) => {
-                match app_ctx_guard.as_ref().unwrap().activate(true) {
+                match app_ctx_guard.as_ref().unwrap().activate(false) {
                     Ok(_) => gst::info!(
                         CAT,
                         imp: self,
-                        "Successfully activated GL Context after fill_info"
+                        "Successfully deactivated GL Context after fill_info"
                     ),
                     Err(_) => {
-                        gst::error!(CAT, imp: self, "Failed to activate GL context",);
+                        gst::error!(CAT, imp: self, "Failed to deactivate GL context",);
                         return Err(glib::Error::new(
                             gst::ResourceError::Failed,
-                            "Failed to activate GL context after fill_info",
+                            "Failed to deactivate GL context after fill_info",
                         ));
                     }
                 };
