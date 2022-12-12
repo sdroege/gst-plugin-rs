@@ -9,7 +9,7 @@ use gst_utils::StreamProducer;
 use gst_video::subclass::prelude::*;
 use gst_webrtc::WebRTCDataChannel;
 
-use async_std::task;
+use tokio::runtime;
 use futures::prelude::*;
 
 use anyhow::{anyhow, Error};
@@ -29,6 +29,14 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
         gst::DebugColorFlags::empty(),
         Some("WebRTC sink"),
     )
+});
+
+static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
+    runtime::Builder::new_multi_thread()
+        .enable_all()
+        .worker_threads(1)
+        .build()
+        .unwrap()
 });
 
 const CUDA_MEMORY_FEATURE: &str = "memory:CUDAMemory";
@@ -1226,7 +1234,7 @@ impl WebRTCSink {
         }
 
         if let Some(receiver) = state.codecs_done_receiver.take() {
-            task::block_on(async {
+            RUNTIME.spawn(async {
                 let _ = receiver.await;
             });
         }
@@ -1678,7 +1686,7 @@ impl WebRTCSink {
         let pipeline_clone = pipeline.downgrade();
         let session_id_clone = session_id.to_owned();
 
-        task::spawn(async move {
+        RUNTIME.spawn(async move {
             while let Some(msg) = bus_stream.next().await {
                 if let Some(element) = element_clone.upgrade() {
                     let this = element.imp();
@@ -1931,11 +1939,12 @@ impl WebRTCSink {
 
             let element_clone = element.downgrade();
             let webrtcbin = session.webrtcbin.downgrade();
-            task::spawn(async move {
+            RUNTIME.spawn(async move {
                 let mut interval =
-                    async_std::stream::interval(std::time::Duration::from_millis(100));
+                    tokio::time::interval(std::time::Duration::from_millis(100));
 
-                while interval.next().await.is_some() {
+                loop {
+                    interval.tick().await;
                     let element_clone = element_clone.clone();
                     if let (Some(webrtcbin), Some(element)) =
                         (webrtcbin.upgrade(), element_clone.upgrade())
@@ -2294,7 +2303,7 @@ impl WebRTCSink {
 
                     if all_pads_have_caps {
                         let element_clone = element.downgrade();
-                        task::spawn(async move {
+                        RUNTIME.spawn(async move {
                             if let Some(element) = element_clone.upgrade() {
                                 let this = element.imp();
                                 let (fut, handle) =

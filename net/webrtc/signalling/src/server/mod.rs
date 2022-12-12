@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use anyhow::Error;
-use async_std::task;
+use tokio::task;
 use async_tungstenite::tungstenite::Message as WsMessage;
 use futures::channel::mpsc;
 use futures::prelude::*;
-use futures::{AsyncRead, AsyncWrite};
+use tokio::io::{AsyncRead, AsyncWrite};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::pin::Pin;
@@ -99,7 +99,10 @@ impl Server {
                 if let Err(err) = peer.send_task_handle.await {
                     trace!(peer_id = %peer_id, "Error while joining send task: {}", err);
                 }
-                peer.receive_task_handle.await;
+
+                if let Err(err) = peer.receive_task_handle.await {
+                    trace!(peer_id = %peer_id, "Error while joining receive task: {}", err);
+                }
             });
         }
     }
@@ -109,7 +112,7 @@ impl Server {
     where
         S: AsyncRead + AsyncWrite + Unpin + Send,
     {
-        let ws = match async_tungstenite::accept_async(stream).await {
+        let ws = match async_tungstenite::tokio::accept_async(stream).await {
             Ok(ws) => ws,
             Err(err) => {
                 warn!("Error during the websocket handshake: {}", err);
@@ -128,7 +131,7 @@ impl Server {
         let (mut ws_sink, mut ws_stream) = ws.split();
         let send_task_handle = task::spawn(async move {
             loop {
-                match async_std::future::timeout(
+                match tokio::time::timeout(
                     std::time::Duration::from_secs(30),
                     websocket_receiver.next(),
                 )

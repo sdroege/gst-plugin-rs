@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: MPL-2.0
 
-use async_std::task;
+use tokio::io::AsyncReadExt;
+use tokio::task;
 use clap::Parser;
 use gst_plugin_webrtc_signalling::handlers::Handler;
 use gst_plugin_webrtc_signalling::server::Server;
 use tracing_subscriber::prelude::*;
 
 use anyhow::Error;
-use async_native_tls::TlsAcceptor;
-use async_std::fs::File as AsyncFile;
-use async_std::net::TcpListener;
+use tokio_native_tls::native_tls::TlsAcceptor;
+use tokio::fs;
+use tokio::net::TcpListener;
 use tracing::{info, warn};
 
 #[derive(Parser, Debug)]
@@ -49,55 +50,57 @@ fn initialize_logging(envvar_name: &str) -> Result<(), Error> {
     Ok(())
 }
 
-fn main() -> Result<(), Error> {
+#[tokio::main]
+async fn main() -> Result<(), Error> {
     let args = Args::parse();
     let server = Server::spawn(|stream| Handler::new(stream));
 
     initialize_logging("WEBRTCSINK_SIGNALLING_SERVER_LOG")?;
 
-    task::block_on(async move {
-        let addr = format!("{}:{}", args.host, args.port);
+    let addr = format!("{}:{}", args.host, args.port);
 
-        // Create the event loop and TCP listener we'll accept connections on.
-        let listener = TcpListener::bind(&addr).await?;
+    // Create the event loop and TCP listener we'll accept connections on.
+    let listener = TcpListener::bind(&addr).await?;
 
-        let acceptor = match args.cert {
-            Some(cert) => {
-                let key = AsyncFile::open(cert).await?;
-                Some(TlsAcceptor::new(key, args.cert_password.as_deref().unwrap_or("")).await?)
+    let acceptor = match args.cert {
+        Some(cert) => {
+            let mut file = fs::File::open(cert).await?;
+            let mut identity = vec![];
+            file.read_to_end(&mut identity).await?;
+            let identity = tokio_native_tls::native_tls::Identity::from_pkcs12(&identity, args.cert_password.as_deref().unwrap_or("")).unwrap();
+            Some(tokio_native_tls::TlsAcceptor::from(TlsAcceptor::new(identity).unwrap()))
+        }
+        None => None,
+    };
+
+    info!("Listening on: {}", addr);
+
+    while let Ok((stream, _)) = listener.accept().await {
+        let mut server_clone = server.clone();
+
+        let address = match stream.peer_addr() {
+            Ok(address) => address,
+            Err(err) => {
+                warn!("Connected peer with no address: {}", err);
+                continue;
             }
-            None => None,
         };
 
-        info!("Listening on: {}", addr);
+        info!("Accepting connection from {}", address);
 
-        while let Ok((stream, _)) = listener.accept().await {
-            let mut server_clone = server.clone();
-
-            let address = match stream.peer_addr() {
-                Ok(address) => address,
+        if let Some(ref acceptor) = acceptor {
+            let stream = match acceptor.accept(stream).await {
+                Ok(stream) => stream,
                 Err(err) => {
-                    warn!("Connected peer with no address: {}", err);
+                    warn!("Failed to accept TLS connection from {}: {}", address, err);
                     continue;
                 }
             };
-
-            info!("Accepting connection from {}", address);
-
-            if let Some(ref acceptor) = acceptor {
-                let stream = match acceptor.accept(stream).await {
-                    Ok(stream) => stream,
-                    Err(err) => {
-                        warn!("Failed to accept TLS connection from {}: {}", address, err);
-                        continue;
-                    }
-                };
-                task::spawn(async move { server_clone.accept_async(stream).await });
-            } else {
-                task::spawn(async move { server_clone.accept_async(stream).await });
-            }
+            task::spawn(async move { server_clone.accept_async(stream).await });
+        } else {
+            task::spawn(async move { server_clone.accept_async(stream).await });
         }
+    }
 
-        Ok(())
-    })
+    Ok(())
 }

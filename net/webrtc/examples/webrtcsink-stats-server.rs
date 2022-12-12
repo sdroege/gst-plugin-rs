@@ -3,8 +3,9 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::Error;
 
-use async_std::net::{TcpListener, TcpStream};
-use async_std::task;
+use tokio::net::{TcpListener, TcpStream};
+use tokio::task;
+use tokio::time;
 use async_tungstenite::tungstenite::Message as WsMessage;
 use clap::Parser;
 use futures::channel::mpsc;
@@ -150,9 +151,10 @@ async fn run(args: Args) -> Result<(), Error> {
     let ws_clone = ws.downgrade();
     let state_clone = state.clone();
     task::spawn(async move {
-        let mut interval = async_std::stream::interval(std::time::Duration::from_millis(100));
+        let mut interval = time::interval(std::time::Duration::from_millis(100));
 
-        while interval.next().await.is_some() {
+        loop {
+            interval.tick().await;
             if let Some(ws) = ws_clone.upgrade() {
                 let stats = ws.property::<gst::Structure>("stats");
                 let stats = serialize_value(&stats.to_value()).unwrap();
@@ -193,7 +195,7 @@ async fn accept_connection(state: Arc<Mutex<State>>, stream: TcpStream) {
         .expect("connected streams should have a peer address");
     info!("Peer address: {}", addr);
 
-    let mut ws_stream = async_tungstenite::accept_async(stream)
+    let mut ws_stream = async_tungstenite::tokio::accept_async(stream)
         .await
         .expect("Error during the websocket handshake occurred");
 
@@ -218,10 +220,11 @@ async fn accept_connection(state: Arc<Mutex<State>>, stream: TcpStream) {
     });
 }
 
-fn main() -> Result<(), Error> {
+#[tokio::main]
+async fn main() -> Result<(), Error> {
     gst::init()?;
 
     let args = Args::parse();
 
-    task::block_on(run(args))
+    run(args).await
 }

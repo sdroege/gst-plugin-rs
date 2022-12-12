@@ -381,7 +381,7 @@ mod tests {
         );
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_register_producer() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
@@ -400,7 +400,7 @@ mod tests {
         .unwrap();
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_list_producers() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
@@ -438,7 +438,7 @@ mod tests {
         );
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_welcome() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
@@ -446,7 +446,7 @@ mod tests {
         new_peer(&mut tx, &mut handler, "consumer").await;
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_listener() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
@@ -491,7 +491,7 @@ mod tests {
         );
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_start_session() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
@@ -540,7 +540,7 @@ mod tests {
         );
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_remove_peer() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
@@ -622,7 +622,7 @@ mod tests {
         );
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_end_session_consumer() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
@@ -677,7 +677,7 @@ mod tests {
         );
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_disconnect_consumer() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
@@ -726,7 +726,7 @@ mod tests {
         );
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_end_session_producer() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
@@ -780,7 +780,7 @@ mod tests {
         );
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_end_session_twice() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
@@ -854,7 +854,7 @@ mod tests {
         );
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_sdp_exchange() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
@@ -916,7 +916,7 @@ mod tests {
         );
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_ice_exchange() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
@@ -1004,7 +1004,7 @@ mod tests {
         );
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_sdp_exchange_wrong_direction_offer() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
@@ -1064,7 +1064,7 @@ mod tests {
         );
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_start_session_no_producer() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
@@ -1088,7 +1088,7 @@ mod tests {
         );
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_stop_producing() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
@@ -1156,7 +1156,7 @@ mod tests {
         );
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_unregistering_with_listeners() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
@@ -1258,7 +1258,7 @@ mod tests {
         );
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_start_session_no_consumer() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
@@ -1290,7 +1290,7 @@ mod tests {
         );
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_start_session_twice() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
@@ -1351,7 +1351,7 @@ mod tests {
         assert_ne!(session0_id, session1_id);
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_start_session_stop_producing() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));

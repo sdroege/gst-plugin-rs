@@ -2,7 +2,8 @@
 
 use crate::webrtcsink::WebRTCSink;
 use anyhow::{anyhow, Error};
-use async_std::task;
+use tokio::runtime;
+use tokio::task;
 use async_tungstenite::tungstenite::Message as WsMessage;
 use futures::channel::mpsc;
 use futures::prelude::*;
@@ -22,6 +23,14 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
         gst::DebugColorFlags::empty(),
         Some("WebRTC sink signaller"),
     )
+});
+
+static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
+    runtime::Builder::new_multi_thread()
+        .enable_all()
+        .worker_threads(1)
+        .build()
+        .unwrap()
 });
 
 #[derive(Default)]
@@ -58,15 +67,16 @@ impl Signaller {
         let settings = self.settings.lock().unwrap().clone();
 
         let connector = if let Some(path) = settings.cafile {
-            let cert = async_std::fs::read_to_string(&path).await?;
-            let cert = async_native_tls::Certificate::from_pem(cert.as_bytes())?;
-            let connector = async_native_tls::TlsConnector::new();
-            Some(connector.add_root_certificate(cert))
+            let cert = tokio::fs::read_to_string(&path).await?;
+            let cert = tokio_native_tls::native_tls::Certificate::from_pem(cert.as_bytes())?;
+            let mut connector_builder = tokio_native_tls::native_tls::TlsConnector::builder();
+            let connector = connector_builder.add_root_certificate(cert).build()?;
+            Some(tokio_native_tls::TlsConnector::from(connector))
         } else {
             None
         };
 
-        let (ws, _) = async_tungstenite::async_std::connect_async_with_tls_connector(
+        let (ws, _) = async_tungstenite::tokio::connect_async_with_tls_connector(
             settings.address.unwrap(),
             connector,
         )
@@ -117,7 +127,7 @@ impl Signaller {
 
         let element_clone = element.downgrade();
         let receive_task_handle = task::spawn(async move {
-            while let Some(msg) = async_std::stream::StreamExt::next(&mut ws_stream).await {
+            while let Some(msg) = tokio_stream::StreamExt::next(&mut ws_stream).await {
                 if let Some(element) = element_clone.upgrade() {
                     match msg {
                         Ok(WsMessage::Text(msg)) => {
@@ -275,7 +285,7 @@ impl Signaller {
 
         if let Some(mut sender) = state.websocket_sender.clone() {
             let element = element.downgrade();
-            task::spawn(async move {
+            RUNTIME.spawn(async move {
                 if let Err(err) = sender.send(msg).await {
                     if let Some(element) = element.upgrade() {
                         element.handle_signalling_error(anyhow!("Error: {}", err).into());
@@ -305,7 +315,7 @@ impl Signaller {
 
         if let Some(mut sender) = state.websocket_sender.clone() {
             let element = element.downgrade();
-            task::spawn(async move {
+            RUNTIME.spawn(async move {
                 if let Err(err) = sender.send(msg).await {
                     if let Some(element) = element.upgrade() {
                         element.handle_signalling_error(anyhow!("Error: {}", err).into());
@@ -322,17 +332,24 @@ impl Signaller {
         let send_task_handle = state.send_task_handle.take();
         let receive_task_handle = state.receive_task_handle.take();
         if let Some(mut sender) = state.websocket_sender.take() {
-            task::block_on(async move {
+            let element = element.downgrade();
+            RUNTIME.block_on(async move {
                 sender.close_channel();
 
                 if let Some(handle) = send_task_handle {
                     if let Err(err) = handle.await {
-                        gst::warning!(CAT, obj: element, "Error while joining send task: {}", err);
+                        if let Some(element) = element.upgrade() {
+                            gst::warning!(CAT, obj: element, "Error while joining send task: {}", err);
+                        }
                     }
                 }
 
                 if let Some(handle) = receive_task_handle {
-                    handle.await;
+                    if let Err(err) = handle.await {
+                        if let Some(element) = element.upgrade() {
+                            gst::warning!(CAT, obj: element, "Error while joining receive task: {}", err);
+                        }
+                    }
                 }
             });
         }
@@ -345,7 +362,7 @@ impl Signaller {
         let session_id = session_id.to_string();
         let element = element.downgrade();
         if let Some(mut sender) = state.websocket_sender.clone() {
-            task::spawn(async move {
+            RUNTIME.spawn(async move {
                 if let Err(err) = sender
                     .send(p::IncomingMessage::EndSession(p::EndSessionMessage {
                         session_id: session_id.to_string(),
