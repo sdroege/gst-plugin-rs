@@ -9,7 +9,7 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst_base::subclass::prelude::*;
+use gst_audio::subclass::prelude::*;
 
 use std::sync::Mutex;
 use std::{cmp, u64};
@@ -20,7 +20,7 @@ use num_traits::cast::{FromPrimitive, ToPrimitive};
 use num_traits::float::Float;
 
 use once_cell::sync::Lazy;
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static _CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "rsaudioecho",
         gst::DebugColorFlags::empty(),
@@ -89,7 +89,7 @@ impl AudioEcho {
 impl ObjectSubclass for AudioEcho {
     const NAME: &'static str = "GstRsAudioEcho";
     type Type = super::AudioEcho;
-    type ParentType = gst_base::BaseTransform;
+    type ParentType = gst_audio::AudioFilter;
 }
 
 impl ObjectImpl for AudioEcho {
@@ -194,32 +194,6 @@ impl ElementImpl for AudioEcho {
 
         Some(&*ELEMENT_METADATA)
     }
-
-    fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let caps = gst_audio::AudioCapsBuilder::new_interleaved()
-                .format_list([gst_audio::AUDIO_FORMAT_F32, gst_audio::AUDIO_FORMAT_F64])
-                .build();
-            let src_pad_template = gst::PadTemplate::new(
-                "src",
-                gst::PadDirection::Src,
-                gst::PadPresence::Always,
-                &caps,
-            )
-            .unwrap();
-
-            let sink_pad_template = gst::PadTemplate::new(
-                "sink",
-                gst::PadDirection::Sink,
-                gst::PadPresence::Always,
-                &caps,
-            )
-            .unwrap();
-            vec![src_pad_template, sink_pad_template]
-        });
-
-        PAD_TEMPLATES.as_ref()
-    }
 }
 
 impl BaseTransformImpl for AudioEcho {
@@ -252,31 +226,34 @@ impl BaseTransformImpl for AudioEcho {
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn set_caps(&self, incaps: &gst::Caps, outcaps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        if incaps != outcaps {
-            return Err(gst::loggable_error!(
-                CAT,
-                "Input and output caps are not the same"
-            ));
-        }
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
+        // Drop state
+        let _ = self.state.lock().unwrap().take();
 
-        let info = gst_audio::AudioInfo::from_caps(incaps)
-            .map_err(|_| gst::loggable_error!(CAT, "Failed to parse input caps"))?;
+        Ok(())
+    }
+}
+
+impl AudioFilterImpl for AudioEcho {
+    fn allowed_caps() -> &'static gst::Caps {
+        static CAPS: Lazy<gst::Caps> = Lazy::new(|| {
+            gst_audio::AudioCapsBuilder::new_interleaved()
+                .format_list([gst_audio::AUDIO_FORMAT_F32, gst_audio::AUDIO_FORMAT_F64])
+                .build()
+        });
+
+        &CAPS
+    }
+
+    fn setup(&self, info: &gst_audio::AudioInfo) -> Result<(), gst::LoggableError> {
         let max_delay = self.settings.lock().unwrap().max_delay;
         let size = (max_delay * (info.rate() as u64)).seconds() as usize;
         let buffer_size = size * (info.channels() as usize);
 
         *self.state.lock().unwrap() = Some(State {
-            info,
+            info: info.clone(),
             buffer: RingBuffer::new(buffer_size),
         });
-
-        Ok(())
-    }
-
-    fn stop(&self) -> Result<(), gst::ErrorMessage> {
-        // Drop state
-        let _ = self.state.lock().unwrap().take();
 
         Ok(())
     }

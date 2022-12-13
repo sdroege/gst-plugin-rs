@@ -9,8 +9,8 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst_audio::subclass::prelude::*;
 use gst_base::prelude::*;
-use gst_base::subclass::prelude::*;
 
 use std::i32;
 use std::sync::atomic;
@@ -118,7 +118,7 @@ pub struct EbuR128Level {
 impl ObjectSubclass for EbuR128Level {
     const NAME: &'static str = "GstEbuR128Level";
     type Type = super::EbuR128Level;
-    type ParentType = gst_base::BaseTransform;
+    type ParentType = gst_audio::AudioFilter;
 }
 
 impl ObjectImpl for EbuR128Level {
@@ -282,113 +282,6 @@ impl BaseTransformImpl for EbuR128Level {
         gst_base::subclass::BaseTransformMode::AlwaysInPlace;
     const PASSTHROUGH_ON_SAME_CAPS: bool = true;
     const TRANSFORM_IP_ON_PASSTHROUGH: bool = true;
-
-    fn set_caps(&self, incaps: &gst::Caps, _outcaps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        let info = match gst_audio::AudioInfo::from_caps(incaps) {
-            Err(_) => return Err(gst::loggable_error!(CAT, "Failed to parse input caps")),
-            Ok(info) => info,
-        };
-
-        gst::debug!(CAT, imp: self, "Configured for caps {}", incaps,);
-
-        let settings = *self.settings.lock().unwrap();
-
-        let mut ebur128 = ebur128::EbuR128::new(info.channels(), info.rate(), settings.mode.into())
-            .map_err(|err| gst::loggable_error!(CAT, "Failed to create EBU R128: {}", err))?;
-
-        // Map channel positions if we can to give correct weighting
-        if let Some(positions) = info.positions() {
-            let channel_map = positions
-                .iter()
-                .map(|p| {
-                    match p {
-                        gst_audio::AudioChannelPosition::Mono => ebur128::Channel::DualMono,
-                        gst_audio::AudioChannelPosition::FrontLeft => ebur128::Channel::Left,
-                        gst_audio::AudioChannelPosition::FrontRight => ebur128::Channel::Right,
-                        gst_audio::AudioChannelPosition::FrontCenter => ebur128::Channel::Center,
-                        gst_audio::AudioChannelPosition::Lfe1
-                        | gst_audio::AudioChannelPosition::Lfe2 => ebur128::Channel::Unused,
-                        gst_audio::AudioChannelPosition::RearLeft => ebur128::Channel::Mp135,
-                        gst_audio::AudioChannelPosition::RearRight => ebur128::Channel::Mm135,
-                        gst_audio::AudioChannelPosition::FrontLeftOfCenter => {
-                            ebur128::Channel::MpSC
-                        }
-                        gst_audio::AudioChannelPosition::FrontRightOfCenter => {
-                            ebur128::Channel::MmSC
-                        }
-                        gst_audio::AudioChannelPosition::RearCenter => ebur128::Channel::Mp180,
-                        gst_audio::AudioChannelPosition::SideLeft => ebur128::Channel::Mp090,
-                        gst_audio::AudioChannelPosition::SideRight => ebur128::Channel::Mm090,
-                        gst_audio::AudioChannelPosition::TopFrontLeft => ebur128::Channel::Up030,
-                        gst_audio::AudioChannelPosition::TopFrontRight => ebur128::Channel::Um030,
-                        gst_audio::AudioChannelPosition::TopFrontCenter => ebur128::Channel::Up000,
-                        gst_audio::AudioChannelPosition::TopCenter => ebur128::Channel::Tp000,
-                        gst_audio::AudioChannelPosition::TopRearLeft => ebur128::Channel::Up135,
-                        gst_audio::AudioChannelPosition::TopRearRight => ebur128::Channel::Um135,
-                        gst_audio::AudioChannelPosition::TopSideLeft => ebur128::Channel::Up090,
-                        gst_audio::AudioChannelPosition::TopSideRight => ebur128::Channel::Um090,
-                        gst_audio::AudioChannelPosition::TopRearCenter => ebur128::Channel::Up180,
-                        gst_audio::AudioChannelPosition::BottomFrontCenter => {
-                            ebur128::Channel::Bp000
-                        }
-                        gst_audio::AudioChannelPosition::BottomFrontLeft => ebur128::Channel::Bp045,
-                        gst_audio::AudioChannelPosition::BottomFrontRight => {
-                            ebur128::Channel::Bm045
-                        }
-                        gst_audio::AudioChannelPosition::WideLeft => {
-                            ebur128::Channel::Mp135 // Mp110?
-                        }
-                        gst_audio::AudioChannelPosition::WideRight => {
-                            ebur128::Channel::Mm135 // Mm110?
-                        }
-                        gst_audio::AudioChannelPosition::SurroundLeft => {
-                            ebur128::Channel::Mp135 // Mp110?
-                        }
-                        gst_audio::AudioChannelPosition::SurroundRight => {
-                            ebur128::Channel::Mm135 // Mm110?
-                        }
-                        gst_audio::AudioChannelPosition::Invalid
-                        | gst_audio::AudioChannelPosition::None => ebur128::Channel::Unused,
-                        val => {
-                            gst::debug!(
-                                CAT,
-                                imp: self,
-                                "Unknown channel position {:?}, ignoring channel",
-                                val
-                            );
-                            ebur128::Channel::Unused
-                        }
-                    }
-                })
-                .collect::<Vec<_>>();
-            ebur128
-                .set_channel_map(&channel_map)
-                .map_err(|err| gst::loggable_error!(CAT, "Failed to set channel map: {}", err))?;
-        } else {
-            // Weight all channels equally if we have no channel map
-            let channel_map = std::iter::repeat(ebur128::Channel::Center)
-                .take(info.channels() as usize)
-                .collect::<Vec<_>>();
-            ebur128
-                .set_channel_map(&channel_map)
-                .map_err(|err| gst::loggable_error!(CAT, "Failed to set channel map: {}", err))?;
-        }
-
-        let interval_frames = settings
-            .interval
-            .mul_div_floor(info.rate() as u64, *gst::ClockTime::SECOND)
-            .unwrap();
-
-        *self.state.borrow_mut() = Some(State {
-            info,
-            ebur128,
-            num_frames: 0,
-            interval_frames,
-            interval_frames_remaining: interval_frames,
-        });
-
-        Ok(())
-    }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         // Drop state
@@ -584,6 +477,133 @@ impl BaseTransformImpl for EbuR128Level {
         }
 
         Ok(gst::FlowSuccess::Ok)
+    }
+}
+
+impl AudioFilterImpl for EbuR128Level {
+    fn allowed_caps() -> &'static gst::Caps {
+        static CAPS: Lazy<gst::Caps> = Lazy::new(|| {
+            gst_audio::AudioCapsBuilder::new()
+                .format_list([
+                    gst_audio::AUDIO_FORMAT_S16,
+                    gst_audio::AUDIO_FORMAT_S32,
+                    gst_audio::AUDIO_FORMAT_F32,
+                    gst_audio::AUDIO_FORMAT_F64,
+                ])
+                // Limit from ebur128
+                .rate_range(1..2_822_400)
+                // Limit from ebur128
+                .channels_range(1..64)
+                .layout_list([
+                    gst_audio::AudioLayout::Interleaved,
+                    gst_audio::AudioLayout::NonInterleaved,
+                ])
+                .build()
+        });
+
+        &CAPS
+    }
+
+    fn setup(&self, info: &gst_audio::AudioInfo) -> Result<(), gst::LoggableError> {
+        gst::debug!(CAT, imp: self, "Configured for caps {:?}", info);
+
+        let settings = *self.settings.lock().unwrap();
+
+        let mut ebur128 = ebur128::EbuR128::new(info.channels(), info.rate(), settings.mode.into())
+            .map_err(|err| gst::loggable_error!(CAT, "Failed to create EBU R128: {}", err))?;
+
+        // Map channel positions if we can to give correct weighting
+        if let Some(positions) = info.positions() {
+            let channel_map = positions
+                .iter()
+                .map(|p| {
+                    match p {
+                        gst_audio::AudioChannelPosition::Mono => ebur128::Channel::DualMono,
+                        gst_audio::AudioChannelPosition::FrontLeft => ebur128::Channel::Left,
+                        gst_audio::AudioChannelPosition::FrontRight => ebur128::Channel::Right,
+                        gst_audio::AudioChannelPosition::FrontCenter => ebur128::Channel::Center,
+                        gst_audio::AudioChannelPosition::Lfe1
+                        | gst_audio::AudioChannelPosition::Lfe2 => ebur128::Channel::Unused,
+                        gst_audio::AudioChannelPosition::RearLeft => ebur128::Channel::Mp135,
+                        gst_audio::AudioChannelPosition::RearRight => ebur128::Channel::Mm135,
+                        gst_audio::AudioChannelPosition::FrontLeftOfCenter => {
+                            ebur128::Channel::MpSC
+                        }
+                        gst_audio::AudioChannelPosition::FrontRightOfCenter => {
+                            ebur128::Channel::MmSC
+                        }
+                        gst_audio::AudioChannelPosition::RearCenter => ebur128::Channel::Mp180,
+                        gst_audio::AudioChannelPosition::SideLeft => ebur128::Channel::Mp090,
+                        gst_audio::AudioChannelPosition::SideRight => ebur128::Channel::Mm090,
+                        gst_audio::AudioChannelPosition::TopFrontLeft => ebur128::Channel::Up030,
+                        gst_audio::AudioChannelPosition::TopFrontRight => ebur128::Channel::Um030,
+                        gst_audio::AudioChannelPosition::TopFrontCenter => ebur128::Channel::Up000,
+                        gst_audio::AudioChannelPosition::TopCenter => ebur128::Channel::Tp000,
+                        gst_audio::AudioChannelPosition::TopRearLeft => ebur128::Channel::Up135,
+                        gst_audio::AudioChannelPosition::TopRearRight => ebur128::Channel::Um135,
+                        gst_audio::AudioChannelPosition::TopSideLeft => ebur128::Channel::Up090,
+                        gst_audio::AudioChannelPosition::TopSideRight => ebur128::Channel::Um090,
+                        gst_audio::AudioChannelPosition::TopRearCenter => ebur128::Channel::Up180,
+                        gst_audio::AudioChannelPosition::BottomFrontCenter => {
+                            ebur128::Channel::Bp000
+                        }
+                        gst_audio::AudioChannelPosition::BottomFrontLeft => ebur128::Channel::Bp045,
+                        gst_audio::AudioChannelPosition::BottomFrontRight => {
+                            ebur128::Channel::Bm045
+                        }
+                        gst_audio::AudioChannelPosition::WideLeft => {
+                            ebur128::Channel::Mp135 // Mp110?
+                        }
+                        gst_audio::AudioChannelPosition::WideRight => {
+                            ebur128::Channel::Mm135 // Mm110?
+                        }
+                        gst_audio::AudioChannelPosition::SurroundLeft => {
+                            ebur128::Channel::Mp135 // Mp110?
+                        }
+                        gst_audio::AudioChannelPosition::SurroundRight => {
+                            ebur128::Channel::Mm135 // Mm110?
+                        }
+                        gst_audio::AudioChannelPosition::Invalid
+                        | gst_audio::AudioChannelPosition::None => ebur128::Channel::Unused,
+                        val => {
+                            gst::debug!(
+                                CAT,
+                                imp: self,
+                                "Unknown channel position {:?}, ignoring channel",
+                                val
+                            );
+                            ebur128::Channel::Unused
+                        }
+                    }
+                })
+                .collect::<Vec<_>>();
+            ebur128
+                .set_channel_map(&channel_map)
+                .map_err(|err| gst::loggable_error!(CAT, "Failed to set channel map: {}", err))?;
+        } else {
+            // Weight all channels equally if we have no channel map
+            let channel_map = std::iter::repeat(ebur128::Channel::Center)
+                .take(info.channels() as usize)
+                .collect::<Vec<_>>();
+            ebur128
+                .set_channel_map(&channel_map)
+                .map_err(|err| gst::loggable_error!(CAT, "Failed to set channel map: {}", err))?;
+        }
+
+        let interval_frames = settings
+            .interval
+            .mul_div_floor(info.rate() as u64, *gst::ClockTime::SECOND)
+            .unwrap();
+
+        *self.state.borrow_mut() = Some(State {
+            info: info.clone(),
+            ebur128,
+            num_frames: 0,
+            interval_frames,
+            interval_frames_remaining: interval_frames,
+        });
+
+        Ok(())
     }
 }
 

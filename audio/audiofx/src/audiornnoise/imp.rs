@@ -12,10 +12,10 @@ use std::sync::Mutex;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst_audio::subclass::prelude::*;
 use gst_base::prelude::*;
 use gst_base::subclass::base_transform::BaseTransformImplExt;
 use gst_base::subclass::base_transform::GenerateOutputSuccess;
-use gst_base::subclass::prelude::*;
 
 use nnnoiseless::DenoiseState;
 
@@ -227,7 +227,7 @@ impl AudioRNNoise {
 impl ObjectSubclass for AudioRNNoise {
     const NAME: &'static str = "GstAudioRNNoise";
     type Type = super::AudioRNNoise;
-    type ParentType = gst_base::BaseTransform;
+    type ParentType = gst_audio::AudioFilter;
 }
 
 impl ObjectImpl for AudioRNNoise {
@@ -282,34 +282,6 @@ impl ElementImpl for AudioRNNoise {
 
         Some(&*ELEMENT_METADATA)
     }
-
-    fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let caps = gst_audio::AudioCapsBuilder::new_interleaved()
-                .format(gst_audio::AUDIO_FORMAT_F32)
-                .rate(48000)
-                .build();
-            let src_pad_template = gst::PadTemplate::new(
-                "src",
-                gst::PadDirection::Src,
-                gst::PadPresence::Always,
-                &caps,
-            )
-            .unwrap();
-
-            let sink_pad_template = gst::PadTemplate::new(
-                "sink",
-                gst::PadDirection::Sink,
-                gst::PadPresence::Always,
-                &caps,
-            )
-            .unwrap();
-
-            vec![src_pad_template, sink_pad_template]
-        });
-
-        PAD_TEMPLATES.as_ref()
-    }
 }
 
 impl BaseTransformImpl for AudioRNNoise {
@@ -317,44 +289,6 @@ impl BaseTransformImpl for AudioRNNoise {
         gst_base::subclass::BaseTransformMode::NeverInPlace;
     const PASSTHROUGH_ON_SAME_CAPS: bool = false;
     const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
-
-    fn set_caps(&self, incaps: &gst::Caps, outcaps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        // Flush previous state
-        if self.state.borrow_mut().is_some() {
-            self.drain().map_err(|e| {
-                gst::loggable_error!(CAT, "Error flushing previous state data {:?}", e)
-            })?;
-        }
-        if incaps != outcaps {
-            return Err(gst::loggable_error!(
-                CAT,
-                "Input and output caps are not the same"
-            ));
-        }
-
-        gst::debug!(CAT, imp: self, "Set caps to {}", incaps);
-
-        let in_info = gst_audio::AudioInfo::from_caps(incaps)
-            .map_err(|e| gst::loggable_error!(CAT, "Failed to parse input caps {:?}", e))?;
-
-        let mut denoisers = vec![];
-        for _i in 0..in_info.channels() {
-            denoisers.push(ChannelDenoiser {
-                denoiser: DenoiseState::new(),
-                frame_chunk: Box::new([0.0; FRAME_SIZE]),
-                out_chunk: Box::new([0.0; FRAME_SIZE]),
-            })
-        }
-
-        let mut state_lock = self.state.borrow_mut();
-        *state_lock = Some(State {
-            in_info,
-            denoisers,
-            adapter: gst_base::UniqueAdapter::new(),
-        });
-
-        Ok(())
-    }
 
     fn generate_output(&self) -> Result<GenerateOutputSuccess, gst::FlowError> {
         // Check if there are enough data in the queued buffer and adapter,
@@ -423,6 +357,48 @@ impl BaseTransformImpl for AudioRNNoise {
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         // Drop state
         let _ = self.state.borrow_mut().take();
+
+        Ok(())
+    }
+}
+
+impl AudioFilterImpl for AudioRNNoise {
+    fn allowed_caps() -> &'static gst::Caps {
+        static CAPS: Lazy<gst::Caps> = Lazy::new(|| {
+            gst_audio::AudioCapsBuilder::new_interleaved()
+                .format(gst_audio::AUDIO_FORMAT_F32)
+                .rate(48000)
+                .build()
+        });
+
+        &CAPS
+    }
+
+    fn setup(&self, info: &gst_audio::AudioInfo) -> Result<(), gst::LoggableError> {
+        // Flush previous state
+        if self.state.borrow_mut().is_some() {
+            self.drain().map_err(|e| {
+                gst::loggable_error!(CAT, "Error flushing previous state data {:?}", e)
+            })?;
+        }
+
+        gst::debug!(CAT, imp: self, "Set caps to {:?}", info);
+
+        let mut denoisers = vec![];
+        for _i in 0..info.channels() {
+            denoisers.push(ChannelDenoiser {
+                denoiser: DenoiseState::new(),
+                frame_chunk: Box::new([0.0; FRAME_SIZE]),
+                out_chunk: Box::new([0.0; FRAME_SIZE]),
+            })
+        }
+
+        let mut state_lock = self.state.borrow_mut();
+        *state_lock = Some(State {
+            in_info: info.clone(),
+            denoisers,
+            adapter: gst_base::UniqueAdapter::new(),
+        });
 
         Ok(())
     }

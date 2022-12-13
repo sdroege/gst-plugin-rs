@@ -3804,6 +3804,7 @@
                 "description": "Removes noise from an audio stream",
                 "hierarchy": [
                     "GstAudioRNNoise",
+                    "GstAudioFilter",
                     "GstBaseTransform",
                     "GstElement",
                     "GstObject",
@@ -3847,6 +3848,7 @@
                 "description": "Measures different loudness metrics according to EBU R128",
                 "hierarchy": [
                     "GstEbuR128Level",
+                    "GstAudioFilter",
                     "GstBaseTransform",
                     "GstElement",
                     "GstObject",
@@ -4013,6 +4015,7 @@
                 "description": "Adds an echo or reverb effect to an audio stream",
                 "hierarchy": [
                     "GstRsAudioEcho",
+                    "GstAudioFilter",
                     "GstBaseTransform",
                     "GstElement",
                     "GstObject",
