@@ -131,7 +131,7 @@ impl State {
         m %= 60;
         let ns = time % 1_000_000_000;
 
-        (h as u64, m as u8, s as u8, (ns / 1_000_000) as u16)
+        (h, m as u8, s as u8, (ns / 1_000_000) as u16)
     }
 
     fn create_vtt_buffer(

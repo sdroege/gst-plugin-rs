@@ -28,7 +28,7 @@ use gst_rtp::RTPBuffer;
 
 use once_cell::sync::Lazy;
 
-use std::cmp::{max, min, Ordering};
+use std::cmp::Ordering;
 use std::collections::{BTreeSet, VecDeque};
 use std::mem;
 use std::sync::Arc;
@@ -412,7 +412,7 @@ impl SinkHandler {
         }
 
         if let Some(last_in_seqnum) = inner.last_in_seqnum {
-            let gap = gst_rtp::compare_seqnum(last_in_seqnum as u16, seq);
+            let gap = gst_rtp::compare_seqnum(last_in_seqnum, seq);
             if gap == 1 {
                 self.calculate_packet_spacing(inner, &mut state, rtptime, pts);
             } else {
@@ -463,7 +463,7 @@ impl SinkHandler {
             state.equidistant += 1;
         }
 
-        state.equidistant = min(max(state.equidistant, -7), 7);
+        state.equidistant = state.equidistant.clamp(-7, 7);
 
         inner.last_rtptime = Some(rtptime);
 
@@ -679,7 +679,7 @@ impl SrcHandler {
             // FIXME reason why we can expect Some for the 2 lines below
             let mut last_popped_pts = state.last_popped_pts.unwrap();
             let interval = pts.into().unwrap().saturating_sub(last_popped_pts);
-            let spacing = interval / (gap as u64 + 1);
+            let spacing = interval / (gap + 1);
 
             *discont = true;
 

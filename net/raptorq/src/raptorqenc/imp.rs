@@ -421,7 +421,7 @@ impl RaptorqEnc {
 
         assert_eq!(state.packets.len(), state.seqnums.len());
 
-        if state.packets.len() == state.protected_packets_num as usize {
+        if state.packets.len() == state.protected_packets_num {
             // We use current buffer timing as a base for repair packets timestamps
             let now_pts = buffer.pts();
             let now_dts = buffer.dts_or_pts();

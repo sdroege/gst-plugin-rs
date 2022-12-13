@@ -373,7 +373,7 @@ impl HrtfRender {
             let (prev_offset, _) = state.adapter.prev_offset();
             let offset = prev_offset.checked_add(distance_samples).unwrap_or(0);
 
-            let duration_samples = outputsz / outbpf as usize;
+            let duration_samples = outputsz / outbpf;
             let duration = samples_to_time(duration_samples as u64);
 
             (pts, offset, duration)

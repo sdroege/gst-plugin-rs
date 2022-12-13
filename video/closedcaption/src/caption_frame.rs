@@ -57,7 +57,7 @@ impl CaptionFrame {
                 data.as_ptr() as *mut _,
                 i32::from(full),
             );
-            data.set_len(len as usize);
+            data.set_len(len);
 
             String::from_utf8(data).map_err(|_| Error)
         }

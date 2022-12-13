@@ -158,7 +158,7 @@ fn main() {
                 let context = build_context();
                 let source = gst::ElementFactory::make("ts-tonesrc")
                     .name(format!("source-{}", i).as_str())
-                    .property("samples-per-buffer", (wait as u32) * 8000 / 1000)
+                    .property("samples-per-buffer", wait * 8000 / 1000)
                     .property("context", &context)
                     .property("context-wait", wait)
                     .build()

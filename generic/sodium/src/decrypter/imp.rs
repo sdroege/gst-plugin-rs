@@ -498,7 +498,7 @@ impl Decrypter {
         gst::debug!(CAT, obj: pad, "Requested offset: {}", offset);
         gst::debug!(CAT, obj: pad, "Requested size: {}", requested_size);
 
-        let chunk_index = offset as u64 / block_size as u64;
+        let chunk_index = offset / block_size as u64;
         gst::debug!(CAT, obj: pad, "Stream Block index: {}", chunk_index);
 
         let pull_offset = offset - (chunk_index * block_size as u64);

@@ -468,7 +468,7 @@ impl ObjectImpl for Rav1Enc {
             }
             "rdo-lookahead-frames" => {
                 let settings = self.settings.lock().unwrap();
-                (settings.rdo_lookahead_frames as i32).to_value()
+                (settings.rdo_lookahead_frames).to_value()
             }
             "tune" => {
                 let settings = self.settings.lock().unwrap();

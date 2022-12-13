@@ -15,8 +15,8 @@ pub struct RingBuffer {
 
 impl RingBuffer {
     pub fn new(size: usize) -> Self {
-        let mut buffer = Vec::with_capacity(size as usize);
-        buffer.extend(iter::repeat(0.0).take(size as usize));
+        let mut buffer = Vec::with_capacity(size);
+        buffer.extend(iter::repeat(0.0).take(size));
 
         Self {
             buffer: buffer.into_boxed_slice(),

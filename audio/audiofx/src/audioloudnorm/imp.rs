@@ -611,10 +611,9 @@ impl State {
         // the position where we have to start writing the next 100ms in the next
         // iteration.
 
-        let mut outbuf = gst::Buffer::with_size(
-            self.current_samples_per_frame as usize * self.info.bpf() as usize,
-        )
-        .map_err(|_| gst::FlowError::Error)?;
+        let mut outbuf =
+            gst::Buffer::with_size(self.current_samples_per_frame * self.info.bpf() as usize)
+                .map_err(|_| gst::FlowError::Error)?;
         {
             let outbuf = outbuf.get_mut().unwrap();
             let mut dst = outbuf.map_writable().map_err(|_| gst::FlowError::Error)?;
@@ -819,7 +818,7 @@ impl State {
         // adjustment. frame_type should only ever be set to Final at the end if we ended up in
         // Inner state before.
         if self.frame_type == FrameType::First
-            && (src.len() / self.info.channels() as usize) < self.current_samples_per_frame as usize
+            && (src.len() / self.info.channels() as usize) < self.current_samples_per_frame
         {
             self.process_first_frame_is_last(imp)?;
         }

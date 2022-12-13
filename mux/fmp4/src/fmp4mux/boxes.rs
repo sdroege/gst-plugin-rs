@@ -1111,8 +1111,8 @@ fn write_visual_sample_entry(
 
         if let Ok(cll) = gst_video::VideoContentLightLevel::from_caps(&stream.caps) {
             write_box(v, b"clli", move |v| {
-                v.extend((cll.max_content_light_level() as u16).to_be_bytes());
-                v.extend((cll.max_frame_average_light_level() as u16).to_be_bytes());
+                v.extend((cll.max_content_light_level()).to_be_bytes());
+                v.extend((cll.max_frame_average_light_level()).to_be_bytes());
                 Ok(())
             })?;
         }

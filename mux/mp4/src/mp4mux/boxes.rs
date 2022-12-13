@@ -928,8 +928,8 @@ fn write_visual_sample_entry(
 
         if let Ok(cll) = gst_video::VideoContentLightLevel::from_caps(&stream.caps) {
             write_box(v, b"clli", move |v| {
-                v.extend((cll.max_content_light_level() as u16).to_be_bytes());
-                v.extend((cll.max_frame_average_light_level() as u16).to_be_bytes());
+                v.extend((cll.max_content_light_level()).to_be_bytes());
+                v.extend((cll.max_frame_average_light_level()).to_be_bytes());
                 Ok(())
             })?;
         }
@@ -1454,7 +1454,7 @@ fn write_cslg(
     let composition_start_time = stream
         .earliest_pts
         .nseconds()
-        .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds() as u64)
+        .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
         .context("too earliest PTS")?;
     v.extend(composition_start_time.to_be_bytes());
 
@@ -1462,7 +1462,7 @@ fn write_cslg(
     let composition_end_time = stream
         .end_pts
         .nseconds()
-        .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds() as u64)
+        .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
         .context("too end PTS")?;
     v.extend(composition_end_time.to_be_bytes());
 
