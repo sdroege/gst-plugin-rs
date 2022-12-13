@@ -77,7 +77,7 @@ cargo build
 Open three terminals. In the first, run:
 
 ``` shell
-WEBRTCSINK_SIGNALLING_SERVER_LOG=debug cargo run --bin server
+WEBRTCSINK_SIGNALLING_SERVER_LOG=debug cargo run --bin gst-webrtc-signalling-server
 ```
 
 In the second, run:
