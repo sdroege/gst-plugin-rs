@@ -260,10 +260,7 @@ fn csound_filter_underflow() {
     }
 
     assert_eq!(num_buffers, UNDERFLOW_NUM_BUFFERS / 2);
-    assert_eq!(
-        num_samples as usize,
-        UNDERFLOW_NUM_SAMPLES * UNDERFLOW_NUM_BUFFERS
-    );
+    assert_eq!(num_samples, UNDERFLOW_NUM_SAMPLES * UNDERFLOW_NUM_BUFFERS);
 }
 
 // Verifies that the caps negotiation is properly done, by pushing buffers whose caps

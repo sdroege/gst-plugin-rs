@@ -915,14 +915,14 @@ impl Receiver {
             real_time_now,
         );
 
-        let res_timestamp = self.0.observations_timestamp[if is_audio { 0 } else { 1 }].process(
+        let res_timestamp = self.0.observations_timestamp[usize::from(!is_audio)].process(
             element,
             timestamp,
             receive_time,
             duration,
         );
 
-        let res_timecode = self.0.observations_timecode[if is_audio { 0 } else { 1 }].process(
+        let res_timecode = self.0.observations_timecode[usize::from(!is_audio)].process(
             element,
             Some(timecode),
             receive_time,

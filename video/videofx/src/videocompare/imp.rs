@@ -355,7 +355,7 @@ impl VideoAggregatorImpl for VideoCompare {
 
         let max_distance_threshold = {
             let settings = self.settings.lock().unwrap();
-            settings.max_distance_threshold as f64
+            settings.max_distance_threshold
         };
 
         if message

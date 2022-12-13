@@ -370,12 +370,12 @@ impl RTPAv1Depay {
                 let mut bitreader = BitReader::endian(reader, ENDIANNESS);
                 parse_leb128(&mut bitreader)
                     .map_err(err_opt!(self, leb_read))
-                    .ok()? as u32
+                    .ok()?
             }
         } else {
             element_size = parse_leb128(&mut BitReader::endian(&mut *reader, ENDIANNESS))
                 .map_err(err_opt!(self, leb_read))
-                .ok()? as u32;
+                .ok()?;
             is_last_obu = match rtp
                 .payload_size()
                 .cmp(&(reader.position() as u32 + element_size))

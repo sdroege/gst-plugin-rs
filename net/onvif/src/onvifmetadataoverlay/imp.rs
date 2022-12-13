@@ -187,8 +187,8 @@ impl OnvifMetadataOverlay {
             gst_video::VideoFormat::Bgra,
             #[cfg(target_endian = "big")]
             gst_video::VideoFormat::Argb,
-            total_width as u32,
-            total_height as u32,
+            total_width,
+            total_height,
         )
         .ok()?;
 

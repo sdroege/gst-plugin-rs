@@ -170,8 +170,8 @@ impl TranscribeParse {
                         }
                     };
 
-                    let start_pts = ((start_time as f64 * 1_000_000_000.0) as u64).nseconds();
-                    let end_pts = ((end_time as f64 * 1_000_000_000.0) as u64).nseconds();
+                    let start_pts = ((start_time * 1_000_000_000.0) as u64).nseconds();
+                    let end_pts = ((end_time * 1_000_000_000.0) as u64).nseconds();
                     let duration = end_pts.saturating_sub(start_pts);
 
                     if start_pts > last_pts {

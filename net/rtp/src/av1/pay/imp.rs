@@ -471,7 +471,7 @@ impl RTPAv1Pay {
                     state.open_obu_fragment = true;
                     size
                 } else {
-                    last_obu.bytes.len() as u32 - last_obu.offset as usize as u32
+                    last_obu.bytes.len() as u32 - last_obu.offset as u32
                 };
 
                 if !packet.omit_last_size_field {

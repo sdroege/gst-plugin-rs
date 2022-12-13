@@ -26,7 +26,7 @@ fn file_name_to_uri(name: &str) -> String {
         r
     };
 
-    let url = url::Url::from_file_path(&input_path).unwrap();
+    let url = url::Url::from_file_path(input_path).unwrap();
     url.to_string()
 }
 

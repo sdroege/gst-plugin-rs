@@ -225,7 +225,7 @@ fn main() -> Result<(), Error> {
 "###,
                     duration = duration, segment_timeline = segment_timeline);
 
-                std::fs::write(path, &manifest).expect("failed to write manifest");
+                std::fs::write(path, manifest).expect("failed to write manifest");
             })
             .build(),
     );

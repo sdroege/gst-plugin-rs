@@ -397,8 +397,8 @@ impl Detector {
             - self.last_received_packets.iter().next().unwrap().1.arrival;
         let bits = self
             .last_received_packets
-            .iter()
-            .map(|(_seqnum, p)| p.size as f64)
+            .values()
+            .map(|p| p.size as f64)
             .sum::<f64>()
             * 8.;
 
@@ -523,7 +523,7 @@ impl Detector {
             }
         }
 
-        self.compute_loss_average(lost_packets as f64 / n_packets as f64);
+        self.compute_loss_average(lost_packets / n_packets as f64);
     }
 
     fn compute_loss_average(&mut self, loss_fraction: f64) {
@@ -828,7 +828,7 @@ impl State {
             }
         };
 
-        if effective_bitrate as f64 - target_bitrate as f64 > 5. * target_bitrate / 100. {
+        if effective_bitrate as f64 - target_bitrate > 5. * target_bitrate / 100. {
             gst::info!(
                 CAT,
                 "Effective rate {} >> target bitrate {} - we should avoid that \
@@ -850,16 +850,11 @@ impl State {
             let threshold_on_effective_bitrate = 1.5 * effective_bitrate as f64;
             let increase = f64::max(
                 1000.0f64,
-                f64::min(
-                    alpha * avg_packet_size_bits,
-                    // Stuffing should ensure that the effective bitrate is not
-                    // < target bitrate, still, make sure to always increase
-                    // the bitrate by a minimum amount of 160.bits
-                    f64::max(
-                        threshold_on_effective_bitrate - self.target_bitrate_on_delay as f64,
-                        160.,
-                    ),
-                ),
+                // Stuffing should ensure that the effective bitrate is not
+                // < target bitrate, still, make sure to always increase
+                // the bitrate by a minimum amount of 160.bits
+                (threshold_on_effective_bitrate - self.target_bitrate_on_delay as f64)
+                    .clamp(160.0, alpha * avg_packet_size_bits),
             );
 
             /* Additive increase */
@@ -1259,8 +1254,8 @@ impl ObjectImpl for BandwidthEstimator {
                      the element to configure the starting bitrate, in which case the
                      encoder should also use it as target bitrate",
                     1,
-                    u32::MAX as u32,
-                    DEFAULT_MIN_BITRATE as u32,
+                    u32::MAX,
+                    DEFAULT_MIN_BITRATE,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpecUInt::new(
@@ -1268,7 +1263,7 @@ impl ObjectImpl for BandwidthEstimator {
                     "Minimal Bitrate",
                     "Minimal bitrate to use (in bit/sec) when computing it through the bandwidth estimation algorithm",
                     1,
-                    u32::MAX as u32,
+                    u32::MAX,
                     DEFAULT_MIN_BITRATE,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
@@ -1277,7 +1272,7 @@ impl ObjectImpl for BandwidthEstimator {
                     "Maximal Bitrate",
                     "Maximal bitrate to use (in bit/sec) when computing it through the bandwidth estimation algorithm",
                     1,
-                    u32::MAX as u32,
+                    u32::MAX,
                     DEFAULT_MAX_BITRATE,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),

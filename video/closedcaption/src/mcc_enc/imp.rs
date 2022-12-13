@@ -103,7 +103,7 @@ impl MccEnc {
                 FixedOffset::east_opt(creation_date.utc_offset().as_seconds() as i32)
                     .and_then(|tz| {
                         tz.with_ymd_and_hms(
-                            creation_date.year() as i32,
+                            creation_date.year(),
                             creation_date.month() as u32,
                             creation_date.day_of_month() as u32,
                             creation_date.hour() as u32,

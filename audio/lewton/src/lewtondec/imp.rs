@@ -405,7 +405,7 @@ impl LewtonDec {
         let outbuf = if let Some(ref reorder_map) = state.reorder_map {
             let mut outbuf = self
                 .obj()
-                .allocate_output_buffer(sample_count as usize * audio_info.bpf() as usize);
+                .allocate_output_buffer(sample_count * audio_info.bpf() as usize);
             {
                 // And copy the decoded data into our output buffer while reordering the channels to the
                 // GStreamer channel order
