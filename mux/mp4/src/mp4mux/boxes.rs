@@ -1646,24 +1646,30 @@ fn write_elst(
     let min_earliest_pts = header.streams.iter().map(|s| s.earliest_pts).min().unwrap();
 
     if min_earliest_pts != stream.earliest_pts {
-        // Entry count
-        v.extend(2u32.to_be_bytes());
-
-        // First entry for the gap
-
-        // Edit duration
         let gap = (stream.earliest_pts - min_earliest_pts)
             .nseconds()
             .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
             .context("too big gap")?;
-        v.extend(gap.to_be_bytes());
 
-        // Media time
-        v.extend((-1i64).to_be_bytes());
+        if gap > 0 {
+            // Entry count
+            v.extend(2u32.to_be_bytes());
 
-        // Media rate
-        v.extend(1u16.to_be_bytes());
-        v.extend(0u16.to_be_bytes());
+            // First entry for the gap
+
+            // Edit duration
+            v.extend(gap.to_be_bytes());
+
+            // Media time
+            v.extend((-1i64).to_be_bytes());
+
+            // Media rate
+            v.extend(1u16.to_be_bytes());
+            v.extend(0u16.to_be_bytes());
+        } else {
+            // Entry count
+            v.extend(1u32.to_be_bytes());
+        }
     } else {
         // Entry count
         v.extend(1u32.to_be_bytes());
