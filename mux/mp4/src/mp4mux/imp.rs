@@ -782,6 +782,16 @@ impl MP4Mux {
                 && buffer.buffer.size() == 0
             {
                 gst::trace!(CAT, obj: stream.sinkpad, "Skipping gap buffer {buffer:?}");
+
+                // If a new chunk was just started for the gap buffer, don't bother and get rid
+                // of this chunk again for now and search for the next stream.
+                if let Some(chunk) = stream.chunks.last() {
+                    if chunk.samples.is_empty() {
+                        let _ = stream.chunks.pop();
+                        state.current_stream_idx = None;
+                    }
+                }
+
                 continue;
             }
 
