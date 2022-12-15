@@ -1683,9 +1683,11 @@ fn write_elst(
     v.extend(duration.to_be_bytes());
 
     // Media time
-    if let Some(gst::Signed::Negative(start_dts)) = stream.start_dts {
-        let shift = (stream.earliest_pts + start_dts)
+    if let Some(start_dts) = stream.start_dts {
+        let shift = (gst::Signed::Positive(stream.earliest_pts) - start_dts)
             .nseconds()
+            .positive()
+            .unwrap_or(0)
             .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
             .context("too big track duration")?;
 
