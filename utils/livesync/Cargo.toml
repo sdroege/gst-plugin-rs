@@ -12,7 +12,7 @@ rust-version = "1.63"
 gio = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "0.16", version = "0.16", optional = true }
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.19", version = "0.19" }
 gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.19", version = "0.19" }
-gst-plugin-gtk4 = { path = "../../video/gtk4", optional = true }
+gst-plugin-gtk4 = { path = "../../video/gtk4", version = "0.9", optional = true }
 gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", branch = "0.5", version = "0.5", optional = true }
 muldiv = "1.0"
 num-rational = { version = "0.4", default-features = false, features = [] }
@@ -37,7 +37,7 @@ name = "livesync"
 path = "tests/livesync.rs"
 
 [build-dependencies]
-gst-plugin-version-helper = { path="../../version-helper" }
+gst-plugin-version-helper = { path="../../version-helper", version = "0.7" }
 
 [features]
 static = []
