@@ -211,6 +211,17 @@ else
   disable_doc = []
 endif
 
+# 'pkgconfig' is the entry in the machine file, if specified
+pkg_config = find_program('pkgconfig', required: false)
+if pkg_config.found()
+  extra_env += {'PKG_CONFIG': pkg_config.full_path()}
+endif
+
+pkg_config_path = get_option('pkg_config_path')
+if pkg_config_path.length() > 0
+  extra_env += {'PKG_CONFIG_PATH': ':'.join(pkg_config_path)}
+endif
+
 rs_plugins = custom_target('gst-plugins-rs',
   build_by_default: true,
   output: output,
