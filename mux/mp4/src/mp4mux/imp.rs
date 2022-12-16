@@ -789,7 +789,26 @@ impl MP4Mux {
                     if chunk.samples.is_empty() {
                         let _ = stream.chunks.pop();
                         state.current_stream_idx = None;
+                    } else {
+                        // Add duration of the gap to the current chunk
+                        stream.queued_chunk_time += buffer.duration.unwrap();
                     }
+                }
+
+                // Add the duration of the gap buffer to the previously written out sample.
+                if let Some(previous_sample) =
+                    stream.chunks.last_mut().and_then(|c| c.samples.last_mut())
+                {
+                    gst::trace!(CAT, obj: stream.sinkpad, "Adding gap duration {} to previous sample", buffer.duration.unwrap());
+                    previous_sample.duration += buffer.duration.unwrap();
+                } else {
+                    gst::trace!(CAT, obj: stream.sinkpad, "Resetting stream start time because it started with a gap");
+                    // If there was no previous sample yet then the next sample needs to start
+                    // earlier or alternatively we change the start PTS. We do the latter here
+                    // as otherwise the first sample would be displayed too early.
+                    stream.earliest_pts = None;
+                    stream.start_dts = None;
+                    stream.end_pts = None;
                 }
 
                 continue;
