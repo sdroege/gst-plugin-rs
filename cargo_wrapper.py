@@ -17,7 +17,6 @@ PARSER.add_argument('src_dir', type=P)
 PARSER.add_argument('root_dir', type=P)
 PARSER.add_argument('target', choices=['release', 'debug'])
 PARSER.add_argument('include')
-PARSER.add_argument('extra_env')
 PARSER.add_argument('prefix', type=P)
 PARSER.add_argument('libdir', type=P)
 PARSER.add_argument('--version', default=None)
@@ -66,11 +65,6 @@ if __name__ == "__main__":
     pkg_config_path = env.get('PKG_CONFIG_PATH', '').split(':')
     pkg_config_path.append(str(opts.root_dir / 'meson-uninstalled'))
     env['PKG_CONFIG_PATH'] = ':'.join(pkg_config_path)
-
-    if opts.extra_env:
-        for e in opts.extra_env.split(','):
-            k, v = e.split(':')
-            env[k] = v
 
     if opts.command == 'build':
         cargo_cmd = ['cargo']
