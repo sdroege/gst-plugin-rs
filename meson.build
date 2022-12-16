@@ -170,6 +170,7 @@ plugins = {
     'library': 'libgsturiplaylistbin',
     'examples': ['playlist'],
     'features': ['clap'],
+    'gst-version': '>=1.23.90',
   },
 
   'cdg': {'library': 'libgstcdg'},
@@ -396,6 +397,18 @@ foreach plugin_name, details: plugins
           break
         endif
       endforeach
+    endif
+    if details.has_key('gst-version')
+      # Check if we have the required GStreamer version
+      gst_version = details.get('gst-version', '')
+      dep = dependency('gstreamer-1.0', required: false, version: gst_version)
+      if not dep.found()
+        opt = get_option(plugin_name)
+        if opt.enabled()
+          error('Required GStreamer version not found to build ' + plugin_name)
+        endif
+        plugin_deps_found = false
+      endif
     endif
     if plugin_deps_found
       packages += f'gst-plugin-@plugin_name@'

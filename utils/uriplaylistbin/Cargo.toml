@@ -9,7 +9,7 @@ description = "GStreamer Playlist Playback Plugin"
 rust-version.workspace = true
 
 [dependencies]
-gst.workspace = true
+gst = { workspace = true, features = ["v1_24"] }
 anyhow = "1"
 clap = { version = "4", optional = true, features = ["derive"] }
 thiserror = "1"

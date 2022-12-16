@@ -135,9 +135,21 @@ fn test(
                 break;
             }
             // check stream related messages
-            MessageView::StreamCollection(_) | MessageView::StreamsSelected(_) => {
+            MessageView::StreamCollection(sc) => {
+                if let Some(prev) = events.last() {
+                    if let MessageView::StreamCollection(prev_sc) = prev.view() {
+                        if prev_sc.src() == sc.src()
+                            && prev_sc.stream_collection() == sc.stream_collection()
+                        {
+                            // decodebin3 may send twice the same collection
+                            continue;
+                        }
+                    }
+                }
+
                 events.push(msg.clone())
             }
+            MessageView::StreamsSelected(_) => events.push(msg.clone()),
             _ => {}
         }
     }
@@ -174,12 +186,15 @@ fn test(
         // check stream-collection and streams-selected message ordering
         let mut events = events.clone().into_iter();
 
-        for _ in 0..playlist_len {
+        for i in 0..playlist_len {
             let decodebin = assert_stream_collection(events.next().unwrap(), n_streams as usize);
-            assert_eq!(
-                assert_stream_selected(events.next().unwrap(), n_streams as usize),
-                decodebin
-            );
+            if i == 0 {
+                // decodebin3 sends StreamSelected only once, which is ok as the selected stream stays the same
+                assert_eq!(
+                    assert_stream_selected(events.next().unwrap(), n_streams as usize),
+                    decodebin
+                );
+            }
         }
     }
 
