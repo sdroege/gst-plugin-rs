@@ -16,13 +16,13 @@ futures = "0.3"
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.19", version = "0.19.1" }
 gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.19", version = "0.19" }
 gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.19", version = "0.19", features = ["v1_16"] }
-aws-config = "0.51.0"
-aws-sdk-s3 = "0.21.0"
-aws-sdk-transcribe = "0.21.0"
-aws-types = "0.51.0"
-aws-sig-auth = "0.51.0"
-aws-smithy-http = { version = "0.51.0", features = [ "rt-tokio" ] }
-aws-smithy-types = "0.51.0"
+aws-config = "0.52.0"
+aws-sdk-s3 = "0.22.0"
+aws-sdk-transcribe = "0.22.0"
+aws-types = "0.52.0"
+aws-sig-auth = "0.52.0"
+aws-smithy-http = { version = "0.52.0", features = [ "rt-tokio" ] }
+aws-smithy-types = "0.52.0"
 http = "0.2.7"
 chrono = "0.4"
 url = "2"

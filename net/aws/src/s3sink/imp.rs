@@ -535,7 +535,7 @@ impl S3Sink {
 
         let config = if let Some(uri) = endpoint_uri {
             config_builder
-                .endpoint_resolver(Endpoint::mutable(uri))
+                .endpoint_resolver(Endpoint::mutable_uri(uri).expect("Failed to parse endpoint"))
                 .build()
         } else {
             config_builder.build()

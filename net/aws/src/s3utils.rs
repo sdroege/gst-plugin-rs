@@ -10,7 +10,7 @@ use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_s3::{config::timeout::TimeoutConfig, Credentials, Region};
 use aws_types::sdk_config::SdkConfig;
 
-use aws_smithy_http::byte_stream::{ByteStream, Error};
+use aws_smithy_http::byte_stream::{error::Error, ByteStream};
 
 use bytes::{buf::BufMut, Bytes, BytesMut};
 use futures::stream::TryStreamExt;
