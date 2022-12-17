@@ -9,7 +9,6 @@ use gst_utils::StreamProducer;
 use gst_video::subclass::prelude::*;
 use gst_webrtc::WebRTCDataChannel;
 
-use tokio::runtime;
 use futures::prelude::*;
 
 use anyhow::{anyhow, Error};
@@ -20,6 +19,7 @@ use std::sync::Mutex;
 
 use super::homegrown_cc::CongestionController;
 use super::{WebRTCSinkCongestionControl, WebRTCSinkError, WebRTCSinkMitigationMode};
+use crate::webrtcsink::RUNTIME;
 use crate::signaller::Signaller;
 use std::collections::BTreeMap;
 
@@ -29,14 +29,6 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
         gst::DebugColorFlags::empty(),
         Some("WebRTC sink"),
     )
-});
-
-static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
-    runtime::Builder::new_multi_thread()
-        .enable_all()
-        .worker_threads(1)
-        .build()
-        .unwrap()
 });
 
 const CUDA_MEMORY_FEATURE: &str = "memory:CUDAMemory";

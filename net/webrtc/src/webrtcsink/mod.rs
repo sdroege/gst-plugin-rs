@@ -10,6 +10,8 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use std::error::Error;
+use tokio::runtime;
+use once_cell::sync::Lazy;
 
 mod homegrown_cc;
 mod imp;
@@ -165,3 +167,11 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         WebRTCSink::static_type(),
     )
 }
+
+pub static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
+    runtime::Builder::new_multi_thread()
+        .enable_all()
+        .worker_threads(1)
+        .build()
+        .unwrap()
+});

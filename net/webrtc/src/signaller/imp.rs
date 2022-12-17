@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::webrtcsink::WebRTCSink;
+use crate::webrtcsink::{RUNTIME, WebRTCSink};
 use anyhow::{anyhow, Error};
-use tokio::runtime;
 use tokio::task;
 use async_tungstenite::tungstenite::Message as WsMessage;
 use futures::channel::mpsc;
@@ -23,14 +22,6 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
         gst::DebugColorFlags::empty(),
         Some("WebRTC sink signaller"),
     )
-});
-
-static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
-    runtime::Builder::new_multi_thread()
-        .enable_all()
-        .worker_threads(1)
-        .build()
-        .unwrap()
 });
 
 #[derive(Default)]
