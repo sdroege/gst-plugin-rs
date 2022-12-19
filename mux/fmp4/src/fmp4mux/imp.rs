@@ -1505,17 +1505,19 @@ impl FMP4Mux {
                     .collect::<gst::BufferList>(),
             );
 
-            // Write mfra only for the main stream, and if there are no buffers for the main stream
-            // in this segment then don't write anything.
-            if let Some(super::FragmentHeaderStream {
-                start_time: Some(start_time),
-                ..
-            }) = streams.get(0)
-            {
-                state.fragment_offsets.push(super::FragmentOffset {
-                    time: *start_time,
-                    offset: moof_offset,
-                });
+            if settings.write_mfra {
+                // Write mfra only for the main stream, and if there are no buffers for the main stream
+                // in this segment then don't write anything.
+                if let Some(super::FragmentHeaderStream {
+                    start_time: Some(start_time),
+                    ..
+                }) = streams.get(0)
+                {
+                    state.fragment_offsets.push(super::FragmentOffset {
+                        time: *start_time,
+                        offset: moof_offset,
+                    });
+                }
             }
 
             state.end_pts = Some(fragment_end_pts);
