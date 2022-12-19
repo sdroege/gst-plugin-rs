@@ -6,6 +6,7 @@ project('gst-plugins-rs',
 
 python = import('python').find_installation()
 fs = import('fs')
+host_system = host_machine.system()
 
 if get_option('debug')
   target = 'debug'
@@ -219,7 +220,11 @@ endif
 
 pkg_config_path = get_option('pkg_config_path')
 if pkg_config_path.length() > 0
-  extra_env += {'PKG_CONFIG_PATH': ':'.join(pkg_config_path)}
+  pathsep = ':'
+  if host_system == 'windows'
+    pathsep = ';'
+  endif
+  extra_env += {'PKG_CONFIG_PATH': pathsep.join(pkg_config_path)}
 endif
 
 rs_plugins = custom_target('gst-plugins-rs',

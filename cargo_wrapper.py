@@ -74,9 +74,9 @@ if __name__ == "__main__":
     env = os.environ.copy()
     env['CARGO_TARGET_DIR'] = str(cargo_target_dir)
 
-    pkg_config_path = env.get('PKG_CONFIG_PATH', '').split(':')
+    pkg_config_path = env.get('PKG_CONFIG_PATH', '').split(os.pathsep)
     pkg_config_path.append(str(opts.root_dir / 'meson-uninstalled'))
-    env['PKG_CONFIG_PATH'] = ':'.join(pkg_config_path)
+    env['PKG_CONFIG_PATH'] = os.pathsep.join(pkg_config_path)
 
     if opts.command == 'build':
         cargo_cmd = ['cargo']
