@@ -84,11 +84,17 @@ plugins = {
   'gst-plugin-png': 'libgstrspng',
   'gst-plugin-rav1e': 'libgstrav1e',
   # videofx has an external dependency, see below
+}
 
+# Won't build on platforms where it bundles the sources because of:
+# https://github.com/qnighy/libwebp-sys2-rs/issues/12
+# Remove this check once we update to a version that contains the fix:
+# https://github.com/qnighy/libwebp-sys2-rs/pull/13
+if host_system not in ['windows', 'darwin']
   # FIXME: libwebp-sys2 will build its bundled version on msvc and apple platforms
   # https://github.com/qnighy/libwebp-sys2-rs/issues/4
-  'gst-plugin-webp': 'libgstrswebp',
-}
+  plugins += {'gst-plugin-webp': 'libgstrswebp'}
+endif
 
 extra_env = {}
 
