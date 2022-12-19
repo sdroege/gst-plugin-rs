@@ -165,6 +165,18 @@
                         "readable": true,
                         "type": "gchararray",
                         "writable": true
+                    },
+                    "stats": {
+                        "blurb": "Various statistics",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "stats, num-uploads-started=(int)0, num-uploads-completed=(int)0, num-bytes-uploaded=(int)0;",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": false
                     }
                 },
                 "rank": "none"
