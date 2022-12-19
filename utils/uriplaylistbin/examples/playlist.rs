@@ -122,7 +122,10 @@ fn main() -> anyhow::Result<()> {
                     eprintln!("Debugging information: {:?}", err.debug());
                     break;
                 }
-                MessageView::Eos(..) => break,
+                MessageView::Eos(..) => {
+                    println!("eos");
+                    break;
+                }
                 _ => (),
             }
         }
