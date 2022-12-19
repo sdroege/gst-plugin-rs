@@ -78,6 +78,22 @@ fn create_pipeline(uris: Vec<String>, iterations: u32) -> anyhow::Result<gst::Pi
         let _ = sink.set_state(gst::State::Null);
     });
 
+    fn display_current(uriplaylistbin: &gst::Element) {
+        let uris = uriplaylistbin.property::<Vec<String>>("uris");
+        let uri_index = uriplaylistbin.property::<u64>("current-uri-index");
+        let iteration = uriplaylistbin.property::<u32>("current-iteration");
+
+        println!("-> {} (iteration {})", uris[uri_index as usize], iteration);
+    }
+
+    playlist.connect_notify(Some("current-iteration"), |uriplaylistbin, _param_spec| {
+        display_current(uriplaylistbin);
+    });
+
+    playlist.connect_notify(Some("current-uri-index"), |uriplaylistbin, _param_spec| {
+        display_current(uriplaylistbin);
+    });
+
     Ok(pipeline)
 }
 
