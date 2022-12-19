@@ -32,7 +32,19 @@ def generate_depfile_for(fpath):
     with open(f"{file_stem}.d", 'r') as depfile:
         for l in depfile.readlines():
             if l.startswith(str(file_stem)):
-                output, srcs = l.split(":", maxsplit=2)
+                # We can't blindly split on `:` because on Windows that's part
+                # of the drive letter. Lucky for us, the format of the dep file
+                # is one of:
+                #
+                #   /path/to/output: /path/to/src1 /path/to/src2
+                #   /path/to/output:
+                #
+                # So we parse these two cases specifically
+                if l.endswith(':'):
+                    output = l[:-1]
+                    srcs = ''
+                else:
+                    output, srcs = l.split(": ", maxsplit=2)
 
                 all_deps = []
                 for src in srcs.split(" "):
