@@ -165,6 +165,11 @@ impl PaintableImpl for Paintable {
 }
 
 impl Paintable {
+    #[cfg(feature = "gst_gl")]
+    pub(super) fn context(&self) -> Option<gdk::GLContext> {
+        self.gl_context.borrow().clone()
+    }
+
     pub(super) fn handle_frame_changed(&self, frame: Option<Frame>) {
         let context = self.gl_context.borrow();
         if let Some(frame) = frame {

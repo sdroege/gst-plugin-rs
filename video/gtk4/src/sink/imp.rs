@@ -209,6 +209,16 @@ impl ElementImpl for PaintableSink {
                     gst::error!(CAT, imp: self, "Failed to create paintable");
                     return Err(gst::StateChangeError);
                 }
+
+                drop(paintable);
+
+                #[cfg(feature = "gst_gl")]
+                {
+                    if self.have_gl_context.load(Ordering::Relaxed) && !self.initialize_gl_wrapper()
+                    {
+                        self.have_gl_context.store(false, Ordering::Relaxed);
+                    }
+                }
             }
             _ => (),
         }
@@ -227,6 +237,12 @@ impl ElementImpl for PaintableSink {
                         paintable.get_ref().handle_flush_frames();
                     }
                 });
+            }
+            #[cfg(feature = "gst_gl")]
+            gst::StateChange::ReadyToNull => {
+                let _ = self.gst_context.lock().unwrap().take();
+                let _ = self.gst_app_context.lock().unwrap().take();
+                let _ = self.gst_display.lock().unwrap().take();
             }
             _ => (),
         }
@@ -384,7 +400,7 @@ impl BaseSinkImpl for PaintableSink {
                     assert_ne!(gst_ctx, None);
 
                     return gst_gl::functions::gl_handle_context_query(
-                        &*self.instance(),
+                        &*self.obj(),
                         q,
                         Some(&display),
                         gst_ctx.as_ref(),
@@ -458,7 +474,7 @@ impl PaintableSink {
     fn do_action(&self, action: SinkEvent) -> glib::Continue {
         let paintable = self.paintable.lock().unwrap();
         let paintable = match &*paintable {
-            Some(paintable) => paintable.clone(),
+            Some(paintable) => paintable,
             None => return glib::Continue(false),
         };
 
@@ -503,10 +519,8 @@ impl PaintableSink {
         #[cfg(feature = "gst_gl")]
         {
             if let Some(c) = self.realize_context() {
-                if let Ok(c) = self.initialize_gl_wrapper(c) {
-                    self.have_gl_context.store(true, Ordering::Relaxed);
-                    ctx = Some(c);
-                }
+                self.have_gl_context.store(true, Ordering::Relaxed);
+                ctx = Some(c);
             }
         }
 
@@ -529,12 +543,12 @@ impl PaintableSink {
 
         // The channel for the SinkEvents
         let (sender, receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
-        let sink = self.instance();
+        let self_ = self.to_owned();
         receiver.attach(
             None,
             glib::clone!(
-                @weak sink => @default-return glib::Continue(false),
-                move |action| sink.imp().do_action(action)
+                @weak self_ => @default-return glib::Continue(false),
+                move |action| self_.do_action(action)
             ),
         );
 
@@ -547,13 +561,13 @@ impl PaintableSink {
     fn realize_context(&self) -> Option<ThreadGuard<gdk::GLContext>> {
         gst::debug!(CAT, imp: self, "Realizing GDK GL Context");
 
-        let weak = self.instance().downgrade();
-        let cb = move || -> Option<ThreadGuard<gdk::GLContext>> {
-            let obj = weak
-                .upgrade()
-                .expect("Failed to upgrade Weak ref during gl initialization.");
-
-            gst::debug!(CAT, obj: &obj, "Realizing GDK GL Context from main context");
+        let self_ = self.to_owned();
+        utils::invoke_on_main_thread(move || -> Option<ThreadGuard<gdk::GLContext>> {
+            gst::debug!(
+                CAT,
+                imp: self_,
+                "Realizing GDK GL Context from main context"
+            );
 
             // This can return NULL but only happens in 2 situations:
             // * If the function is called before gtk_init
@@ -569,44 +583,58 @@ impl PaintableSink {
             // FIXME: add a couple more gtk_init checks across the codebase where
             // applicable since this is no longer going to panic.
             let display = gdk::Display::default()?;
-            let ctx = display.create_gl_context();
-
-            if let Ok(ctx) = ctx {
-                gst::info!(CAT, obj: &obj, "Realizing GDK GL Context",);
-
-                if ctx.realize().is_ok() {
-                    gst::info!(CAT, obj: &obj, "Successfully realized GDK GL Context",);
-                    return Some(ThreadGuard::new(ctx));
-                } else {
-                    gst::warning!(CAT, obj: &obj, "Failed to realize GDK GL Context",);
+            let ctx = match display.create_gl_context() {
+                Ok(ctx) => ctx,
+                Err(err) => {
+                    gst::warning!(CAT, imp: self_, "Failed to create GDK GL Context: {err}");
+                    return None;
                 }
-            } else {
-                gst::warning!(CAT, obj: &obj, "Failed to create GDK GL Context",);
             };
 
-            None
+            match ctx.type_().name() {
+                #[cfg(all(target_os = "linux", feature = "x11egl"))]
+                "GdkX11GLContextEGL" => (),
+                #[cfg(all(target_os = "linux", feature = "x11glx"))]
+                "GdkX11GLContextGLX" => (),
+                #[cfg(all(target_os = "linux", feature = "wayland"))]
+                "GdkWaylandGLContext" => (),
+                display => {
+                    gst::error!(CAT, imp: self_, "Unsupported GDK display {display} for GL");
+                    return None;
+                }
+            }
+
+            gst::info!(CAT, imp: &self_, "Realizing GDK GL Context",);
+
+            match ctx.realize() {
+                Ok(_) => {
+                    gst::info!(CAT, imp: self_, "Successfully realized GDK GL Context",);
+                    Some(ThreadGuard::new(ctx))
+                }
+                Err(err) => {
+                    gst::warning!(CAT, imp: self_, "Failed to realize GDK GL Context: {err}",);
+                    None
+                }
+            }
+        })
+    }
+
+    #[cfg(feature = "gst_gl")]
+    fn initialize_gl_wrapper(&self) -> bool {
+        gst::info!(CAT, imp: self, "Initializing GDK GL Context");
+        let self_ = self.to_owned();
+        utils::invoke_on_main_thread(move || self_.initialize_gl())
+    }
+
+    #[cfg(feature = "gst_gl")]
+    fn initialize_gl(&self) -> bool {
+        let ctx = {
+            let paintable = self.paintable.lock().unwrap();
+            // Impossible to not have a paintable and GL context at this point
+            paintable.as_ref().unwrap().get_ref().context().unwrap()
         };
 
-        utils::invoke_on_main_thread(cb)
-    }
-
-    #[cfg(feature = "gst_gl")]
-    fn initialize_gl_wrapper(
-        &self,
-        context: ThreadGuard<gdk::GLContext>,
-    ) -> Result<ThreadGuard<gdk::GLContext>, glib::Error> {
-        gst::info!(CAT, imp: self, "Initializing GDK GL Context");
-        let self_ = self.instance().clone();
-        utils::invoke_on_main_thread(move || self_.imp().initialize_gl(context))
-    }
-
-    #[cfg(feature = "gst_gl")]
-    fn initialize_gl(
-        &self,
-        context: ThreadGuard<gdk::GLContext>,
-    ) -> Result<ThreadGuard<gdk::GLContext>, glib::Error> {
-        let ctx = context.get_ref();
-        let display = gtk::prelude::GLContextExt::display(ctx)
+        let display = gtk::prelude::GLContextExt::display(&ctx)
             .expect("Failed to get GDK Display from GDK Context.");
         ctx.make_current();
 
@@ -616,81 +644,62 @@ impl PaintableSink {
         match ctx.type_().name() {
             #[cfg(all(target_os = "linux", feature = "x11egl"))]
             "GdkX11GLContextEGL" => {
-                self.initialize_x11egl(display, &mut display_ctx_guard, &mut app_ctx_guard)?;
+                self.initialize_x11egl(display, &mut display_ctx_guard, &mut app_ctx_guard);
             }
             #[cfg(all(target_os = "linux", feature = "x11glx"))]
             "GdkX11GLContextGLX" => {
-                self.initialize_x11glx(display, &mut display_ctx_guard, &mut app_ctx_guard)?;
+                self.initialize_x11glx(display, &mut display_ctx_guard, &mut app_ctx_guard);
             }
             #[cfg(all(target_os = "linux", feature = "wayland"))]
             "GdkWaylandGLContext" => {
-                self.initialize_waylandegl(display, &mut display_ctx_guard, &mut app_ctx_guard)?;
+                self.initialize_waylandegl(display, &mut display_ctx_guard, &mut app_ctx_guard);
             }
             _ => {
-                gst::error!(
-                    CAT,
-                    imp: self,
-                    "Unsupported GDK display {} for GL",
-                    &display,
-                );
-                return Err(glib::Error::new(
-                    gst::ResourceError::Failed,
-                    &format!("Unsupported GDK display {display} for GL"),
-                ));
+                unreachable!("Unsupported GDK display {display} for GL");
             }
         };
 
         // This should have been initialized once we are done with the platform checks
-        assert!(app_ctx_guard.is_some());
+        if app_ctx_guard.is_none() {
+            return false;
+        }
 
         match app_ctx_guard.as_ref().unwrap().activate(true) {
             Ok(_) => gst::info!(CAT, imp: self, "Successfully activated GL Context."),
             Err(_) => {
                 gst::error!(CAT, imp: self, "Failed to activate GL context",);
-                return Err(glib::Error::new(
-                    gst::ResourceError::Failed,
-                    "Failed to activate GL context",
-                ));
+                return false;
             }
         };
 
-        match app_ctx_guard.as_ref().unwrap().fill_info() {
-            Ok(_) => {
-                match app_ctx_guard.as_ref().unwrap().activate(false) {
-                    Ok(_) => gst::info!(
-                        CAT,
-                        imp: self,
-                        "Successfully deactivated GL Context after fill_info"
-                    ),
-                    Err(_) => {
-                        gst::error!(CAT, imp: self, "Failed to deactivate GL context",);
-                        return Err(glib::Error::new(
-                            gst::ResourceError::Failed,
-                            "Failed to deactivate GL context after fill_info",
-                        ));
-                    }
-                };
-            }
-            Err(err) => {
+        if let Err(err) = app_ctx_guard.as_ref().unwrap().fill_info() {
+            gst::error!(
+                CAT,
+                imp: self,
+                "Failed to fill info on the GL Context: {err}",
+            );
+            // Deactivate the context upon failure
+            if app_ctx_guard.as_ref().unwrap().activate(false).is_err() {
                 gst::error!(
                     CAT,
                     imp: self,
-                    "Failed to fill info on the GL Context: {}",
-                    &err
+                    "Failed to deactivate the context after failing fill info",
                 );
-                // Deactivate the context upon failure
-                if let Err(err) = app_ctx_guard.as_ref().unwrap().activate(false) {
-                    gst::error!(
-                        CAT,
-                        imp: self,
-                        "Failed to deactivate the context after failing fill info: {}",
-                        &err
-                    );
-                }
-
-                return Err(err);
             }
-        };
+
+            return false;
+        }
+
+        if app_ctx_guard.as_ref().unwrap().activate(false).is_err() {
+            gst::error!(CAT, imp: self, "Failed to deactivate GL context",);
+            return false;
+        }
+
+        gst::info!(
+            CAT,
+            imp: self,
+            "Successfully deactivated GL Context after fill_info"
+        );
 
         match display_ctx_guard
             .as_ref()
@@ -701,11 +710,11 @@ impl PaintableSink {
                 let mut gst_ctx_guard = self.gst_context.lock().unwrap();
                 gst::info!(CAT, imp: self, "Successfully initialized GL Context");
                 gst_ctx_guard.replace(gst_context);
-                Ok(context)
+                true
             }
             Err(err) => {
-                gst::error!(CAT, imp: self, "Could not create GL context: {}", &err);
-                Err(err)
+                gst::error!(CAT, imp: self, "Could not create GL context: {err}");
+                false
             }
         }
     }
@@ -716,7 +725,7 @@ impl PaintableSink {
         display: gdk::Display,
         display_ctx_guard: &mut Option<gst_gl::GLDisplay>,
         app_ctx_guard: &mut Option<gst_gl::GLContext>,
-    ) -> Result<(), glib::Error> {
+    ) {
         gst::info!(
             CAT,
             imp: self,
@@ -727,34 +736,29 @@ impl PaintableSink {
         let (gl_api, _, _) = gst_gl::GLContext::current_gl_api(platform);
         let gl_ctx = gst_gl::GLContext::current_gl_context(platform);
 
-        if gl_ctx != 0 {
-            unsafe {
-                let d = display.downcast::<gdk_x11::X11Display>().unwrap();
-                let x11_display = gdk_x11::ffi::gdk_x11_display_get_egl_display(d.to_glib_none().0);
-                assert!(!x11_display.is_null());
-
-                let gst_display =
-                    gst_gl_egl::ffi::gst_gl_display_egl_new_with_egl_display(x11_display);
-                assert!(!gst_display.is_null());
-                let gst_display: gst_gl::GLDisplay =
-                    from_glib_full(gst_display as *mut gst_gl::ffi::GstGLDisplay);
-
-                let gst_app_context =
-                    gst_gl::GLContext::new_wrapped(&gst_display, gl_ctx, platform, gl_api);
-
-                assert!(gst_app_context.is_some());
-
-                display_ctx_guard.replace(gst_display);
-                app_ctx_guard.replace(gst_app_context.unwrap());
-
-                Ok(())
-            }
-        } else {
+        if gl_ctx == 0 {
             gst::error!(CAT, imp: self, "Failed to get handle from GdkGLContext",);
-            Err(glib::Error::new(
-                gst::ResourceError::Failed,
-                "Failed to get handle from GdkGLContext",
-            ))
+            return;
+        }
+
+        // FIXME: bindings
+        unsafe {
+            let d = display.downcast::<gdk_x11::X11Display>().unwrap();
+            let x11_display = gdk_x11::ffi::gdk_x11_display_get_egl_display(d.to_glib_none().0);
+            assert!(!x11_display.is_null());
+
+            let gst_display = gst_gl_egl::ffi::gst_gl_display_egl_new_with_egl_display(x11_display);
+            assert!(!gst_display.is_null());
+            let gst_display: gst_gl::GLDisplay =
+                from_glib_full(gst_display as *mut gst_gl::ffi::GstGLDisplay);
+
+            let gst_app_context =
+                gst_gl::GLContext::new_wrapped(&gst_display, gl_ctx, platform, gl_api);
+
+            assert!(gst_app_context.is_some());
+
+            display_ctx_guard.replace(gst_display);
+            app_ctx_guard.replace(gst_app_context.unwrap());
         }
     }
 
@@ -764,7 +768,7 @@ impl PaintableSink {
         display: gdk::Display,
         display_ctx_guard: &mut Option<gst_gl::GLDisplay>,
         app_ctx_guard: &mut Option<gst_gl::GLContext>,
-    ) -> Result<(), glib::Error> {
+    ) {
         gst::info!(
             CAT,
             imp: self,
@@ -775,33 +779,29 @@ impl PaintableSink {
         let (gl_api, _, _) = gst_gl::GLContext::current_gl_api(platform);
         let gl_ctx = gst_gl::GLContext::current_gl_context(platform);
 
-        if gl_ctx != 0 {
-            unsafe {
-                let d = display.downcast::<gdk_x11::X11Display>().unwrap();
-                let x11_display = gdk_x11::ffi::gdk_x11_display_get_xdisplay(d.to_glib_none().0);
-                assert!(!x11_display.is_null());
-
-                let gst_display = gst_gl_x11::ffi::gst_gl_display_x11_new_with_display(x11_display);
-                assert!(!gst_display.is_null());
-                let gst_display: gst_gl::GLDisplay =
-                    from_glib_full(gst_display as *mut gst_gl::ffi::GstGLDisplay);
-
-                let gst_app_context =
-                    gst_gl::GLContext::new_wrapped(&gst_display, gl_ctx, platform, gl_api);
-
-                assert!(gst_app_context.is_some());
-
-                display_ctx_guard.replace(gst_display);
-                app_ctx_guard.replace(gst_app_context.unwrap());
-
-                Ok(())
-            }
-        } else {
+        if gl_ctx == 0 {
             gst::error!(CAT, imp: self, "Failed to get handle from GdkGLContext",);
-            Err(glib::Error::new(
-                gst::ResourceError::Failed,
-                "Failed to get handle from GdkGLContext",
-            ))
+            return;
+        }
+
+        // FIXME: bindings
+        unsafe {
+            let d = display.downcast::<gdk_x11::X11Display>().unwrap();
+            let x11_display = gdk_x11::ffi::gdk_x11_display_get_xdisplay(d.to_glib_none().0);
+            assert!(!x11_display.is_null());
+
+            let gst_display = gst_gl_x11::ffi::gst_gl_display_x11_new_with_display(x11_display);
+            assert!(!gst_display.is_null());
+            let gst_display: gst_gl::GLDisplay =
+                from_glib_full(gst_display as *mut gst_gl::ffi::GstGLDisplay);
+
+            let gst_app_context =
+                gst_gl::GLContext::new_wrapped(&gst_display, gl_ctx, platform, gl_api);
+
+            assert!(gst_app_context.is_some());
+
+            display_ctx_guard.replace(gst_display);
+            app_ctx_guard.replace(gst_app_context.unwrap());
         }
     }
 
@@ -811,7 +811,7 @@ impl PaintableSink {
         display: gdk::Display,
         display_ctx_guard: &mut Option<gst_gl::GLDisplay>,
         app_ctx_guard: &mut Option<gst_gl::GLContext>,
-    ) -> Result<(), glib::Error> {
+    ) {
         gst::info!(
             CAT,
             imp: self,
@@ -822,38 +822,33 @@ impl PaintableSink {
         let (gl_api, _, _) = gst_gl::GLContext::current_gl_api(platform);
         let gl_ctx = gst_gl::GLContext::current_gl_context(platform);
 
-        // FIXME: bindings
-        if gl_ctx != 0 {
-            unsafe {
-                // let wayland_display = gdk_wayland::WaylandDisplay::wl_display(display.downcast());
-                // get the ptr directly since we are going to use it raw
-                let d = display.downcast::<gdk_wayland::WaylandDisplay>().unwrap();
-                let wayland_display =
-                    gdk_wayland::ffi::gdk_wayland_display_get_wl_display(d.to_glib_none().0);
-                assert!(!wayland_display.is_null());
-
-                let gst_display =
-                    gst_gl_wayland::ffi::gst_gl_display_wayland_new_with_display(wayland_display);
-                assert!(!gst_display.is_null());
-                let gst_display: gst_gl::GLDisplay =
-                    from_glib_full(gst_display as *mut gst_gl::ffi::GstGLDisplay);
-
-                let gst_app_context =
-                    gst_gl::GLContext::new_wrapped(&gst_display, gl_ctx, platform, gl_api);
-
-                assert!(gst_app_context.is_some());
-
-                display_ctx_guard.replace(gst_display);
-                app_ctx_guard.replace(gst_app_context.unwrap());
-
-                Ok(())
-            }
-        } else {
+        if gl_ctx == 0 {
             gst::error!(CAT, imp: self, "Failed to get handle from GdkGLContext",);
-            Err(glib::Error::new(
-                gst::ResourceError::Failed,
-                "Failed to get handle from GdkGLContext",
-            ))
+            return;
+        }
+
+        // FIXME: bindings
+        unsafe {
+            // let wayland_display = gdk_wayland::WaylandDisplay::wl_display(display.downcast());
+            // get the ptr directly since we are going to use it raw
+            let d = display.downcast::<gdk_wayland::WaylandDisplay>().unwrap();
+            let wayland_display =
+                gdk_wayland::ffi::gdk_wayland_display_get_wl_display(d.to_glib_none().0);
+            assert!(!wayland_display.is_null());
+
+            let gst_display =
+                gst_gl_wayland::ffi::gst_gl_display_wayland_new_with_display(wayland_display);
+            assert!(!gst_display.is_null());
+            let gst_display: gst_gl::GLDisplay =
+                from_glib_full(gst_display as *mut gst_gl::ffi::GstGLDisplay);
+
+            let gst_app_context =
+                gst_gl::GLContext::new_wrapped(&gst_display, gl_ctx, platform, gl_api);
+
+            assert!(gst_app_context.is_some());
+
+            display_ctx_guard.replace(gst_display);
+            app_ctx_guard.replace(gst_app_context.unwrap());
         }
     }
 }
