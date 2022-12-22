@@ -156,6 +156,10 @@ impl Frame {
                         gst_ctx,
                     )
                 } else {
+                    // This will fail badly if the video frame was actually mapped as GL texture
+                    // but this case can't really happen as we only do that if we actually have a
+                    // GDK GL context.
+                    assert!(self.gst_context.is_none());
                     video_frame_to_memory_texture(self.frame, cached_textures, &mut used_textures)
                 }
             }
