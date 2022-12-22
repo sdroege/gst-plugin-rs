@@ -13,7 +13,7 @@ use super::SinkEvent;
 use crate::sink::frame::Frame;
 use crate::sink::paintable::Paintable;
 
-use glib::Sender;
+use glib::{thread_guard::ThreadGuard, Sender};
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
@@ -25,7 +25,6 @@ use once_cell::sync::Lazy;
 use std::sync::{Mutex, MutexGuard};
 
 use crate::utils;
-use fragile::Fragile;
 
 #[cfg(feature = "gst_gl")]
 use glib::translate::*;
@@ -44,9 +43,9 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct PaintableSink {
-    paintable: Mutex<Option<Fragile<Paintable>>>,
+    paintable: Mutex<Option<ThreadGuard<Paintable>>>,
     info: Mutex<Option<gst_video::VideoInfo>>,
     sender: Mutex<Option<Sender<SinkEvent>>>,
     pending_frame: Mutex<Option<Frame>>,
@@ -109,16 +108,15 @@ impl ObjectImpl for PaintableSink {
                 };
 
                 // Getter must be called from the main thread
-                match paintable.try_get() {
-                    Ok(paintable) => paintable.to_value(),
-                    Err(_) => {
-                        gst::error!(
-                            CAT,
-                            imp: self,
-                            "Can't retrieve Paintable from non-main thread"
-                        );
-                        None::<&gdk::Paintable>.to_value()
-                    }
+                if paintable.is_owner() {
+                    paintable.get_ref().to_value()
+                } else {
+                    gst::error!(
+                        CAT,
+                        imp: self,
+                        "Can't retrieve Paintable from non-main thread"
+                    );
+                    None::<&gdk::Paintable>.to_value()
                 }
             }
             _ => unimplemented!(),
@@ -226,7 +224,7 @@ impl ElementImpl for PaintableSink {
                 utils::invoke_on_main_thread(move || {
                     let paintable = self_.paintable.lock().unwrap();
                     if let Some(paintable) = &*paintable {
-                        paintable.get().handle_flush_frames();
+                        paintable.get_ref().handle_flush_frames();
                     }
                 });
             }
@@ -458,16 +456,18 @@ impl PaintableSink {
     }
 
     fn do_action(&self, action: SinkEvent) -> glib::Continue {
-        let paintable = self.paintable.lock().unwrap().clone();
-        let paintable = match paintable {
-            Some(paintable) => paintable,
+        let paintable = self.paintable.lock().unwrap();
+        let paintable = match &*paintable {
+            Some(paintable) => paintable.clone(),
             None => return glib::Continue(false),
         };
 
         match action {
             SinkEvent::FrameChanged => {
                 gst::trace!(CAT, imp: self, "Frame changed");
-                paintable.get().handle_frame_changed(self.pending_frame())
+                paintable
+                    .get_ref()
+                    .handle_frame_changed(self.pending_frame())
             }
         }
 
@@ -496,7 +496,7 @@ impl PaintableSink {
             .replace(tmp_caps);
     }
 
-    fn create_paintable(&self, paintable_storage: &mut MutexGuard<Option<Fragile<Paintable>>>) {
+    fn create_paintable(&self, paintable_storage: &mut MutexGuard<Option<ThreadGuard<Paintable>>>) {
         #[allow(unused_mut)]
         let mut ctx = None;
 
@@ -516,15 +516,15 @@ impl PaintableSink {
 
     fn initialize_paintable(
         &self,
-        gl_context: Option<Fragile<gdk::GLContext>>,
-        paintable_storage: &mut MutexGuard<Option<Fragile<Paintable>>>,
+        gl_context: Option<ThreadGuard<gdk::GLContext>>,
+        paintable_storage: &mut MutexGuard<Option<ThreadGuard<Paintable>>>,
     ) {
         gst::debug!(CAT, imp: self, "Initializing paintable");
 
         let paintable = utils::invoke_on_main_thread(|| {
             // grab the context out of the fragile
             let ctx = gl_context.map(|f| f.into_inner());
-            Fragile::new(Paintable::new(ctx))
+            ThreadGuard::new(Paintable::new(ctx))
         });
 
         // The channel for the SinkEvents
@@ -544,11 +544,11 @@ impl PaintableSink {
     }
 
     #[cfg(feature = "gst_gl")]
-    fn realize_context(&self) -> Option<Fragile<gdk::GLContext>> {
+    fn realize_context(&self) -> Option<ThreadGuard<gdk::GLContext>> {
         gst::debug!(CAT, imp: self, "Realizing GDK GL Context");
 
         let weak = self.instance().downgrade();
-        let cb = move || -> Option<Fragile<gdk::GLContext>> {
+        let cb = move || -> Option<ThreadGuard<gdk::GLContext>> {
             let obj = weak
                 .upgrade()
                 .expect("Failed to upgrade Weak ref during gl initialization.");
@@ -576,7 +576,7 @@ impl PaintableSink {
 
                 if ctx.realize().is_ok() {
                     gst::info!(CAT, obj: &obj, "Successfully realized GDK GL Context",);
-                    return Some(Fragile::new(ctx));
+                    return Some(ThreadGuard::new(ctx));
                 } else {
                     gst::warning!(CAT, obj: &obj, "Failed to realize GDK GL Context",);
                 }
@@ -593,8 +593,8 @@ impl PaintableSink {
     #[cfg(feature = "gst_gl")]
     fn initialize_gl_wrapper(
         &self,
-        context: Fragile<gdk::GLContext>,
-    ) -> Result<Fragile<gdk::GLContext>, glib::Error> {
+        context: ThreadGuard<gdk::GLContext>,
+    ) -> Result<ThreadGuard<gdk::GLContext>, glib::Error> {
         gst::info!(CAT, imp: self, "Initializing GDK GL Context");
         let self_ = self.instance().clone();
         utils::invoke_on_main_thread(move || self_.imp().initialize_gl(context))
@@ -603,9 +603,9 @@ impl PaintableSink {
     #[cfg(feature = "gst_gl")]
     fn initialize_gl(
         &self,
-        context: Fragile<gdk::GLContext>,
-    ) -> Result<Fragile<gdk::GLContext>, glib::Error> {
-        let ctx = context.get();
+        context: ThreadGuard<gdk::GLContext>,
+    ) -> Result<ThreadGuard<gdk::GLContext>, glib::Error> {
+        let ctx = context.get_ref();
         let display = gtk::prelude::GLContextExt::display(ctx)
             .expect("Failed to get GDK Display from GDK Context.");
         ctx.make_current();
