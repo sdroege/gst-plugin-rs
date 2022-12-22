@@ -440,12 +440,12 @@ impl VideoSinkImpl for PaintableSink {
         let sender = self.sender.lock().unwrap();
         let sender = sender.as_ref().ok_or_else(|| {
             gst::error!(CAT, imp: self, "Have no main thread sender");
-            gst::FlowError::Error
+            gst::FlowError::Flushing
         })?;
 
         sender.send(SinkEvent::FrameChanged).map_err(|_| {
             gst::error!(CAT, imp: self, "Have main thread receiver shut down");
-            gst::FlowError::Error
+            gst::FlowError::Flushing
         })?;
 
         Ok(gst::FlowSuccess::Ok)
