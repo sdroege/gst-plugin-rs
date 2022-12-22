@@ -221,6 +221,14 @@ impl ElementImpl for PaintableSink {
             gst::StateChange::PausedToReady => {
                 let _ = self.info.lock().unwrap().take();
                 let _ = self.pending_frame.lock().unwrap().take();
+
+                let self_ = self.to_owned();
+                utils::invoke_on_main_thread(move || {
+                    let paintable = self_.paintable.lock().unwrap();
+                    if let Some(paintable) = &*paintable {
+                        paintable.get().handle_flush_frames();
+                    }
+                });
             }
             _ => (),
         }

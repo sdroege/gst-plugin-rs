@@ -196,4 +196,12 @@ impl Paintable {
             self.obj().invalidate_contents();
         }
     }
+
+    pub(super) fn handle_flush_frames(&self) {
+        gst::debug!(CAT, imp: self, "Flushing frames");
+        self.paintables.borrow_mut().clear();
+        self.cached_textures.borrow_mut().clear();
+        self.obj().invalidate_size();
+        self.obj().invalidate_contents();
+    }
 }
