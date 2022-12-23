@@ -598,6 +598,8 @@ impl PaintableSink {
                 "GdkX11GLContextGLX" => (),
                 #[cfg(all(target_os = "linux", feature = "wayland"))]
                 "GdkWaylandGLContext" => (),
+                #[cfg(all(target_os = "macos", feature = "gst_gl"))]
+                "GdkMacosGLContext" => (),
                 display => {
                     gst::error!(CAT, imp: self_, "Unsupported GDK display {display} for GL");
                     return None;
@@ -653,6 +655,10 @@ impl PaintableSink {
             #[cfg(all(target_os = "linux", feature = "wayland"))]
             "GdkWaylandGLContext" => {
                 self.initialize_waylandegl(display, &mut display_ctx_guard, &mut app_ctx_guard);
+            }
+            #[cfg(all(target_os = "macos", feature = "gst_gl"))]
+            "GdkMacosGLContext" => {
+                self.initialize_macosgl(display, &mut display_ctx_guard, &mut app_ctx_guard);
             }
             _ => {
                 unreachable!("Unsupported GDK display {display} for GL");
@@ -842,6 +848,40 @@ impl PaintableSink {
             let gst_display: gst_gl::GLDisplay =
                 from_glib_full(gst_display as *mut gst_gl::ffi::GstGLDisplay);
 
+            let gst_app_context =
+                gst_gl::GLContext::new_wrapped(&gst_display, gl_ctx, platform, gl_api);
+
+            assert!(gst_app_context.is_some());
+
+            display_ctx_guard.replace(gst_display);
+            app_ctx_guard.replace(gst_app_context.unwrap());
+        }
+    }
+
+    #[cfg(all(target_os = "macos", feature = "gst_gl"))]
+    fn initialize_macosgl(
+        &self,
+        display: gdk::Display,
+        display_ctx_guard: &mut Option<gst_gl::GLDisplay>,
+        app_ctx_guard: &mut Option<gst_gl::GLContext>,
+    ) {
+        gst::info!(
+            CAT,
+            imp: self,
+            "Initializing GL with for macOS backend and display."
+        );
+
+        let platform = gst_gl::GLPlatform::CGL;
+        let (gl_api, _, _) = gst_gl::GLContext::current_gl_api(platform);
+        let gl_ctx = gst_gl::GLContext::current_gl_context(platform);
+
+        if gl_ctx == 0 {
+            gst::error!(CAT, imp: self, "Failed to get handle from GdkGLContext",);
+            return;
+        }
+
+        let gst_display = gst_gl::GLDisplay::new();
+        unsafe {
             let gst_app_context =
                 gst_gl::GLContext::new_wrapped(&gst_display, gl_ctx, platform, gl_api);
 

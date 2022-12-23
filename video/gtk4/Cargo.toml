@@ -24,6 +24,10 @@ gst_gl_egl = { package = "gstreamer-gl-egl", git = "https://gitlab.freedesktop.o
 
 once_cell = "1.0"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", features = ["v4_6"] }
+gst_gl = { package = "gstreamer-gl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"] }
+
 [lib]
 name = "gstgtk4"
 crate-type = ["cdylib", "rlib"]
