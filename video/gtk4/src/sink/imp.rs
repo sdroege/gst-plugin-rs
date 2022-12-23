@@ -26,15 +26,15 @@ use std::sync::{Mutex, MutexGuard};
 
 use crate::utils;
 
-#[cfg(any(target_os = "macos", feature = "gst_gl"))]
+#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
 use gst_gl::prelude::GLContextExt as GstGLContextExt;
-#[cfg(any(target_os = "macos", feature = "gst_gl"))]
+#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
 use gst_gl::prelude::*;
 
 // Global GL context that is created by the first sink and kept around until the end of the
 // process. This is provided to other elements in the pipeline to make sure they create GL contexts
 // that are sharing with the GTK GL context.
-#[cfg(any(target_os = "macos", feature = "gst_gl"))]
+#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
 enum GLContext {
     Uninitialized,
     Unsupported,
@@ -45,7 +45,7 @@ enum GLContext {
     },
 }
 
-#[cfg(any(target_os = "macos", feature = "gst_gl"))]
+#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
 static GL_CONTEXT: Mutex<GLContext> = Mutex::new(GLContext::Uninitialized);
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -154,12 +154,12 @@ impl ElementImpl for PaintableSink {
 
                 for features in [
                     None,
-                    #[cfg(any(target_os = "macos", feature = "gst_gl"))]
+                    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
                     Some(gst::CapsFeatures::new([
                         "memory:GLMemory",
                         "meta:GstVideoOverlayComposition",
                     ])),
-                    #[cfg(any(target_os = "macos", feature = "gst_gl"))]
+                    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
                     Some(gst::CapsFeatures::new(["memory:GLMemory"])),
                     Some(gst::CapsFeatures::new([
                         "memory:SystemMemory",
@@ -225,7 +225,7 @@ impl ElementImpl for PaintableSink {
                 // Notify the pipeline about the GL display and wrapped context so that any other
                 // elements in the pipeline ideally use the same / create GL contexts that are
                 // sharing with this one.
-                #[cfg(any(target_os = "macos", feature = "gst_gl"))]
+                #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
                 {
                     let gl_context = GL_CONTEXT.lock().unwrap();
                     if let GLContext::Initialized {
@@ -331,7 +331,7 @@ impl BaseSinkImpl for PaintableSink {
         // TODO: Provide a preferred "window size" here for higher-resolution rendering
         query.add_allocation_meta::<gst_video::VideoOverlayCompositionMeta>(None);
 
-        #[cfg(any(target_os = "macos", feature = "gst_gl"))]
+        #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
         {
             if let GLContext::Initialized {
                 wrapped_context, ..
@@ -352,7 +352,7 @@ impl BaseSinkImpl for PaintableSink {
         gst::log!(CAT, imp: self, "Handling query {:?}", query);
 
         match query.view_mut() {
-            #[cfg(any(target_os = "macos", feature = "gst_gl"))]
+            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
             gst::QueryViewMut::Context(q) => {
                 // Avoid holding the locks while we respond to the query
                 // The objects are ref-counted anyway.
@@ -408,11 +408,11 @@ impl VideoSinkImpl for PaintableSink {
         })?;
 
         let wrapped_context = {
-            #[cfg(not(any(target_os = "macos", feature = "gst_gl")))]
+            #[cfg(not(any(target_os = "macos", target_os = "windows", feature = "gst_gl")))]
             {
                 None
             }
-            #[cfg(any(target_os = "macos", feature = "gst_gl"))]
+            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
             {
                 let gl_context = GL_CONTEXT.lock().unwrap();
                 if let GLContext::Initialized {
@@ -474,7 +474,7 @@ impl PaintableSink {
         #[allow(unused_mut)]
         let mut tmp_caps = Self::pad_templates()[0].caps().clone();
 
-        #[cfg(any(target_os = "macos", feature = "gst_gl"))]
+        #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
         {
             // Filter out GL caps from the template pads if we have no context
             if !matches!(&*GL_CONTEXT.lock().unwrap(), GLContext::Initialized { .. }) {
@@ -493,7 +493,7 @@ impl PaintableSink {
     }
 
     fn create_paintable(&self, paintable_storage: &mut MutexGuard<Option<ThreadGuard<Paintable>>>) {
-        #[cfg(any(target_os = "macos", feature = "gst_gl"))]
+        #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
         {
             self.initialize_gl_context();
         }
@@ -523,7 +523,7 @@ impl PaintableSink {
                 ),
             );
 
-            #[cfg(any(target_os = "macos", feature = "gst_gl"))]
+            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
             {
                 let gdk_context = if let GLContext::Initialized { gdk_context, .. } =
                     &*GL_CONTEXT.lock().unwrap()
@@ -534,7 +534,7 @@ impl PaintableSink {
                 };
                 ThreadGuard::new(Paintable::new(gdk_context))
             }
-            #[cfg(not(any(target_os = "macos", feature = "gst_gl")))]
+            #[cfg(not(any(target_os = "macos", target_os = "windows", feature = "gst_gl")))]
             {
                 ThreadGuard::new(Paintable::new(None))
             }
@@ -545,7 +545,7 @@ impl PaintableSink {
         *self.sender.lock().unwrap() = Some(sender);
     }
 
-    #[cfg(any(target_os = "macos", feature = "gst_gl"))]
+    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
     fn initialize_gl_context(&self) {
         gst::debug!(CAT, imp: self, "Realizing GDK GL Context");
 
@@ -555,7 +555,7 @@ impl PaintableSink {
         });
     }
 
-    #[cfg(any(target_os = "macos", feature = "gst_gl"))]
+    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
     fn initialize_gl_context_main(&self) {
         gst::debug!(CAT, imp: self, "Realizing GDK GL Context from main thread");
 
@@ -603,6 +603,10 @@ impl PaintableSink {
             "GdkWaylandGLContext" => (),
             #[cfg(target_os = "macos")]
             "GdkMacosGLContext" => (),
+            #[cfg(target_os = "windows")]
+            "GdkWin32GLContext" => (),
+            #[cfg(all(windows, feature = "winegl"))]
+            "GdkWin32GLContextEGL" => (),
             display => {
                 gst::error!(CAT, imp: self, "Unsupported GDK display {display} for GL");
                 return;
@@ -618,6 +622,7 @@ impl PaintableSink {
 
         gst::info!(CAT, imp: self, "Successfully realized GDK GL Context");
 
+        handle_wgl_makecurrent(&ctx);
         gdk_context.make_current();
 
         let res = match gdk_context.type_().name() {
@@ -629,6 +634,14 @@ impl PaintableSink {
             "GdkWaylandGLContext" => self.initialize_waylandegl(gdk_display),
             #[cfg(target_os = "macos")]
             "GdkMacosGLContext" => self.initialize_macosgl(gdk_display),
+            #[cfg(target_os = "windows")]
+            "GdkWin32GLContext" => {
+                self.initialize_wgl(gdk_display, &gdk_ctx);
+            }
+            #[cfg(all(target_os = "windows", feature = "winegl"))]
+            "GdkWin32GLContextEGL" => {
+                self.initialize_winegl(gdk_display);
+            }
             display_type => {
                 unreachable!("Unsupported GDK display {display_type} for GL");
             }
@@ -665,6 +678,11 @@ impl PaintableSink {
             }
             return;
         }
+
+        // FIXME: Is this all necessary?
+        deactivate_gdk_wgl_context(&ctx);
+        handle_wgl_makecurrent(&ctx);
+        reactivate_gdk_wgl_context(&ctx);
 
         gst::info!(CAT, imp: self, "Successfully initialized GL Context");
 
@@ -864,4 +882,165 @@ impl PaintableSink {
             Some((gst_display, wrapped_context))
         }
     }
+
+    #[cfg(target_os = "windows")]
+    fn initialize_wgl(
+        &self,
+        display: gdk::Display,
+        context: &gdk::GLContext,
+    ) -> Option<(gst_gl::GLDisplay, gst_gl::GLContext)> {
+        gst::info!(
+            CAT,
+            imp: self,
+            "Initializing GL with for Windows WGL backend and display."
+        );
+
+        let platform = gst_gl::GLPlatform::WGL;
+
+        let gl_api = if context.is_legacy() {
+            gst_gl::GLAPI::OPENGL
+        } else {
+            gst_gl::GLAPI::OPENGL3
+        };
+        let gl_ctx = gst_gl::GLContext::current_gl_context(platform);
+
+        if gl_ctx == 0 {
+            gst::error!(CAT, imp: self, "Failed to get handle from GdkGLContext",);
+            return None;
+        }
+
+        unsafe {
+            let gst_gl_display = gst_gl::Display::with_type(gst_gl::DisplayType::WIN32);
+            if gst_gl_display.is_none() {
+                gst::error!(CAT, imp: self, "Failed to get GL display");
+                return None;
+            }
+
+            gst_gl_display.filter_gl_api(gl_api);
+
+            let wrapped_context =
+                gst_gl::GLContext::new_wrapped(&gst_gl_display, gl_ctx, platform, gl_api);
+            let wrapped_context = match wrapped_context {
+                None => {
+                    gst::error!(CAT, imp: self, "Failed to create wrapped GL context");
+                    return None;
+                }
+                Some(wrapped_context) => wrapped_context,
+            };
+
+            Some((gst_gl_display, wrapped_context))
+        }
+    }
+
+    #[cfg(all(target_os = "windows", feature = "winegl"))]
+    fn initialize_winegl(
+        &self,
+        display: gdk::Display,
+    ) -> Option<(gst_gl::GLDisplay, gst_gl::GLContext)> {
+        gst::info!(
+            CAT,
+            imp: self,
+            "Initializing GL with for Windows EGL backend and display."
+        );
+
+        let platform = gst_gl::GLPlatform::EGL;
+
+        let (gl_api, _, _) = gst_gl::GLContext::current_gl_api(platform);
+        let gl_ctx = gst_gl::GLContext::current_gl_context(platform);
+
+        if gl_ctx == 0 {
+            gst::error!(CAT, imp: self, "Failed to get handle from GdkGLContext",);
+            return None;
+        }
+
+        // FIXME: bindings
+        unsafe {
+            use gdk_win32::prelude::*;
+
+            let d = display.downcast::<gdk_win32::Win32Display>().unwrap();
+            let egl_display = display.egl_display().unwrap().as_ptr();
+
+            let gst_gl_display =
+                gst_gl_egl::ffi::gst_gl_display_egl_new_with_egl_display(egl_display);
+            if gst_gl_display.is_null() {
+                gst::error!(CAT, imp: self, "Failed to get EGL display");
+                return None;
+            }
+            let gst_gl_display: gst_gl::GLDisplay =
+                from_glib_full(gst_gl_display as *mut gst_gl::ffi::GstGLDisplay);
+
+            gst_gl_display.filter_gl_api(gl_api);
+
+            let wrapped_context =
+                gst_gl::GLContext::new_wrapped(&gst_gl_display, gl_ctx, platform, gl_api);
+
+            let wrapped_context = match wrapped_context {
+                None => {
+                    gst::error!(CAT, imp: self, "Failed to create wrapped GL context");
+                    return None;
+                }
+                Some(wrapped_context) => wrapped_context,
+            };
+
+            Some((gst_gl_display, wrapped_context))
+        }
+    }
 }
+
+// Workaround for Windows specific GL context problems
+
+#[cfg(target_os = "windows")]
+fn handle_wgl_makecurrent(ctx: &gdk::GLContext) {
+    if ctx.type_().name() != "GdkWin32GLContext" {
+        return;
+    }
+
+    extern "C" {
+        fn epoxy_handle_external_wglMakeCurrent();
+    }
+
+    unsafe {
+        epoxy_handle_external_wglMakeCurrent();
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn deactivate_gdk_wgl_context(ctx: &gdk::GLContext) {
+    if ctx.type_().name() != "GdkWin32GLContext" {
+        return;
+    }
+
+    unsafe {
+        use gdk_win32::prelude::*;
+
+        let surface = context
+            .surface()
+            .unwrap()
+            .downcast::<gdk_win32::Win32Surface>()
+            .unwrap();
+        let hwnd = surface.handle();
+        let hdc = windows_sys::Win32::Graphics::Gdi::GetDC(hwnd);
+        windows_sys::Win32::Graphics::OpenGL::wglMakeCurrent(hdc, 0);
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn reactivate_gdk_wgl_context(ctx: &gdk::GLContext) {
+    if ctx.type_().name() != "GdkWin32GLContext" {
+        return;
+    }
+
+    context.make_current();
+}
+
+#[cfg(any(target_os = "macos", feature = "gst_gl"))]
+#[cfg(not(target_os = "windows"))]
+fn handle_wgl_makecurrent(_ctx: &gdk::GLContext) {}
+
+#[cfg(any(target_os = "macos", feature = "gst_gl"))]
+#[cfg(not(target_os = "windows"))]
+fn deactivate_gdk_wgl_context(_ctx: &gdk::GLContext) {}
+
+#[cfg(any(target_os = "macos", feature = "gst_gl"))]
+#[cfg(not(target_os = "windows"))]
+fn reactivate_gdk_wgl_context(_ctx: &gdk::GLContext) {}

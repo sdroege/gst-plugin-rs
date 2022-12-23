@@ -262,6 +262,10 @@ if get_option('gtk4').allowed()
     if 'glx' in gl_platforms
       gtk4_features += 'x11glx'
     endif
+  elif host_system == 'windows'
+    if 'egl' in gl_platforms
+      gtk4_features += 'winegl'
+    endif
   endif
   plugins += {'gtk4': {
     'library': 'libgstgtk4',
