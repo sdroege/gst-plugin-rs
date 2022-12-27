@@ -16,12 +16,13 @@ PARSER.add_argument('build_dir', type=P)
 PARSER.add_argument('src_dir', type=P)
 PARSER.add_argument('root_dir', type=P)
 PARSER.add_argument('target', choices=['release', 'debug'])
-PARSER.add_argument('include')
 PARSER.add_argument('prefix', type=P)
 PARSER.add_argument('libdir', type=P)
 PARSER.add_argument('--version', default=None)
 PARSER.add_argument('--bin', default=None, type=P)
-PARSER.add_argument('--exts', nargs="+", default=[])
+PARSER.add_argument('--packages', nargs="+", default=[])
+PARSER.add_argument('--lib-suffixes', nargs="+", default=[])
+PARSER.add_argument('--exe-suffix')
 PARSER.add_argument('--depfile')
 PARSER.add_argument('--disable-doc', action="store_true", default=False)
 
@@ -102,7 +103,7 @@ if __name__ == "__main__":
         cargo_cmd.extend(['--manifest-path', opts.src_dir / 'Cargo.toml'])
         cargo_cmd.extend(['--prefix', opts.prefix, '--libdir',
                         opts.prefix / opts.libdir])
-        for p in opts.include.split(','):
+        for p in opts.packages:
             cargo_cmd.extend(['-p', p])
     else:
         cargo_cmd.extend(['--bin', opts.bin.name])
@@ -119,18 +120,14 @@ if __name__ == "__main__":
     if opts.command == 'build':
         target_dir = cargo_target_dir / '**' / opts.target
         if opts.bin:
-            if opts.exts[0]:
-                ext = f'.{opts.exts[0]}'
-            else:
-                ext = ''
-            exe = glob.glob(str(target_dir / opts.bin) + ext, recursive=True)[0]
+            exe = glob.glob(str(target_dir / opts.bin) + opts.exe_suffix, recursive=True)[0]
             shutil.copy2(exe, opts.build_dir)
             depfile_content = generate_depfile_for(P(exe))
         else:
             # Copy so files to build dir
             depfile_content = ""
-            for ext in opts.exts:
-                for f in glob.glob(str(target_dir / f'*.{ext}'), recursive=True):
+            for suffix in opts.lib_suffixes:
+                for f in glob.glob(str(target_dir / f'*.{suffix}'), recursive=True):
                     libfile = P(f)
 
                     depfile_content += generate_depfile_for(libfile)
