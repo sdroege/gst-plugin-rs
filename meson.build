@@ -45,6 +45,7 @@ endif
 plugins = {
   'audiofx': {
     'library': 'libgstrsaudiofx',
+    'examples': ['hrtfrender'],
   },
   'claxon': {'library': 'libgstclaxon'},
   # csound has a non-trivial external dependency, see below
@@ -55,11 +56,22 @@ plugins = {
   # sodium can have an external dependency, see below
   'threadshare': {
     'library': 'libgstthreadshare',
+    'examples': [
+      'ts-benchmark',
+      'udpsrc-benchmark-sender',
+      'tcpclientsrc-benchmark-sender',
+      'ts-standalone',
+    ],
   },
 
   'mp4': {'library': 'libgstmp4'},
   'fmp4': {
     'library': 'libgstfmp4',
+    'examples': [
+      'dash_vod',
+      'hls_live',
+      'hls_vod',
+    ],
   },
 
   'aws': {
@@ -78,6 +90,7 @@ plugins = {
   'webrtchttp': {'library': 'libgstwebrtchttp'},
   'webrtc': {
     'library': 'libgstrswebrtc',
+    'examples': ['webrtcsink-stats-server'],
   },
 
   'textahead': {'library': 'libgsttextahead'},
@@ -87,16 +100,24 @@ plugins = {
 
   'fallbackswitch': {
     'library': 'libgstfallbackswitch',
+    'examples': ['gtk-fallbackswitch'],
+    'features': ['gtk', 'gio', 'gst-plugin-gtk4'],
   },
   'livesync': {
     'library': 'libgstlivesync',
+    'examples': ['gtk-livesync'],
+    'features': ['gtk', 'gio', 'gst-plugin-gtk4'],
   },
   'togglerecord': {
     'library': 'libgsttogglerecord',
+    'examples': ['gtk-recording'],
+    'features': ['gtk', 'gio', 'gst-plugin-gtk4'],
   },
   'tracers': {'library': 'libgstrstracers'},
   'uriplaylistbin': {
     'library': 'libgsturiplaylistbin',
+    'examples': ['playlist'],
+    'features': ['clap'],
   },
 
   'cdg': {'library': 'libgstcdg'},
@@ -116,14 +137,17 @@ plugins = {
   'flavors': {'library': 'libgstrsflv'},
   'gif': {
     'library': 'libgstgif',
+    'examples': ['testvideosrc2gif'],
   },
   'gtk4': {
     'library': 'libgstgtk4',
+    'examples': ['gtksink'],
     'extra-deps': {'gtk4': '>=4.6'},
   },
   'hsv': {'library': 'libgsthsv'},
   'png': {
     'library': 'libgstrspng',
+    'examples': ['pngenc'],
   },
   'rav1e': {'library': 'libgstrav1e'},
   'videofx': {
@@ -151,6 +175,8 @@ sodium_opt = get_option('sodium')
 if sodium_opt.allowed()
   sodium_plugin = {'sodium': {
     'library': 'libgstsodium',
+    'examples': ['generate-keys', 'encrypt-example', 'decrypt-example'],
+    'features': ['serde', 'serde_json', 'clap'],
   }}
   if get_option('sodium-source') == 'system'
     sodium_dep = dependency('libsodium', required: sodium_opt.enabled())
@@ -175,6 +201,7 @@ if csound_option.allowed()
     if csound_dep.found()
       plugins += {'csound': {
         'library': 'libgstcsound',
+        'examples': ['csound-effect'],
       }}
       extra_env += {'CSOUND_LIB_DIR': csound_libdir}
     elif csound_option.enabled()
@@ -182,6 +209,45 @@ if csound_option.allowed()
     endif
   endif
 endif
+
+# Used to not lookup the same dependency multiple times which clutters logs
+deps_cache = {}
+
+# Need to depends on all gstreamer-rs deps to ensure they are built
+# before gstreamer-rs when building with gst-build.
+# Custom targets can't depend on dependency() objects so we have to depend
+# on the library variable from the subproject instead.
+glib_req = '>=2.62'
+gst_req = '>=1.20.0'
+depends = []
+
+deps = [
+  # name, subproject name, subproject dep, library object
+  ['gstreamer-1.0', 'gstreamer', 'gst_dep', 'libgst'],
+  ['gstreamer-app-1.0', 'gst-plugins-base', 'app_dep', 'gstapp'],
+  ['gstreamer-audio-1.0', 'gst-plugins-base', 'audio_dep', 'gstaudio'],
+  ['gstreamer-base-1.0', 'gstreamer', 'gst_base_dep', 'gst_base'],
+  ['gstreamer-check-1.0', 'gstreamer', 'gst_check_dep', 'gst_check'],
+  ['gstreamer-net-1.0', 'gstreamer', 'gst_net_dep', 'gst_net'],
+  ['gstreamer-rtp-1.0', 'gst-plugins-base', 'rtp_dep', 'gst_rtp'],
+  ['gstreamer-video-1.0', 'gst-plugins-base', 'video_dep', 'gstvideo'],
+  ['gstreamer-sdp-1.0', 'gst-plugins-base', 'sdp_dep', 'gstsdp'],
+  ['gstreamer-webrtc-1.0', 'gst-plugins-bad', 'gstwebrtc_dep', 'gstwebrtc'],
+]
+
+glib_dep = dependency('glib-2.0', version: glib_req)
+deps_cache += {'glib-2.0': glib_dep}
+
+foreach d: deps
+  dep = dependency(d[0], version: gst_req,
+    fallback : [d[1], d[2]])
+  set_variable(d[2], dep)
+  deps_cache += {d[0]: dep}
+  if dep.type_name() == 'internal'
+    lib = subproject(d[1]).get_variable(d[3])
+    depends += lib
+  endif
+endforeach
 
 # Process plugins list
 
@@ -197,10 +263,47 @@ endif
 
 # cargo packages (plugins) to build
 packages = []
+# cargo features
+features = []
+# examples to build
+examples = []
 # Add the plugin library files as output
 output = []
-# Used to not lookup the same dependency multiple times which clutters logs
-deps_cache = {}
+
+if glib_dep.version().version_compare('>=2.74')
+  features += ['glib/v2_74', 'gio/v2_74']
+elif glib_dep.version().version_compare('>=2.72')
+  features += ['glib/v2_72', 'gio/v2_72']
+elif glib_dep.version().version_compare('>=2.70')
+  features += ['glib/v2_70', 'gio/v2_70']
+elif glib_dep.version().version_compare('>=2.68')
+  features += ['glib/v2_68', 'gio/v2_68']
+elif glib_dep.version().version_compare('>=2.66')
+  features += ['glib/v2_66', 'gio/v2_66']
+elif glib_dep.version().version_compare('>=2.64')
+  features += ['glib/v2_64', 'gio/v2_64']
+elif glib_dep.version().version_compare('>=2.62')
+  features += ['glib/v2_62', 'gio/v2_62']
+elif glib_dep.version().version_compare('>=2.60')
+  features += ['glib/v2_60', 'gio/v2_60']
+elif glib_dep.version().version_compare('>=2.58')
+  features += ['glib/v2_58', 'gio/v2_58']
+endif
+
+if gst_dep.version().version_compare('>=1.21')
+  components = [
+    '', '-app', '-audio', '-base', '-check', '-net', '-pbutils',
+    '-plugin-tracers', '-rtp', '-sdp', '-utils', '-video', '-webrtc',
+  ]
+  foreach c: components
+    features += f'gst@c@/v1_22'
+  endforeach
+  features += ['gst-plugin-webrtc/gst1_22']
+endif
+
+if find_program('nasm', required: false).found()
+  features += 'gst-plugin-rav1e/asm'
+endif
 
 foreach plugin_name, details: plugins
   plugin_opt = get_option(plugin_name)
@@ -219,6 +322,8 @@ foreach plugin_name, details: plugins
     endforeach
     if plugin_deps_found
       packages += f'gst-plugin-@plugin_name@'
+      features += details.get('features', [])
+      examples += details.get('examples', [])
       lib = details.get('library')
       if default_library in ['shared', 'both']
         output += [lib + '.' + ext_dynamic]
@@ -231,48 +336,12 @@ foreach plugin_name, details: plugins
 endforeach
 
 
-
-# Need to depends on all gstreamer-rs deps to ensure they are built
-# before gstreamer-rs when building with gst-build.
-# Custom targets can't depend on dependency() objects so we have to depend
-# on the library variable from the subproject instead.
-gst_req = '>= 1.20.0'
-depends = []
-
-deps = [
-  # name, subproject name, subproject dep, library object
-  ['gstreamer-1.0', 'gstreamer', 'gst_dep', 'libgst'],
-  ['gstreamer-app-1.0', 'gst-plugins-base', 'app_dep', 'gstapp'],
-  ['gstreamer-audio-1.0', 'gst-plugins-base', 'audio_dep', 'gstaudio'],
-  ['gstreamer-base-1.0', 'gstreamer', 'gst_base_dep', 'gst_base'],
-  ['gstreamer-check-1.0', 'gstreamer', 'gst_check_dep', 'gst_check'],
-  ['gstreamer-net-1.0', 'gstreamer', 'gst_net_dep', 'gst_net'],
-  ['gstreamer-rtp-1.0', 'gst-plugins-base', 'rtp_dep', 'gst_rtp'],
-  ['gstreamer-video-1.0', 'gst-plugins-base', 'video_dep', 'gstvideo'],
-  ['gstreamer-sdp-1.0', 'gst-plugins-base', 'sdp_dep', 'gstsdp'],
-  ['gstreamer-webrtc-1.0', 'gst-plugins-bad', 'gstwebrtc_dep', 'gstwebrtc'],
-]
-
-foreach d: deps
-  dep = dependency(d[0], version : gst_req,
-    fallback : [d[1], d[2]])
-  set_variable(d[2], dep)
-  deps_cache += {d[0]: dep}
-  if dep.type_name() == 'internal'
-    lib = subproject(d[1]).get_variable(d[3])
-    depends += lib
-  endif
-endforeach
-
-include = ','.join(plugins.keys())
-
 plugins_install_dir = get_option('libdir') / 'gstreamer-1.0'
 pkgconfig_install_dir = get_option('libdir') / 'pkgconfig'
 
+extra_args = []
 if get_option('doc').disabled()
-  disable_doc = ['--disable-doc']
-else
-  disable_doc = []
+  extra_args = ['--disable-doc']
 endif
 
 # 'pkgconfig' is the entry in the machine file, if specified
@@ -308,9 +377,10 @@ rs_plugins = custom_target('gst-plugins-rs',
     get_option('prefix'),
     get_option('libdir'),
     '--packages', packages,
+    '--features', features,
     '--depfile', '@DEPFILE@',
     '--lib-suffixes', library_suffixes,
-  ] + disable_doc)
+  ] + extra_args)
 
 plugins = rs_plugins.to_list()
 
@@ -409,6 +479,30 @@ if get_option('webrtc').allowed()
       get_option('libdir'),
       '--depfile', '@DEPFILE@',
       '--bin', 'gst-webrtc-signalling-server',
+      '--exe-suffix', exe_suffix,
+    ])
+endif
+
+if get_option('examples').allowed() and examples.length() > 0
+  custom_target('gst-plugins-rs-examples',
+    build_by_default: true,
+    output: examples,
+    console: true,
+    install: false,
+    depfile: 'gst-plugins-rs-examples.dep',
+    env: extra_env,
+    command: [cargo_wrapper,
+      'build',
+      meson.current_build_dir(),
+      meson.current_source_dir(),
+      meson.global_build_root(),
+      target,
+      get_option('prefix'),
+      get_option('libdir'),
+      '--depfile', '@DEPFILE@',
+      '--packages', packages,
+      '--features', features,
+      '--examples', examples,
       '--exe-suffix', exe_suffix,
     ])
 endif

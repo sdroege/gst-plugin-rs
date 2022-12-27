@@ -43,7 +43,7 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [[example]]
-name = "benchmark"
+name = "ts-benchmark"
 path = "examples/benchmark.rs"
 
 [[example]]

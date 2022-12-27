@@ -60,3 +60,5 @@ option('webp', type: 'feature', value: 'auto', description: 'Build webp plugin')
 # Common options
 option('doc', type: 'feature', value: 'auto', yield: true,
        description: 'Enable documentation')
+option('examples', type: 'feature', value: 'disabled', yield: true,
+       description: 'Build examples')
