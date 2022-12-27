@@ -248,7 +248,7 @@ meson shared:
 meson static:
   extends: .meson
   script:
-    - meson build --default-library=static --prefix=$(pwd)/install -Dsodium=built-in
+    - meson build --default-library=static --prefix=$(pwd)/install -Dsodium-source=built-in
     - ninja -C build install
     - ./ci/generate-static-test.py test-static-link-all
     - cd test-static-link-all
@@ -277,7 +277,7 @@ documentation:
       -Dsharp=disabled
       -Dgst-examples=disabled
       -Drs=enabled
-      -Dgst-plugins-rs:sodium=system
+      -Dgst-plugins-rs:sodium-source=system
       -Dgst-docs:fatal_warnings=true
       -Dorc=disabled
   script:
@@ -332,7 +332,7 @@ documentation:
 #      -Dsharp=disabled
 #      -Dgst-examples=disabled
 #      -Drs=enabled
-#      -Dgst-plugins-rs:sodium=system
+#      -Dgst-plugins-rs:sodium-source=system
 #  script:
 #    - P=$(pwd)
 #    - cd ..

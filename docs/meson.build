@@ -9,7 +9,7 @@ if meson.is_cross_build()
     subdir_done()
 endif
 
-if static_build
+if default_library == 'static'
     if get_option('doc').enabled()
         error('Documentation enabled but not supported when building statically.')
     endif
