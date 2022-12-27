@@ -4,7 +4,11 @@ project('gst-plugins-rs',
         version: '0.9.0-alpha.1',
         meson_version : '>= 0.60')
 
-python = import('python').find_installation()
+# dependencies.py needs a toml parsing module
+python = import('python').find_installation(modules: ['tomllib'], required: false)
+if not python.found()
+  python = import('python').find_installation(modules: ['tomli'])
+endif
 fs = import('fs')
 host_system = host_machine.system()
 
