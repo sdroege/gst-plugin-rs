@@ -106,16 +106,3 @@ panic = 'unwind'
 
 [profile.dev]
 opt-level = 1
-
-[patch."https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"]
-gstreamer = { git = "https://gitlab.freedesktop.org/slomo/gstreamer-rs", branch = "inlining" }
-gstreamer-sys = { git = "https://gitlab.freedesktop.org/slomo/gstreamer-rs", branch = "inlining" }
-gstreamer-base = { git = "https://gitlab.freedesktop.org/slomo/gstreamer-rs", branch = "inlining" }
-gstreamer-base-sys = { git = "https://gitlab.freedesktop.org/slomo/gstreamer-rs", branch = "inlining" }
-gstreamer-audio = { git = "https://gitlab.freedesktop.org/slomo/gstreamer-rs", branch = "inlining" }
-gstreamer-audio-sys = { git = "https://gitlab.freedesktop.org/slomo/gstreamer-rs", branch = "inlining" }
-
-[patch."https://github.com/gtk-rs/gtk-rs-core"]
-glib = { git = "https://github.com/sdroege/gtk-rs-core", branch = "inlining" }
-glib-sys = { git = "https://github.com/sdroege/gtk-rs-core", branch = "inlining" }
-gobject-sys = { git = "https://github.com/sdroege/gtk-rs-core", branch = "inlining" }
