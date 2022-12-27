@@ -20,7 +20,9 @@ PARSER.add_argument('prefix', type=P)
 PARSER.add_argument('libdir', type=P)
 PARSER.add_argument('--version', default=None)
 PARSER.add_argument('--bin', default=None, type=P)
+PARSER.add_argument('--features', nargs="+", default=[])
 PARSER.add_argument('--packages', nargs="+", default=[])
+PARSER.add_argument('--examples', nargs="+", default=[])
 PARSER.add_argument('--lib-suffixes', nargs="+", default=[])
 PARSER.add_argument('--exe-suffix')
 PARSER.add_argument('--depfile')
@@ -80,14 +82,15 @@ if __name__ == "__main__":
     pkg_config_path.append(str(opts.root_dir / 'meson-uninstalled'))
     env['PKG_CONFIG_PATH'] = os.pathsep.join(pkg_config_path)
 
+    features = opts.features
     if opts.command == 'build':
         cargo_cmd = ['cargo']
-        if opts.bin:
+        if opts.bin or opts.examples:
             cargo_cmd += ['build']
         else:
             cargo_cmd += ['cbuild']
             if not opts.disable_doc:
-                cargo_cmd += ['--features', "doc"]
+                features += ['doc']
         if opts.target == 'release':
             cargo_cmd.append('--release')
     elif opts.command == 'test':
@@ -97,25 +100,29 @@ if __name__ == "__main__":
         print("Unknown command:", opts.command, file=logfile)
         sys.exit(1)
 
-    cwd = None
+    if features:
+        cargo_cmd += ['--features', ','.join(features)]
     cargo_cmd += ['--target-dir', cargo_target_dir]
-    if not opts.bin:
-        cargo_cmd.extend(['--manifest-path', opts.src_dir / 'Cargo.toml'])
-        cargo_cmd.extend(['--prefix', opts.prefix, '--libdir',
-                        opts.prefix / opts.libdir])
+    cargo_cmd += ['--manifest-path', opts.src_dir / 'Cargo.toml']
+    if opts.bin:
+        cargo_cmd.extend(['--bin', opts.bin.name])
+    else:
+        if not opts.examples:
+            cargo_cmd.extend(['--prefix', opts.prefix, '--libdir',
+                              opts.prefix / opts.libdir])
         for p in opts.packages:
             cargo_cmd.extend(['-p', p])
-    else:
-        cargo_cmd.extend(['--bin', opts.bin.name])
-        cwd = opts.src_dir
+        for e in opts.examples:
+            cargo_cmd.extend(['--example', e])
 
-    def run(cargo_cmd, env, cwd=cwd):
+    def run(cargo_cmd, env):
+        print(cargo_cmd, env, file=logfile)
         try:
-            subprocess.run(cargo_cmd, env=env, check=True, cwd=cwd)
+            subprocess.run(cargo_cmd, env=env, cwd=opts.src_dir, check=True)
         except subprocess.SubprocessError:
             sys.exit(1)
 
-    run(cargo_cmd, env, cwd)
+    run(cargo_cmd, env)
 
     if opts.command == 'build':
         target_dir = cargo_target_dir / '**' / opts.target
@@ -142,6 +149,12 @@ if __name__ == "__main__":
 
                     print(f"Copying {copied_file}", file=logfile)
                     shutil.copy2(f, opts.build_dir)
+            # Copy examples to builddir
+            for example in opts.examples:
+                example_glob = str(target_dir / 'examples' / example) + opts.exe_suffix
+                exe = glob.glob(example_glob, recursive=True)[0]
+                shutil.copy2(exe, opts.build_dir)
+                depfile_content += generate_depfile_for(P(exe))
 
         with open(opts.depfile, 'w') as depfile:
             depfile.write(depfile_content)
