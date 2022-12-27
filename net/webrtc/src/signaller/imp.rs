@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::webrtcsink::{RUNTIME, WebRTCSink};
+use crate::webrtcsink::{WebRTCSink, RUNTIME};
 use anyhow::{anyhow, Error};
-use tokio::task;
 use async_tungstenite::tungstenite::Message as WsMessage;
 use futures::channel::mpsc;
 use futures::prelude::*;
@@ -15,6 +14,7 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use tokio::task;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -330,7 +330,12 @@ impl Signaller {
                 if let Some(handle) = send_task_handle {
                     if let Err(err) = handle.await {
                         if let Some(element) = element.upgrade() {
-                            gst::warning!(CAT, obj: element, "Error while joining send task: {}", err);
+                            gst::warning!(
+                                CAT,
+                                obj: element,
+                                "Error while joining send task: {}",
+                                err
+                            );
                         }
                     }
                 }
@@ -338,7 +343,12 @@ impl Signaller {
                 if let Some(handle) = receive_task_handle {
                     if let Err(err) = handle.await {
                         if let Some(element) = element.upgrade() {
-                            gst::warning!(CAT, obj: element, "Error while joining receive task: {}", err);
+                            gst::warning!(
+                                CAT,
+                                obj: element,
+                                "Error while joining receive task: {}",
+                                err
+                            );
                         }
                     }
                 }

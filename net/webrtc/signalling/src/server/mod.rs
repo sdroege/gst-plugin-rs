@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use anyhow::Error;
-use tokio::task;
 use async_tungstenite::tungstenite::Message as WsMessage;
 use futures::channel::mpsc;
 use futures::prelude::*;
-use tokio::io::{AsyncRead, AsyncWrite};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
+use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::task;
 use tracing::{info, instrument, trace, warn};
 
 struct Peer {

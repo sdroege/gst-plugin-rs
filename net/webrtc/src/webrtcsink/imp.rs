@@ -19,8 +19,8 @@ use std::sync::Mutex;
 
 use super::homegrown_cc::CongestionController;
 use super::{WebRTCSinkCongestionControl, WebRTCSinkError, WebRTCSinkMitigationMode};
-use crate::webrtcsink::RUNTIME;
 use crate::signaller::Signaller;
+use crate::webrtcsink::RUNTIME;
 use std::collections::BTreeMap;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -1932,8 +1932,7 @@ impl WebRTCSink {
             let element_clone = element.downgrade();
             let webrtcbin = session.webrtcbin.downgrade();
             RUNTIME.spawn(async move {
-                let mut interval =
-                    tokio::time::interval(std::time::Duration::from_millis(100));
+                let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
 
                 loop {
                     interval.tick().await;

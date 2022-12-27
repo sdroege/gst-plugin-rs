@@ -9,9 +9,9 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use once_cell::sync::Lazy;
 use std::error::Error;
 use tokio::runtime;
-use once_cell::sync::Lazy;
 
 mod homegrown_cc;
 mod imp;

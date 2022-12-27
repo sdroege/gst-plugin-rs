@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MPL-2.0
 
-use tokio::io::AsyncReadExt;
-use tokio::task;
 use clap::Parser;
 use gst_plugin_webrtc_signalling::handlers::Handler;
 use gst_plugin_webrtc_signalling::server::Server;
+use tokio::io::AsyncReadExt;
+use tokio::task;
 use tracing_subscriber::prelude::*;
 
 use anyhow::Error;
-use tokio_native_tls::native_tls::TlsAcceptor;
 use tokio::fs;
 use tokio::net::TcpListener;
+use tokio_native_tls::native_tls::TlsAcceptor;
 use tracing::{info, warn};
 
 #[derive(Parser, Debug)]
@@ -67,8 +67,14 @@ async fn main() -> Result<(), Error> {
             let mut file = fs::File::open(cert).await?;
             let mut identity = vec![];
             file.read_to_end(&mut identity).await?;
-            let identity = tokio_native_tls::native_tls::Identity::from_pkcs12(&identity, args.cert_password.as_deref().unwrap_or("")).unwrap();
-            Some(tokio_native_tls::TlsAcceptor::from(TlsAcceptor::new(identity).unwrap()))
+            let identity = tokio_native_tls::native_tls::Identity::from_pkcs12(
+                &identity,
+                args.cert_password.as_deref().unwrap_or(""),
+            )
+            .unwrap();
+            Some(tokio_native_tls::TlsAcceptor::from(
+                TlsAcceptor::new(identity).unwrap(),
+            ))
         }
         None => None,
     };
