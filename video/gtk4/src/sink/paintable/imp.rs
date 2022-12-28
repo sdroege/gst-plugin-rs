@@ -165,7 +165,7 @@ impl PaintableImpl for Paintable {
 }
 
 impl Paintable {
-    #[cfg(feature = "gst_gl")]
+    #[cfg(any(target_os = "macos", feature = "gst_gl"))]
     pub(super) fn context(&self) -> Option<gdk::GLContext> {
         self.gl_context.borrow().clone()
     }
