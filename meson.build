@@ -41,6 +41,49 @@ else
   ext_static = 'a'
 endif
 
+# Extra env to pass to cargo
+extra_env = {}
+
+# Used to not lookup the same dependency multiple times which clutters logs
+deps_cache = {}
+
+# Need to depends on all gstreamer-rs deps to ensure they are built
+# before gstreamer-rs when building with gst-build.
+# Custom targets can't depend on dependency() objects so we have to depend
+# on the library variable from the subproject instead.
+glib_req = '>=2.62'
+gst_req = '>=1.20.0'
+depends = []
+
+deps = [
+  # name, subproject name, subproject dep, library object
+  ['gstreamer-1.0', 'gstreamer', 'gst_dep', 'libgst'],
+  ['gstreamer-app-1.0', 'gst-plugins-base', 'app_dep', 'gstapp'],
+  ['gstreamer-audio-1.0', 'gst-plugins-base', 'audio_dep', 'gstaudio'],
+  ['gstreamer-base-1.0', 'gstreamer', 'gst_base_dep', 'gst_base'],
+  ['gstreamer-check-1.0', 'gstreamer', 'gst_check_dep', 'gst_check'],
+  ['gstreamer-gl-1.0', 'gst-plugins-base', 'gst_gl_dep', 'gstgl'],
+  ['gstreamer-net-1.0', 'gstreamer', 'gst_net_dep', 'gst_net'],
+  ['gstreamer-rtp-1.0', 'gst-plugins-base', 'rtp_dep', 'gst_rtp'],
+  ['gstreamer-video-1.0', 'gst-plugins-base', 'video_dep', 'gstvideo'],
+  ['gstreamer-sdp-1.0', 'gst-plugins-base', 'sdp_dep', 'gstsdp'],
+  ['gstreamer-webrtc-1.0', 'gst-plugins-bad', 'gstwebrtc_dep', 'gstwebrtc'],
+]
+
+glib_dep = dependency('glib-2.0', version: glib_req)
+deps_cache += {'glib-2.0': glib_dep}
+
+foreach d: deps
+  dep = dependency(d[0], version: gst_req,
+    fallback : [d[1], d[2]])
+  set_variable(d[2], dep)
+  deps_cache += {d[0]: dep}
+  if dep.type_name() == 'internal'
+    lib = subproject(d[1]).get_variable(d[3])
+    depends += lib
+  endif
+endforeach
+
 # kept in the same order as the `members` list in Cargo.toml
 plugins = {
   'audiofx': {
@@ -139,11 +182,7 @@ plugins = {
     'library': 'libgstgif',
     'examples': ['testvideosrc2gif'],
   },
-  'gtk4': {
-    'library': 'libgstgtk4',
-    'examples': ['gtksink'],
-    'extra-deps': {'gtk4': '>=4.6'},
-  },
+  # gtk4 is added below
   'hsv': {'library': 'libgsthsv'},
   'png': {
     'library': 'libgstrspng',
@@ -168,8 +207,6 @@ if host_system not in ['windows', 'darwin']
     'extra-deps': {'libwebpdemux': ''},
   }}
 endif
-
-extra_env = {}
 
 sodium_opt = get_option('sodium')
 if sodium_opt.allowed()
@@ -210,45 +247,30 @@ if csound_option.allowed()
   endif
 endif
 
-# Used to not lookup the same dependency multiple times which clutters logs
-deps_cache = {}
-
-# Need to depends on all gstreamer-rs deps to ensure they are built
-# before gstreamer-rs when building with gst-build.
-# Custom targets can't depend on dependency() objects so we have to depend
-# on the library variable from the subproject instead.
-glib_req = '>=2.62'
-gst_req = '>=1.20.0'
-depends = []
-
-deps = [
-  # name, subproject name, subproject dep, library object
-  ['gstreamer-1.0', 'gstreamer', 'gst_dep', 'libgst'],
-  ['gstreamer-app-1.0', 'gst-plugins-base', 'app_dep', 'gstapp'],
-  ['gstreamer-audio-1.0', 'gst-plugins-base', 'audio_dep', 'gstaudio'],
-  ['gstreamer-base-1.0', 'gstreamer', 'gst_base_dep', 'gst_base'],
-  ['gstreamer-check-1.0', 'gstreamer', 'gst_check_dep', 'gst_check'],
-  ['gstreamer-gl-1.0', 'gst-plugins-base', 'gst_gl_dep', 'gstgl'],
-  ['gstreamer-net-1.0', 'gstreamer', 'gst_net_dep', 'gst_net'],
-  ['gstreamer-rtp-1.0', 'gst-plugins-base', 'rtp_dep', 'gst_rtp'],
-  ['gstreamer-video-1.0', 'gst-plugins-base', 'video_dep', 'gstvideo'],
-  ['gstreamer-sdp-1.0', 'gst-plugins-base', 'sdp_dep', 'gstsdp'],
-  ['gstreamer-webrtc-1.0', 'gst-plugins-bad', 'gstwebrtc_dep', 'gstwebrtc'],
-]
-
-glib_dep = dependency('glib-2.0', version: glib_req)
-deps_cache += {'glib-2.0': glib_dep}
-
-foreach d: deps
-  dep = dependency(d[0], version: gst_req,
-    fallback : [d[1], d[2]])
-  set_variable(d[2], dep)
-  deps_cache += {d[0]: dep}
-  if dep.type_name() == 'internal'
-    lib = subproject(d[1]).get_variable(d[3])
-    depends += lib
+if get_option('gtk4').allowed()
+  gtk4_features = []
+  gl_winsys = gst_gl_dep.get_variable('gl_winsys').split()
+  gl_platforms = gst_gl_dep.get_variable('gl_platforms').split()
+  if host_system == 'linux'
+    if 'wayland' in gl_winsys
+      gtk4_features += 'wayland'
+    endif
+    if 'x11' in gl_winsys
+      if 'egl' in gl_platforms
+        gtk4_features += 'x11egl'
+      endif
+      if 'glx' in gl_platforms
+        gtk4_features += 'x11glx'
+      endif
+    endif
   endif
-endforeach
+  plugins += {'gtk4': {
+    'library': 'libgstgtk4',
+    'examples': ['gtksink'],
+    'extra-deps': {'gtk4': '>=4.6'},
+    'features': gtk4_features,
+  }}
+endif
 
 # Process plugins list
 
