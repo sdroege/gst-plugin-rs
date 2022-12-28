@@ -735,7 +735,7 @@ impl PaintableSink {
         gst::info!(
             CAT,
             imp: self,
-            "Initializing GL with for x11 EGL backend and display."
+            "Initializing GL for x11 EGL backend and display."
         );
 
         let platform = gst_gl::GLPlatform::EGL;
@@ -778,7 +778,7 @@ impl PaintableSink {
         gst::info!(
             CAT,
             imp: self,
-            "Initializing GL with for x11 GLX backend and display."
+            "Initializing GL for x11 GLX backend and display."
         );
 
         let platform = gst_gl::GLPlatform::GLX;
@@ -821,7 +821,7 @@ impl PaintableSink {
         gst::info!(
             CAT,
             imp: self,
-            "Initializing GL with for Wayland EGL backend and display."
+            "Initializing GL for Wayland EGL backend and display."
         );
 
         let platform = gst_gl::GLPlatform::EGL;
@@ -868,7 +868,7 @@ impl PaintableSink {
         gst::info!(
             CAT,
             imp: self,
-            "Initializing GL with for macOS backend and display."
+            "Initializing GL for macOS backend and display."
         );
 
         let platform = gst_gl::GLPlatform::CGL;
