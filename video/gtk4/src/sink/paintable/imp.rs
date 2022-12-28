@@ -22,7 +22,7 @@ use once_cell::sync::Lazy;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "gstgtk4paintable",
+        "gtk4paintable",
         gst::DebugColorFlags::empty(),
         Some("GTK4 Paintable Sink Paintable"),
     )
