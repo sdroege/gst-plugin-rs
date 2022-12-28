@@ -67,9 +67,9 @@ def generate_depfile_for(fpath):
 
 if __name__ == "__main__":
     opts = PARSER.parse_args()
-
-    logfile = open(opts.root_dir / 'meson-logs' /
-                   f'{opts.src_dir.name}-cargo-wrapper.log', 'w')
+    logdir = opts.root_dir / 'meson-logs'
+    logfile_path = logdir / f'{opts.src_dir.name}-cargo-wrapper.log'
+    logfile = open(logfile_path, mode='w', buffering=1)
 
     print(opts, file=logfile)
     cargo_target_dir = opts.build_dir / 'target'
