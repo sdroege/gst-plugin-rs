@@ -37,7 +37,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "gstgtk4paintablesink",
+        "gtk4paintablesink",
         gst::DebugColorFlags::empty(),
         Some("GTK4 Paintable sink"),
     )
