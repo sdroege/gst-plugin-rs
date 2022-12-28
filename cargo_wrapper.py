@@ -72,9 +72,10 @@ if __name__ == "__main__":
     cargo_target_dir = opts.build_dir / 'target'
 
     env = os.environ.copy()
-    env['CARGO_TARGET_DIR'] = str(cargo_target_dir)
-
-    pkg_config_path = env.get('PKG_CONFIG_PATH', '').split(os.pathsep)
+    if 'PKG_CONFIG_PATH' in env:
+        pkg_config_path = env['PKG_CONFIG_PATH'].split(os.pathsep)
+    else:
+        pkg_config_path = []
     pkg_config_path.append(str(opts.root_dir / 'meson-uninstalled'))
     env['PKG_CONFIG_PATH'] = os.pathsep.join(pkg_config_path)
 
@@ -96,6 +97,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     cwd = None
+    cargo_cmd += ['--target-dir', cargo_target_dir]
     if not opts.bin:
         cargo_cmd.extend(['--manifest-path', opts.src_dir / 'Cargo.toml'])
         cargo_cmd.extend(['--prefix', opts.prefix, '--libdir',
