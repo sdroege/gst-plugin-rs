@@ -228,6 +228,7 @@ deps = [
   ['gstreamer-audio-1.0', 'gst-plugins-base', 'audio_dep', 'gstaudio'],
   ['gstreamer-base-1.0', 'gstreamer', 'gst_base_dep', 'gst_base'],
   ['gstreamer-check-1.0', 'gstreamer', 'gst_check_dep', 'gst_check'],
+  ['gstreamer-gl-1.0', 'gst-plugins-base', 'gst_gl_dep', 'gstgl'],
   ['gstreamer-net-1.0', 'gstreamer', 'gst_net_dep', 'gst_net'],
   ['gstreamer-rtp-1.0', 'gst-plugins-base', 'rtp_dep', 'gst_rtp'],
   ['gstreamer-video-1.0', 'gst-plugins-base', 'video_dep', 'gstvideo'],
