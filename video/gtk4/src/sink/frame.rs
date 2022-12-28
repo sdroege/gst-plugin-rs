@@ -11,7 +11,7 @@
 
 use gst_video::prelude::*;
 
-#[cfg(feature = "gst_gl")]
+#[cfg(any(target_os = "macos", feature = "gst_gl"))]
 use gst_gl::prelude::*;
 use gtk::{gdk, glib};
 use std::collections::{HashMap, HashSet};
@@ -20,7 +20,7 @@ use std::collections::{HashMap, HashSet};
 pub(crate) struct Frame {
     frame: gst_video::VideoFrame<gst_video::video_frame::Readable>,
     overlays: Vec<Overlay>,
-    #[cfg(feature = "gst_gl")]
+    #[cfg(any(target_os = "macos", feature = "gst_gl"))]
     gst_context: Option<gst_gl::GLContext>,
 }
 
@@ -94,7 +94,7 @@ fn video_frame_to_memory_texture(
     (texture, pixel_aspect_ratio)
 }
 
-#[cfg(feature = "gst_gl")]
+#[cfg(any(target_os = "macos", feature = "gst_gl"))]
 fn video_frame_to_gl_texture(
     frame: &gst_video::VideoFrame<gst_video::video_frame::Readable>,
     cached_textures: &mut HashMap<usize, gdk::Texture>,
@@ -141,11 +141,11 @@ impl Frame {
         let width = self.frame.width();
         let height = self.frame.height();
         let (texture, pixel_aspect_ratio) = {
-            #[cfg(not(feature = "gst_gl"))]
+            #[cfg(not(any(target_os = "macos", feature = "gst_gl")))]
             {
                 video_frame_to_memory_texture(self.frame, cached_textures, &mut used_textures)
             }
-            #[cfg(feature = "gst_gl")]
+            #[cfg(any(target_os = "macos", feature = "gst_gl"))]
             {
                 if let (Some(gdk_ctx), Some(gst_ctx)) = (gdk_context, self.gst_context.as_ref()) {
                     video_frame_to_gl_texture(
@@ -206,7 +206,7 @@ impl Frame {
 
         let mut frame;
 
-        #[cfg(not(feature = "gst_gl"))]
+        #[cfg(not(any(target_os = "macos", feature = "gst_gl")))]
         {
             frame = Self {
                 frame: gst_video::VideoFrame::from_buffer_readable(buffer.clone(), info)
@@ -214,7 +214,7 @@ impl Frame {
                 overlays: vec![],
             };
         }
-        #[cfg(feature = "gst_gl")]
+        #[cfg(any(target_os = "macos", feature = "gst_gl"))]
         {
             let is_buffer_gl = buffer
                 .peek_memory(0)

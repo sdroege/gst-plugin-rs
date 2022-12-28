@@ -30,7 +30,7 @@ impl Paintable {
 }
 
 impl Paintable {
-    #[cfg(feature = "gst_gl")]
+    #[cfg(any(target_os = "macos", feature = "gst_gl"))]
     pub(crate) fn context(&self) -> Option<gdk::GLContext> {
         self.imp().context()
     }
