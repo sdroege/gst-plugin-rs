@@ -311,10 +311,9 @@ impl BaseSinkImpl for PaintableSink {
 
         #[cfg(any(target_os = "macos", feature = "gst_gl"))]
         {
-            {
-                // Early return if there is no context initialized
-                let gst_context_guard = self.gst_context.lock().unwrap();
-                if gst_context_guard.is_none() {
+            // Early return if there is no context initialized
+            let gst_context = match &*self.gst_context.lock().unwrap() {
+                None => {
                     gst::debug!(
                         CAT,
                         imp: self,
@@ -322,7 +321,8 @@ impl BaseSinkImpl for PaintableSink {
                     );
                     return Ok(());
                 }
-            }
+                Some(gst_context) => gst_context.clone(),
+            };
 
             // GL specific things
             let (caps, need_pool) = query.get_owned();
@@ -347,33 +347,30 @@ impl BaseSinkImpl for PaintableSink {
 
             let size = info.size() as u32;
 
+            let buffer_pool = gst_gl::GLBufferPool::new(&gst_context);
+
+            if need_pool {
+                gst::debug!(CAT, imp: self, "Creating new Pool");
+
+                let mut config = buffer_pool.config();
+                config.set_params(Some(&caps), size, 0, 0);
+                config.add_option("GstBufferPoolOptionGLSyncMeta");
+
+                if let Err(err) = buffer_pool.set_config(config) {
+                    return Err(gst::loggable_error!(
+                        CAT,
+                        format!("Failed to set config in the GL BufferPool.: {}", err)
+                    ));
+                }
+            }
+
+            // we need at least 2 buffer because we hold on to the last one
+            query.add_allocation_pool(Some(&buffer_pool), size, 2, 0);
+
+            if gst_context.check_feature("GL_ARB_sync")
+                || gst_context.check_feature("GL_EXT_EGL_sync")
             {
-                let gst_context = { self.gst_context.lock().unwrap().clone().unwrap() };
-                let buffer_pool = gst_gl::GLBufferPool::new(&gst_context);
-
-                if need_pool {
-                    gst::debug!(CAT, imp: self, "Creating new Pool");
-
-                    let mut config = buffer_pool.config();
-                    config.set_params(Some(&caps), size, 0, 0);
-                    config.add_option("GstBufferPoolOptionGLSyncMeta");
-
-                    if let Err(err) = buffer_pool.set_config(config) {
-                        return Err(gst::loggable_error!(
-                            CAT,
-                            format!("Failed to set config in the GL BufferPool.: {}", err)
-                        ));
-                    }
-                }
-
-                // we need at least 2 buffer because we hold on to the last one
-                query.add_allocation_pool(Some(&buffer_pool), size, 2, 0);
-
-                if gst_context.check_feature("GL_ARB_sync")
-                    || gst_context.check_feature("GL_EXT_EGL_sync")
-                {
-                    query.add_allocation_meta::<gst_gl::GLSyncMeta>(None)
-                }
+                query.add_allocation_meta::<gst_gl::GLSyncMeta>(None)
             }
 
             Ok(())
@@ -388,23 +385,21 @@ impl BaseSinkImpl for PaintableSink {
             gst::QueryViewMut::Context(q) => {
                 // Avoid holding the locks while we respond to the query
                 // The objects are ref-counted anyway.
-                let gst_display = { self.gst_display.lock().unwrap().clone() };
-                if let Some(display) = gst_display {
-                    let (app_ctx, gst_ctx) = {
-                        (
-                            self.gst_app_context.lock().unwrap().clone(),
-                            self.gst_context.lock().unwrap().clone(),
-                        )
-                    };
-                    assert_ne!(app_ctx, None);
-                    assert_ne!(gst_ctx, None);
+                let (gst_display, app_ctx, gst_ctx) = (
+                    self.gst_display.lock().unwrap().clone(),
+                    self.gst_app_context.lock().unwrap().clone(),
+                    self.gst_context.lock().unwrap().clone(),
+                );
 
+                if let (Some(gst_display), Some(app_ctx), Some(gst_ctx)) =
+                    (gst_display, app_ctx, gst_ctx)
+                {
                     return gst_gl::functions::gl_handle_context_query(
                         &*self.obj(),
                         q,
-                        Some(&display),
-                        gst_ctx.as_ref(),
-                        app_ctx.as_ref(),
+                        Some(&gst_display),
+                        Some(&gst_ctx),
+                        Some(&app_ctx),
                     );
                 }
 
@@ -641,24 +636,24 @@ impl PaintableSink {
         ctx.make_current();
 
         let mut app_ctx_guard = self.gst_app_context.lock().unwrap();
-        let mut display_ctx_guard = self.gst_display.lock().unwrap();
+        let mut display_guard = self.gst_display.lock().unwrap();
 
         match ctx.type_().name() {
             #[cfg(all(target_os = "linux", feature = "x11egl"))]
             "GdkX11GLContextEGL" => {
-                self.initialize_x11egl(display, &mut display_ctx_guard, &mut app_ctx_guard);
+                self.initialize_x11egl(display, &mut display_guard, &mut app_ctx_guard);
             }
             #[cfg(all(target_os = "linux", feature = "x11glx"))]
             "GdkX11GLContextGLX" => {
-                self.initialize_x11glx(display, &mut display_ctx_guard, &mut app_ctx_guard);
+                self.initialize_x11glx(display, &mut display_guard, &mut app_ctx_guard);
             }
             #[cfg(all(target_os = "linux", feature = "wayland"))]
             "GdkWaylandGLContext" => {
-                self.initialize_waylandegl(display, &mut display_ctx_guard, &mut app_ctx_guard);
+                self.initialize_waylandegl(display, &mut display_guard, &mut app_ctx_guard);
             }
             #[cfg(target_os = "macos")]
             "GdkMacosGLContext" => {
-                self.initialize_macosgl(display, &mut display_ctx_guard, &mut app_ctx_guard);
+                self.initialize_macosgl(display, &mut display_guard, &mut app_ctx_guard);
             }
             _ => {
                 unreachable!("Unsupported GDK display {display} for GL");
@@ -666,11 +661,20 @@ impl PaintableSink {
         };
 
         // This should have been initialized once we are done with the platform checks
-        if app_ctx_guard.is_none() {
-            return false;
-        }
+        let app_ctx = match &*app_ctx_guard {
+            None => {
+                assert!(display_guard.is_none());
+                return false;
+            }
+            Some(app_ctx) => app_ctx,
+        };
 
-        match app_ctx_guard.as_ref().unwrap().activate(true) {
+        let display = match &*display_guard {
+            None => return false,
+            Some(display) => display,
+        };
+
+        match app_ctx.activate(true) {
             Ok(_) => gst::info!(CAT, imp: self, "Successfully activated GL Context."),
             Err(_) => {
                 gst::error!(CAT, imp: self, "Failed to activate GL context",);
@@ -678,14 +682,14 @@ impl PaintableSink {
             }
         };
 
-        if let Err(err) = app_ctx_guard.as_ref().unwrap().fill_info() {
+        if let Err(err) = app_ctx.fill_info() {
             gst::error!(
                 CAT,
                 imp: self,
                 "Failed to fill info on the GL Context: {err}",
             );
             // Deactivate the context upon failure
-            if app_ctx_guard.as_ref().unwrap().activate(false).is_err() {
+            if app_ctx.activate(false).is_err() {
                 gst::error!(
                     CAT,
                     imp: self,
@@ -696,7 +700,7 @@ impl PaintableSink {
             return false;
         }
 
-        if app_ctx_guard.as_ref().unwrap().activate(false).is_err() {
+        if app_ctx.activate(false).is_err() {
             gst::error!(CAT, imp: self, "Failed to deactivate GL context",);
             return false;
         }
@@ -707,11 +711,7 @@ impl PaintableSink {
             "Successfully deactivated GL Context after fill_info"
         );
 
-        match display_ctx_guard
-            .as_ref()
-            .unwrap()
-            .create_context(app_ctx_guard.as_ref().unwrap())
-        {
+        match display.create_context(app_ctx) {
             Ok(gst_context) => {
                 let mut gst_ctx_guard = self.gst_context.lock().unwrap();
                 gst::info!(CAT, imp: self, "Successfully initialized GL Context");
