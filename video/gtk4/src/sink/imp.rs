@@ -735,7 +735,7 @@ impl PaintableSink {
     fn initialize_x11egl(
         &self,
         display: gdk::Display,
-        display_ctx_guard: &mut Option<gst_gl::GLDisplay>,
+        display_guard: &mut Option<gst_gl::GLDisplay>,
         app_ctx_guard: &mut Option<gst_gl::GLContext>,
     ) {
         gst::info!(
@@ -778,7 +778,7 @@ impl PaintableSink {
                 Some(gst_app_context) => gst_app_context,
             };
 
-            display_ctx_guard.replace(gst_display);
+            display_guard.replace(gst_display);
             app_ctx_guard.replace(gst_app_context);
         }
     }
@@ -787,7 +787,7 @@ impl PaintableSink {
     fn initialize_x11glx(
         &self,
         display: gdk::Display,
-        display_ctx_guard: &mut Option<gst_gl::GLDisplay>,
+        display_guard: &mut Option<gst_gl::GLDisplay>,
         app_ctx_guard: &mut Option<gst_gl::GLContext>,
     ) {
         gst::info!(
@@ -830,7 +830,7 @@ impl PaintableSink {
                 Some(gst_app_context) => gst_app_context,
             };
 
-            display_ctx_guard.replace(gst_display);
+            display_guard.replace(gst_display);
             app_ctx_guard.replace(gst_app_context);
         }
     }
@@ -839,7 +839,7 @@ impl PaintableSink {
     fn initialize_waylandegl(
         &self,
         display: gdk::Display,
-        display_ctx_guard: &mut Option<gst_gl::GLDisplay>,
+        display_guard: &mut Option<gst_gl::GLDisplay>,
         app_ctx_guard: &mut Option<gst_gl::GLContext>,
     ) {
         gst::info!(
@@ -887,7 +887,7 @@ impl PaintableSink {
                 Some(gst_app_context) => gst_app_context,
             };
 
-            display_ctx_guard.replace(gst_display);
+            display_guard.replace(gst_display);
             app_ctx_guard.replace(gst_app_context);
         }
     }
@@ -896,7 +896,7 @@ impl PaintableSink {
     fn initialize_macosgl(
         &self,
         display: gdk::Display,
-        display_ctx_guard: &mut Option<gst_gl::GLDisplay>,
+        display_guard: &mut Option<gst_gl::GLDisplay>,
         app_ctx_guard: &mut Option<gst_gl::GLContext>,
     ) {
         gst::info!(
@@ -927,7 +927,7 @@ impl PaintableSink {
                 Some(gst_app_context) => gst_app_context,
             };
 
-            display_ctx_guard.replace(gst_display);
+            display_guard.replace(gst_display);
             app_ctx_guard.replace(gst_app_context);
         }
     }
