@@ -678,6 +678,8 @@ impl PaintableSink {
             Ok(_) => gst::info!(CAT, imp: self, "Successfully activated GL Context."),
             Err(_) => {
                 gst::error!(CAT, imp: self, "Failed to activate GL context",);
+                *app_ctx_guard = None;
+                *display_guard = None;
                 return false;
             }
         };
@@ -696,12 +698,16 @@ impl PaintableSink {
                     "Failed to deactivate the context after failing fill info",
                 );
             }
+            *app_ctx_guard = None;
+            *display_guard = None;
 
             return false;
         }
 
         if app_ctx.activate(false).is_err() {
             gst::error!(CAT, imp: self, "Failed to deactivate GL context",);
+            *app_ctx_guard = None;
+            *display_guard = None;
             return false;
         }
 
@@ -720,6 +726,8 @@ impl PaintableSink {
             }
             Err(err) => {
                 gst::error!(CAT, imp: self, "Could not create GL context: {err}");
+                *app_ctx_guard = None;
+                *display_guard = None;
                 false
             }
         }
