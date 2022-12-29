@@ -27,8 +27,6 @@ use std::sync::{Mutex, MutexGuard};
 use crate::utils;
 
 #[cfg(any(target_os = "macos", feature = "gst_gl"))]
-use glib::translate::*;
-#[cfg(any(target_os = "macos", feature = "gst_gl"))]
 use gst_gl::prelude::GLContextExt as GstGLContextExt;
 #[cfg(any(target_os = "macos", feature = "gst_gl"))]
 use gst_gl::prelude::*;
@@ -757,22 +755,31 @@ impl PaintableSink {
 
         // FIXME: bindings
         unsafe {
+            use glib::translate::*;
+
             let d = display.downcast::<gdk_x11::X11Display>().unwrap();
             let x11_display = gdk_x11::ffi::gdk_x11_display_get_egl_display(d.to_glib_none().0);
-            assert!(!x11_display.is_null());
+            if x11_display.is_null() {
+                gst::error!(CAT, imp: self, "Failed to get EGL display");
+                return;
+            }
 
             let gst_display = gst_gl_egl::ffi::gst_gl_display_egl_new_with_egl_display(x11_display);
-            assert!(!gst_display.is_null());
-            let gst_display: gst_gl::GLDisplay =
-                from_glib_full(gst_display as *mut gst_gl::ffi::GstGLDisplay);
+            let gst_display =
+                gst_gl::GLDisplay::from_glib_full(gst_display as *mut gst_gl::ffi::GstGLDisplay);
 
             let gst_app_context =
                 gst_gl::GLContext::new_wrapped(&gst_display, gl_ctx, platform, gl_api);
-
-            assert!(gst_app_context.is_some());
+            let gst_app_context = match gst_app_context {
+                None => {
+                    gst::error!(CAT, imp: self, "Failed to create wrapped GL context");
+                    return;
+                }
+                Some(gst_app_context) => gst_app_context,
+            };
 
             display_ctx_guard.replace(gst_display);
-            app_ctx_guard.replace(gst_app_context.unwrap());
+            app_ctx_guard.replace(gst_app_context);
         }
     }
 
@@ -800,22 +807,31 @@ impl PaintableSink {
 
         // FIXME: bindings
         unsafe {
+            use glib::translate::*;
+
             let d = display.downcast::<gdk_x11::X11Display>().unwrap();
             let x11_display = gdk_x11::ffi::gdk_x11_display_get_xdisplay(d.to_glib_none().0);
-            assert!(!x11_display.is_null());
+            if x11_display.is_null() {
+                gst::error!(CAT, imp: self, "Failed to get X11 display");
+                return;
+            }
 
             let gst_display = gst_gl_x11::ffi::gst_gl_display_x11_new_with_display(x11_display);
-            assert!(!gst_display.is_null());
-            let gst_display: gst_gl::GLDisplay =
-                from_glib_full(gst_display as *mut gst_gl::ffi::GstGLDisplay);
+            let gst_display =
+                gst_gl::GLDisplay::from_glib_full(gst_display as *mut gst_gl::ffi::GstGLDisplay);
 
             let gst_app_context =
                 gst_gl::GLContext::new_wrapped(&gst_display, gl_ctx, platform, gl_api);
-
-            assert!(gst_app_context.is_some());
+            let gst_app_context = match gst_app_context {
+                None => {
+                    gst::error!(CAT, imp: self, "Failed to create wrapped GL context");
+                    return;
+                }
+                Some(gst_app_context) => gst_app_context,
+            };
 
             display_ctx_guard.replace(gst_display);
-            app_ctx_guard.replace(gst_app_context.unwrap());
+            app_ctx_guard.replace(gst_app_context);
         }
     }
 
@@ -843,26 +859,36 @@ impl PaintableSink {
 
         // FIXME: bindings
         unsafe {
+            use glib::translate::*;
+
             // let wayland_display = gdk_wayland::WaylandDisplay::wl_display(display.downcast());
             // get the ptr directly since we are going to use it raw
             let d = display.downcast::<gdk_wayland::WaylandDisplay>().unwrap();
             let wayland_display =
                 gdk_wayland::ffi::gdk_wayland_display_get_wl_display(d.to_glib_none().0);
-            assert!(!wayland_display.is_null());
+            if wayland_display.is_null() {
+                gst::error!(CAT, imp: self, "Failed to get Wayland display");
+                return;
+            }
 
             let gst_display =
                 gst_gl_wayland::ffi::gst_gl_display_wayland_new_with_display(wayland_display);
-            assert!(!gst_display.is_null());
-            let gst_display: gst_gl::GLDisplay =
-                from_glib_full(gst_display as *mut gst_gl::ffi::GstGLDisplay);
+            let gst_display =
+                gst_gl::GLDisplay::from_glib_full(gst_display as *mut gst_gl::ffi::GstGLDisplay);
 
             let gst_app_context =
                 gst_gl::GLContext::new_wrapped(&gst_display, gl_ctx, platform, gl_api);
 
-            assert!(gst_app_context.is_some());
+            let gst_app_context = match gst_app_context {
+                None => {
+                    gst::error!(CAT, imp: self, "Failed to create wrapped GL context");
+                    return;
+                }
+                Some(gst_app_context) => gst_app_context,
+            };
 
             display_ctx_guard.replace(gst_display);
-            app_ctx_guard.replace(gst_app_context.unwrap());
+            app_ctx_guard.replace(gst_app_context);
         }
     }
 
@@ -893,10 +919,16 @@ impl PaintableSink {
             let gst_app_context =
                 gst_gl::GLContext::new_wrapped(&gst_display, gl_ctx, platform, gl_api);
 
-            assert!(gst_app_context.is_some());
+            let gst_app_context = match gst_app_context {
+                None => {
+                    gst::error!(CAT, imp: self, "Failed to create wrapped GL context");
+                    return;
+                }
+                Some(gst_app_context) => gst_app_context,
+            };
 
             display_ctx_guard.replace(gst_display);
-            app_ctx_guard.replace(gst_app_context.unwrap());
+            app_ctx_guard.replace(gst_app_context);
         }
     }
 }
