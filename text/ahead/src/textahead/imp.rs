@@ -6,6 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::collections::VecDeque;
 use std::sync::{Mutex, MutexGuard};
 
 use once_cell::sync::Lazy;
@@ -54,7 +55,7 @@ struct Input {
 
 #[derive(Default)]
 struct State {
-    previous: Vec<Input>,
+    previous: VecDeque<Input>,
     pending: Vec<Input>,
     done: bool,
     /// Segment for which we should send a buffer with ahead text. Only set if `Settings.buffer_start_segment` is set.
@@ -425,10 +426,10 @@ impl TextAhead {
             let duration = current.duration;
 
             if settings.n_previous > 0 {
-                state.previous.push(current);
+                state.previous.push_back(current);
 
                 if state.previous.len() > settings.n_previous as usize {
-                    state.previous.pop();
+                    state.previous.pop_front();
                 }
             }
 
