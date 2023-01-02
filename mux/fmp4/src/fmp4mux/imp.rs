@@ -1968,7 +1968,7 @@ impl ObjectImpl for FMP4Mux {
 
         let obj = self.obj();
         let class = obj.class();
-        for templ in class.pad_template_list().filter(|templ| {
+        for templ in class.pad_template_list().into_iter().filter(|templ| {
             templ.presence() == gst::PadPresence::Always
                 && templ.direction() == gst::PadDirection::Sink
         }) {
