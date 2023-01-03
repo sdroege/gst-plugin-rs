@@ -8,6 +8,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use gst::{glib, subclass::prelude::*};
+use gst_rtp::prelude::*;
 use gst_rtp::subclass::prelude::*;
 use std::{
     cmp::Ordering,
@@ -142,6 +143,15 @@ impl ElementImpl for RTPAv1Depay {
 }
 
 impl RTPBaseDepayloadImpl for RTPAv1Depay {
+    fn set_caps(&self, _caps: &gst::Caps) -> Result<(), gst::LoggableError> {
+        let element = self.obj();
+        let src_pad = element.src_pad();
+        let src_caps = src_pad.pad_template_caps();
+        src_pad.push_event(gst::event::Caps::builder(&src_caps).build());
+
+        Ok(())
+    }
+
     fn handle_event(&self, event: gst::Event) -> bool {
         match event.view() {
             gst::EventView::Eos(_) | gst::EventView::FlushStop(_) => {
@@ -445,7 +455,6 @@ impl RTPAv1Depay {
 #[rustfmt::skip]
 mod tests {
     use super::*;
-    use gst_rtp::prelude::*;
     use std::io::Cursor;
 
     #[test]
