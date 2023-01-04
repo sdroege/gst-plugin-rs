@@ -397,7 +397,7 @@ impl VideoEncoderImpl for GifEnc {
         // Currently not using incremental frames -> every frame is a keyframe
         frame.set_flags(gst_video::VideoCodecFrameFlags::SYNC_POINT);
         frame.set_output_buffer(output_buffer);
-        self.obj().finish_frame(Some(frame))
+        self.obj().finish_frame(frame)
     }
 }
 

@@ -259,6 +259,6 @@ impl VideoEncoderImpl for PngEncoder {
         // There are no such incremental frames in the png format
         frame.set_flags(gst_video::VideoCodecFrameFlags::SYNC_POINT);
         frame.set_output_buffer(output_buffer);
-        self.obj().finish_frame(Some(frame))
+        self.obj().finish_frame(frame)
     }
 }

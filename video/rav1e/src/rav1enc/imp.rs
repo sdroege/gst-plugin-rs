@@ -924,7 +924,7 @@ impl Rav1Enc {
                     }
                     let output_buffer = gst::Buffer::from_mut_slice(packet_data);
                     frame.set_output_buffer(output_buffer);
-                    instance.finish_frame(Some(frame))?;
+                    instance.finish_frame(frame)?;
                 }
                 Err(data::EncoderStatus::Encoded) => {
                     gst::debug!(CAT, imp: self, "Encoded but not output frame yet",);
