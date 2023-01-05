@@ -338,13 +338,8 @@ impl CustomSource {
         gst::debug!(CAT, imp: self, "Source signalled no-more-pads");
 
         let state = self.state.lock().unwrap();
-        let streams = state
-            .pads
-            .iter()
-            .map(|p| p.stream.clone())
-            .collect::<Vec<_>>();
         let collection = gst::StreamCollection::builder(None)
-            .streams(streams)
+            .streams(state.pads.iter().map(|p| p.stream.clone()))
             .build();
         drop(state);
 

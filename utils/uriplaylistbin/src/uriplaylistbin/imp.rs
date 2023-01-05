@@ -855,7 +855,7 @@ impl BinImpl for UriPlaylistBin {
                 let state = state_guard.as_mut().unwrap();
 
                 let src = error.src().unwrap();
-                let item = state.find_item_from_src(&src);
+                let item = state.find_item_from_src(src);
 
                 drop(state_guard);
 
