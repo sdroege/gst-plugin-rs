@@ -2778,7 +2778,7 @@ impl FallbackSrc {
             Some(state) => state,
         };
 
-        let src = match m.src().and_then(|s| s.downcast::<gst::Element>().ok()) {
+        let src = match m.src().and_then(|s| s.downcast_ref::<gst::Element>()) {
             None => return false,
             Some(src) => src,
         };
@@ -2790,7 +2790,7 @@ impl FallbackSrc {
             src.path_string()
         );
 
-        if src == state.source.source || src.has_as_ancestor(&state.source.source) {
+        if src == &state.source.source || src.has_as_ancestor(&state.source.source) {
             self.handle_source_error(state, RetryReason::Error, false);
             drop(state_guard);
             self.obj().notify("status");
@@ -2800,7 +2800,7 @@ impl FallbackSrc {
 
         // Check if error is from fallback input and if so, use a dummy fallback
         if let Some(ref source) = state.fallback_source {
-            if src == source.source || src.has_as_ancestor(&source.source) {
+            if src == &source.source || src.has_as_ancestor(&source.source) {
                 self.handle_source_error(state, RetryReason::Error, true);
                 drop(state_guard);
                 self.obj().notify("status");

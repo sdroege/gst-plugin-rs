@@ -382,7 +382,7 @@ impl BinImpl for HlsSink3 {
                 let event_is_from_splitmuxsink = {
                     let settings = self.settings.lock().unwrap();
 
-                    msg.src().as_ref() == Some(settings.splitmuxsink.upcast_ref())
+                    msg.src() == Some(settings.splitmuxsink.upcast_ref())
                 };
                 if !event_is_from_splitmuxsink {
                     return;

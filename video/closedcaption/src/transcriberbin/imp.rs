@@ -878,7 +878,7 @@ impl BinImpl for TranscriberBin {
                 let s = self.state.lock().unwrap();
 
                 if let Some(state) = s.as_ref() {
-                    if msg.src().as_ref() == Some(state.transcriber.upcast_ref()) {
+                    if msg.src() == Some(state.transcriber.upcast_ref()) {
                         gst::error!(
                             CAT,
                             imp: self,

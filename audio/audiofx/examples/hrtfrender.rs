@@ -110,7 +110,7 @@ fn run() -> Result<(), Error> {
 
         match msg.view() {
             MessageView::StateChanged(state_changed) => {
-                if state_changed.src().map(|s| s == pipeline).unwrap_or(false)
+                if state_changed.src().map(|s| s == &pipeline).unwrap_or(false)
                     && state_changed.current() == gst::State::Playing
                 {
                     let (lock, cvar) = &*state_cond;

@@ -223,7 +223,7 @@ impl BinImpl for ProgressBin {
             // handling of the parent class, i.e. forwarding to the parent
             // bins and the application.
             MessageView::Element(msg)
-                if msg.src().as_ref() == Some(self.progress.upcast_ref())
+                if msg.src() == Some(self.progress.upcast_ref())
                     && msg
                         .structure()
                         .map(|s| s.name() == "progress")

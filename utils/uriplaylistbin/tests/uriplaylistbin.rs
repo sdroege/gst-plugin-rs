@@ -213,7 +213,7 @@ fn assert_stream_collection(msg: gst::Message, n_streams: usize) -> gst::Object 
         MessageView::StreamCollection(sc) => {
             let collection = sc.stream_collection();
             assert_eq!(collection.len(), n_streams);
-            sc.src().unwrap()
+            sc.src().unwrap().clone()
         }
         _ => {
             panic!("message is not a stream collection");
@@ -226,7 +226,7 @@ fn assert_stream_selected(msg: gst::Message, n_streams: usize) -> gst::Object {
         MessageView::StreamsSelected(ss) => {
             let collection = ss.stream_collection();
             assert_eq!(collection.len(), n_streams);
-            ss.src().unwrap()
+            ss.src().unwrap().clone()
         }
         _ => {
             panic!("message is not stream selected");

@@ -344,7 +344,7 @@ impl CustomSource {
             .map(|p| p.stream.clone())
             .collect::<Vec<_>>();
         let collection = gst::StreamCollection::builder(None)
-            .streams(&streams)
+            .streams(streams)
             .build();
         drop(state);
 

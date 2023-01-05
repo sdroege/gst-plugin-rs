@@ -1695,7 +1695,7 @@ impl WebRTCSink {
                         }
                         gst::MessageView::StateChanged(state_changed) => {
                             if let Some(pipeline) = pipeline_clone.upgrade() {
-                                if Some(pipeline.clone().upcast()) == state_changed.src() {
+                                if state_changed.src() == Some(pipeline.upcast_ref()) {
                                     pipeline.debug_to_dot_file_with_ts(
                                         gst::DebugGraphDetails::all(),
                                         format!(
