@@ -46,7 +46,7 @@ chrono = { version = "0.4", features = [ "alloc" ] }
 env_logger = "0.10"
 gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_18"] }
 rand = "0.8"
-test-with = { version = "0.8", default-features = false }
+test-with = { version = "0.9", default-features = false }
 
 [lib]
 name = "gstaws"
