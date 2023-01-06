@@ -218,7 +218,8 @@ impl Harness {
                             panic!(
                                 "Got error: {} ({})",
                                 err.error(),
-                                err.debug().unwrap_or_else(|| String::from("None"))
+                                err.debug()
+                                    .unwrap_or_else(|| glib::GString::from("UNKNOWN"))
                             );
                         }
                         _ => (),
@@ -262,7 +263,8 @@ impl Harness {
                             panic!(
                                 "Got error: {} ({})",
                                 err.error(),
-                                err.debug().unwrap_or_else(|| String::from("None"))
+                                err.debug()
+                                    .unwrap_or_else(|| glib::GString::from("UNKNOWN"))
                             );
                         }
                         _ => (),
@@ -302,7 +304,8 @@ impl Harness {
                             panic!(
                                 "Got error: {} ({})",
                                 err.error(),
-                                err.debug().unwrap_or_else(|| String::from("None"))
+                                err.debug()
+                                    .unwrap_or_else(|| glib::GString::from("UNKNOWN"))
                             );
                         }
                         _ => (),
