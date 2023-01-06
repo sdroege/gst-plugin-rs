@@ -2339,7 +2339,6 @@ impl AggregatorImpl for FMP4Mux {
                             Some(fku_time)
                         };
 
-                        // XXX: needs translation for ONVIF as these are UTC times already
                         let fku = gst_video::UpstreamForceKeyUnitEvent::builder()
                             .running_time(fku_time)
                             .all_headers(true)
