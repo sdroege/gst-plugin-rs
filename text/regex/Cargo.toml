@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-regex"
-version = "0.9.4"
+version = "0.9.5"
 authors = ["Mathieu Duponchelle <mathieu@centricular.com>"]
 license = "MPL-2.0"
 edition = "2021"
