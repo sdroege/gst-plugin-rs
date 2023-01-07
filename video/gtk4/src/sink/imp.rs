@@ -212,9 +212,14 @@ impl ElementImpl for PaintableSink {
 
                 #[cfg(any(target_os = "macos", feature = "gst_gl"))]
                 {
-                    if self.have_gl_context.load(Ordering::Relaxed) && !self.initialize_gl_wrapper()
-                    {
-                        self.have_gl_context.store(false, Ordering::Relaxed);
+                    if self.have_gl_context.load(Ordering::Relaxed) {
+                        if self.initialize_gl_wrapper() {
+                            // We must have a display at this point.
+                            let display = self.gst_display.lock().unwrap().clone().unwrap();
+                            gst_gl::gl_element_propagate_display_context(&*self.obj(), &display);
+                        } else {
+                            self.have_gl_context.store(false, Ordering::Relaxed);
+                        }
                     }
                 }
             }
@@ -715,15 +720,25 @@ impl PaintableSink {
             "Successfully deactivated GL Context after fill_info"
         );
 
-        match display.create_context(app_ctx) {
-            Ok(gst_context) => {
+        let gst_context = match display.create_context(app_ctx) {
+            Ok(gst_context) => gst_context,
+            Err(err) => {
+                gst::error!(CAT, imp: self, "Could not create GL context: {err}");
+                *app_ctx_guard = None;
+                *display_guard = None;
+                return false;
+            }
+        };
+
+        match display.add_context(&gst_context) {
+            Ok(_) => {
                 let mut gst_ctx_guard = self.gst_context.lock().unwrap();
                 gst::info!(CAT, imp: self, "Successfully initialized GL Context");
                 gst_ctx_guard.replace(gst_context);
                 true
             }
-            Err(err) => {
-                gst::error!(CAT, imp: self, "Could not create GL context: {err}");
+            Err(_) => {
+                gst::error!(CAT, imp: self, "Could not add GL context to display");
                 *app_ctx_guard = None;
                 *display_guard = None;
                 false
