@@ -316,15 +316,20 @@ endif
 if gst_dep.version().version_compare('>=1.21')
   components = [
     '', '-app', '-audio', '-base', '-check', '-net', '-pbutils',
-    '-plugin-tracers', '-rtp', '-sdp', '-utils', '-video', '-webrtc',
+    '-rtp', '-sdp', '-utils', '-video', '-webrtc',
   ]
+  if get_option('tracers').allowed()
+    components += '-plugin-tracers'
+  endif
   foreach c: components
     features += f'gst@c@/v1_22'
   endforeach
-  features += ['gst-plugin-webrtc/gst1_22']
+  if get_option('webrtc').allowed()
+    features += 'gst-plugin-webrtc/gst1_22'
+  endif
 endif
 
-if find_program('nasm', required: false).found()
+if get_option('rav1e').allowed() and find_program('nasm', required: false).found()
   features += 'gst-plugin-rav1e/asm'
 endif
 
