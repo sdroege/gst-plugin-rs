@@ -759,6 +759,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
+name = "base64"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4a4ddaa51a5bc52a6948f74c06d20aaaddb71924eab79b8c97a8c556e942d6a"
+
+[[package]]
 name = "base64-simd"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3230,7 +3236,7 @@ version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3e372db8e5c0d213e0cd0b9be18be2aca3d44cf2fe30a9d46a65581cd454584"
 dependencies = [
- "base64",
+ "base64 0.13.1",
  "bitflags",
  "bytes",
  "headers-core",
@@ -3537,7 +3543,7 @@ version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a465709ca502270eba7ae8129c6a680f5668748d7edafa85da0f8ceae596bb2b"
 dependencies = [
- "base64",
+ "base64 0.13.1",
  "image",
  "rustdct",
  "serde",
@@ -3740,7 +3746,7 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea4c9952ef48968f8184a4a87f8576982426ebe623342d5a28f7d9c4978e4a44"
 dependencies = [
- "base64",
+ "base64 0.13.1",
  "env_logger 0.9.3",
  "futures-util",
  "getopts",
@@ -3805,7 +3811,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "046349f25888e644bf02d9c5de0164b2a493d29aa4ce18e1ad0b756da9b55d6d"
 dependencies = [
  "aes",
- "base64",
+ "base64 0.13.1",
  "byteorder",
  "bytes",
  "form_urlencoded",
@@ -3846,7 +3852,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2aa877d18f6150364012cb4be5682d62d7c712c88bae2d0d01720fd7c15e2f06"
 dependencies = [
  "aes-ctr",
- "base64",
+ "base64 0.13.1",
  "form_urlencoded",
  "futures-core",
  "hmac 0.11.0",
@@ -4771,9 +4777,9 @@ checksum = "655b020bbf5c89791160a30f0d4706d8ec7aa5718d6a198f6df19c400e4f4470"
 
 [[package]]
 name = "rav1e"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3811d0c888e27fef48f8c22304b663571e7e325b20ca2a1e1c45fdf1ded04a8d"
+checksum = "277898094f0d03c6a609e491324102daf5080e71c06b4b25e5acf8b89d26c945"
 dependencies = [
  "arbitrary",
  "arg_enum_proc_macro",
@@ -4889,7 +4895,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68cc60575865c7831548863cc02356512e3f1dc2f3f82cb837d7fc4cc8f3c97c"
 dependencies = [
  "async-compression",
- "base64",
+ "base64 0.13.1",
  "bytes",
  "cookie",
  "cookie_store",
@@ -5083,11 +5089,11 @@ dependencies = [
 
 [[package]]
 name = "rustls-pemfile"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0864aeff53f8c05aa08d86e5ef839d3dfcf07aeba2db32f12db0ef716e87bd55"
+checksum = "d194b56d58803a43635bdc398cd17e383d6f71f9182b9a192c127ca42494a59b"
 dependencies = [
- "base64",
+ "base64 0.21.0",
 ]
 
 [[package]]
@@ -5817,7 +5823,7 @@ version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "30ee6ab729cd4cf0fd55218530c4522ed30b7b6081752839b68fcec8d0960788"
 dependencies = [
- "base64",
+ "base64 0.13.1",
  "byteorder",
  "bytes",
  "http",
