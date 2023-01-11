@@ -1443,26 +1443,26 @@ impl WebRTCSink {
                             false,
                             glib::closure!(@watch element, @strong session_id, @weak-allow-none cc
                                     => move |_webrtcbin: gst::Element, _transport: gst::Object| {
+                                if let Some(ref cc) = cc {
+                                    let settings = element.imp().settings.lock().unwrap();
 
-                                let cc = cc.unwrap();
-                                let settings = element.imp().settings.lock().unwrap();
+                                    // TODO: Bind properties with @element's
+                                    cc.set_properties(&[
+                                        ("min-bitrate", &settings.cc_info.min_bitrate),
+                                        ("estimated-bitrate", &settings.cc_info.start_bitrate),
+                                        ("max-bitrate", &settings.cc_info.max_bitrate),
+                                    ]);
 
-                                // TODO: Bind properties with @element's
-                                cc.set_properties(&[
-                                    ("min-bitrate", &settings.cc_info.min_bitrate),
-                                    ("estimated-bitrate", &settings.cc_info.start_bitrate),
-                                    ("max-bitrate", &settings.cc_info.max_bitrate),
-                                ]);
+                                    cc.connect_notify(Some("estimated-bitrate"),
+                                        glib::clone!(@weak element, @strong session_id
+                                            => move |bwe, pspec| {
+                                            element.imp().set_bitrate(&element, &session_id,
+                                                bwe.property::<u32>(pspec.name()));
+                                        }
+                                    ));
+                                }
 
-                                cc.connect_notify(Some("estimated-bitrate"),
-                                    glib::clone!(@weak element, @strong session_id
-                                        => move |bwe, pspec| {
-                                        element.imp().set_bitrate(&element, &session_id,
-                                            bwe.property::<u32>(pspec.name()));
-                                    }
-                                ));
-
-                                Some(cc)
+                                cc
                             }),
                         );
 
