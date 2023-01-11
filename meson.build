@@ -293,33 +293,41 @@ examples = []
 # Add the plugin library files as output
 output = []
 
-if glib_dep.version().version_compare('>=2.74')
-  features += ['glib/v2_74', 'gio/v2_74']
-elif glib_dep.version().version_compare('>=2.72')
-  features += ['glib/v2_72', 'gio/v2_72']
-elif glib_dep.version().version_compare('>=2.70')
-  features += ['glib/v2_70', 'gio/v2_70']
-elif glib_dep.version().version_compare('>=2.68')
-  features += ['glib/v2_68', 'gio/v2_68']
-elif glib_dep.version().version_compare('>=2.66')
-  features += ['glib/v2_66', 'gio/v2_66']
-elif glib_dep.version().version_compare('>=2.64')
-  features += ['glib/v2_64', 'gio/v2_64']
-elif glib_dep.version().version_compare('>=2.62')
-  features += ['glib/v2_62', 'gio/v2_62']
-elif glib_dep.version().version_compare('>=2.60')
-  features += ['glib/v2_60', 'gio/v2_60']
-elif glib_dep.version().version_compare('>=2.58')
-  features += ['glib/v2_58', 'gio/v2_58']
+if get_option('gtk4').allowed()
+  if glib_dep.version().version_compare('>=2.74')
+    features += ['glib/v2_74', 'gio/v2_74']
+  elif glib_dep.version().version_compare('>=2.72')
+    features += ['glib/v2_72', 'gio/v2_72']
+  elif glib_dep.version().version_compare('>=2.70')
+    features += ['glib/v2_70', 'gio/v2_70']
+  elif glib_dep.version().version_compare('>=2.68')
+    features += ['glib/v2_68', 'gio/v2_68']
+  elif glib_dep.version().version_compare('>=2.66')
+    features += ['glib/v2_66', 'gio/v2_66']
+  elif glib_dep.version().version_compare('>=2.64')
+    features += ['glib/v2_64', 'gio/v2_64']
+  elif glib_dep.version().version_compare('>=2.62')
+    features += ['glib/v2_62', 'gio/v2_62']
+  elif glib_dep.version().version_compare('>=2.60')
+    features += ['glib/v2_60', 'gio/v2_60']
+  elif glib_dep.version().version_compare('>=2.58')
+    features += ['glib/v2_58', 'gio/v2_58']
+  endif
 endif
 
 if gst_dep.version().version_compare('>=1.21')
   components = [
-    '', '-app', '-audio', '-base', '-check', '-net', '-pbutils',
+    '', '-app', '-audio', '-base', '-check',
     '-rtp', '-sdp', '-utils', '-video', '-webrtc',
   ]
   if get_option('tracers').allowed()
     components += '-plugin-tracers'
+  endif
+  if get_option('threadshare').allowed()
+    components += '-net'
+  endif
+  if get_option('mp4').allowed() or get_option('fmp4').allowed()
+    components += '-pbutils'
   endif
   foreach c: components
     features += f'gst@c@/v1_22'
