@@ -123,6 +123,11 @@ version = "0.6"
 name = "hermit-abi"
 version = "0.1"
 
+# Various crates depend on an older version of base64
+[[bans.skip]]
+name = "base64"
+version = "0.13"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
