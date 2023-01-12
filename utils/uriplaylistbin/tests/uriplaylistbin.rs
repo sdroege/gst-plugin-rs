@@ -47,14 +47,14 @@ impl TestMedia {
 
     fn missing_file() -> Self {
         Self {
-            uri: "file:///not-there.ogg".to_string(),
+            uri: "file://not-there.ogg".to_string(),
             len: 10.mseconds(),
         }
     }
 
     fn missing_http() -> Self {
         Self {
-            uri: "http:///not-there.ogg".to_string(),
+            uri: "http://not-there.ogg".to_string(),
             len: 10.mseconds(),
         }
     }
