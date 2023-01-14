@@ -14,11 +14,11 @@ use gst::{element_imp_error, error_msg, loggable_error};
 use std::default::Default;
 
 use aws_config::default_provider::credentials::DefaultCredentialsChain;
+use aws_credential_types::{provider::ProvideCredentials, Credentials};
 use aws_sig_auth::signer::{self, HttpSignatureType, OperationSigningConfig, RequestConfig};
 use aws_smithy_http::body::SdkBody;
-use aws_types::credentials::ProvideCredentials;
 use aws_types::region::{Region, SigningRegion};
-use aws_types::{Credentials, SigningService};
+use aws_types::SigningService;
 use std::time::{Duration, SystemTime};
 
 use chrono::prelude::*;

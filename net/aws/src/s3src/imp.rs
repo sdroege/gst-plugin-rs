@@ -13,9 +13,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use aws_sdk_s3::config;
-use aws_sdk_s3::Endpoint;
 use aws_sdk_s3::{config::retry::RetryConfig, Client, Credentials};
-use http::Uri;
 
 use gst::glib;
 use gst::prelude::*;
@@ -130,26 +128,11 @@ impl S3Src {
                     }
                 })?;
 
-        let endpoint_uri = match &settings.endpoint_uri {
-            Some(endpoint) => match endpoint.parse::<Uri>() {
-                Ok(uri) => Some(uri),
-                Err(e) => {
-                    return Err(gst::error_msg!(
-                        gst::ResourceError::Settings,
-                        ["Invalid S3 endpoint uri. Error: {}", e]
-                    ));
-                }
-            },
-            None => None,
-        };
-
         let config_builder = config::Builder::from(&sdk_config)
             .retry_config(RetryConfig::standard().with_max_attempts(settings.retry_attempts));
 
-        let config = if let Some(uri) = endpoint_uri {
-            config_builder
-                .endpoint_resolver(Endpoint::mutable_uri(uri).expect("Failed to parse endpoint"))
-                .build()
+        let config = if let Some(ref uri) = settings.endpoint_uri {
+            config_builder.endpoint_url(uri).build()
         } else {
             config_builder.build()
         };
