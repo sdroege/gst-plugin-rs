@@ -22,10 +22,8 @@ use gst::{element_imp_error, glib, prelude::*, subclass::prelude::*};
 use aws_sdk_s3::config;
 use aws_sdk_s3::model::ObjectCannedAcl;
 use aws_sdk_s3::types::ByteStream;
-use aws_sdk_s3::Endpoint;
 use aws_sdk_s3::{config::retry::RetryConfig, Client, Credentials, Region};
 use aws_types::sdk_config::SdkConfig;
-use http::Uri;
 
 use crate::s3utils;
 
@@ -376,29 +374,13 @@ impl S3HlsSink {
         }
 
         let sdk_config = settings.config.as_ref().expect("SDK config must be set");
-        let endpoint_uri = match &settings.endpoint_uri {
-            Some(endpoint) => match endpoint.parse::<Uri>() {
-                Ok(uri) => Some(uri),
-                Err(e) => {
-                    element_imp_error!(
-                        self,
-                        gst::ResourceError::Settings,
-                        ["Invalid S3 endpoint uri. Error: {}", e]
-                    );
-                    None
-                }
-            },
-            None => None,
-        };
 
         let config_builder = config::Builder::from(sdk_config)
             .region(settings.s3_region.clone())
             .retry_config(RetryConfig::standard().with_max_attempts(settings.retry_attempts));
 
-        let config = if let Some(uri) = endpoint_uri {
-            config_builder
-                .endpoint_resolver(Endpoint::mutable_uri(uri).expect("Failed to parse endpoint"))
-                .build()
+        let config = if let Some(ref uri) = settings.endpoint_uri {
+            config_builder.endpoint_url(uri).build()
         } else {
             config_builder.build()
         };
