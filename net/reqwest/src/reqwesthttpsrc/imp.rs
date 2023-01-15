@@ -379,7 +379,7 @@ impl ReqwestHttpSrc {
 
         if let Some(ref extra_headers) = settings.extra_headers {
             for (field, value) in extra_headers.iter() {
-                let field = match HeaderName::try_from(field) {
+                let field = match HeaderName::try_from(field.as_str()) {
                     Ok(field) => field,
                     Err(err) => {
                         gst::warning!(

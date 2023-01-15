@@ -59,12 +59,12 @@ impl Default for Settings {
                 "video/x-h265",
                 "video/x-av1",
             ]
-            .iter()
-            .map(|s| gst::Structure::new_empty(s))
+            .into_iter()
+            .map(gst::Structure::new_empty)
             .collect::<gst::Caps>(),
             audio_caps: ["audio/x-opus"]
-                .iter()
-                .map(|s| gst::Structure::new_empty(s))
+                .into_iter()
+                .map(gst::Structure::new_empty)
                 .collect::<gst::Caps>(),
             stun_server: None,
             turn_server: None,

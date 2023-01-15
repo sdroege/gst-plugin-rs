@@ -860,7 +860,7 @@ impl FallbackSwitch {
                 let caps = caps.caps();
                 debug!(CAT, obj: pad, "Received caps {}", caps);
 
-                let caps_info = match caps.structure(0).unwrap().name() {
+                let caps_info = match caps.structure(0).unwrap().name().as_str() {
                     "audio/x-raw" => {
                         CapsInfo::Audio(gst_audio::AudioInfo::from_caps(caps).unwrap())
                     }

@@ -263,12 +263,12 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             video_caps: ["video/x-vp8", "video/x-h264", "video/x-vp9", "video/x-h265"]
-                .iter()
-                .map(|s| gst::Structure::new_empty(s))
+                .into_iter()
+                .map(gst::Structure::new_empty)
                 .collect::<gst::Caps>(),
             audio_caps: ["audio/x-opus"]
-                .iter()
-                .map(|s| gst::Structure::new_empty(s))
+                .into_iter()
+                .map(gst::Structure::new_empty)
                 .collect::<gst::Caps>(),
             stun_server: DEFAULT_STUN_SERVER.map(String::from),
             turn_servers: gst::Array::new(Vec::new() as Vec<glib::SendValue>),
@@ -848,7 +848,7 @@ impl Session {
 
         {
             let payloader_caps_mut = payloader_caps.make_mut();
-            payloader_caps_mut.set_simple(&[("ssrc", &ssrc)]);
+            payloader_caps_mut.set("ssrc", ssrc);
         }
 
         gst::info!(
@@ -949,7 +949,7 @@ impl Session {
             .property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
         transceiver.set_property("codec-preferences", None::<gst::Caps>);
 
-        let mut global_caps = gst::Caps::new_simple("application/x-unknown", &[]);
+        let mut global_caps = gst::Caps::new_empty_simple("application/x-unknown");
 
         let sdp = self.sdp.as_ref().unwrap();
         let sdp_media = sdp.media(webrtc_pad.media_idx).unwrap();
@@ -1107,10 +1107,9 @@ impl NavigationEventHandler {
             "create-data-channel",
             &[
                 &"input",
-                &gst::Structure::new(
-                    "config",
-                    &[("priority", &gst_webrtc::WebRTCPriorityType::High)],
-                ),
+                &gst::Structure::builder("config")
+                    .field("priority", gst_webrtc::WebRTCPriorityType::High)
+                    .build(),
             ],
         );
 
@@ -2138,7 +2137,7 @@ impl WebRTCSink {
 
                     if let Some(s) = caps.structure(0) {
                         let mut s = s.to_owned();
-                        s.remove_fields(&[
+                        s.remove_fields([
                             "timestamp-offset",
                             "seqnum-offset",
                             "ssrc",
@@ -2173,7 +2172,7 @@ impl WebRTCSink {
     ) -> (String, gst::Caps) {
         let sink_caps = in_caps.as_ref().to_owned();
 
-        let is_video = match sink_caps.structure(0).unwrap().name() {
+        let is_video = match sink_caps.structure(0).unwrap().name().as_str() {
             "video/x-raw" => true,
             "audio/x-raw" => false,
             _ => unreachable!(),
@@ -2710,15 +2709,15 @@ impl ElementImpl for WebRTCSink {
                 .structure(gst::Structure::builder("video/x-raw").build())
                 .structure_with_features(
                     gst::Structure::builder("video/x-raw").build(),
-                    gst::CapsFeatures::new(&[CUDA_MEMORY_FEATURE]),
+                    gst::CapsFeatures::new([CUDA_MEMORY_FEATURE]),
                 )
                 .structure_with_features(
                     gst::Structure::builder("video/x-raw").build(),
-                    gst::CapsFeatures::new(&[GL_MEMORY_FEATURE]),
+                    gst::CapsFeatures::new([GL_MEMORY_FEATURE]),
                 )
                 .structure_with_features(
                     gst::Structure::builder("video/x-raw").build(),
-                    gst::CapsFeatures::new(&[NVMM_MEMORY_FEATURE]),
+                    gst::CapsFeatures::new([NVMM_MEMORY_FEATURE]),
                 )
                 .build();
             let video_pad_template = gst::PadTemplate::new(

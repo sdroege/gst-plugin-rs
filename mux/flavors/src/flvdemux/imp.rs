@@ -1331,16 +1331,14 @@ impl AudioFormat {
 
         if self.rate != 0 {
             if let Some(ref mut caps) = caps.as_mut() {
-                caps.get_mut()
-                    .unwrap()
-                    .set_simple(&[("rate", &(self.rate as i32))])
+                caps.get_mut().unwrap().set("rate", self.rate as i32)
             }
         }
         if self.channels != 0 {
             if let Some(ref mut caps) = caps.as_mut() {
                 caps.get_mut()
                     .unwrap()
-                    .set_simple(&[("channels", &(self.channels as i32))])
+                    .set("channels", self.channels as i32)
             }
         }
 
@@ -1441,19 +1439,19 @@ impl VideoFormat {
 
         if let (Some(width), Some(height)) = (self.width, self.height) {
             if let Some(ref mut caps) = caps.as_mut() {
-                caps.get_mut()
-                    .unwrap()
-                    .set_simple(&[("width", &(width as i32)), ("height", &(height as i32))])
+                let caps = caps.get_mut().unwrap();
+                caps.set("width", width as i32);
+                caps.set("height", height as i32);
             }
         }
 
         if let Some(par) = self.pixel_aspect_ratio {
             if *par.numer() != 0 && par.numer() != par.denom() {
                 if let Some(ref mut caps) = caps.as_mut() {
-                    caps.get_mut().unwrap().set_simple(&[(
+                    caps.get_mut().unwrap().set(
                         "pixel-aspect-ratio",
-                        &gst::Fraction::new(*par.numer(), *par.denom()),
-                    )])
+                        gst::Fraction::new(*par.numer(), *par.denom()),
+                    );
                 }
             }
         }
@@ -1461,10 +1459,9 @@ impl VideoFormat {
         if let Some(fps) = self.framerate {
             if *fps.numer() != 0 {
                 if let Some(ref mut caps) = caps.as_mut() {
-                    caps.get_mut().unwrap().set_simple(&[(
-                        "framerate",
-                        &gst::Fraction::new(*fps.numer(), *fps.denom()),
-                    )])
+                    caps.get_mut()
+                        .unwrap()
+                        .set("framerate", gst::Fraction::new(*fps.numer(), *fps.denom()));
                 }
             }
         }

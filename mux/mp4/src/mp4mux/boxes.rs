@@ -190,7 +190,10 @@ fn write_moov(v: &mut Vec<u8>, header: &super::Header) -> Result<(), Error> {
                 for (idx, other_stream) in header.streams.iter().enumerate() {
                     let s = other_stream.caps.structure(0).unwrap();
 
-                    if matches!(s.name(), "video/x-h264" | "video/x-h265" | "image/jpeg") {
+                    if matches!(
+                        s.name().as_str(),
+                        "video/x-h264" | "video/x-h265" | "image/jpeg"
+                    ) {
                         references.push(TrackReference {
                             reference_type: *b"cdsc",
                             track_ids: vec![idx as u32 + 1],
@@ -378,7 +381,7 @@ fn write_tkhd(
 
     // Volume
     let s = stream.caps.structure(0).unwrap();
-    match s.name() {
+    match s.name().as_str() {
         "audio/mpeg" | "audio/x-opus" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
             v.extend((1u16 << 8).to_be_bytes())
         }
@@ -406,7 +409,7 @@ fn write_tkhd(
     );
 
     // Width/height
-    match s.name() {
+    match s.name().as_str() {
         "video/x-h264" | "video/x-h265" | "video/x-vp9" | "image/jpeg" => {
             let width = s.get::<i32>("width").context("video caps without width")? as u32;
             let height = s
@@ -507,7 +510,7 @@ fn write_hdlr(
     v.extend([0u8; 4]);
 
     let s = stream.caps.structure(0).unwrap();
-    let (handler_type, name) = match s.name() {
+    let (handler_type, name) = match s.name().as_str() {
         "video/x-h264" | "video/x-h265" | "video/x-vp9" | "image/jpeg" => {
             (b"vide", b"VideoHandler\0".as_slice())
         }
@@ -537,7 +540,7 @@ fn write_minf(
 ) -> Result<(), Error> {
     let s = stream.caps.structure(0).unwrap();
 
-    match s.name() {
+    match s.name().as_str() {
         "video/x-h264" | "video/x-h265" | "video/x-vp9" | "image/jpeg" => {
             // Flags are always 1 for unspecified reasons
             write_full_box(v, b"vmhd", FULL_BOX_VERSION_0, 1, |v| write_vmhd(v, header))?
@@ -696,7 +699,7 @@ fn write_stsd(
     v.extend(1u32.to_be_bytes());
 
     let s = stream.caps.structure(0).unwrap();
-    match s.name() {
+    match s.name().as_str() {
         "video/x-h264" | "video/x-h265" | "video/x-vp9" | "image/jpeg" => {
             write_visual_sample_entry(v, header, stream)?
         }
@@ -732,7 +735,7 @@ fn write_visual_sample_entry(
     stream: &super::Stream,
 ) -> Result<(), Error> {
     let s = stream.caps.structure(0).unwrap();
-    let fourcc = match s.name() {
+    let fourcc = match s.name().as_str() {
         "video/x-h264" => {
             let stream_format = s.get::<&str>("stream-format").context("no stream-format")?;
             match stream_format {
@@ -794,7 +797,7 @@ fn write_visual_sample_entry(
         v.extend((-1i16).to_be_bytes());
 
         // Codec specific boxes
-        match s.name() {
+        match s.name().as_str() {
             "video/x-h264" => {
                 let codec_data = s
                     .get::<&gst::BufferRef>("codec_data")
@@ -949,7 +952,7 @@ fn write_visual_sample_entry(
         }
 
         // Write fiel box for codecs that require it
-        if ["image/jpeg"].contains(&s.name()) {
+        if ["image/jpeg"].contains(&s.name().as_str()) {
             let interlace_mode = s
                 .get::<&str>("interlace-mode")
                 .ok()
@@ -993,7 +996,7 @@ fn write_audio_sample_entry(
     stream: &super::Stream,
 ) -> Result<(), Error> {
     let s = stream.caps.structure(0).unwrap();
-    let fourcc = match s.name() {
+    let fourcc = match s.name().as_str() {
         "audio/mpeg" => b"mp4a",
         "audio/x-opus" => b"Opus",
         "audio/x-alaw" => b"alaw",
@@ -1009,7 +1012,7 @@ fn write_audio_sample_entry(
         _ => unreachable!(),
     };
 
-    let sample_size = match s.name() {
+    let sample_size = match s.name().as_str() {
         "audio/x-adpcm" => {
             let bitrate = s.get::<i32>("bitrate").context("no ADPCM bitrate field")?;
             (bitrate / 8000) as u16
@@ -1040,7 +1043,7 @@ fn write_audio_sample_entry(
         v.extend((u32::from(rate) << 16).to_be_bytes());
 
         // Codec specific boxes
-        match s.name() {
+        match s.name().as_str() {
             "audio/mpeg" => {
                 let codec_data = s
                     .get::<&gst::BufferRef>("codec_data")
@@ -1256,7 +1259,7 @@ fn write_xml_meta_data_sample_entry(
     stream: &super::Stream,
 ) -> Result<(), Error> {
     let s = stream.caps.structure(0).unwrap();
-    let namespace = match s.name() {
+    let namespace = match s.name().as_str() {
         "application/x-onvif-metadata" => b"http://www.onvif.org/ver10/schema",
         _ => unreachable!(),
     };

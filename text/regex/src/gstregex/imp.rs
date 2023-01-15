@@ -202,7 +202,7 @@ impl ObjectImpl for RegEx {
                         }
                     };
 
-                    match operation {
+                    match operation.as_str() {
                         "replace-all" | "replace_all" => {
                             let replacement = match s.get::<Option<String>>("replacement") {
                                 Ok(Some(pattern)) => pattern,

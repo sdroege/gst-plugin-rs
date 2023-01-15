@@ -1638,7 +1638,7 @@ impl FMP4Mux {
             let s = caps.structure(0).unwrap();
 
             let mut delta_frames = DeltaFrames::IntraOnly;
-            match s.name() {
+            match s.name().as_str() {
                 "video/x-h264" | "video/x-h265" => {
                     if !s.has_field_with_type("codec_data", gst::Buffer::static_type()) {
                         gst::error!(CAT, obj: pad, "Received caps without codec_data");

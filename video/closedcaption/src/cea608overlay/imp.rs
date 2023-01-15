@@ -266,7 +266,7 @@ impl Cea608Overlay {
 
         let upstream_has_meta = caps
             .features(0)
-            .map(|f| f.contains(&gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION))
+            .map(|f| f.contains(gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION))
             .unwrap_or(false);
 
         if !upstream_has_meta {
@@ -274,7 +274,7 @@ impl Cea608Overlay {
             let overlay_caps = caps_clone.make_mut();
 
             if let Some(features) = overlay_caps.features_mut(0) {
-                features.add(&gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION);
+                features.add(gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION);
                 let peercaps = self.srcpad.peer_query_caps(Some(&caps_clone));
                 downstream_accepts_meta = !peercaps.is_empty();
                 if downstream_accepts_meta {

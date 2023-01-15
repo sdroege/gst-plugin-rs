@@ -389,7 +389,7 @@ impl BinImpl for HlsSink3 {
                 }
 
                 let s = msg.structure().unwrap();
-                match s.name() {
+                match s.name().as_str() {
                     "splitmuxsink-fragment-opened" => {
                         if let Ok(new_fragment_opened_at) = s.get::<gst::ClockTime>("running-time")
                         {

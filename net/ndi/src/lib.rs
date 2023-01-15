@@ -148,9 +148,9 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 static TIMECODE_CAPS: Lazy<gst::Caps> =
-    Lazy::new(|| gst::Caps::new_simple("timestamp/x-ndi-timecode", &[]));
+    Lazy::new(|| gst::Caps::new_empty_simple("timestamp/x-ndi-timecode"));
 static TIMESTAMP_CAPS: Lazy<gst::Caps> =
-    Lazy::new(|| gst::Caps::new_simple("timestamp/x-ndi-timestamp", &[]));
+    Lazy::new(|| gst::Caps::new_empty_simple("timestamp/x-ndi-timestamp"));
 
 gst::plugin_define!(
     ndi,

@@ -204,7 +204,7 @@ impl VideoDecoderImpl for CdgDec {
             let pools = query.allocation_pools();
             if let Some((Some(ref pool), _, _, _)) = pools.first() {
                 let mut config = pool.config();
-                config.add_option(&gst_video::BUFFER_POOL_OPTION_VIDEO_META);
+                config.add_option(gst_video::BUFFER_POOL_OPTION_VIDEO_META);
                 pool.set_config(config)
                     .map_err(|_| gst::loggable_error!(CAT, "Failed to configure buffer pool"))?;
             }

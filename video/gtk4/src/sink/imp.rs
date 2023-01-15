@@ -147,10 +147,16 @@ impl ElementImpl for PaintableSink {
 
                 for features in [
                     None,
-                    Some(&["memory:GLMemory", "meta:GstVideoOverlayComposition"][..]),
-                    Some(&["memory:GLMemory"][..]),
-                    Some(&["memory:SystemMemory", "meta:GstVideoOverlayComposition"][..]),
-                    Some(&["meta:GstVideoOverlayComposition"][..]),
+                    Some(gst::CapsFeatures::new([
+                        "memory:GLMemory",
+                        "meta:GstVideoOverlayComposition",
+                    ])),
+                    Some(gst::CapsFeatures::new(["memory:GLMemory"])),
+                    Some(gst::CapsFeatures::new([
+                        "memory:SystemMemory",
+                        "meta:GstVideoOverlayComposition",
+                    ])),
+                    Some(gst::CapsFeatures::new(["meta:GstVideoOverlayComposition"])),
                 ] {
                     let mut c = gst_video::video_make_raw_caps(&[
                         gst_video::VideoFormat::Bgra,
@@ -163,15 +169,12 @@ impl ElementImpl for PaintableSink {
                     .build();
 
                     if let Some(features) = features {
-                        c.get_mut()
-                            .unwrap()
-                            .set_features_simple(Some(gst::CapsFeatures::new(features)));
+                        let c = c.get_mut().unwrap();
 
-                        if features.contains(&"memory:GLMemory") {
-                            c.get_mut()
-                                .unwrap()
-                                .set_simple(&[("texture-target", &"2D")])
+                        if features.contains("memory:GLMemory") {
+                            c.set("texture-target", "2D")
                         }
+                        c.set_features_simple(Some(features));
                     }
 
                     caps.append(c);
