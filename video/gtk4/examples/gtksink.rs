@@ -147,7 +147,7 @@ fn main() {
 
     gstgtk4::plugin_register_static().expect("Failed to register gstgtk4 plugin");
 
-    let app = gtk::Application::new(None, gio::ApplicationFlags::FLAGS_NONE);
+    let app = gtk::Application::new(None::<&str>, gio::ApplicationFlags::FLAGS_NONE);
 
     app.connect_activate(create_ui);
     app.run();

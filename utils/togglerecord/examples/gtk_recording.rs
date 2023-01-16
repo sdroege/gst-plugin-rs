@@ -333,7 +333,7 @@ fn main() {
     gsttogglerecord::plugin_register_static().expect("Failed to register togglerecord plugin");
     gstgtk4::plugin_register_static().expect("Failed to register gtk4paintablesink plugin");
 
-    let app = gtk::Application::new(None, gio::ApplicationFlags::FLAGS_NONE);
+    let app = gtk::Application::new(None::<&str>, gio::ApplicationFlags::FLAGS_NONE);
 
     app.connect_activate(create_ui);
     app.run();
