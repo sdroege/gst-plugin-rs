@@ -1075,10 +1075,7 @@ impl InputStream {
             .set_target(Some(&clocksync.static_pad("sink").unwrap()))
             .unwrap();
 
-        let producer = StreamProducer::from(&appsink);
-        producer.forward();
-
-        self.producer = Some(producer);
+        self.producer = Some(StreamProducer::from(&appsink));
 
         Ok(())
     }
