@@ -2587,7 +2587,7 @@
                         "controllable": false,
                         "default": "2000000000",
                         "max": "18446744073709551615",
-                        "min": "1000000000",
+                        "min": "0",
                         "mutable": "playing",
                         "readable": true,
                         "type": "guint64",
