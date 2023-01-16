@@ -103,7 +103,7 @@ const PROP_SINGLE_SEGMENT: &str = "single-segment";
 
 const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::ZERO;
 const DEFAULT_DURATION: gst::ClockTime = gst::ClockTime::from_mseconds(100);
-const MINIMUM_LATE_THRESHOLD: gst::ClockTime = gst::ClockTime::from_seconds(1);
+const MINIMUM_LATE_THRESHOLD: gst::ClockTime = gst::ClockTime::ZERO;
 const DEFAULT_LATE_THRESHOLD: Option<gst::ClockTime> = Some(gst::ClockTime::from_seconds(2));
 
 impl Default for State {
