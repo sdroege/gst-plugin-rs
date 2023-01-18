@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-ndi"
-version = "0.9.5"
+version = "0.9.6"
 authors = ["Ruben Gonzalez <rubenrua@teltek.es>", "Daniel Vilar <daniel.peiteado@teltek.es>", "Sebastian Dröge <sebastian@centricular.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"

@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-json"
-version = "0.9.5"
+version = "0.9.6"
 authors = ["Mathieu Duponchelle <mathieu@centricular.com>"]
 license = "MPL-2.0"
 edition = "2021"

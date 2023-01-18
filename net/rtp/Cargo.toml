@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-rtp"
-version = "0.9.5"
+version = "0.9.6"
 authors = ["Vivienne Watermeier <vwatermeier@igalia.com>", "Sebastian Dröge <sebastian@centricular.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
