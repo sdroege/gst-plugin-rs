@@ -334,10 +334,15 @@ impl BaseSinkImpl for PaintableSink {
 
             // GL specific things
             let (caps, need_pool) = query.get_owned();
-
-            if caps.is_empty() {
-                return Err(gst::loggable_error!(CAT, "No caps where specified."));
-            }
+            let caps = match caps {
+                None => {
+                    return Ok(());
+                }
+                Some(caps) if caps.is_empty() || caps.is_any() => {
+                    return Ok(());
+                }
+                Some(caps) => caps,
+            };
 
             if let Some(f) = caps.features(0) {
                 if !f.contains("memory:GLMemory") {
