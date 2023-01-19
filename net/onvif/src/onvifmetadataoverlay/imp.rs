@@ -117,7 +117,7 @@ impl OnvifMetadataOverlay {
         );
 
         if upstream_has_meta || downstream_accepts_meta {
-            let mut query = gst::query::Allocation::new(&caps, false);
+            let mut query = gst::query::Allocation::new(Some(&caps), false);
 
             if !self.srcpad.push_event(gst::event::Caps::new(&caps)) {
                 return Err(gst::FlowError::NotNegotiated);
