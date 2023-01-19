@@ -350,10 +350,8 @@ impl BaseSinkImpl for PaintableSink {
                 .map_err(|_| gst::loggable_error!(CAT, "Failed to get VideoInfo from caps"))?;
 
             let size = info.size() as u32;
-
-            let buffer_pool = gst_gl::GLBufferPool::new(&gst_context);
-
-            if need_pool {
+            let buffer_pool = if need_pool {
+                let buffer_pool = gst_gl::GLBufferPool::new(&gst_context);
                 gst::debug!(CAT, imp: self, "Creating new Pool");
 
                 let mut config = buffer_pool.config();
@@ -366,10 +364,14 @@ impl BaseSinkImpl for PaintableSink {
                         format!("Failed to set config in the GL BufferPool.: {}", err)
                     ));
                 }
-            }
+
+                Some(buffer_pool)
+            } else {
+                None
+            };
 
             // we need at least 2 buffer because we hold on to the last one
-            query.add_allocation_pool(Some(&buffer_pool), size, 2, 0);
+            query.add_allocation_pool(buffer_pool.as_ref(), size, 2, 0);
 
             if gst_context.check_feature("GL_ARB_sync")
                 || gst_context.check_feature("GL_EXT_EGL_sync")
