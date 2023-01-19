@@ -233,8 +233,10 @@ impl ElementImpl for PaintableSink {
                 let _ = self.info.lock().unwrap().take();
                 let _ = self.pending_frame.lock().unwrap().take();
 
+                // Flush frames from the GDK paintable but don't wait
+                // for this to finish as this can other deadlock.
                 let self_ = self.to_owned();
-                utils::invoke_on_main_thread(move || {
+                glib::MainContext::default().invoke(move || {
                     let paintable = self_.paintable.lock().unwrap();
                     if let Some(paintable) = &*paintable {
                         paintable.get_ref().handle_flush_frames();
