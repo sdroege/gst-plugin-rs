@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-textwrap"
-version = "0.9.6"
+version = "0.9.7"
 authors = ["Mathieu Duponchelle <mathieu@centricular.com>"]
 license = "MPL-2.0"
 edition = "2021"
@@ -39,7 +39,7 @@ capi = []
 doc = ["gst/v1_18"]
 
 [package.metadata.capi]
-min_version = "0.9.6"
+min_version = "0.9.7"
 
 [package.metadata.capi.header]
 enabled = false
