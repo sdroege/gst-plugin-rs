@@ -96,7 +96,7 @@ fn video_frame_to_memory_texture(
 
 #[cfg(any(target_os = "macos", feature = "gst_gl"))]
 fn video_frame_to_gl_texture(
-    frame: &gst_video::VideoFrame<gst_video::video_frame::Readable>,
+    frame: gst_video::VideoFrame<gst_video::video_frame::Readable>,
     cached_textures: &mut HashMap<usize, gdk::Texture>,
     used_textures: &mut HashSet<usize>,
     gdk_context: &gdk::GLContext,
@@ -119,8 +119,17 @@ fn video_frame_to_gl_texture(
     sync_meta.wait(gst_context);
 
     let texture = unsafe {
-        gdk::GLTexture::new(gdk_context, texture_id as u32, width as i32, height as i32)
-            .upcast::<gdk::Texture>()
+        gdk::GLTexture::with_release_func(
+            gdk_context,
+            texture_id as u32,
+            width as i32,
+            height as i32,
+            move || {
+                // Unmap and drop the GStreamer GL texture once GTK is done with it and not earlier
+                drop(frame);
+            },
+        )
+        .upcast::<gdk::Texture>()
     };
 
     cached_textures.insert(texture_id, texture.clone());
@@ -149,7 +158,7 @@ impl Frame {
             {
                 if let (Some(gdk_ctx), Some(gst_ctx)) = (gdk_context, self.gst_context.as_ref()) {
                     video_frame_to_gl_texture(
-                        &self.frame,
+                        self.frame,
                         cached_textures,
                         &mut used_textures,
                         gdk_ctx,
