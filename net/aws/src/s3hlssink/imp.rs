@@ -516,13 +516,11 @@ impl ObjectImpl for S3HlsSink {
                     .minimum(1)
                     .default_value(DEFAULT_TIMEOUT_IN_MSECS)
                     .build(),
-                glib::ParamSpecBoxed::new(
-                    "stats",
-                    "Various statistics",
-                    "Various statistics",
-                    gst::Structure::static_type(),
-                    glib::ParamFlags::READABLE,
-                ),
+                glib::ParamSpecBoxed::builder::<gst::Structure>("stats")
+                    .nick("Various statistics")
+                    .blurb("Various statistics")
+                    .read_only()
+                    .build(),
                 glib::ParamSpecString::builder("endpoint-uri")
                     .nick("S3 endpoint URI")
                     .blurb("The S3 endpoint URI to use")

@@ -2349,110 +2349,87 @@ impl ObjectImpl for WebRTCSink {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecBoxed::new(
-                    "video-caps",
-                    "Video encoder caps",
-                    "Governs what video codecs will be proposed",
-                    gst::Caps::static_type(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoxed::new(
-                    "audio-caps",
-                    "Audio encoder caps",
-                    "Governs what audio codecs will be proposed",
-                    gst::Caps::static_type(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "stun-server",
-                    "STUN Server",
-                    "The STUN server of the form stun://hostname:port",
-                    DEFAULT_STUN_SERVER,
-                    glib::ParamFlags::READWRITE,
-                ),
-                gst::ParamSpecArray::new(
-                    "turn-servers",
-                    "List of TURN Servers to user",
-                    "The TURN servers of the form <\"turn(s)://username:password@host:port\", \"turn(s)://username1:password1@host1:port1\">",
-                    Some(&glib::ParamSpecString::new(
-                        "turn-server",
-                        "TURN Server",
-                        "The TURN server of the form turn(s)://username:password@host:port.",
-                        None,
-                        glib::ParamFlags::READWRITE,
-                    )),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecEnum::new(
-                    "congestion-control",
-                    "Congestion control",
-                    "Defines how congestion is controlled, if at all",
-                    WebRTCSinkCongestionControl::static_type(),
-                    DEFAULT_CONGESTION_CONTROL as i32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "min-bitrate",
-                    "Minimal Bitrate",
-                    "Minimal bitrate to use (in bit/sec) when computing it through the congestion control algorithm",
-                    1,
-                    u32::MAX,
-                    DEFAULT_MIN_BITRATE,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "max-bitrate",
-                    "Minimal Bitrate",
-                    "Minimal bitrate to use (in bit/sec) when computing it through the congestion control algorithm",
-                    1,
-                    u32::MAX,
-                    DEFAULT_MAX_BITRATE,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "start-bitrate",
-                    "Start Bitrate",
-                    "Start bitrate to use (in bit/sec)",
-                    1,
-                    u32::MAX,
-                    DEFAULT_START_BITRATE,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoxed::new(
-                    "stats",
-                    "Consumer statistics",
-                    "Statistics for the current consumers",
-                    gst::Structure::static_type(),
-                    glib::ParamFlags::READABLE,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "do-fec",
-                    "Do Forward Error Correction",
-                    "Whether the element should negotiate and send FEC data",
-                    DEFAULT_DO_FEC,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY
-                ),
-                glib::ParamSpecBoolean::new(
-                    "do-retransmission",
-                    "Do retransmission",
-                    "Whether the element should offer to honor retransmission requests",
-                    DEFAULT_DO_RETRANSMISSION,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY
-                ),
-                glib::ParamSpecBoolean::new(
-                    "enable-data-channel-navigation",
-                    "Enable data channel navigation",
-                    "Enable navigation events through a dedicated WebRTCDataChannel",
-                    DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY
-                ),
-                glib::ParamSpecBoxed::new(
-                    "meta",
-                    "Meta",
-                    "Free form metadata about the producer",
-                    gst::Structure::static_type(),
-                    glib::ParamFlags::READWRITE,
-                ),
+                glib::ParamSpecBoxed::builder::<gst::Caps>("video-caps")
+                    .nick("Video encoder caps")
+                    .blurb("Governs what video codecs will be proposed")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoxed::builder::<gst::Caps>("audio-caps")
+                    .nick("Audio encoder caps")
+                    .blurb("Governs what audio codecs will be proposed")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("stun-server")
+                    .nick("STUN Server")
+                    .blurb("The STUN server of the form stun://hostname:port")
+                    .default_value(DEFAULT_STUN_SERVER)
+                    .build(),
+                gst::ParamSpecArray::builder("turn-servers")
+                    .nick("List of TURN Servers to user")
+                    .blurb("The TURN servers of the form <\"turn(s)://username:password@host:port\", \"turn(s)://username1:password1@host1:port1\">")
+                    .element_spec(&glib::ParamSpecString::builder("turn-server")
+                        .nick("TURN Server")
+                        .blurb("The TURN server of the form turn(s)://username:password@host:port.")
+                        .build()
+                    )
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecEnum::builder_with_default("congestion-control", DEFAULT_CONGESTION_CONTROL)
+                    .nick("Congestion control")
+                    .blurb("Defines how congestion is controlled, if at all")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("min-bitrate")
+                    .nick("Minimal Bitrate")
+                    .blurb("Minimal bitrate to use (in bit/sec) when computing it through the congestion control algorithm")
+                    .minimum(1)
+                    .maximum(u32::MAX)
+                    .default_value(DEFAULT_MIN_BITRATE)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("max-bitrate")
+                    .nick("Minimal Bitrate")
+                    .blurb("Minimal bitrate to use (in bit/sec) when computing it through the congestion control algorithm")
+                    .minimum(1)
+                    .maximum(u32::MAX)
+                    .default_value(DEFAULT_MAX_BITRATE)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("start-bitrate")
+                    .nick("Start Bitrate")
+                    .blurb("Start bitrate to use (in bit/sec)")
+                    .minimum(1)
+                    .maximum(u32::MAX)
+                    .default_value(DEFAULT_START_BITRATE)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoxed::builder::<gst::Structure>("stats")
+                    .nick("Consumer statistics")
+                    .blurb("Statistics for the current consumers")
+                    .read_only()
+                    .build(),
+                glib::ParamSpecBoolean::builder("do-fec")
+                    .nick("Do Forward Error Correction")
+                    .blurb("Whether the element should negotiate and send FEC data")
+                    .default_value(DEFAULT_DO_FEC)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoolean::builder("do-retransmission")
+                    .nick("Do retransmission")
+                    .blurb("Whether the element should offer to honor retransmission requests")
+                    .default_value(DEFAULT_DO_RETRANSMISSION)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoolean::builder("enable-data-channel-navigation")
+                    .nick("Enable data channel navigation")
+                    .blurb("Enable navigation events through a dedicated WebRTCDataChannel")
+                    .default_value(DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoxed::builder::<gst::Structure>("meta")
+                    .nick("Meta")
+                    .blurb("Free form metadata about the producer")
+                    .build(),
             ]
         });
 

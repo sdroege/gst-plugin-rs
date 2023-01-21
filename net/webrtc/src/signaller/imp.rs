@@ -390,20 +390,15 @@ impl ObjectImpl for Signaller {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecString::new(
-                    "address",
-                    "Address",
-                    "Address of the signalling server",
-                    Some("ws://127.0.0.1:8443"),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecString::new(
-                    "cafile",
-                    "CA file",
-                    "Path to a Certificate file to add to the set of roots the TLS connector will trust",
-                    None,
-                    glib::ParamFlags::READWRITE,
-                ),
+                glib::ParamSpecString::builder("address")
+                    .nick("Address")
+                    .blurb("Address of the signalling server")
+                    .default_value("ws://127.0.0.1:8443")
+                    .build(),
+                glib::ParamSpecString::builder("cafile")
+                    .nick("CA file")
+                    .blurb("Path to a Certificate file to add to the set of roots the TLS connector will trust")
+                    .build(),
             ]
         });
 

@@ -18,11 +18,7 @@
  *
  */
 use chrono::Duration;
-use gst::{
-    glib::{self},
-    prelude::*,
-    subclass::prelude::*,
-};
+use gst::{glib, prelude::*, subclass::prelude::*};
 use once_cell::sync::Lazy;
 use std::{
     collections::{BTreeMap, VecDeque},
@@ -1247,35 +1243,32 @@ impl ObjectImpl for BandwidthEstimator {
                  * Currently computed network bitrate, should be used
                  * to set encoders bitrate.
                  */
-                glib::ParamSpecUInt::new(
-                    "estimated-bitrate",
-                    "Estimated Bitrate",
-                    "Currently estimated bitrate. Can be set before starting
+                glib::ParamSpecUInt::builder("estimated-bitrate")
+                    .nick("Estimated Bitrate")
+                    .blurb("Currently estimated bitrate. Can be set before starting
                      the element to configure the starting bitrate, in which case the
-                     encoder should also use it as target bitrate",
-                    1,
-                    u32::MAX,
-                    DEFAULT_MIN_BITRATE,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "min-bitrate",
-                    "Minimal Bitrate",
-                    "Minimal bitrate to use (in bit/sec) when computing it through the bandwidth estimation algorithm",
-                    1,
-                    u32::MAX,
-                    DEFAULT_MIN_BITRATE,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "max-bitrate",
-                    "Maximal Bitrate",
-                    "Maximal bitrate to use (in bit/sec) when computing it through the bandwidth estimation algorithm",
-                    1,
-                    u32::MAX,
-                    DEFAULT_MAX_BITRATE,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
+                     encoder should also use it as target bitrate")
+                    .minimum(1)
+                    .maximum(u32::MAX)
+                    .default_value(DEFAULT_MIN_BITRATE)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("min-bitrate")
+                    .nick("Minimal Bitrate")
+                    .blurb("Minimal bitrate to use (in bit/sec) when computing it through the bandwidth estimation algorithm")
+                    .minimum(1)
+                    .maximum(u32::MAX)
+                    .default_value(DEFAULT_MIN_BITRATE)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("max-bitrate")
+                    .nick("Maximal Bitrate")
+                    .blurb("Maximal bitrate to use (in bit/sec) when computing it through the bandwidth estimation algorithm")
+                    .minimum(1)
+                    .maximum(u32::MAX)
+                    .default_value(DEFAULT_MAX_BITRATE)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
