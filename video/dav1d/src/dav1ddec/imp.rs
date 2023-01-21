@@ -379,13 +379,6 @@ impl Dav1dDec {
         }
     }
 
-    fn drop_decoded_pictures(&self, state_guard: &mut MutexGuard<Option<State>>) {
-        while let Ok(Some(pic)) = self.pending_picture(state_guard) {
-            gst::debug!(CAT, imp: self, "Dropping picture {}", pic.offset());
-            drop(pic);
-        }
-    }
-
     fn pending_picture(
         &self,
         state_guard: &mut MutexGuard<Option<State>>,
@@ -738,7 +731,6 @@ impl VideoDecoderImpl for Dav1dDec {
             if state_guard.is_some() {
                 let state = state_guard.as_mut().unwrap();
                 self.flush_decoder(state);
-                self.drop_decoded_pictures(&mut state_guard);
             }
         }
 
