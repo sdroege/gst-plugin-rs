@@ -147,14 +147,14 @@ impl ObjectImpl for NdiSrc {
                     .maximum(100)
                     .default_value(100)
                     .build(),
-                glib::ParamSpecEnum::builder::<RecvColorFormat>(
+                glib::ParamSpecEnum::builder_with_default(
                     "color-format",
                     RecvColorFormat::UyvyBgra,
                 )
                 .nick("Color Format")
                 .blurb("Receive color format")
                 .build(),
-                glib::ParamSpecEnum::builder::<TimestampMode>(
+                glib::ParamSpecEnum::builder_with_default(
                     "timestamp-mode",
                     TimestampMode::ReceiveTimeTimecode,
                 )

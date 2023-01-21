@@ -242,7 +242,7 @@ impl ObjectImpl for WhepSrc {
                     .nick("Authorization Token")
                     .blurb("Authentication token to use, will be sent in the HTTP Header as 'Bearer <auth-token>'")
                     .build(),
-                glib::ParamSpecEnum::builder::<IceTransportPolicy>("ice-transport-policy", DEFAULT_ICE_TRANSPORT_POLICY)
+                glib::ParamSpecEnum::builder_with_default("ice-transport-policy", DEFAULT_ICE_TRANSPORT_POLICY)
                     .nick("ICE transport policy")
                     .blurb("The policy to apply for ICE transport")
                     .build(),

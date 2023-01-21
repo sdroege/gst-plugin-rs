@@ -1001,7 +1001,7 @@ impl ObjectImpl for TtToCea608 {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecEnum::builder::<Cea608Mode>("mode", DEFAULT_MODE)
+                glib::ParamSpecEnum::builder_with_default("mode", DEFAULT_MODE)
                     .nick("Mode")
                     .blurb("Which mode to operate in")
                     .mutable_playing()

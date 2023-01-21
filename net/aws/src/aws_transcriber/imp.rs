@@ -1161,7 +1161,7 @@ impl ObjectImpl for Transcriber {
                     .blurb("The ID of the transcription session, must be length 36")
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecEnum::builder::<AwsTranscriberResultStability>("results-stability", DEFAULT_STABILITY)
+                glib::ParamSpecEnum::builder_with_default("results-stability", DEFAULT_STABILITY)
                     .nick("Results stability")
                     .blurb("Defines how fast results should stabilize")
                     .mutable_ready()
@@ -1188,7 +1188,7 @@ impl ObjectImpl for Transcriber {
                         for more information")
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecEnum::builder::<AwsTranscriberVocabularyFilterMethod>("vocabulary-filter-method", DEFAULT_VOCABULARY_FILTER_METHOD)
+                glib::ParamSpecEnum::builder_with_default("vocabulary-filter-method", DEFAULT_VOCABULARY_FILTER_METHOD)
                     .nick("Vocabulary Filter Method")
                     .blurb("Defines how filtered words will be edited, has no effect when vocabulary-filter-name isn't set")
                     .mutable_ready()

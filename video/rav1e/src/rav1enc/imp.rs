@@ -321,7 +321,7 @@ impl ObjectImpl for Rav1Enc {
                     .default_value(DEFAULT_RDO_LOOKAHEAD_FRAMES)
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecEnum::builder::<Tune>("tune", DEFAULT_TUNE)
+                glib::ParamSpecEnum::builder_with_default("tune", DEFAULT_TUNE)
                     .nick("Tune")
                     .blurb("Tune")
                     .mutable_ready()

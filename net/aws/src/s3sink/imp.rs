@@ -701,7 +701,7 @@ impl ObjectImpl for S3Sink {
                     .blurb("A map of metadata to store with the object in S3; field values need to be convertible to strings.")
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecEnum::builder::<OnError>("on-error", DEFAULT_MULTIPART_UPLOAD_ON_ERROR)
+                glib::ParamSpecEnum::builder_with_default("on-error", DEFAULT_MULTIPART_UPLOAD_ON_ERROR)
                     .nick("Whether to upload or complete the multipart upload on error")
                     .blurb("Do nothing, abort or complete a multipart upload request on error")
                     .mutable_ready()

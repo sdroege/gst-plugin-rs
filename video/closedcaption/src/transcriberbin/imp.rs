@@ -601,7 +601,7 @@ impl ObjectImpl for TranscriberBin {
                     .default_value(DEFAULT_ACCUMULATE.mseconds() as u32)
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecEnum::builder::<Cea608Mode>("mode", DEFAULT_MODE)
+                glib::ParamSpecEnum::builder_with_default("mode", DEFAULT_MODE)
                     .nick("Mode")
                     .blurb("Which closed caption mode to operate in")
                     .mutable_playing()
@@ -616,7 +616,7 @@ impl ObjectImpl for TranscriberBin {
                     .blurb("The transcriber element to use")
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecEnum::builder::<CaptionSource>("caption-source", DEFAULT_CAPTION_SOURCE)
+                glib::ParamSpecEnum::builder_with_default("caption-source", DEFAULT_CAPTION_SOURCE)
                     .nick("Caption source")
                     .blurb("Caption source to use. \
                     If \"Transcription\" or \"Inband\" is selected, the caption meta \

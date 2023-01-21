@@ -75,7 +75,7 @@ impl ObjectImpl for VideoCompare {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecEnum::builder::<HashAlgorithm>("hash-algo", DEFAULT_HASH_ALGO)
+                glib::ParamSpecEnum::builder_with_default("hash-algo", DEFAULT_HASH_ALGO)
                     .nick("Hashing Algorithm")
                     .blurb("Which hashing algorithm to use for image comparisons")
                     .mutable_ready()

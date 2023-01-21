@@ -266,7 +266,7 @@ impl TestSrc {
         drop(settings);
 
         self.task
-            .prepare(SrcTask::new(self.instance().clone()), ts_ctx)
+            .prepare(SrcTask::new(self.obj().clone()), ts_ctx)
             .block_on()?;
 
         debug_or_trace!(CAT, is_main_elem, imp: self, "Prepared");

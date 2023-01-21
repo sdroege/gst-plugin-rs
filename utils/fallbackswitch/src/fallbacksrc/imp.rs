@@ -286,7 +286,7 @@ impl ObjectImpl for FallbackSrc {
                     .default_value(false)
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecEnum::builder::<Status>("status", Status::Stopped)
+                glib::ParamSpecEnum::builder_with_default("status", Status::Stopped)
                     .nick("Status")
                     .blurb("Current source status")
                     .read_only()
