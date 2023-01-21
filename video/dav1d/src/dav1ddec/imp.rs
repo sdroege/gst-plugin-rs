@@ -164,7 +164,7 @@ impl Dav1dDec {
         let out_state = instance.output_state().unwrap();
 
         state_guard = self.state.lock().unwrap();
-        let state = state_guard.as_mut().unwrap();
+        let state = state_guard.as_mut().ok_or(gst::FlowError::Flushing)?;
         state.output_info = Some(out_state.info());
 
         Ok(state_guard)
@@ -189,7 +189,7 @@ impl Dav1dDec {
             frame.system_frame_number()
         );
 
-        let state = state_guard.as_mut().unwrap();
+        let state = state_guard.as_mut().ok_or(gst::FlowError::Flushing)?;
 
         let timestamp = frame.dts().map(|ts| *ts as i64);
         let duration = frame.duration().map(|d| *d as i64);
@@ -232,7 +232,7 @@ impl Dav1dDec {
     ) -> Result<std::ops::ControlFlow<(), ()>, gst::FlowError> {
         gst::trace!(CAT, imp: self, "Sending pending data to decoder");
 
-        let state = state_guard.as_mut().unwrap();
+        let state = state_guard.as_mut().ok_or(gst::FlowError::Flushing)?;
 
         match state.decoder.send_pending_data() {
             Ok(()) => {
@@ -266,7 +266,7 @@ impl Dav1dDec {
         let mut strides = vec![];
         let mut acc_offset: usize = 0;
 
-        let state = state_guard.as_mut().unwrap();
+        let state = state_guard.as_mut().ok_or(gst::FlowError::Flushing)?;
         let video_meta_supported = state.video_meta_supported;
 
         let info = output_state.info();
@@ -385,7 +385,7 @@ impl Dav1dDec {
     ) -> Result<Option<dav1d::Picture>, gst::FlowError> {
         gst::trace!(CAT, imp: self, "Retrieving pending picture");
 
-        let state = state_guard.as_mut().unwrap();
+        let state = state_guard.as_mut().ok_or(gst::FlowError::Flushing)?;
 
         match state.decoder.get_picture() {
             Ok(pic) => {
@@ -728,8 +728,7 @@ impl VideoDecoderImpl for Dav1dDec {
 
         {
             let mut state_guard = self.state.lock().unwrap();
-            if state_guard.is_some() {
-                let state = state_guard.as_mut().unwrap();
+            if let Some(state) = &mut *state_guard {
                 self.flush_decoder(state);
             }
         }
@@ -769,10 +768,11 @@ impl VideoDecoderImpl for Dav1dDec {
     ) -> Result<(), gst::LoggableError> {
         {
             let mut state_guard = self.state.lock().unwrap();
-            let state = state_guard.as_mut().unwrap();
-            state.video_meta_supported = query
-                .find_allocation_meta::<gst_video::VideoMeta>()
-                .is_some();
+            if let Some(state) = &mut *state_guard {
+                state.video_meta_supported = query
+                    .find_allocation_meta::<gst_video::VideoMeta>()
+                    .is_some();
+            }
         }
 
         self.parent_decide_allocation(query)
