@@ -380,13 +380,13 @@ impl Dav1dDec {
     }
 
     fn drop_decoded_pictures(&self, state_guard: &mut MutexGuard<Option<State>>) {
-        while let Ok(Some(pic)) = self.pending_pictures(state_guard) {
+        while let Ok(Some(pic)) = self.pending_picture(state_guard) {
             gst::debug!(CAT, imp: self, "Dropping picture {}", pic.offset());
             drop(pic);
         }
     }
 
-    fn pending_pictures(
+    fn pending_picture(
         &self,
         state_guard: &mut MutexGuard<Option<State>>,
     ) -> Result<Option<dav1d::Picture>, gst::FlowError> {
@@ -425,9 +425,13 @@ impl Dav1dDec {
     fn forward_pending_pictures<'s>(
         &'s self,
         mut state_guard: MutexGuard<'s, Option<State>>,
+        drain: bool,
     ) -> Result<MutexGuard<Option<State>>, gst::FlowError> {
-        while let Some(pic) = self.pending_pictures(&mut state_guard)? {
+        while let Some(pic) = self.pending_picture(&mut state_guard)? {
             state_guard = self.handle_picture(state_guard, &pic)?;
+            if !drain {
+                break;
+            }
         }
 
         Ok(state_guard)
@@ -709,19 +713,18 @@ impl VideoDecoderImpl for Dav1dDec {
 
         {
             let mut state_guard = self.state.lock().unwrap();
-            state_guard = self.forward_pending_pictures(state_guard)?;
             if self.send_data(&mut state_guard, input_buffer, frame)?
                 == std::ops::ControlFlow::Continue(())
             {
                 loop {
-                    state_guard = self.forward_pending_pictures(state_guard)?;
+                    state_guard = self.forward_pending_pictures(state_guard, false)?;
                     if self.send_pending_data(&mut state_guard)? == std::ops::ControlFlow::Break(())
                     {
                         break;
                     }
                 }
             }
-            let _state_guard = self.forward_pending_pictures(state_guard)?;
+            let _state_guard = self.forward_pending_pictures(state_guard, false)?;
         }
 
         Ok(gst::FlowSuccess::Ok)
@@ -750,7 +753,7 @@ impl VideoDecoderImpl for Dav1dDec {
             if state_guard.is_some() {
                 let state = state_guard.as_mut().unwrap();
                 self.flush_decoder(state);
-                let _state_guard = self.forward_pending_pictures(state_guard)?;
+                let _state_guard = self.forward_pending_pictures(state_guard, true)?;
             }
         }
 
@@ -765,7 +768,7 @@ impl VideoDecoderImpl for Dav1dDec {
             if state_guard.is_some() {
                 let state = state_guard.as_mut().unwrap();
                 self.flush_decoder(state);
-                let _state_guard = self.forward_pending_pictures(state_guard)?;
+                let _state_guard = self.forward_pending_pictures(state_guard, true)?;
             }
         }
 
