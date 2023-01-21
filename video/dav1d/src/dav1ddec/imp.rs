@@ -749,10 +749,8 @@ impl VideoDecoderImpl for Dav1dDec {
         gst::info!(CAT, imp: self, "Draining");
 
         {
-            let mut state_guard = self.state.lock().unwrap();
+            let state_guard = self.state.lock().unwrap();
             if state_guard.is_some() {
-                let state = state_guard.as_mut().unwrap();
-                self.flush_decoder(state);
                 let _state_guard = self.forward_pending_pictures(state_guard, true)?;
             }
         }
@@ -764,10 +762,8 @@ impl VideoDecoderImpl for Dav1dDec {
         gst::info!(CAT, imp: self, "Finishing");
 
         {
-            let mut state_guard = self.state.lock().unwrap();
+            let state_guard = self.state.lock().unwrap();
             if state_guard.is_some() {
-                let state = state_guard.as_mut().unwrap();
-                self.flush_decoder(state);
                 let _state_guard = self.forward_pending_pictures(state_guard, true)?;
             }
         }
