@@ -693,7 +693,7 @@ fn setup(
     let pipeline = gst::Pipeline::default();
 
     // Src
-    let src_element = glib::Object::new::<ElementSrcTest>(&[]);
+    let src_element = glib::Object::new_default::<ElementSrcTest>();
     src_element.set_property("context", &context_name);
     pipeline.add(&src_element).unwrap();
 
@@ -713,7 +713,9 @@ fn setup(
 
     // Sink
     let (sender, receiver) = mpsc::channel::<Item>(10);
-    let sink_element = glib::Object::new::<ElementSinkTest>(&[("sender", &ItemSender { sender })]);
+    let sink_element = glib::Object::builder::<ElementSinkTest>()
+        .property("sender", ItemSender { sender })
+        .build();
     pipeline.add(&sink_element).unwrap();
     last_element.link(&sink_element).unwrap();
 

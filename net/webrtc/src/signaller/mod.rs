@@ -59,6 +59,6 @@ impl Signallable for Signaller {
 
 impl Default for Signaller {
     fn default() -> Self {
-        glib::Object::new::<Self>(&[])
+        glib::Object::new_default()
     }
 }

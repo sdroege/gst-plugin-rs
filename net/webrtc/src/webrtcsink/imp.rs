@@ -1402,7 +1402,7 @@ impl WebRTCSink {
         );
 
         let pipeline = gst::Pipeline::builder()
-            .name(&format!("session-pipeline-{}", session_id))
+            .name(format!("session-pipeline-{}", session_id))
             .build();
 
         let webrtcbin = make_element("webrtcbin", Some(&format!("webrtcbin-{}", session_id)))
