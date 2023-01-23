@@ -291,9 +291,9 @@ checksum = "7a40729d2133846d9ed0ea60a8b9541bccddab49cd30f0715a1da672fe9a2524"
 
 [[package]]
 name = "async-trait"
-version = "0.1.61"
+version = "0.1.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "705339e0e4a9690e2908d2b3d049d85682cf19fbd5782494498fbf7003a6a282"
+checksum = "eff18d764974428cf3a9328e23fc5c986f5fbed46e6cd4cdf42544df5d297ec1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -892,9 +892,9 @@ checksum = "c3ac9f8b63eca6fd385229b3675f6cc0dc5c8a5c8a54a59d4f52ffd670d87b0c"
 
 [[package]]
 name = "bytemuck"
-version = "1.12.3"
+version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaa3a8d9a1ca92e282c96a32d6511b695d7d994d1d102ba85d279f9b2756947f"
+checksum = "c041d3eab048880cb0b86b256447da3f18859a163c3b8d8893f4e6368abe6393"
 
 [[package]]
 name = "byteorder"
@@ -1312,9 +1312,9 @@ dependencies = [
 
 [[package]]
 name = "cxx"
-version = "1.0.86"
+version = "1.0.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51d1075c37807dcf850c379432f0df05ba52cc30f279c5cfc43cc221ce7f8579"
+checksum = "b61a7545f753a88bcbe0a70de1fcc0221e10bfc752f576754fa91e663db1622e"
 dependencies = [
  "cc",
  "cxxbridge-flags",
@@ -1324,9 +1324,9 @@ dependencies = [
 
 [[package]]
 name = "cxx-build"
-version = "1.0.86"
+version = "1.0.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5044281f61b27bc598f2f6647d480aed48d2bf52d6eb0b627d84c0361b17aa70"
+checksum = "f464457d494b5ed6905c63b0c4704842aba319084a0a3561cdc1359536b53200"
 dependencies = [
  "cc",
  "codespan-reporting",
@@ -1339,15 +1339,15 @@ dependencies = [
 
 [[package]]
 name = "cxxbridge-flags"
-version = "1.0.86"
+version = "1.0.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61b50bc93ba22c27b0d31128d2d130a0a6b3d267ae27ef7e4fae2167dfe8781c"
+checksum = "43c7119ce3a3701ed81aca8410b9acf6fc399d2629d057b87e2efa4e63a3aaea"
 
 [[package]]
 name = "cxxbridge-macro"
-version = "1.0.86"
+version = "1.0.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39e61fda7e62115119469c7b3591fd913ecca96fb766cfd3f2e2502ab7bc87a5"
+checksum = "65e07508b90551e610910fa648a1878991d367064997a596135b86df30daf07e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1889,9 +1889,9 @@ dependencies = [
 
 [[package]]
 name = "gimli"
-version = "0.27.0"
+version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dec7af912d60cdbd3677c1af9352ebae6fb8394d165568a2234df0fa00f87793"
+checksum = "221996f774192f0f718773def8201c4ae31f02616a54ccfc2d358bb0e5cefdec"
 
 [[package]]
 name = "gio"
@@ -1976,9 +1976,9 @@ checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
 name = "gloo-timers"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98c4a8d6391675c6b2ee1a6c8d06e8e2d03605c44cec1270675985a4c2a5500b"
+checksum = "9b995a66bb87bebce9a0f4a95aed01daca4872c050bfcb21653361c03bc35e5c"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -2049,7 +2049,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-audiofx"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "anyhow",
  "atomic_refcell",
@@ -2071,7 +2071,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-aws"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "async-tungstenite",
  "atomic_refcell",
@@ -2112,7 +2112,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-cdg"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "cdg",
  "cdg_renderer",
@@ -2128,7 +2128,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-claxon"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "atomic_refcell",
  "byte-slice-cast",
@@ -2142,7 +2142,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-closedcaption"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "anyhow",
  "atomic_refcell",
@@ -2169,7 +2169,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-csound"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "byte-slice-cast",
  "csound",
@@ -2183,7 +2183,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-dav1d"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "dav1d",
  "gst-plugin-version-helper",
@@ -2196,7 +2196,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-fallbackswitch"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "gio",
  "gst-plugin-gtk4",
@@ -2214,7 +2214,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-ffv1"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "byte-slice-cast",
  "ffv1",
@@ -2227,7 +2227,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-file"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
@@ -2238,7 +2238,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-flavors"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "byteorder",
  "flavors",
@@ -2255,7 +2255,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-fmp4"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2273,7 +2273,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-gif"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "atomic_refcell",
  "gif 0.12.0",
@@ -2286,7 +2286,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-gtk4"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "gdk4-wayland",
  "gdk4-x11",
@@ -2304,7 +2304,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-hlssink3"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "gio",
  "glib",
@@ -2320,7 +2320,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-hsv"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "byte-slice-cast",
  "gst-plugin-version-helper",
@@ -2335,7 +2335,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-json"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
@@ -2347,7 +2347,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-lewton"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "atomic_refcell",
  "byte-slice-cast",
@@ -2361,7 +2361,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-livesync"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "gio",
  "gst-plugin-gtk4",
@@ -2378,7 +2378,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-mp4"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "anyhow",
  "gst-plugin-version-helper",
@@ -2394,7 +2394,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-ndi"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "atomic_refcell",
  "byte-slice-cast",
@@ -2411,7 +2411,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-onvif"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "cairo-rs",
  "chrono",
@@ -2429,7 +2429,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-png"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
@@ -2442,7 +2442,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-raptorq"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
@@ -2456,7 +2456,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-rav1e"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "atomic_refcell",
  "gst-plugin-version-helper",
@@ -2469,7 +2469,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-regex"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
@@ -2480,7 +2480,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-reqwest"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "futures",
  "gst-plugin-version-helper",
@@ -2497,7 +2497,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-rtp"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "bitstream-io",
  "chrono",
@@ -2511,7 +2511,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-sodium"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "clap",
  "gst-plugin-version-helper",
@@ -2531,7 +2531,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-spotify"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "anyhow",
  "futures",
@@ -2546,7 +2546,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-textahead"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
@@ -2555,7 +2555,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-textwrap"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
@@ -2567,7 +2567,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-threadshare"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "async-task",
  "cc",
@@ -2597,7 +2597,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-togglerecord"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "either",
  "gio",
@@ -2613,7 +2613,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-tracers"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "anyhow",
  "gst-plugin-version-helper",
@@ -2625,7 +2625,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-tutorial"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "byte-slice-cast",
  "gst-plugin-version-helper",
@@ -2639,7 +2639,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-uriplaylistbin"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "anyhow",
  "clap",
@@ -2660,7 +2660,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-videofx"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "atomic_refcell",
  "cairo-rs",
@@ -2680,7 +2680,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-webp"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
@@ -2693,7 +2693,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-webrtc"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "anyhow",
  "async-native-tls",
@@ -2724,7 +2724,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-webrtc-signalling"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "anyhow",
  "async-native-tls",
@@ -2746,7 +2746,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-webrtc-signalling-protocol"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "serde",
  "serde_json",
@@ -2754,7 +2754,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-webrtchttp"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "async-recursion",
  "bytes",
@@ -4034,9 +4034,9 @@ dependencies = [
 
 [[package]]
 name = "matches"
-version = "0.1.9"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3e378b66a060d48947b590737b30a1be76706c8dd7b8ba0f2fe3989c68a853f"
+checksum = "2532096657941c2fea9c289d370a250971c689d4f143798ff67113ec042024a5"
 
 [[package]]
 name = "maybe-rayon"
@@ -4240,9 +4240,9 @@ dependencies = [
 
 [[package]]
 name = "num-complex"
-version = "0.4.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ae39348c8bc5fbd7f40c727a9925f03517afd2ab27d46702108b6a7e5414c19"
+checksum = "02e0d21255c828d6f128a1e41534206671e8c3ea0c62f32291e808dc82cff17d"
 dependencies = [
  "num-traits",
 ]
@@ -4303,9 +4303,9 @@ dependencies = [
 
 [[package]]
 name = "object"
-version = "0.30.2"
+version = "0.30.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b8c786513eb403643f2a88c244c2aaa270ef2153f55094587d0c48a3cf22a83"
+checksum = "ea86265d3d3dcb6a27fc51bd29a4bf387fae9d2986b823079d4986af253eb439"
 dependencies = [
  "memchr",
 ]
@@ -4696,12 +4696,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "proc-macro-hack"
-version = "0.5.20+deprecated"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc375e1527247fe1a97d8b7156678dfe7c1af2fc075c9a4db3690ecd2a148068"
-
-[[package]]
 name = "proc-macro2"
 version = "1.0.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4856,9 +4850,9 @@ dependencies = [
 
 [[package]]
 name = "rayon-core"
-version = "1.10.1"
+version = "1.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cac410af5d00ab6884528b4ab69d1e8e146e8d471201800fa1b4524126de6ad3"
+checksum = "356a0625f1954f730c0201cdab48611198dc6ce21f4acff55089b5a78e6e835b"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-deque",
@@ -4921,12 +4915,12 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.11.13"
+version = "0.11.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68cc60575865c7831548863cc02356512e3f1dc2f3f82cb837d7fc4cc8f3c97c"
+checksum = "21eed90ec8570952d53b772ecf8f206aa1ec9a3d76b2521c56c42973f2d91ee9"
 dependencies = [
  "async-compression",
- "base64 0.13.1",
+ "base64 0.21.0",
  "bytes",
  "cookie",
  "cookie_store",
@@ -4946,7 +4940,6 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
- "proc-macro-hack",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -5734,9 +5727,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.5.10"
+version = "0.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1333c76748e868a4d9d1017b5ab53171dfd095f70c712fdb4653a406547f598f"
+checksum = "f4f7f0dd8d50a853a531c426359045b1998f04219d88799810762cd4ad314234"
 dependencies = [
  "serde",
 ]
@@ -5882,9 +5875,9 @@ checksum = "9e79c4d996edb816c91e4308506774452e55e95c3c9de07b6729e17e15a5ef81"
 
 [[package]]
 name = "unicode-bidi"
-version = "0.3.9"
+version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0046be40136ef78dc325e0edefccf84ccddacd0afcc1ca54103fa3c61bbdab1d"
+checksum = "d54675592c1dbefd78cbd98db9bacd89886e1ca50692a0692baefffdeb92dd58"
 
 [[package]]
 name = "unicode-ident"
