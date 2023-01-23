@@ -208,8 +208,18 @@ impl Dav1dDec {
                 gst::trace!(CAT, imp: self, "Decoder returned OK");
                 Ok(std::ops::ControlFlow::Break(()))
             }
-            Err(err) if err.is_again() => {
+            Err(dav1d::Error::Again) => {
                 gst::trace!(CAT, imp: self, "Decoder returned EAGAIN");
+                Ok(std::ops::ControlFlow::Continue(()))
+            }
+            Err(dav1d::Error::InvalidArgument) => {
+                gst::trace!(CAT, imp: self, "Decoder returned EINVAL");
+                gst_video::video_decoder_error!(
+                    &*self.obj(),
+                    1,
+                    gst::LibraryError::Encode,
+                    ["Bitstream error"]
+                )?;
                 Ok(std::ops::ControlFlow::Continue(()))
             }
             Err(err) => {
