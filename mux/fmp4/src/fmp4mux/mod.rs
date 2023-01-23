@@ -110,6 +110,9 @@ pub(crate) struct FragmentHeaderConfiguration<'a> {
     /// Sequence number for this fragment.
     sequence_number: u32,
 
+    /// If this is a full fragment or only a chunk.
+    chunk: bool,
+
     streams: &'a [FragmentHeaderStream],
     buffers: &'a [Buffer],
 }

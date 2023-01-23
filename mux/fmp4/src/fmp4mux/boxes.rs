@@ -1573,19 +1573,22 @@ pub(super) fn create_fmp4_fragment_header(
 ) -> Result<(gst::Buffer, u64), Error> {
     let mut v = vec![];
 
-    let (brand, compatible_brands) =
-        brands_from_variant_and_caps(cfg.variant, cfg.streams.iter().map(|s| &s.caps));
+    // Don't write a `styp` if this is only a chunk.
+    if !cfg.chunk {
+        let (brand, compatible_brands) =
+            brands_from_variant_and_caps(cfg.variant, cfg.streams.iter().map(|s| &s.caps));
 
-    write_box(&mut v, b"styp", |v| {
-        // major brand
-        v.extend(brand);
-        // minor version
-        v.extend(0u32.to_be_bytes());
-        // compatible brands
-        v.extend(compatible_brands.into_iter().flatten());
+        write_box(&mut v, b"styp", |v| {
+            // major brand
+            v.extend(brand);
+            // minor version
+            v.extend(0u32.to_be_bytes());
+            // compatible brands
+            v.extend(compatible_brands.into_iter().flatten());
 
-        Ok(())
-    })?;
+            Ok(())
+        })?;
+    }
 
     let styp_len = v.len();
 
