@@ -1728,6 +1728,20 @@
                 ],
                 "kind": "object",
                 "properties": {
+                    "chunk-duration": {
+                        "blurb": "Duration for each FMP4 chunk (default = no chunks)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "18446744073709551615",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
                     "fragment-duration": {
                         "blurb": "Duration for each FMP4 fragment",
                         "conditionally-available": false,
