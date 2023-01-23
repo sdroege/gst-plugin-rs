@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-textahead"
-version = "0.9.7"
+version = "0.9.8"
 authors = ["Guillaume Desmottes <guillaume@desmottes.be>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
