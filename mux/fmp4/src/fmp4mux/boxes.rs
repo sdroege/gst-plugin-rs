@@ -1757,15 +1757,19 @@ fn analyze_buffers(
 
         let f = sample_flags_from_buffer(stream, buffer);
         if first_buffer_flags.is_none() {
+            // First buffer, remember as first buffer flags
             first_buffer_flags = Some(f);
-        } else {
+        } else if flags.is_none() {
+            // Second buffer, remember as general flags and if they're
+            // different from the first buffer's flags then also remember
+            // that
             flags = Some(f);
             if Some(f) != first_buffer_flags {
                 tr_flags |= FIRST_SAMPLE_FLAGS_PRESENT;
             }
-        }
-
-        if flags.is_some() && Some(f) != flags {
+        } else if Some(f) != flags {
+            // Third or later buffer, and the flags are different than the second buffer's flags.
+            // In that case each sample will have to store its own flags.
             tr_flags &= !FIRST_SAMPLE_FLAGS_PRESENT;
             tr_flags |= SAMPLE_FLAGS_PRESENT;
         }
@@ -1800,6 +1804,8 @@ fn analyze_buffers(
         flags = first_buffer_flags.take();
     }
 
+    // If all but possibly the first buffer had the same flags then only store them once instead of
+    // with every single sample.
     if (tr_flags & SAMPLE_FLAGS_PRESENT) == 0 {
         tf_flags |= DEFAULT_SAMPLE_FLAGS_PRESENT;
     } else {
