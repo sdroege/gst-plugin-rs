@@ -1839,7 +1839,7 @@ fn write_traf(
     // has to be stored for every single sample
     let (
         tf_flags,
-        tr_flags,
+        mut tr_flags,
         default_size,
         default_duration,
         default_flags,
@@ -1895,6 +1895,9 @@ fn write_traf(
         current_data_offset = (current_data_offset as u64
             + run.iter().map(|b| b.buffer.size() as u64).sum::<u64>())
         .try_into()?;
+
+        // Don't include first sample flags in any trun boxes except for the first
+        tr_flags &= !FIRST_SAMPLE_FLAGS_PRESENT;
     }
 
     // TODO: saio, saiz, sbgp, sgpd, subs?
