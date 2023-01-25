@@ -232,14 +232,14 @@ fn create_ui(app: &gtk::Application) {
         let position = video_sink
             .query_position::<gst::ClockTime>()
             .unwrap_or(gst::ClockTime::ZERO);
-        position_label.set_text(&format!("Position: {:.1}", position));
+        position_label.set_text(&format!("Position: {position:.1}"));
 
         let recording_duration = togglerecord
             .static_pad("src")
             .unwrap()
             .query_position::<gst::ClockTime>()
             .unwrap_or(gst::ClockTime::ZERO);
-        recorded_duration_label.set_text(&format!("Recorded: {:.1}", recording_duration));
+        recorded_duration_label.set_text(&format!("Recorded: {recording_duration:.1}"));
 
         glib::Continue(true)
     });

@@ -80,14 +80,14 @@ impl FileSrc {
                 if !location.exists() {
                     return Err(glib::Error::new(
                         gst::URIError::BadReference,
-                        format!("{} doesn't exist", location).as_str(),
+                        format!("{location} doesn't exist").as_str(),
                     ));
                 }
 
                 if !location.is_file() {
                     return Err(glib::Error::new(
                         gst::URIError::BadReference,
-                        format!("{} is not a file", location).as_str(),
+                        format!("{location} is not a file").as_str(),
                     ));
                 }
 

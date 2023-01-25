@@ -33,9 +33,9 @@ fn run_test(
     init();
 
     let format = if cfg!(target_endian = "little") {
-        format!("audio/x-raw,format=F64LE,rate=192000,channels={}", channels)
+        format!("audio/x-raw,format=F64LE,rate=192000,channels={channels}")
     } else {
-        format!("audio/x-raw,format=F64BE,rate=192000,channels={}", channels)
+        format!("audio/x-raw,format=F64BE,rate=192000,channels={channels}")
     };
 
     let pipeline = if let Some(second_input) = second_input {
@@ -51,10 +51,6 @@ fn run_test(
     } else {
         gst::parse_launch(&format!(
         "audiotestsrc {first_input} num-buffers={num_buffers} samplesperbuffer={samples_per_buffer} ! {format} ! audioloudnorm ! appsink name=sink",
-        first_input = first_input,
-        num_buffers = num_buffers,
-        samples_per_buffer = samples_per_buffer,
-        format = format,
         ))
     }
     .unwrap()
@@ -129,17 +125,13 @@ fn run_test(
             Ordering::Greater => {
                 assert!(
                     ts - expected_ts <= gst::ClockTime::NSECOND,
-                    "TS is {} instead of {}",
-                    ts,
-                    expected_ts
+                    "TS is {ts} instead of {expected_ts}"
                 );
             }
             Ordering::Less => {
                 assert!(
                     expected_ts - ts <= gst::ClockTime::NSECOND,
-                    "TS is {} instead of {}",
-                    ts,
-                    expected_ts
+                    "TS is {ts} instead of {expected_ts}"
                 );
             }
             Ordering::Equal => (),
@@ -164,27 +156,18 @@ fn run_test(
     if expected_loudness.classify() == std::num::FpCategory::Infinite && expected_loudness < 0.0 {
         assert!(
             loudness.classify() == std::num::FpCategory::Infinite && loudness < 0.0,
-            "Loudness is {} instead of {}",
-            loudness,
-            expected_loudness,
+            "Loudness is {loudness} instead of {expected_loudness}",
         );
     } else {
         assert!(
             f64::abs(loudness - expected_loudness) < 1.0,
-            "Loudness is {} instead of {}",
-            loudness,
-            expected_loudness,
+            "Loudness is {loudness} instead of {expected_loudness}",
         );
     }
 
     for c in 0..channels {
         let peak = 20.0 * f64::log10(r128.sample_peak(c).unwrap());
-        assert!(
-            peak <= -2.0,
-            "Peak {} for channel {} is above -2.0",
-            c,
-            peak,
-        );
+        assert!(peak <= -2.0, "Peak {c} for channel {peak} is above -2.0",);
     }
 }
 

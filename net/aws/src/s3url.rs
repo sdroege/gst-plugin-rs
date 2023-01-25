@@ -42,14 +42,14 @@ impl ToString for GstS3Url {
 }
 
 pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
-    let url = Url::parse(url_str).map_err(|err| format!("Parse error: {}", err))?;
+    let url = Url::parse(url_str).map_err(|err| format!("Parse error: {err}"))?;
 
     if url.scheme() != "s3" {
         return Err(format!("Unsupported URI '{}'", url.scheme()));
     }
 
     if !url.has_host() {
-        return Err(format!("Invalid host in uri '{}'", url));
+        return Err(format!("Invalid host in uri '{url}'"));
     }
 
     let host = url.host_str().unwrap();
@@ -64,9 +64,9 @@ pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
                 base32::decode(base32::Alphabet::RFC4648 { padding: true }, endpoint).ok_or(())?;
             let name = String::from_utf8(name).map_err(|_| ())?;
             let endpoint = String::from_utf8(endpoint).map_err(|_| ())?;
-            Ok(format!("{}{}", name, endpoint))
+            Ok(format!("{name}{endpoint}"))
         })
-        .map_err(|_: ()| format!("Invalid region '{}'", host))?;
+        .map_err(|_: ()| format!("Invalid region '{host}'"))?;
 
     // Note that aws_sdk_s3::Region does not provide any error/validation
     // methods to check the region argument being passed to it.
@@ -75,23 +75,23 @@ pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
 
     let mut path = url
         .path_segments()
-        .ok_or_else(|| format!("Invalid uri '{}'", url))?;
+        .ok_or_else(|| format!("Invalid uri '{url}'"))?;
 
     let bucket = path.next().unwrap().to_string();
 
     let o = path
         .next()
-        .ok_or_else(|| format!("Invalid empty object/bucket '{}'", url))?;
+        .ok_or_else(|| format!("Invalid empty object/bucket '{url}'"))?;
 
     let mut object = percent_decode(o.as_bytes())
         .decode_utf8()
         .unwrap()
         .to_string();
     if o.is_empty() {
-        return Err(format!("Invalid empty object/bucket '{}'", url));
+        return Err(format!("Invalid empty object/bucket '{url}'"));
     }
 
-    object = path.fold(object, |o, p| format!("{}/{}", o, p));
+    object = path.fold(object, |o, p| format!("{o}/{p}"));
 
     let mut q = url.query_pairs();
     let v = q.next();

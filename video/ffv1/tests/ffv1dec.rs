@@ -33,12 +33,11 @@ fn test_decode_yuv420p() {
 
 fn test_decode(name: &str) {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push(format!("tests/ffv1_v3_{}.mkv", name));
+    path.push(format!("tests/ffv1_v3_{name}.mkv"));
 
     let bin = gst::parse_bin_from_description(
         &format!(
-            "filesrc location={:?} ! matroskademux name=m m.video_0 ! ffv1dec name=ffv1dec",
-            path
+            "filesrc location={path:?} ! matroskademux name=m m.video_0 ! ffv1dec name=ffv1dec"
         ),
         false,
     )
@@ -55,7 +54,7 @@ fn test_decode(name: &str) {
     let frame = buf.into_mapped_buffer_readable().unwrap();
 
     let mut refpath = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    refpath.push(format!("tests/ffv1_v3_{}.ref", name));
+    refpath.push(format!("tests/ffv1_v3_{name}.ref"));
 
     let ref_frame = fs::read(refpath).unwrap();
 

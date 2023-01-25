@@ -469,7 +469,7 @@ mod tests {
         // The last sub task should be simply dropped at this point
         match receiver.try_next() {
             Ok(None) | Err(_) => (),
-            other => panic!("Unexpected {:?}", other),
+            other => panic!("Unexpected {other:?}"),
         }
     }
 

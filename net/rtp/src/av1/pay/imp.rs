@@ -860,7 +860,7 @@ mod tests {
         let element = <RTPAv1Pay as ObjectSubclass>::Type::new();
         let pay = element.imp();
         for idx in 0..input_data.len() {
-            println!("running test {}...", idx);
+            println!("running test {idx}...");
 
             let mut state = pay.state.lock().unwrap();
             *state = input_data[idx].1.clone();

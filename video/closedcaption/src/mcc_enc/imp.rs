@@ -77,7 +77,7 @@ impl MccEnc {
             Err(structure::GetError::FieldNotFound { .. }) => {
                 return Err(gst::FlowError::NotNegotiated);
             }
-            err => panic!("MccEnc::generate_headers caps: {:?}", err),
+            err => panic!("MccEnc::generate_headers caps: {err:?}"),
         };
 
         if framerate == gst::Fraction::new(60000, 1001) {
@@ -87,7 +87,7 @@ impl MccEnc {
         }
 
         if let Some(ref uuid) = settings.uuid {
-            let _ = write!(buffer, "UUID={}\r\n", uuid);
+            let _ = write!(buffer, "UUID={uuid}\r\n");
         } else {
             let _ = write!(buffer, "UUID={:X}\r\n", Uuid::new_v4().as_hyphenated());
         }
@@ -291,10 +291,10 @@ impl MccEnc {
 
         match state.format {
             Some(Format::Cea608) => {
-                let _ = write!(outbuf, "6102{:02X}", len);
+                let _ = write!(outbuf, "6102{len:02X}");
             }
             Some(Format::Cea708Cdp) => {
-                let _ = write!(outbuf, "T{:02X}", len);
+                let _ = write!(outbuf, "T{len:02X}");
             }
             _ => return Err(gst::FlowError::NotNegotiated),
         };
@@ -305,7 +305,7 @@ impl MccEnc {
         if checksum == 0 {
             outbuf.push(b'Z');
         } else {
-            let _ = write!(outbuf, "{:02X}", checksum);
+            let _ = write!(outbuf, "{checksum:02X}");
         }
 
         outbuf.extend_from_slice(b"\r\n".as_ref());
@@ -354,7 +354,7 @@ impl MccEnc {
                         gst::error!(CAT, obj: pad, "Caps without framerate");
                         return false;
                     }
-                    err => panic!("MccEnc::sink_event caps: {:?}", err),
+                    err => panic!("MccEnc::sink_event caps: {err:?}"),
                 };
 
                 let mut state = self.state.lock().unwrap();

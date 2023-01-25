@@ -163,7 +163,7 @@ mod imp_src {
                     Err(gst::FlowError::Flushing) => {
                         gst::debug!(SRC_CAT, obj: self.element, "Flushing")
                     }
-                    Err(err) => panic!("Got error {}", err),
+                    Err(err) => panic!("Got error {err}"),
                 }
 
                 res
@@ -744,9 +744,9 @@ fn nominal_scenario(
     match futures::executor::block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
             EventView::StreamStart(_) => (),
-            other => panic!("Unexpected event {:?}", other),
+            other => panic!("Unexpected event {other:?}"),
         },
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     elem_src_test
@@ -758,9 +758,9 @@ fn nominal_scenario(
     match futures::executor::block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
             EventView::Segment(_) => (),
-            other => panic!("Unexpected event {:?}", other),
+            other => panic!("Unexpected event {other:?}"),
         },
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     // Buffer
@@ -773,7 +773,7 @@ fn nominal_scenario(
             let data = buffer.map_readable().unwrap();
             assert_eq!(data.as_slice(), vec![1, 2, 3, 4].as_slice());
         }
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     // BufferList
@@ -785,7 +785,7 @@ fn nominal_scenario(
 
     match futures::executor::block_on(receiver.next()).unwrap() {
         Item::BufferList(_) => (),
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     // Pause the Pad task
@@ -807,7 +807,7 @@ fn nominal_scenario(
             let data = buffer.map_readable().unwrap();
             assert_eq!(data.as_slice(), vec![5, 6, 7].as_slice());
         }
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     // Flush
@@ -817,9 +817,9 @@ fn nominal_scenario(
     match futures::executor::block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
             EventView::FlushStop(_) => (),
-            other => panic!("Unexpected event {:?}", other),
+            other => panic!("Unexpected event {other:?}"),
         },
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     elem_src_test
@@ -831,9 +831,9 @@ fn nominal_scenario(
     match futures::executor::block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
             EventView::Segment(_) => (),
-            other => panic!("Unexpected event {:?}", other),
+            other => panic!("Unexpected event {other:?}"),
         },
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     // Buffer
@@ -846,7 +846,7 @@ fn nominal_scenario(
             let data = buffer.map_readable().unwrap();
             assert_eq!(data.as_slice(), vec![8, 9].as_slice());
         }
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     // EOS
@@ -857,9 +857,9 @@ fn nominal_scenario(
     match futures::executor::block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
             EventView::Eos(_) => (),
-            other => panic!("Unexpected event {:?}", other),
+            other => panic!("Unexpected event {other:?}"),
         },
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     pipeline.set_state(gst::State::Ready).unwrap();
@@ -867,7 +867,7 @@ fn nominal_scenario(
     // Receiver was dropped when stopping => can't send anymore
     elem_src_test
         .try_push(Item::Event(
-            gst::event::StreamStart::builder(&format!("{}_past_stop", scenario_name))
+            gst::event::StreamStart::builder(&format!("{scenario_name}_past_stop"))
                 .group_id(gst::GroupId::next())
                 .build(),
         ))
@@ -893,7 +893,7 @@ fn src_tsqueue_sink_nominal() {
 
     let ts_queue = gst::ElementFactory::make("ts-queue")
         .name("ts-queue")
-        .property("context", format!("{}_queue", name))
+        .property("context", format!("{name}_queue"))
         .property("context-wait", THROTTLING_DURATION.as_millis() as u32)
         .build()
         .unwrap();
@@ -926,14 +926,14 @@ fn src_tsproxy_sink_nominal() {
 
     let ts_proxy_sink = gst::ElementFactory::make("ts-proxysink")
         .name("ts-proxysink")
-        .property("proxy-context", format!("{}_proxy_context", name))
+        .property("proxy-context", format!("{name}_proxy_context"))
         .build()
         .unwrap();
 
     let ts_proxy_src = gst::ElementFactory::make("ts-proxysrc")
         .name("ts-proxysrc")
-        .property("proxy-context", format!("{}_proxy_context", name))
-        .property("context", format!("{}_context", name))
+        .property("proxy-context", format!("{name}_proxy_context"))
+        .property("context", format!("{name}_context"))
         .property("context-wait", THROTTLING_DURATION.as_millis() as u32)
         .build()
         .unwrap();
@@ -968,9 +968,9 @@ fn start_pause_start() {
     match futures::executor::block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
             EventView::StreamStart(_) => (),
-            other => panic!("Unexpected event {:?}", other),
+            other => panic!("Unexpected event {other:?}"),
         },
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     elem_src_test
@@ -982,9 +982,9 @@ fn start_pause_start() {
     match futures::executor::block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
             EventView::Segment(_) => (),
-            other => panic!("Unexpected event {:?}", other),
+            other => panic!("Unexpected event {other:?}"),
         },
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     // Buffer
@@ -1005,7 +1005,7 @@ fn start_pause_start() {
             let data = buffer.map_readable().unwrap();
             assert_eq!(data.as_slice(), vec![1, 2, 3, 4].as_slice());
         }
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     match futures::executor::block_on(receiver.next()).unwrap() {
@@ -1013,7 +1013,7 @@ fn start_pause_start() {
             let data = buffer.map_readable().unwrap();
             assert_eq!(data.as_slice(), vec![5, 6, 7].as_slice());
         }
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     // Nothing else forwarded
@@ -1037,7 +1037,7 @@ fn start_stop_start() {
     // Initial events
     elem_src_test
         .try_push(Item::Event(
-            gst::event::StreamStart::builder(&format!("{}-after_stop", scenario_name))
+            gst::event::StreamStart::builder(&format!("{scenario_name}-after_stop"))
                 .group_id(gst::GroupId::next())
                 .build(),
         ))
@@ -1046,9 +1046,9 @@ fn start_stop_start() {
     match futures::executor::block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
             EventView::StreamStart(_) => (),
-            other => panic!("Unexpected event {:?}", other),
+            other => panic!("Unexpected event {other:?}"),
         },
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     elem_src_test
@@ -1060,9 +1060,9 @@ fn start_stop_start() {
     match futures::executor::block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
             EventView::Segment(_) => (),
-            other => panic!("Unexpected event {:?}", other),
+            other => panic!("Unexpected event {other:?}"),
         },
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     // Buffer
@@ -1094,16 +1094,16 @@ fn start_stop_start() {
             match futures::executor::block_on(receiver.next()).unwrap() {
                 Item::Event(event) => match event.view() {
                     EventView::StreamStart(_) => (),
-                    other => panic!("Unexpected event {:?}", other),
+                    other => panic!("Unexpected event {other:?}"),
                 },
-                other => panic!("Unexpected item {:?}", other),
+                other => panic!("Unexpected item {other:?}"),
             }
         }
         Item::Event(event) => match event.view() {
             EventView::StreamStart(_) => (),
-            other => panic!("Unexpected event {:?}", other),
+            other => panic!("Unexpected event {other:?}"),
         },
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     elem_src_test
@@ -1115,9 +1115,9 @@ fn start_stop_start() {
     match futures::executor::block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
             EventView::Segment(_) => (),
-            other => panic!("Unexpected event {:?}", other),
+            other => panic!("Unexpected event {other:?}"),
         },
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     elem_src_test
@@ -1129,7 +1129,7 @@ fn start_stop_start() {
             let data = buffer.map_readable().unwrap();
             assert_eq!(data.as_slice(), vec![5, 6, 7].as_slice());
         }
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     pipeline.set_state(gst::State::Null).unwrap();
@@ -1150,7 +1150,7 @@ fn start_flush() {
     // Initial events
     elem_src_test
         .try_push(Item::Event(
-            gst::event::StreamStart::builder(&format!("{}-after_stop", scenario_name))
+            gst::event::StreamStart::builder(&format!("{scenario_name}-after_stop"))
                 .group_id(gst::GroupId::next())
                 .build(),
         ))
@@ -1159,9 +1159,9 @@ fn start_flush() {
     match futures::executor::block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
             EventView::StreamStart(_) => (),
-            other => panic!("Unexpected event {:?}", other),
+            other => panic!("Unexpected event {other:?}"),
         },
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     elem_src_test
@@ -1173,9 +1173,9 @@ fn start_flush() {
     match futures::executor::block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
             EventView::Segment(_) => (),
-            other => panic!("Unexpected event {:?}", other),
+            other => panic!("Unexpected event {other:?}"),
         },
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     // Buffer
@@ -1202,7 +1202,7 @@ fn start_flush() {
     match futures::executor::block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
             EventView::Segment(_) => (),
-            other => panic!("Unexpected event {:?}", other),
+            other => panic!("Unexpected event {other:?}"),
         },
         Item::Buffer(buffer) => {
             // In some cases, the first Buffer might be processed before FlushStart
@@ -1212,12 +1212,12 @@ fn start_flush() {
             match futures::executor::block_on(receiver.next()).unwrap() {
                 Item::Event(event) => match event.view() {
                     EventView::Segment(_) => (),
-                    other => panic!("Unexpected event {:?}", other),
+                    other => panic!("Unexpected event {other:?}"),
                 },
-                other => panic!("Unexpected item {:?}", other),
+                other => panic!("Unexpected item {other:?}"),
             }
         }
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     // Post flush buffer
@@ -1230,7 +1230,7 @@ fn start_flush() {
             let data = buffer.map_readable().unwrap();
             assert_eq!(data.as_slice(), vec![8, 9].as_slice());
         }
-        other => panic!("Unexpected item {:?}", other),
+        other => panic!("Unexpected item {other:?}"),
     }
 
     pipeline.set_state(gst::State::Null).unwrap();

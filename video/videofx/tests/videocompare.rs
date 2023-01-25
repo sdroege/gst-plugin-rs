@@ -134,7 +134,7 @@ fn test_do_not_send_message_when_image_not_found() {
     pipeline.set_state(gst::State::Null).unwrap();
 
     if let Some(detection) = detection {
-        panic!("Got unexpected detection message {:?}", detection);
+        panic!("Got unexpected detection message {detection:?}");
     }
 }
 

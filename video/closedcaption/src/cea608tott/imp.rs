@@ -201,11 +201,10 @@ impl Cea608ToTt {
 
         writeln!(
             &mut data,
-            "{:02}:{:02}:{:02}.{:03} --> {:02}:{:02}:{:02}.{:03}\r",
-            h1, m1, s1, ms1, h2, m2, s2, ms2
+            "{h1:02}:{m1:02}:{s1:02}.{ms1:03} --> {h2:02}:{m2:02}:{s2:02}.{ms2:03}\r"
         )
         .unwrap();
-        writeln!(&mut data, "{}\r", text).unwrap();
+        writeln!(&mut data, "{text}\r").unwrap();
         writeln!(&mut data, "\r").unwrap();
 
         let mut buffer = gst::Buffer::from_mut_slice(data.into_bytes());
@@ -231,14 +230,13 @@ impl Cea608ToTt {
         let (h1, m1, s1, ms1) = Self::split_time(timestamp);
         let (h2, m2, s2, ms2) = Self::split_time(timestamp + duration);
 
-        writeln!(&mut data, "{}\r", index).unwrap();
+        writeln!(&mut data, "{index}\r").unwrap();
         writeln!(
             &mut data,
-            "{:02}:{:02}:{:02},{:03} --> {:02}:{:02}:{:02},{:03}\r",
-            h1, m1, s1, ms1, h2, m2, s2, ms2
+            "{h1:02}:{m1:02}:{s1:02},{ms1:03} --> {h2:02}:{m2:02}:{s2:02},{ms2:03}\r"
         )
         .unwrap();
-        writeln!(&mut data, "{}\r", text).unwrap();
+        writeln!(&mut data, "{text}\r").unwrap();
         writeln!(&mut data, "\r").unwrap();
 
         let mut buffer = gst::Buffer::from_mut_slice(data.into_bytes());

@@ -89,7 +89,7 @@ mod tests {
     #[test]
     fn test_aggr_header() {
         for (idx, (byte, header)) in HEADERS.into_iter().enumerate() {
-            println!("running test {}...", idx);
+            println!("running test {idx}...");
 
             assert_eq!(byte, header.into());
             assert_eq!(header, byte.into());

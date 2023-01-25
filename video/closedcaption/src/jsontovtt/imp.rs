@@ -155,11 +155,10 @@ impl State {
 
         writeln!(
             &mut data,
-            "{:02}:{:02}:{:02}.{:03} --> {:02}:{:02}:{:02}.{:03}",
-            h1, m1, s1, ms1, h2, m2, s2, ms2
+            "{h1:02}:{m1:02}:{s1:02}.{ms1:03} --> {h2:02}:{m2:02}:{s2:02}.{ms2:03}"
         )
         .unwrap();
-        writeln!(&mut data, "{}", text).unwrap();
+        writeln!(&mut data, "{text}").unwrap();
 
         let mut buffer = gst::Buffer::from_mut_slice(data.into_bytes());
         {

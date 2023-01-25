@@ -2002,40 +2002,39 @@ impl ElementImpl for ToggleRecord {
         *pad_count += 1;
 
         let templ = self.obj().pad_template("sink_%u").unwrap();
-        let sinkpad =
-            gst::Pad::builder_with_template(&templ, Some(format!("sink_{}", id).as_str()))
-                .chain_function(|pad, parent, buffer| {
-                    ToggleRecord::catch_panic_pad_function(
-                        parent,
-                        || Err(gst::FlowError::Error),
-                        |togglerecord| togglerecord.sink_chain(pad, buffer),
-                    )
-                })
-                .event_function(|pad, parent, event| {
-                    ToggleRecord::catch_panic_pad_function(
-                        parent,
-                        || false,
-                        |togglerecord| togglerecord.sink_event(pad, event),
-                    )
-                })
-                .query_function(|pad, parent, query| {
-                    ToggleRecord::catch_panic_pad_function(
-                        parent,
-                        || false,
-                        |togglerecord| togglerecord.sink_query(pad, query),
-                    )
-                })
-                .iterate_internal_links_function(|pad, parent| {
-                    ToggleRecord::catch_panic_pad_function(
-                        parent,
-                        || gst::Iterator::from_vec(vec![]),
-                        |togglerecord| togglerecord.iterate_internal_links(pad),
-                    )
-                })
-                .build();
+        let sinkpad = gst::Pad::builder_with_template(&templ, Some(format!("sink_{id}").as_str()))
+            .chain_function(|pad, parent, buffer| {
+                ToggleRecord::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |togglerecord| togglerecord.sink_chain(pad, buffer),
+                )
+            })
+            .event_function(|pad, parent, event| {
+                ToggleRecord::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |togglerecord| togglerecord.sink_event(pad, event),
+                )
+            })
+            .query_function(|pad, parent, query| {
+                ToggleRecord::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |togglerecord| togglerecord.sink_query(pad, query),
+                )
+            })
+            .iterate_internal_links_function(|pad, parent| {
+                ToggleRecord::catch_panic_pad_function(
+                    parent,
+                    || gst::Iterator::from_vec(vec![]),
+                    |togglerecord| togglerecord.iterate_internal_links(pad),
+                )
+            })
+            .build();
 
         let templ = self.obj().pad_template("src_%u").unwrap();
-        let srcpad = gst::Pad::builder_with_template(&templ, Some(format!("src_{}", id).as_str()))
+        let srcpad = gst::Pad::builder_with_template(&templ, Some(format!("src_{id}").as_str()))
             .event_function(|pad, parent, event| {
                 ToggleRecord::catch_panic_pad_function(
                     parent,

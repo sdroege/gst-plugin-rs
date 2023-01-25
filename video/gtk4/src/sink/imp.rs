@@ -370,7 +370,7 @@ impl BaseSinkImpl for PaintableSink {
                 if let Err(err) = buffer_pool.set_config(config) {
                     return Err(gst::loggable_error!(
                         CAT,
-                        format!("Failed to set config in the GL BufferPool.: {}", err)
+                        format!("Failed to set config in the GL BufferPool.: {err}")
                     ));
                 }
 

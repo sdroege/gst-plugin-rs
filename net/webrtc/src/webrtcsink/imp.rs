@@ -241,7 +241,7 @@ pub fn make_element(element: &str, name: Option<&str>) -> Result<gst::Element, E
 
     builder
         .build()
-        .with_context(|| format!("Failed to make element {}", element))
+        .with_context(|| format!("Failed to make element {element}"))
 }
 
 /// Simple utility for tearing down a pipeline cleanly
@@ -861,7 +861,7 @@ impl Session {
 
         let pad = self
             .webrtcbin
-            .request_pad_simple(&format!("sink_{}", media_idx))
+            .request_pad_simple(&format!("sink_{media_idx}"))
             .unwrap();
 
         let transceiver = pad.property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
@@ -1402,10 +1402,10 @@ impl WebRTCSink {
         );
 
         let pipeline = gst::Pipeline::builder()
-            .name(format!("session-pipeline-{}", session_id))
+            .name(format!("session-pipeline-{session_id}"))
             .build();
 
-        let webrtcbin = make_element("webrtcbin", Some(&format!("webrtcbin-{}", session_id)))
+        let webrtcbin = make_element("webrtcbin", Some(&format!("webrtcbin-{session_id}")))
             .map_err(|err| WebRTCSinkError::SessionPipelineError {
                 session_id: session_id.clone(),
                 peer_id: peer_id.clone(),
@@ -1922,7 +1922,7 @@ impl WebRTCSink {
 
             session.pipeline.debug_to_dot_file_with_ts(
                 gst::DebugGraphDetails::all(),
-                format!("webrtcsink-peer-{}-remote-description-set", session_id,),
+                format!("webrtcsink-peer-{session_id}-remote-description-set",),
             );
 
             let element_clone = element.downgrade();
@@ -2092,7 +2092,7 @@ impl WebRTCSink {
         let elements_slice = &elements.iter().collect::<Vec<_>>();
         pipe.0.add_many(elements_slice).unwrap();
         gst::Element::link_many(elements_slice)
-            .with_context(|| format!("Running discovery pipeline for caps {}", caps))?;
+            .with_context(|| format!("Running discovery pipeline for caps {caps}"))?;
 
         let (_, _, pay) = setup_encoding(&pipe.0, &capsfilter, caps, codec, None, true)?;
 
@@ -2101,7 +2101,7 @@ impl WebRTCSink {
         pipe.0.add(&sink).unwrap();
 
         pay.link(&sink)
-            .with_context(|| format!("Running discovery pipeline for caps {}", caps))?;
+            .with_context(|| format!("Running discovery pipeline for caps {caps}"))?;
 
         capsfilter.set_property("caps", caps);
 
@@ -2111,7 +2111,7 @@ impl WebRTCSink {
 
         pipe.0
             .set_state(gst::State::Playing)
-            .with_context(|| format!("Running discovery pipeline for caps {}", caps))?;
+            .with_context(|| format!("Running discovery pipeline for caps {caps}"))?;
 
         let in_caps = caps;
 

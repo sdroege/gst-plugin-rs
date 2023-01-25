@@ -140,12 +140,12 @@ impl Harness {
             local_addr_sender.send(local_addr).unwrap();
 
             if let Err(e) = server.await {
-                let _ = sender.send(Message::ServerError(format!("{:?}", e)));
+                let _ = sender.send(Message::ServerError(format!("{e:?}")));
             }
         });
 
         let local_addr = futures::executor::block_on(local_addr_receiver).unwrap();
-        src.set_property("location", format!("http://{}/", local_addr));
+        src.set_property("location", format!("http://{local_addr}/"));
 
         // Let the test setup anything needed on the HTTP source now
         setup_func(&src);
@@ -162,7 +162,7 @@ impl Harness {
         loop {
             match self.receiver.as_mut().unwrap().recv().unwrap() {
                 Message::ServerError(err) => {
-                    panic!("Got server error: {}", err);
+                    panic!("Got server error: {err}");
                 }
                 Message::Event(ev) => {
                     use gst::EventView;
@@ -195,7 +195,7 @@ impl Harness {
         loop {
             match self.receiver.as_mut().unwrap().recv().unwrap() {
                 Message::ServerError(err) => {
-                    panic!("Got server error: {}", err);
+                    panic!("Got server error: {err}");
                 }
                 Message::Event(ev) => {
                     use gst::EventView;
@@ -239,7 +239,7 @@ impl Harness {
         loop {
             match self.receiver.as_mut().unwrap().recv().unwrap() {
                 Message::ServerError(err) => {
-                    panic!("Got server error: {}", err);
+                    panic!("Got server error: {err}");
                 }
                 Message::Event(ev) => {
                     use gst::EventView;
@@ -286,7 +286,7 @@ impl Harness {
         loop {
             match self.receiver.as_mut().unwrap().recv().unwrap() {
                 Message::ServerError(err) => {
-                    panic!("Got server error: {}", err);
+                    panic!("Got server error: {err}");
                 }
                 Message::Event(ev) => {
                     use gst::EventView;
@@ -1227,7 +1227,7 @@ fn test_proxy() {
     // Listen on socket before spawning thread (we won't error out with connection refused).
     let incoming = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let proxy_addr = incoming.local_addr().unwrap();
-    println!("listening on {}, starting proxy server", proxy_addr);
+    println!("listening on {proxy_addr}, starting proxy server");
     let proxy_server = std::thread::spawn(move || {
         use std::io::*;
         println!("awaiting connection to proxy server");
@@ -1245,7 +1245,7 @@ fn test_proxy() {
             url.port_or_known_default().unwrap()
         );
 
-        println!("connecting to target server {}", host);
+        println!("connecting to target server {host}");
         let mut server_connection = std::net::TcpStream::connect(host).unwrap();
 
         println!("connected to target server, sending modified request line");

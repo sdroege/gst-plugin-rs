@@ -99,7 +99,7 @@ fn test_depayloader() {
     h.push_event(Eos::new());
 
     for (idx, ex) in expected.iter().enumerate() {
-        println!("checking buffer {}...", idx);
+        println!("checking buffer {idx}...");
 
         let buffer = h.pull().unwrap();
         let actual = buffer.into_mapped_buffer_readable().unwrap();
@@ -209,7 +209,7 @@ fn test_payloader() {
 
     let mut base_ts = None;
     for (idx, (marker, ts_offset, payload)) in expected.iter().enumerate() {
-        println!("checking packet {}...", idx);
+        println!("checking packet {idx}...");
 
         let buffer = h.pull().unwrap();
         let packet = RTPBuffer::from_buffer_readable(&buffer).unwrap();

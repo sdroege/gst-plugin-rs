@@ -340,7 +340,7 @@ mod tests {
         while let Some(line) = reader.line() {
             let res = match parser.parse_line(line) {
                 Ok(res) => res,
-                Err(err) => panic!("Couldn't parse line {}: {:?}", line_cnt, err),
+                Err(err) => panic!("Couldn't parse line {line_cnt}: {err:?}"),
             };
 
             match line_cnt {
@@ -348,7 +348,7 @@ mod tests {
                 x if x % 2 != 0 => assert_eq!(res, SccLine::Empty),
                 _ => match res {
                     SccLine::Caption(_, _) => (),
-                    res => panic!("Expected caption at line {}, got {:?}", line_cnt, res),
+                    res => panic!("Expected caption at line {line_cnt}, got {res:?}"),
                 },
             }
 

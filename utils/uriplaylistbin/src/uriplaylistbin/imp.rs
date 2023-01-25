@@ -36,7 +36,7 @@ impl std::fmt::Display for PlaylistError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PlaylistError::PluginMissing { error } => {
-                write!(f, "{}", error)
+                write!(f, "{error}")
             }
             PlaylistError::ItemFailed { error, item } => {
                 write!(f, "{} (URI: {})", error, item.uri())

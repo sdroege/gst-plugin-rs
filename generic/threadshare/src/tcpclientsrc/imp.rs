@@ -434,13 +434,14 @@ impl TcpClientSrc {
         // Don't block on `prepare` as the socket connection takes time.
         // This will be performed in the background and we'll block on
         // `start` which will also ensure `prepare` completed successfully.
-        let _ = self
+        let fut = self
             .task
             .prepare(
                 TcpClientSrcTask::new(self.obj().clone(), saddr, buffer_pool),
                 context,
             )
             .check()?;
+        drop(fut);
 
         gst::debug!(CAT, imp: self, "Preparing asynchronously");
 

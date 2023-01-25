@@ -233,7 +233,7 @@ impl BinImpl for ProgressBin {
                 if let Ok(percent) = s.get::<f64>("percent-double") {
                     let output_type = *self.output_type.lock().unwrap();
                     match output_type {
-                        ProgressBinOutput::Println => println!("progress: {:5.1}%", percent),
+                        ProgressBinOutput::Println => println!("progress: {percent:5.1}%"),
                         ProgressBinOutput::DebugCategory => {
                             gst::info!(CAT, imp: self, "progress: {:5.1}%", percent);
                         }

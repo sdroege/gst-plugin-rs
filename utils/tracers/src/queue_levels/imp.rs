@@ -116,7 +116,7 @@ impl Default for Settings {
 
 impl Settings {
     fn update_from_params(&mut self, imp: &QueueLevels, params: String) {
-        let s = match gst::Structure::from_str(&format!("queue-levels,{}", params)) {
+        let s = match gst::Structure::from_str(&format!("queue-levels,{params}")) {
             Ok(s) => s,
             Err(err) => {
                 gst::warning!(CAT, imp: imp, "failed to parse tracer parameters: {}", err);

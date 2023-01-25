@@ -308,7 +308,7 @@ impl PushSrcImpl for SpotifyAudioSrc {
                         return Err(gst::FlowError::Flushing);
                     }
                     Ok(Err(err)) => {
-                        let details = format!("{:?}", err);
+                        let details = format!("{err:?}");
                         gst::error!(CAT, imp: self, "failed to start: {}", details);
                         gst::element_imp_error!(self, gst::ResourceError::Settings, [&details]);
                         return Err(gst::FlowError::Error);
@@ -383,7 +383,7 @@ impl URIHandlerImpl for SpotifyAudioSrc {
         gst::debug!(CAT, imp: self, "set URI: {}", uri);
 
         let url = url::Url::parse(uri)
-            .map_err(|e| glib::Error::new(gst::URIError::BadUri, &format!("{:?}", e)))?;
+            .map_err(|e| glib::Error::new(gst::URIError::BadUri, &format!("{e:?}")))?;
 
         // allow to configure auth and cache settings from the URI
         for (key, value) in url.query_pairs() {

@@ -1336,7 +1336,7 @@ impl ElementImpl for FallbackSwitch {
 
         let pad = gst::PadBuilder::<super::FallbackSwitchSinkPad>::from_template(
             templ,
-            Some(format!("sink_{}", pad_serial).as_str()),
+            Some(format!("sink_{pad_serial}").as_str()),
         )
         .chain_function(|pad, parent, buffer| {
             FallbackSwitch::catch_panic_pad_function(

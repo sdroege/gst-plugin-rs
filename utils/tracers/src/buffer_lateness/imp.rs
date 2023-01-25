@@ -85,7 +85,7 @@ impl Default for Settings {
 
 impl Settings {
     fn update_from_params(&mut self, imp: &BufferLateness, params: String) {
-        let s = match gst::Structure::from_str(&format!("buffer-lateness,{}", params)) {
+        let s = match gst::Structure::from_str(&format!("buffer-lateness,{params}")) {
             Ok(s) => s,
             Err(err) => {
                 gst::warning!(CAT, imp: imp, "failed to parse tracer parameters: {}", err);

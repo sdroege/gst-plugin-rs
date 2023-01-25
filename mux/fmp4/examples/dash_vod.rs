@@ -222,8 +222,7 @@ fn main() -> Result<(), Error> {
         </AdaptationSet>
     </Period>
 </MPD>
-"###,
-                    duration = duration, segment_timeline = segment_timeline);
+"###);
 
                 std::fs::write(path, manifest).expect("failed to write manifest");
             })

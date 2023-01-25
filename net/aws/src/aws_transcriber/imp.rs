@@ -896,12 +896,11 @@ impl Transcriber {
         );
 
         if let Some(ref vocabulary) = settings.vocabulary {
-            query_params.push_str(format!("&vocabulary-name={}", vocabulary).as_str());
+            query_params.push_str(format!("&vocabulary-name={vocabulary}").as_str());
         }
 
         if let Some(ref vocabulary_filter) = settings.vocabulary_filter {
-            query_params
-                .push_str(format!("&vocabulary-filter-name={}", vocabulary_filter).as_str());
+            query_params.push_str(format!("&vocabulary-filter-name={vocabulary_filter}").as_str());
 
             query_params.push_str(
                 format!(
@@ -918,7 +917,7 @@ impl Transcriber {
 
         if let Some(ref session_id) = settings.session_id {
             gst::debug!(CAT, imp: self, "Using session ID: {}", session_id);
-            query_params.push_str(format!("&session-id={}", session_id).as_str());
+            query_params.push_str(format!("&session-id={session_id}").as_str());
         }
 
         query_params.push_str("&enable-partial-results-stabilization=true");
@@ -951,7 +950,7 @@ impl Transcriber {
         };
         let transcribe_uri = Uri::builder()
             .scheme("https")
-            .authority(format!("transcribestreaming.{}.amazonaws.com:8443", region).as_str())
+            .authority(format!("transcribestreaming.{region}.amazonaws.com:8443").as_str())
             .path_and_query(query_params.clone())
             .build()
             .map_err(|err| {

@@ -1306,7 +1306,7 @@ mod tests {
                 origin: Unprepared,
                 ..
             } => (),
-            other => panic!("{:?}", other),
+            other => panic!("{other:?}"),
         };
 
         gst::debug!(RUNTIME_CAT, "nominal: starting (async prepare)");
@@ -1356,7 +1356,7 @@ mod tests {
                 state: Started,
                 ..
             } => (),
-            other => panic!("{:?}", other),
+            other => panic!("{other:?}"),
         }
 
         gst::debug!(RUNTIME_CAT, "nominal: pause cancelling try_next");
@@ -1559,7 +1559,7 @@ mod tests {
                 state: Preparing,
                 ..
             } => (),
-            other => panic!("{:?}", other),
+            other => panic!("{other:?}"),
         }
 
         // Wait for state machine to reach Error
@@ -1573,7 +1573,7 @@ mod tests {
                 state: TaskState::Error,
                 ..
             } => (),
-            other => panic!("{:?}", other),
+            other => panic!("{other:?}"),
         }
 
         block_on(task.unprepare()).unwrap();
@@ -1636,7 +1636,8 @@ mod tests {
         let task = Task::default();
 
         let (mut prepare_sender, prepare_receiver) = mpsc::channel(1);
-        let _ = task.prepare(TaskPrepareTest { prepare_receiver }, context);
+        let fut = task.prepare(TaskPrepareTest { prepare_receiver }, context);
+        drop(fut);
 
         let start_ctx = Context::acquire("prepare_start_ok_requester", Duration::ZERO).unwrap();
         let (ready_sender, ready_receiver) = oneshot::channel();
@@ -1650,7 +1651,7 @@ mod tests {
                     origin: Preparing,
                     ..
                 } => (),
-                other => panic!("{:?}", other),
+                other => panic!("{other:?}"),
             }
             ready_sender.send(()).unwrap();
             assert_eq!(
@@ -1669,7 +1670,7 @@ mod tests {
                     origin: Started,
                     ..
                 } => (),
-                other => panic!("{:?}", other),
+                other => panic!("{other:?}"),
             }
             assert_eq!(
                 stop_status.await.unwrap(),
@@ -1687,7 +1688,7 @@ mod tests {
                     origin: Stopped,
                     ..
                 } => (),
-                other => panic!("{:?}", other),
+                other => panic!("{other:?}"),
             };
             assert_eq!(
                 unprepare_status.await.unwrap(),
@@ -1755,7 +1756,7 @@ mod tests {
                         (Prepare, Unprepared) => {
                             self.prepare_error_sender.send(()).await.unwrap();
                         }
-                        other => panic!("action error for {:?}", other),
+                        other => panic!("action error for {other:?}"),
                     }
                     Trigger::Error
                 }
@@ -1794,14 +1795,15 @@ mod tests {
                 origin: Unprepared,
                 ..
             } => (),
-            other => panic!("{:?}", other),
+            other => panic!("{other:?}"),
         };
 
         let start_ctx = Context::acquire("prepare_start_error_requester", Duration::ZERO).unwrap();
         let (ready_sender, ready_receiver) = oneshot::channel();
         let start_handle = start_ctx.spawn(async move {
             gst::debug!(RUNTIME_CAT, "prepare_start_error: starting (Err)");
-            let _ = task.start();
+            let fut = task.start();
+            drop(fut);
             ready_sender.send(()).unwrap();
             // FIXME we loose the origin Trigger (Start)
             // and only get the Trigger returned by handle_action_error
@@ -1812,7 +1814,7 @@ mod tests {
                     state: Preparing,
                     ..
                 }) => (),
-                other => panic!("{:?}", other),
+                other => panic!("{other:?}"),
             }
 
             let unprepare_status = task.unprepare();
@@ -1822,7 +1824,7 @@ mod tests {
                     origin: TaskState::Error,
                     ..
                 } => (),
-                other => panic!("{:?}", other),
+                other => panic!("{other:?}"),
             };
             assert_eq!(
                 unprepare_status.await.unwrap(),
@@ -1921,7 +1923,7 @@ mod tests {
                 state: TaskState::Error,
                 ..
             } => (),
-            other => panic!("{:?}", other),
+            other => panic!("{other:?}"),
         }
 
         assert_eq!(
@@ -1978,13 +1980,14 @@ mod tests {
 
         let (flush_start_sender, mut flush_start_receiver) = mpsc::channel(1);
         let (flush_stop_sender, mut flush_stop_receiver) = mpsc::channel(1);
-        let _ = task.prepare(
+        let fut = task.prepare(
             TaskFlushTest {
                 flush_start_sender,
                 flush_stop_sender,
             },
             context,
         );
+        drop(fut);
 
         gst::debug!(RUNTIME_CAT, "flush_regular_sync: start");
         block_on(task.start()).unwrap();
@@ -2013,7 +2016,8 @@ mod tests {
 
         block_on(flush_stop_receiver.next()).unwrap();
 
-        let _ = task.pause();
+        let fut = task.pause();
+        drop(fut);
         stop_then_unprepare(task);
     }
 
@@ -2070,13 +2074,14 @@ mod tests {
 
         let (flush_start_sender, mut flush_start_receiver) = mpsc::channel(1);
         let (flush_stop_sender, mut flush_stop_receiver) = mpsc::channel(1);
-        let _ = task.prepare(
+        let fut = task.prepare(
             TaskFlushTest {
                 flush_start_sender,
                 flush_stop_sender,
             },
             context,
         );
+        drop(fut);
 
         gst::debug!(RUNTIME_CAT, "flush_regular_different_context: start");
         task.start().block_on().unwrap();
@@ -2096,7 +2101,7 @@ mod tests {
                     origin: Started,
                     ..
                 } => (),
-                other => panic!("{:?}", other),
+                other => panic!("{other:?}"),
             };
             assert_eq!(
                 flush_start_status.await.unwrap(),
@@ -2115,7 +2120,7 @@ mod tests {
                     origin: Flushing,
                     ..
                 } => (),
-                other => panic!("{:?}", other),
+                other => panic!("{other:?}"),
             };
             assert_eq!(
                 flush_stop_status.await_maybe_on_context().unwrap(),
@@ -2182,13 +2187,14 @@ mod tests {
 
         let (flush_start_sender, mut flush_start_receiver) = mpsc::channel(1);
         let (flush_stop_sender, mut flush_stop_receiver) = mpsc::channel(1);
-        let _ = task.prepare(
+        let fut = task.prepare(
             TaskFlushTest {
                 flush_start_sender,
                 flush_stop_sender,
             },
             context.clone(),
         );
+        drop(fut);
 
         block_on(task.start()).unwrap();
 
@@ -2201,7 +2207,7 @@ mod tests {
                     origin: Started,
                     ..
                 } => (),
-                other => panic!("{:?}", other),
+                other => panic!("{other:?}"),
             };
             assert_eq!(
                 flush_start_status.await.unwrap(),
@@ -2220,7 +2226,7 @@ mod tests {
                     origin: Flushing,
                     ..
                 } => (),
-                other => panic!("{:?}", other),
+                other => panic!("{other:?}"),
             };
             assert_eq!(
                 flush_stop_status.await.unwrap(),
@@ -2264,7 +2270,7 @@ mod tests {
                             origin: Started,
                             ..
                         } => (),
-                        other => panic!("{:?}", other),
+                        other => panic!("{other:?}"),
                     }
                     Ok(())
                 }
@@ -2286,15 +2292,17 @@ mod tests {
         let task = Task::default();
 
         let (flush_start_sender, mut flush_start_receiver) = mpsc::channel(1);
-        let _ = task.prepare(
+        let fut = task.prepare(
             TaskFlushTest {
                 task: task.clone(),
                 flush_start_sender,
             },
             context,
         );
+        drop(fut);
 
-        let _ = task.start();
+        let fut = task.start();
+        drop(fut);
 
         gst::debug!(
             RUNTIME_CAT,
@@ -2343,7 +2351,7 @@ mod tests {
                             origin: Started,
                             ..
                         } => (),
-                        other => panic!("{:?}", other),
+                        other => panic!("{other:?}"),
                     }
 
                     Ok(())
@@ -2366,15 +2374,17 @@ mod tests {
         let task = Task::default();
 
         let (pause_sender, mut pause_receiver) = mpsc::channel(1);
-        let _ = task.prepare(
+        let fut = task.prepare(
             TaskStartTest {
                 task: task.clone(),
                 pause_sender,
             },
             context,
         );
+        drop(fut);
 
-        let _ = task.start();
+        let fut = task.start();
+        drop(fut);
 
         gst::debug!(RUNTIME_CAT, "pause_from_loop: awaiting pause notification");
         block_on(pause_receiver.next()).unwrap();
@@ -2415,7 +2425,7 @@ mod tests {
                             origin: Started,
                             ..
                         } => (),
-                        other => panic!("{:?}", other),
+                        other => panic!("{other:?}"),
                     }
 
                     Ok(())
@@ -2438,16 +2448,18 @@ mod tests {
         let task = Task::default();
 
         let (flush_stop_sender, mut flush_stop_receiver) = mpsc::channel(1);
-        let _ = task.prepare(
+        let fut = task.prepare(
             TaskFlushTest {
                 task: task.clone(),
                 flush_stop_sender,
             },
             context,
         );
+        drop(fut);
 
         task.start().block_on().unwrap();
-        let _ = task.flush_start();
+        let fut = task.flush_start();
+        drop(fut);
 
         gst::debug!(
             RUNTIME_CAT,
@@ -2514,7 +2526,7 @@ mod tests {
         let (started_sender, mut started_receiver) = mpsc::channel(1);
         let (flush_start_sender, mut flush_start_receiver) = mpsc::channel(1);
         let (flush_stop_sender, mut flush_stop_receiver) = mpsc::channel(1);
-        let _ = task.prepare(
+        let fut = task.prepare(
             TaskFlushTest {
                 started_sender,
                 flush_start_sender,
@@ -2522,6 +2534,7 @@ mod tests {
             },
             context,
         );
+        drop(fut);
 
         // Pause, FlushStart, FlushStop, Start
 
@@ -2629,7 +2642,7 @@ mod tests {
         let (started_sender, mut started_receiver) = mpsc::channel(1);
         let (flush_start_sender, mut flush_start_receiver) = mpsc::channel(1);
         let (flush_stop_sender, mut flush_stop_receiver) = mpsc::channel(1);
-        let _ = task.prepare(
+        let fut = task.prepare(
             TaskFlushTest {
                 started_sender,
                 flush_start_sender,
@@ -2637,11 +2650,13 @@ mod tests {
             },
             context,
         );
+        drop(fut);
 
         // Pause, FlushStart, Start, FlushStop
 
         gst::debug!(RUNTIME_CAT, "pause_flushing_start: pausing");
-        let _ = task.pause();
+        let fut = task.pause();
+        drop(fut);
 
         gst::debug!(RUNTIME_CAT, "pause_flushing_start: starting flush");
         block_on(task.flush_start()).unwrap();
@@ -2723,13 +2738,14 @@ mod tests {
 
         let (flush_start_sender, mut flush_start_receiver) = mpsc::channel(1);
         let (flush_stop_sender, mut flush_stop_receiver) = mpsc::channel(1);
-        let _ = task.prepare(
+        let fut = task.prepare(
             TaskStartTest {
                 flush_start_sender,
                 flush_stop_sender,
             },
             context,
         );
+        drop(fut);
 
         let oob_context =
             Context::acquire("flush_concurrent_start_oob", Duration::from_millis(2)).unwrap();
@@ -2755,7 +2771,7 @@ mod tests {
                     origin: Started,
                     ..
                 } => (),
-                other => panic!("{:?}", other),
+                other => panic!("{other:?}"),
             };
             status.await.unwrap();
             flush_start_receiver.next().await.unwrap();
@@ -2777,7 +2793,7 @@ mod tests {
                 origin: PausedFlushing,
                 target: Flushing,
             }) => (),
-            other => panic!("{:?}", other),
+            other => panic!("{other:?}"),
         }
 
         block_on(flush_start_handle).unwrap();
@@ -2848,16 +2864,18 @@ mod tests {
         let task = Task::default();
 
         let (timer_elapsed_sender, timer_elapsed_receiver) = oneshot::channel();
-        let _ = task.prepare(
+        let fut = task.prepare(
             TaskTimerTest {
                 timer: None,
                 timer_elapsed_sender: Some(timer_elapsed_sender),
             },
             context,
         );
+        drop(fut);
 
         gst::debug!(RUNTIME_CAT, "start_timer: start");
-        let _ = task.start();
+        let fut = task.start();
+        drop(fut);
 
         block_on(timer_elapsed_receiver).unwrap();
         gst::debug!(RUNTIME_CAT, "start_timer: timer elapsed received");

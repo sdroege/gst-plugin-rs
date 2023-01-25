@@ -24,7 +24,7 @@ pub fn repo_hash<P: AsRef<Path>>(path: P) -> Option<(String, String)> {
     let date = s.next()?;
 
     let hash = if dirty(path) {
-        format!("{}+", hash)
+        format!("{hash}+")
     } else {
         hash.into()
     };

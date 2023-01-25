@@ -107,8 +107,7 @@ fn test_basic() {
                 .field("mpegversion", 4i32)
                 .build()
         ),
-        "Unexpected audio caps {:?}",
-        caps
+        "Unexpected audio caps {caps:?}"
     );
 
     let video_streams = info.video_streams();
@@ -122,7 +121,6 @@ fn test_basic() {
     let caps = video_stream.caps().unwrap();
     assert!(
         caps.can_intersect(&gst::Caps::builder("video/x-h264").any_features().build()),
-        "Unexpected video caps {:?}",
-        caps
+        "Unexpected video caps {caps:?}"
     );
 }

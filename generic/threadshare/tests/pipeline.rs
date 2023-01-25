@@ -64,7 +64,7 @@ fn multiple_contexts_queue() {
 
     for i in 0..SRC_NB {
         let src = gst::ElementFactory::make("ts-udpsrc")
-            .name(format!("src-{}", i).as_str())
+            .name(format!("src-{i}").as_str())
             .property("context", format!("context-{}", (i as u32) % CONTEXT_NB))
             .property("context-wait", CONTEXT_WAIT)
             .property("port", (FIRST_PORT + i) as i32)
@@ -72,14 +72,14 @@ fn multiple_contexts_queue() {
             .unwrap();
 
         let queue = gst::ElementFactory::make("ts-queue")
-            .name(format!("queue-{}", i).as_str())
+            .name(format!("queue-{i}").as_str())
             .property("context", format!("context-{}", (i as u32) % CONTEXT_NB))
             .property("context-wait", CONTEXT_WAIT)
             .build()
             .unwrap();
 
         let sink = gst_app::AppSink::builder()
-            .name(format!("sink-{}", i).as_str())
+            .name(format!("sink-{i}").as_str())
             .sync(false)
             .async_(false)
             .build();
@@ -200,7 +200,7 @@ fn multiple_contexts_proxy() {
         let pipeline_index = i + OFFSET;
 
         let src = gst::ElementFactory::make("ts-udpsrc")
-            .name(format!("src-{}", pipeline_index).as_str())
+            .name(format!("src-{pipeline_index}").as_str())
             .property("context", format!("context-{}", (i as u32) % CONTEXT_NB))
             .property("context-wait", CONTEXT_WAIT)
             .property("port", (FIRST_PORT + i) as i32)
@@ -208,23 +208,23 @@ fn multiple_contexts_proxy() {
             .unwrap();
 
         let proxysink = gst::ElementFactory::make("ts-proxysink")
-            .name(format!("proxysink-{}", pipeline_index).as_str())
-            .property("proxy-context", format!("proxy-{}", pipeline_index))
+            .name(format!("proxysink-{pipeline_index}").as_str())
+            .property("proxy-context", format!("proxy-{pipeline_index}"))
             .build()
             .unwrap();
 
         let proxysrc = gst::ElementFactory::make("ts-proxysrc")
-            .name(format!("proxysrc-{}", pipeline_index).as_str())
+            .name(format!("proxysrc-{pipeline_index}").as_str())
             .property(
                 "context",
                 &format!("context-{}", (pipeline_index as u32) % CONTEXT_NB),
             )
-            .property("proxy-context", format!("proxy-{}", pipeline_index))
+            .property("proxy-context", format!("proxy-{pipeline_index}"))
             .build()
             .unwrap();
 
         let sink = gst_app::AppSink::builder()
-            .name(format!("sink-{}", pipeline_index).as_str())
+            .name(format!("sink-{pipeline_index}").as_str())
             .sync(false)
             .async_(false)
             .build();
@@ -634,7 +634,7 @@ fn socket_play_null_play() {
         .unwrap();
 
     let sink = gst::ElementFactory::make("ts-udpsink")
-        .name(format!("sink-{}", TEST).as_str())
+        .name(format!("sink-{TEST}").as_str())
         .property("socket", &socket)
         .property("context", TEST)
         .property("context-wait", 20u32)
@@ -705,6 +705,6 @@ fn socket_play_null_play() {
     let _ = pipeline.set_state(gst::State::Null);
 
     if let Err(err) = receiver.recv().unwrap() {
-        panic!("{}: {}", TEST, err);
+        panic!("{TEST}: {err}");
     }
 }

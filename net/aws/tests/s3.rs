@@ -36,14 +36,14 @@ async fn test_s3() {
     let bucket =
         std::env::var("AWS_S3_BUCKET").unwrap_or_else(|_| "gst-plugins-rs-tests".to_string());
     let key = format!("s3-test-{:?}.txt", chrono::Utc::now());
-    let uri = format!("s3://{}/{}/{}", region, bucket, key);
+    let uri = format!("s3://{region}/{bucket}/{key}");
     let content = "Hello, world!\n".as_bytes();
 
     // Manually add the element so we can configure it before it goes to PLAYING
     let mut h1 = gst_check::Harness::new_empty();
     // Need to add_parse() because the Harness API / Rust bindings aren't conducive to creating and
     // adding an element manually
-    h1.add_parse(format!("awss3sink uri={}", uri).as_str());
+    h1.add_parse(format!("awss3sink uri={uri}").as_str());
 
     h1.set_src_caps(gst::Caps::builder("text/plain").build());
     h1.play();

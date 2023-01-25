@@ -96,7 +96,7 @@ impl Handler {
         let session = self
             .sessions
             .get(session_id)
-            .context(format!("Session {} doesn't exist", session_id))?
+            .context(format!("Session {session_id} doesn't exist"))?
             .clone();
 
         if matches!(
@@ -526,7 +526,7 @@ mod tests {
                 assert_eq!(peer_id, "producer");
                 session_id.to_string()
             }
-            _ => panic!("SessionStarted message missing {:?}", sent_message),
+            _ => panic!("SessionStarted message missing {sent_message:?}"),
         };
 
         let (peer_id, sent_message) = handler.next().await.unwrap();
@@ -1212,7 +1212,7 @@ mod tests {
                 assert_eq!(peer_id, "producer");
                 session_id.to_string()
             }
-            _ => panic!("SessionStarted message missing {:?}", sent_message),
+            _ => panic!("SessionStarted message missing {sent_message:?}"),
         };
 
         let (peer_id, sent_message) = handler.next().await.unwrap();

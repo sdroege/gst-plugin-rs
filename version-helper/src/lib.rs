@@ -74,8 +74,8 @@ pub fn info() {
         ("RELEASE".into(), date.format("%Y-%m-%d").to_string())
     });
 
-    println!("cargo:rustc-env=COMMIT_ID={}", commit_id);
-    println!("cargo:rustc-env=BUILD_REL_DATE={}", commit_date);
+    println!("cargo:rustc-env=COMMIT_ID={commit_id}");
+    println!("cargo:rustc-env=BUILD_REL_DATE={commit_date}");
 }
 
 fn cargo_mtime_date(crate_dir: path::PathBuf) -> Option<chrono::DateTime<chrono::Utc>> {

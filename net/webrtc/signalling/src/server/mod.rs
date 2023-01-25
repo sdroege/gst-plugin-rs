@@ -69,7 +69,7 @@ impl Server {
         }));
 
         let state_clone = state.clone();
-        let _ = task::spawn(async move {
+        task::spawn(async move {
             while let Some((peer_id, msg)) = handler.next().await {
                 match serde_json::to_string(&msg) {
                     Ok(msg) => {

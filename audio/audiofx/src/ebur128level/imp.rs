@@ -779,8 +779,8 @@ fn non_interleaved_channel_data_into_slices<'a, T: FromByteSlice>(
 
 /// Split a vector of slices into a tuple of slices with each slice split at `split_at`.
 #[allow(clippy::type_complexity)]
-fn split_vec<'a, 'b, T: Copy>(
-    vec: &'b SmallVec<[&'a [T]; 64]>,
+fn split_vec<'a, T: Copy>(
+    vec: &SmallVec<[&'a [T]; 64]>,
     split_at: usize,
 ) -> (SmallVec<[&'a [T]; 64]>, SmallVec<[&'a [T]; 64]>) {
     let VecPair(first, second) = vec

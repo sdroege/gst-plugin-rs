@@ -40,7 +40,7 @@ fn test_parse() {
         )
     } else {
         let seed = rand::random::<u64>();
-        println!("seed {}", seed);
+        println!("seed {seed}");
         rand::rngs::SmallRng::seed_from_u64(seed)
     };
 
@@ -199,7 +199,7 @@ fn test_pull() {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("tests/dn2018-1217.scc");
 
-    let mut h = gst_check::Harness::new_parse(&format!("filesrc location={:?} ! sccparse", path));
+    let mut h = gst_check::Harness::new_parse(&format!("filesrc location={path:?} ! sccparse"));
 
     h.play();
 

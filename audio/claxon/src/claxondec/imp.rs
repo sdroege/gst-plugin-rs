@@ -392,7 +392,7 @@ fn gstaudioinfo(streaminfo: &claxon::metadata::StreamInfo) -> Result<gst_audio::
 
     let audio_info = info_builder
         .build()
-        .map_err(|e| format!("failed to build audio info: {}", e))?;
+        .map_err(|e| format!("failed to build audio info: {e}"))?;
 
     Ok(audio_info)
 }

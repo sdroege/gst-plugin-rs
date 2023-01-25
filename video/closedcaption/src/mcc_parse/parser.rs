@@ -682,7 +682,7 @@ mod tests {
         while let Some(line) = reader.line() {
             let res = match parser.parse_line(line, true) {
                 Ok(res) => res,
-                Err(err) => panic!("Couldn't parse line {}: {:?}", line_cnt, err),
+                Err(err) => panic!("Couldn't parse line {line_cnt}: {err:?}"),
             };
 
             match line_cnt {
@@ -714,7 +714,7 @@ mod tests {
                 42 => assert_eq!(res, MccLine::TimeCodeRate(30, true)),
                 _ => match res {
                     MccLine::Caption(_, _) => (),
-                    res => panic!("Expected caption at line {}, got {:?}", line_cnt, res),
+                    res => panic!("Expected caption at line {line_cnt}, got {res:?}"),
                 },
             }
 

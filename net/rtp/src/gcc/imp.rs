@@ -865,9 +865,7 @@ impl State {
 
             assert!(
                 rate >= self.target_bitrate_on_delay as f64,
-                "Increase: {} - {}",
-                rate,
-                eta
+                "Increase: {rate} - {eta}"
             );
 
             // Maximum increase to 1.5 * received rate

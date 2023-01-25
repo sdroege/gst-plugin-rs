@@ -90,7 +90,7 @@ fn send_test_buffers(n_streams: u16, num_buffers: Option<i32>) {
     let pipeline = gst::Pipeline::default();
     for i in 0..n_streams {
         let src = gst::ElementFactory::make("ts-audiotestsrc")
-            .name(format!("ts-audiotestsrc-{}", i).as_str())
+            .name(format!("ts-audiotestsrc-{i}").as_str())
             .property("context-wait", 20u32)
             .property("is-live", true)
             .property("do-timestamp", true)
@@ -107,7 +107,7 @@ fn send_test_buffers(n_streams: u16, num_buffers: Option<i32>) {
         }
 
         let sink = gst::ElementFactory::make("ts-udpsink")
-            .name(format!("udpsink-{}", i).as_str())
+            .name(format!("udpsink-{i}").as_str())
             .property("clients", format!("127.0.0.1:{}", i + 5004))
             .property("context-wait", 20u32)
             .build()
@@ -125,7 +125,7 @@ fn send_rtp_buffers(n_streams: u16, num_buffers: Option<i32>) {
     let pipeline = gst::Pipeline::default();
     for i in 0..n_streams {
         let src = gst::ElementFactory::make("ts-audiotestsrc")
-            .name(format!("ts-audiotestsrc-{}", i).as_str())
+            .name(format!("ts-audiotestsrc-{i}").as_str())
             .property("context-wait", 20u32)
             .property("is-live", true)
             .property("do-timestamp", true)
@@ -142,16 +142,16 @@ fn send_rtp_buffers(n_streams: u16, num_buffers: Option<i32>) {
         }
 
         let enc = gst::ElementFactory::make("alawenc")
-            .name(format!("alawenc-{}", i).as_str())
+            .name(format!("alawenc-{i}").as_str())
             .build()
             .unwrap();
         let pay = gst::ElementFactory::make("rtppcmapay")
-            .name(format!("rtppcmapay-{}", i).as_str())
+            .name(format!("rtppcmapay-{i}").as_str())
             .build()
             .unwrap();
 
         let sink = gst::ElementFactory::make("ts-udpsink")
-            .name(format!("udpsink-{}", i).as_str())
+            .name(format!("udpsink-{i}").as_str())
             .property("context-wait", 20u32)
             .property("clients", format!("127.0.0.1:{}", i + 5004))
             .build()

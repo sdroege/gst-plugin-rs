@@ -37,9 +37,8 @@ fn run() -> Result<(), Error> {
     let hrir = &args[2];
 
     let pipeline = gst::parse_launch(&format!(
-        "uridecodebin uri={} ! audioconvert ! audio/x-raw,channels=1 !
-            hrtfrender hrir-file={} name=hrtf ! audioresample ! autoaudiosink",
-        uri, hrir
+        "uridecodebin uri={uri} ! audioconvert ! audio/x-raw,channels=1 !
+            hrtfrender hrir-file={hrir} name=hrtf ! audioresample ! autoaudiosink"
     ))?
     .downcast::<gst::Pipeline>()
     .expect("type error");
@@ -142,6 +141,6 @@ fn run() -> Result<(), Error> {
 fn main() {
     match run() {
         Ok(r) => r,
-        Err(e) => eprintln!("Error! {}", e),
+        Err(e) => eprintln!("Error! {e}"),
     }
 }

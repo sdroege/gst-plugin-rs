@@ -509,7 +509,7 @@ mod tests {
 
         let element = <RTPAv1Depay as ObjectSubclass>::Type::new();
         for (idx, (obu, rtp_bytes, out_bytes)) in test_data.into_iter().enumerate() {
-            println!("running test {}...", idx);
+            println!("running test {idx}...");
             let mut reader = Cursor::new(rtp_bytes.as_slice());
 
             let actual = element.imp().translate_obu(&mut reader, &obu);
@@ -560,7 +560,7 @@ mod tests {
             rtp_bytes,
             aggr_header,
         )) in test_data.into_iter().enumerate() {
-            println!("running test {}...", idx);
+            println!("running test {idx}...");
             let buffer = gst::Buffer::new_rtp_with_sizes(payload_size, 0, 0).unwrap();
             let rtp = gst_rtp::RTPBuffer::from_buffer_readable(&buffer).unwrap();
             let mut reader = Cursor::new(rtp_bytes.as_slice());

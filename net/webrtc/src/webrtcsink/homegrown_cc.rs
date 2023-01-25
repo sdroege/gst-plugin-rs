@@ -139,11 +139,11 @@ impl CongestionController {
 
         if delay_factor > 0.1 {
             let (factor, reason) = if delay_factor < 0.64 {
-                (0.96, format!("low delay factor {}", delay_factor))
+                (0.96, format!("low delay factor {delay_factor}"))
             } else {
                 (
                     delay_factor.sqrt().sqrt().clamp(0.8, 0.96),
-                    format!("High delay factor {}", delay_factor),
+                    format!("High delay factor {delay_factor}"),
                 )
             };
 
@@ -151,7 +151,7 @@ impl CongestionController {
         } else if delta_of_delta > 1_000_000 {
             CongestionControlOp::Decrease {
                 factor: 0.97,
-                reason: format!("High delta: {}", delta_of_delta),
+                reason: format!("High delta: {delta_of_delta}"),
             }
         } else {
             CongestionControlOp::Increase(if let Some(ema) = self.bitrate_ema {
@@ -303,7 +303,7 @@ impl CongestionController {
             if loss_percentage > 10. {
                 CongestionControlOp::Decrease {
                     factor: ((100. - (0.5 * loss_percentage)) / 100.).clamp(0.7, 0.98),
-                    reason: format!("High loss: {}", loss_percentage),
+                    reason: format!("High loss: {loss_percentage}"),
                 }
             } else if loss_percentage > 2. {
                 CongestionControlOp::Hold

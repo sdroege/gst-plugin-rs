@@ -153,7 +153,7 @@ impl S3Upload {
         let s3_bucket = settings.s3_bucket.as_ref().unwrap().to_string();
         let s3_key_prefix = settings.s3_key_prefix.as_ref();
         let s3_key = if let Some(key_prefix) = s3_key_prefix {
-            format!("{}/{}", key_prefix, s3_location)
+            format!("{key_prefix}/{s3_location}")
         } else {
             s3_location
         };
@@ -718,7 +718,7 @@ impl ObjectImpl for S3HlsSink {
 
                 let s3_key_prefix = settings.s3_key_prefix.as_ref();
                 let s3_key = if let Some(key_prefix) = s3_key_prefix {
-                    format!("{}/{}", key_prefix, s3_location)
+                    format!("{key_prefix}/{s3_location}")
                 } else {
                     s3_location.to_string()
                 };

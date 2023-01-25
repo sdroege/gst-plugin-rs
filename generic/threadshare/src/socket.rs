@@ -111,8 +111,8 @@ impl error::Error for SocketError {}
 impl fmt::Display for SocketError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SocketError::Gst(err) => write!(f, "flow error: {}", err),
-            SocketError::Io(err) => write!(f, "IO error: {}", err),
+            SocketError::Gst(err) => write!(f, "flow error: {err}"),
+            SocketError::Io(err) => write!(f, "IO error: {err}"),
         }
     }
 }

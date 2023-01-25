@@ -319,7 +319,7 @@ mod tests {
         for (idx, (sized_obu, sized_bytes, expected_position, unsized_obu, unsized_bytes)) in
             (*OBUS).iter().enumerate()
         {
-            println!("running test {}...", idx);
+            println!("running test {idx}...");
             {
                 println!("  parsing sized...");
                 let mut reader = BitReader::endian(Cursor::new(&sized_bytes), BigEndian);
@@ -345,7 +345,7 @@ mod tests {
     #[test]
     fn test_conversion() {
         for (idx, (sized_obu, _, _, unsized_obu, _)) in (*OBUS).iter().enumerate() {
-            println!("running test {}...", idx);
+            println!("running test {idx}...");
             assert_eq!(
                 unsized_obu.as_sized(sized_obu.size, sized_obu.leb_size),
                 SizedObu {
@@ -404,7 +404,7 @@ mod tests {
         ];
 
         for (idx, (sized_obu, rtp_bytes)) in obus.into_iter().enumerate() {
-            println!("running test {}...", idx);
+            println!("running test {idx}...");
 
             let mut reader = BitReader::endian(Cursor::new(&rtp_bytes), BigEndian);
 

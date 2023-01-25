@@ -197,7 +197,7 @@ impl State {
                     .expect("Buffer without timecode")
                     .tc();
 
-                let _ = write!(outbuf, "{}\t", timecode);
+                let _ = write!(outbuf, "{timecode}\t");
                 line_start = false;
             } else {
                 outbuf.push(b' ');
@@ -280,7 +280,7 @@ impl SccEnc {
                         gst::error!(CAT, obj: pad, "Caps without framerate");
                         return false;
                     }
-                    err => panic!("SccEnc::sink_event caps: {:?}", err),
+                    err => panic!("SccEnc::sink_event caps: {err:?}"),
                 };
 
                 let mut state = self.state.lock().unwrap();

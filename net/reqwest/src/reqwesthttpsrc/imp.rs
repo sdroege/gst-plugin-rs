@@ -93,7 +93,7 @@ fn proxy_from_str(s: Option<String>) -> Result<Option<String>, glib::Error> {
             // If no protocol specified, prepend http for compatibility
             // https://gstreamer.freedesktop.org/documentation/soup/souphttpsrc.html
             let url_string = if !not_empty_str.contains("://") {
-                format!("http://{}", not_empty_str)
+                format!("http://{not_empty_str}")
             } else {
                 not_empty_str
             };
@@ -104,7 +104,7 @@ fn proxy_from_str(s: Option<String>) -> Result<Option<String>, glib::Error> {
                 }
                 Err(err) => Err(glib::Error::new(
                     gst::URIError::BadUri,
-                    format!("Failed to parse URI '{}': {:?}", url_string, err).as_str(),
+                    format!("Failed to parse URI '{url_string}': {err:?}").as_str(),
                 )),
             }
         }
@@ -190,7 +190,7 @@ impl ReqwestHttpSrc {
         let uri = Url::parse(uri).map_err(|err| {
             glib::Error::new(
                 gst::URIError::BadUri,
-                format!("Failed to parse URI '{}': {:?}", uri, err).as_str(),
+                format!("Failed to parse URI '{uri}': {err:?}").as_str(),
             )
         })?;
 
@@ -222,8 +222,7 @@ impl ReqwestHttpSrc {
             return Err(glib::Error::new(
                 gst::URIError::BadState,
                 &format!(
-                    "Changing the `{}` property on a started `reqwesthttpsrc` is not supported",
-                    property_name
+                    "Changing the `{property_name}` property on a started `reqwesthttpsrc` is not supported"
                 ),
             ));
         }

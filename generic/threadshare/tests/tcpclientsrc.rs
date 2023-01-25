@@ -100,7 +100,7 @@ fn test_push() {
                 eos = true;
                 break;
             }
-            MessageView::Error(err) => panic!("{:?}", err),
+            MessageView::Error(err) => panic!("{err:?}"),
             _ => (),
         }
     }

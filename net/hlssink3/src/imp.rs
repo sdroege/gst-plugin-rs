@@ -342,7 +342,7 @@ impl HlsSink3 {
 
         let settings = self.settings.lock().unwrap();
         if let Some(playlist_root) = &settings.playlist_root {
-            format!("{}/{}", playlist_root, segment_filename)
+            format!("{playlist_root}/{segment_filename}")
         } else {
             segment_filename
         }

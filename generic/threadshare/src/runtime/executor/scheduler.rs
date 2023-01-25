@@ -201,7 +201,7 @@ impl Scheduler {
 
         let mut now;
         // This is to ensure reactor invocation on the first iteration.
-        let mut last_react = Instant::now() - self.max_throttling;
+        let mut last_react = Instant::now().checked_sub(self.max_throttling).unwrap();
         let mut tasks_checked;
         'main: loop {
             // Only check I/O and timers every `max_throttling`.

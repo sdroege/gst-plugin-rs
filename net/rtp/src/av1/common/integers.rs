@@ -79,7 +79,7 @@ mod tests {
         ];
 
         for (value, encoding) in TEST_CASES {
-            println!("testing: value={}", value);
+            println!("testing: value={value}");
 
             let mut reader = BitReader::endian(Cursor::new(&encoding), BigEndian);
             assert_eq!(value, parse_leb128(&mut reader).unwrap());

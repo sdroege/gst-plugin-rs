@@ -116,7 +116,7 @@ fn create_ui(app: &gtk::Application) {
         let position = video_sink
             .query_position::<gst::ClockTime>()
             .unwrap_or(gst::ClockTime::ZERO);
-        position_label.set_text(&format!("Position: {:.1}", position));
+        position_label.set_text(&format!("Position: {position:.1}"));
 
         glib::Continue(true)
     });

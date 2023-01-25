@@ -78,7 +78,7 @@ fn main() {
         let build_context = || format!("context-{}", (i as u32) % n_groups);
 
         let sink = gst::ElementFactory::make("fakesink")
-            .name(format!("sink-{}", i).as_str())
+            .name(format!("sink-{i}").as_str())
             .property("sync", false)
             .property("async", false)
             .property("signal-handoffs", true)
@@ -96,7 +96,7 @@ fn main() {
         let (source, context) = match source.as_str() {
             "udpsrc" => {
                 let source = gst::ElementFactory::make("udpsrc")
-                    .name(format!("source-{}", i).as_str())
+                    .name(format!("source-{i}").as_str())
                     .property("port", 5004i32 + i as i32)
                     .property("retrieve-sender-address", false)
                     .build()
@@ -107,7 +107,7 @@ fn main() {
             "ts-udpsrc" => {
                 let context = build_context();
                 let source = gst::ElementFactory::make("ts-udpsrc")
-                    .name(format!("source-{}", i).as_str())
+                    .name(format!("source-{i}").as_str())
                     .property("port", 5004i32 + i as i32)
                     .property("context", &context)
                     .property("context-wait", wait)
@@ -122,7 +122,7 @@ fn main() {
             }
             "tcpclientsrc" => {
                 let source = gst::ElementFactory::make("tcpclientsrc")
-                    .name(format!("source-{}", i).as_str())
+                    .name(format!("source-{i}").as_str())
                     .property("host", "127.0.0.1")
                     .property("port", 40000i32)
                     .build()
@@ -133,7 +133,7 @@ fn main() {
             "ts-tcpclientsrc" => {
                 let context = build_context();
                 let source = gst::ElementFactory::make("ts-tcpclientsrc")
-                    .name(format!("source-{}", i).as_str())
+                    .name(format!("source-{i}").as_str())
                     .property("host", "127.0.0.1")
                     .property("port", 40000i32)
                     .property("context", &context)
@@ -145,7 +145,7 @@ fn main() {
             }
             "tonegeneratesrc" => {
                 let source = gst::ElementFactory::make("tonegeneratesrc")
-                    .name(format!("source-{}", i).as_str())
+                    .name(format!("source-{i}").as_str())
                     .property("samplesperbuffer", (wait as i32) * 8000 / 1000)
                     .build()
                     .unwrap();
@@ -157,7 +157,7 @@ fn main() {
             "ts-tonesrc" => {
                 let context = build_context();
                 let source = gst::ElementFactory::make("ts-tonesrc")
-                    .name(format!("source-{}", i).as_str())
+                    .name(format!("source-{i}").as_str())
                     .property("samples-per-buffer", wait * 8000 / 1000)
                     .property("context", &context)
                     .property("context-wait", wait)
@@ -171,7 +171,7 @@ fn main() {
 
         if is_rtp {
             let jb = gst::ElementFactory::make("ts-jitterbuffer")
-                .name(format!("jb-{}", i).as_str())
+                .name(format!("jb-{i}").as_str())
                 .property("context-wait", wait)
                 .property("latency", wait)
                 .build()
