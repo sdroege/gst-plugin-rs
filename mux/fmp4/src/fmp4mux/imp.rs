@@ -100,6 +100,7 @@ struct Settings {
     interleave_bytes: Option<u64>,
     interleave_time: Option<gst::ClockTime>,
     movie_timescale: u32,
+    offset_to_zero: bool,
 }
 
 impl Default for Settings {
@@ -112,6 +113,7 @@ impl Default for Settings {
             interleave_bytes: DEFAULT_INTERLEAVE_BYTES,
             interleave_time: DEFAULT_INTERLEAVE_TIME,
             movie_timescale: 0,
+            offset_to_zero: false,
         }
     }
 }
@@ -1386,11 +1388,11 @@ impl FMP4Mux {
         let (mut interleaved_buffers, mut streams) =
             self.interleave_buffers(settings, drained_streams)?;
 
-        // Offset stream start time to start at 0 in ONVIF mode instead of using the UTC time
-        // verbatim. This would be used for the tfdt box later.
+        // Offset stream start time to start at 0 in ONVIF mode, or if 'offset-to-zero' is enabled,
+        // instead of using the UTC time verbatim. This would be used for the tfdt box later.
         // FIXME: Should this use the original DTS-or-PTS running time instead?
         //        That might be negative though!
-        if self.obj().class().as_ref().variant == super::Variant::ONVIF {
+        if self.obj().class().as_ref().variant == super::Variant::ONVIF || settings.offset_to_zero {
             let offset = if let Some(start_dts) = state.start_dts {
                 std::cmp::min(start_dts, state.earliest_pts.unwrap())
             } else {
@@ -2521,7 +2523,47 @@ impl ObjectSubclass for ISOFMP4Mux {
     type ParentType = super::FMP4Mux;
 }
 
-impl ObjectImpl for ISOFMP4Mux {}
+impl ObjectImpl for ISOFMP4Mux {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![glib::ParamSpecBoolean::builder("offset-to-zero")
+                .nick("Offset to Zero")
+                .blurb("Offsets all streams so that the earliest stream starts at 0")
+                .mutable_ready()
+                .build()]
+        });
+
+        &PROPERTIES
+    }
+
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        let obj = self.obj();
+        let fmp4mux = obj.upcast_ref::<super::FMP4Mux>().imp();
+
+        match pspec.name() {
+            "offset-to-zero" => {
+                let settings = fmp4mux.settings.lock().unwrap();
+                settings.offset_to_zero.to_value()
+            }
+
+            _ => unimplemented!(),
+        }
+    }
+
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        let obj = self.obj();
+        let fmp4mux = obj.upcast_ref::<super::FMP4Mux>().imp();
+
+        match pspec.name() {
+            "offset-to-zero" => {
+                let mut settings = fmp4mux.settings.lock().unwrap();
+                settings.offset_to_zero = value.get().expect("type checked upstream");
+            }
+
+            _ => unimplemented!(),
+        }
+    }
+}
 
 impl GstObjectImpl for ISOFMP4Mux {}
 
