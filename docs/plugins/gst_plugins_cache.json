@@ -1668,6 +1668,20 @@
                         "presence": "always"
                     }
                 },
+                "properties": {
+                    "offset-to-zero": {
+                        "blurb": "Offsets all streams so that the earliest stream starts at 0",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                },
                 "rank": "primary"
             },
             "onviffmp4mux": {
