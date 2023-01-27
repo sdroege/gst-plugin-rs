@@ -158,7 +158,7 @@ fn create_window(app: &gtk::Application) {
     window.show();
 }
 
-fn main() {
+fn main() -> glib::ExitCode {
     let app = gtk::Application::new(
         Some("gtk-plugins-rs.gtk-livesync"),
         gio::ApplicationFlags::FLAGS_NONE,
@@ -171,5 +171,5 @@ fn main() {
     });
 
     app.connect_activate(create_window);
-    app.run();
+    app.run()
 }

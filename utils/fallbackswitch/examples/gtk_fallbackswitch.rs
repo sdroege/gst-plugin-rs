@@ -196,7 +196,7 @@ fn create_ui(app: &gtk::Application) {
     });
 }
 
-fn main() {
+fn main() -> glib::ExitCode {
     gst::init().unwrap();
     gtk::init().unwrap();
 
@@ -206,5 +206,5 @@ fn main() {
     let app = gtk::Application::new(None::<&str>, gio::ApplicationFlags::FLAGS_NONE);
 
     app.connect_activate(create_ui);
-    app.run();
+    app.run()
 }
