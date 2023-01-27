@@ -732,7 +732,7 @@ impl PaintableSink {
             "Successfully deactivated GL Context after fill_info"
         );
 
-        let gst_context = match display.create_context(app_ctx) {
+        let gst_context = match display.create_context(Some(app_ctx)) {
             Ok(gst_context) => gst_context,
             Err(err) => {
                 gst::error!(CAT, imp: self, "Could not create GL context: {err}");
