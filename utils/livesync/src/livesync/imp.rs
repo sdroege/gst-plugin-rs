@@ -588,7 +588,9 @@ impl LiveSync {
 
                 let mut state = self.state.lock();
                 state.segment = Some(segment.clone());
-                state.sent_segment = false;
+                if !state.single_segment {
+                    state.sent_segment = false;
+                }
                 return true;
             }
 
