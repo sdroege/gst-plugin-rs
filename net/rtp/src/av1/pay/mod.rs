@@ -20,7 +20,7 @@ glib::wrapper! {
 
 impl RTPAv1Pay {
     pub fn new() -> Self {
-        glib::Object::new_default()
+        glib::Object::new()
     }
 }
 

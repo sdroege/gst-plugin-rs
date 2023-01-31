@@ -693,7 +693,7 @@ fn setup(
     let pipeline = gst::Pipeline::default();
 
     // Src
-    let src_element = glib::Object::new_default::<ElementSrcTest>();
+    let src_element = glib::Object::new::<ElementSrcTest>();
     src_element.set_property("context", &context_name);
     pipeline.add(&src_element).unwrap();
 

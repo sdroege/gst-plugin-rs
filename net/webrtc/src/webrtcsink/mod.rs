@@ -83,13 +83,13 @@ impl<T: AsRef<glib::Object> + Signallable> SignallableObject for T {}
 
 impl Default for WebRTCSink {
     fn default() -> Self {
-        glib::Object::new_default()
+        glib::Object::new()
     }
 }
 
 impl WebRTCSink {
     pub fn with_signaller(signaller: Box<dyn SignallableObject>) -> Self {
-        let ret = glib::Object::new_default::<WebRTCSink>();
+        let ret = glib::Object::new::<WebRTCSink>();
 
         let ws = ret.imp();
         ws.set_signaller(signaller).unwrap();
