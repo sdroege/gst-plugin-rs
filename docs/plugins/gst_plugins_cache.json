@@ -2041,6 +2041,18 @@
                     }
                 },
                 "properties": {
+                    "i-frames-only": {
+                        "blurb": "Each video segments is single iframe, So put EXT-X-I-FRAMES-ONLY tag in the playlist",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "location": {
                         "blurb": "Location of the file to write",
                         "conditionally-available": false,

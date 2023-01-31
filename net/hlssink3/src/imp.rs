@@ -25,6 +25,7 @@ const DEFAULT_MAX_NUM_SEGMENT_FILES: u32 = 10;
 const DEFAULT_TARGET_DURATION: u32 = 15;
 const DEFAULT_PLAYLIST_LENGTH: u32 = 5;
 const DEFAULT_PLAYLIST_TYPE: HlsSink3PlaylistType = HlsSink3PlaylistType::Unspecified;
+const DEFAULT_I_FRAMES_ONLY_PLAYLIST: bool = false;
 const DEFAULT_SEND_KEYFRAME_REQUESTS: bool = true;
 
 const SIGNAL_GET_PLAYLIST_STREAM: &str = "get-playlist-stream";
@@ -66,6 +67,7 @@ struct Settings {
     playlist_type: Option<MediaPlaylistType>,
     max_num_segment_files: usize,
     target_duration: u32,
+    i_frames_only: bool,
     send_keyframe_requests: bool,
 
     splitmuxsink: gst::Element,
@@ -94,6 +96,7 @@ impl Default for Settings {
             max_num_segment_files: DEFAULT_MAX_NUM_SEGMENT_FILES as usize,
             target_duration: DEFAULT_TARGET_DURATION,
             send_keyframe_requests: DEFAULT_SEND_KEYFRAME_REQUESTS,
+            i_frames_only: DEFAULT_I_FRAMES_ONLY_PLAYLIST,
 
             splitmuxsink,
             giostreamsink,
@@ -111,9 +114,13 @@ pub(crate) struct StartedState {
 }
 
 impl StartedState {
-    fn new(target_duration: f32, playlist_type: Option<MediaPlaylistType>) -> Self {
+    fn new(
+        target_duration: f32,
+        playlist_type: Option<MediaPlaylistType>,
+        i_frames_only: bool,
+    ) -> Self {
         Self {
-            playlist: Playlist::new(target_duration, playlist_type),
+            playlist: Playlist::new(target_duration, playlist_type, i_frames_only),
             current_segment_location: None,
             fragment_opened_at: None,
             old_segment_locations: Vec::new(),
@@ -148,17 +155,22 @@ impl HlsSink3 {
     fn start(&self) {
         gst::info!(CAT, imp: self, "Starting");
 
-        let (target_duration, playlist_type) = {
+        let (target_duration, playlist_type, i_frames_only) = {
             let settings = self.settings.lock().unwrap();
             (
                 settings.target_duration as f32,
                 settings.playlist_type.clone(),
+                settings.i_frames_only,
             )
         };
 
         let mut state = self.state.lock().unwrap();
         if let State::Stopped = *state {
-            *state = State::Started(StartedState::new(target_duration, playlist_type));
+            *state = State::Started(StartedState::new(
+                target_duration,
+                playlist_type,
+                i_frames_only,
+            ));
         }
     }
 
@@ -452,6 +464,11 @@ impl ObjectImpl for HlsSink3 {
                     .nick("Playlist Type")
                     .blurb("The type of the playlist to use. When VOD type is set, the playlist will be live until the pipeline ends execution.")
                     .build(),
+                glib::ParamSpecBoolean::builder("i-frames-only")
+                    .nick("I-Frames only playlist")
+                    .blurb("Each video segments is single iframe, So put EXT-X-I-FRAMES-ONLY tag in the playlist")
+                    .default_value(DEFAULT_I_FRAMES_ONLY_PLAYLIST)
+                    .build(),
                 glib::ParamSpecBoolean::builder("send-keyframe-requests")
                     .nick("Send Keyframe Requests")
                     .blurb("Send keyframe requests to ensure correct fragmentation. If this is disabled then the input must have keyframes in regular intervals.")
@@ -509,6 +526,17 @@ impl ObjectImpl for HlsSink3 {
                     .expect("type checked upstream")
                     .into();
             }
+            "i-frames-only" => {
+                settings.i_frames_only = value.get().expect("type checked upstream");
+                if settings.i_frames_only && settings.audio_sink {
+                    gst::element_error!(
+                        self.obj(),
+                        gst::StreamError::WrongType,
+                        ("Invalid configuration"),
+                        ["Audio not allowed for i-frames-only-stream"]
+                    );
+                }
+            }
             "send-keyframe-requests" => {
                 settings.send_keyframe_requests = value.get().expect("type checked upstream");
                 settings
@@ -535,6 +563,7 @@ impl ObjectImpl for HlsSink3 {
                 let playlist_type: HlsSink3PlaylistType = settings.playlist_type.as_ref().into();
                 playlist_type.to_value()
             }
+            "i-frames-only" => settings.i_frames_only.to_value(),
             "send-keyframe-requests" => settings.send_keyframe_requests.to_value(),
             _ => unimplemented!(),
         }
@@ -764,6 +793,15 @@ impl ElementImpl for HlsSink3 {
                         CAT,
                         imp: self,
                         "requested_new_pad: audio pad is already set"
+                    );
+                    return None;
+                }
+                if settings.i_frames_only {
+                    gst::element_error!(
+                        self.obj(),
+                        gst::StreamError::WrongType,
+                        ("Invalid configuration"),
+                        ["Audio not allowed for i-frames-only-stream"]
                     );
                     return None;
                 }

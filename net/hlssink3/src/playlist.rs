@@ -11,7 +11,8 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use std::io::Write;
 
-const GST_M3U8_PLAYLIST_VERSION: usize = 3;
+const GST_M3U8_PLAYLIST_V3: usize = 3;
+const GST_M3U8_PLAYLIST_V4: usize = 4;
 
 static SEGMENT_IDX_PATTERN: Lazy<regex::Regex> = Lazy::new(|| Regex::new(r"(%0(\d+)d)").unwrap());
 
@@ -29,7 +30,11 @@ pub struct Playlist {
 }
 
 impl Playlist {
-    pub fn new(target_duration: f32, playlist_type: Option<MediaPlaylistType>) -> Self {
+    pub fn new(
+        target_duration: f32,
+        playlist_type: Option<MediaPlaylistType>,
+        i_frames_only: bool,
+    ) -> Self {
         let mut turn_vod = false;
         let playlist_type = if playlist_type == Some(MediaPlaylistType::Vod) {
             turn_vod = true;
@@ -37,16 +42,21 @@ impl Playlist {
         } else {
             playlist_type
         };
+        let m3u8_version = if i_frames_only {
+            GST_M3U8_PLAYLIST_V4
+        } else {
+            GST_M3U8_PLAYLIST_V3
+        };
         Self {
             inner: MediaPlaylist {
-                version: Some(GST_M3U8_PLAYLIST_VERSION),
+                version: Some(m3u8_version),
                 target_duration,
                 media_sequence: 0,
                 segments: vec![],
                 discontinuity_sequence: 0,
                 end_list: false,
                 playlist_type,
-                i_frames_only: false,
+                i_frames_only,
                 start: None,
                 independent_segments: false,
                 unknown_tags: vec![],
