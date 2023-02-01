@@ -10,13 +10,13 @@
 macro_rules! err_flow {
     ($imp:ident, read, $msg:literal) => {
         |err| {
-            gst::element_imp_error!($imp, gst::ResourceError::Read, [$msg, err]);
+            gst::element_imp_warning!($imp, gst::ResourceError::Read, [$msg, err]);
             gst::FlowError::Error
         }
     };
     ($imp:ident, write, $msg:literal) => {
         |err| {
-            gst::element_imp_error!($imp, gst::ResourceError::Write, [$msg, err]);
+            gst::element_imp_warning!($imp, gst::ResourceError::Write, [$msg, err]);
             gst::FlowError::Error
         }
     };
@@ -44,51 +44,24 @@ macro_rules! err_flow {
     ($imp:ident, outbuf_alloc) => {
         err_flow!($imp, write, "Failed to allocate output buffer: {}")
     };
-}
-
-macro_rules! err_opt {
-    ($imp:ident, read, $msg:literal) => {
-        |err| {
-            gst::element_imp_error!($imp, gst::ResourceError::Read, [$msg, err]);
-            Option::<()>::None
-        }
-    };
-    ($imp:ident, write, $msg:literal) => {
-        |err| {
-            gst::element_imp_error!($imp, gst::ResourceError::Write, [$msg, err]);
-            Option::<()>::None
-        }
-    };
-
-    ($imp:ident, buf_alloc) => {
-        err_opt!($imp, write, "Failed to allocate new buffer: {}")
-    };
-
     ($imp:ident, payload_buf) => {
-        err_opt!($imp, read, "Failed to get RTP payload buffer: {}")
-    };
-    ($imp:ident, payload_map) => {
-        err_opt!($imp, read, "Failed to map payload as readable: {}")
-    };
-    ($imp:ident, buf_take) => {
-        err_opt!($imp, read, "Failed to take buffer from adapter: {}")
+        err_flow!($imp, read, "Failed to get RTP payload buffer: {}")
     };
     ($imp:ident, aggr_header_read) => {
-        err_opt!($imp, read, "Failed to read aggregation header: {}")
+        err_flow!($imp, read, "Failed to read aggregation header: {}")
+    };
+    ($imp:ident, find_element) => {
+        err_flow!($imp, read, "Failed to find OBU element in packet: {}")
     };
     ($imp:ident, leb_read) => {
-        err_opt!($imp, read, "Failed to read leb128 size field: {}")
+        err_flow!($imp, read, "Failed to read leb128 size field: {}")
     };
     ($imp:ident, leb_write) => {
-        err_opt!($imp, read, "Failed to write leb128 size field: {}")
+        err_flow!($imp, read, "Failed to write leb128 size field: {}")
     };
     ($imp:ident, obu_read) => {
-        err_opt!($imp, read, "Failed to read OBU header: {}")
-    };
-    ($imp:ident, buf_read) => {
-        err_opt!($imp, read, "Failed to read RTP buffer: {}")
+        err_flow!($imp, read, "Failed to read OBU header: {}")
     };
 }
 
 pub(crate) use err_flow;
-pub(crate) use err_opt;
