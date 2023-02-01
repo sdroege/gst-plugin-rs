@@ -26,13 +26,26 @@ use crate::av1::common::{
 
 // TODO: handle internal size fields in RTP OBUs
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct State {
     last_timestamp: Option<u32>,
     /// if true, the last packet of a temporal unit has been received
     marked_packet: bool,
+    /// if the next output buffer needs the DISCONT flag set
+    needs_discont: bool,
     /// holds data for a fragment
     obu_fragment: Option<(UnsizedObu, Vec<u8>)>,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        State {
+            last_timestamp: None,
+            marked_packet: false,
+            needs_discont: true,
+            obu_fragment: None,
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -314,9 +327,10 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
             gst::log!(
                 CAT,
                 imp: self,
-                "creating buffer containing {} bytes of data (marker {})...",
+                "creating buffer containing {} bytes of data (marker {}, discont {})...",
                 ready_obus.len(),
                 state.marked_packet,
+                state.needs_discont,
             );
 
             let mut buffer = gst::Buffer::from_mut_slice(ready_obus);
@@ -325,6 +339,10 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
                 if state.marked_packet {
                     buffer.set_flags(gst::BufferFlags::MARKER);
                 }
+                if state.needs_discont {
+                    buffer.set_flags(gst::BufferFlags::DISCONT);
+                    state.needs_discont = false;
+                }
             }
 
             Some(buffer)
@@ -332,6 +350,8 @@ impl RTPBaseDepayloadImpl for RTPAv1Depay {
             None
         };
 
+        // It's important to check this after the packet was created as otherwise
+        // the discont flag is already before the missing data.
         if state.marked_packet && state.obu_fragment.is_some() {
             gst::error!(
                 CAT,
