@@ -5495,7 +5495,7 @@
                         "presence": "always"
                     },
                     "src": {
-                        "caps": "video/x-av1:\n         parsed: true\n  stream-format: obu-stream\n      alignment: tu\n",
+                        "caps": "video/x-av1:\n         parsed: true\n  stream-format: obu-stream\n      alignment: obu\n",
                         "direction": "src",
                         "presence": "always"
                     }
