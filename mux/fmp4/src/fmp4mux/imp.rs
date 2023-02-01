@@ -1271,9 +1271,10 @@ impl FMP4Mux {
             gst::trace!(
                 CAT,
                 obj: stream.sinkpad,
-                "Draining up to end PTS {} / duration {}",
+                "Draining from {} up to end PTS {} / duration {}",
+                chunk_start_pts,
                 dequeue_end_pts,
-                dequeue_end_pts - chunk_start_pts
+                dequeue_end_pts.saturating_sub(chunk_start_pts),
             );
 
             while let Some(gop) = stream.queued_gops.back() {
@@ -1444,9 +1445,10 @@ impl FMP4Mux {
             gst::trace!(
                 CAT,
                 obj: stream.sinkpad,
-                "Draining up to end PTS {} / duration {}",
+                "Draining from {} up to end PTS {} / duration {}",
+                chunk_start_pts,
                 dequeue_end_pts,
-                dequeue_end_pts - chunk_start_pts
+                dequeue_end_pts.saturating_sub(chunk_start_pts),
             );
 
             while let Some(gop) = stream.queued_gops.back() {
@@ -1769,9 +1771,6 @@ impl FMP4Mux {
                     if all_eos || stream.sinkpad.is_eos() {
                         // This is handled below generally if nothing was dequeued
                     } else {
-                        // Otherwise this can only really happen on timeout in live pipelines.
-                        assert!(timeout);
-
                         if settings.chunk_duration.is_some() {
                             gst::warning!(
                                 CAT,
@@ -2318,7 +2317,6 @@ impl FMP4Mux {
                 Err(err) => {
                     if err == gst_base::AGGREGATOR_FLOW_NEED_DATA {
                         assert!(!all_eos);
-                        assert!(timeout);
                         gst::element_imp_warning!(
                             self,
                             gst::StreamError::Format,
