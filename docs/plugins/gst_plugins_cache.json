@@ -5520,7 +5520,7 @@
                 "long-name": "RTP AV1 payloader",
                 "pad-templates": {
                     "sink": {
-                        "caps": "video/x-av1:\n         parsed: true\n  stream-format: obu-stream\n      alignment: obu\n",
+                        "caps": "video/x-av1:\n         parsed: true\n  stream-format: obu-stream\n      alignment: { (string)tu, (string)frame, (string)obu }\n",
                         "direction": "sink",
                         "presence": "always"
                     },

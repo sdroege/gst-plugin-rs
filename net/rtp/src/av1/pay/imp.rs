@@ -82,6 +82,9 @@ struct State {
     last_dts: Option<gst::ClockTime>,
     /// The last observed PTS if upstream does not provide PTS for each OBU
     last_pts: Option<gst::ClockTime>,
+
+    /// If the input is TU or frame aligned.
+    framed: bool,
 }
 
 #[derive(Debug, Default)]
@@ -97,15 +100,23 @@ impl Default for State {
             first_packet_in_seq: true,
             last_dts: None,
             last_pts: None,
+            framed: false,
         }
     }
 }
 
 impl RTPAv1Pay {
-    fn reset(&self, state: &mut State) {
+    fn reset(&self, state: &mut State, full: bool) {
         gst::debug!(CAT, imp: self, "resetting state");
 
-        *state = State::default();
+        if full {
+            *state = State::default();
+        } else {
+            *state = State {
+                framed: state.framed,
+                ..State::default()
+            };
+        }
     }
 
     /// Parses new OBUs, stores them in the state,
@@ -576,7 +587,7 @@ impl ElementImpl for RTPAv1Pay {
                 &gst::Caps::builder("video/x-av1")
                     .field("parsed", true)
                     .field("stream-format", "obu-stream")
-                    .field("alignment", "obu")
+                    .field("alignment", gst::List::new(["tu", "frame", "obu"]))
                     .build(),
             )
             .unwrap();
@@ -608,14 +619,14 @@ impl ElementImpl for RTPAv1Pay {
 
         if matches!(transition, gst::StateChange::ReadyToPaused) {
             let mut state = self.state.lock().unwrap();
-            self.reset(&mut state);
+            self.reset(&mut state, true);
         }
 
         let ret = self.parent_change_state(transition);
 
         if matches!(transition, gst::StateChange::PausedToReady) {
             let mut state = self.state.lock().unwrap();
-            self.reset(&mut state);
+            self.reset(&mut state, true);
         }
 
         ret
@@ -623,10 +634,23 @@ impl ElementImpl for RTPAv1Pay {
 }
 
 impl RTPBasePayloadImpl for RTPAv1Pay {
-    fn set_caps(&self, _caps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        self.obj().set_options("video", true, "AV1", CLOCK_RATE);
+    fn set_caps(&self, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
+        gst::debug!(CAT, imp: self, "received caps {caps:?}");
 
-        gst::debug!(CAT, imp: self, "setting caps");
+        {
+            let mut state = self.state.lock().unwrap();
+            let s = caps.structure(0).unwrap();
+            match s.get::<&str>("alignment").unwrap() {
+                "tu" | "frame" => {
+                    state.framed = true;
+                }
+                _ => {
+                    state.framed = false;
+                }
+            }
+        }
+
+        self.obj().set_options("video", true, "AV1", CLOCK_RATE);
 
         Ok(())
     }
@@ -638,7 +662,7 @@ impl RTPBasePayloadImpl for RTPAv1Pay {
 
         if buffer.flags().contains(gst::BufferFlags::DISCONT) {
             gst::debug!(CAT, imp: self, "buffer discontinuity");
-            self.reset(&mut state);
+            self.reset(&mut state, false);
         }
 
         let dts = buffer.dts();
@@ -655,7 +679,7 @@ impl RTPBasePayloadImpl for RTPAv1Pay {
         })?;
 
         // Does the buffer finished a full TU?
-        let marker = buffer.flags().contains(gst::BufferFlags::MARKER);
+        let marker = buffer.flags().contains(gst::BufferFlags::MARKER) || state.framed;
         let list = self.handle_new_obus(&mut state, map.as_slice(), marker, dts, pts)?;
         drop(map);
         drop(state);
@@ -685,7 +709,7 @@ impl RTPBasePayloadImpl for RTPAv1Pay {
                         }
                     }
 
-                    self.reset(&mut state);
+                    self.reset(&mut state, false);
                 }
                 if !list.is_empty() {
                     let _ = self.obj().push_list(list);
@@ -693,7 +717,7 @@ impl RTPBasePayloadImpl for RTPAv1Pay {
             }
             gst::EventView::FlushStop(_) => {
                 let mut state = self.state.lock().unwrap();
-                self.reset(&mut state);
+                self.reset(&mut state, false);
             }
             _ => (),
         }
