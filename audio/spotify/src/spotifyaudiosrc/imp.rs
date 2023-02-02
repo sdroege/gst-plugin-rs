@@ -99,43 +99,45 @@ impl ObjectSubclass for SpotifyAudioSrc {
 impl ObjectImpl for SpotifyAudioSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            let default = Settings::default();
+
             vec![glib::ParamSpecString::builder("username")
                     .nick("Username")
                     .blurb("Spotify device username from https://www.spotify.com/us/account/set-device-password/")
-                    .default_value(Some(""))
+                    .default_value(Some(default.username.as_str()))
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecString::builder("password")
                     .nick("Password")
                     .blurb("Spotify device password from https://www.spotify.com/us/account/set-device-password/")
-                    .default_value(Some(""))
+                    .default_value(Some(default.password.as_str()))
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecString::builder("cache-credentials")
                     .nick("Credentials cache")
                     .blurb("Directory where to cache Spotify credentials")
-                    .default_value(Some(""))
+                    .default_value(Some(default.cache_credentials.as_str()))
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecString::builder("cache-files")
                     .nick("Files cache")
                     .blurb("Directory where to cache downloaded files from Spotify")
-                    .default_value(Some(""))
+                    .default_value(Some(default.cache_files.as_str()))
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecUInt64::builder("cache-max-size")
                     .nick("Cache max size")
                     .blurb("The max allowed size of the cache, in bytes, or 0 to disable the cache limit")
-                    .default_value(0)
+                    .default_value(default.cache_max_size)
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecString::builder("track")
                     .nick("Spotify URI")
                     .blurb("Spotify track URI, in the form 'spotify:track:$SPOTIFY_ID'")
-                    .default_value(Some(""))
+                    .default_value(Some(default.track.as_str()))
                     .mutable_ready()
                     .build(),
-                 glib::ParamSpecEnum::builder::<Bitrate>("bitrate")
+                 glib::ParamSpecEnum::builder_with_default::<Bitrate>("bitrate", default.bitrate)
                      .nick("Spotify bitrate")
                      .blurb("Spotify audio bitrate in kbit/s")
                      .mutable_ready()
