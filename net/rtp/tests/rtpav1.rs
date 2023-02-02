@@ -167,7 +167,7 @@ fn test_payloader() {
                 0b0011_0100, 0b0100_1000, 1,
             ]
         ), (
-            false,
+            true, // because of EOS
             90_000,
             vec![
                 0b0001_0000,
