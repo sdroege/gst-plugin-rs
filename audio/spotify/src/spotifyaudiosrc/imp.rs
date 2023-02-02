@@ -31,6 +31,8 @@ use librespot::playback::{
     player::{Player, PlayerEvent},
 };
 
+use super::Bitrate;
+
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "spotifyaudiosrc",
@@ -71,6 +73,7 @@ struct Settings {
     cache_files: String,
     cache_max_size: u64,
     track: String,
+    bitrate: Bitrate,
 }
 
 #[derive(Default)]
@@ -132,6 +135,11 @@ impl ObjectImpl for SpotifyAudioSrc {
                     .default_value(Some(""))
                     .mutable_ready()
                     .build(),
+                 glib::ParamSpecEnum::builder::<Bitrate>("bitrate")
+                     .nick("Spotify bitrate")
+                     .blurb("Spotify audio bitrate in kbit/s")
+                     .mutable_ready()
+                     .build()
             ]
         });
 
@@ -164,6 +172,10 @@ impl ObjectImpl for SpotifyAudioSrc {
                 let mut settings = self.settings.lock().unwrap();
                 settings.track = value.get().expect("type checked upstream");
             }
+            "bitrate" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.bitrate = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -193,6 +205,10 @@ impl ObjectImpl for SpotifyAudioSrc {
             "track" => {
                 let settings = self.settings.lock().unwrap();
                 settings.track.to_value()
+            }
+            "bitrate" => {
+                let settings = self.settings.lock().unwrap();
+                settings.bitrate.to_value()
             }
             _ => unimplemented!(),
         }
@@ -434,7 +450,7 @@ impl SpotifyAudioSrc {
             }
         }
 
-        let (credentials, cache, track) = {
+        let (credentials, cache, track, bitrate) = {
             let settings = self.settings.lock().unwrap();
 
             let credentials_cache = if settings.cache_credentials.is_empty() {
@@ -482,7 +498,10 @@ impl SpotifyAudioSrc {
                 bail!("track is not set")
             }
 
-            (credentials, cache, settings.track.clone())
+            let bitrate = settings.bitrate.into();
+            gst::debug!(CAT, imp: self, "Requesting bitrate {:?}", bitrate);
+
+            (credentials, cache, settings.track.clone(), bitrate)
         };
 
         let (session, _credentials) =
@@ -490,6 +509,7 @@ impl SpotifyAudioSrc {
 
         let player_config = PlayerConfig {
             passthrough: true,
+            bitrate,
             ..Default::default()
         };
 
