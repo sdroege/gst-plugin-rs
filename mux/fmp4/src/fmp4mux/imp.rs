@@ -2408,6 +2408,9 @@ impl FMP4Mux {
                     }
                     delta_frames = DeltaFrames::Bidirectional;
                 }
+                "video/x-vp8" => {
+                    delta_frames = DeltaFrames::PredictiveOnly;
+                }
                 "video/x-vp9" => {
                     if !s.has_field_with_type("colorimetry", str::static_type()) {
                         gst::error!(CAT, obj: pad, "Received caps without colorimetry");
@@ -3264,6 +3267,10 @@ impl ElementImpl for ISOFMP4Mux {
                         .field("width", gst::IntRange::new(1, u16::MAX as i32))
                         .field("height", gst::IntRange::new(1, u16::MAX as i32))
                         .build(),
+                    gst::Structure::builder("video/x-vp8")
+                        .field("width", gst::IntRange::new(1, u16::MAX as i32))
+                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
+                        .build(),
                     gst::Structure::builder("video/x-vp9")
                         .field("profile", gst::List::new(["0", "1", "2", "3"]))
                         .field("chroma-format", gst::List::new(["4:2:0", "4:2:2", "4:4:4"]))
@@ -3442,6 +3449,10 @@ impl ElementImpl for DASHMP4Mux {
                         .field("alignment", "au")
                         .field("width", gst::IntRange::<i32>::new(1, u16::MAX as i32))
                         .field("height", gst::IntRange::<i32>::new(1, u16::MAX as i32))
+                        .build(),
+                    gst::Structure::builder("video/x-vp8")
+                        .field("width", gst::IntRange::new(1, u16::MAX as i32))
+                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
                         .build(),
                     gst::Structure::builder("video/x-vp9")
                         .field("profile", gst::List::new(["0", "1", "2", "3"]))

@@ -632,7 +632,7 @@ fn write_tkhd(
 
     // Width/height
     match s.name().as_str() {
-        "video/x-h264" | "video/x-h265" | "video/x-vp9" | "image/jpeg" => {
+        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "image/jpeg" => {
             let width = s.get::<i32>("width").context("video caps without width")? as u32;
             let height = s
                 .get::<i32>("height")
@@ -742,7 +742,7 @@ fn write_hdlr(
 
     let s = stream.caps.structure(0).unwrap();
     let (handler_type, name) = match s.name().as_str() {
-        "video/x-h264" | "video/x-h265" | "video/x-vp9" | "image/jpeg" => {
+        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "image/jpeg" => {
             (b"vide", b"VideoHandler\0".as_slice())
         }
         "audio/mpeg" | "audio/x-opus" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
@@ -772,7 +772,7 @@ fn write_minf(
     let s = stream.caps.structure(0).unwrap();
 
     match s.name().as_str() {
-        "video/x-h264" | "video/x-h265" | "video/x-vp9" | "image/jpeg" => {
+        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "image/jpeg" => {
             // Flags are always 1 for unspecified reasons
             write_full_box(v, b"vmhd", FULL_BOX_VERSION_0, 1, |v| write_vmhd(v, cfg))?
         }
@@ -883,7 +883,7 @@ fn write_stsd(
 
     let s = stream.caps.structure(0).unwrap();
     match s.name().as_str() {
-        "video/x-h264" | "video/x-h265" | "video/x-vp9" | "image/jpeg" => {
+        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "image/jpeg" => {
             write_visual_sample_entry(v, cfg, stream)?
         }
         "audio/mpeg" | "audio/x-opus" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
@@ -936,6 +936,7 @@ fn write_visual_sample_entry(
             }
         }
         "image/jpeg" => b"jpeg",
+        "video/x-vp8" => b"vp08",
         "video/x-vp9" => b"vp09",
         _ => unreachable!(),
     };
@@ -1068,7 +1069,7 @@ fn write_visual_sample_entry(
                     Ok(())
                 })?;
             }
-            "image/jpeg" => {
+            "video/x-vp8" | "image/jpeg" => {
                 // Nothing to do here
             }
             _ => unreachable!(),
