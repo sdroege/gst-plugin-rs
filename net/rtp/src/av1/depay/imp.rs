@@ -282,6 +282,8 @@ impl RTPAv1Depay {
                 )?;
                 state.obu_fragment = None;
             }
+
+            idx += 1;
         }
 
         // handle other OBUs, including trailing fragments
