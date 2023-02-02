@@ -6309,6 +6309,18 @@
                     }
                 },
                 "properties": {
+                    "bitrate": {
+                        "blurb": "Spotify audio bitrate in kbit/s",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "160 (1)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstRsSpotifyBitrate",
+                        "writable": true
+                    },
                     "cache-credentials": {
                         "blurb": "Directory where to cache Spotify credentials",
                         "conditionally-available": false,
@@ -6389,7 +6401,28 @@
         },
         "filename": "gstspotify",
         "license": "MPL",
-        "other-types": {},
+        "other-types": {
+            "GstRsSpotifyBitrate": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "96 kbit/s",
+                        "name": "96",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "160 kbit/s",
+                        "name": "160",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "320 kbit/s",
+                        "name": "320",
+                        "value": "2"
+                    }
+                ]
+            }
+        },
         "package": "gst-plugin-spotify",
         "source": "gst-plugin-spotify",
         "tracers": {},
