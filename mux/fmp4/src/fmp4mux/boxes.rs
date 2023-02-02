@@ -632,7 +632,8 @@ fn write_tkhd(
 
     // Width/height
     match s.name().as_str() {
-        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "image/jpeg" => {
+        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
+        | "image/jpeg" => {
             let width = s.get::<i32>("width").context("video caps without width")? as u32;
             let height = s
                 .get::<i32>("height")
@@ -742,9 +743,8 @@ fn write_hdlr(
 
     let s = stream.caps.structure(0).unwrap();
     let (handler_type, name) = match s.name().as_str() {
-        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "image/jpeg" => {
-            (b"vide", b"VideoHandler\0".as_slice())
-        }
+        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
+        | "image/jpeg" => (b"vide", b"VideoHandler\0".as_slice()),
         "audio/mpeg" | "audio/x-opus" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
             (b"soun", b"SoundHandler\0".as_slice())
         }
@@ -772,7 +772,8 @@ fn write_minf(
     let s = stream.caps.structure(0).unwrap();
 
     match s.name().as_str() {
-        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "image/jpeg" => {
+        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
+        | "image/jpeg" => {
             // Flags are always 1 for unspecified reasons
             write_full_box(v, b"vmhd", FULL_BOX_VERSION_0, 1, |v| write_vmhd(v, cfg))?
         }
@@ -883,9 +884,8 @@ fn write_stsd(
 
     let s = stream.caps.structure(0).unwrap();
     match s.name().as_str() {
-        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "image/jpeg" => {
-            write_visual_sample_entry(v, cfg, stream)?
-        }
+        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
+        | "image/jpeg" => write_visual_sample_entry(v, cfg, stream)?,
         "audio/mpeg" | "audio/x-opus" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
             write_audio_sample_entry(v, cfg, stream)?
         }
@@ -938,6 +938,7 @@ fn write_visual_sample_entry(
         "image/jpeg" => b"jpeg",
         "video/x-vp8" => b"vp08",
         "video/x-vp9" => b"vp09",
+        "video/x-av1" => b"av01",
         _ => unreachable!(),
     };
 
@@ -1066,6 +1067,84 @@ fn write_visual_sample_entry(
                     // 16-bit length field for codec initialization, unused
                     v.push(0);
                     v.push(0);
+                    Ok(())
+                })?;
+            }
+            "video/x-av1" => {
+                write_box(v, b"av1C", move |v| {
+                    if let Ok(codec_data) = s.get::<&gst::BufferRef>("codec_data") {
+                        let map = codec_data
+                            .map_readable()
+                            .context("codec_data not mappable")?;
+
+                        v.extend_from_slice(&map);
+                    } else {
+                        let presentation_delay_minus_one =
+                            if let Ok(presentation_delay) = s.get::<i32>("presentation-delay") {
+                                Some(
+                                    (1u8 << 5)
+                                        | std::cmp::max(
+                                            0xF,
+                                            (presentation_delay.saturating_sub(1) & 0xF) as u8,
+                                        ),
+                                )
+                            } else {
+                                None
+                            };
+
+                        let profile = match s.get::<&str>("profile").unwrap() {
+                            "main" => 0,
+                            "high" => 1,
+                            "professional" => 2,
+                            _ => unreachable!(),
+                        };
+
+                        let level = 1; // FIXME
+                        let tier = 0; // FIXME
+                        let (high_bitdepth, twelve_bit) =
+                            match s.get::<u32>("bit-depth-luma").unwrap() {
+                                8 => (false, false),
+                                10 => (true, false),
+                                12 => (true, true),
+                                _ => unreachable!(),
+                            };
+                        let (monochrome, chroma_sub_x, chroma_sub_y) =
+                            match s.get::<&str>("chroma-format").unwrap() {
+                                "4:0:0" => (true, true, true),
+                                "4:2:0" => (false, true, true),
+                                "4:2:2" => (false, true, false),
+                                "4:4:4" => (false, false, false),
+                                _ => unreachable!(),
+                            };
+
+                        let chrome_sample_position = match s.get::<&str>("chroma-site") {
+                            Ok("v-cosited") => 1,
+                            Ok("v-cosited+h-cosited") => 2,
+                            _ => 0,
+                        };
+
+                        let codec_data = [
+                            0x80 | 0x01,            // marker | version
+                            (profile << 5) | level, // profile | level
+                            (tier << 7)
+                                | ((high_bitdepth as u8) << 6)
+                                | ((twelve_bit as u8) << 5)
+                                | ((monochrome as u8) << 4)
+                                | ((chroma_sub_x as u8) << 3)
+                                | ((chroma_sub_y as u8) << 2)
+                                | chrome_sample_position, // tier | high bitdepth | twelve bit | monochrome | chroma sub x |
+                            // chroma sub y | chroma sample position
+                            if let Some(presentation_delay_minus_one) = presentation_delay_minus_one
+                            {
+                                0x10 | presentation_delay_minus_one // reserved | presentation delay present | presentation delay
+                            } else {
+                                0
+                            },
+                        ];
+
+                        v.extend_from_slice(&codec_data);
+                    }
+
                     Ok(())
                 })?;
             }
