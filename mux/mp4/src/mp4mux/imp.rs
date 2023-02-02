@@ -878,6 +878,9 @@ impl MP4Mux {
                     }
                     delta_frames = super::DeltaFrames::Bidirectional;
                 }
+                "video/x-vp8" => {
+                    delta_frames = super::DeltaFrames::PredictiveOnly;
+                }
                 "video/x-vp9" => {
                     if !s.has_field_with_type("colorimetry", str::static_type()) {
                         gst::error!(CAT, obj: pad, "Received caps without colorimetry");
@@ -1473,6 +1476,10 @@ impl ElementImpl for ISOMP4Mux {
                     gst::Structure::builder("video/x-h265")
                         .field("stream-format", gst::List::new(["hvc1", "hev1"]))
                         .field("alignment", "au")
+                        .field("width", gst::IntRange::new(1, u16::MAX as i32))
+                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
+                        .build(),
+                    gst::Structure::builder("video/x-vp8")
                         .field("width", gst::IntRange::new(1, u16::MAX as i32))
                         .field("height", gst::IntRange::new(1, u16::MAX as i32))
                         .build(),
