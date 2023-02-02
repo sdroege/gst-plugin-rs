@@ -16,6 +16,7 @@ members = [
     "generic/sodium",
     "generic/threadshare",
     "generic/inter",
+    "generic/gopbuffer",
 
     "mux/flavors",
     "mux/fmp4",
@@ -69,6 +70,7 @@ default-members = [
     "generic/originalbuffer",
     "generic/threadshare",
     "generic/inter",
+    "generic/gopbuffer",
 
     "mux/fmp4",
     "mux/mp4",

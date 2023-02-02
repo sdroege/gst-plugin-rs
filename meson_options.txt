@@ -10,6 +10,7 @@ option('spotify', type: 'feature', value: 'auto', description: 'Build spotify pl
 # generic
 option('file', type: 'feature', value: 'auto', description: 'Build file plugin')
 option('originalbuffer', type: 'feature', value: 'auto', description: 'Build originalbuffer plugin')
+option('gopbuffer', type: 'feature', value: 'auto', description: 'Build gopbuffer plugin')
 option('sodium', type: 'feature', value: 'auto', description: 'Build sodium plugin')
 option('sodium-source', type: 'combo',
        choices: ['system', 'built-in'], value: 'built-in',

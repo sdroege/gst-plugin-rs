@@ -204,6 +204,7 @@ plugins = {
     'library': 'libgstrsvideofx',
     'extra-deps': {'cairo-gobject': []},
   },
+  'gopbuffer': {'library': 'libgstgopbuffer'},
 }
 
 if get_option('examples').allowed()

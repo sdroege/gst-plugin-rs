@@ -2342,6 +2342,73 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "gopbuffer": {
+        "description": "Store complete groups of pictures at a time",
+        "elements": {
+            "gopbuffer": {
+                "author": "Matthew Waters <matthew@centricular.com>",
+                "description": "GOP Buffer",
+                "hierarchy": [
+                    "GstGopBuffer",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Video",
+                "pad-templates": {
+                    "video_sink": {
+                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\nvideo/x-vp8:\nvideo/x-vp9:\nvideo/x-av1:\n  stream-format: obu-stream\n      alignment: tu\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "video_src": {
+                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\nvideo/x-vp8:\nvideo/x-vp9:\nvideo/x-av1:\n  stream-format: obu-stream\n      alignment: tu\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "max-size-time": {
+                        "blurb": "The maximum duration to store (0=disable)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "minimum-duration": {
+                        "blurb": "The minimum duration to store",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1000000000",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    }
+                },
+                "rank": "primary"
+            }
+        },
+        "filename": "gstgopbuffer",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-gopbuffer",
+        "source": "gst-plugin-gopbuffer",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "gtk4": {
         "description": "GStreamer GTK 4 Sink element and Paintable widget",
         "elements": {
