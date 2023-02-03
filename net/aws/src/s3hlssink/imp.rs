@@ -737,7 +737,7 @@ impl ObjectImpl for S3HlsSink {
 
                 // The signature on delete-fragment signal is different for
                 // hlssink2 and hlssink3.
-                if self_.hlssink.name().contains("hlssink3") {
+                if self_.hlssink.factory().unwrap().name().contains("hlssink3") {
                     if res.is_ok() {
                         Some(true.to_value())
                     } else {
