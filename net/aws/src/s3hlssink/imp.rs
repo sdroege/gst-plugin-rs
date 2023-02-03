@@ -408,6 +408,9 @@ impl S3HlsSink {
                 }
             };
         };
+
+        let mut state = self.state.lock().unwrap();
+        *state = State::Stopped
     }
 
     fn create_stats(&self) -> gst::Structure {
@@ -649,6 +652,7 @@ impl ObjectImpl for S3HlsSink {
                     State::Started(ref mut state) => state.num_uploads_started += 1,
                     State::Stopped => unreachable!("State not started yet"),
                 };
+                drop(state);
 
                 let s3_location = args[1].get::<&str>().unwrap();
                 let upload = S3Upload::new(
@@ -683,6 +687,7 @@ impl ObjectImpl for S3HlsSink {
                     State::Started(ref mut state) => state.num_uploads_started += 1,
                     State::Stopped => unreachable!("State not started yet"),
                 };
+                drop(state);
 
                 let s3_location = args[1].get::<&str>().unwrap();
                 let upload = S3Upload::new(
@@ -808,10 +813,12 @@ impl ElementImpl for S3HlsSink {
          * in turn will require the settings lock.
          */
         let settings = self.settings.lock().unwrap();
-        let mut state = self.state.lock().unwrap();
 
         match transition {
-            gst::StateChange::ReadyToPaused => *state = State::Started(Started::default()),
+            gst::StateChange::ReadyToPaused => {
+                let mut state = self.state.lock().unwrap();
+                *state = State::Started(Started::default());
+            }
             gst::StateChange::PausedToPlaying => {
                 let s3_txc = settings.s3_txc.clone();
                 if let Some(tx) = s3_txc {
@@ -849,8 +856,6 @@ impl ElementImpl for S3HlsSink {
                  * pending requests.
                  */
                 self.stop();
-
-                *state = State::Stopped
             }
             _ => (),
         }
