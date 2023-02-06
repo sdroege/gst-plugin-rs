@@ -732,17 +732,20 @@ impl PaintableSink {
             "Successfully deactivated GL Context after fill_info"
         );
 
-        let gst_context = match display.create_context(Some(app_ctx)) {
-            Ok(gst_context) => gst_context,
-            Err(err) => {
-                gst::error!(CAT, imp: self, "Could not create GL context: {err}");
-                *app_ctx_guard = None;
-                *display_guard = None;
-                return false;
-            }
-        };
+        let display_object_guard = display.object_lock();
+        let gst_context =
+            match gst_gl::GLDisplay::create_context(&display_object_guard, Some(app_ctx)) {
+                Ok(gst_context) => gst_context,
+                Err(err) => {
+                    gst::error!(CAT, imp: self, "Could not create GL context: {err}");
+                    drop(display_object_guard);
+                    *app_ctx_guard = None;
+                    *display_guard = None;
+                    return false;
+                }
+            };
 
-        match display.add_context(&gst_context) {
+        match gst_gl::GLDisplay::add_context(&display_object_guard, &gst_context) {
             Ok(_) => {
                 let mut gst_ctx_guard = self.gst_context.lock().unwrap();
                 gst::info!(CAT, imp: self, "Successfully initialized GL Context");
@@ -751,6 +754,7 @@ impl PaintableSink {
             }
             Err(_) => {
                 gst::error!(CAT, imp: self, "Could not add GL context to display");
+                drop(display_object_guard);
                 *app_ctx_guard = None;
                 *display_guard = None;
                 false
