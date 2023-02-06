@@ -846,11 +846,16 @@ impl State {
             let threshold_on_effective_bitrate = 1.5 * effective_bitrate as f64;
             let increase = f64::max(
                 1000.0f64,
-                // Stuffing should ensure that the effective bitrate is not
-                // < target bitrate, still, make sure to always increase
-                // the bitrate by a minimum amount of 160.bits
-                (threshold_on_effective_bitrate - self.target_bitrate_on_delay as f64)
-                    .clamp(160.0, alpha * avg_packet_size_bits),
+                f64::min(
+                    alpha * avg_packet_size_bits,
+                    // Stuffing should ensure that the effective bitrate is not
+                    // < target bitrate, still, make sure to always increase
+                    // the bitrate by a minimum amount of 160.bits
+                    f64::max(
+                        threshold_on_effective_bitrate - self.target_bitrate_on_delay as f64,
+                        160.0,
+                    ),
+                ),
             );
 
             /* Additive increase */
