@@ -598,6 +598,9 @@ impl LiveSync {
             }
         }
 
+        let mut is_restart = false;
+        let mut is_eos = false;
+
         match event.view() {
             gst::EventView::FlushStart(_) => {
                 let ret = self.srcpad.push_event(event);
@@ -637,13 +640,11 @@ impl LiveSync {
                 return ret;
             }
 
-            gst::EventView::StreamStart(_) => {
-                let mut state = self.state.lock();
-                state.srcresult = Ok(gst::FlowSuccess::Ok);
-                state.eos = false;
-            }
+            gst::EventView::StreamStart(_) => is_restart = true,
 
             gst::EventView::Segment(e) => {
+                is_restart = true;
+
                 let segment = match e.segment().downcast_ref() {
                     Some(s) => s,
                     None => {
@@ -656,17 +657,7 @@ impl LiveSync {
                 state.in_segment = Some(segment.clone());
             }
 
-            gst::EventView::Eos(_) => {
-                let mut state = self.state.lock();
-
-                if let Err(err) = state.srcresult {
-                    if matches!(err, gst::FlowError::Flushing | gst::FlowError::Eos) {
-                        self.flow_error(err);
-                    }
-                }
-
-                state.eos = true;
-            }
+            gst::EventView::Eos(_) => is_eos = true,
 
             gst::EventView::Caps(c) => {
                 let caps = c.caps_owned();
@@ -698,7 +689,33 @@ impl LiveSync {
         }
 
         let mut state = self.state.lock();
-        if state.srcresult.is_err() {
+
+        if is_restart {
+            if state.srcresult == Err(gst::FlowError::Eos) {
+                state.srcresult = Ok(gst::FlowSuccess::Ok);
+            }
+
+            state.eos = false;
+            let _ = self.start_src_task();
+        }
+
+        if state.eos {
+            gst::trace!(CAT, imp: self, "Refusing event, we are EOS: {:?}", event);
+            return false;
+        }
+
+        if is_eos {
+            state.eos = true;
+        }
+
+        if let Err(err) = state.srcresult {
+            // Following GstQueue's behavior:
+            // > For EOS events, that are not followed by data flow, we still
+            // > return FALSE here though and report an error.
+            if is_eos && !matches!(err, gst::FlowError::Flushing | gst::FlowError::Eos) {
+                self.flow_error(err);
+            }
+
             return false;
         }
 
@@ -791,6 +808,11 @@ impl LiveSync {
         gst::trace!(CAT, imp: self, "Incoming {:?}", buffer);
 
         let mut state = self.state.lock();
+
+        if state.eos {
+            gst::debug!(CAT, imp: self, "Refusing buffer, we are EOS");
+            return Err(gst::FlowError::Eos);
+        }
 
         if state.upstream_latency.is_none() {
             gst::debug!(CAT, imp: self, "Have no upstream latency yet, querying");
@@ -988,6 +1010,9 @@ impl LiveSync {
             self.cond.notify_all();
         }
 
+        // Following GstQueue's behavior:
+        // > let app know about us giving up if upstream is not expected to do so
+        // > EOS is already taken care of elsewhere
         if eos && !matches!(err, gst::FlowError::Flushing | gst::FlowError::Eos) {
             self.flow_error(err);
             pad.push_event(gst::event::Eos::new());
@@ -1030,6 +1055,12 @@ impl LiveSync {
                         let segment = e.segment().downcast_ref().unwrap();
                         state.pending_segment = Some(segment.clone());
                         push = false;
+                    }
+
+                    gst::EventView::Eos(_) => {
+                        state.out_buffer = None;
+                        state.out_timestamp = None;
+                        state.srcresult = Err(gst::FlowError::Eos);
                     }
 
                     gst::EventView::Caps(e) => {
