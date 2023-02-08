@@ -602,6 +602,19 @@ impl FMP4Mux {
         timeout: bool,
         fragment_duration: gst::ClockTime,
     ) -> Result<Option<&'a mut Stream>, gst::FlowError> {
+        if state
+            .streams
+            .iter()
+            .all(|s| s.fragment_filled || s.chunk_filled)
+        {
+            gst::trace!(
+                CAT,
+                imp: self,
+                "All streams are currently filled and have to be drained"
+            );
+            return Ok(None);
+        }
+
         let mut earliest_stream = None;
         let mut all_have_data_or_eos = true;
 
@@ -619,16 +632,6 @@ impl FMP4Mux {
                 }
                 Err(err) => return Err(err),
             };
-
-            if stream.fragment_filled {
-                gst::trace!(CAT, obj: stream.sinkpad, "Stream has current fragment filled");
-                continue;
-            }
-
-            if stream.chunk_filled {
-                gst::trace!(CAT, obj: stream.sinkpad, "Stream has current chunk filled");
-                continue;
-            }
 
             gst::trace!(
                 CAT,
@@ -682,8 +685,6 @@ impl FMP4Mux {
         stream: &mut Stream,
         mut pre_queued_buffer: PreQueuedBuffer,
     ) -> Result<(), gst::FlowError> {
-        assert!(!stream.fragment_filled);
-
         gst::trace!(CAT, obj: stream.sinkpad, "Handling buffer {:?}", pre_queued_buffer);
 
         let delta_frames = stream.delta_frames;
@@ -1089,7 +1090,7 @@ impl FMP4Mux {
             gst::trace!(
                 CAT,
                 obj: stream.sinkpad,
-                "Current fragment start{}, current fragment end {}",
+                "Current fragment start {}, current fragment end {}",
                 fragment_start_pts,
                 fragment_start_pts + settings.fragment_duration,
             );
