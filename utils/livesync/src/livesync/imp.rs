@@ -70,38 +70,79 @@ pub struct LiveSync {
 
 #[derive(Debug)]
 struct State {
+    /// See `PROP_LATENCY`
     latency: gst::ClockTime,
+
+    /// See `PROP_LATE_THRESHOLD`
     late_threshold: Option<gst::ClockTime>,
+
+    /// See `PROP_SINGLE_SEGMENT`
     single_segment: bool,
 
+    /// Latency reported by upstream
     upstream_latency: Option<gst::ClockTime>,
+
+    /// Duration we assume for buffers without one
     fallback_duration: gst::ClockTime,
 
+    /// Whether we're in PLAYING state
     playing: bool,
+
+    /// Whether our sinkpad is EOS
     eos: bool,
 
+    /// Flow state of our srcpad
     srcresult: Result<gst::FlowSuccess, gst::FlowError>,
+
+    /// Wait operation for our next buffer
     clock_id: Option<gst::SingleShotClockId>,
 
+    /// Segment of our sinkpad
     in_segment: Option<gst::FormattedSegment<gst::ClockTime>>,
+
+    /// Segment to be applied to the srcpad on the next queued buffer
     pending_segment: Option<gst::FormattedSegment<gst::ClockTime>>,
+
+    /// Segment of our srcpad
     out_segment: Option<gst::FormattedSegment<gst::ClockTime>>,
 
+    /// Caps of our sinkpad
     in_caps: Option<gst::Caps>,
+
+    /// Caps to be applied to the srcpad on the next queued buffer
     pending_caps: Option<gst::Caps>,
+
+    /// Audio format of our sinkpad
     in_audio_info: Option<gst_audio::AudioInfo>,
+
+    /// Audio format of our srcpad
     out_audio_info: Option<gst_audio::AudioInfo>,
 
+    /// Queue between sinkpad and srcpad
     queue: VecDeque<Item>,
+
+    /// Whether our queue currently holds a buffer. We only allow one!
     buffer_queued: bool,
+
+    /// Current buffer of our srcpad
     out_buffer: Option<gst::Buffer>,
 
+    /// Running timestamp of our sinkpad
     in_timestamp: Option<Timestamps>,
+
+    /// Running timestamp of our srcpad
     out_timestamp: Option<Timestamps>,
 
+    /// See `PROP_IN`
     num_in: u64,
+
+    /// See `PROP_DROP`
     num_drop: u64,
+
+    /// See `PROP_OUT`
     num_out: u64,
+
+    /// See `PROP_DUPLICATE`
     num_duplicate: u64,
 }
 
