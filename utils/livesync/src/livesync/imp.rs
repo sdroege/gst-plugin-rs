@@ -624,13 +624,7 @@ impl LiveSync {
 
                 if let Err(err) = state.srcresult {
                     if matches!(err, gst::FlowError::Flushing | gst::FlowError::Eos) {
-                        let err = state.srcresult.unwrap_err();
-                        gst::element_imp_error!(
-                            self,
-                            gst::StreamError::Failed,
-                            ("Internal data flow error."),
-                            ["streaming task paused, reason {} ({:?})", err, err]
-                        );
+                        self.flow_error(err);
                     }
                 }
 
@@ -952,12 +946,7 @@ impl LiveSync {
         }
 
         if eos && !matches!(err, gst::FlowError::Flushing | gst::FlowError::Eos) {
-            gst::element_imp_error!(
-                self,
-                gst::StreamError::Failed,
-                ("Internal data flow error."),
-                ["streaming task paused, reason {} ({:?})", err, err]
-            );
+            self.flow_error(err);
             pad.push_event(gst::event::Eos::new());
         }
 
@@ -1238,5 +1227,19 @@ impl LiveSync {
         );
 
         true
+    }
+
+    /// Produces a message like GST_ELEMENT_FLOW_ERROR does
+    fn flow_error(&self, err: gst::FlowError) {
+        let details = gst::Structure::builder("details")
+            .field("flow-return", err.into_glib())
+            .build();
+        gst::element_imp_error!(
+            self,
+            gst::StreamError::Failed,
+            ("Internal data flow error."),
+            ["streaming task paused, reason {} ({:?})", err, err],
+            details: details
+        );
     }
 }
