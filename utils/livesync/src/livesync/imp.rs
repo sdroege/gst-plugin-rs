@@ -63,6 +63,7 @@ pub struct LiveSync {
 struct State {
     latency: gst::ClockTime,
     late_threshold: Option<gst::ClockTime>,
+    single_segment: bool,
 
     upstream_latency: Option<gst::ClockTime>,
     fallback_duration: gst::ClockTime,
@@ -93,17 +94,16 @@ struct State {
     num_drop: u64,
     num_out: u64,
     num_duplicate: u64,
-    single_segment: bool,
 }
 
 const PROP_LATENCY: &str = "latency";
 const PROP_LATE_THRESHOLD: &str = "late-threshold";
+const PROP_SINGLE_SEGMENT: &str = "single-segment";
 
 const PROP_IN: &str = "in";
 const PROP_DROP: &str = "drop";
 const PROP_OUT: &str = "out";
 const PROP_DUPLICATE: &str = "duplicate";
-const PROP_SINGLE_SEGMENT: &str = "single-segment";
 
 const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::ZERO;
 const DEFAULT_DURATION: gst::ClockTime = gst::ClockTime::from_mseconds(100);
@@ -115,6 +115,7 @@ impl Default for State {
         Self {
             latency: DEFAULT_LATENCY,
             late_threshold: DEFAULT_LATE_THRESHOLD,
+            single_segment: false,
             upstream_latency: None,
             fallback_duration: DEFAULT_DURATION,
             playing: false,
@@ -137,7 +138,6 @@ impl Default for State {
             num_drop: 0,
             num_out: 0,
             num_duplicate: 0,
-            single_segment: false,
         }
     }
 }
@@ -249,6 +249,11 @@ impl ObjectImpl for LiveSync {
                     .default_value(DEFAULT_LATE_THRESHOLD.into_glib())
                     .mutable_playing()
                     .build(),
+                glib::ParamSpecBoolean::builder(PROP_SINGLE_SEGMENT)
+                    .nick("Single segment")
+                    .blurb("Timestamp buffers and eat segments so as to appear as one segment")
+                    .mutable_ready()
+                    .build(),
                 glib::ParamSpecUInt64::builder(PROP_IN)
                     .nick("Frames input")
                     .blurb("Number of incoming frames accepted")
@@ -268,11 +273,6 @@ impl ObjectImpl for LiveSync {
                     .nick("Frames duplicated")
                     .blurb("Number of outgoing frames duplicated")
                     .read_only()
-                    .build(),
-                glib::ParamSpecBoolean::builder(PROP_SINGLE_SEGMENT)
-                    .nick("Single segment")
-                    .blurb("Timestamp buffers and eat segments so as to appear as one segment")
-                    .mutable_ready()
                     .build(),
             ]
         });
@@ -315,11 +315,11 @@ impl ObjectImpl for LiveSync {
         match pspec.name() {
             PROP_LATENCY => state.latency.to_value(),
             PROP_LATE_THRESHOLD => state.late_threshold.to_value(),
+            PROP_SINGLE_SEGMENT => state.single_segment.to_value(),
             PROP_IN => state.num_in.to_value(),
             PROP_DROP => state.num_drop.to_value(),
             PROP_OUT => state.num_out.to_value(),
             PROP_DUPLICATE => state.num_duplicate.to_value(),
-            PROP_SINGLE_SEGMENT => state.single_segment.to_value(),
             _ => unimplemented!(),
         }
     }
