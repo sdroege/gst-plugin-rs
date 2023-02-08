@@ -27,6 +27,15 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
+fn audio_info_from_caps(
+    caps: &gst::CapsRef,
+) -> Result<Option<gst_audio::AudioInfo>, glib::BoolError> {
+    caps.structure(0)
+        .map_or(false, |s| s.has_name("audio/x-raw"))
+        .then(|| gst_audio::AudioInfo::from_caps(caps))
+        .transpose()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BufferLateness {
     OnTime,
@@ -631,13 +640,7 @@ impl LiveSync {
             gst::EventView::Caps(c) => {
                 let caps = c.caps_owned();
 
-                let audio_info = match caps
-                    .structure(0)
-                    .unwrap()
-                    .has_name("audio/x-raw")
-                    .then(|| gst_audio::AudioInfo::from_caps(&caps))
-                    .transpose()
-                {
+                let audio_info = match audio_info_from_caps(&caps) {
                     Ok(ai) => ai,
                     Err(e) => {
                         gst::error!(CAT, imp: self, "Failed to parse audio caps: {}", e);
@@ -1092,11 +1095,7 @@ impl LiveSync {
             MutexGuard::unlocked(&mut state, || self.srcpad.push_event(event));
             state.srcresult?;
 
-            state.out_audio_info = caps
-                .structure(0)
-                .unwrap()
-                .has_name("audio/x-raw")
-                .then(|| gst_audio::AudioInfo::from_caps(&caps).unwrap());
+            state.out_audio_info = audio_info_from_caps(&caps).unwrap();
         }
 
         if let Some(segment) = segment {
