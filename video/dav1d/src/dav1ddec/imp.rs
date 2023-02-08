@@ -430,11 +430,23 @@ impl Dav1dDec {
         mut state_guard: MutexGuard<'s, Option<State>>,
         drain: bool,
     ) -> Result<MutexGuard<Option<State>>, gst::FlowError> {
-        while let Some(pic) = self.pending_picture(&mut state_guard)? {
-            state_guard = self.handle_picture(state_guard, &pic)?;
-            if !drain {
+        // dav1d wants to have get_picture() called a second time after it return EAGAIN to
+        // actually drain all pending pictures.
+        let mut call_twice = drain;
+
+        loop {
+            while let Some(pic) = self.pending_picture(&mut state_guard)? {
+                state_guard = self.handle_picture(state_guard, &pic)?;
+                call_twice = false;
+                if !drain {
+                    break;
+                }
+            }
+
+            if !call_twice {
                 break;
             }
+            call_twice = false;
         }
 
         Ok(state_guard)
