@@ -1138,8 +1138,8 @@ fn test_buffer_multi_stream_short_gops() {
 
     let output_offset = (60 * 60 * 1000).seconds();
 
-    // Push 8 buffers of 1s each, 1st, 4th and 7th buffer without DELTA_UNIT flag
-    for i in 0..8 {
+    // Push 9 buffers of 1s each, 1st, 4th and 7th buffer without DELTA_UNIT flag
+    for i in 0..9 {
         let mut buffer = gst::Buffer::with_size(1).unwrap();
         {
             let buffer = buffer.get_mut().unwrap();
@@ -1161,7 +1161,7 @@ fn test_buffer_multi_stream_short_gops() {
         }
         assert_eq!(h2.push(buffer), Ok(gst::FlowSuccess::Ok));
 
-        if i == 2 || i == 7 {
+        if i == 2 || i == 8 {
             let ev = loop {
                 let ev = h1.pull_upstream_event().unwrap();
                 if ev.type_() != gst::EventType::Reconfigure
@@ -1254,12 +1254,12 @@ fn test_buffer_multi_stream_short_gops() {
     assert_eq!(fragment_header.flags(), gst::BufferFlags::HEADER);
     assert_eq!(fragment_header.pts(), Some(3.seconds() + output_offset));
     assert_eq!(fragment_header.dts(), Some(3.seconds() + output_offset));
-    assert_eq!(fragment_header.duration(), Some(5.seconds()));
+    assert_eq!(fragment_header.duration(), Some(6.seconds()));
 
-    for i in 3..8 {
+    for i in 3..9 {
         for j in 0..2 {
             let buffer = h1.pull().unwrap();
-            if i == 7 && j == 1 {
+            if i == 8 && j == 1 {
                 assert_eq!(
                     buffer.flags(),
                     gst::BufferFlags::DELTA_UNIT | gst::BufferFlags::MARKER
