@@ -9,13 +9,13 @@ repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 rust-version = "1.63"
 
 [dependencies]
-gst = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer", features = ["v1_20", "serde"] }
-gst-app = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-app", features = ["v1_20"] }
-gst-video = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-video", features = ["v1_20", "serde"] }
-gst-webrtc = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-webrtc", features = ["v1_20"] }
-gst-sdp = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-sdp", features = ["v1_20"] }
-gst-rtp = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-rtp", features = ["v1_20"] }
-gst-utils = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-utils" }
+gst = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20", package = "gstreamer", features = ["v1_20", "serde"] }
+gst-app = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20", package = "gstreamer-app", features = ["v1_20"] }
+gst-video = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20", package = "gstreamer-video", features = ["v1_20", "serde"] }
+gst-webrtc = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20", package = "gstreamer-webrtc", features = ["v1_20"] }
+gst-sdp = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20", package = "gstreamer-sdp", features = ["v1_20"] }
+gst-rtp = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20", package = "gstreamer-rtp", features = ["v1_20"] }
+gst-utils = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20", package = "gstreamer-utils" }
 once_cell = "1.0"
 anyhow = "1"
 thiserror = "1"

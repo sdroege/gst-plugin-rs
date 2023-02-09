@@ -13,9 +13,9 @@ rust-version = "1.63"
 [dependencies]
 bytes = "1.0"
 futures = "0.3"
-gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"] }
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20" }
+gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20" }
+gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20", features = ["v1_16"] }
 aws-config = "0.54.0"
 aws-sdk-s3 = "0.24.0"
 aws-sdk-transcribe = "0.24.0"
@@ -40,12 +40,12 @@ serde_json = "1"
 atomic_refcell = "0.1"
 base32 = "0.4"
 backoff = { version = "0.4", features = [ "futures", "tokio" ] }
-gio = { git = "https://github.com/gtk-rs/gtk-rs-core.git", package = "gio" }
+gio = { git = "https://github.com/gtk-rs/gtk-rs-core.git", branch = "0.17", version = "0.17", package = "gio" }
 
 [dev-dependencies]
 chrono = { version = "0.4", features = [ "alloc" ] }
 env_logger = "0.10"
-gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_18"] }
+gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20", features = ["v1_18"] }
 rand = "0.8"
 test-with = { version = "0.9", default-features = false }
 

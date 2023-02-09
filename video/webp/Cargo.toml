@@ -14,10 +14,14 @@ libwebp-sys2 = { version = "0.1.2", features = ["demux", "0_5"] }
 
 [dependencies.gst]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+branch = "0.20"
+version = "0.20"
 package="gstreamer"
 
 [dependencies.gst-video]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+branch = "0.20"
+version = "0.20"
 package="gstreamer-video"
 
 [dev-dependencies]
@@ -25,6 +29,8 @@ pretty_assertions = "1"
 
 [dev-dependencies.gst-check]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+branch = "0.20"
+version = "0.20"
 package="gstreamer-check"
 
 [lib]

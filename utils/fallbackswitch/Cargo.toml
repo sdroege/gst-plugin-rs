@@ -9,19 +9,19 @@ rust-version = "1.63"
 description = "GStreamer Fallback Switcher and Source Plugin"
 
 [dependencies]
-gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20" }
+gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20" }
+gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20" }
+gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20" }
 gst-plugin-gtk4 = { path = "../../video/gtk4", optional = true }
-gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", optional = true }
-gio = { git = "https://github.com/gtk-rs/gtk-rs-core", optional = true }
+gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", branch = "0.6", version = "0.6", optional = true }
+gio = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "0.17", version = "0.17", optional = true }
 once_cell = "1.0"
 parking_lot = "0.12"
 
 [dev-dependencies]
-gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20" }
+gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20" }
 
 [lib]
 name = "gstfallbackswitch"
