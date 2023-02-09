@@ -746,7 +746,7 @@ impl LiveSync {
         _pad: &gst::Pad,
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::trace!(CAT, imp: self, "incoming {:?}", buffer);
+        gst::trace!(CAT, imp: self, "Incoming {:?}", buffer);
 
         let mut state = self.state.lock();
 
@@ -783,7 +783,7 @@ impl LiveSync {
         let buf_mut = buffer.make_mut();
 
         if buf_mut.pts().is_none() {
-            gst::warning!(CAT, imp: self, "incoming buffer has no timestamps");
+            gst::warning!(CAT, imp: self, "Incoming buffer has no timestamps");
         }
 
         if let Some(audio_info) = &state.in_audio_info {
@@ -843,7 +843,7 @@ impl LiveSync {
         }
 
         if buf_mut.duration().is_none() {
-            gst::debug!(CAT, imp: self, "incoming buffer without duration");
+            gst::debug!(CAT, imp: self, "Incoming buffer without duration");
             buf_mut.set_duration(Some(state.fallback_duration));
         }
 
@@ -863,13 +863,13 @@ impl LiveSync {
             BufferLateness::OnTime => {}
 
             BufferLateness::LateUnderThreshold => {
-                gst::debug!(CAT, imp: self, "discarding late {:?}", buf_mut);
+                gst::debug!(CAT, imp: self, "Discarding late {:?}", buf_mut);
                 state.num_drop += 1;
                 return Ok(gst::FlowSuccess::Ok);
             }
 
             BufferLateness::LateOverThreshold => {
-                gst::debug!(CAT, imp: self, "accepting late {:?}", buf_mut);
+                gst::debug!(CAT, imp: self, "Accepting late {:?}", buf_mut);
 
                 let prev = state.out_buffer.as_ref().unwrap();
                 let prev_duration = prev.duration().unwrap();
@@ -1040,7 +1040,7 @@ impl LiveSync {
                 out_audio_info: ref audio_info,
                 ..
             } = *state;
-            gst::debug!(CAT, imp: self, "repeating {:?}", buffer);
+            gst::debug!(CAT, imp: self, "Repeating {:?}", buffer);
 
             let buffer = buffer.as_mut().unwrap().make_mut();
             let prev_duration = buffer.duration().unwrap();
