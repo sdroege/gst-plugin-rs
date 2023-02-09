@@ -257,6 +257,30 @@
                         "type": "gint64",
                         "writable": true
                     },
+                    "content-disposition": {
+                        "blurb": "Content-Disposition header to set for uploaded object",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "content-type": {
+                        "blurb": "Content-Type header to set for uploaded object",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "endpoint-uri": {
                         "blurb": "The S3 endpoint URI to use",
                         "conditionally-available": false,
