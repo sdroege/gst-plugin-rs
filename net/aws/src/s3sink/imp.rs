@@ -101,6 +101,7 @@ struct Settings {
     bucket: Option<String>,
     key: Option<String>,
     content_type: Option<String>,
+    content_disposition: Option<String>,
     buffer_size: u64,
     access_key: Option<String>,
     secret_access_key: Option<String>,
@@ -153,6 +154,7 @@ impl Default for Settings {
             bucket: None,
             key: None,
             content_type: None,
+            content_disposition: None,
             access_key: None,
             secret_access_key: None,
             session_token: None,
@@ -350,6 +352,7 @@ impl S3Sink {
         let bucket = Some(url.bucket.clone());
         let key = Some(url.object.clone());
         let content_type = settings.content_type.clone();
+        let content_disposition = settings.content_disposition.clone();
         let metadata = settings.to_metadata(self);
 
         client
@@ -357,6 +360,7 @@ impl S3Sink {
             .set_bucket(bucket)
             .set_key(key)
             .set_content_type(content_type)
+            .set_content_disposition(content_disposition)
             .set_metadata(metadata)
     }
 
@@ -753,6 +757,14 @@ impl ObjectImpl for S3Sink {
                     .nick("S3 endpoint URI")
                     .blurb("The S3 endpoint URI to use")
                     .build(),
+                glib::ParamSpecString::builder("content-type")
+                    .nick("content-type")
+                    .blurb("Content-Type header to set for uploaded object")
+                    .build(),
+                glib::ParamSpecString::builder("content-disposition")
+                    .nick("content-disposition")
+                    .blurb("Content-Disposition header to set for uploaded object")
+                    .build(),
             ]
         });
 
@@ -856,6 +868,16 @@ impl ObjectImpl for S3Sink {
                     let _ = self.set_uri(Some(&settings.to_uri()));
                 }
             }
+            "content-type" => {
+                settings.content_type = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream");
+            }
+            "content-disposition" => {
+                settings.content_disposition = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -895,6 +917,8 @@ impl ObjectImpl for S3Sink {
                 (settings.retry_attempts as i64 * request_timeout).to_value()
             }
             "endpoint-uri" => settings.endpoint_uri.to_value(),
+            "content-type" => settings.content_type.to_value(),
+            "content-disposition" => settings.content_disposition.to_value(),
             _ => unimplemented!(),
         }
     }
