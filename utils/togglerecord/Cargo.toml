@@ -12,7 +12,7 @@ rust-version = "1.63"
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20" }
 gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20" }
 gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20" }
-gst-plugin-gtk4 = { path = "../../video/gtk4", optional = true }
+gst-plugin-gtk4 = { path = "../../video/gtk4", version = "0.10", optional = true }
 gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", branch = "0.6", version = "0.6", optional = true }
 gio = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "0.17", version = "0.17", optional = true }
 parking_lot = "0.12"
@@ -32,7 +32,7 @@ path = "examples/gtk_recording.rs"
 required-features = ["gtk", "gio", "gst-plugin-gtk4"]
 
 [build-dependencies]
-gst-plugin-version-helper = { path="../../version-helper" }
+gst-plugin-version-helper = { path="../../version-helper", version = "0.7" }
 
 [features]
 static = []

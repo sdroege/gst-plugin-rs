@@ -27,7 +27,7 @@ async-tungstenite = { version = "0.19", features = ["tokio-runtime", "tokio-nati
 serde = "1"
 serde_json = "1"
 fastrand = "1.0"
-gst_plugin_webrtc_protocol = { path="protocol", package = "gst-plugin-webrtc-signalling-protocol" }
+gst_plugin_webrtc_protocol = { path="protocol", version = "0.10", package = "gst-plugin-webrtc-signalling-protocol" }
 human_bytes = "0.4"
 
 [dev-dependencies]
@@ -43,7 +43,7 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [build-dependencies]
-gst-plugin-version-helper = { path = "../../version-helper" }
+gst-plugin-version-helper = { path = "../../version-helper", version = "0.7" }
 
 [features]
 static = []

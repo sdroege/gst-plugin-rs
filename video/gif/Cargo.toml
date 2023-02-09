@@ -28,7 +28,7 @@ name = "testvideosrc2gif"
 path = "examples/testvideosrc2gif.rs"
 
 [build-dependencies]
-gst-plugin-version-helper = { path="../../version-helper" }
+gst-plugin-version-helper = { path="../../version-helper", version = "0.7" }
 
 [features]
 static = []

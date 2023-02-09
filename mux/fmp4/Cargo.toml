@@ -30,7 +30,7 @@ m3u8-rs = "5.0"
 chrono = "0.4"
 
 [build-dependencies]
-gst-plugin-version-helper = { path="../../version-helper" }
+gst-plugin-version-helper = { path="../../version-helper", version = "0.7" }
 
 [features]
 default = []

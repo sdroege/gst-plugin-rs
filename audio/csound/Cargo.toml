@@ -29,7 +29,7 @@ name = "csound-effect"
 path = "examples/effect_example.rs"
 
 [build-dependencies]
-gst-plugin-version-helper = { path = "../../version-helper" }
+gst-plugin-version-helper = { path = "../../version-helper", version = "0.7" }
 
 [features]
 static = []

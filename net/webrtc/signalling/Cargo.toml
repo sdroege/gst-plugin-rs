@@ -25,7 +25,7 @@ uuid = { version = "1", features = ["v4"] }
 thiserror = "1"
 test-log = { version = "0.2", features = ["trace"], default-features = false }
 pin-project-lite = "0.2"
-gst_plugin_webrtc_protocol = { path="../protocol", package = "gst-plugin-webrtc-signalling-protocol" }
+gst_plugin_webrtc_protocol = { path="../protocol", version = "0.10", package = "gst-plugin-webrtc-signalling-protocol" }
 
 [[bin]]
 name = "gst-webrtc-signalling-server"
