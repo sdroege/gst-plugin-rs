@@ -51,14 +51,14 @@ enum Item {
     Query(std::ptr::NonNull<gst::QueryRef>, mpsc::SyncSender<bool>),
 }
 
+// SAFETY: Need to be able to pass *mut gst::QueryRef
+unsafe impl Send for Item {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Timestamps {
     start: gst::ClockTime,
     end: gst::ClockTime,
 }
-
-// SAFETY: Need to be able to pass *mut gst::QueryRef
-unsafe impl Send for Item {}
 
 #[derive(Debug)]
 pub struct LiveSync {
@@ -614,11 +614,6 @@ impl LiveSync {
                 state.in_segment = Some(segment.clone());
             }
 
-            gst::EventView::Gap(_) => {
-                gst::debug!(CAT, imp: self, "Got gap event");
-                return true;
-            }
-
             gst::EventView::Eos(_) => {
                 let mut state = self.state.lock();
 
@@ -646,6 +641,11 @@ impl LiveSync {
                 state.in_caps = Some(caps);
                 state.in_audio_info = audio_info;
                 state.update_fallback_duration();
+            }
+
+            gst::EventView::Gap(_) => {
+                gst::debug!(CAT, imp: self, "Got gap event");
+                return true;
             }
 
             _ => {}
