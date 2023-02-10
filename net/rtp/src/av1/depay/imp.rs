@@ -393,24 +393,21 @@ impl RTPAv1Depay {
         aggr_header: &AggregationHeader,
         index: u32,
     ) -> Result<(u32, bool), gst::FlowError> {
-        let element_size: u32;
         let is_last_obu: bool;
 
-        if let Some(count) = aggr_header.obu_count {
+        let element_size = if let Some(count) = aggr_header.obu_count {
             is_last_obu = index + 1 == count as u32;
-            element_size = if is_last_obu {
+            if is_last_obu {
                 rtp.payload_size() - (reader.position() as u32)
             } else {
                 let mut bitreader = BitReader::endian(reader, ENDIANNESS);
-                parse_leb128(&mut bitreader).map_err(err_flow!(self, leb_read))?
+                let (size, _) = parse_leb128(&mut bitreader).map_err(err_flow!(self, leb_read))?;
+                size
             }
         } else {
-            element_size = parse_leb128(&mut BitReader::endian(&mut *reader, ENDIANNESS))
+            let (size, _) = parse_leb128(&mut BitReader::endian(&mut *reader, ENDIANNESS))
                 .map_err(err_flow!(self, leb_read))?;
-            is_last_obu = match rtp
-                .payload_size()
-                .cmp(&(reader.position() as u32 + element_size))
-            {
+            is_last_obu = match rtp.payload_size().cmp(&(reader.position() as u32 + size)) {
                 Ordering::Greater => false,
                 Ordering::Equal => true,
                 Ordering::Less => {
@@ -422,7 +419,8 @@ impl RTPAv1Depay {
                     return Err(gst::FlowError::Error);
                 }
             };
-        }
+            size
+        };
 
         Ok((element_size, is_last_obu))
     }
