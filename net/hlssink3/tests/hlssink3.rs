@@ -126,7 +126,7 @@ fn test_hlssink3_element_with_video_content() -> Result<(), ()> {
     let pl_type: HlsSink3PlaylistType = hlssink3.property("playlist-type");
     assert_eq!(pl_type, HlsSink3PlaylistType::Event);
 
-    hlssink3.set_property_from_str("playlist-type", "Unspecified");
+    hlssink3.set_property_from_str("playlist-type", "unspecified");
 
     let (hls_events_sender, hls_events_receiver) = mpsc::sync_channel(20);
     let playlist_content = Arc::new(Mutex::new(String::from("")));

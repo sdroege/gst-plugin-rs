@@ -2147,7 +2147,7 @@
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
-                        "default": "Unspecified (0)",
+                        "default": "unspecified (0)",
                         "mutable": "null",
                         "readable": true,
                         "type": "GstHlsSink3PlaylistType",
@@ -2223,7 +2223,7 @@
                 "values": [
                     {
                         "desc": "Unspecified: The tag `#EXT-X-PLAYLIST-TYPE` won't be present in the playlist during the pipeline processing.",
-                        "name": "Unspecified",
+                        "name": "unspecified",
                         "value": "0"
                     },
                     {

@@ -26,7 +26,7 @@ mod playlist;
 pub enum HlsSink3PlaylistType {
     #[enum_value(
         name = "Unspecified: The tag `#EXT-X-PLAYLIST-TYPE` won't be present in the playlist during the pipeline processing.",
-        nick = "Unspecified"
+        nick = "unspecified"
     )]
     Unspecified = 0,
 
