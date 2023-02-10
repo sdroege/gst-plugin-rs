@@ -12,23 +12,25 @@
 use bitstream_io::{BitRead, BitReader, BitWrite, BitWriter, Endianness};
 use std::io::{self, Read, Seek, Write};
 
-pub fn parse_leb128<R, E>(reader: &mut BitReader<R, E>) -> io::Result<u32>
+pub fn parse_leb128<R, E>(reader: &mut BitReader<R, E>) -> io::Result<(u32, u32)>
 where
     R: Read + Seek,
     E: Endianness,
 {
     let mut value = 0;
+    let mut num_bytes = 0;
 
     for i in 0..8 {
         let byte = reader.read::<u32>(8)?;
         value |= (byte & 0x7f) << (i * 7);
+        num_bytes += 1;
         if byte & 0x80 == 0 {
             break;
         }
     }
 
     reader.byte_align();
-    Ok(value)
+    Ok((value, num_bytes))
 }
 
 pub fn write_leb128<W, E>(writer: &mut BitWriter<W, E>, mut value: u32) -> io::Result<()>
@@ -82,7 +84,10 @@ mod tests {
             println!("testing: value={value}");
 
             let mut reader = BitReader::endian(Cursor::new(&encoding), BigEndian);
-            assert_eq!(value, parse_leb128(&mut reader).unwrap());
+            assert_eq!(
+                (value, encoding.len() as u32),
+                parse_leb128(&mut reader).unwrap()
+            );
             assert_eq!(
                 encoding.len() as u64 * 8,
                 reader.position_in_bits().unwrap()
@@ -96,7 +101,10 @@ mod tests {
             data.set_position(0);
 
             let mut reader = BitReader::endian(data, BigEndian);
-            assert_eq!(value, parse_leb128(&mut reader).unwrap());
+            assert_eq!(
+                (value, encoding.len() as u32),
+                parse_leb128(&mut reader).unwrap()
+            );
         }
     }
 }

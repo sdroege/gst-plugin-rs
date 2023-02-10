@@ -7,7 +7,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::av1::common::{leb128_size, parse_leb128};
+use crate::av1::common::parse_leb128;
 use bitstream_io::{BitRead, BitReader, Endianness};
 use std::io::{self, Read, Seek};
 
@@ -165,8 +165,7 @@ impl SizedObu {
 
         reader.byte_align();
 
-        let size = parse_leb128(reader)?;
-        let leb_size = leb128_size(size) as u32;
+        let (size, leb_size) = parse_leb128(reader)?;
 
         Ok(Self {
             obu_type,
