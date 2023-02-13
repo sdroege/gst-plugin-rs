@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.10.1] - 2023-02-13
+### Fixed
+- rtpav1pay: Fix calculation of Leb128 size size to work correctly with
+  streams from certain encoders.
+
 ## [0.10.0] - 2023-02-10
 ### Fixed
 - audiornnoise: Use correct value range for the samples
