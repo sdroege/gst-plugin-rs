@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-threadshare"
-version = "0.10.0"
+version = "0.10.1"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 license = "LGPL-2.1-or-later"
 description = "GStreamer Threadshare Plugin"
