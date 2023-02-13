@@ -110,6 +110,8 @@ You will find the following plugins in this repository:
 
     - `fmp4`: A fragmented MP4/ISOBMFF/CMAF muxer for generating e.g. DASH/HLS media fragments.
 
+    - `mp4`: A non-fragmented MP4 muxer for generating MP4 files.
+
   * `text`
     - `ahead`: A plugin to display upcoming text buffers ahead.
 
