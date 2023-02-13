@@ -76,11 +76,10 @@ impl State {
             .ok_or_else(|| {
                 gst::error_msg!(
                     gst::ResourceError::NotFound,
-                    [format!(
+                    [
                         "Failed to set Sender's Key from property: {:?}",
                         props.sender_key
-                    )
-                    .as_ref()]
+                    ]
                 )
             })?;
 
@@ -91,11 +90,10 @@ impl State {
             .ok_or_else(|| {
                 gst::error_msg!(
                     gst::ResourceError::NotFound,
-                    [format!(
+                    [
                         "Failed to set Receiver's Key from property: {:?}",
                         props.receiver_key
-                    )
-                    .as_ref()]
+                    ]
                 )
             })?;
 

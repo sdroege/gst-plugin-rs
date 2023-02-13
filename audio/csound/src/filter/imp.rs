@@ -144,11 +144,11 @@ impl CsoundFilter {
         if let Some(ref location) = settings.location {
             csound
                 .compile_csd(location)
-                .map_err(|e| error_msg!(gst::LibraryError::Failed, [e]))?;
+                .map_err(|e| error_msg!(gst::LibraryError::Failed, ["{e}"]))?;
         } else if let Some(ref text) = settings.csd_text {
             csound
                 .compile_csd_text(text)
-                .map_err(|e| error_msg!(gst::LibraryError::Failed, [e]))?;
+                .map_err(|e| error_msg!(gst::LibraryError::Failed, ["{e}"]))?;
         } else {
             return Err(error_msg!(
                 gst::LibraryError::Failed,
@@ -470,7 +470,7 @@ impl BaseTransformImpl for CsoundFilter {
         csound.set_score_offset_seconds(settings.offset);
 
         if let Err(e) = csound.start() {
-            return Err(error_msg!(gst::LibraryError::Failed, [e]));
+            return Err(error_msg!(gst::LibraryError::Failed, ["{e}"]));
         }
 
         Ok(())

@@ -363,8 +363,8 @@ impl BaseTransformImpl for CCDetect {
         let cc_packet = match self.detect(format, map.as_slice()) {
             Ok(v) => v,
             Err(e) => {
-                gst::warning!(CAT, imp: self, "{}", &e.to_string());
-                gst::element_imp_warning!(self, gst::StreamError::Decode, [&e.to_string()]);
+                gst::warning!(CAT, imp: self, "{e}");
+                gst::element_imp_warning!(self, gst::StreamError::Decode, ["{e}"]);
                 CCPacketContents {
                     cc608: false,
                     cc708: false,

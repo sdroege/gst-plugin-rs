@@ -209,12 +209,12 @@ impl ClaxonDec {
         indata: &[u8],
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let streaminfo = claxon_streaminfo(indata).map_err(|e| {
-            gst::element_imp_error!(self, gst::StreamError::Decode, [e]);
+            gst::element_imp_error!(self, gst::StreamError::Decode, ["{e}"]);
             gst::FlowError::Error
         })?;
 
         let audio_info = gstaudioinfo(&streaminfo).map_err(|e| {
-            gst::element_imp_error!(self, gst::StreamError::Decode, [&e]);
+            gst::element_imp_error!(self, gst::StreamError::Decode, ["{e}"]);
             gst::FlowError::Error
         })?;
 

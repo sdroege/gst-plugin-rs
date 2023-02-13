@@ -380,7 +380,7 @@ impl VideoEncoderImpl for GifEnc {
             // encode new frame
             let context = state.context.as_mut().unwrap();
             if let Err(e) = context.write_frame(&gif_frame) {
-                gst::element_imp_error!(self, gst::CoreError::Failed, [&e.to_string()]);
+                gst::element_imp_error!(self, gst::CoreError::Failed, ["{e}"]);
                 return Err(gst::FlowError::Error);
             }
         }

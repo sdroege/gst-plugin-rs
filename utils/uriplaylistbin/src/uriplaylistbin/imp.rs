@@ -1623,14 +1623,13 @@ impl UriPlaylistBin {
                 blocked.set_streaming(state.streams_topology.n_streams());
             }
         }
-        let error_msg = error.to_string();
-        gst::error!(CAT, imp: self, "{}", error_msg);
+        gst::error!(CAT, imp: self, "{error}");
 
         match error {
             PlaylistError::PluginMissing { .. } => {
-                gst::element_imp_error!(self, gst::CoreError::MissingPlugin, [&error_msg]);
+                gst::element_imp_error!(self, gst::CoreError::MissingPlugin, ["{error}"]);
             }
-            PlaylistError::ItemFailed { item, .. } => {
+            PlaylistError::ItemFailed { ref item, .. } => {
                 // remove failing uridecodebin
                 let uridecodebin = item.uridecodebin();
                 uridecodebin.call_async(move |uridecodebin| {
@@ -1644,7 +1643,7 @@ impl UriPlaylistBin {
                 gst::element_imp_error!(
                     self,
                     gst::LibraryError::Failed,
-                    [&error_msg],
+                    ["{error}"],
                     details: details.build()
                 );
             }

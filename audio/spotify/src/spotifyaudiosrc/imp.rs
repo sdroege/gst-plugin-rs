@@ -324,9 +324,8 @@ impl PushSrcImpl for SpotifyAudioSrc {
                         return Err(gst::FlowError::Flushing);
                     }
                     Ok(Err(err)) => {
-                        let details = format!("{err:?}");
-                        gst::error!(CAT, imp: self, "failed to start: {}", details);
-                        gst::element_imp_error!(self, gst::ResourceError::Settings, [&details]);
+                        gst::error!(CAT, imp: self, "failed to start: {err:?}");
+                        gst::element_imp_error!(self, gst::ResourceError::Settings, ["{err:?}"]);
                         return Err(gst::FlowError::Error);
                     }
                     Ok(Ok(_)) => {}

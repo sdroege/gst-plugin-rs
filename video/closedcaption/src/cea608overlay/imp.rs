@@ -419,8 +419,8 @@ impl Cea608Overlay {
                         self.decode_cc_data(pad, &mut state, data, pts);
                     }
                     Err(e) => {
-                        gst::warning!(CAT, "{}", &e.to_string());
-                        gst::element_imp_warning!(self, gst::StreamError::Decode, [&e.to_string()]);
+                        gst::warning!(CAT, "{e}");
+                        gst::element_imp_warning!(self, gst::StreamError::Decode, ["{e}"]);
                     }
                 }
             } else if meta.caption_type() == gst_video::VideoCaptionType::Cea708Raw {

@@ -499,8 +499,8 @@ impl ObjectSubclass for WhipSink {
 
 impl WhipSink {
     fn raise_error(&self, resource_error: gst::ResourceError, msg: String) {
-        gst::error_msg!(resource_error, [msg.as_str()]);
-        gst::element_imp_error!(self, resource_error, [msg.as_str()]);
+        gst::error_msg!(resource_error, ["{msg}"]);
+        gst::element_imp_error!(self, resource_error, ["{msg}"]);
     }
 
     fn handle_future_error(&self, err: WaitError) {
