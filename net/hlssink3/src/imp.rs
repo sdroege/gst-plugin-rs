@@ -417,7 +417,7 @@ impl BinImpl for HlsSink3 {
                     "splitmuxsink-fragment-closed" => {
                         let s = msg.structure().unwrap();
                         if let Ok(fragment_closed_at) = s.get::<gst::ClockTime>("running-time") {
-                            self.write_playlist(Some(fragment_closed_at)).unwrap();
+                            let _ = self.write_playlist(Some(fragment_closed_at));
                         }
                     }
                     _ => {}
@@ -574,7 +574,7 @@ impl ObjectImpl for HlsSink3 {
             vec![
                 glib::subclass::Signal::builder(SIGNAL_GET_PLAYLIST_STREAM)
                     .param_types([String::static_type()])
-                    .return_type::<gio::OutputStream>()
+                    .return_type::<Option<gio::OutputStream>>()
                     .class_handler(|_, args| {
                         let element = args[0]
                             .get::<super::HlsSink3>()
@@ -583,12 +583,7 @@ impl ObjectImpl for HlsSink3 {
                             args[1].get::<String>().expect("playlist-stream signal arg");
                         let hlssink3 = element.imp();
 
-                        Some(
-                            hlssink3
-                                .new_file_stream(&playlist_location)
-                                .ok()?
-                                .to_value(),
-                        )
+                        Some(hlssink3.new_file_stream(&playlist_location).ok().to_value())
                     })
                     .accumulator(|_hint, ret, value| {
                         // First signal handler wins
@@ -598,7 +593,7 @@ impl ObjectImpl for HlsSink3 {
                     .build(),
                 glib::subclass::Signal::builder(SIGNAL_GET_FRAGMENT_STREAM)
                     .param_types([String::static_type()])
-                    .return_type::<gio::OutputStream>()
+                    .return_type::<Option<gio::OutputStream>>()
                     .class_handler(|_, args| {
                         let element = args[0]
                             .get::<super::HlsSink3>()
@@ -607,12 +602,7 @@ impl ObjectImpl for HlsSink3 {
                             args[1].get::<String>().expect("fragment-stream signal arg");
                         let hlssink3 = element.imp();
 
-                        Some(
-                            hlssink3
-                                .new_file_stream(&fragment_location)
-                                .ok()?
-                                .to_value(),
-                        )
+                        Some(hlssink3.new_file_stream(&fragment_location).ok().to_value())
                     })
                     .accumulator(|_hint, ret, value| {
                         // First signal handler wins
@@ -767,7 +757,8 @@ impl ElementImpl for HlsSink3 {
                 };
 
                 if write_final {
-                    self.write_final_playlist()?;
+                    // Don't fail transitioning to READY if this fails
+                    let _ = self.write_final_playlist();
                 }
             }
             gst::StateChange::ReadyToNull => {
