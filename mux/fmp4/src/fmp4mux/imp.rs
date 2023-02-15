@@ -2944,9 +2944,14 @@ impl AggregatorImpl for FMP4Mux {
 
         match query.view_mut() {
             QueryViewMut::Caps(q) => {
-                let allowed_caps = aggregator_pad
+                let mut allowed_caps = aggregator_pad
                     .current_caps()
                     .unwrap_or_else(|| aggregator_pad.pad_template_caps());
+
+                // Allow framerate change
+                for s in allowed_caps.make_mut().iter_mut() {
+                    s.remove_field("framerate");
+                }
 
                 if let Some(filter_caps) = q.filter() {
                     let res = filter_caps
