@@ -6,7 +6,7 @@ license = "MPL-2.0"
 description = "Livesync Plugin"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 edition = "2021"
-rust-version = "1.63"
+rust-version = "1.66"
 
 [dependencies]
 gio = { git = "https://github.com/gtk-rs/gtk-rs-core", optional = true }

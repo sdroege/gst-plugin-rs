@@ -6,7 +6,7 @@ repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 description = "GStreamer RaptorQ FEC Plugin"
 license = "MPL-2.0"
 edition = "2021"
-rust-version = "1.63"
+rust-version = "1.66"
 
 [dependencies]
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }

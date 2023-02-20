@@ -6,7 +6,7 @@ version = "0.11.0-alpha.1"
 authors = ["Rafael Caricio <rafael@caricio.com>"]
 edition = "2021"
 license = "MPL-2.0"
-rust-version = "1.63"
+rust-version = "1.66"
 
 [dependencies]
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }

@@ -5,7 +5,7 @@ authors = ["Markus Ebner <info@ebner-markus.de>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT OR Apache-2.0"
 edition = "2021"
-rust-version = "1.63"
+rust-version = "1.66"
 description = "GStreamer GIF plugin"
 
 [dependencies]
