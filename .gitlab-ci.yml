@@ -83,19 +83,19 @@ trigger:
 .debian:11-stable:
   extends: .debian:11
   variables:
-    FDO_DISTRIBUTION_TAG: '$GST_RS_STABLE-${GST_RS_IMG_TAG}_2022-11-05.0'
+    FDO_DISTRIBUTION_TAG: '$GST_RS_STABLE-${GST_RS_IMG_TAG}_2023-02-20.0'
     FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bullseye-slim:$GST_RS_STABLE-$GST_RS_IMG_TAG"
 
 .debian:11-msrv:
   extends: .debian:11
   variables:
-    FDO_DISTRIBUTION_TAG: '$GST_RS_MSRV-${GST_RS_IMG_TAG}_2022-11-05.0'
+    FDO_DISTRIBUTION_TAG: '$GST_RS_MSRV-${GST_RS_IMG_TAG}_2023-02-20.0'
     FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bullseye-slim:$GST_RS_MSRV-$GST_RS_IMG_TAG"
 
 .debian:11-nightly:
   extends: .debian:11
   variables:
-    FDO_DISTRIBUTION_TAG: 'nightly-${GST_RS_IMG_TAG}_2022-11-05.0'
+    FDO_DISTRIBUTION_TAG: 'nightly-${GST_RS_IMG_TAG}_2023-02-20.0'
     FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bullseye-slim:nightly-$GST_RS_IMG_TAG"
 
 .build-debian-container:
