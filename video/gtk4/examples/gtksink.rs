@@ -24,8 +24,6 @@ fn create_ui(app: &gtk::Application) {
         .build()
         .unwrap();
 
-    // Need to set state to Ready to get a GL context
-    gtksink.set_state(gst::State::Ready).unwrap();
     let paintable = gtksink.property::<gdk::Paintable>("paintable");
 
     // TODO: future plans to provide a bin-like element that works with less setup
