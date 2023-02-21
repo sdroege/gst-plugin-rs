@@ -165,11 +165,6 @@ impl PaintableImpl for Paintable {
 }
 
 impl Paintable {
-    #[cfg(any(target_os = "macos", feature = "gst_gl"))]
-    pub(super) fn context(&self) -> Option<gdk::GLContext> {
-        self.gl_context.borrow().clone()
-    }
-
     pub(super) fn handle_frame_changed(&self, frame: Option<Frame>) {
         let context = self.gl_context.borrow();
         if let Some(frame) = frame {
@@ -191,9 +186,7 @@ impl Paintable {
                 gst::debug!(
                     CAT,
                     imp: self,
-                    "Size changed from {:?} to {:?}",
-                    old_size,
-                    new_size,
+                    "Size changed from {old_size:?} to {new_size:?}",
                 );
                 self.obj().invalidate_size();
             }
