@@ -21,7 +21,7 @@ pub(crate) struct Frame {
     frame: gst_video::VideoFrame<gst_video::video_frame::Readable>,
     overlays: Vec<Overlay>,
     #[cfg(any(target_os = "macos", feature = "gst_gl"))]
-    gst_context: Option<gst_gl::GLContext>,
+    wrapped_context: Option<gst_gl::GLContext>,
 }
 
 #[derive(Debug)]
@@ -100,7 +100,7 @@ fn video_frame_to_gl_texture(
     cached_textures: &mut HashMap<usize, gdk::Texture>,
     used_textures: &mut HashSet<usize>,
     gdk_context: &gdk::GLContext,
-    gst_context: &gst_gl::GLContext,
+    wrapped_context: &gst_gl::GLContext,
 ) -> (gdk::Texture, f64) {
     let texture_id = frame.texture_id(0).expect("Invalid texture id") as usize;
 
@@ -116,7 +116,7 @@ fn video_frame_to_gl_texture(
     let height = frame.height();
 
     let sync_meta = frame.buffer().meta::<gst_gl::GLSyncMeta>().unwrap();
-    sync_meta.wait(gst_context);
+    sync_meta.wait(wrapped_context);
 
     let texture = unsafe {
         gdk::GLTexture::with_release_func(
@@ -156,19 +156,21 @@ impl Frame {
             }
             #[cfg(any(target_os = "macos", feature = "gst_gl"))]
             {
-                if let (Some(gdk_ctx), Some(gst_ctx)) = (gdk_context, self.gst_context.as_ref()) {
+                if let (Some(gdk_ctx), Some(wrapped_ctx)) =
+                    (gdk_context, self.wrapped_context.as_ref())
+                {
                     video_frame_to_gl_texture(
                         self.frame,
                         cached_textures,
                         &mut used_textures,
                         gdk_ctx,
-                        gst_ctx,
+                        wrapped_ctx,
                     )
                 } else {
                     // This will fail badly if the video frame was actually mapped as GL texture
                     // but this case can't really happen as we only do that if we actually have a
                     // GDK GL context.
-                    assert!(self.gst_context.is_none());
+                    assert!(self.wrapped_context.is_none());
                     video_frame_to_memory_texture(self.frame, cached_textures, &mut used_textures)
                 }
             }
@@ -208,7 +210,12 @@ impl Frame {
     pub(crate) fn new(
         buffer: &gst::Buffer,
         info: &gst_video::VideoInfo,
-        #[allow(unused_variables)] have_gl_context: bool,
+        #[cfg(any(target_os = "macos", feature = "gst_gl"))] wrapped_context: Option<
+            &gst_gl::GLContext,
+        >,
+        #[allow(unused_variables)]
+        #[cfg(not(any(target_os = "macos", feature = "gst_gl")))]
+        wrapped_context: Option<&()>,
     ) -> Result<Self, gst::FlowError> {
         // Empty buffers get filtered out in show_frame
         debug_assert!(buffer.n_memory() > 0);
@@ -225,35 +232,35 @@ impl Frame {
         }
         #[cfg(any(target_os = "macos", feature = "gst_gl"))]
         {
-            let is_buffer_gl = buffer
+            // Check we received a buffer with GL memory and if the context of that memory
+            // can share with the wrapped context around the GDK GL context.
+            //
+            // If not it has to be uploaded to the GPU.
+            let memory_ctx = buffer
                 .peek_memory(0)
                 .downcast_memory_ref::<gst_gl::GLBaseMemory>()
-                .is_some();
+                .and_then(|m| {
+                    let ctx = m.context();
+                    if wrapped_context
+                        .map_or(false, |wrapped_context| wrapped_context.can_share(ctx))
+                    {
+                        Some(ctx)
+                    } else {
+                        None
+                    }
+                });
 
-            if !is_buffer_gl || !have_gl_context {
-                frame = Self {
-                    frame: gst_video::VideoFrame::from_buffer_readable(buffer.clone(), info)
-                        .map_err(|_| gst::FlowError::Error)?,
-                    overlays: vec![],
-                    gst_context: None,
-                };
-            } else {
-                let gst_ctx = buffer
-                    .peek_memory(0)
-                    .downcast_memory_ref::<gst_gl::GLBaseMemory>()
-                    .map(|m| m.context())
-                    .expect("Failed to retrieve the GstGL Context.");
-
+            if let Some(memory_ctx) = memory_ctx {
                 let mapped_frame = if let Some(meta) = buffer.meta::<gst_gl::GLSyncMeta>() {
-                    meta.set_sync_point(gst_ctx);
+                    meta.set_sync_point(memory_ctx);
                     gst_video::VideoFrame::from_buffer_readable_gl(buffer.clone(), info)
                         .map_err(|_| gst::FlowError::Error)?
                 } else {
                     let mut buffer = buffer.clone();
                     {
                         let buffer = buffer.make_mut();
-                        let meta = gst_gl::GLSyncMeta::add(buffer, gst_ctx);
-                        meta.set_sync_point(gst_ctx);
+                        let meta = gst_gl::GLSyncMeta::add(buffer, memory_ctx);
+                        meta.set_sync_point(memory_ctx);
                     }
                     gst_video::VideoFrame::from_buffer_readable_gl(buffer, info)
                         .map_err(|_| gst::FlowError::Error)?
@@ -262,7 +269,14 @@ impl Frame {
                 frame = Self {
                     frame: mapped_frame,
                     overlays: vec![],
-                    gst_context: Some(gst_ctx.clone()),
+                    wrapped_context: Some(wrapped_context.unwrap().clone()),
+                };
+            } else {
+                frame = Self {
+                    frame: gst_video::VideoFrame::from_buffer_readable(buffer.clone(), info)
+                        .map_err(|_| gst::FlowError::Error)?,
+                    overlays: vec![],
+                    wrapped_context: None,
                 };
             }
         }
