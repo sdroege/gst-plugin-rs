@@ -30,11 +30,6 @@ impl Paintable {
 }
 
 impl Paintable {
-    #[cfg(any(target_os = "macos", feature = "gst_gl"))]
-    pub(crate) fn context(&self) -> Option<gdk::GLContext> {
-        self.imp().context()
-    }
-
     pub(crate) fn handle_frame_changed(&self, frame: Option<Frame>) {
         self.imp().handle_frame_changed(frame);
     }
