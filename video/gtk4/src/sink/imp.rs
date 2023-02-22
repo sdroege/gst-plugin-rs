@@ -505,7 +505,21 @@ impl PaintableSink {
     ) {
         gst::debug!(CAT, imp: self, "Initializing paintable");
 
-        let paintable = utils::invoke_on_main_thread(|| {
+        // The channel for the SinkEvents
+        let (sender, receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
+        let self_ = self.to_owned();
+
+        let paintable = utils::invoke_on_main_thread(move || {
+            // Attach the receiver from the main thread to make sure it is called
+            // from a place where it can acquire the default main context.
+            receiver.attach(
+                Some(&glib::MainContext::default()),
+                glib::clone!(
+                    @weak self_ => @default-return glib::Continue(false),
+                    move |action| self_.do_action(action)
+                ),
+            );
+
             #[cfg(any(target_os = "macos", feature = "gst_gl"))]
             {
                 let gdk_context = if let GLContext::Initialized { gdk_context, .. } =
@@ -522,17 +536,6 @@ impl PaintableSink {
                 ThreadGuard::new(Paintable::new(None))
             }
         });
-
-        // The channel for the SinkEvents
-        let (sender, receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
-        let self_ = self.to_owned();
-        receiver.attach(
-            None,
-            glib::clone!(
-                @weak self_ => @default-return glib::Continue(false),
-                move |action| self_.do_action(action)
-            ),
-        );
 
         **paintable_storage = Some(paintable);
 
