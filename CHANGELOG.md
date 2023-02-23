@@ -5,6 +5,20 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.10.2] - 2023-02-23
+### Fixed
+- hlssink3: Allow signal handlers to return `None`
+- gtk4: Make GL context sharing more reliable in pipelines with multiple
+  `gtk4paintablesinks`
+- gtk4: Attach channel receiver to the main context from the correct thread to
+  make it possible to start the sink from a different thread than the main
+  thread without having retrieved the paintable from the main thread before.
+- fmp4mux/mp4mux: Ignore caps changes if only the framerate changes.
+
+### Changed
+- gtk4: Simplify and refactor GL context sharing. Apart from being more
+  reliable this reduces GL resource usage.
+
 ## [0.10.1] - 2023-02-13
 ### Fixed
 - rtpav1pay: Fix calculation of Leb128 size size to work correctly with
@@ -65,5 +79,7 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.0...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.2...HEAD
+[0.10.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.1...0.10.2
+[0.10.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.0...0.10.1
 [0.10.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.9.0...0.10.0
