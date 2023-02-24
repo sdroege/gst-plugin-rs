@@ -251,20 +251,26 @@ impl Frame {
                 });
 
             if let Some(memory_ctx) = memory_ctx {
-                let mapped_frame = if let Some(meta) = buffer.meta::<gst_gl::GLSyncMeta>() {
-                    meta.set_sync_point(memory_ctx);
+                // If there is no GLSyncMeta yet then we need to add one here now, which requires
+                // obtaining a writable buffer.
+                let mapped_frame = if buffer.meta::<gst_gl::GLSyncMeta>().is_some() {
                     gst_video::VideoFrame::from_buffer_readable_gl(buffer.clone(), info)
                         .map_err(|_| gst::FlowError::Error)?
                 } else {
                     let mut buffer = buffer.clone();
                     {
                         let buffer = buffer.make_mut();
-                        let meta = gst_gl::GLSyncMeta::add(buffer, memory_ctx);
-                        meta.set_sync_point(memory_ctx);
+                        gst_gl::GLSyncMeta::add(buffer, memory_ctx);
                     }
                     gst_video::VideoFrame::from_buffer_readable_gl(buffer, info)
                         .map_err(|_| gst::FlowError::Error)?
                 };
+
+                // Now that it's guaranteed that there is a sync meta and the frame is mapped, set
+                // a sync point so we can ensure that the texture is ready later when making use of
+                // it as gdk::GLTexture.
+                let meta = mapped_frame.buffer().meta::<gst_gl::GLSyncMeta>().unwrap();
+                meta.set_sync_point(memory_ctx);
 
                 frame = Self {
                     frame: mapped_frame,
