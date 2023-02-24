@@ -10,7 +10,8 @@ use gst::glib;
 use gst::prelude::*;
 
 mod imp;
-mod packet;
+
+use aws_sdk_transcribestreaming::model::{PartialResultsStability, VocabularyFilterMethod};
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]
@@ -31,6 +32,17 @@ pub enum AwsTranscriberResultStability {
     Low = 2,
 }
 
+impl From<AwsTranscriberResultStability> for PartialResultsStability {
+    fn from(val: AwsTranscriberResultStability) -> Self {
+        use AwsTranscriberResultStability::*;
+        match val {
+            High => PartialResultsStability::High,
+            Medium => PartialResultsStability::Medium,
+            Low => PartialResultsStability::Low,
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]
 #[enum_type(name = "GstAwsTranscriberVocabularyFilterMethod")]
@@ -42,6 +54,17 @@ pub enum AwsTranscriberVocabularyFilterMethod {
     Remove = 1,
     #[enum_value(name = "Tag: flag words without changing them", nick = "tag")]
     Tag = 2,
+}
+
+impl From<AwsTranscriberVocabularyFilterMethod> for VocabularyFilterMethod {
+    fn from(val: AwsTranscriberVocabularyFilterMethod) -> Self {
+        use AwsTranscriberVocabularyFilterMethod::*;
+        match val {
+            Mask => VocabularyFilterMethod::Mask,
+            Remove => VocabularyFilterMethod::Remove,
+            Tag => VocabularyFilterMethod::Tag,
+        }
+    }
 }
 
 glib::wrapper! {

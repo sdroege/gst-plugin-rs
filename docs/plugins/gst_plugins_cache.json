@@ -619,7 +619,7 @@
                 "rank": "none"
             },
             "awstranscriber": {
-                "author": "Jordan Petridis <jordan@centricular.com>, Mathieu Duponchelle <mathieu@centricular.com>",
+                "author": "Jordan Petridis <jordan@centricular.com>, Mathieu Duponchelle <mathieu@centricular.com>, François Laignel <francois@centricular.com>",
                 "description": "Speech to Text filter, using AWS transcribe",
                 "hierarchy": [
                     "GstAwsTranscriber",
