@@ -105,7 +105,7 @@ fn test_hlssink3_element_with_video_content() -> Result<(), ()> {
 
     const BUFFER_NB: i32 = 250;
 
-    let pipeline = gst::Pipeline::builder().name("video_pipeline").build();
+    let pipeline = gst::Pipeline::with_name("video_pipeline");
 
     let video_src = try_create_element!("videotestsrc");
     video_src.set_property("is-live", true);
@@ -253,7 +253,7 @@ fn test_hlssink3_element_with_audio_content() -> Result<(), ()> {
 
     const BUFFER_NB: i32 = 100;
 
-    let pipeline = gst::Pipeline::builder().name("audio_pipeline").build();
+    let pipeline = gst::Pipeline::with_name("audio_pipeline");
 
     let audio_src = try_create_element!("audiotestsrc");
     audio_src.set_property("is-live", true);
@@ -316,7 +316,7 @@ fn test_hlssink3_write_correct_playlist_content() -> Result<(), ()> {
 
     const BUFFER_NB: i32 = 50;
 
-    let pipeline = gst::Pipeline::builder().name("video_pipeline").build();
+    let pipeline = gst::Pipeline::with_name("video_pipeline");
 
     let video_src = try_create_element!("videotestsrc");
     video_src.set_property("is-live", true);

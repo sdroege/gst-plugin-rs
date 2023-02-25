@@ -126,7 +126,7 @@ pub struct TranscriberBin {
 
 impl TranscriberBin {
     fn construct_channel_bin(&self, lang: &str) -> Result<TranscriptionChannel, Error> {
-        let bin = gst::Bin::new(None);
+        let bin = gst::Bin::new();
         let queue = gst::ElementFactory::make("queue").build()?;
         let textwrap = gst::ElementFactory::make("textwrap").build()?;
         let tttocea608 = gst::ElementFactory::make("tttocea608").build()?;
@@ -719,8 +719,8 @@ impl TranscriberBin {
     }
 
     fn build_state(&self) -> Result<State, Error> {
-        let internal_bin = gst::Bin::builder().name("internal").build();
-        let transcription_bin = gst::Bin::builder().name("transcription-bin").build();
+        let internal_bin = gst::Bin::with_name("internal");
+        let transcription_bin = gst::Bin::with_name("transcription-bin");
         let audio_tee = gst::ElementFactory::make("tee")
             // Protect passthrough enable (and resulting dynamic reconfigure)
             // from non-streaming thread

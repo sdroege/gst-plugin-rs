@@ -13,7 +13,7 @@ fn create_ui(app: &gtk::Application) {
     let picture = gtk::Picture::new();
     let label = gtk::Label::new(Some("Position: 00:00:00"));
 
-    let pipeline = gst::Pipeline::new(None);
+    let pipeline = gst::Pipeline::new();
 
     let overlay = gst::ElementFactory::make("clockoverlay")
         .property("font-desc", "Monospace 42")

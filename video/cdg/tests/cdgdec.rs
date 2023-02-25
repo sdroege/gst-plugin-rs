@@ -25,7 +25,7 @@ fn init() {
 fn test_cdgdec() {
     init();
 
-    let pipeline = gst::Pipeline::builder().name("cdgdec-test").build();
+    let pipeline = gst::Pipeline::with_name("cdgdec-test");
 
     let input_path = {
         let mut r = PathBuf::new();
