@@ -336,9 +336,13 @@ fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error
                 (glupload, glscale)
             } else if feature.contains(NVMM_MEMORY_FEATURE) {
                 let queue = make_element("queue", None)?;
-                let nvconvert = make_element("nvvideoconvert", None)?;
-                nvconvert.set_property("compute-hw", 0);
-                nvconvert.set_property("nvbuf-memory-type", 0);
+                let nvconvert = if let Ok(nvconvert) = make_element("nvvideoconvert", None) {
+                    nvconvert.set_property("compute-hw", 0);
+                    nvconvert.set_property("nvbuf-memory-type", 0);
+                    nvconvert
+                } else {
+                    make_element("nvvidconv", None)?
+                };
 
                 ret.add_many(&[&queue, &nvconvert])?;
                 gst::Element::link_many(&[&queue, &nvconvert])?;
