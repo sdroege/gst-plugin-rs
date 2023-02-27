@@ -14,21 +14,21 @@
  */
 use gst::glib;
 
-mod aws_transcribe_parse;
-mod aws_transcriber;
 mod s3hlssink;
 mod s3sink;
 mod s3src;
 mod s3url;
 mod s3utils;
+mod transcribe_parse;
+mod transcriber;
 
-pub use aws_transcriber::AwsTranscriberResultStability;
+pub use transcriber::AwsTranscriberResultStability;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     s3sink::register(plugin)?;
     s3src::register(plugin)?;
-    aws_transcribe_parse::register(plugin)?;
-    aws_transcriber::register(plugin)?;
+    transcribe_parse::register(plugin)?;
+    transcriber::register(plugin)?;
     s3hlssink::register(plugin)?;
 
     Ok(())
