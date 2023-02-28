@@ -90,8 +90,17 @@ static MULTIQUEUE_TYPE: Lazy<glib::Type> = Lazy::new(|| {
     }
 });
 
+static APPSRC_TYPE: Lazy<glib::Type> = Lazy::new(|| {
+    if let Some(queue) = gst::ElementFactory::find("appsrc").and_then(|f| f.load().ok()) {
+        queue.element_type()
+    } else {
+        gst::warning!(CAT, "Can't instantiate appsrc element");
+        glib::Type::INVALID
+    }
+});
+
 fn is_queue_type(type_: glib::Type) -> bool {
-    [*QUEUE_TYPE, *QUEUE2_TYPE, *MULTIQUEUE_TYPE].contains(&type_)
+    [*QUEUE_TYPE, *QUEUE2_TYPE, *MULTIQUEUE_TYPE, *APPSRC_TYPE].contains(&type_)
 }
 
 #[derive(Debug)]
@@ -180,9 +189,9 @@ struct LogLine {
     cur_level_bytes: u32,
     cur_level_time: u64,
     cur_level_buffers: u32,
-    max_size_bytes: u32,
+    max_size_bytes: u64,
     max_size_time: u64,
-    max_size_buffers: u32,
+    max_size_buffers: u64,
 }
 
 #[derive(Default)]
@@ -439,9 +448,19 @@ impl QueueLevels {
             None => return,
         };
 
-        let max_size_bytes = element.property::<u32>("max-size-bytes");
-        let max_size_time = element.property::<u64>("max-size-time");
-        let max_size_buffers = element.property::<u32>("max-size-buffers");
+        let (max_size_bytes, max_size_time, max_size_buffers) = if element.type_() == *APPSRC_TYPE {
+            (
+                element.property::<u64>("max-bytes"),
+                element.property::<u64>("max-time"),
+                element.property::<u64>("max-buffers"),
+            )
+        } else {
+            (
+                element.property::<u32>("max-size-bytes") as u64,
+                element.property::<u64>("max-size-time"),
+                element.property::<u32>("max-size-buffers") as u64,
+            )
+        };
 
         if element.type_() == *MULTIQUEUE_TYPE {
             let get_pad_idx = |pad: &gst::Pad| {
@@ -497,9 +516,21 @@ impl QueueLevels {
                 }
             }
         } else {
-            let cur_level_bytes = element.property::<u32>("current-level-bytes");
-            let cur_level_time = element.property::<u64>("current-level-time");
-            let cur_level_buffers = element.property::<u32>("current-level-buffers");
+            let (cur_level_bytes, cur_level_time, cur_level_buffers) =
+                if element.type_() == *APPSRC_TYPE {
+                    (
+                        element.property::<u64>("current-level-bytes") as u32,
+                        element.property::<u64>("current-level-time"),
+                        element.property::<u64>("current-level-buffers") as u32,
+                    )
+                } else {
+                    (
+                        element.property::<u32>("current-level-bytes"),
+                        element.property::<u64>("current-level-time"),
+                        element.property::<u32>("current-level-buffers"),
+                    )
+                };
+
             state.log.push(LogLine {
                 timestamp,
                 name,
