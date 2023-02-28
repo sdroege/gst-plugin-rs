@@ -299,7 +299,12 @@ impl Transcriber {
     /// Enqueues a buffer for each of the provided stable items.
     ///
     /// Returns `true` if at least one buffer was enqueued.
-    fn enqueue(&self, items: &[model::Item], partial: bool, lateness: gst::ClockTime) -> bool {
+    fn enqueue(
+        &self,
+        mut items: Vec<model::Item>,
+        partial: bool,
+        lateness: gst::ClockTime,
+    ) -> bool {
         let mut state = self.state.lock().unwrap();
 
         if items.len() <= state.partial_index {
@@ -320,12 +325,12 @@ impl Transcriber {
 
         let mut enqueued = false;
 
-        for item in &items[state.partial_index..] {
+        for item in items.drain(state.partial_index..) {
             if !item.stable().unwrap_or(false) {
                 break;
             }
 
-            let Some(content) = item.content() else { continue };
+            let Some(content) = item.content else { continue };
 
             let start_time = ((item.start_time * 1_000_000_000.0) as u64).nseconds() + lateness;
             let end_time = ((item.end_time * 1_000_000_000.0) as u64).nseconds() + lateness;
@@ -337,7 +342,7 @@ impl Transcriber {
                 "Item is ready for queuing: {content}, PTS {start_time}",
             );
 
-            let mut buf = gst::Buffer::from_mut_slice(content.to_string().into_bytes());
+            let mut buf = gst::Buffer::from_mut_slice(content.into_bytes());
             {
                 let buf = buf.get_mut().unwrap();
 
@@ -825,9 +830,8 @@ impl Transcriber {
 
                     if let Some(result) = transcript_evt
                         .transcript
-                        .as_ref()
-                        .and_then(|transcript| transcript.results())
-                        .and_then(|results| results.get(0))
+                        .and_then(|transcript| transcript.results)
+                        .and_then(|mut results| results.drain(..).next())
                     {
                         let Some(imp) = imp_weak.upgrade() else { break };
 
@@ -835,10 +839,9 @@ impl Transcriber {
 
                         if let Some(alternative) = result
                             .alternatives
-                            .as_ref()
-                            .and_then(|alternatives| alternatives.get(0))
+                            .and_then(|mut alternatives| alternatives.drain(..).next())
                         {
-                            if let Some(items) = alternative.items() {
+                            if let Some(items) = alternative.items {
                                 enqueued = imp.enqueue(items, result.is_partial, lateness);
                             }
                         }
