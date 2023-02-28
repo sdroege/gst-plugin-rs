@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::webrtcsink::{WebRTCSink, RUNTIME};
+use crate::{webrtcsink::WebRTCSink, RUNTIME};
 use anyhow::{anyhow, Error};
 use async_tungstenite::tungstenite::Message as WsMessage;
 use futures::channel::mpsc;
