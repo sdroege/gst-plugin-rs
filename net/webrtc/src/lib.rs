@@ -7,6 +7,8 @@
  * Since: plugins-rs-0.9
  */
 use gst::glib;
+use once_cell::sync::Lazy;
+use tokio::runtime;
 
 mod signaller;
 pub mod webrtcsink;
@@ -28,3 +30,11 @@ gst::plugin_define!(
     env!("CARGO_PKG_REPOSITORY"),
     env!("BUILD_REL_DATE")
 );
+
+pub static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
+    runtime::Builder::new_multi_thread()
+        .enable_all()
+        .worker_threads(1)
+        .build()
+        .unwrap()
+});
