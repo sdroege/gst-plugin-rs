@@ -484,7 +484,7 @@ impl State {
             .and_then(|s| s.get::<gst::Fraction>("framerate").ok())
             .and_then(|framerate| {
                 gst::ClockTime::SECOND
-                    .mul_div_round(framerate.numer() as u64, framerate.denom() as u64)
+                    .mul_div_round(framerate.denom() as u64, framerate.numer() as u64)
             })
             .filter(|&dur| dur > 8.mseconds() && dur < 10.seconds())
             // Otherwise, half the configured latency
