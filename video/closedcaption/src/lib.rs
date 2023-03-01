@@ -28,6 +28,7 @@ mod ccutils;
 mod cea608overlay;
 mod cea608tojson;
 mod cea608tott;
+mod cea608utils;
 mod jsontovtt;
 mod line_reader;
 mod mcc_enc;
@@ -42,7 +43,7 @@ mod ttutils;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "doc")]
-    ttutils::Cea608Mode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    cea608utils::Cea608Mode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     mcc_parse::register(plugin)?;
     mcc_enc::register(plugin)?;
     scc_parse::register(plugin)?;

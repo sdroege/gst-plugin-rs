@@ -29,8 +29,8 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use crate::ffi;
-use crate::ttutils::{Cea608Mode, Chunk, Line, Lines, TextStyle};
+use crate::cea608utils::*;
+use crate::ttutils::{Chunk, Line, Lines};
 
 use atomic_refcell::AtomicRefCell;
 
@@ -195,7 +195,6 @@ impl Default for Settings {
 
 struct State {
     mode: Option<Cea608Mode>,
-    last_cc_data: Option<u16>,
     rows: BTreeMap<u32, Row>,
     first_pts: Option<gst::ClockTime>,
     current_pts: Option<gst::ClockTime>,
@@ -205,13 +204,13 @@ struct State {
     cursor: Cursor,
     pending_lines: Option<TimestampedLines>,
     settings: Settings,
+    cea608_state: Cea608StateTracker,
 }
 
 impl Default for State {
     fn default() -> Self {
         State {
             mode: None,
-            last_cc_data: None,
             rows: BTreeMap::new(),
             first_pts: gst::ClockTime::NONE,
             current_pts: gst::ClockTime::NONE,
@@ -226,6 +225,7 @@ impl Default for State {
             },
             pending_lines: None,
             settings: Settings::default(),
+            cea608_state: Cea608StateTracker::default(),
         }
     }
 }
@@ -245,152 +245,6 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
         Some("CEA-608 to JSON Element"),
     )
 });
-
-fn is_basicna(cc_data: u16) -> bool {
-    0x0000 != (0x6000 & cc_data)
-}
-
-fn is_preamble(cc_data: u16) -> bool {
-    0x1040 == (0x7040 & cc_data)
-}
-
-fn is_midrowchange(cc_data: u16) -> bool {
-    0x1120 == (0x7770 & cc_data)
-}
-
-fn is_specialna(cc_data: u16) -> bool {
-    0x1130 == (0x7770 & cc_data)
-}
-
-fn is_xds(cc_data: u16) -> bool {
-    0x0000 == (0x7070 & cc_data) && 0x0000 != (0x0F0F & cc_data)
-}
-
-fn is_westeu(cc_data: u16) -> bool {
-    0x1220 == (0x7660 & cc_data)
-}
-
-fn is_control(cc_data: u16) -> bool {
-    0x1420 == (0x7670 & cc_data) || 0x1720 == (0x7770 & cc_data)
-}
-
-fn parse_control(cc_data: u16) -> (ffi::eia608_control_t, i32) {
-    unsafe {
-        let mut chan = 0;
-        let cmd = ffi::eia608_parse_control(cc_data, &mut chan);
-
-        (cmd, chan)
-    }
-}
-
-#[derive(Debug)]
-struct Preamble {
-    row: i32,
-    col: i32,
-    style: TextStyle,
-    chan: i32,
-    underline: i32,
-}
-
-fn parse_preamble(cc_data: u16) -> Preamble {
-    unsafe {
-        let mut row = 0;
-        let mut col = 0;
-        let mut style = 0;
-        let mut chan = 0;
-        let mut underline = 0;
-
-        ffi::eia608_parse_preamble(
-            cc_data,
-            &mut row,
-            &mut col,
-            &mut style,
-            &mut chan,
-            &mut underline,
-        );
-
-        Preamble {
-            row,
-            col,
-            style: style.into(),
-            chan,
-            underline,
-        }
-    }
-}
-
-struct MidrowChange {
-    chan: i32,
-    style: TextStyle,
-    underline: bool,
-}
-
-fn parse_midrowchange(cc_data: u16) -> MidrowChange {
-    unsafe {
-        let mut chan = 0;
-        let mut style = 0;
-        let mut underline = 0;
-
-        ffi::eia608_parse_midrowchange(cc_data, &mut chan, &mut style, &mut underline);
-
-        MidrowChange {
-            chan,
-            style: style.into(),
-            underline: underline > 0,
-        }
-    }
-}
-
-fn eia608_to_utf8(cc_data: u16) -> (Option<char>, Option<char>, i32) {
-    unsafe {
-        let mut chan = 0;
-        let mut char1 = [0u8; 5usize];
-        let mut char2 = [0u8; 5usize];
-
-        let n_chars = ffi::eia608_to_utf8(
-            cc_data,
-            &mut chan,
-            char1.as_mut_ptr() as *mut _,
-            char2.as_mut_ptr() as *mut _,
-        );
-
-        let char1 = if n_chars > 0 {
-            Some(
-                std::ffi::CStr::from_bytes_with_nul_unchecked(&char1)
-                    .to_string_lossy()
-                    .chars()
-                    .next()
-                    .unwrap(),
-            )
-        } else {
-            None
-        };
-
-        let char2 = if n_chars > 1 {
-            Some(
-                std::ffi::CStr::from_bytes_with_nul_unchecked(&char2)
-                    .to_string_lossy()
-                    .chars()
-                    .next()
-                    .unwrap(),
-            )
-        } else {
-            None
-        };
-
-        (char1, char2, chan)
-    }
-}
-
-fn eia608_to_text(cc_data: u16) -> String {
-    unsafe {
-        let bufsz = ffi::eia608_to_text(std::ptr::null_mut(), 0, cc_data);
-        let mut data = Vec::with_capacity((bufsz + 1) as usize);
-        ffi::eia608_to_text(data.as_ptr() as *mut _, (bufsz + 1) as usize, cc_data);
-        data.set_len(bufsz as usize);
-        String::from_utf8_unchecked(data)
-    }
-}
 
 fn dump(
     imp: &Cea608ToJson,
@@ -492,6 +346,7 @@ impl State {
             }
 
             self.rows.clear();
+            self.cea608_state.flush();
         } else {
             for row in self.rows.values() {
                 if !row.is_empty() {
@@ -544,9 +399,11 @@ impl State {
         }
     }
 
-    fn decode_preamble(&mut self, imp: &Cea608ToJson, cc_data: u16) -> Option<TimestampedLines> {
-        let preamble = parse_preamble(cc_data);
-
+    fn handle_preamble(
+        &mut self,
+        imp: &Cea608ToJson,
+        preamble: Preamble,
+    ) -> Option<TimestampedLines> {
         if preamble.chan != 0 {
             return None;
         }
@@ -630,140 +487,17 @@ impl State {
         }
     }
 
-    fn decode_control(&mut self, imp: &Cea608ToJson, cc_data: u16) -> Option<TimestampedLines> {
-        let (cmd, chan) = parse_control(cc_data);
-
-        gst::log!(CAT, imp: imp, "Command for CC {}", chan);
-
-        if chan != 0 {
-            return None;
-        }
-
-        match cmd {
-            ffi::eia608_control_t_eia608_control_resume_direct_captioning => {
-                return self.update_mode(imp, Cea608Mode::PaintOn);
-            }
-            ffi::eia608_control_t_eia608_control_erase_display_memory => {
-                return match self.mode {
-                    Some(Cea608Mode::PopOn) => {
-                        self.clear = Some(true);
-                        self.drain_pending(imp)
-                    }
-                    _ => {
-                        let ret = self.drain(imp, true);
-                        self.clear = Some(true);
-                        ret
-                    }
-                };
-            }
-            ffi::eia608_control_t_eia608_control_roll_up_2 => {
-                return self.update_mode(imp, Cea608Mode::RollUp2);
-            }
-            ffi::eia608_control_t_eia608_control_roll_up_3 => {
-                return self.update_mode(imp, Cea608Mode::RollUp3);
-            }
-            ffi::eia608_control_t_eia608_control_roll_up_4 => {
-                return self.update_mode(imp, Cea608Mode::RollUp4);
-            }
-            ffi::eia608_control_t_eia608_control_carriage_return => {
-                gst::log!(CAT, imp: imp, "carriage return");
-
-                if let Some(mode) = self.mode {
-                    // https://www.law.cornell.edu/cfr/text/47/79.101 (f)(2)(i) (f)(3)(i)
-                    if mode.is_rollup() {
-                        let ret = if self.settings.unbuffered {
-                            let offset = match mode {
-                                Cea608Mode::RollUp2 => 1,
-                                Cea608Mode::RollUp3 => 2,
-                                Cea608Mode::RollUp4 => 3,
-                                _ => unreachable!(),
-                            };
-
-                            let top_row = self.cursor.row.saturating_sub(offset);
-
-                            // https://www.law.cornell.edu/cfr/text/47/79.101 (f)(1)(iii)
-                            self.rows.remove(&top_row);
-
-                            for row in top_row + 1..self.cursor.row + 1 {
-                                if let Some(mut row) = self.rows.remove(&row) {
-                                    row.row -= 1;
-                                    self.rows.insert(row.row, row);
-                                }
-                            }
-
-                            self.rows.insert(self.cursor.row, Row::new(self.cursor.row));
-                            self.drain(imp, false)
-                        } else {
-                            let ret = self.drain(imp, true);
-                            self.carriage_return = Some(true);
-                            ret
-                        };
-
-                        return ret;
-                    }
-                }
-            }
-            ffi::eia608_control_t_eia608_control_backspace => {
-                if let Some(row) = self.rows.get_mut(&self.cursor.row) {
-                    row.pop(&mut self.cursor);
-                }
-            }
-            ffi::eia608_control_t_eia608_control_resume_caption_loading => {
-                return self.update_mode(imp, Cea608Mode::PopOn);
-            }
-            ffi::eia608_control_t_eia608_control_erase_non_displayed_memory => {
-                if self.mode == Some(Cea608Mode::PopOn) {
-                    self.rows.clear();
-                }
-            }
-            ffi::eia608_control_t_eia608_control_end_of_caption => {
-                // https://www.law.cornell.edu/cfr/text/47/79.101 (f)(2)
-                self.update_mode(imp, Cea608Mode::PopOn);
-                self.first_pts = self.current_pts;
-                let ret = if self.settings.unbuffered {
-                    self.drain(imp, true)
-                } else {
-                    let ret = self.drain_pending(imp);
-                    self.pending_lines = self.drain(imp, true);
-                    ret
-                };
-                return ret;
-            }
-            ffi::eia608_control_t_eia608_tab_offset_0
-            | ffi::eia608_control_t_eia608_tab_offset_1
-            | ffi::eia608_control_t_eia608_tab_offset_2
-            | ffi::eia608_control_t_eia608_tab_offset_3 => {
-                self.cursor.col += (cmd - ffi::eia608_control_t_eia608_tab_offset_0) as usize;
-                // C.13 Right Margin Limitation
-                self.cursor.col = std::cmp::min(self.cursor.col, 31);
-            }
-            // TODO
-            ffi::eia608_control_t_eia608_control_alarm_off
-            | ffi::eia608_control_t_eia608_control_delete_to_end_of_row => {}
-            ffi::eia608_control_t_eia608_control_alarm_on
-            | ffi::eia608_control_t_eia608_control_text_restart
-            | ffi::eia608_control_t_eia608_control_text_resume_text_display => {}
-            _ => {
-                gst::warning!(CAT, imp: imp, "Unknown command {}!", cmd);
-            }
-        }
-
-        None
-    }
-
-    fn decode_text(&mut self, imp: &Cea608ToJson, cc_data: u16) {
-        let (char1, char2, chan) = eia608_to_utf8(cc_data);
-
-        if chan != 0 {
+    fn handle_text(&mut self, imp: &Cea608ToJson, text: Cea608Text) {
+        if text.chan != 0 {
             return;
         }
 
         if let Some(row) = self.rows.get_mut(&self.cursor.row) {
-            if is_westeu(cc_data) {
+            if text.code_space == CodeSpace::WestEU {
                 row.pop(&mut self.cursor);
             }
 
-            if (char1.is_some() || char2.is_some()) && self.first_pts.is_none() {
+            if (text.char1.is_some() || text.char2.is_some()) && self.first_pts.is_none() {
                 if let Some(mode) = self.mode {
                     if mode.is_rollup() || mode == Cea608Mode::PaintOn {
                         self.first_pts = self.current_pts;
@@ -771,11 +505,11 @@ impl State {
                 }
             }
 
-            if let Some(c) = char1 {
+            if let Some(c) = text.char1 {
                 row.push(&mut self.cursor, c);
             }
 
-            if let Some(c) = char2 {
+            if let Some(c) = text.char2 {
                 row.push(&mut self.cursor, c);
             }
         } else {
@@ -783,10 +517,8 @@ impl State {
         }
     }
 
-    fn decode_midrowchange(&mut self, cc_data: u16) {
+    fn handle_midrowchange(&mut self, midrowchange: MidRowChange) {
         if let Some(row) = self.rows.get_mut(&self.cursor.row) {
-            let midrowchange = parse_midrowchange(cc_data);
-
             if midrowchange.chan == 0 {
                 row.push_midrow(&mut self.cursor, midrowchange.style, midrowchange.underline);
             }
@@ -800,36 +532,127 @@ impl State {
         duration: Option<gst::ClockTime>,
         cc_data: u16,
     ) -> Option<TimestampedLines> {
-        if (is_specialna(cc_data) || is_control(cc_data)) && Some(cc_data) == self.last_cc_data {
-            gst::log!(CAT, imp: imp, "Skipping duplicate");
-            return None;
-        }
+        self.cea608_state.push_cc_data(cc_data);
 
-        self.last_cc_data = Some(cc_data);
-        self.current_pts = pts;
-        self.current_duration = duration;
-
-        if is_xds(cc_data) {
-            gst::log!(CAT, imp: imp, "XDS, ignoring");
-        } else if is_control(cc_data) {
-            gst::log!(CAT, imp: imp, "control!");
-            return self.decode_control(imp, cc_data);
-        } else if is_basicna(cc_data) || is_specialna(cc_data) || is_westeu(cc_data) {
-            if let Some(mode) = self.mode {
-                self.mode?;
-                gst::log!(CAT, imp: imp, "text");
-                self.decode_text(imp, cc_data);
-
-                if mode.is_rollup() && self.settings.unbuffered {
-                    return self.drain(imp, false);
-                }
+        while let Some(cea608) = self.cea608_state.pop() {
+            if matches!(cea608, Cea608::Duplicate) {
+                gst::log!(CAT, imp: imp, "Skipping duplicate");
+                return None;
             }
-        } else if is_preamble(cc_data) {
-            gst::log!(CAT, imp: imp, "preamble");
-            return self.decode_preamble(imp, cc_data);
-        } else if is_midrowchange(cc_data) {
-            gst::log!(CAT, imp: imp, "midrowchange");
-            self.decode_midrowchange(cc_data);
+
+            self.current_pts = pts;
+            self.current_duration = duration;
+
+            match cea608 {
+                Cea608::Duplicate => unreachable!(),
+                Cea608::EraseDisplay(chan) => {
+                    if chan == 0 {
+                        return match self.mode {
+                            Some(Cea608Mode::PopOn) => {
+                                self.clear = Some(true);
+                                self.drain_pending(imp)
+                            }
+                            _ => {
+                                let ret = self.drain(imp, true);
+                                self.clear = Some(true);
+                                ret
+                            }
+                        };
+                    }
+                }
+                Cea608::NewMode(chan, mode) => {
+                    if chan == 0 {
+                        return self.update_mode(imp, mode);
+                    }
+                }
+                Cea608::CarriageReturn(chan) => {
+                    if chan == 0 {
+                        gst::log!(CAT, imp: imp, "carriage return");
+
+                        if let Some(mode) = self.mode {
+                            // https://www.law.cornell.edu/cfr/text/47/79.101 (f)(2)(i) (f)(3)(i)
+                            if mode.is_rollup() {
+                                let ret = if self.settings.unbuffered {
+                                    let offset = match mode {
+                                        Cea608Mode::RollUp2 => 1,
+                                        Cea608Mode::RollUp3 => 2,
+                                        Cea608Mode::RollUp4 => 3,
+                                        _ => unreachable!(),
+                                    };
+
+                                    let top_row = self.cursor.row.saturating_sub(offset);
+
+                                    // https://www.law.cornell.edu/cfr/text/47/79.101 (f)(1)(iii)
+                                    self.rows.remove(&top_row);
+
+                                    for row in top_row + 1..self.cursor.row + 1 {
+                                        if let Some(mut row) = self.rows.remove(&row) {
+                                            row.row -= 1;
+                                            self.rows.insert(row.row, row);
+                                        }
+                                    }
+
+                                    self.rows.insert(self.cursor.row, Row::new(self.cursor.row));
+                                    self.drain(imp, false)
+                                } else {
+                                    let ret = self.drain(imp, true);
+                                    self.carriage_return = Some(true);
+                                    ret
+                                };
+
+                                return ret;
+                            }
+                        }
+                    }
+                }
+                Cea608::Backspace(chan) => {
+                    if chan == 0 {
+                        if let Some(row) = self.rows.get_mut(&self.cursor.row) {
+                            row.pop(&mut self.cursor);
+                        }
+                    }
+                }
+                Cea608::EraseNonDisplay(chan) => {
+                    if chan == 0 && self.mode == Some(Cea608Mode::PopOn) {
+                        self.rows.clear();
+                    }
+                }
+                Cea608::EndOfCaption(chan) => {
+                    if chan == 0 {
+                        // https://www.law.cornell.edu/cfr/text/47/79.101 (f)(2)
+                        self.update_mode(imp, Cea608Mode::PopOn);
+                        self.first_pts = self.current_pts;
+                        let ret = if self.settings.unbuffered {
+                            self.drain(imp, true)
+                        } else {
+                            let ret = self.drain_pending(imp);
+                            self.pending_lines = self.drain(imp, true);
+                            ret
+                        };
+                        return ret;
+                    }
+                }
+                Cea608::TabOffset(chan, count) => {
+                    if chan == 0 {
+                        self.cursor.col += count as usize;
+                        // C.13 Right Margin Limitation
+                        self.cursor.col = std::cmp::min(self.cursor.col, 31);
+                    }
+                }
+                Cea608::Text(text) => {
+                    if let Some(mode) = self.mode {
+                        self.mode?;
+                        gst::log!(CAT, imp: imp, "text");
+                        self.handle_text(imp, text);
+
+                        if mode.is_rollup() && self.settings.unbuffered {
+                            return self.drain(imp, false);
+                        }
+                    }
+                }
+                Cea608::Preamble(preamble) => return self.handle_preamble(imp, preamble),
+                Cea608::MidRowChange(change) => self.handle_midrowchange(change),
+            }
         }
         None
     }

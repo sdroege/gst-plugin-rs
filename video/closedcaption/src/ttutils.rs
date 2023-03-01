@@ -6,49 +6,9 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use gst::glib;
 use serde::{Deserialize, Serialize};
 
-#[derive(
-    Serialize, Deserialize, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum,
-)]
-#[repr(u32)]
-#[enum_type(name = "GstTtToCea608Mode")]
-pub enum Cea608Mode {
-    PopOn,
-    PaintOn,
-    RollUp2,
-    RollUp3,
-    RollUp4,
-}
-
-#[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
-pub enum TextStyle {
-    White,
-    Green,
-    Blue,
-    Cyan,
-    Red,
-    Yellow,
-    Magenta,
-    ItalicWhite,
-}
-
-impl From<u32> for TextStyle {
-    fn from(val: u32) -> Self {
-        match val {
-            0 => TextStyle::White,
-            1 => TextStyle::Green,
-            2 => TextStyle::Blue,
-            3 => TextStyle::Cyan,
-            4 => TextStyle::Red,
-            5 => TextStyle::Yellow,
-            6 => TextStyle::Magenta,
-            7 => TextStyle::ItalicWhite,
-            _ => TextStyle::White,
-        }
-    }
-}
+use crate::cea608utils::*;
 
 // TODO allow indenting chunks
 #[derive(Clone, Serialize, Deserialize, Debug)]

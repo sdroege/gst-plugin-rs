@@ -15,7 +15,8 @@ use once_cell::sync::Lazy;
 use std::cmp::min;
 use std::sync::Mutex;
 
-use crate::ttutils::{Cea608Mode, Chunk, Line, Lines, TextStyle};
+use crate::cea608utils::*;
+use crate::ttutils::{Chunk, Line, Lines};
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(

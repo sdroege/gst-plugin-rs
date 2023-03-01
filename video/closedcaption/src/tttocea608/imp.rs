@@ -15,7 +15,8 @@ use once_cell::sync::Lazy;
 use crate::ffi;
 use std::sync::Mutex;
 
-use crate::ttutils::{Cea608Mode, Chunk, Line, Lines, TextStyle};
+use crate::cea608utils::{Cea608Mode, TextStyle};
+use crate::ttutils::{Chunk, Line, Lines};
 
 fn is_punctuation(word: &str) -> bool {
     word == "." || word == "," || word == "?" || word == "!" || word == ";" || word == ":"

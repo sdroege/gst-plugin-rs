@@ -6,7 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::ttutils::Cea608Mode;
+use crate::cea608utils::Cea608Mode;
 use anyhow::{anyhow, Error};
 use gst::glib;
 use gst::prelude::*;
