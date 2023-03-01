@@ -5904,6 +5904,37 @@
     "rswebrtc": {
         "description": "GStreamer plugin for high level WebRTC elements and a simple signaling server",
         "elements": {
+            "awskvswebrtcsink": {
+                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
+                "description": "WebRTC sink",
+                "hierarchy": [
+                    "GstAwsKvsWebRTCSink",
+                    "GstWebRTCSink",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy",
+                    "GstNavigation"
+                ],
+                "klass": "Sink/Network/WebRTC",
+                "pad-templates": {
+                    "audio_%%u": {
+                        "caps": "audio/x-raw:\n",
+                        "direction": "sink",
+                        "presence": "request"
+                    },
+                    "video_%%u": {
+                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n",
+                        "direction": "sink",
+                        "presence": "request"
+                    }
+                },
+                "rank": "none"
+            },
             "webrtcsink": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "WebRTC sink",

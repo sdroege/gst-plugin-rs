@@ -19,7 +19,8 @@ use std::sync::Mutex;
 
 use super::homegrown_cc::CongestionController;
 use super::{WebRTCSinkCongestionControl, WebRTCSinkError, WebRTCSinkMitigationMode};
-use crate::signaller::Signaller;
+use crate::aws_kvs_signaller::AwsKvsSignaller;
+use crate::signaller::Signaller as DefaultSignaller;
 use crate::RUNTIME;
 use std::collections::BTreeMap;
 
@@ -64,6 +65,7 @@ struct CCInfo {
 }
 
 /// User configuration
+#[derive(Clone)]
 struct Settings {
     video_caps: gst::Caps,
     audio_caps: gst::Caps,
@@ -83,6 +85,7 @@ struct Codec {
     payloader: gst::ElementFactory,
     caps: gst::Caps,
     payload: i32,
+    output_filter: Option<gst::Caps>,
 }
 
 impl Codec {
@@ -103,10 +106,14 @@ struct InputStream {
     out_caps: Option<gst::Caps>,
     /// Pace input data
     clocksync: Option<gst::Element>,
+    /// The serial number picked for this stream
+    serial: u32,
+    /// Whether the input stream is video or not
+    is_video: bool,
 }
 
 /// Wrapper around webrtcbin pads
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct WebRTCPad {
     pad: gst::Pad,
     /// The (fixed) caps of the corresponding input stream
@@ -114,8 +121,10 @@ struct WebRTCPad {
     /// The m= line index in the SDP
     media_idx: u32,
     ssrc: u32,
-    /// The name of the corresponding InputStream's sink_pad
-    stream_name: String,
+    /// The name of the corresponding InputStream's sink_pad.
+    /// When None, the pad was only created to mark its transceiver
+    /// as inactive (in the case where we answer an offer).
+    stream_name: Option<String>,
     /// The payload selected in the answer, None at first
     payload: Option<i32>,
 }
@@ -158,6 +167,9 @@ struct Session {
 
     links: HashMap<u32, gst_utils::ConsumptionLink>,
     stats_sigid: Option<glib::SignalHandlerId>,
+
+    // When not None, constructed from offer SDP
+    codecs: Option<BTreeMap<i32, Codec>>,
 }
 
 #[derive(PartialEq)]
@@ -288,7 +300,7 @@ impl Default for Settings {
 
 impl Default for State {
     fn default() -> Self {
-        let signaller = Signaller::default();
+        let signaller = DefaultSignaller::default();
 
         Self {
             signaller: Box::new(signaller),
@@ -455,14 +467,23 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
 /// Bit of an awkward function, but the goal here is to keep
 /// most of the encoding code for consumers in line with
 /// the codec discovery code, and this gets the job done.
+#[allow(clippy::too_many_arguments)] // This needs some more refactoring and it will happen soon
 fn setup_encoding(
+    element: &super::WebRTCSink,
     pipeline: &gst::Pipeline,
     src: &gst::Element,
     input_caps: &gst::Caps,
+    output_caps: &gst::Caps,
     codec: &Codec,
     ssrc: Option<u32>,
-    twcc: bool,
+    twcc: Option<u32>,
 ) -> Result<(gst::Element, gst::Element, gst::Element), Error> {
+    gst::trace!(
+        CAT,
+        "Setting up encoding, input caps: {input_caps}, \
+                output caps: {output_caps}, codec: {codec:?}, twcc: {twcc:?}"
+    );
+
     let conv = match codec.is_video() {
         true => make_converter_for_video_caps(input_caps)?.upcast(),
         false => gst::parse_bin_from_description("audioresample ! audioconvert", true)?.upcast(),
@@ -475,12 +496,13 @@ fn setup_encoding(
         .create()
         .build()
         .with_context(|| format!("Creating encoder {}", codec.encoder.name()))?;
+    let parse_filter = make_element("capsfilter", None)?;
     let pay = codec
         .payloader
         .create()
         .build()
         .with_context(|| format!("Creating payloader {}", codec.payloader.name()))?;
-    let parse_filter = make_element("capsfilter", None)?;
+    let pay_filter = make_element("capsfilter", None)?;
 
     pay.set_property("mtu", 1200_u32);
     pay.set_property("pt", codec.payload as u32);
@@ -489,8 +511,10 @@ fn setup_encoding(
         pay.set_property("ssrc", ssrc);
     }
 
+    pay_filter.set_property("caps", output_caps);
+
     pipeline
-        .add_many([&conv, &conv_filter, &enc, &parse_filter, &pay])
+        .add_many([&conv, &conv_filter, &enc, &parse_filter, &pay, &pay_filter])
         .unwrap();
     gst::Element::link_many([src, &conv, &conv_filter, &enc])
         .with_context(|| "Linking encoding elements")?;
@@ -546,19 +570,33 @@ fn setup_encoding(
      * concept of *transport-wide* congestion control, and firefox doesn't
      * provide feedback for audio packets.
      */
-    if twcc {
+    if let Some(idx) = twcc {
         let twcc_extension = gst_rtp::RTPHeaderExtension::create_from_uri(RTP_TWCC_URI).unwrap();
-        twcc_extension.set_id(1);
+        twcc_extension.set_id(idx);
         pay.emit_by_name::<()>("add-extension", &[&twcc_extension]);
     }
 
     conv_filter.set_property("caps", conv_caps);
 
     let parse_caps = if codec_name == "video/x-h264" {
-        gst::Caps::builder(codec_name)
-            .field("stream-format", "avc")
-            .field("profile", "constrained-baseline")
-            .build()
+        if output_caps.is_any() {
+            gst::debug!(
+                CAT,
+                obj: element,
+                "No H264 profile requested, selecting constrained-baseline"
+            );
+
+            gst::Caps::builder(codec_name)
+                .field("stream-format", "avc")
+                .field("profile", "constrained-baseline")
+                .build()
+        } else {
+            /* When output caps were specified, we are answering an offer
+             * and should not force a profile */
+            gst::Caps::builder(codec_name)
+                .field("stream-format", "avc")
+                .build()
+        }
     } else if codec_name == "video/x-h265" {
         gst::Caps::builder(codec_name)
             .field("stream-format", "hvc1")
@@ -569,9 +607,10 @@ fn setup_encoding(
 
     parse_filter.set_property("caps", parse_caps);
 
-    gst::Element::link_many([&parse_filter, &pay]).with_context(|| "Linking encoding elements")?;
+    gst::Element::link_many([&parse_filter, &pay, &pay_filter])
+        .with_context(|| "Linking encoding elements")?;
 
-    Ok((enc, conv_filter, pay))
+    Ok((enc, conv_filter, pay_filter))
 }
 
 impl VideoEncoder {
@@ -806,6 +845,7 @@ impl Session {
             encoders: Vec::new(),
             links: HashMap::new(),
             stats_sigid: None,
+            codecs: None,
         }
     }
 
@@ -828,76 +868,6 @@ impl Session {
         ret
     }
 
-    fn generate_ssrc(&self) -> u32 {
-        loop {
-            let ret = fastrand::u32(..);
-
-            if !self.webrtc_pads.contains_key(&ret) {
-                return ret;
-            }
-        }
-    }
-
-    /// Request a sink pad on our webrtcbin, and set its transceiver's codec_preferences
-    fn request_webrtcbin_pad(
-        &mut self,
-        element: &super::WebRTCSink,
-        settings: &Settings,
-        stream: &InputStream,
-    ) {
-        let ssrc = self.generate_ssrc();
-        let media_idx = self.webrtc_pads.len() as i32;
-
-        let mut payloader_caps = stream.out_caps.as_ref().unwrap().to_owned();
-
-        {
-            let payloader_caps_mut = payloader_caps.make_mut();
-            payloader_caps_mut.set("ssrc", ssrc);
-        }
-
-        gst::info!(
-            CAT,
-            obj: element,
-            "Requesting WebRTC pad for consumer {} with caps {}",
-            self.peer_id,
-            payloader_caps
-        );
-
-        let pad = self
-            .webrtcbin
-            .request_pad_simple(&format!("sink_{media_idx}"))
-            .unwrap();
-
-        let transceiver = pad.property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
-
-        transceiver.set_property(
-            "direction",
-            gst_webrtc::WebRTCRTPTransceiverDirection::Sendonly,
-        );
-
-        transceiver.set_property("codec-preferences", &payloader_caps);
-
-        if stream.sink_pad.name().starts_with("video_") {
-            if settings.do_fec {
-                transceiver.set_property("fec-type", gst_webrtc::WebRTCFECType::UlpRed);
-            }
-
-            transceiver.set_property("do-nack", settings.do_retransmission);
-        }
-
-        self.webrtc_pads.insert(
-            ssrc,
-            WebRTCPad {
-                pad,
-                in_caps: stream.in_caps.as_ref().unwrap().clone(),
-                media_idx: media_idx as u32,
-                ssrc,
-                stream_name: stream.sink_pad.name().to_string(),
-                payload: None,
-            },
-        );
-    }
-
     /// Called when we have received an answer, connects an InputStream
     /// to a given WebRTCPad
     fn connect_input_stream(
@@ -907,39 +877,74 @@ impl Session {
         webrtc_pad: &WebRTCPad,
         codecs: &BTreeMap<i32, Codec>,
     ) -> Result<(), Error> {
+        // No stream name, pad only exists to deactivate media
+        let stream_name = match webrtc_pad.stream_name {
+            Some(ref name) => name,
+            None => {
+                gst::info!(
+                    CAT,
+                    obj: element,
+                    "Consumer {} not connecting any input stream for inactive media {}",
+                    self.peer_id,
+                    webrtc_pad.media_idx
+                );
+                return Ok(());
+            }
+        };
+
         gst::info!(
             CAT,
             obj: element,
-            "Connecting input stream {} for consumer {}",
-            webrtc_pad.stream_name,
-            self.peer_id
+            "Connecting input stream {} for consumer {} and media {}",
+            stream_name,
+            self.peer_id,
+            webrtc_pad.media_idx
         );
 
         let payload = webrtc_pad.payload.unwrap();
 
-        let codec = codecs
-            .get(&payload)
-            .ok_or_else(|| anyhow!("No codec for payload {}", payload))?;
+        let codec = match self.codecs {
+            Some(ref codecs) => {
+                gst::debug!(CAT, obj: element, "Picking codec from remote offer");
 
-        let appsrc = make_element("appsrc", Some(&webrtc_pad.stream_name))?;
+                codecs
+                    .get(&payload)
+                    .cloned()
+                    .ok_or_else(|| anyhow!("No codec for payload {}", payload))?
+            }
+            None => {
+                gst::debug!(CAT, obj: element, "Picking codec from local offer");
+
+                codecs
+                    .get(&payload)
+                    .cloned()
+                    .ok_or_else(|| anyhow!("No codec for payload {}", payload))?
+            }
+        };
+
+        let appsrc = make_element("appsrc", Some(stream_name))?;
         self.pipeline.add(&appsrc).unwrap();
 
         let pay_filter = make_element("capsfilter", None)?;
         self.pipeline.add(&pay_filter).unwrap();
 
-        let (enc, raw_filter, pay) = setup_encoding(
+        let output_caps = codec
+            .output_filter
+            .clone()
+            .unwrap_or_else(gst::Caps::new_any);
+
+        let (enc, raw_filter, encoding_sink) = setup_encoding(
+            element,
             &self.pipeline,
             &appsrc,
             &webrtc_pad.in_caps,
-            codec,
+            &output_caps,
+            &codec,
             Some(webrtc_pad.ssrc),
-            false,
+            None,
         )?;
 
-        element.emit_by_name::<bool>(
-            "encoder-setup",
-            &[&self.peer_id, &webrtc_pad.stream_name, &enc],
-        );
+        element.emit_by_name::<bool>("encoder-setup", &[&self.peer_id, &stream_name, &enc]);
 
         // At this point, the peer has provided its answer, and we want to
         // let the payloader / encoder perform negotiation according to that.
@@ -1032,7 +1037,7 @@ impl Session {
             .sync_children_states()
             .with_context(|| format!("Connecting input stream for {}", self.peer_id))?;
 
-        pay.link(&pay_filter)?;
+        encoding_sink.link(&pay_filter)?;
 
         let srcpad = pay_filter.static_pad("src").unwrap();
 
@@ -1131,6 +1136,164 @@ impl NavigationEventHandler {
 }
 
 impl WebRTCSink {
+    fn generate_ssrc(element: &super::WebRTCSink, webrtc_pads: &HashMap<u32, WebRTCPad>) -> u32 {
+        loop {
+            let ret = fastrand::u32(..);
+
+            if !webrtc_pads.contains_key(&ret) {
+                gst::trace!(CAT, obj: element, "Selected ssrc {}", ret);
+                return ret;
+            }
+        }
+    }
+
+    fn request_inactive_webrtcbin_pad(
+        element: &super::WebRTCSink,
+        webrtcbin: &gst::Element,
+        webrtc_pads: &mut HashMap<u32, WebRTCPad>,
+        is_video: bool,
+    ) {
+        let ssrc = WebRTCSink::generate_ssrc(element, webrtc_pads);
+        let media_idx = webrtc_pads.len() as i32;
+
+        let pad = webrtcbin
+            .request_pad_simple(&format!("sink_{}", media_idx))
+            .unwrap();
+
+        let transceiver = pad.property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
+
+        transceiver.set_property(
+            "direction",
+            gst_webrtc::WebRTCRTPTransceiverDirection::Inactive,
+        );
+
+        let payloader_caps = gst::Caps::builder("application/x-rtp")
+            .field("media", if is_video { "video" } else { "audio" })
+            .build();
+
+        transceiver.set_property("codec-preferences", &payloader_caps);
+
+        webrtc_pads.insert(
+            ssrc,
+            WebRTCPad {
+                pad,
+                in_caps: gst::Caps::new_empty(),
+                media_idx: media_idx as u32,
+                ssrc,
+                stream_name: None,
+                payload: None,
+            },
+        );
+    }
+
+    async fn request_webrtcbin_pad(
+        element: &super::WebRTCSink,
+        webrtcbin: &gst::Element,
+        stream: &InputStream,
+        media: Option<&gst_sdp::SDPMediaRef>,
+        settings: &Settings,
+        webrtc_pads: &mut HashMap<u32, WebRTCPad>,
+        codecs: &mut BTreeMap<i32, Codec>,
+    ) {
+        let ssrc = WebRTCSink::generate_ssrc(element, webrtc_pads);
+        let media_idx = webrtc_pads.len() as i32;
+
+        let mut payloader_caps = match media {
+            Some(media) => {
+                let encoders = gst::ElementFactory::factories_with_type(
+                    gst::ElementFactoryType::ENCODER,
+                    gst::Rank::Marginal,
+                );
+
+                let payloaders = gst::ElementFactory::factories_with_type(
+                    gst::ElementFactoryType::PAYLOADER,
+                    gst::Rank::Marginal,
+                );
+
+                let codec = WebRTCSink::select_codec(
+                    element,
+                    &encoders,
+                    &payloaders,
+                    media,
+                    &stream.in_caps.as_ref().unwrap().clone(),
+                    settings,
+                )
+                .await;
+
+                match codec {
+                    Some(codec) => {
+                        gst::debug!(
+                            CAT,
+                            obj: element,
+                            "Selected {codec:?} for media {media_idx}"
+                        );
+
+                        codecs.insert(codec.payload, codec.clone());
+                        codec.output_filter.unwrap()
+                    }
+                    None => {
+                        gst::error!(CAT, obj: element, "No codec selected for media {media_idx}");
+
+                        gst::Caps::new_empty()
+                    }
+                }
+            }
+            None => stream.out_caps.as_ref().unwrap().to_owned(),
+        };
+
+        if payloader_caps.is_empty() {
+            WebRTCSink::request_inactive_webrtcbin_pad(
+                element,
+                webrtcbin,
+                webrtc_pads,
+                stream.is_video,
+            );
+        } else {
+            let payloader_caps_mut = payloader_caps.make_mut();
+            payloader_caps_mut.set("ssrc", ssrc);
+
+            gst::info!(
+                CAT,
+                obj: element,
+                "Requesting WebRTC pad with caps {}",
+                payloader_caps
+            );
+
+            let pad = webrtcbin
+                .request_pad_simple(&format!("sink_{}", media_idx))
+                .unwrap();
+
+            let transceiver = pad.property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
+
+            transceiver.set_property(
+                "direction",
+                gst_webrtc::WebRTCRTPTransceiverDirection::Sendonly,
+            );
+
+            transceiver.set_property("codec-preferences", &payloader_caps);
+
+            if stream.sink_pad.name().starts_with("video_") {
+                if settings.do_fec {
+                    transceiver.set_property("fec-type", gst_webrtc::WebRTCFECType::UlpRed);
+                }
+
+                transceiver.set_property("do-nack", settings.do_retransmission);
+            }
+
+            webrtc_pads.insert(
+                ssrc,
+                WebRTCPad {
+                    pad,
+                    in_caps: stream.in_caps.as_ref().unwrap().clone(),
+                    media_idx: media_idx as u32,
+                    ssrc,
+                    stream_name: Some(stream.sink_pad.name().to_string()),
+                    payload: None,
+                },
+            );
+        }
+    }
+
     /// Build an ordered map of Codecs, given user-provided audio / video caps */
     fn lookup_codecs(&self) -> BTreeMap<i32, Codec> {
         /* First gather all encoder and payloader factories */
@@ -1172,6 +1335,7 @@ impl WebRTCSink {
                             payloader: payloader.clone(),
                             caps,
                             payload: pt,
+                            output_filter: None,
                         })
                     } else {
                         gst::warning!(
@@ -1259,6 +1423,12 @@ impl WebRTCSink {
         );
     }
 
+    /// Called by the signaller when it wants to shut down gracefully
+    pub fn shutdown(&self, element: &super::WebRTCSink) {
+        gst::info!(CAT, "Shutting down");
+        let _ = element.post_message(gst::message::Eos::builder().src(element).build());
+    }
+
     fn on_offer_created(
         &self,
         element: &super::WebRTCSink,
@@ -1285,17 +1455,60 @@ impl WebRTCSink {
         }
     }
 
-    fn negotiate(&self, element: &super::WebRTCSink, session_id: &str) {
+    fn on_answer_created(
+        &self,
+        element: &super::WebRTCSink,
+        answer: gst_webrtc::WebRTCSessionDescription,
+        session_id: &str,
+    ) {
+        let mut state = self.state.lock().unwrap();
+
+        if let Some(mut session) = state.sessions.remove(session_id) {
+            let sdp = answer.sdp();
+
+            session.sdp = Some(sdp.to_owned());
+
+            for webrtc_pad in session.webrtc_pads.values_mut() {
+                webrtc_pad.payload = sdp
+                    .media(webrtc_pad.media_idx)
+                    .and_then(|media| media.format(0))
+                    .and_then(|format| format.parse::<i32>().ok());
+            }
+
+            session
+                .webrtcbin
+                .emit_by_name::<()>("set-local-description", &[&answer, &None::<gst::Promise>]);
+
+            if let Err(err) = state.signaller.handle_sdp(element, session_id, &answer) {
+                gst::warning!(
+                    CAT,
+                    "Failed to handle SDP for session {}: {}",
+                    session_id,
+                    err
+                );
+
+                state.finalize_session(element, &mut session, true);
+            } else {
+                let session_id = session.id.clone();
+
+                state.sessions.insert(session.id.clone(), session);
+
+                drop(state);
+
+                self.on_remote_description_set(element, session_id)
+            }
+        }
+    }
+
+    fn on_remote_description_offer_set(&self, element: &super::WebRTCSink, session_id: String) {
         let state = self.state.lock().unwrap();
 
-        gst::debug!(CAT, obj: element, "Negotiating for session {}", session_id);
-
-        if let Some(session) = state.sessions.get(session_id) {
+        if let Some(session) = state.sessions.get(&session_id) {
             let element = element.downgrade();
-            gst::debug!(CAT, "Creating offer for session {}", session_id);
-            let session_id = session_id.to_string();
+            gst::debug!(CAT, "Creating answer for session {}", session_id);
+            let session_id = session_id.clone();
             let promise = gst::Promise::with_change_func(move |reply| {
-                gst::debug!(CAT, "Created offer for session {}", session_id);
+                gst::debug!(CAT, "Created answer for session {}", session_id);
 
                 if let Some(element) = element.upgrade() {
                     let this = element.imp();
@@ -1324,15 +1537,16 @@ impl WebRTCSink {
                         }
                     };
 
-                    if let Ok(offer) = reply
-                        .value("offer")
-                        .map(|offer| offer.get::<gst_webrtc::WebRTCSessionDescription>().unwrap())
-                    {
-                        this.on_offer_created(&element, offer, &session_id);
+                    if let Ok(answer) = reply.value("answer").map(|answer| {
+                        answer
+                            .get::<gst_webrtc::WebRTCSessionDescription>()
+                            .unwrap()
+                    }) {
+                        this.on_answer_created(&element, answer, &session_id);
                     } else {
                         gst::warning!(
                             CAT,
-                            "Reply without an offer for session {}: {:?}",
+                            "Reply without an answer for session {}: {:?}",
                             session_id,
                             reply
                         );
@@ -1343,7 +1557,235 @@ impl WebRTCSink {
 
             session
                 .webrtcbin
-                .emit_by_name::<()>("create-offer", &[&None::<gst::Structure>, &promise]);
+                .emit_by_name::<()>("create-answer", &[&None::<gst::Structure>, &promise]);
+        }
+    }
+
+    fn build_codec(
+        encoding_name: &str,
+        payload: i32,
+        encoders: &gst::glib::List<gst::ElementFactory>,
+        payloaders: &gst::glib::List<gst::ElementFactory>,
+    ) -> Option<Codec> {
+        let caps = match encoding_name {
+            "VP8" => gst::Caps::builder("video/x-vp8").build(),
+            "VP9" => gst::Caps::builder("video/x-vp9").build(),
+            "H264" => gst::Caps::builder("video/x-h264").build(),
+            "H265" => gst::Caps::builder("video/x-h265").build(),
+            "OPUS" => gst::Caps::builder("audio/x-opus").build(),
+            _ => {
+                return None;
+            }
+        };
+
+        Option::zip(
+            encoders
+                .iter()
+                .find(|factory| factory.can_src_any_caps(&caps)),
+            payloaders
+                .iter()
+                .find(|factory| factory.can_sink_any_caps(&caps)),
+        )
+        .map(|(encoder, payloader)| Codec {
+            encoder: encoder.clone(),
+            payloader: payloader.clone(),
+            caps,
+            payload,
+            output_filter: None,
+        })
+    }
+
+    async fn select_codec(
+        element: &super::WebRTCSink,
+        encoders: &gst::glib::List<gst::ElementFactory>,
+        payloaders: &gst::glib::List<gst::ElementFactory>,
+        media: &gst_sdp::SDPMediaRef,
+        in_caps: &gst::Caps,
+        settings: &Settings,
+    ) -> Option<Codec> {
+        let user_caps = match media.media() {
+            Some("audio") => &settings.audio_caps,
+            Some("video") => &settings.video_caps,
+            _ => {
+                unreachable!();
+            }
+        };
+
+        // Here, we want to try the codecs proposed by the remote offerer
+        // in the order requested by the user. For instance, if the offer
+        // contained VP8, VP9 and H264 (in this order), but the video-caps
+        // contained H264 and VP8 (in this order), we want to try H264 first,
+        // skip VP9, then try VP8.
+        //
+        // If the user wants to simply use the offered order, they should be
+        // able to set video-caps to ANY caps, though other tweaks are probably
+        // required elsewhere to make this work in all cases (eg when we create
+        // the offer).
+
+        let mut ordered_codecs_and_caps: Vec<(gst::Caps, Vec<(Codec, gst::Caps)>)> = user_caps
+            .iter()
+            .map(|s| ([s.to_owned()].into_iter().collect(), Vec::new()))
+            .collect();
+
+        for (payload, mut caps) in media
+            .formats()
+            .filter_map(|format| format.parse::<i32>().ok())
+            .filter_map(|payload| Some(payload).zip(media.caps_from_media(payload)))
+        {
+            let s = caps.make_mut().structure_mut(0).unwrap();
+
+            s.filter_map_in_place(|quark, value| {
+                if quark.as_str().starts_with("rtcp-fb-") {
+                    None
+                } else {
+                    Some(value)
+                }
+            });
+            s.set_name("application/x-rtp");
+
+            let encoding_name = s.get::<String>("encoding-name").unwrap();
+
+            if let Some(codec) =
+                WebRTCSink::build_codec(&encoding_name, payload, encoders, payloaders)
+            {
+                for (user_caps, codecs_and_caps) in ordered_codecs_and_caps.iter_mut() {
+                    if codec.caps.is_subset(user_caps) {
+                        codecs_and_caps.push((codec, caps));
+                        break;
+                    }
+                }
+            }
+        }
+
+        let mut twcc_idx = None;
+
+        for attribute in media.attributes() {
+            if attribute.key() == "extmap" {
+                if let Some(value) = attribute.value() {
+                    if let Some((idx_str, ext)) = value.split_once(' ') {
+                        if ext == RTP_TWCC_URI {
+                            if let Ok(idx) = idx_str.parse::<u32>() {
+                                twcc_idx = Some(idx);
+                            } else {
+                                gst::warning!(
+                                    CAT,
+                                    obj: element,
+                                    "Failed to parse twcc index: {idx_str}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let in_caps = &in_caps;
+        let futs = ordered_codecs_and_caps
+            .iter()
+            .flat_map(|(_, codecs_and_caps)| codecs_and_caps)
+            .map(|(codec, caps)| async move {
+                WebRTCSink::run_discovery_pipeline(element, codec, in_caps, caps, twcc_idx)
+                    .await
+                    .map(|s| {
+                        let mut codec = codec.clone();
+                        codec.output_filter = Some([s].into_iter().collect());
+                        codec
+                    })
+            });
+
+        /* Run sequentially to avoid NVENC collisions */
+        for fut in futs {
+            if let Ok(codec) = fut.await {
+                return Some(codec);
+            }
+        }
+
+        None
+    }
+
+    fn negotiate(
+        &self,
+        element: &super::WebRTCSink,
+        session_id: &str,
+        offer: Option<&gst_webrtc::WebRTCSessionDescription>,
+    ) {
+        let state = self.state.lock().unwrap();
+
+        gst::debug!(CAT, obj: element, "Negotiating for session {}", session_id);
+
+        if let Some(session) = state.sessions.get(session_id) {
+            gst::trace!(CAT, "WebRTC pads: {:?}", session.webrtc_pads);
+
+            if let Some(offer) = offer {
+                let element = element.downgrade();
+                let session_id = session_id.to_string();
+
+                let promise = gst::Promise::with_change_func(move |reply| {
+                    gst::debug!(CAT, "received reply {:?}", reply);
+                    if let Some(element) = element.upgrade() {
+                        let this = element.imp();
+
+                        this.on_remote_description_offer_set(&element, session_id);
+                    }
+                });
+
+                session
+                    .webrtcbin
+                    .emit_by_name::<()>("set-remote-description", &[&offer, &promise]);
+            } else {
+                let element = element.downgrade();
+                gst::debug!(CAT, "Creating offer for session {}", session_id);
+                let session_id = session_id.to_string();
+                let promise = gst::Promise::with_change_func(move |reply| {
+                    gst::debug!(CAT, "Created offer for session {}", session_id);
+
+                    if let Some(element) = element.upgrade() {
+                        let this = element.imp();
+                        let reply = match reply {
+                            Ok(Some(reply)) => reply,
+                            Ok(None) => {
+                                gst::warning!(
+                                    CAT,
+                                    obj: element,
+                                    "Promise returned without a reply for {}",
+                                    session_id
+                                );
+                                let _ = this.remove_session(&element, &session_id, true);
+                                return;
+                            }
+                            Err(err) => {
+                                gst::warning!(
+                                    CAT,
+                                    obj: element,
+                                    "Promise returned with an error for {}: {:?}",
+                                    session_id,
+                                    err
+                                );
+                                let _ = this.remove_session(&element, &session_id, true);
+                                return;
+                            }
+                        };
+
+                        if let Ok(offer) = reply.value("offer").map(|offer| {
+                            offer.get::<gst_webrtc::WebRTCSessionDescription>().unwrap()
+                        }) {
+                            this.on_offer_created(&element, offer, &session_id);
+                        } else {
+                            gst::warning!(
+                                CAT,
+                                "Reply without an offer for session {}: {:?}",
+                                session_id,
+                                reply
+                            );
+                            let _ = this.remove_session(&element, &session_id, true);
+                        }
+                    }
+                });
+
+                session
+                    .webrtcbin
+                    .emit_by_name::<()>("create-offer", &[&None::<gst::Structure>, &promise]);
+            }
         } else {
             gst::debug!(
                 CAT,
@@ -1387,6 +1829,7 @@ impl WebRTCSink {
         element: &super::WebRTCSink,
         session_id: &str,
         peer_id: &str,
+        offer: Option<&gst_webrtc::WebRTCSessionDescription>,
     ) -> Result<(), WebRTCSinkError> {
         let settings = self.settings.lock().unwrap();
         let mut state = self.state.lock().unwrap();
@@ -1662,11 +2105,6 @@ impl WebRTCSink {
             }
         }
 
-        state
-            .streams
-            .iter()
-            .for_each(|(_, stream)| session.request_webrtcbin_pad(element, &settings, stream));
-
         let clock = element.clock();
 
         pipeline.use_clock(clock.as_ref());
@@ -1676,65 +2114,53 @@ impl WebRTCSink {
         let mut bus_stream = pipeline.bus().unwrap().stream();
         let element_clone = element.downgrade();
         let pipeline_clone = pipeline.downgrade();
-        let session_id_clone = session_id.to_owned();
+        let session_id_clone = session_id.clone();
 
         RUNTIME.spawn(async move {
             while let Some(msg) = bus_stream.next().await {
-                if let Some(element) = element_clone.upgrade() {
-                    let this = element.imp();
-                    match msg.view() {
-                        gst::MessageView::Error(err) => {
-                            gst::error!(
-                                CAT,
-                                "session {} error: {}, details: {:?}",
-                                session_id_clone,
-                                err.error(),
-                                err.debug()
-                            );
-                            let _ = this.remove_session(&element, &session_id_clone, true);
-                        }
-                        gst::MessageView::StateChanged(state_changed) => {
-                            if let Some(pipeline) = pipeline_clone.upgrade() {
-                                if state_changed.src() == Some(pipeline.upcast_ref()) {
-                                    pipeline.debug_to_dot_file_with_ts(
-                                        gst::DebugGraphDetails::all(),
-                                        format!(
-                                            "webrtcsink-session-{}-{:?}-to-{:?}",
-                                            session_id_clone,
-                                            state_changed.old(),
-                                            state_changed.current()
-                                        ),
-                                    );
-                                }
-                            }
-                        }
-                        gst::MessageView::Latency(..) => {
-                            if let Some(pipeline) = pipeline_clone.upgrade() {
-                                gst::info!(CAT, obj: pipeline, "Recalculating latency");
-                                let _ = pipeline.recalculate_latency();
-                            }
-                        }
-                        gst::MessageView::Eos(..) => {
-                            gst::error!(
-                                CAT,
-                                "Unexpected end of stream in session {}",
-                                session_id_clone,
-                            );
-                            let _ = this.remove_session(&element, &session_id_clone, true);
-                        }
-                        _ => (),
+                let Some(element) = element_clone.upgrade() else { break; };
+                let Some(pipeline) = pipeline_clone.upgrade() else { break; };
+                let this = element.imp();
+                match msg.view() {
+                    gst::MessageView::Error(err) => {
+                        gst::error!(
+                            CAT,
+                            "session {} error: {}, details: {:?}",
+                            session_id_clone,
+                            err.error(),
+                            err.debug()
+                        );
+                        let _ = this.remove_session(&element, &session_id_clone, true);
                     }
+                    gst::MessageView::StateChanged(state_changed) => {
+                        if state_changed.src() == Some(pipeline.upcast_ref()) {
+                            pipeline.debug_to_dot_file_with_ts(
+                                gst::DebugGraphDetails::all(),
+                                format!(
+                                    "webrtcsink-session-{}-{:?}-to-{:?}",
+                                    session_id_clone,
+                                    state_changed.old(),
+                                    state_changed.current()
+                                ),
+                            );
+                        }
+                    }
+                    gst::MessageView::Latency(..) => {
+                        gst::info!(CAT, obj: pipeline, "Recalculating latency");
+                        let _ = pipeline.recalculate_latency();
+                    }
+                    gst::MessageView::Eos(..) => {
+                        gst::error!(
+                            CAT,
+                            "Unexpected end of stream in session {}",
+                            session_id_clone,
+                        );
+                        let _ = this.remove_session(&element, &session_id_clone, true);
+                    }
+                    _ => (),
                 }
             }
         });
-
-        pipeline.set_state(gst::State::Ready).map_err(|err| {
-            WebRTCSinkError::SessionPipelineError {
-                session_id: session_id.to_string(),
-                peer_id: peer_id.to_string(),
-                details: err.to_string(),
-            }
-        })?;
 
         if settings.enable_data_channel_navigation {
             state.navigation_handler = Some(NavigationEventHandler::new(element, &webrtcbin));
@@ -1742,32 +2168,132 @@ impl WebRTCSink {
 
         state.sessions.insert(session_id.to_string(), session);
 
-        drop(state);
-        drop(settings);
+        let element_clone = element.downgrade();
+        let mut streams: Vec<InputStream> = state.streams.values().cloned().collect();
 
-        // This is intentionally emitted with the pipeline in the Ready state,
-        // so that application code can create data channels at the correct
-        // moment.
-        element.emit_by_name::<()>("consumer-added", &[&peer_id, &webrtcbin]);
+        streams.sort_by_key(|s| s.serial);
 
-        // We don't connect to on-negotiation-needed, this in order to call the above
-        // signal without holding the state lock:
-        //
-        // Going to Ready triggers synchronous emission of the on-negotiation-needed
-        // signal, during which time the application may add a data channel, causing
-        // renegotiation, which we do not support at this time.
-        //
-        // This is completely safe, as we know that by now all conditions are gathered:
-        // webrtcbin is in the Ready state, and all its transceivers have codec_preferences.
-        self.negotiate(element, &session_id);
+        let offer_clone = offer.cloned();
+        RUNTIME.spawn(async move {
+            if let Some(element) = element_clone.upgrade() {
+                let this = element.imp();
 
-        pipeline.set_state(gst::State::Playing).map_err(|err| {
-            WebRTCSinkError::SessionPipelineError {
-                session_id: session_id.to_string(),
-                peer_id: peer_id.to_string(),
-                details: err.to_string(),
+                let settings_clone = this.settings.lock().unwrap().clone();
+
+                let mut webrtc_pads: HashMap<u32, WebRTCPad> = HashMap::new();
+                let mut codecs: BTreeMap<i32, Codec> = BTreeMap::new();
+
+                if let Some(ref offer) = offer_clone {
+                    for media in offer.sdp().medias() {
+                        let media_is_video = match media.media() {
+                            Some("audio") => false,
+                            Some("video") => true,
+                            _ => {
+                                continue;
+                            }
+                        };
+
+                        if let Some(idx) = streams.iter().position(|s| {
+                            let stream_is_video = match s
+                                .in_caps
+                                .as_ref()
+                                .unwrap()
+                                .structure(0)
+                                .unwrap()
+                                .name()
+                                .as_str()
+                            {
+                                "video/x-raw" => true,
+                                "audio/x-raw" => false,
+                                _ => unreachable!(),
+                            };
+
+                            media_is_video == stream_is_video
+                        }) {
+                            let stream = streams.remove(idx);
+                            WebRTCSink::request_webrtcbin_pad(
+                                &element,
+                                &webrtcbin,
+                                &stream,
+                                Some(media),
+                                &settings_clone,
+                                &mut webrtc_pads,
+                                &mut codecs,
+                            )
+                            .await;
+                        } else {
+                            WebRTCSink::request_inactive_webrtcbin_pad(
+                                &element,
+                                &webrtcbin,
+                                &mut webrtc_pads,
+                                media_is_video,
+                            );
+                        }
+                    }
+                } else {
+                    for stream in streams {
+                        WebRTCSink::request_webrtcbin_pad(
+                            &element,
+                            &webrtcbin,
+                            &stream,
+                            None,
+                            &settings_clone,
+                            &mut webrtc_pads,
+                            &mut codecs,
+                        )
+                        .await;
+                    }
+                }
+
+                {
+                    let mut state = this.state.lock().unwrap();
+                    if let Some(mut session) = state.sessions.remove(&session_id) {
+                        session.webrtc_pads = webrtc_pads;
+                        if offer_clone.is_some() {
+                            session.codecs = Some(codecs);
+                        }
+                        state.sessions.insert(session_id.to_owned(), session);
+                    }
+                }
+
+                if let Err(err) = pipeline.set_state(gst::State::Ready) {
+                    gst::warning!(
+                        CAT,
+                        obj: element,
+                        "Failed to bring {peer_id} pipeline to READY: {}",
+                        err
+                    );
+                    let _ = this.remove_session(&element, &session_id, true);
+                    return;
+                }
+
+                // This is intentionally emitted with the pipeline in the Ready state,
+                // so that application code can create data channels at the correct
+                // moment.
+                element.emit_by_name::<()>("consumer-added", &[&peer_id, &webrtcbin]);
+
+                // We don't connect to on-negotiation-needed, this in order to call the above
+                // signal without holding the state lock:
+                //
+                // Going to Ready triggers synchronous emission of the on-negotiation-needed
+                // signal, during which time the application may add a data channel, causing
+                // renegotiation, which we do not support at this time.
+                //
+                // This is completely safe, as we know that by now all conditions are gathered:
+                // webrtcbin is in the Ready state, and all its transceivers have codec_preferences.
+                this.negotiate(&element, &session_id, offer_clone.as_ref());
+
+                if let Err(err) = pipeline.set_state(gst::State::Playing) {
+                    gst::warning!(
+                        CAT,
+                        obj: element,
+                        "Failed to bring {peer_id} pipeline to PLAYING: {}",
+                        err
+                    );
+                    let _ = this.remove_session(&element, &session_id, true);
+                }
             }
-        })?;
+        });
 
         Ok(())
     }
@@ -1884,15 +2410,15 @@ impl WebRTCSink {
                     .pad
                     .property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
 
+                let Some(ref stream_name) = webrtc_pad.stream_name else { continue; };
+
                 if let Some(mid) = transceiver.mid() {
-                    state
-                        .mids
-                        .insert(mid.to_string(), webrtc_pad.stream_name.clone());
+                    state.mids.insert(mid.to_string(), stream_name.clone());
                 }
 
                 if let Some(producer) = state
                     .streams
-                    .get(&webrtc_pad.stream_name)
+                    .get(stream_name)
                     .and_then(|stream| stream.producer.clone())
                 {
                     drop(state);
@@ -1903,7 +2429,7 @@ impl WebRTCSink {
                             CAT,
                             obj: element,
                             "Failed to connect input stream {} for session {}: {}",
-                            webrtc_pad.stream_name,
+                            stream_name,
                             session_id,
                             err
                         );
@@ -2071,6 +2597,8 @@ impl WebRTCSink {
         element: &super::WebRTCSink,
         codec: &Codec,
         caps: &gst::Caps,
+        output_caps: &gst::Caps,
+        twcc: Option<u32>,
     ) -> Result<gst::Structure, Error> {
         let pipe = PipelineWrapper(gst::Pipeline::default());
 
@@ -2088,7 +2616,7 @@ impl WebRTCSink {
         gst::debug!(
             CAT,
             obj: element,
-            "Running discovery pipeline for caps {caps} with codec {codec:?}"
+            "Running discovery pipeline for input caps {caps} and output caps {output_caps} with codec {codec:?}"
         );
 
         let capsfilter = make_element("capsfilter", None)?;
@@ -2098,13 +2626,23 @@ impl WebRTCSink {
         gst::Element::link_many(elements_slice)
             .with_context(|| format!("Running discovery pipeline for caps {caps}"))?;
 
-        let (_, _, pay) = setup_encoding(&pipe.0, &capsfilter, caps, codec, None, true)?;
+        let (_, _, encoding_sink) = setup_encoding(
+            element,
+            &pipe.0,
+            &capsfilter,
+            caps,
+            output_caps,
+            codec,
+            None,
+            twcc,
+        )?;
 
         let sink = make_element("fakesink", None)?;
 
         pipe.0.add(&sink).unwrap();
 
-        pay.link(&sink)
+        encoding_sink
+            .link(&sink)
             .with_context(|| format!("Running discovery pipeline for caps {caps}"))?;
 
         capsfilter.set_property("caps", caps);
@@ -2129,7 +2667,18 @@ impl WebRTCSink {
                     return Err(err.error().into());
                 }
                 gst::MessageView::Eos(_) => {
-                    let caps = pay.static_pad("src").unwrap().current_caps().unwrap();
+                    pipe.0.debug_to_dot_file_with_ts(
+                        gst::DebugGraphDetails::all(),
+                        "webrtcsink-discovery-done",
+                    );
+
+                    let caps = match encoding_sink.static_pad("src").unwrap().current_caps() {
+                        Some(caps) => caps,
+                        None => {
+                            // https://gitlab.freedesktop.org/gstreamer/gstreamer/-/issues/1713
+                            return Err(anyhow!("EOS but no caps were pushed"));
+                        }
+                    };
 
                     pipe.0.debug_to_dot_file_with_ts(
                         gst::DebugGraphDetails::all(),
@@ -2169,6 +2718,7 @@ impl WebRTCSink {
         element: &super::WebRTCSink,
         name: String,
         in_caps: gst::Caps,
+        output_caps: gst::Caps,
         codecs: &BTreeMap<i32, Codec>,
     ) -> (String, gst::Caps) {
         let sink_caps = in_caps.as_ref().to_owned();
@@ -2185,7 +2735,15 @@ impl WebRTCSink {
         let futs = codecs
             .iter()
             .filter(|(_, codec)| codec.is_video() == is_video)
-            .map(|(_, codec)| WebRTCSink::run_discovery_pipeline(element, codec, &sink_caps));
+            .map(|(_, codec)| {
+                WebRTCSink::run_discovery_pipeline(
+                    element,
+                    codec,
+                    &sink_caps,
+                    &output_caps,
+                    Some(1),
+                )
+            });
 
         for ret in futures::future::join_all(futs).await {
             match ret {
@@ -2225,6 +2783,7 @@ impl WebRTCSink {
                     element,
                     name.to_owned(),
                     stream.in_caps.as_ref().unwrap().to_owned(),
+                    gst::Caps::new_any(),
                     &codecs,
                 )
             })
@@ -2348,6 +2907,14 @@ impl ObjectSubclass for WebRTCSink {
     type ParentType = gst::Bin;
     type Interfaces = (gst::ChildProxy, gst_video::Navigation);
 }
+
+unsafe impl<T: WebRTCSinkImpl> IsSubclassable<T> for super::WebRTCSink {
+    fn class_init(class: &mut glib::Class<Self>) {
+        Self::parent_class_init::<T>(class);
+    }
+}
+
+pub(crate) trait WebRTCSinkImpl: BinImpl {}
 
 impl ObjectImpl for WebRTCSink {
     fn properties() -> &'static [glib::ParamSpec] {
@@ -2735,14 +3302,19 @@ impl ElementImpl for WebRTCSink {
 
         let mut state = self.state.lock().unwrap();
 
-        let name = if templ.name().starts_with("video_") {
+        let serial;
+
+        let (name, is_video) = if templ.name().starts_with("video_") {
             let name = format!("video_{}", state.video_serial);
+            serial = state.video_serial;
             state.video_serial += 1;
-            name
+
+            (name, true)
         } else {
             let name = format!("audio_{}", state.audio_serial);
+            serial = state.audio_serial;
             state.audio_serial += 1;
-            name
+            (name, false)
         };
 
         let sink_pad = gst::GhostPad::builder_with_template(templ, Some(name.as_str()))
@@ -2767,6 +3339,8 @@ impl ElementImpl for WebRTCSink {
                 in_caps: None,
                 out_caps: None,
                 clocksync: None,
+                is_video,
+                serial,
             },
         );
 
@@ -2858,4 +3432,31 @@ impl NavigationImpl for WebRTCSink {
             }
         });
     }
+}
+
+#[derive(Default)]
+pub struct AwsKvsWebRTCSink {}
+
+impl ObjectImpl for AwsKvsWebRTCSink {
+    fn constructed(&self) {
+        let element = self.obj();
+        let ws = element.upcast_ref::<super::WebRTCSink>().imp();
+
+        let _ = ws.set_signaller(Box::<AwsKvsSignaller>::default());
+    }
+}
+
+impl GstObjectImpl for AwsKvsWebRTCSink {}
+
+impl ElementImpl for AwsKvsWebRTCSink {}
+
+impl BinImpl for AwsKvsWebRTCSink {}
+
+impl WebRTCSinkImpl for AwsKvsWebRTCSink {}
+
+#[glib::object_subclass]
+impl ObjectSubclass for AwsKvsWebRTCSink {
+    const NAME: &'static str = "GstAwsKvsWebRTCSink";
+    type Type = super::AwsKvsWebRTCSink;
+    type ParentType = super::WebRTCSink;
 }

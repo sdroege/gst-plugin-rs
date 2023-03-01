@@ -18,8 +18,9 @@ glib::wrapper! {
     pub struct WebRTCSink(ObjectSubclass<imp::WebRTCSink>) @extends gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
 }
 
-unsafe impl Send for WebRTCSink {}
-unsafe impl Sync for WebRTCSink {}
+glib::wrapper! {
+    pub struct AwsKvsWebRTCSink(ObjectSubclass<imp::AwsKvsWebRTCSink>) @extends WebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum WebRTCSinkError {
@@ -79,12 +80,6 @@ pub trait SignallableObject: AsRef<glib::Object> + Signallable {}
 
 impl<T: AsRef<glib::Object> + Signallable> SignallableObject for T {}
 
-impl Default for WebRTCSink {
-    fn default() -> Self {
-        glib::Object::new()
-    }
-}
-
 impl WebRTCSink {
     pub fn with_signaller(signaller: Box<dyn SignallableObject>) -> Self {
         let ret = glib::Object::new::<WebRTCSink>();
@@ -123,9 +118,19 @@ impl WebRTCSink {
         ws.handle_signalling_error(self, anyhow::anyhow!(error));
     }
 
-    pub fn start_session(&self, session_id: &str, peer_id: &str) -> Result<(), WebRTCSinkError> {
+    pub fn shutdown(&self) {
         let ws = self.imp();
-        ws.start_session(self, session_id, peer_id)
+        ws.shutdown(self);
+    }
+
+    pub fn start_session(
+        &self,
+        session_id: &str,
+        peer_id: &str,
+        offer: Option<&gst_webrtc::WebRTCSessionDescription>,
+    ) -> Result<(), WebRTCSinkError> {
+        let ws = self.imp();
+        ws.start_session(self, session_id, peer_id, offer)
     }
 
     pub fn end_session(&self, session_id: &str) -> Result<(), WebRTCSinkError> {
@@ -163,5 +168,13 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         "webrtcsink",
         gst::Rank::None,
         WebRTCSink::static_type(),
-    )
+    )?;
+    gst::Element::register(
+        Some(plugin),
+        "awskvswebrtcsink",
+        gst::Rank::None,
+        AwsKvsWebRTCSink::static_type(),
+    )?;
+
+    Ok(())
 }

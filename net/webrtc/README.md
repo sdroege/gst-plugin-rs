@@ -197,5 +197,19 @@ Parts of the JavaScript code in the www/ example are licensed under the [Apache 
 the rest is licensed under the [Mozilla Public License Version 2.0] unless advertised in the
 header.
 
+## Using the AWS KVS signaller
+
+* Setup AWS Kinesis Video Streams
+
+* Create a channel from the AWS console (<https://us-east-1.console.aws.amazon.com/kinesisvideo/home?region=us-east-1#/signalingChannels/create>)
+
+* Start a producer:
+
+```
+AWS_ACCESS_KEY_ID="XXX" AWS_SECRET_ACCESS_KEY="XXX" gst-launch-1.0 videotestsrc pattern=ball ! video/x-raw, width=1280, height=720 ! videoconvert ! textoverlay text="Hello from GStreamer!" ! videoconvert ! awskvswebrtcsink name=ws signaller::channel-name="XXX"
+```
+
+* Connect a viewer @ <https://awslabs.github.io/amazon-kinesis-video-streams-webrtc-sdk-js/examples/index.html>
+
 [Mozilla Public License Version 2.0]: http://opensource.org/licenses/MPL-2.0
 [Apache License, Version 2.0]: https://www.apache.org/licenses/LICENSE-2.1

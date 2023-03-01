@@ -139,7 +139,7 @@ impl Signaller {
                                         peer_id,
                                     } => {
                                         if let Err(err) =
-                                            element.start_session(&session_id, &peer_id)
+                                            element.start_session(&session_id, &peer_id, None)
                                         {
                                             gst::warning!(CAT, obj: element, "{}", err);
                                         }
