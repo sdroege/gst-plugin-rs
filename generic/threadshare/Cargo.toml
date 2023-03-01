@@ -24,7 +24,7 @@ pin-project-lite = "0.2.0"
 polling = "2.2.0"
 rand = "0.8"
 slab = "0.4.7"
-socket2 = {features = ["all"], version = "0.4"}
+socket2 = {features = ["all"], version = "0.5"}
 waker-fn = "1.1"
 
 # Used by examples
