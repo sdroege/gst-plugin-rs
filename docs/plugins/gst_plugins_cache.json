@@ -4600,6 +4600,31 @@
                 },
                 "rank": "primary"
             },
+            "cea608tocea708": {
+                "author": "Matthew Waters <matthew@centricular.com>",
+                "description": "Converts CEA-608 Closed Captions to CEA-708 Closed Captions",
+                "hierarchy": [
+                    "GstCea608ToCea708",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Converter",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "closedcaption/x-cea-608:\n         format: s334-1a\nclosedcaption/x-cea-608:\n         format: raw\n          field: { (int)0, (int)1 }\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "closedcaption/x-cea-708:\n         format: cc_data\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "none"
+            },
             "cea608tojson": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Converts CEA-608 Closed Captions to JSON",
