@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-livesync"
-version = "0.10.2"
+version = "0.10.3"
 authors = ["Jan Alexander Steffens (heftig) <jan.steffens@ltnglobal.com>"]
 license = "MPL-2.0"
 description = "Livesync Plugin"

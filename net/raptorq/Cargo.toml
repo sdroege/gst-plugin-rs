@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-raptorq"
-version = "0.10.2"
+version = "0.10.3"
 authors = ["Tomasz Andrzejak <andreiltd@gmail.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 description = "GStreamer RaptorQ FEC Plugin"
