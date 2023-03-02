@@ -5,6 +5,22 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.10.3] - 2023-03-02
+### Added
+- tracers: `queue_levels` tracer now also supports printing the `appsrc` levels.
+- webrtc: `webrtcsink` can use `nvvidconv` if `nvvideoconvert` does not exist
+  on an NVIDIA platform.
+
+### Fixed
+- gtk4: Set the sync point on the video frame after mapping it as otherwise
+  the frame might not be ready yet for further usage.
+- livesync: Correctly calculate the fallback buffer duration from the video
+  framerate.
+- ndi: Handle caps changes correctly in `ndisinkcombiner`.
+
+### Changed
+- webrtc: Minor cleanup.
+
 ## [0.10.2] - 2023-02-23
 ### Fixed
 - hlssink3: Allow signal handlers to return `None`
