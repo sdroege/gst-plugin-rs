@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
+use crate::utils::*;
 use anyhow::Context;
 use gst::glib;
 use gst::prelude::*;
@@ -79,23 +80,6 @@ struct Settings {
     meta: Option<gst::Structure>,
     ice_transport_policy: WebRTCICETransportPolicy,
     signaller: Signallable,
-}
-
-/// Represents a codec we can offer
-#[derive(Debug, Clone)]
-struct Codec {
-    encoder: gst::ElementFactory,
-    payloader: gst::ElementFactory,
-    caps: gst::Caps,
-    payload: i32,
-    output_filter: Option<gst::Caps>,
-}
-
-impl Codec {
-    fn is_video(&self) -> bool {
-        self.encoder
-            .has_type(gst::ElementFactoryType::VIDEO_ENCODER)
-    }
 }
 
 /// Wrapper around our sink pads
@@ -281,13 +265,17 @@ impl Default for Settings {
         let signaller = Signaller::new(WebRTCSignallerRole::Producer);
 
         Self {
-            video_caps: ["video/x-vp8", "video/x-h264", "video/x-vp9", "video/x-h265"]
+            video_caps: Codecs::video_codecs()
                 .into_iter()
-                .map(gst::Structure::new_empty)
+                .map(|codec| codec.caps.iter().map(|s| s.to_owned()).collect::<Vec<_>>())
+                .flatten()
+                .into_iter()
                 .collect::<gst::Caps>(),
-            audio_caps: ["audio/x-opus"]
+            audio_caps: Codecs::audio_codecs()
                 .into_iter()
-                .map(gst::Structure::new_empty)
+                .map(|codec| codec.caps.iter().map(|s| s.to_owned()).collect::<Vec<_>>())
+                .flatten()
+                .into_iter()
                 .collect::<gst::Caps>(),
             stun_server: DEFAULT_STUN_SERVER.map(String::from),
             turn_servers: gst::Array::new(Vec::new() as Vec<glib::SendValue>),
@@ -497,20 +485,16 @@ fn setup_encoding(
     let conv_filter = make_element("capsfilter", None)?;
 
     let enc = codec
-        .encoder
-        .create()
-        .build()
-        .with_context(|| format!("Creating encoder {}", codec.encoder.name()))?;
+        .build_encoder()
+        .expect("Encoders should always have been set in the CodecInfo we handle")?;
     let parse_filter = make_element("capsfilter", None)?;
     let pay = codec
-        .payloader
-        .create()
-        .build()
-        .with_context(|| format!("Creating payloader {}", codec.payloader.name()))?;
+        .build_payloader()
+        .expect("Payloaders should always have been set in the CodecInfo we handle")?;
     let pay_filter = make_element("capsfilter", None)?;
 
     pay.set_property("mtu", 1200_u32);
-    pay.set_property("pt", codec.payload as u32);
+    pay.set_property("pt", codec.payload().unwrap() as u32);
 
     if let Some(ssrc) = ssrc {
         pay.set_property("ssrc", ssrc);
@@ -555,7 +539,7 @@ fn setup_encoding(
         let mut structure_builder = gst::Structure::builder("video/x-raw")
             .field("pixel-aspect-ratio", gst::Fraction::new(1, 1));
 
-        if codec.encoder.name() == "nvh264enc" {
+        if codec.encoder_name().unwrap().as_str() == "nvh264enc" {
             // Quirk: nvh264enc can perform conversion from RGB formats, but
             // doesn't advertise / negotiate colorimetry correctly, leading
             // to incorrect color display in Chrome (but interestingly not in
@@ -572,7 +556,7 @@ fn setup_encoding(
         gst::Caps::builder("audio/x-raw").build()
     };
 
-    match codec.encoder.name().as_str() {
+    match codec.encoder_name().unwrap().as_str() {
         "vp8enc" | "vp9enc" => {
             pay.set_property_from_str("picture-id-mode", "15-bit");
         }
@@ -931,7 +915,7 @@ impl Session {
         self.pipeline.add(&pay_filter).unwrap();
 
         let output_caps = codec
-            .output_filter
+            .output_filter()
             .clone()
             .unwrap_or_else(gst::Caps::new_any);
 
@@ -1211,20 +1195,8 @@ impl BaseWebRTCSink {
 
         let mut payloader_caps = match media {
             Some(media) => {
-                let encoders = gst::ElementFactory::factories_with_type(
-                    gst::ElementFactoryType::ENCODER,
-                    gst::Rank::Marginal,
-                );
-
-                let payloaders = gst::ElementFactory::factories_with_type(
-                    gst::ElementFactoryType::PAYLOADER,
-                    gst::Rank::Marginal,
-                );
-
                 let codec = BaseWebRTCSink::select_codec(
                     element,
-                    &encoders,
-                    &payloaders,
                     media,
                     &stream.in_caps.as_ref().unwrap().clone(),
                     &stream.sink_pad.name(),
@@ -1240,8 +1212,8 @@ impl BaseWebRTCSink {
                             "Selected {codec:?} for media {media_idx}"
                         );
 
-                        codecs.insert(codec.payload, codec.clone());
-                        codec.output_filter.unwrap()
+                        codecs.insert(codec.payload().unwrap(), codec.clone());
+                        codec.output_filter().unwrap()
                     }
                     None => {
                         gst::error!(CAT, obj: element, "No codec selected for media {media_idx}");
@@ -1304,64 +1276,6 @@ impl BaseWebRTCSink {
                 },
             );
         }
-    }
-
-    /// Build an ordered map of Codecs, given user-provided audio / video caps */
-    fn lookup_codecs(&self) -> BTreeMap<i32, Codec> {
-        /* First gather all encoder and payloader factories */
-        let encoders = gst::ElementFactory::factories_with_type(
-            gst::ElementFactoryType::ENCODER,
-            gst::Rank::Marginal,
-        );
-
-        let payloaders = gst::ElementFactory::factories_with_type(
-            gst::ElementFactoryType::PAYLOADER,
-            gst::Rank::Marginal,
-        );
-
-        /* Now iterate user-provided codec preferences and determine
-         * whether we can fulfill these preferences */
-        let settings = self.settings.lock().unwrap();
-        let mut payload = 96..128;
-
-        settings
-            .video_caps
-            .iter()
-            .chain(settings.audio_caps.iter())
-            .filter_map(move |s| {
-                let caps = gst::Caps::builder_full().structure(s.to_owned()).build();
-
-                Option::zip(
-                    encoders
-                        .iter()
-                        .find(|factory| factory.can_src_any_caps(&caps)),
-                    payloaders
-                        .iter()
-                        .find(|factory| factory.can_sink_any_caps(&caps)),
-                )
-                .and_then(|(encoder, payloader)| {
-                    /* Assign a payload type to the codec */
-                    if let Some(pt) = payload.next() {
-                        Some(Codec {
-                            encoder: encoder.clone(),
-                            payloader: payloader.clone(),
-                            caps,
-                            payload: pt,
-                            output_filter: None,
-                        })
-                    } else {
-                        gst::warning!(
-                            CAT,
-                            imp: self,
-                            "Too many formats for available payload type range, ignoring {}",
-                            s
-                        );
-                        None
-                    }
-                })
-            })
-            .map(|codec| (codec.payload, codec))
-            .collect()
     }
 
     /// Prepare for accepting consumers, by setting
@@ -1666,44 +1580,8 @@ impl BaseWebRTCSink {
         }
     }
 
-    fn build_codec(
-        encoding_name: &str,
-        payload: i32,
-        encoders: &gst::glib::List<gst::ElementFactory>,
-        payloaders: &gst::glib::List<gst::ElementFactory>,
-    ) -> Option<Codec> {
-        let caps = match encoding_name {
-            "VP8" => gst::Caps::builder("video/x-vp8").build(),
-            "VP9" => gst::Caps::builder("video/x-vp9").build(),
-            "H264" => gst::Caps::builder("video/x-h264").build(),
-            "H265" => gst::Caps::builder("video/x-h265").build(),
-            "OPUS" => gst::Caps::builder("audio/x-opus").build(),
-            _ => {
-                return None;
-            }
-        };
-
-        Option::zip(
-            encoders
-                .iter()
-                .find(|factory| factory.can_src_any_caps(&caps)),
-            payloaders
-                .iter()
-                .find(|factory| factory.can_sink_any_caps(&caps)),
-        )
-        .map(|(encoder, payloader)| Codec {
-            encoder: encoder.clone(),
-            payloader: payloader.clone(),
-            caps,
-            payload,
-            output_filter: None,
-        })
-    }
-
     async fn select_codec(
         element: &super::BaseWebRTCSink,
-        encoders: &gst::glib::List<gst::ElementFactory>,
-        payloaders: &gst::glib::List<gst::ElementFactory>,
         media: &gst_sdp::SDPMediaRef,
         in_caps: &gst::Caps,
         stream_name: &str,
@@ -1751,9 +1629,8 @@ impl BaseWebRTCSink {
 
             let encoding_name = s.get::<String>("encoding-name").unwrap();
 
-            if let Some(codec) =
-                BaseWebRTCSink::build_codec(&encoding_name, payload, encoders, payloaders)
-            {
+            if let Some(mut codec) = Codecs::find(&encoding_name) {
+                codec.set_pt(payload);
                 for (user_caps, codecs_and_caps) in ordered_codecs_and_caps.iter_mut() {
                     if codec.caps.is_subset(user_caps) {
                         codecs_and_caps.push((codec, caps));
@@ -1798,12 +1675,12 @@ impl BaseWebRTCSink {
                     caps,
                     twcc_idx,
                 )
-                .await
-                .map(|s| {
-                    let mut codec = codec.clone();
-                    codec.output_filter = Some([s].into_iter().collect());
-                    codec
-                })
+                    .await
+                    .map(|s| {
+                        let mut codec = codec.clone();
+                        codec.set_output_filter([s].into_iter().collect());
+                        codec
+                    })
             });
 
         /* Run sequentially to avoid NVENC collisions */
@@ -2850,7 +2727,7 @@ impl BaseWebRTCSink {
                             "sprop-parameter-sets",
                             "a-framerate",
                         ]);
-                        s.set("payload", codec.payload);
+                        s.set("payload", codec.payload().unwrap());
                         gst::debug!(
                             CAT,
                             obj: element,
@@ -2875,7 +2752,7 @@ impl BaseWebRTCSink {
         name: String,
         in_caps: gst::Caps,
         output_caps: gst::Caps,
-        codecs: &BTreeMap<i32, Codec>,
+        codecs: &Codecs,
     ) -> (String, gst::Caps) {
         let sink_caps = in_caps.as_ref().to_owned();
 
@@ -2890,8 +2767,8 @@ impl BaseWebRTCSink {
 
         let futs = codecs
             .iter()
-            .filter(|(_, codec)| codec.is_video() == is_video)
-            .map(|(_, codec)| {
+            .filter(|codec| codec.is_video() == is_video)
+            .map(|codec| {
                 BaseWebRTCSink::run_discovery_pipeline(
                     element,
                     &name,
@@ -2925,7 +2802,11 @@ impl BaseWebRTCSink {
     }
 
     async fn lookup_streams_caps(&self, element: &super::BaseWebRTCSink) -> Result<(), Error> {
-        let codecs = self.lookup_codecs();
+        let codecs = {
+            let settings = self.settings.lock().unwrap();
+
+            Codecs::list_encoders(settings.video_caps.iter().chain(settings.audio_caps.iter()))
+        };
 
         gst::debug!(CAT, obj: element, "Looked up codecs {codecs:?}");
 
@@ -2960,7 +2841,7 @@ impl BaseWebRTCSink {
             }
         }
 
-        state.codecs = codecs;
+        state.codecs = codecs.to_map();
 
         Ok(())
     }
@@ -3496,7 +3377,7 @@ impl ElementImpl for BaseWebRTCSink {
                 "audio_%u",
                 gst::PadDirection::Sink,
                 gst::PadPresence::Request,
-                &caps,
+                &caps
             )
             .unwrap();
 

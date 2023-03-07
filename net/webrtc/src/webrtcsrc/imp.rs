@@ -3,15 +3,14 @@
 use gst::prelude::*;
 
 use crate::signaller::{prelude::*, Signallable, Signaller};
+use crate::utils::*;
 use crate::webrtcsrc::WebRTCSrcPad;
 use anyhow::{Context, Error};
-use core::ops::Deref;
 use gst::glib;
 use gst::subclass::prelude::*;
 use once_cell::sync::Lazy;
 use std::collections::HashSet;
 use std::str::FromStr;
-use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU16;
 use std::sync::atomic::Ordering;
 use std::sync::Mutex;
@@ -25,112 +24,6 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
         gst::DebugColorFlags::empty(),
         Some("WebRTC src"),
     )
-});
-
-struct Codec {
-    name: String,
-    caps: gst::Caps,
-    has_decoder: AtomicBool,
-    stream_type: gst::StreamType,
-}
-
-impl Clone for Codec {
-    fn clone(&self) -> Self {
-        Self {
-            name: self.name.clone(),
-            caps: self.caps.clone(),
-            has_decoder: AtomicBool::new(self.has_decoder.load(Ordering::SeqCst)),
-            stream_type: self.stream_type,
-        }
-    }
-}
-
-impl Codec {
-    fn new(
-        name: &str,
-        stream_type: gst::StreamType,
-        caps: &gst::Caps,
-        decoders: &glib::List<gst::ElementFactory>,
-    ) -> Self {
-        let has_decoder = Self::has_decoder_for_caps(caps, decoders);
-
-        Self {
-            caps: caps.clone(),
-            stream_type,
-            name: name.into(),
-            has_decoder: AtomicBool::new(has_decoder),
-        }
-    }
-
-    fn has_decoder(&self) -> bool {
-        if self.has_decoder.load(Ordering::SeqCst) {
-            true
-        } else if Self::has_decoder_for_caps(
-            &self.caps,
-            // Replicating decodebin logic
-            &gst::ElementFactory::factories_with_type(
-                gst::ElementFactoryType::DECODER,
-                gst::Rank::Marginal,
-            ),
-        ) {
-            // Check if new decoders have been installed meanwhile
-            self.has_decoder.store(true, Ordering::SeqCst);
-            true
-        } else {
-            false
-        }
-    }
-
-    fn has_decoder_for_caps(caps: &gst::Caps, decoders: &glib::List<gst::ElementFactory>) -> bool {
-        decoders.iter().any(|factory| {
-            factory.static_pad_templates().iter().any(|template| {
-                let template_caps = template.caps();
-                template.direction() == gst::PadDirection::Sink
-                    && !template_caps.is_any()
-                    && caps.can_intersect(&template_caps)
-            })
-        })
-    }
-}
-
-static AUDIO_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::new_empty_simple("audio/x-raw"));
-static OPUS_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::new_empty_simple("audio/x-opus"));
-
-static VIDEO_CAPS: Lazy<gst::Caps> = Lazy::new(|| {
-    gst::Caps::builder_full_with_any_features()
-        .structure(gst::Structure::new_empty("video/x-raw"))
-        .build()
-});
-static VP8_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::new_empty_simple("video/x-vp8"));
-static VP9_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::new_empty_simple("video/x-vp9"));
-static H264_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::new_empty_simple("video/x-h264"));
-static H265_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::new_empty_simple("video/x-h265"));
-
-static RTP_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::new_empty_simple("application/x-rtp"));
-
-struct Codecs(Vec<Codec>);
-
-impl Deref for Codecs {
-    type Target = Vec<Codec>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-static CODECS: Lazy<Codecs> = Lazy::new(|| {
-    let decoders = gst::ElementFactory::factories_with_type(
-        gst::ElementFactoryType::DECODER,
-        gst::Rank::Marginal,
-    );
-
-    Codecs(vec![
-        Codec::new("OPUS", gst::StreamType::AUDIO, &OPUS_CAPS, &decoders),
-        Codec::new("VP8", gst::StreamType::VIDEO, &VP8_CAPS, &decoders),
-        Codec::new("H264", gst::StreamType::VIDEO, &H264_CAPS, &decoders),
-        Codec::new("VP9", gst::StreamType::VIDEO, &VP9_CAPS, &decoders),
-        Codec::new("H265", gst::StreamType::VIDEO, &H265_CAPS, &decoders),
-    ])
 });
 
 struct Settings {
@@ -175,25 +68,15 @@ impl ObjectImpl for WebRTCSrc {
                     .build(),
                 gst::ParamSpecArray::builder("video-codecs")
                     .flags(glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY)
-                    .blurb(&format!("Names of video codecs to be be used during the SDP negotiation. Valid values: [{}]", CODECS.iter().filter_map(|c|
-                            if matches!(c.stream_type, gst::StreamType::VIDEO) {
-                                Some(c.name.to_owned())
-                            } else {
-                                None
-                            }
-                        ).collect::<Vec<String>>().join(", ")
+                    .blurb(&format!("Names of video codecs to be be used during the SDP negotiation. Valid values: [{}]",
+                        Codecs::video_codec_names().into_iter().collect::<Vec<String>>().join(", ")
                     ))
                     .element_spec(&glib::ParamSpecString::builder("video-codec-name").build())
                     .build(),
                 gst::ParamSpecArray::builder("audio-codecs")
                     .flags(glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY)
-                    .blurb(&format!("Names of audio codecs to be be used during the SDP negotiation. Valid values: [{}]", CODECS.iter().filter_map(|c|
-                            if matches!(c.stream_type, gst::StreamType::AUDIO) {
-                                Some(c.name.to_owned())
-                            } else {
-                                None
-                            }
-                        ).collect::<Vec<String>>().join(", ")
+                    .blurb(&format!("Names of audio codecs to be be used during the SDP negotiation. Valid values: [{}]",
+                        Codecs::video_codec_names().into_iter().collect::<Vec<String>>().join(", ")
                     ))
                     .element_spec(&glib::ParamSpecString::builder("audio-codec-name").build())
                     .build(),
@@ -216,14 +99,7 @@ impl ObjectImpl for WebRTCSrc {
                     .as_slice()
                     .iter()
                     .filter_map(|codec_name| {
-                        CODECS
-                            .iter()
-                            .find(|codec| {
-                                codec.stream_type == gst::StreamType::VIDEO
-                                    && codec.name
-                                        == codec_name.get::<&str>().expect("Type checked upstream")
-                            })
-                            .cloned()
+                        Codecs::find(codec_name.get::<&str>().expect("Type checked upstream"))
                     })
                     .collect::<Vec<Codec>>()
             }
@@ -234,14 +110,7 @@ impl ObjectImpl for WebRTCSrc {
                     .as_slice()
                     .iter()
                     .filter_map(|codec_name| {
-                        CODECS
-                            .iter()
-                            .find(|codec| {
-                                codec.stream_type == gst::StreamType::AUDIO
-                                    && codec.name
-                                        == codec_name.get::<&str>().expect("Type checked upstream")
-                            })
-                            .cloned()
+                        Codecs::find(codec_name.get::<&str>().expect("Type checked upstream"))
                     })
                     .collect::<Vec<Codec>>()
             }
@@ -339,19 +208,13 @@ impl Default for Settings {
             stun_server: DEFAULT_STUN_SERVER.map(|v| v.to_string()),
             signaller: signaller.upcast(),
             meta: Default::default(),
-            audio_codecs: CODECS
-                .iter()
-                .filter(|codec| {
-                    matches!(codec.stream_type, gst::StreamType::AUDIO) && codec.has_decoder()
-                })
-                .cloned()
+            audio_codecs: Codecs::audio_codecs()
+                .into_iter()
+                .filter(|codec| codec.has_decoder())
                 .collect(),
-            video_codecs: CODECS
-                .iter()
-                .filter(|codec| {
-                    matches!(codec.stream_type, gst::StreamType::VIDEO) && codec.has_decoder()
-                })
-                .cloned()
+            video_codecs: Codecs::video_codecs()
+                .into_iter()
+                .filter(|codec| codec.has_decoder())
                 .collect(),
         }
     }
@@ -1002,15 +865,30 @@ impl ElementImpl for WebRTCSrc {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let mut video_caps_builder = gst::Caps::builder_full()
+                .structure_with_any_features(VIDEO_CAPS.structure(0).unwrap().to_owned())
+                .structure(RTP_CAPS.structure(0).unwrap().to_owned());
+
+            for codec in Codecs::video_codecs() {
+                video_caps_builder =
+                    video_caps_builder.structure(codec.caps.structure(0).unwrap().to_owned());
+            }
+
+            let mut audio_caps_builder = gst::Caps::builder_full()
+                .structure_with_any_features(AUDIO_CAPS.structure(0).unwrap().to_owned())
+                .structure(RTP_CAPS.structure(0).unwrap().to_owned());
+
+            for codec in Codecs::audio_codecs() {
+                audio_caps_builder =
+                    audio_caps_builder.structure(codec.caps.structure(0).unwrap().to_owned());
+            }
+
             vec![
                 gst::PadTemplate::with_gtype(
                     "video_%u",
                     gst::PadDirection::Src,
                     gst::PadPresence::Sometimes,
-                    &gst::Caps::builder_full()
-                        .structure_with_any_features(VIDEO_CAPS.structure(0).unwrap().to_owned())
-                        .structure(RTP_CAPS.structure(0).unwrap().to_owned())
-                        .build(),
+                    &video_caps_builder.build(),
                     WebRTCSrcPad::static_type(),
                 )
                 .unwrap(),
@@ -1018,11 +896,7 @@ impl ElementImpl for WebRTCSrc {
                     "audio_%u",
                     gst::PadDirection::Src,
                     gst::PadPresence::Sometimes,
-                    &gst::Caps::builder_full()
-                        .structure_with_any_features(AUDIO_CAPS.structure(0).unwrap().to_owned())
-                        .structure(OPUS_CAPS.structure(0).unwrap().to_owned())
-                        .structure(RTP_CAPS.structure(0).unwrap().to_owned())
-                        .build(),
+                    &audio_caps_builder.build(),
                     WebRTCSrcPad::static_type(),
                 )
                 .unwrap(),
