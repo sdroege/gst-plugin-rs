@@ -21,19 +21,15 @@ use gst_video::VideoFormat;
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
+#[derive(Default)]
 enum DecoderState {
+    #[default]
     Stopped,
     Started {
         output_info: Option<gst_video::VideoInfo>,
         decoder: Box<Decoder>,
         video_meta_supported: bool,
     },
-}
-
-impl Default for DecoderState {
-    fn default() -> Self {
-        DecoderState::Stopped
-    }
 }
 
 #[derive(Default)]

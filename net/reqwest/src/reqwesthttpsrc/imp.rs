@@ -123,8 +123,9 @@ struct ClientContextInner {
 }
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 enum State {
+    #[default]
     Stopped,
     Started {
         uri: Url,
@@ -136,12 +137,6 @@ enum State {
         caps: Option<gst::Caps>,
         tags: Option<gst::TagList>,
     },
-}
-
-impl Default for State {
-    fn default() -> Self {
-        State::Stopped
-    }
 }
 
 #[derive(Debug, Default)]
