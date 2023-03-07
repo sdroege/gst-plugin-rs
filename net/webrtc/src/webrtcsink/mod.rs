@@ -4,7 +4,7 @@ use crate::signaller::Signallable;
 /**
  * element-webrtcsink:
  *
- * {{ net/webrtc/README.md[0:190] }}
+ * {{ net/webrtc/README.md[2:190] }}
  *
  */
 use gst::glib;

@@ -4,6 +4,8 @@
 /**
  * plugin-rswebrtc:
  *
+ * This plugin implements a high level WebRTC sink and source.
+ *
  * Since: plugins-rs-0.9
  */
 use gst::glib;
