@@ -84,16 +84,12 @@ impl Started {
     }
 }
 
+#[derive(Default)]
 enum State {
+    #[default]
     Stopped,
     Completed,
     Started(Started),
-}
-
-impl Default for State {
-    fn default() -> State {
-        State::Stopped
-    }
 }
 
 struct Settings {

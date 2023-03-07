@@ -30,20 +30,16 @@ const DEFAULT_RETRY_ATTEMPTS: u32 = 5;
 const DEFAULT_REQUEST_TIMEOUT_MSEC: u64 = 15000;
 const DEFAULT_RETRY_DURATION_MSEC: u64 = 60_000;
 
+#[derive(Default)]
 #[allow(clippy::large_enum_variant)]
 enum StreamingState {
+    #[default]
     Stopped,
     Started {
         url: GstS3Url,
         client: Client,
         size: u64,
     },
-}
-
-impl Default for StreamingState {
-    fn default() -> StreamingState {
-        StreamingState::Stopped
-    }
 }
 
 struct Settings {
