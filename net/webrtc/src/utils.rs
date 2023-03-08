@@ -159,10 +159,10 @@ impl Codec {
         let encoder = Self::get_encoder_for_caps(caps, encoders);
         let payloader = Self::get_payloader_for_codec(name, payloaders);
 
-        let encoding_info = if encoder.is_some() && payloader.is_some() {
+        let encoding_info = if let (Some(encoder), Some(payloader)) = (encoder, payloader) {
             Some(EncodingInfo {
-                encoder: encoder.unwrap(),
-                payloader: payloader.unwrap(),
+                encoder,
+                payloader,
                 output_filter: None,
             })
         } else {
@@ -323,15 +323,52 @@ impl Codec {
         })
     }
 
-    pub fn build_payloader(&self) -> Option<Result<gst::Element, Error>> {
+    pub fn build_payloader(&self, pt: u32) -> Option<gst::Element> {
         self.encoding_info.as_ref().map(|info| {
-            info.payloader.create().build().with_context(|| {
-                format!(
-                    "Creating payloader {}",
-                    self.encoding_info.as_ref().unwrap().payloader.name()
-                )
-            })
+            let mut res = info
+                .payloader
+                .create()
+                .property("mtu", 1200_u32)
+                .property("pt", pt);
+
+            if ["vp8enc", "vp9enc"].contains(&self.encoder_name().unwrap().as_str()) {
+                res = res.property_from_str("picture-id-mode", "15-bit");
+            }
+
+            res.build().unwrap()
         })
+    }
+
+    pub fn raw_converter_filter(&self) -> Result<gst::Element, Error> {
+        let caps = if self.is_video() {
+            let mut structure_builder = gst::Structure::builder("video/x-raw")
+                .field("pixel-aspect-ratio", gst::Fraction::new(1, 1));
+
+            if self.encoder_name().map(|e| e.as_str() == "nvh264enc").unwrap_or(false) {
+                // Quirk: nvh264enc can perform conversion from RGB formats, but
+                // doesn't advertise / negotiate colorimetry correctly, leading
+                // to incorrect color display in Chrome (but interestingly not in
+                // Firefox). In any case, restrict to exclude RGB formats altogether,
+                // and let videoconvert do the conversion properly if needed.
+                structure_builder =
+                    structure_builder.field("format", gst::List::new(["NV12", "YV12", "I420"]));
+            }
+
+            gst::Caps::builder_full_with_any_features()
+                .structure(structure_builder.build())
+                .build()
+        } else {
+            gst::Caps::builder("audio/x-raw").build()
+        };
+
+        gst::ElementFactory::make("capsfilter")
+            .property("caps", &caps)
+            .build()
+            .with_context(|| "Creating capsfilter caps")
+    }
+
+    pub fn encoder_factory(&self) -> Option<gst::ElementFactory> {
+        self.encoding_info.as_ref().map(|info| info.encoder.clone())
     }
 
     pub fn encoder_name(&self) -> Option<String> {
@@ -341,16 +378,49 @@ impl Codec {
     }
 
     pub fn set_output_filter(&mut self, caps: gst::Caps) {
-        self.encoding_info
-            .as_mut()
-            .map(|info| info.output_filter = Some(caps));
+        if let Some(info) = self.encoding_info.as_mut() {
+            info.output_filter = Some(caps);
+        }
     }
 
     pub fn output_filter(&self) -> Option<gst::Caps> {
         self.encoding_info
             .as_ref()
-            .map(|info| info.output_filter.clone())
-            .flatten()
+            .and_then(|info| info.output_filter.clone())
+    }
+
+    pub fn build_parser(&self) -> Result<Option<gst::Element>, Error> {
+        match self.name.as_str() {
+            "H264" => make_element("h264parse", None),
+            "H265" => make_element("h265parse", None),
+            _ => return Ok(None),
+        }
+        .map(Some)
+    }
+
+    pub fn parser_caps(&self, force_profile: bool) -> gst::Caps {
+        let codec_caps_name = self.caps.structure(0).unwrap().name();
+        match self.name.as_str() {
+            "H264" => {
+                if force_profile {
+                    gst::debug!(
+                        CAT,
+                        "No H264 profile requested, selecting constrained-baseline"
+                    );
+
+                    gst::Caps::builder(codec_caps_name)
+                        .field("stream-format", "avc")
+                        .field("profile", "constrained-baseline")
+                        .build()
+                } else {
+                    gst::Caps::builder(codec_caps_name)
+                        .field("stream-format", "avc")
+                        .build()
+                }
+            }
+            "H265" => gst::Caps::new_empty_simple("video/x-h265"),
+            _ => gst::Caps::new_any(),
+        }
     }
 }
 
@@ -382,11 +452,21 @@ impl Deref for Codecs {
 }
 
 impl Codecs {
-    pub fn to_map(self) -> BTreeMap<i32, Codec> {
+    pub fn to_map(&self) -> BTreeMap<i32, Codec> {
         self.0
-            .into_iter()
-            .map(|codec| (codec.payload().unwrap(), codec))
+            .iter()
+            .map(|codec| (codec.payload().unwrap(), codec.clone()))
             .collect()
+    }
+
+    pub fn from_map(codecs: &BTreeMap<i32, Codec>) -> Self {
+        Self(codecs.values().cloned().collect())
+    }
+
+    pub fn find_for_encoded_caps(&self, caps: &gst::Caps) -> Option<Codec> {
+        self.iter()
+            .find(|codec| codec.caps.can_intersect(caps) && codec.encoding_info.is_some())
+            .cloned()
     }
 }
 
@@ -455,14 +535,14 @@ impl Codecs {
         CODECS
             .iter()
             .find(|codec| codec.name == encoding_name)
-            .map(|codec| codec.clone())
+            .cloned()
     }
 
     pub fn video_codecs() -> Vec<Codec> {
         CODECS
             .iter()
             .filter(|codec| codec.stream_type == gst::StreamType::VIDEO)
-            .map(|codec| codec.clone())
+            .cloned()
             .collect()
     }
 
@@ -470,7 +550,7 @@ impl Codecs {
         CODECS
             .iter()
             .filter(|codec| codec.stream_type == gst::StreamType::AUDIO)
-            .map(|codec| codec.clone())
+            .cloned()
             .collect()
     }
 
@@ -529,4 +609,25 @@ impl Codecs {
                 .collect()
         )
     }
+}
+
+pub fn is_raw_caps(caps: &gst::Caps) -> bool {
+    assert!(caps.is_fixed());
+    ["video/x-raw", "audio/x-raw"].contains(&caps.structure(0).unwrap().name().as_str())
+}
+
+pub fn cleanup_codec_caps(mut caps: gst::Caps) -> gst::Caps {
+    assert!(caps.is_fixed());
+
+    if let Some(s) = caps.make_mut().structure_mut(0) {
+        if ["video/x-h264", "video/x-h265"].contains(&s.name().as_str()) {
+            s.remove_fields(["codec_data"]);
+        } else if ["video/x-vp8", "video/x-vp9"].contains(&s.name().as_str()) {
+            s.remove_fields(["profile"]);
+        } else if s.name() == "audio/x-opus" {
+            s.remove_fields(["streamheader"]);
+        }
+    }
+
+    caps
 }
