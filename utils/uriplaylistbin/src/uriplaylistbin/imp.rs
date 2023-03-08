@@ -962,7 +962,13 @@ impl ElementImpl for UriPlaylistBin {
             }
         }
 
-        self.parent_change_state(transition)
+        let res = self.parent_change_state(transition);
+
+        if transition == gst::StateChange::ReadyToNull {
+            self.stop();
+        }
+
+        res
     }
 }
 
@@ -1683,6 +1689,20 @@ impl UriPlaylistBin {
                 }
             }
         }
+    }
+
+    fn stop(&self) {
+        // remove all children and pads
+        let children = self.obj().children();
+        let children_ref = children.iter().collect::<Vec<_>>();
+        self.obj().remove_many(&children_ref).unwrap();
+
+        for pad in self.obj().src_pads() {
+            self.obj().remove_pad(&pad).unwrap();
+        }
+
+        let mut state_guard = self.state.lock().unwrap();
+        *state_guard = None;
     }
 }
 
