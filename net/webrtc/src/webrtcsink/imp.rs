@@ -261,19 +261,6 @@ fn create_navigation_event(sink: &super::BaseWebRTCSink, msg: &str) {
     }
 }
 
-/// Wrapper around `gst::ElementFactory::make` with a better error
-/// message
-fn make_element(element: &str, name: Option<&str>) -> Result<gst::Element, Error> {
-    let mut builder = gst::ElementFactory::make(element);
-    if let Some(name) = name {
-        builder = builder.name(name);
-    }
-
-    builder
-        .build()
-        .with_context(|| format!("Failed to make element {element}"))
-}
-
 /// Simple utility for tearing down a pipeline cleanly
 struct PipelineWrapper(gst::Pipeline);
 

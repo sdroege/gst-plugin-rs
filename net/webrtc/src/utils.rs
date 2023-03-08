@@ -85,3 +85,16 @@ pub fn serialize_json_object(val: &serde_json::Map<String, serde_json::Value>) -
 
     res
 }
+
+/// Wrapper around `gst::ElementFactory::make` with a better error
+/// message
+pub fn make_element(element: &str, name: Option<&str>) -> Result<gst::Element, Error> {
+    let mut builder = gst::ElementFactory::make(element);
+    if let Some(name) = name {
+        builder = builder.name(name);
+    }
+
+    builder
+        .build()
+        .with_context(|| format!("Failed to make element {element}"))
+}
