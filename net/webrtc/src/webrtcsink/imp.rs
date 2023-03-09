@@ -321,8 +321,8 @@ fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error
                 let cudaconvert = make_element("cudaconvert", None)?;
                 let cudascale = make_element("cudascale", None)?;
 
-                ret.add_many(&[&cudaupload, &cudaconvert, &cudascale])?;
-                gst::Element::link_many(&[&cudaupload, &cudaconvert, &cudascale])?;
+                ret.add_many([&cudaupload, &cudaconvert, &cudascale])?;
+                gst::Element::link_many([&cudaupload, &cudaconvert, &cudascale])?;
 
                 (cudaupload, cudascale)
             } else if feature.contains(GL_MEMORY_FEATURE) {
@@ -330,8 +330,8 @@ fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error
                 let glconvert = make_element("glcolorconvert", None)?;
                 let glscale = make_element("glcolorscale", None)?;
 
-                ret.add_many(&[&glupload, &glconvert, &glscale])?;
-                gst::Element::link_many(&[&glupload, &glconvert, &glscale])?;
+                ret.add_many([&glupload, &glconvert, &glscale])?;
+                gst::Element::link_many([&glupload, &glconvert, &glscale])?;
 
                 (glupload, glscale)
             } else if feature.contains(NVMM_MEMORY_FEATURE) {
@@ -344,16 +344,16 @@ fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error
                     make_element("nvvidconv", None)?
                 };
 
-                ret.add_many(&[&queue, &nvconvert])?;
-                gst::Element::link_many(&[&queue, &nvconvert])?;
+                ret.add_many([&queue, &nvconvert])?;
+                gst::Element::link_many([&queue, &nvconvert])?;
 
                 (queue, nvconvert)
             } else {
                 let convert = make_element("videoconvert", None)?;
                 let scale = make_element("videoscale", None)?;
 
-                ret.add_many(&[&convert, &scale])?;
-                gst::Element::link_many(&[&convert, &scale])?;
+                ret.add_many([&convert, &scale])?;
+                gst::Element::link_many([&convert, &scale])?;
 
                 (convert, scale)
             }
@@ -361,8 +361,8 @@ fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error
             let convert = make_element("videoconvert", None)?;
             let scale = make_element("videoscale", None)?;
 
-            ret.add_many(&[&convert, &scale])?;
-            gst::Element::link_many(&[&convert, &scale])?;
+            ret.add_many([&convert, &scale])?;
+            gst::Element::link_many([&convert, &scale])?;
 
             (convert, scale)
         }
@@ -490,9 +490,9 @@ fn setup_encoding(
     }
 
     pipeline
-        .add_many(&[&conv, &conv_filter, &enc, &parse_filter, &pay])
+        .add_many([&conv, &conv_filter, &enc, &parse_filter, &pay])
         .unwrap();
-    gst::Element::link_many(&[src, &conv, &conv_filter, &enc])
+    gst::Element::link_many([src, &conv, &conv_filter, &enc])
         .with_context(|| "Linking encoding elements")?;
 
     let codec_name = codec.caps.structure(0).unwrap().name();
@@ -505,10 +505,10 @@ fn setup_encoding(
         None
     } {
         pipeline.add(&parser).unwrap();
-        gst::Element::link_many(&[&enc, &parser, &parse_filter])
+        gst::Element::link_many([&enc, &parser, &parse_filter])
             .with_context(|| "Linking encoding elements")?;
     } else {
-        gst::Element::link_many(&[&enc, &parse_filter])
+        gst::Element::link_many([&enc, &parse_filter])
             .with_context(|| "Linking encoding elements")?;
     }
 
@@ -569,7 +569,7 @@ fn setup_encoding(
 
     parse_filter.set_property("caps", parse_caps);
 
-    gst::Element::link_many(&[&parse_filter, &pay]).with_context(|| "Linking encoding elements")?;
+    gst::Element::link_many([&parse_filter, &pay]).with_context(|| "Linking encoding elements")?;
 
     Ok((enc, conv_filter, pay))
 }

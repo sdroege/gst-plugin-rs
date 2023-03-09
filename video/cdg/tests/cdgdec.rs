@@ -53,9 +53,9 @@ fn test_cdgdec() {
     let sink = gst_app::AppSink::builder().build();
 
     pipeline
-        .add_many(&[&filesrc, &parse, &dec, sink.upcast_ref()])
+        .add_many([&filesrc, &parse, &dec, sink.upcast_ref()])
         .expect("failed to add elements to the pipeline");
-    gst::Element::link_many(&[&filesrc, &parse, &dec, sink.upcast_ref()])
+    gst::Element::link_many([&filesrc, &parse, &dec, sink.upcast_ref()])
         .expect("failed to link the elements");
 
     sink.set_callbacks(

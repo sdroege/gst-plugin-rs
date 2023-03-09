@@ -85,9 +85,9 @@ fn multiple_contexts_queue() {
             .build();
 
         pipeline
-            .add_many(&[&src, &queue, sink.upcast_ref()])
+            .add_many([&src, &queue, sink.upcast_ref()])
             .unwrap();
-        gst::Element::link_many(&[&src, &queue, sink.upcast_ref()]).unwrap();
+        gst::Element::link_many([&src, &queue, sink.upcast_ref()]).unwrap();
 
         let sender_clone = sender.clone();
         sink.set_callbacks(
@@ -230,7 +230,7 @@ fn multiple_contexts_proxy() {
             .build();
 
         pipeline
-            .add_many(&[&src, &proxysink, &proxysrc, sink.upcast_ref()])
+            .add_many([&src, &proxysink, &proxysrc, sink.upcast_ref()])
             .unwrap();
         src.link(&proxysink).unwrap();
         proxysrc.link(&sink).unwrap();
@@ -353,9 +353,9 @@ fn eos() {
         .build();
 
     pipeline
-        .add_many(&[&src, &queue, sink.upcast_ref()])
+        .add_many([&src, &queue, sink.upcast_ref()])
         .unwrap();
-    gst::Element::link_many(&[&src, &queue, sink.upcast_ref()]).unwrap();
+    gst::Element::link_many([&src, &queue, sink.upcast_ref()]).unwrap();
 
     let (sample_notifier, sample_notif_rcv) = mpsc::channel();
     let (eos_notifier, eos_notif_rcv) = mpsc::channel();
@@ -487,9 +487,9 @@ fn premature_shutdown() {
         .build();
 
     pipeline
-        .add_many(&[&src, &queue, sink.upcast_ref()])
+        .add_many([&src, &queue, sink.upcast_ref()])
         .unwrap();
-    gst::Element::link_many(&[&src, &queue, sink.upcast_ref()]).unwrap();
+    gst::Element::link_many([&src, &queue, sink.upcast_ref()]).unwrap();
 
     let (appsink_sender, appsink_receiver) = mpsc::channel();
 

@@ -85,7 +85,7 @@ fn create_pipeline() -> (
         .unwrap();
 
     pipeline
-        .add_many(&[
+        .add_many([
             &video_src,
             &timeoverlay,
             &video_tee,
@@ -113,7 +113,7 @@ fn create_pipeline() -> (
         ])
         .unwrap();
 
-    gst::Element::link_many(&[
+    gst::Element::link_many([
         &video_src,
         &timeoverlay,
         &video_tee,
@@ -123,7 +123,7 @@ fn create_pipeline() -> (
     ])
     .unwrap();
 
-    gst::Element::link_many(&[
+    gst::Element::link_many([
         &video_tee,
         &video_queue2,
         &video_convert2,
@@ -142,7 +142,7 @@ fn create_pipeline() -> (
         .link_pads(Some("src"), &mux, Some("video_%u"))
         .unwrap();
 
-    gst::Element::link_many(&[
+    gst::Element::link_many([
         &audio_src,
         &audio_tee,
         &audio_queue1,
@@ -151,7 +151,7 @@ fn create_pipeline() -> (
     ])
     .unwrap();
 
-    gst::Element::link_many(&[
+    gst::Element::link_many([
         &audio_tee,
         &audio_queue2,
         &audio_convert2,
@@ -170,7 +170,7 @@ fn create_pipeline() -> (
         .link_pads(Some("src"), &mux, Some("audio_%u"))
         .unwrap();
 
-    gst::Element::link_many(&[&mux, &file_sink]).unwrap();
+    gst::Element::link_many([&mux, &file_sink]).unwrap();
 
     (
         pipeline,

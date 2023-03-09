@@ -91,9 +91,9 @@ fn jb_pipeline() {
         .build();
 
     pipeline
-        .add_many(&[&src, &enc, &pay, &jb, &depay, &dec, sink.upcast_ref()])
+        .add_many([&src, &enc, &pay, &jb, &depay, &dec, sink.upcast_ref()])
         .unwrap();
-    gst::Element::link_many(&[&src, &enc, &pay, &jb, &depay, &dec, sink.upcast_ref()]).unwrap();
+    gst::Element::link_many([&src, &enc, &pay, &jb, &depay, &dec, sink.upcast_ref()]).unwrap();
 
     let (sender, receiver) = mpsc::channel();
     sink.set_callbacks(
@@ -175,7 +175,7 @@ fn jb_ts_pipeline() {
         .build();
 
     pipeline
-        .add_many(&[
+        .add_many([
             &src,
             &queue,
             &enc,
@@ -186,7 +186,7 @@ fn jb_ts_pipeline() {
             sink.upcast_ref(),
         ])
         .unwrap();
-    gst::Element::link_many(&[
+    gst::Element::link_many([
         &src,
         &queue,
         &enc,

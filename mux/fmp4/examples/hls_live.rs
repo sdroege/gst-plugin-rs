@@ -425,7 +425,7 @@ impl VideoStream {
             .build()?;
         let appsink = gst_app::AppSink::builder().buffer_list(true).build();
 
-        pipeline.add_many(&[
+        pipeline.add_many([
             &src,
             &raw_capsfilter,
             &timeoverlay,
@@ -435,7 +435,7 @@ impl VideoStream {
             appsink.upcast_ref(),
         ])?;
 
-        gst::Element::link_many(&[
+        gst::Element::link_many([
             &src,
             &raw_capsfilter,
             &timeoverlay,
@@ -472,9 +472,9 @@ impl AudioStream {
             .build()?;
         let appsink = gst_app::AppSink::builder().buffer_list(true).build();
 
-        pipeline.add_many(&[&src, &enc, &mux, appsink.upcast_ref()])?;
+        pipeline.add_many([&src, &enc, &mux, appsink.upcast_ref()])?;
 
-        gst::Element::link_many(&[&src, &enc, &mux, appsink.upcast_ref()])?;
+        gst::Element::link_many([&src, &enc, &mux, appsink.upcast_ref()])?;
 
         probe_encoder(state, enc);
 

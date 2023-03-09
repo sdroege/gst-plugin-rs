@@ -925,7 +925,7 @@ impl FallbackSrc {
             .build()
             .expect("No queue found");
 
-        bin.add_many(&[
+        bin.add_many([
             &audiotestsrc,
             &audioconvert,
             &audioresample,
@@ -934,7 +934,7 @@ impl FallbackSrc {
         ])
         .unwrap();
 
-        gst::Element::link_many(&[
+        gst::Element::link_many([
             &audiotestsrc,
             &audioconvert,
             &audioresample,
@@ -984,7 +984,7 @@ impl FallbackSrc {
             .build()
             .expect("No queue found");
 
-        bin.add_many(&[
+        bin.add_many([
             &videotestsrc,
             &videoconvert,
             &videoscale,
@@ -993,7 +993,7 @@ impl FallbackSrc {
         ])
         .unwrap();
 
-        gst::Element::link_many(&[
+        gst::Element::link_many([
             &videotestsrc,
             &videoconvert,
             &videoscale,
@@ -1601,10 +1601,10 @@ impl FallbackSrc {
             .build()
             .expect("No capsfilter found");
 
-        bin.add_many(&[&videoconvert, &videoscale, &imagefreeze, &capsfilter])
+        bin.add_many([&videoconvert, &videoscale, &imagefreeze, &capsfilter])
             .unwrap();
 
-        gst::Element::link_many(&[&videoconvert, &videoscale, &imagefreeze, &capsfilter]).unwrap();
+        gst::Element::link_many([&videoconvert, &videoscale, &imagefreeze, &capsfilter]).unwrap();
 
         let ghostpad =
             gst::GhostPad::with_target(Some("sink"), &videoconvert.static_pad("sink").unwrap())
@@ -1649,10 +1649,10 @@ impl FallbackSrc {
             .build()
             .expect("No capsfilter found");
 
-        bin.add_many(&[&videoconvert, &videoscale, &capsfilter])
+        bin.add_many([&videoconvert, &videoscale, &capsfilter])
             .unwrap();
 
-        gst::Element::link_many(&[&videoconvert, &videoscale, &capsfilter]).unwrap();
+        gst::Element::link_many([&videoconvert, &videoscale, &capsfilter]).unwrap();
 
         let ghostpad =
             gst::GhostPad::with_target(Some("sink"), &videoconvert.static_pad("sink").unwrap())
@@ -1697,10 +1697,10 @@ impl FallbackSrc {
             .build()
             .expect("No capsfilter found");
 
-        bin.add_many(&[&audioconvert, &audioresample, &capsfilter])
+        bin.add_many([&audioconvert, &audioresample, &capsfilter])
             .unwrap();
 
-        gst::Element::link_many(&[&audioconvert, &audioresample, &capsfilter]).unwrap();
+        gst::Element::link_many([&audioconvert, &audioresample, &capsfilter]).unwrap();
 
         let ghostpad =
             gst::GhostPad::with_target(Some("sink"), &audioconvert.static_pad("sink").unwrap())
@@ -1869,7 +1869,7 @@ impl FallbackSrc {
 
         source
             .source
-            .add_many(&[&converters, &queue, &clocksync])
+            .add_many([&converters, &queue, &clocksync])
             .unwrap();
         converters.sync_state_with_parent().unwrap();
         queue.sync_state_with_parent().unwrap();
@@ -1884,7 +1884,7 @@ impl FallbackSrc {
             )
         })?;
 
-        gst::Element::link_many(&[&converters, &queue, &clocksync]).unwrap();
+        gst::Element::link_many([&converters, &queue, &clocksync]).unwrap();
 
         let ghostpad =
             gst::GhostPad::with_target(Some(type_), &clocksync.static_pad("src").unwrap()).unwrap();

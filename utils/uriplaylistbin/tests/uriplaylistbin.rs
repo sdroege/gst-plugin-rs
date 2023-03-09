@@ -93,7 +93,7 @@ fn test(
         .unwrap();
     let mq = gst::ElementFactory::make("multiqueue").build().unwrap();
 
-    pipeline.add_many(&[&playlist, &mq]).unwrap();
+    pipeline.add_many([&playlist, &mq]).unwrap();
 
     assert_eq!(playlist.property::<u32>("current-iteration"), 0);
     assert_eq!(playlist.property::<u64>("current-uri-index"), 0);

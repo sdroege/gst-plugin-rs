@@ -57,7 +57,7 @@ fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element) {
         .unwrap();
 
     pipeline
-        .add_many(&[
+        .add_many([
             &video_src,
             &fallback_video_src,
             &fallbackswitch,

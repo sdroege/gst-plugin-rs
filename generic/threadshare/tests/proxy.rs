@@ -54,7 +54,7 @@ fn test_push() {
     let appsink = gst_app::AppSink::builder().build();
 
     pipeline
-        .add_many(&[&fakesrc, &proxysink, &proxysrc, appsink.upcast_ref()])
+        .add_many([&fakesrc, &proxysink, &proxysrc, appsink.upcast_ref()])
         .unwrap();
     fakesrc.link(&proxysink).unwrap();
     proxysrc.link(&appsink).unwrap();
@@ -122,10 +122,10 @@ fn test_from_pipeline_to_pipeline() {
         .unwrap();
     let fakesink = gst::ElementFactory::make("fakesink").build().unwrap();
 
-    pipe_1.add_many(&[&fakesrc, &pxsink]).unwrap();
+    pipe_1.add_many([&fakesrc, &pxsink]).unwrap();
     fakesrc.link(&pxsink).unwrap();
 
-    pipe_2.add_many(&[&pxsrc, &fakesink]).unwrap();
+    pipe_2.add_many([&pxsrc, &fakesink]).unwrap();
     pxsrc.link(&fakesink).unwrap();
 
     pipe_1.set_state(gst::State::Paused).unwrap();
@@ -169,10 +169,10 @@ fn test_from_pipeline_to_pipeline_and_back() {
         .build()
         .unwrap();
 
-    pipe_1.add_many(&[&pxsrc_1, &pxsink_1]).unwrap();
+    pipe_1.add_many([&pxsrc_1, &pxsink_1]).unwrap();
     pxsrc_1.link(&pxsink_1).unwrap();
 
-    pipe_2.add_many(&[&pxsrc_2, &pxsink_2]).unwrap();
+    pipe_2.add_many([&pxsrc_2, &pxsink_2]).unwrap();
     pxsrc_2.link(&pxsink_2).unwrap();
 
     pipe_1.set_state(gst::State::Paused).unwrap();

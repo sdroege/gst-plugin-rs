@@ -44,7 +44,7 @@ fn test_push() {
     let appsink = gst_app::AppSink::builder().build();
 
     pipeline
-        .add_many(&[&fakesrc, &queue, appsink.upcast_ref()])
+        .add_many([&fakesrc, &queue, appsink.upcast_ref()])
         .unwrap();
     fakesrc.link(&queue).unwrap();
     queue.link(&appsink).unwrap();

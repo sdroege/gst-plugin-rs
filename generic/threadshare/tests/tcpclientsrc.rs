@@ -68,7 +68,7 @@ fn test_push() {
         .build();
 
     pipeline
-        .add_many(&[&tcpclientsrc, appsink.upcast_ref()])
+        .add_many([&tcpclientsrc, appsink.upcast_ref()])
         .unwrap();
     tcpclientsrc.link(&appsink).unwrap();
 

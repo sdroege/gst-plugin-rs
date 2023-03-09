@@ -174,8 +174,8 @@ fn test_hlssink3_element_with_video_content() -> Result<(), ()> {
         Some(true.to_value())
     });
 
-    try_or_pause!(pipeline.add_many(&[&video_src, &x264enc, &h264parse, &hlssink3,]));
-    try_or_pause!(gst::Element::link_many(&[
+    try_or_pause!(pipeline.add_many([&video_src, &x264enc, &h264parse, &hlssink3,]));
+    try_or_pause!(gst::Element::link_many([
         &video_src, &x264enc, &h264parse, &hlssink3
     ]));
 
@@ -280,8 +280,8 @@ fn test_hlssink3_element_with_audio_content() -> Result<(), ()> {
 
     hlssink3.connect("delete-fragment", false, move |_| Some(true.to_value()));
 
-    try_or_pause!(pipeline.add_many(&[&audio_src, &hls_avenc_aac, &hlssink3,]));
-    try_or_pause!(gst::Element::link_many(&[
+    try_or_pause!(pipeline.add_many([&audio_src, &hls_avenc_aac, &hlssink3,]));
+    try_or_pause!(gst::Element::link_many([
         &audio_src,
         &hls_avenc_aac,
         &hlssink3
@@ -379,8 +379,8 @@ fn test_hlssink3_write_correct_playlist_content() -> Result<(), ()> {
         Some(true.to_value())
     });
 
-    try_or_pause!(pipeline.add_many(&[&video_src, &x264enc, &h264parse, &hlssink3,]));
-    try_or_pause!(gst::Element::link_many(&[
+    try_or_pause!(pipeline.add_many([&video_src, &x264enc, &h264parse, &hlssink3,]));
+    try_or_pause!(gst::Element::link_many([
         &video_src, &x264enc, &h264parse, &hlssink3
     ]));
 
