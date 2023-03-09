@@ -42,10 +42,11 @@ impl Default for Settings {
 enum State {
     #[default]
     Stopped,
-    Started { file: File, position: u64 },
+    Started {
+        file: File,
+        position: u64,
+    },
 }
-
-
 
 #[derive(Default)]
 pub struct FileSink {
