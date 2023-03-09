@@ -69,7 +69,7 @@ fn scc_payload_item(s: &[u8]) -> IResult<&[u8], (u8, u8)> {
         "invalid SCC payload item",
         map(take_while_m_n(4, 4, is_hex_digit), |s: &[u8]| {
             let hex_to_u8 = |v: u8| match v {
-                v if (b'0'..=b'9').contains(&v) => v - b'0',
+                v if v.is_ascii_digit() => v - b'0',
                 v if (b'A'..=b'F').contains(&v) => 10 + v - b'A',
                 v if (b'a'..=b'f').contains(&v) => 10 + v - b'a',
                 _ => unreachable!(),

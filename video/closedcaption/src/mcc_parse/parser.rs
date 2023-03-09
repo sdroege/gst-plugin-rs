@@ -229,7 +229,7 @@ fn mcc_payload_item(s: &[u8]) -> IResult<&[u8], Either<u8, &'static [u8]>> {
             map(tag("Z"), |_| Either::Right([0x00].as_ref())),
             map(take_while_m_n(2, 2, is_hex_digit), |s: &[u8]| {
                 let hex_to_u8 = |v: u8| match v {
-                    v if (b'0'..=b'9').contains(&v) => v - b'0',
+                    v if v.is_ascii_digit() => v - b'0',
                     v if (b'A'..=b'F').contains(&v) => 10 + v - b'A',
                     v if (b'a'..=b'f').contains(&v) => 10 + v - b'a',
                     _ => unreachable!(),
