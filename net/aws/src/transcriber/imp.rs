@@ -536,7 +536,6 @@ impl Transcriber {
                     if notif.is_none() {
                         // Transcriber loop terminated
                         self.state.lock().unwrap().send_eos = true;
-                        return;
                     };
                 }
                 _ = timeout => (),
