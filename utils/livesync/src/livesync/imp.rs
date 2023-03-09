@@ -482,6 +482,7 @@ impl State {
             .and_then(|c| c.structure(0))
             .filter(|s| s.name().starts_with("video/"))
             .and_then(|s| s.get::<gst::Fraction>("framerate").ok())
+            .filter(|framerate| framerate.denom() > 0 && framerate.numer() > 0)
             .and_then(|framerate| {
                 gst::ClockTime::SECOND
                     .mul_div_round(framerate.denom() as u64, framerate.numer() as u64)
