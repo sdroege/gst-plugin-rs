@@ -48,10 +48,10 @@ fn setup_pipeline(
     let sink = gst::ElementFactory::make("fakesink").build().unwrap();
 
     pipeline
-        .add_many(&[&reference_src, &secondary_src, &videocompare, &sink])
+        .add_many([&reference_src, &secondary_src, &videocompare, &sink])
         .unwrap();
-    gst::Element::link_many(&[&reference_src, &videocompare, &sink]).expect("Link primary path");
-    gst::Element::link_many(&[&secondary_src, &videocompare]).expect("Link secondary path");
+    gst::Element::link_many([&reference_src, &videocompare, &sink]).expect("Link primary path");
+    gst::Element::link_many([&secondary_src, &videocompare]).expect("Link secondary path");
 }
 
 #[test]

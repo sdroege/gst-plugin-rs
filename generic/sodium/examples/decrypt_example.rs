@@ -102,9 +102,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let pipeline = gst::Pipeline::builder().name("test-pipeline").build();
     pipeline
-        .add_many(&[&filesrc, &decrypter, &typefind, &filesink])
+        .add_many([&filesrc, &decrypter, &typefind, &filesink])
         .expect("failed to add elements to the pipeline");
-    gst::Element::link_many(&[&filesrc, &decrypter, &typefind, &filesink])
+    gst::Element::link_many([&filesrc, &decrypter, &typefind, &filesink])
         .expect("failed to link the elements");
 
     pipeline

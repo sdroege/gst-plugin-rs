@@ -97,7 +97,7 @@ impl TranscriberBin {
             .build()?;
         let ccconverter = gst::ElementFactory::make("ccconverter").build()?;
 
-        state.transcription_bin.add_many(&[
+        state.transcription_bin.add_many([
             &aqueue_transcription,
             &state.transcriber_aconv,
             &state.transcriber,
@@ -109,7 +109,7 @@ impl TranscriberBin {
             &state.transcription_valve,
         ])?;
 
-        gst::Element::link_many(&[
+        gst::Element::link_many([
             &aqueue_transcription,
             &state.transcriber_aconv,
             &state.transcriber,
@@ -156,7 +156,7 @@ impl TranscriberBin {
 
         let vclocksync = gst::ElementFactory::make("clocksync").build()?;
 
-        state.internal_bin.add_many(&[
+        state.internal_bin.add_many([
             &aclocksync,
             &state.audio_tee,
             &state.audio_queue_passthrough,
@@ -392,7 +392,7 @@ impl TranscriberBin {
 
         state.transcription_bin.add(&state.transcriber)?;
         state.transcriber.sync_state_with_parent().unwrap();
-        gst::Element::link_many(&[
+        gst::Element::link_many([
             &state.transcriber_aconv,
             &state.transcriber,
             &state.transcriber_queue,

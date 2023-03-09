@@ -84,7 +84,7 @@ fn create_pipeline() -> Result<gst::Pipeline, Box<dyn Error>> {
         .build()
         .unwrap();
 
-    pipeline.add_many(&[&audio_src, &csoundfilter, &audio_sink])?;
+    pipeline.add_many([&audio_src, &csoundfilter, &audio_sink])?;
 
     audio_src.link_pads(Some("src"), &csoundfilter, Some("sink"))?;
     csoundfilter.link_pads(Some("src"), &audio_sink, Some("sink"))?;

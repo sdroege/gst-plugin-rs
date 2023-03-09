@@ -33,9 +33,9 @@ fn test_red_color() {
     let sink = gst::ElementFactory::make("fakevideosink").build().unwrap();
 
     pipeline
-        .add_many(&[&src, &filter, &sink])
+        .add_many([&src, &filter, &sink])
         .expect("failed to add elements to the pipeline");
-    gst::Element::link_many(&[&src, &filter, &sink]).expect("failed to link the elements");
+    gst::Element::link_many([&src, &filter, &sink]).expect("failed to link the elements");
 
     pipeline
         .set_state(gst::State::Playing)

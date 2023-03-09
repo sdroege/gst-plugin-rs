@@ -91,9 +91,9 @@ fn test_pipeline() {
     let sink = gst_app::AppSink::builder().build();
 
     pipeline
-        .add_many(&[&filesrc, &dec, &typefind, sink.upcast_ref()])
+        .add_many([&filesrc, &dec, &typefind, sink.upcast_ref()])
         .expect("failed to add elements to the pipeline");
-    gst::Element::link_many(&[&filesrc, &dec, &typefind, sink.upcast_ref()])
+    gst::Element::link_many([&filesrc, &dec, &typefind, sink.upcast_ref()])
         .expect("failed to link the elements");
 
     let adapter = Arc::new(Mutex::new(gst_base::UniqueAdapter::new()));
@@ -179,9 +179,9 @@ fn test_pull_range() {
         .unwrap();
 
     pipeline
-        .add_many(&[&filesrc, &dec])
+        .add_many([&filesrc, &dec])
         .expect("failed to add elements to the pipeline");
-    gst::Element::link_many(&[&filesrc, &dec]).expect("failed to link the elements");
+    gst::Element::link_many([&filesrc, &dec]).expect("failed to link the elements");
 
     // Activate in the pad in pull mode
     pipeline

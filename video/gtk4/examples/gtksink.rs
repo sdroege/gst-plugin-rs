@@ -57,7 +57,7 @@ fn create_ui(app: &gtk::Application) {
         (src, sink.upcast())
     };
 
-    pipeline.add_many(&[&src, &overlay, &sink]).unwrap();
+    pipeline.add_many([&src, &overlay, &sink]).unwrap();
     let caps = gst_video::VideoCapsBuilder::new()
         .width(640)
         .height(480)
