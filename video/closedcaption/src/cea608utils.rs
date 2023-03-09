@@ -252,6 +252,24 @@ pub(crate) enum Cea608 {
     MidRowChange(MidRowChange),
 }
 
+impl Cea608 {
+    pub fn channel(&self) -> i32 {
+        match self {
+            Self::Duplicate => 0,
+            Self::NewMode(chan, _) => *chan,
+            Self::EraseDisplay(chan) => *chan,
+            Self::EraseNonDisplay(chan) => *chan,
+            Self::CarriageReturn(chan) => *chan,
+            Self::Backspace(chan) => *chan,
+            Self::EndOfCaption(chan) => *chan,
+            Self::TabOffset(chan, _) => *chan,
+            Self::Text(text) => text.chan,
+            Self::Preamble(preamble) => preamble.chan,
+            Self::MidRowChange(midrowchange) => midrowchange.chan,
+        }
+    }
+}
+
 fn decode_control(cc_data: u16) -> Option<Cea608> {
     let (cmd, chan) = parse_control(cc_data);
 
@@ -313,6 +331,7 @@ fn decode_control(cc_data: u16) -> Option<Cea608> {
 #[derive(Debug, Default)]
 pub(crate) struct Cea608StateTracker {
     last_cc_data: Option<u16>,
+    last_channel: i32,
     pending_output: Vec<Cea608>,
 }
 
@@ -328,11 +347,19 @@ impl Cea608StateTracker {
             gst::log!(CAT, "XDS, ignoring");
         } else if is_control(cc_data) {
             if let Some(d) = decode_control(cc_data) {
+                self.last_channel = d.channel();
                 self.pending_output.push(d);
             }
         } else if is_basicna(cc_data) || is_specialna(cc_data) || is_westeu(cc_data) {
             let (char1, char2, chan) = eia608_to_utf8(cc_data);
             if char1.is_some() || char2.is_some() {
+                let chan = if is_basicna(cc_data) {
+                    /* basicna doesn't include a channel indicator so we track the last generated
+                     * one */
+                    self.last_channel
+                } else {
+                    chan
+                };
                 self.pending_output.push(Cea608::Text(Cea608Text {
                     char1,
                     char2,
@@ -341,11 +368,13 @@ impl Cea608StateTracker {
                 }));
             }
         } else if is_preamble(cc_data) {
-            self.pending_output
-                .push(Cea608::Preamble(parse_preamble(cc_data)));
+            let preamble = parse_preamble(cc_data);
+            self.last_channel = preamble.chan;
+            self.pending_output.push(Cea608::Preamble(preamble));
         } else if is_midrowchange(cc_data) {
-            self.pending_output
-                .push(Cea608::MidRowChange(parse_midrowchange(cc_data)));
+            let midrowchange = parse_midrowchange(cc_data);
+            self.last_channel = midrowchange.chan;
+            self.pending_output.push(Cea608::MidRowChange(midrowchange));
         }
     }
 
