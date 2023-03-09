@@ -38,16 +38,14 @@ impl Default for Settings {
     }
 }
 
+#[derive(Default)]
 enum State {
+    #[default]
     Stopped,
     Started { file: File, position: u64 },
 }
 
-impl Default for State {
-    fn default() -> State {
-        State::Stopped
-    }
-}
+
 
 #[derive(Default)]
 pub struct FileSink {
