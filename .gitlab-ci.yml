@@ -1,4 +1,4 @@
-.templates_sha: &templates_sha 567700e483aabed992d0a4fea84994a0472deff6
+.templates_sha: &templates_sha fddab8aa63e89a8e65214f59860d9c0f030360c9
 
 include:
   - project: 'freedesktop/ci-templates'
@@ -66,30 +66,30 @@ trigger:
       when: 'manual'
       allow_failure: false
 
-.debian:11:
+.debian:12:
   variables:
-    FDO_DISTRIBUTION_VERSION: 'bullseye-slim'
+    FDO_DISTRIBUTION_VERSION: 'bookworm-slim'
   before_script:
     - source ./ci/env.sh
     - mkdir .cargo && echo -e "[net]\ngit-fetch-with-cli = true" > .cargo/config
 
-.debian:11-stable:
-  extends: .debian:11
+.debian:12-stable:
+  extends: .debian:12
   variables:
     FDO_DISTRIBUTION_TAG: '$GST_RS_STABLE-${GST_RS_IMG_TAG}_2023-02-20.0'
-    FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bullseye-slim:$GST_RS_STABLE-$GST_RS_IMG_TAG"
+    FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bookworm-slim:$GST_RS_STABLE-$GST_RS_IMG_TAG"
 
-.debian:11-msrv:
-  extends: .debian:11
+.debian:12-msrv:
+  extends: .debian:12
   variables:
     FDO_DISTRIBUTION_TAG: '$GST_RS_MSRV-${GST_RS_IMG_TAG}_2023-02-20.0'
-    FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bullseye-slim:$GST_RS_MSRV-$GST_RS_IMG_TAG"
+    FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bookworm-slim:$GST_RS_MSRV-$GST_RS_IMG_TAG"
 
-.debian:11-nightly:
-  extends: .debian:11
+.debian:12-nightly:
+  extends: .debian:12
   variables:
     FDO_DISTRIBUTION_TAG: 'nightly-${GST_RS_IMG_TAG}_2023-02-20.0'
-    FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bullseye-slim:nightly-$GST_RS_IMG_TAG"
+    FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bookworm-slim:nightly-$GST_RS_IMG_TAG"
 
 .build-debian-container:
   extends:
@@ -101,7 +101,7 @@ trigger:
       bash ci/install-dav1d.sh &&
       apt clean &&
       bash ./ci/install-rust-ext.sh &&
-      pip install tomli
+      pip install tomli --break-system-packages
   needs:
     - "trigger"
   rules:
@@ -110,17 +110,17 @@ trigger:
 build-stable:
   extends:
     - .build-debian-container
-    - .debian:11-stable
+    - .debian:12-stable
 
 build-msrv:
   extends:
     - .build-debian-container
-    - .debian:11-msrv
+    - .debian:12-msrv
 
 build-nightly:
   extends:
     - .build-debian-container
-    - .debian:11-nightly
+    - .debian:12-nightly
 
 # Those jobs are triggered by gstreamer-rs when updating its images
 update-stable:
@@ -155,7 +155,7 @@ update-nightly:
 .img-stable:
   extends:
     - .dist-debian-container
-    - .debian:11-stable
+    - .debian:12-stable
   needs:
     - job: 'build-stable'
       optional: true
@@ -165,7 +165,7 @@ update-nightly:
 .img-msrv:
   extends:
     - .dist-debian-container
-    - .debian:11-msrv
+    - .debian:12-msrv
   needs:
     - job: 'build-msrv'
       optional: true
@@ -175,7 +175,7 @@ update-nightly:
 .img-nightly:
   extends:
     - .dist-debian-container
-    - .debian:11-nightly
+    - .debian:12-nightly
   needs:
     - job: 'build-nightly'
       optional: true
