@@ -2930,7 +2930,24 @@ impl ElementImpl for FMP4Mux {
 impl AggregatorImpl for FMP4Mux {
     fn next_time(&self) -> Option<gst::ClockTime> {
         let state = self.state.lock().unwrap();
-        state.chunk_start_pts.opt_add(state.timeout_delay)
+        let agg = self.obj();
+        let segment = agg
+            .src_pad()
+            .downcast_ref::<gst_base::AggregatorPad>()
+            .unwrap()
+            .segment()
+            .downcast::<gst::ClockTime>()
+            .expect("TIME segment");
+
+        state
+            .chunk_start_pts
+            .opt_add(state.timeout_delay)
+            .and_then(|mut t| {
+                if !agg.class().as_ref().variant.is_single_stream() {
+                    t += SEGMENT_OFFSET;
+                }
+                segment.to_running_time(t)
+            })
     }
 
     fn sink_query(
