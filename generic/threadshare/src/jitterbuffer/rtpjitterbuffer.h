@@ -23,16 +23,16 @@
 #include <gst/gst.h>
 #include <gst/rtp/gstrtcpbuffer.h>
 
-typedef struct _RTPJitterBuffer RTPJitterBuffer;
-typedef struct _RTPJitterBufferClass RTPJitterBufferClass;
+typedef struct _RTPJitterBuffer TsRTPJitterBuffer;
+typedef struct _RTPJitterBufferClass TsRTPJitterBufferClass;
 typedef struct _RTPJitterBufferItem RTPJitterBufferItem;
 
-#define RTP_TYPE_JITTER_BUFFER             (rtp_jitter_buffer_get_type())
-#define RTP_JITTER_BUFFER(src)             (G_TYPE_CHECK_INSTANCE_CAST((src),RTP_TYPE_JITTER_BUFFER,RTPJitterBuffer))
-#define RTP_JITTER_BUFFER_CLASS(klass)     (G_TYPE_CHECK_CLASS_CAST((klass),RTP_TYPE_JITTER_BUFFER,RTPJitterBufferClass))
+#define RTP_TYPE_JITTER_BUFFER             (ts_rtp_jitter_buffer_get_type())
+#define RTP_JITTER_BUFFER(src)             (G_TYPE_CHECK_INSTANCE_CAST((src),RTP_TYPE_JITTER_BUFFER,TsRTPJitterBuffer))
+#define RTP_JITTER_BUFFER_CLASS(klass)     (G_TYPE_CHECK_CLASS_CAST((klass),RTP_TYPE_JITTER_BUFFER,TsRTPJitterBufferClass))
 #define RTP_IS_JITTER_BUFFER(src)          (G_TYPE_CHECK_INSTANCE_TYPE((src),RTP_TYPE_JITTER_BUFFER))
 #define RTP_IS_JITTER_BUFFER_CLASS(klass)  (G_TYPE_CHECK_CLASS_TYPE((klass),RTP_TYPE_JITTER_BUFFER))
-#define RTP_JITTER_BUFFER_CAST(src)        ((RTPJitterBuffer *)(src))
+#define RTP_JITTER_BUFFER_CAST(src)        ((TsRTPJitterBuffer *)(src))
 
 /**
  * RTPJitterBufferMode:
@@ -61,8 +61,8 @@ typedef enum {
   RTP_JITTER_BUFFER_MODE_LAST
 } RTPJitterBufferMode;
 
-#define RTP_TYPE_JITTER_BUFFER_MODE (rtp_jitter_buffer_mode_get_type())
-GType rtp_jitter_buffer_mode_get_type (void);
+#define RTP_TYPE_JITTER_BUFFER_MODE (ts_rtp_jitter_buffer_mode_get_type())
+GType ts_rtp_jitter_buffer_mode_get_type (void);
 
 #define RTP_JITTER_BUFFER_MAX_WINDOW 512
 /**
@@ -144,58 +144,58 @@ struct _RTPJitterBufferItem {
   guint rtptime;
 };
 
-GType rtp_jitter_buffer_get_type (void);
+GType ts_rtp_jitter_buffer_get_type (void);
 
 /* managing lifetime */
-RTPJitterBuffer*      rtp_jitter_buffer_new              (void);
+TsRTPJitterBuffer*      ts_rtp_jitter_buffer_new              (void);
 
-RTPJitterBufferMode   rtp_jitter_buffer_get_mode         (RTPJitterBuffer *jbuf);
-void                  rtp_jitter_buffer_set_mode         (RTPJitterBuffer *jbuf, RTPJitterBufferMode mode);
+RTPJitterBufferMode   ts_rtp_jitter_buffer_get_mode         (TsRTPJitterBuffer *jbuf);
+void                  ts_rtp_jitter_buffer_set_mode         (TsRTPJitterBuffer *jbuf, RTPJitterBufferMode mode);
 
-GstClockTime          rtp_jitter_buffer_get_delay        (RTPJitterBuffer *jbuf);
-void                  rtp_jitter_buffer_set_delay        (RTPJitterBuffer *jbuf, GstClockTime delay);
+GstClockTime          ts_rtp_jitter_buffer_get_delay        (RTPJitterBuffer *jbuf);
+void                  ts_rtp_jitter_buffer_set_delay        (TsRTPJitterBuffer *jbuf, GstClockTime delay);
 
-void                  rtp_jitter_buffer_set_clock_rate   (RTPJitterBuffer *jbuf, guint32 clock_rate);
-guint32               rtp_jitter_buffer_get_clock_rate   (RTPJitterBuffer *jbuf);
+void                  ts_rtp_jitter_buffer_set_clock_rate   (TsRTPJitterBuffer *jbuf, guint32 clock_rate);
+guint32               ts_rtp_jitter_buffer_get_clock_rate   (RTPJitterBuffer *jbuf);
 
-void                  rtp_jitter_buffer_set_media_clock  (RTPJitterBuffer *jbuf, GstClock * clock, guint64 clock_offset);
-void                  rtp_jitter_buffer_set_pipeline_clock (RTPJitterBuffer *jbuf, GstClock * clock);
+void                  ts_rtp_jitter_buffer_set_media_clock  (TsRTPJitterBuffer *jbuf, GstClock * clock, guint64 clock_offset);
+void                  ts_rtp_jitter_buffer_set_pipeline_clock (TsRTPJitterBuffer *jbuf, GstClock * clock);
 
-gboolean              rtp_jitter_buffer_get_rfc7273_sync (RTPJitterBuffer *jbuf);
-void                  rtp_jitter_buffer_set_rfc7273_sync (RTPJitterBuffer *jbuf, gboolean rfc7273_sync);
+gboolean              ts_rtp_jitter_buffer_get_rfc7273_sync (RTPJitterBuffer *jbuf);
+void                  ts_rtp_jitter_buffer_set_rfc7273_sync (TsRTPJitterBuffer *jbuf, gboolean rfc7273_sync);
 
-void                  rtp_jitter_buffer_reset_skew       (RTPJitterBuffer *jbuf);
+void                  ts_rtp_jitter_buffer_reset_skew       (TsRTPJitterBuffer *jbuf);
 
-gboolean              rtp_jitter_buffer_insert           (RTPJitterBuffer *jbuf,
-                                                          RTPJitterBufferItem *item,
-                                                          gboolean *head, gint *percent);
+gboolean              ts_rtp_jitter_buffer_insert           (RTPJitterBuffer *jbuf,
+                                                             RTPJitterBufferItem *item,
+                                                             gboolean *head, gint *percent);
 
-void                  rtp_jitter_buffer_disable_buffering (RTPJitterBuffer *jbuf, gboolean disabled);
+void                  ts_rtp_jitter_buffer_disable_buffering (TsRTPJitterBuffer *jbuf, gboolean disabled);
 
-RTPJitterBufferItem * rtp_jitter_buffer_peek             (RTPJitterBuffer *jbuf);
-RTPJitterBufferItem * rtp_jitter_buffer_pop              (RTPJitterBuffer *jbuf, gint *percent);
+RTPJitterBufferItem * ts_rtp_jitter_buffer_peek             (TsRTPJitterBuffer *jbuf);
+RTPJitterBufferItem * ts_rtp_jitter_buffer_pop              (TsRTPJitterBuffer *jbuf, gint *percent);
 
-void                  rtp_jitter_buffer_flush            (RTPJitterBuffer *jbuf,
-                                                          GFunc free_func, gpointer user_data);
+void                  ts_rtp_jitter_buffer_flush            (TsRTPJitterBuffer *jbuf,
+                                                             GFunc free_func, gpointer user_data);
 
-gboolean              rtp_jitter_buffer_is_buffering     (RTPJitterBuffer * jbuf);
-void                  rtp_jitter_buffer_set_buffering    (RTPJitterBuffer * jbuf, gboolean buffering);
-gint                  rtp_jitter_buffer_get_percent      (RTPJitterBuffer * jbuf);
+gboolean              ts_rtp_jitter_buffer_is_buffering     (RTPJitterBuffer * jbuf);
+void                  ts_rtp_jitter_buffer_set_buffering    (TsRTPJitterBuffer * jbuf, gboolean buffering);
+gint                  ts_rtp_jitter_buffer_get_percent      (RTPJitterBuffer * jbuf);
 
-guint                 rtp_jitter_buffer_num_packets      (RTPJitterBuffer *jbuf);
-guint32               rtp_jitter_buffer_get_ts_diff      (RTPJitterBuffer *jbuf);
+guint                 ts_rtp_jitter_buffer_num_packets      (RTPJitterBuffer *jbuf);
+guint32               ts_rtp_jitter_buffer_get_ts_diff      (RTPJitterBuffer *jbuf);
 
-void                  rtp_jitter_buffer_get_sync         (RTPJitterBuffer *jbuf, guint64 *rtptime,
-                                                          guint64 *timestamp, guint32 *clock_rate,
-                                                          guint64 *last_rtptime);
+void                  ts_rtp_jitter_buffer_get_sync         (TsRTPJitterBuffer *jbuf, guint64 *rtptime,
+                                                             guint64 *timestamp, guint32 *clock_rate,
+                                                             guint64 *last_rtptime);
 
-GstClockTime          rtp_jitter_buffer_calculate_pts    (RTPJitterBuffer * jbuf, GstClockTime dts, gboolean estimated_dts,
-                                                          guint32 rtptime, GstClockTime base_time, gint gap,
-                                                          gboolean is_rtx);
+GstClockTime          ts_rtp_jitter_buffer_calculate_pts    (RTPJitterBuffer * jbuf, GstClockTime dts, gboolean estimated_dts,
+                                                             guint32 rtptime, GstClockTime base_time, gint gap,
+                                                             gboolean is_rtx);
 
-gboolean              rtp_jitter_buffer_can_fast_start   (RTPJitterBuffer * jbuf, gint num_packet);
+gboolean              ts_rtp_jitter_buffer_can_fast_start   (RTPJitterBuffer * jbuf, gint num_packet);
 
-gboolean              rtp_jitter_buffer_is_full          (RTPJitterBuffer * jbuf);
-void                  rtp_jitter_buffer_find_earliest     (RTPJitterBuffer * jbuf, GstClockTime *pts, guint * seqnum);
+gboolean              ts_rtp_jitter_buffer_is_full          (RTPJitterBuffer * jbuf);
+void                  ts_rtp_jitter_buffer_find_earliest    (TsRTPJitterBuffer * jbuf, GstClockTime *pts, guint * seqnum);
 
 #endif /* __RTP_JITTER_BUFFER_H__ */

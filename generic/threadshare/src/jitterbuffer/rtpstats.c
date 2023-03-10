@@ -22,7 +22,7 @@
 #include "rtpstats.h"
 
 void
-gst_rtp_packet_rate_ctx_reset (RTPPacketRateCtx * ctx, gint32 clock_rate)
+ts_gst_rtp_packet_rate_ctx_reset (RTPPacketRateCtx * ctx, gint32 clock_rate)
 {
   ctx->clock_rate = clock_rate;
   ctx->probed = FALSE;
@@ -31,7 +31,7 @@ gst_rtp_packet_rate_ctx_reset (RTPPacketRateCtx * ctx, gint32 clock_rate)
 }
 
 guint32
-gst_rtp_packet_rate_ctx_update (RTPPacketRateCtx * ctx, guint16 seqnum,
+ts_gst_rtp_packet_rate_ctx_update (RTPPacketRateCtx * ctx, guint16 seqnum,
     guint32 ts)
 {
   guint64 new_ts, diff_ts;
@@ -80,13 +80,13 @@ done:
 }
 
 guint32
-gst_rtp_packet_rate_ctx_get (RTPPacketRateCtx * ctx)
+ts_gst_rtp_packet_rate_ctx_get (RTPPacketRateCtx * ctx)
 {
   return ctx->avg_packet_rate;
 }
 
 guint32
-gst_rtp_packet_rate_ctx_get_max_dropout (RTPPacketRateCtx * ctx, gint32 time_ms)
+ts_gst_rtp_packet_rate_ctx_get_max_dropout (RTPPacketRateCtx * ctx, gint32 time_ms)
 {
   if (time_ms <= 0 || !ctx->probed || ctx->avg_packet_rate == G_MAXUINT32) {
     return RTP_DEF_DROPOUT;
@@ -96,7 +96,7 @@ gst_rtp_packet_rate_ctx_get_max_dropout (RTPPacketRateCtx * ctx, gint32 time_ms)
 }
 
 guint32
-gst_rtp_packet_rate_ctx_get_max_misorder (RTPPacketRateCtx * ctx,
+ts_gst_rtp_packet_rate_ctx_get_max_misorder (RTPPacketRateCtx * ctx,
     gint32 time_ms)
 {
   if (time_ms <= 0 || !ctx->probed || ctx->avg_packet_rate == G_MAXUINT32) {
@@ -113,9 +113,9 @@ gst_rtp_packet_rate_ctx_get_max_misorder (RTPPacketRateCtx * ctx,
  * Initialize @stats with its default values.
  */
 void
-rtp_stats_init_defaults (RTPSessionStats * stats)
+ts_rtp_stats_init_defaults (RTPSessionStats * stats)
 {
-  rtp_stats_set_bandwidths (stats, -1, -1, -1, -1);
+  ts_rtp_stats_set_bandwidths (stats, -1, -1, -1, -1);
   stats->min_interval = RTP_STATS_MIN_INTERVAL;
   stats->bye_timeout = RTP_STATS_BYE_TIMEOUT;
   stats->nacks_dropped = 0;
@@ -136,7 +136,7 @@ rtp_stats_init_defaults (RTPSessionStats * stats)
  * defaults.
  */
 void
-rtp_stats_set_bandwidths (RTPSessionStats * stats, guint rtp_bw,
+ts_rtp_stats_set_bandwidths (RTPSessionStats * stats, guint rtp_bw,
     gdouble rtcp_bw, guint rs, guint rr)
 {
   GST_DEBUG ("recalc bandwidths: RTP %u, RTCP %f, RS %u, RR %u", rtp_bw,
@@ -217,7 +217,7 @@ rtp_stats_set_bandwidths (RTPSessionStats * stats, guint rtp_bw,
  * Returns: the RTCP interval.
  */
 GstClockTime
-rtp_stats_calculate_rtcp_interval (RTPSessionStats * stats, gboolean we_send,
+ts_rtp_stats_calculate_rtcp_interval (RTPSessionStats * stats, gboolean we_send,
     GstRTPProfile profile, gboolean ptp, gboolean first)
 {
   gdouble members, senders, n;
@@ -296,7 +296,7 @@ rtp_stats_calculate_rtcp_interval (RTPSessionStats * stats, gboolean we_send,
  * Returns: the new RTCP interval.
  */
 GstClockTime
-rtp_stats_add_rtcp_jitter (RTPSessionStats * stats G_GNUC_UNUSED,
+ts_rtp_stats_add_rtcp_jitter (RTPSessionStats * stats G_GNUC_UNUSED,
     GstClockTime interval)
 {
   gdouble temp;
@@ -323,7 +323,7 @@ rtp_stats_add_rtcp_jitter (RTPSessionStats * stats G_GNUC_UNUSED,
  * Returns: the BYE interval.
  */
 GstClockTime
-rtp_stats_calculate_bye_interval (RTPSessionStats * stats)
+ts_rtp_stats_calculate_bye_interval (RTPSessionStats * stats)
 {
   gdouble members;
   gdouble avg_rtcp_size, rtcp_bw;
@@ -377,7 +377,7 @@ rtp_stats_calculate_bye_interval (RTPSessionStats * stats)
  * Returns: total RTP packets lost.
  */
 gint64
-rtp_stats_get_packets_lost (const RTPSourceStats * stats)
+ts_rtp_stats_get_packets_lost (const RTPSourceStats * stats)
 {
   gint64 lost;
   guint64 extended_max, expected;
@@ -390,41 +390,7 @@ rtp_stats_get_packets_lost (const RTPSourceStats * stats)
 }
 
 void
-rtp_stats_set_min_interval (RTPSessionStats * stats, gdouble min_interval)
+ts_rtp_stats_set_min_interval (RTPSessionStats * stats, gdouble min_interval)
 {
   stats->min_interval = min_interval;
-}
-
-gboolean
-__g_socket_address_equal (GSocketAddress * a, GSocketAddress * b)
-{
-  GInetSocketAddress *ia, *ib;
-  GInetAddress *iaa, *iab;
-
-  ia = G_INET_SOCKET_ADDRESS (a);
-  ib = G_INET_SOCKET_ADDRESS (b);
-
-  if (g_inet_socket_address_get_port (ia) !=
-      g_inet_socket_address_get_port (ib))
-    return FALSE;
-
-  iaa = g_inet_socket_address_get_address (ia);
-  iab = g_inet_socket_address_get_address (ib);
-
-  return g_inet_address_equal (iaa, iab);
-}
-
-gchar *
-__g_socket_address_to_string (GSocketAddress * addr)
-{
-  GInetSocketAddress *ia;
-  gchar *ret, *tmp;
-
-  ia = G_INET_SOCKET_ADDRESS (addr);
-
-  tmp = g_inet_address_to_string (g_inet_socket_address_get_address (ia));
-  ret = g_strdup_printf ("%s:%u", tmp, g_inet_socket_address_get_port (ia));
-  g_free (tmp);
-
-  return ret;
 }

@@ -216,11 +216,11 @@ typedef struct {
   guint32 avg_packet_rate;
 } RTPPacketRateCtx;
 
-void gst_rtp_packet_rate_ctx_reset (RTPPacketRateCtx * ctx, gint32 clock_rate);
-guint32 gst_rtp_packet_rate_ctx_update (RTPPacketRateCtx *ctx, guint16 seqnum, guint32 ts);
-guint32 gst_rtp_packet_rate_ctx_get (RTPPacketRateCtx *ctx);
-guint32 gst_rtp_packet_rate_ctx_get_max_dropout (RTPPacketRateCtx *ctx, gint32 time_ms);
-guint32 gst_rtp_packet_rate_ctx_get_max_misorder (RTPPacketRateCtx *ctx, gint32 time_ms);
+void ts_gst_rtp_packet_rate_ctx_reset (RTPPacketRateCtx * ctx, gint32 clock_rate);
+guint32 ts_gst_rtp_packet_rate_ctx_update (RTPPacketRateCtx *ctx, guint16 seqnum, guint32 ts);
+guint32 ts_gst_rtp_packet_rate_ctx_get (RTPPacketRateCtx *ctx);
+guint32 ts_gst_rtp_packet_rate_ctx_get_max_dropout (RTPPacketRateCtx *ctx, gint32 time_ms);
+guint32 ts_gst_rtp_packet_rate_ctx_get_max_misorder (RTPPacketRateCtx *ctx, gint32 time_ms);
 
 /**
  * RTPSessionStats:
@@ -245,23 +245,19 @@ typedef struct {
   guint         nacks_received;
 } RTPSessionStats;
 
-void           rtp_stats_init_defaults              (RTPSessionStats *stats);
+void           ts_rtp_stats_init_defaults              (RTPSessionStats *stats);
 
-void           rtp_stats_set_bandwidths             (RTPSessionStats *stats,
-                                                     guint rtp_bw,
-                                                     gdouble rtcp_bw,
-                                                     guint rs, guint rr);
+void           ts_rtp_stats_set_bandwidths             (RTPSessionStats *stats,
+                                                        guint rtp_bw,
+                                                        gdouble rtcp_bw,
+                                                        guint rs, guint rr);
 
-GstClockTime   rtp_stats_calculate_rtcp_interval    (RTPSessionStats *stats, gboolean sender, GstRTPProfile profile, gboolean ptp, gboolean first);
-GstClockTime   rtp_stats_add_rtcp_jitter            (RTPSessionStats *stats, GstClockTime interval);
-GstClockTime   rtp_stats_calculate_bye_interval     (RTPSessionStats *stats);
-gint64         rtp_stats_get_packets_lost           (const RTPSourceStats *stats);
+GstClockTime   ts_rtp_stats_calculate_rtcp_interval    (RTPSessionStats *stats, gboolean sender, GstRTPProfile profile, gboolean ptp, gboolean first);
+GstClockTime   ts_rtp_stats_add_rtcp_jitter            (RTPSessionStats *stats, GstClockTime interval);
+GstClockTime   ts_rtp_stats_calculate_bye_interval     (RTPSessionStats *stats);
+gint64         ts_rtp_stats_get_packets_lost           (const RTPSourceStats *stats);
 
-void           rtp_stats_set_min_interval           (RTPSessionStats *stats,
-                                                     gdouble min_interval);
-
-
-gboolean __g_socket_address_equal (GSocketAddress *a, GSocketAddress *b);
-gchar * __g_socket_address_to_string (GSocketAddress * addr);
+void           ts_rtp_stats_set_min_interval           (RTPSessionStats *stats,
+                                                        gdouble min_interval);
 
 #endif /* __RTP_STATS_H__ */
