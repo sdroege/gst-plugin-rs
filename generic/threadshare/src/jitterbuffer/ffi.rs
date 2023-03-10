@@ -57,27 +57,27 @@ pub const RTP_JITTER_BUFFER_MODE_BUFFER: RTPJitterBufferMode = 2;
 pub const RTP_JITTER_BUFFER_MODE_SYNCED: RTPJitterBufferMode = 4;
 
 extern "C" {
-    pub fn rtp_jitter_buffer_new() -> *mut RTPJitterBuffer;
-    pub fn rtp_jitter_buffer_get_type() -> GType;
+    pub fn ts_rtp_jitter_buffer_new() -> *mut RTPJitterBuffer;
+    pub fn ts_rtp_jitter_buffer_get_type() -> GType;
     #[allow(dead_code)]
-    pub fn rtp_jitter_buffer_get_mode(jbuf: *mut RTPJitterBuffer) -> RTPJitterBufferMode;
+    pub fn ts_rtp_jitter_buffer_get_mode(jbuf: *mut RTPJitterBuffer) -> RTPJitterBufferMode;
     #[allow(dead_code)]
-    pub fn rtp_jitter_buffer_set_mode(jbuf: *mut RTPJitterBuffer, mode: RTPJitterBufferMode);
+    pub fn ts_rtp_jitter_buffer_set_mode(jbuf: *mut RTPJitterBuffer, mode: RTPJitterBufferMode);
     #[allow(dead_code)]
-    pub fn rtp_jitter_buffer_get_delay(jbuf: *mut RTPJitterBuffer) -> GstClockTime;
-    pub fn rtp_jitter_buffer_set_delay(jbuf: *mut RTPJitterBuffer, delay: GstClockTime);
-    pub fn rtp_jitter_buffer_set_clock_rate(jbuf: *mut RTPJitterBuffer, clock_rate: c_uint);
+    pub fn ts_rtp_jitter_buffer_get_delay(jbuf: *mut RTPJitterBuffer) -> GstClockTime;
+    pub fn ts_rtp_jitter_buffer_set_delay(jbuf: *mut RTPJitterBuffer, delay: GstClockTime);
+    pub fn ts_rtp_jitter_buffer_set_clock_rate(jbuf: *mut RTPJitterBuffer, clock_rate: c_uint);
     #[allow(dead_code)]
-    pub fn rtp_jitter_buffer_get_clock_rate(jbuf: *mut RTPJitterBuffer) -> c_uint;
-    pub fn rtp_jitter_buffer_reset_skew(jbuf: *mut RTPJitterBuffer);
+    pub fn ts_rtp_jitter_buffer_get_clock_rate(jbuf: *mut RTPJitterBuffer) -> c_uint;
+    pub fn ts_rtp_jitter_buffer_reset_skew(jbuf: *mut RTPJitterBuffer);
 
-    pub fn rtp_jitter_buffer_flush(jbuf: *mut RTPJitterBuffer, free_func: glib::ffi::GFunc);
-    pub fn rtp_jitter_buffer_find_earliest(
+    pub fn ts_rtp_jitter_buffer_flush(jbuf: *mut RTPJitterBuffer, free_func: glib::ffi::GFunc);
+    pub fn ts_rtp_jitter_buffer_find_earliest(
         jbuf: *mut RTPJitterBuffer,
         pts: *mut GstClockTime,
         seqnum: *mut c_uint,
     );
-    pub fn rtp_jitter_buffer_calculate_pts(
+    pub fn ts_rtp_jitter_buffer_calculate_pts(
         jbuf: *mut RTPJitterBuffer,
         dts: GstClockTime,
         estimated_dts: gboolean,
@@ -86,30 +86,30 @@ extern "C" {
         gap: c_int,
         is_rtx: gboolean,
     ) -> GstClockTime;
-    pub fn rtp_jitter_buffer_insert(
+    pub fn ts_rtp_jitter_buffer_insert(
         jbuf: *mut RTPJitterBuffer,
         item: *mut RTPJitterBufferItem,
         head: *mut gboolean,
         percent: *mut c_int,
     ) -> gboolean;
-    pub fn rtp_jitter_buffer_pop(
+    pub fn ts_rtp_jitter_buffer_pop(
         jbuf: *mut RTPJitterBuffer,
         percent: *mut c_int,
     ) -> *mut RTPJitterBufferItem;
-    pub fn rtp_jitter_buffer_peek(jbuf: *mut RTPJitterBuffer) -> *mut RTPJitterBufferItem;
+    pub fn ts_rtp_jitter_buffer_peek(jbuf: *mut RTPJitterBuffer) -> *mut RTPJitterBufferItem;
 
-    pub fn gst_rtp_packet_rate_ctx_reset(ctx: *mut RTPPacketRateCtx, clock_rate: c_int);
-    pub fn gst_rtp_packet_rate_ctx_update(
+    pub fn ts_gst_rtp_packet_rate_ctx_reset(ctx: *mut RTPPacketRateCtx, clock_rate: c_int);
+    pub fn ts_gst_rtp_packet_rate_ctx_update(
         ctx: *mut RTPPacketRateCtx,
         seqnum: c_ushort,
         ts: c_uint,
     ) -> c_uint;
-    pub fn gst_rtp_packet_rate_ctx_get_max_dropout(
+    pub fn ts_gst_rtp_packet_rate_ctx_get_max_dropout(
         ctx: *mut RTPPacketRateCtx,
         time_ms: c_int,
     ) -> c_uint;
     #[allow(dead_code)]
-    pub fn gst_rtp_packet_rate_ctx_get_max_misorder(
+    pub fn ts_gst_rtp_packet_rate_ctx_get_max_misorder(
         ctx: *mut RTPPacketRateCtx,
         time_ms: c_int,
     ) -> c_uint;
