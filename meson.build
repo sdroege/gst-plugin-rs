@@ -315,28 +315,6 @@ if get_option('gtk4').allowed()
   endif
 endif
 
-if gst_dep.version().version_compare('>=1.21')
-  components = [
-    '', '-app', '-audio', '-base', '-check',
-    '-rtp', '-sdp', '-utils', '-video', '-webrtc',
-  ]
-  if get_option('tracers').allowed()
-    components += '-plugin-tracers'
-  endif
-  if get_option('threadshare').allowed()
-    components += '-net'
-  endif
-  if get_option('mp4').allowed() or get_option('fmp4').allowed()
-    components += '-pbutils'
-  endif
-  foreach c: components
-    features += f'gst@c@/v1_22'
-  endforeach
-  if get_option('webrtc').allowed()
-    features += 'gst-plugin-webrtc/gst1_22'
-  endif
-endif
-
 if get_option('rav1e').allowed() and find_program('nasm', required: false).found()
   features += 'gst-plugin-rav1e/asm'
 endif
@@ -359,6 +337,12 @@ foreach plugin_name, details: plugins
     if plugin_deps_found
       packages += f'gst-plugin-@plugin_name@'
       features += details.get('features', [])
+      extra_features = run_command('dependencies.py', meson.current_source_dir(), plugin_name,
+        '--feature', '--gst-version', gst_dep.version(), capture: true, check: true).stdout().strip()
+      if extra_features != ''
+        features += extra_features.split(',')
+      endif
+
       examples += details.get('examples', [])
       lib = details.get('library')
       if default_library in ['shared', 'both']
