@@ -10,6 +10,18 @@ use gst::glib;
 use gst::prelude::*;
 
 mod imp;
+mod transcribe;
+mod translate;
+
+use once_cell::sync::Lazy;
+
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
+        "awstranscribe",
+        gst::DebugColorFlags::empty(),
+        Some("AWS Transcribe element"),
+    )
+});
 
 use aws_sdk_transcribestreaming::model::{PartialResultsStability, VocabularyFilterMethod};
 
@@ -68,7 +80,11 @@ impl From<AwsTranscriberVocabularyFilterMethod> for VocabularyFilterMethod {
 }
 
 glib::wrapper! {
-    pub struct Transcriber(ObjectSubclass<imp::Transcriber>) @extends gst::Element, gst::Object;
+    pub struct Transcriber(ObjectSubclass<imp::Transcriber>) @extends gst::Element, gst::Object, @implements gst::ChildProxy;
+}
+
+glib::wrapper! {
+    pub struct TranslationSrcPad(ObjectSubclass<imp::TranslationSrcPad>) @extends gst::Pad, gst::Object;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
@@ -78,6 +94,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
             .mark_as_plugin_api(gst::PluginAPIFlags::empty());
         AwsTranscriberVocabularyFilterMethod::static_type()
             .mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        TranslationSrcPad::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }
     gst::Element::register(
         Some(plugin),

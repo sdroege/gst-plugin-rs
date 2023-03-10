@@ -628,6 +628,9 @@
                     "GInitiallyUnowned",
                     "GObject"
                 ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
                 "klass": "Audio/Text/Filter",
                 "long-name": "Transcriber",
                 "pad-templates": {
@@ -639,7 +642,14 @@
                     "src": {
                         "caps": "text/x-raw:\n         format: utf8\n",
                         "direction": "src",
-                        "presence": "always"
+                        "presence": "always",
+                        "type": "GstTranslationSrcPad"
+                    },
+                    "src_%%u": {
+                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "direction": "src",
+                        "presence": "request",
+                        "type": "GstTranslationSrcPad"
                     }
                 },
                 "properties": {
@@ -668,7 +678,7 @@
                         "writable": true
                     },
                     "latency": {
-                        "blurb": "Amount of milliseconds to allow AWS transcribe",
+                        "blurb": "Amount of milliseconds to allow AWS transcribe (Deprecated. Use transcribe-latency)",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -741,6 +751,48 @@
                         "mutable": "ready",
                         "readable": true,
                         "type": "gchararray",
+                        "writable": true
+                    },
+                    "transcribe-latency": {
+                        "blurb": "Amount of milliseconds to allow AWS transcribe",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "8000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "transcript-lookahead": {
+                        "blurb": "Maximum duration in milliseconds of transcript to lookahead before sending to translation when no separator was encountered",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "3000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "translate-latency": {
+                        "blurb": "Amount of milliseconds to allow AWS translate (ignored if the input and output languages are the same)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "500",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
                         "writable": true
                     },
                     "vocabulary-filter-method": {
@@ -845,6 +897,30 @@
                         "value": "2"
                     }
                 ]
+            },
+            "GstTranslationSrcPad": {
+                "hierarchy": [
+                    "GstTranslationSrcPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "language-code": {
+                        "blurb": "The Language the Stream must be translated to",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                }
             }
         },
         "package": "gst-plugin-aws",
