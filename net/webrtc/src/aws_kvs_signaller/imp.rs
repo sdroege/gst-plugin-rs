@@ -16,16 +16,18 @@ use std::sync::Mutex;
 use tokio::task;
 
 use aws_config::default_provider::credentials::DefaultCredentialsChain;
+use aws_credential_types::{provider::ProvideCredentials, Credentials};
 use aws_sdk_kinesisvideo::{
     model::{ChannelProtocol, ChannelRole, SingleMasterChannelEndpointConfiguration},
-    Client, Endpoint,
+    Client,
 };
 use aws_sdk_kinesisvideosignaling::Client as SignalingClient;
 use aws_sig_auth::signer::{self, HttpSignatureType, OperationSigningConfig, RequestConfig};
 use aws_smithy_http::body::SdkBody;
-use aws_types::credentials::ProvideCredentials;
-use aws_types::region::{Region, SigningRegion};
-use aws_types::{Credentials, SigningService};
+use aws_types::{
+    region::{Region, SigningRegion},
+    SigningService,
+};
 use chrono::prelude::*;
 use data_encoding::BASE64;
 use http::Uri;
@@ -282,7 +284,7 @@ impl Signaller {
                         None
                     }
                 }) {
-                Some(endpoint_uri_str) => Uri::from_maybe_shared(endpoint_uri_str).unwrap(),
+                Some(endpoint_uri_str) => endpoint_uri_str,
                 None => {
                     anyhow::bail!("No HTTPS endpoint found for {channel_name}");
                 }
@@ -301,7 +303,7 @@ impl Signaller {
                 .load()
                 .await,
         )
-        .endpoint_resolver(Endpoint::immutable_uri(endpoint_https_uri.clone())?)
+        .endpoint_url(endpoint_https_uri)
         .build();
 
         let signaling_client = SignalingClient::from_conf(signaling_config);
