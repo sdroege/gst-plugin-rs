@@ -35,7 +35,10 @@ use once_cell::sync::Lazy;
 
 use super::transcribe::{TranscriberLoop, TranscriptEvent, TranscriptItem, TranscriptionSettings};
 use super::translate::{TranslatedItem, TranslationLoop, TranslationQueue};
-use super::{AwsTranscriberResultStability, AwsTranscriberVocabularyFilterMethod, CAT};
+use super::{
+    AwsTranscriberResultStability, AwsTranscriberVocabularyFilterMethod,
+    TranslationTokenizationMethod, CAT,
+};
 
 static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
     runtime::Builder::new_multi_thread()
@@ -72,6 +75,8 @@ pub const GRANULARITY: gst::ClockTime = gst::ClockTime::from_mseconds(100);
 
 const OUTPUT_LANG_CODE_PROPERTY: &str = "language-code";
 const DEFAULT_OUTPUT_LANG_CODE: Option<&str> = None;
+
+const TRANSLATION_TOKENIZATION_PROPERTY: &str = "tokenization-method";
 
 #[derive(Debug, Clone)]
 pub(super) struct Settings {
@@ -850,8 +855,8 @@ struct TranslationPadTask {
     needs_translate: bool,
     translation_queue: TranslationQueue,
     translation_loop_handle: Option<task::JoinHandle<Result<(), gst::ErrorMessage>>>,
-    to_translation_tx: Option<mpsc::Sender<TranscriptItem>>,
-    from_translation_rx: Option<mpsc::Receiver<TranslatedItem>>,
+    to_translation_tx: Option<mpsc::Sender<Vec<TranscriptItem>>>,
+    from_translation_rx: Option<mpsc::Receiver<Vec<TranslatedItem>>>,
     translate_latency: gst::ClockTime,
     transcript_lookahead: gst::ClockTime,
     send_events: bool,
@@ -991,14 +996,14 @@ impl TranslationPadTask {
             // before current latency budget is exhausted.
             futures::select_biased! {
                 _ = timeout => return Ok(()),
-                translated_item = from_translation_rx.next() => {
-                    let Some(translated_item) = translated_item else {
+                translated_items = from_translation_rx.next() => {
+                    let Some(translated_items) = translated_items else {
                         const ERR: &str = "translation chan terminated";
                         gst::debug!(CAT, imp: self.pad, "{ERR}");
                         return Err(gst::error_msg!(gst::StreamError::Failed, ["{ERR}"]));
                     };
 
-                    self.translated_items.push_back(translated_item);
+                    self.translated_items.extend(translated_items);
                     self.pending_translations = self.pending_translations.saturating_sub(1);
 
                     return Ok(());
@@ -1027,9 +1032,9 @@ impl TranslationPadTask {
             }
         };
 
-        for item in transcript_items.iter() {
-            if let Some(ready_item) = self.translation_queue.push(item) {
-                self.send_for_translation(ready_item).await?;
+        for items in transcript_items.iter() {
+            if let Some(ready_items) = self.translation_queue.push(items) {
+                self.send_for_translation(ready_items).await?;
             }
         }
 
@@ -1072,19 +1077,12 @@ impl TranslationPadTask {
 
             let deadline = translation_eta.saturating_sub(max_delay);
 
-            if let Some(ready_item) = self
+            if let Some(ready_items) = self
                 .translation_queue
                 .dequeue(deadline, self.transcript_lookahead)
             {
-                gst::debug!(
-                    CAT,
-                    imp: self.pad,
-                    "Forcing transcript at pts {} with duration {} to translation",
-                    ready_item.pts,
-                    ready_item.duration,
-                );
-
-                if self.send_for_translation(ready_item).await.is_err() {
+                gst::debug!(CAT, imp: self.pad, "Forcing  {} transcripts to translation", ready_items.len());
+                if self.send_for_translation(ready_items).await.is_err() {
                     return false;
                 }
             }
@@ -1240,13 +1238,13 @@ impl TranslationPadTask {
 
     async fn send_for_translation(
         &mut self,
-        transcript_item: TranscriptItem,
+        transcript_items: Vec<TranscriptItem>,
     ) -> Result<(), gst::ErrorMessage> {
         let res = self
             .to_translation_tx
             .as_mut()
             .expect("to_translation chan must be available in translation mode")
-            .send(transcript_item)
+            .send(transcript_items)
             .await;
 
         if res.is_err() {
@@ -1346,6 +1344,7 @@ impl TranslationPadTask {
                     &self.pad,
                     &elem_settings.language_code,
                     pad_settings.language_code.as_deref().unwrap(),
+                    pad_settings.tokenization_method,
                     to_translation_rx,
                     from_translation_tx,
                 ));
@@ -1384,6 +1383,7 @@ impl Default for TranslationPadState {
 #[derive(Debug, Default, Clone)]
 struct TranslationPadSettings {
     language_code: Option<String>,
+    tokenization_method: TranslationTokenizationMethod,
 }
 
 #[derive(Debug, Default)]
@@ -1566,12 +1566,20 @@ impl ObjectSubclass for TranslationSrcPad {
 impl ObjectImpl for TranslationSrcPad {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpecString::builder(OUTPUT_LANG_CODE_PROPERTY)
-                .nick("Language Code")
-                .blurb("The Language the Stream must be translated to")
-                .default_value(DEFAULT_OUTPUT_LANG_CODE)
-                .mutable_ready()
-                .build()]
+            vec![
+                glib::ParamSpecString::builder(OUTPUT_LANG_CODE_PROPERTY)
+                    .nick("Language Code")
+                    .blurb("The Language the Stream must be translated to")
+                    .default_value(DEFAULT_OUTPUT_LANG_CODE)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecEnum::builder(TRANSLATION_TOKENIZATION_PROPERTY)
+                    .nick("Translations tokenization method")
+                    .blurb("The tokenization method to apply to translations")
+                    .default_value(TranslationTokenizationMethod::default())
+                    .mutable_ready()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()
@@ -1582,6 +1590,9 @@ impl ObjectImpl for TranslationSrcPad {
             OUTPUT_LANG_CODE_PROPERTY => {
                 self.settings.lock().unwrap().language_code = value.get().unwrap()
             }
+            TRANSLATION_TOKENIZATION_PROPERTY => {
+                self.settings.lock().unwrap().tokenization_method = value.get().unwrap()
+            }
             _ => unimplemented!(),
         }
     }
@@ -1589,6 +1600,9 @@ impl ObjectImpl for TranslationSrcPad {
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             OUTPUT_LANG_CODE_PROPERTY => self.settings.lock().unwrap().language_code.to_value(),
+            TRANSLATION_TOKENIZATION_PROPERTY => {
+                self.settings.lock().unwrap().tokenization_method.to_value()
+            }
             _ => unimplemented!(),
         }
     }

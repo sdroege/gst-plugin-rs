@@ -650,6 +650,12 @@
                         "direction": "src",
                         "presence": "request",
                         "type": "GstTranslationSrcPad"
+                    },
+                    "translation_src_%%u": {
+                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "direction": "src",
+                        "presence": "request",
+                        "type": "GstTranslationSrcPad"
                     }
                 },
                 "properties": {
@@ -773,7 +779,7 @@
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
-                        "default": "3000",
+                        "default": "5000",
                         "max": "-1",
                         "min": "0",
                         "mutable": "ready",
@@ -858,6 +864,21 @@
                     }
                 ]
             },
+            "GstAwsTranscriberTranslationTokenizationMethod": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "None: don't tokenize translations",
+                        "name": "none",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Span based: insert spans in the transript text and use the resulting spans in the translations to reproduce speech pacing.",
+                        "name": "span-based",
+                        "value": "1"
+                    }
+                ]
+            },
             "GstAwsTranscriberVocabularyFilterMethod": {
                 "kind": "enum",
                 "values": [
@@ -918,6 +939,18 @@
                         "mutable": "ready",
                         "readable": true,
                         "type": "gchararray",
+                        "writable": true
+                    },
+                    "tokenization-method": {
+                        "blurb": "The tokenization method to apply to translations",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "none (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstAwsTranscriberTranslationTokenizationMethod",
                         "writable": true
                     }
                 }

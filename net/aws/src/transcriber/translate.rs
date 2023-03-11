@@ -18,8 +18,12 @@ use std::collections::VecDeque;
 
 use super::imp::TranslationSrcPad;
 use super::transcribe::TranscriptItem;
-use super::CAT;
+use super::{TranslationTokenizationMethod, CAT};
 
+const SPAN_START: &str = "<span>";
+const SPAN_END: &str = "</span>";
+
+#[derive(Debug)]
 pub struct TranslatedItem {
     pub pts: gst::ClockTime,
     pub duration: gst::ClockTime,
@@ -49,7 +53,7 @@ impl TranslationQueue {
     /// Pushes the provided item.
     ///
     /// Returns `Some(..)` if items are ready for translation.
-    pub fn push(&mut self, transcript_item: &TranscriptItem) -> Option<TranscriptItem> {
+    pub fn push(&mut self, transcript_item: &TranscriptItem) -> Option<Vec<TranscriptItem>> {
         // Keep track of the item individually so we can schedule translation precisely.
         self.items.push_back(transcript_item.clone());
 
@@ -57,16 +61,7 @@ impl TranslationQueue {
             // This makes it a good chunk for translation.
             // Concatenate as a single item for translation
 
-            let mut items = self.items.drain(..);
-
-            let mut item_acc = items.next()?;
-            for item in items {
-                item_acc.push(&item);
-            }
-
-            item_acc.push(transcript_item);
-
-            return Some(item_acc);
+            return Some(self.items.drain(..).collect());
         }
 
         // Regular case: no separator detected, don't push transcript items
@@ -78,12 +73,12 @@ impl TranslationQueue {
 
     /// Dequeues items from the specified `deadline` up to `lookahead`.
     ///
-    /// Returns `Some(..)` with the accumulated items matching the criteria.
+    /// Returns `Some(..)` if some items match the criteria.
     pub fn dequeue(
         &mut self,
         deadline: gst::ClockTime,
         lookahead: gst::ClockTime,
-    ) -> Option<TranscriptItem> {
+    ) -> Option<Vec<TranscriptItem>> {
         if self.items.front()?.pts < deadline {
             // First item is too early to be sent to translation now
             // we can wait for more items to accumulate.
@@ -94,17 +89,16 @@ impl TranslationQueue {
         // Try to get up to lookahead more items to improve translation accuracy
         let limit = deadline + lookahead;
 
-        let mut item_acc = self.items.pop_front().unwrap();
+        let mut items_acc = vec![self.items.pop_front().unwrap()];
         while let Some(item) = self.items.front() {
             if item.pts > limit {
                 break;
             }
 
-            let item = self.items.pop_front().unwrap();
-            item_acc.push(&item);
+            items_acc.push(self.items.pop_front().unwrap());
         }
 
-        Some(item_acc)
+        Some(items_acc)
     }
 }
 
@@ -113,8 +107,9 @@ pub struct TranslationLoop {
     client: aws_translate::Client,
     input_lang: String,
     output_lang: String,
-    transcript_rx: mpsc::Receiver<TranscriptItem>,
-    translation_tx: mpsc::Sender<TranslatedItem>,
+    tokenization_method: TranslationTokenizationMethod,
+    transcript_rx: mpsc::Receiver<Vec<TranscriptItem>>,
+    translation_tx: mpsc::Sender<Vec<TranslatedItem>>,
 }
 
 impl TranslationLoop {
@@ -123,8 +118,9 @@ impl TranslationLoop {
         pad: &TranslationSrcPad,
         input_lang: &str,
         output_lang: &str,
-        transcript_rx: mpsc::Receiver<TranscriptItem>,
-        translation_tx: mpsc::Sender<TranslatedItem>,
+        tokenization_method: TranslationTokenizationMethod,
+        transcript_rx: mpsc::Receiver<Vec<TranscriptItem>>,
+        translation_tx: mpsc::Sender<Vec<TranslatedItem>>,
     ) -> Self {
         let aws_config = imp.aws_config.lock().unwrap();
         let aws_config = aws_config
@@ -136,6 +132,7 @@ impl TranslationLoop {
             client: aws_sdk_translate::Client::new(aws_config),
             input_lang: input_lang.to_string(),
             output_lang: output_lang.to_string(),
+            tokenization_method,
             transcript_rx,
             translation_tx,
         }
@@ -167,40 +164,70 @@ impl TranslationLoop {
     }
 
     pub async fn run(mut self) -> Result<(), gst::ErrorMessage> {
-        while let Some(transcript_item) = self.transcript_rx.next().await {
-            let TranscriptItem {
-                pts,
-                duration,
-                content,
-                ..
-            } = transcript_item;
+        use TranslationTokenizationMethod as Tokenization;
 
-            let translated_text = if content.is_empty() {
-                content
-            } else {
-                self.client
-                    .translate_text()
-                    .set_source_language_code(Some(self.input_lang.clone()))
-                    .set_target_language_code(Some(self.output_lang.clone()))
-                    .set_text(Some(content))
-                    .send()
-                    .await
-                    .map_err(|err| {
-                        let err = format!("Failed to call translation service: {err}");
-                        gst::info!(CAT, imp: self.pad, "{err}");
-                        gst::error_msg!(gst::LibraryError::Failed, ["{err}"])
-                    })?
-                    .translated_text
-                    .unwrap_or_default()
+        while let Some(transcript_items) = self.transcript_rx.next().await {
+            if transcript_items.is_empty() {
+                continue;
+            }
+
+            let (ts_duration_list, content): (Vec<(gst::ClockTime, gst::ClockTime)>, String) =
+                transcript_items
+                    .into_iter()
+                    .map(|item| {
+                        (
+                            (item.pts, item.duration),
+                            match self.tokenization_method {
+                                Tokenization::None => item.content,
+                                Tokenization::SpanBased => {
+                                    format!("{SPAN_START}{}{SPAN_END}", item.content)
+                                }
+                            },
+                        )
+                    })
+                    .unzip();
+
+            gst::trace!(CAT, imp: self.pad, "Translating {content} with {ts_duration_list:?}");
+
+            let translated_text = self
+                .client
+                .translate_text()
+                .set_source_language_code(Some(self.input_lang.clone()))
+                .set_target_language_code(Some(self.output_lang.clone()))
+                .set_text(Some(content))
+                .send()
+                .await
+                .map_err(|err| {
+                    let err = format!("Failed to call translation service: {err}");
+                    gst::info!(CAT, imp: self.pad, "{err}");
+                    gst::error_msg!(gst::LibraryError::Failed, ["{err}"])
+                })?
+                .translated_text
+                .unwrap_or_default();
+
+            gst::trace!(CAT, imp: self.pad, "Got translation {translated_text}");
+
+            let translated_items = match self.tokenization_method {
+                Tokenization::None => {
+                    // Push translation as a single item
+                    let mut ts_duration_iter = ts_duration_list.into_iter().peekable();
+
+                    let &(first_pts, _) = ts_duration_iter.peek().expect("at least one item");
+                    let (last_pts, last_duration) =
+                        ts_duration_iter.last().expect("at least one item");
+
+                    vec![TranslatedItem {
+                        pts: first_pts,
+                        duration: last_pts.saturating_sub(first_pts) + last_duration,
+                        content: translated_text,
+                    }]
+                }
+                Tokenization::SpanBased => span_tokenize_items(&translated_text, ts_duration_list),
             };
 
-            let translated_item = TranslatedItem {
-                pts,
-                duration,
-                content: translated_text,
-            };
+            gst::trace!(CAT, imp: self.pad, "Sending {translated_items:?}");
 
-            if self.translation_tx.send(translated_item).await.is_err() {
+            if self.translation_tx.send(translated_items).await.is_err() {
                 gst::info!(
                     CAT,
                     imp: self.pad,
@@ -211,5 +238,376 @@ impl TranslationLoop {
         }
 
         Ok(())
+    }
+}
+
+/// Parses translated items from the `translation` `String` using `span` tags.
+///
+/// The `translation` is expected to have been returned by the `Translate` ws.
+/// It can contain id-less `<span>` and `</span>` tags, matching similar
+/// id-less tags from the content submitted to the `Translate` ws.
+///
+/// This parser accepts both serial `<span></span>` as well as nested
+/// `<span><span></span></span>`.
+///
+/// The parsed items are assigned the ts and duration from `ts_duration_list`
+/// in their order of appearance.
+///
+/// If more parsed items are found, the last item will concatenate the remaining items.
+///
+/// If less parsed items are found, the last item will be assign the remaining
+/// duration from the `ts_duration_list`.
+fn span_tokenize_items(
+    translation: &str,
+    ts_duration_list: impl IntoIterator<Item = (gst::ClockTime, gst::ClockTime)>,
+) -> Vec<TranslatedItem> {
+    const SPAN_START_LEN: usize = SPAN_START.len();
+    const SPAN_END_LEN: usize = SPAN_END.len();
+
+    let mut translated_items = vec![];
+
+    let mut ts_duration_iter = ts_duration_list.into_iter();
+
+    // Content for a translated item
+    let mut content = String::new();
+
+    // Alleged span chunk
+    let mut chunk = String::new();
+
+    for c in translation.chars() {
+        if content.is_empty() && c.is_whitespace() {
+            // ignore leading whitespaces
+            continue;
+        }
+
+        if chunk.is_empty() {
+            if c == '<' {
+                // Start an alleged span chunk
+                chunk.push(c);
+            } else {
+                content.push(c);
+            }
+
+            continue;
+        }
+
+        chunk.push(c);
+
+        match chunk.len() {
+            len if len < SPAN_START_LEN => continue,
+            SPAN_START_LEN => {
+                if chunk != SPAN_START {
+                    continue;
+                }
+                // Got a <span>
+            }
+            SPAN_END_LEN => {
+                if chunk != SPAN_END {
+                    continue;
+                }
+                // Got a </span>
+            }
+            _ => {
+                // Can no longer be a span
+                content.extend(chunk.drain(..));
+                continue;
+            }
+        }
+
+        // got a span
+        chunk.clear();
+
+        if content.is_empty() {
+            continue;
+        }
+
+        // Add pending content
+        // assign it the next pts and duration from the input list
+        if let Some((pts, duration)) = ts_duration_iter.next() {
+            translated_items.push(TranslatedItem {
+                pts,
+                duration,
+                content,
+            });
+
+            content = String::new();
+        } else if let Some(last_item) = translated_items.last_mut() {
+            // exhausted available pts and duration
+            // add content to last item
+            if !last_item.content.ends_with(' ') {
+                last_item.content.push(' ');
+            }
+            last_item.content.extend(content.drain(..));
+        }
+    }
+
+    content.extend(chunk.drain(..));
+
+    if !content.is_empty() {
+        // Add last content
+        if let Some((pts, mut duration)) = ts_duration_iter.next() {
+            if let Some((last_pts, last_duration)) = ts_duration_iter.last() {
+                // Fix remaining duration
+                duration = last_pts.saturating_sub(pts) + last_duration;
+            }
+
+            translated_items.push(TranslatedItem {
+                pts,
+                duration,
+                content,
+            });
+        } else if let Some(last_item) = translated_items.last_mut() {
+            // No more pts and duration in the index
+            // Add remaining content to the last item pushed
+            if !last_item.content.ends_with(' ') {
+                last_item.content.push(' ');
+            }
+            last_item.content.push_str(&content);
+        }
+    } else if let Some((last_pts, last_duration)) = ts_duration_iter.last() {
+        if let Some(last_item) = translated_items.last_mut() {
+            // No more content, but need to fix last item's duration
+            last_item.duration = last_pts.saturating_sub(last_item.pts) + last_duration;
+        }
+    }
+
+    translated_items
+}
+
+#[cfg(test)]
+mod tests {
+    use super::span_tokenize_items;
+    use gst::prelude::*;
+
+    #[test]
+    fn serial_spans() {
+        let input = "<span>first</span> <span>second</span> <span>third</span>";
+        let ts_duration_list = vec![
+            (0.seconds(), 1.seconds()),
+            (1.seconds(), 2.seconds()),
+            (4.seconds(), 3.seconds()),
+        ];
+
+        let mut items = span_tokenize_items(input, ts_duration_list).into_iter();
+
+        let first = items.next().unwrap();
+        assert_eq!(first.pts, 0.seconds());
+        assert_eq!(first.duration, 1.seconds());
+        assert_eq!(first.content, "first");
+
+        let second = items.next().unwrap();
+        assert_eq!(second.pts, 1.seconds());
+        assert_eq!(second.duration, 2.seconds());
+        assert_eq!(second.content, "second");
+
+        let third = items.next().unwrap();
+        assert_eq!(third.pts, 4.seconds());
+        assert_eq!(third.duration, 3.seconds());
+        assert_eq!(third.content, "third");
+
+        assert!(items.next().is_none());
+    }
+
+    #[test]
+    fn serial_and_nested_spans() {
+        let input = "<span>first</span> <span>second <span>third</span></span> <span>fourth</span>";
+        let ts_duration_list = vec![
+            (0.seconds(), 1.seconds()),
+            (1.seconds(), 2.seconds()),
+            (3.seconds(), 1.seconds()),
+            (4.seconds(), 2.seconds()),
+        ];
+
+        let mut items = span_tokenize_items(input, ts_duration_list).into_iter();
+
+        let first = items.next().unwrap();
+        assert_eq!(first.pts, 0.seconds());
+        assert_eq!(first.duration, 1.seconds());
+        assert_eq!(first.content, "first");
+
+        let second = items.next().unwrap();
+        assert_eq!(second.pts, 1.seconds());
+        assert_eq!(second.duration, 2.seconds());
+        assert_eq!(second.content, "second ");
+
+        let third = items.next().unwrap();
+        assert_eq!(third.pts, 3.seconds());
+        assert_eq!(third.duration, 1.seconds());
+        assert_eq!(third.content, "third");
+
+        let fourth = items.next().unwrap();
+        assert_eq!(fourth.pts, 4.seconds());
+        assert_eq!(fourth.duration, 2.seconds());
+        assert_eq!(fourth.content, "fourth");
+
+        assert!(items.next().is_none());
+    }
+
+    #[test]
+    fn nonspaned_serial_and_nested_spans() {
+        let input = "Initial <span>first</span> <span>second <span>third</span></span> <span>fourth</span> final";
+        let ts_duration_list = vec![
+            (0.seconds(), 1.seconds()),
+            (1.seconds(), 1.seconds()),
+            (2.seconds(), 1.seconds()),
+            (3.seconds(), 1.seconds()),
+            (4.seconds(), 1.seconds()),
+            (5.seconds(), 1.seconds()),
+        ];
+
+        let mut items = span_tokenize_items(input, ts_duration_list).into_iter();
+
+        let init = items.next().unwrap();
+        assert_eq!(init.pts, 0.seconds());
+        assert_eq!(init.duration, 1.seconds());
+        assert_eq!(init.content, "Initial ");
+
+        let first = items.next().unwrap();
+        assert_eq!(first.pts, 1.seconds());
+        assert_eq!(first.duration, 1.seconds());
+        assert_eq!(first.content, "first");
+
+        let second = items.next().unwrap();
+        assert_eq!(second.pts, 2.seconds());
+        assert_eq!(second.duration, 1.seconds());
+        assert_eq!(second.content, "second ");
+
+        let third = items.next().unwrap();
+        assert_eq!(third.pts, 3.seconds());
+        assert_eq!(third.duration, 1.seconds());
+        assert_eq!(third.content, "third");
+
+        let fourth = items.next().unwrap();
+        assert_eq!(fourth.pts, 4.seconds());
+        assert_eq!(fourth.duration, 1.seconds());
+        assert_eq!(fourth.content, "fourth");
+
+        let final_ = items.next().unwrap();
+        assert_eq!(final_.pts, 5.seconds());
+        assert_eq!(final_.duration, 1.seconds());
+        assert_eq!(final_.content, "final");
+
+        assert!(items.next().is_none());
+    }
+
+    #[test]
+    fn more_parsed_items() {
+        let input = "<span>first</span> <span>second</span> <span>third</span> <span>fourth</span>";
+        let ts_duration_list = vec![
+            (0.seconds(), 1.seconds()),
+            (1.seconds(), 2.seconds()),
+            (4.seconds(), 3.seconds()),
+        ];
+
+        let mut items = span_tokenize_items(input, ts_duration_list).into_iter();
+
+        let first = items.next().unwrap();
+        assert_eq!(first.pts, 0.seconds());
+        assert_eq!(first.duration, 1.seconds());
+        assert_eq!(first.content, "first");
+
+        let second = items.next().unwrap();
+        assert_eq!(second.pts, 1.seconds());
+        assert_eq!(second.duration, 2.seconds());
+        assert_eq!(second.content, "second");
+
+        let third = items.next().unwrap();
+        assert_eq!(third.pts, 4.seconds());
+        assert_eq!(third.duration, 3.seconds());
+        assert_eq!(third.content, "third fourth");
+
+        assert!(items.next().is_none());
+    }
+
+    #[test]
+    fn more_parsed_items_nonspan_final() {
+        let input = "<span>first</span> <span>second</span> <span>third</span> final";
+        let ts_duration_list = vec![
+            (0.seconds(), 1.seconds()),
+            (1.seconds(), 2.seconds()),
+            (4.seconds(), 3.seconds()),
+        ];
+
+        let mut items = span_tokenize_items(input, ts_duration_list).into_iter();
+
+        let first = items.next().unwrap();
+        assert_eq!(first.pts, 0.seconds());
+        assert_eq!(first.duration, 1.seconds());
+        assert_eq!(first.content, "first");
+
+        let second = items.next().unwrap();
+        assert_eq!(second.pts, 1.seconds());
+        assert_eq!(second.duration, 2.seconds());
+        assert_eq!(second.content, "second");
+
+        let third = items.next().unwrap();
+        assert_eq!(third.pts, 4.seconds());
+        assert_eq!(third.duration, 3.seconds());
+        assert_eq!(third.content, "third final");
+
+        assert!(items.next().is_none());
+    }
+
+    #[test]
+    fn less_parsed_items() {
+        let input = "<span>first</span> <span>second</span>";
+        let ts_duration_list = vec![
+            (0.seconds(), 1.seconds()),
+            (1.seconds(), 2.seconds()),
+            (4.seconds(), 3.seconds()),
+        ];
+
+        let mut items = span_tokenize_items(input, ts_duration_list).into_iter();
+
+        let first = items.next().unwrap();
+        assert_eq!(first.pts, 0.seconds());
+        assert_eq!(first.duration, 1.seconds());
+        assert_eq!(first.content, "first");
+
+        let second = items.next().unwrap();
+        assert_eq!(second.pts, 1.seconds());
+        assert_eq!(second.duration, 6.seconds());
+        assert_eq!(second.content, "second");
+
+        assert!(items.next().is_none());
+    }
+
+    #[test]
+    fn less_parsed_items_nonspan_final() {
+        let input = "<span>first</span> final";
+        let ts_duration_list = vec![
+            (0.seconds(), 1.seconds()),
+            (1.seconds(), 2.seconds()),
+            (4.seconds(), 3.seconds()),
+        ];
+
+        let mut items = span_tokenize_items(input, ts_duration_list).into_iter();
+
+        let first = items.next().unwrap();
+        assert_eq!(first.pts, 0.seconds());
+        assert_eq!(first.duration, 1.seconds());
+        assert_eq!(first.content, "first");
+
+        let final_ = items.next().unwrap();
+        assert_eq!(final_.pts, 1.seconds());
+        assert_eq!(final_.duration, 6.seconds());
+        assert_eq!(final_.content, "final");
+
+        assert!(items.next().is_none());
+    }
+
+    #[test]
+    fn utf8_input() {
+        let input = "caractères accentués";
+        let ts_duration_list = vec![(0.seconds(), 1.seconds())];
+
+        let mut items = span_tokenize_items(input, ts_duration_list).into_iter();
+
+        let first = items.next().unwrap();
+        assert_eq!(first.pts, 0.seconds());
+        assert_eq!(first.duration, 1.seconds());
+        assert_eq!(first.content, "caractères accentués");
+
+        assert!(items.next().is_none());
     }
 }

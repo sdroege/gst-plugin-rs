@@ -79,6 +79,21 @@ impl From<AwsTranscriberVocabularyFilterMethod> for VocabularyFilterMethod {
     }
 }
 
+#[derive(Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
+#[repr(u32)]
+#[enum_type(name = "GstAwsTranscriberTranslationTokenizationMethod")]
+#[non_exhaustive]
+pub enum TranslationTokenizationMethod {
+    #[default]
+    #[enum_value(name = "None: don't tokenize translations", nick = "none")]
+    None = 0,
+    #[enum_value(
+        name = "Span based: insert spans in the transript text and use the resulting spans in the translations to reproduce speech pacing.",
+        nick = "span-based"
+    )]
+    SpanBased = 1,
+}
+
 glib::wrapper! {
     pub struct Transcriber(ObjectSubclass<imp::Transcriber>) @extends gst::Element, gst::Object, @implements gst::ChildProxy;
 }
@@ -93,6 +108,8 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         AwsTranscriberResultStability::static_type()
             .mark_as_plugin_api(gst::PluginAPIFlags::empty());
         AwsTranscriberVocabularyFilterMethod::static_type()
+            .mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        TranslationTokenizationMethod::static_type()
             .mark_as_plugin_api(gst::PluginAPIFlags::empty());
         TranslationSrcPad::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }

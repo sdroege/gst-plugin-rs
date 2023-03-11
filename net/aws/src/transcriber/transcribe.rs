@@ -69,18 +69,6 @@ impl TranscriptItem {
             is_punctuation: matches!(item.r#type, Some(model::ItemType::Punctuation)),
         })
     }
-
-    #[inline]
-    pub fn push(&mut self, item: &TranscriptItem) {
-        self.duration += item.duration;
-
-        self.is_punctuation &= item.is_punctuation;
-        if !item.is_punctuation {
-            self.content.push(' ');
-        }
-
-        self.content.push_str(&item.content);
-    }
 }
 
 #[derive(Clone)]
