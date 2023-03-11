@@ -58,14 +58,6 @@ wildcards = "allow"
 name = "time"
 version = "0.1"
 
-# ignore duplicated rustc_version dependency because rav1e depends on an old version
-[[bans.skip]]
-name = "rustc_version"
-version = "0.3"
-[[bans.skip]]
-name = "semver"
-version = "0.11"
-
 # ignore duplicated crc dependency because ffv1 depends on an old version
 # https://github.com/rust-av/ffv1/issues/21
 [[bans.skip]]
