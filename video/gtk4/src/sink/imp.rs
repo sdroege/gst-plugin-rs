@@ -509,7 +509,7 @@ impl PaintableSink {
         gst::debug!(CAT, imp: self, "Initializing paintable");
 
         // The channel for the SinkEvents
-        let (sender, receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
+        let (sender, receiver) = glib::MainContext::channel(glib::Priority::DEFAULT);
         let self_ = self.to_owned();
 
         let paintable = utils::invoke_on_main_thread(move || {
