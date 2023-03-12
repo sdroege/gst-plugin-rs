@@ -463,12 +463,12 @@ impl AudioStream {
         let src = gst::ElementFactory::make("audiotestsrc")
             .property("is-live", true)
             .property_from_str("wave", &self.wave)
-            .property("fragment-duration", 2500.mseconds())
             .build()?;
         let enc = gst::ElementFactory::make("avenc_aac").build()?;
         let mux = gst::ElementFactory::make("cmafmux")
             .property_from_str("header-update-mode", "update")
             .property("write-mehd", true)
+            .property("fragment-duration", 2500.mseconds())
             .build()?;
         let appsink = gst_app::AppSink::builder().buffer_list(true).build();
 
