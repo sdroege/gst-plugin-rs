@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.10.4] - 2023-03-14
+### Fixed
+- fmp4mux: Return a running time from `AggregatorImpl::next_time()` to fix
+  waiting in live pipelines.
+- fmp4mux: Fix `hls_live` example to set properties on the right element.
+- uriplaylistbin: Reset element when switching back to `NULL` state.
+- livesync: Handle variable framerates correctly in fallback buffer duration
+  calculation.
+- meson: Fix GStreamer version feature detection.
+
+### Added
+- webrtc: New `webrtc` element.
+
 ## [0.10.3] - 2023-03-02
 ### Added
 - tracers: `queue_levels` tracer now also supports printing the `appsrc` levels.
@@ -95,7 +108,9 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.2...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.4...HEAD
+[0.10.4]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.3...0.10.4
+[0.10.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.2...0.10.3
 [0.10.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.1...0.10.2
 [0.10.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.0...0.10.1
 [0.10.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.9.0...0.10.0
