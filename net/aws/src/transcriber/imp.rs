@@ -459,7 +459,7 @@ impl ObjectImpl for Transcriber {
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecUInt::builder(TRANSCRIPT_LOOKAHEAD_PROPERTY)
-                    .nick("Transcript chunk")
+                    .nick("Transcript lookahead")
                     .blurb(concat!(
                         "Maximum duration in milliseconds of transcript to lookahead ",
                         "before sending to translation when no separator was encountered",
