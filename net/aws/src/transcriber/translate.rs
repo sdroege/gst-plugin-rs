@@ -16,7 +16,7 @@ use futures::prelude::*;
 
 use std::collections::VecDeque;
 
-use super::imp::TranslationSrcPad;
+use super::imp::TranslateSrcPad;
 use super::transcribe::TranscriptItem;
 use super::{TranslationTokenizationMethod, CAT};
 
@@ -41,11 +41,11 @@ impl From<&TranscriptItem> for TranslatedItem {
 }
 
 #[derive(Default)]
-pub struct TranslationQueue {
+pub struct TranslateQueue {
     items: VecDeque<TranscriptItem>,
 }
 
-impl TranslationQueue {
+impl TranslateQueue {
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
     }
@@ -102,39 +102,39 @@ impl TranslationQueue {
     }
 }
 
-pub struct TranslationLoop {
-    pad: glib::subclass::ObjectImplRef<TranslationSrcPad>,
+pub struct TranslateLoop {
+    pad: glib::subclass::ObjectImplRef<TranslateSrcPad>,
     client: aws_translate::Client,
     input_lang: String,
     output_lang: String,
     tokenization_method: TranslationTokenizationMethod,
     transcript_rx: mpsc::Receiver<Vec<TranscriptItem>>,
-    translation_tx: mpsc::Sender<Vec<TranslatedItem>>,
+    translate_tx: mpsc::Sender<Vec<TranslatedItem>>,
 }
 
-impl TranslationLoop {
+impl TranslateLoop {
     pub fn new(
         imp: &super::imp::Transcriber,
-        pad: &TranslationSrcPad,
+        pad: &TranslateSrcPad,
         input_lang: &str,
         output_lang: &str,
         tokenization_method: TranslationTokenizationMethod,
         transcript_rx: mpsc::Receiver<Vec<TranscriptItem>>,
-        translation_tx: mpsc::Sender<Vec<TranslatedItem>>,
+        translate_tx: mpsc::Sender<Vec<TranslatedItem>>,
     ) -> Self {
         let aws_config = imp.aws_config.lock().unwrap();
         let aws_config = aws_config
             .as_ref()
             .expect("aws_config must be initialized at this stage");
 
-        TranslationLoop {
+        TranslateLoop {
             pad: pad.ref_counted(),
             client: aws_sdk_translate::Client::new(aws_config),
             input_lang: input_lang.to_string(),
             output_lang: output_lang.to_string(),
             tokenization_method,
             transcript_rx,
-            translation_tx,
+            translate_tx,
         }
     }
 
@@ -227,7 +227,7 @@ impl TranslationLoop {
 
             gst::trace!(CAT, imp: self.pad, "Sending {translated_items:?}");
 
-            if self.translation_tx.send(translated_items).await.is_err() {
+            if self.translate_tx.send(translated_items).await.is_err() {
                 gst::info!(
                     CAT,
                     imp: self.pad,

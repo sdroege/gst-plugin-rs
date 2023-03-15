@@ -643,19 +643,19 @@
                         "caps": "text/x-raw:\n         format: utf8\n",
                         "direction": "src",
                         "presence": "always",
-                        "type": "GstTranslationSrcPad"
+                        "type": "GstTranslateSrcPad"
                     },
                     "src_%%u": {
                         "caps": "text/x-raw:\n         format: utf8\n",
                         "direction": "src",
                         "presence": "request",
-                        "type": "GstTranslationSrcPad"
+                        "type": "GstTranslateSrcPad"
                     },
-                    "translation_src_%%u": {
+                    "translate_src_%%u": {
                         "caps": "text/x-raw:\n         format: utf8\n",
                         "direction": "src",
                         "presence": "request",
-                        "type": "GstTranslationSrcPad"
+                        "type": "GstTranslateSrcPad"
                     }
                 },
                 "properties": {
@@ -773,20 +773,6 @@
                         "type": "guint",
                         "writable": true
                     },
-                    "transcript-lookahead": {
-                        "blurb": "Maximum duration in milliseconds of transcript to lookahead before sending to translation when no separator was encountered",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "5000",
-                        "max": "-1",
-                        "min": "0",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "guint",
-                        "writable": true
-                    },
                     "translate-latency": {
                         "blurb": "Amount of milliseconds to allow AWS translate (ignored if the input and output languages are the same)",
                         "conditionally-available": false,
@@ -794,6 +780,20 @@
                         "construct-only": false,
                         "controllable": false,
                         "default": "500",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "translate-lookahead": {
+                        "blurb": "Maximum duration in milliseconds of transcript to lookahead before sending to translation when no separator was encountered",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "5000",
                         "max": "-1",
                         "min": "0",
                         "mutable": "ready",
@@ -919,9 +919,9 @@
                     }
                 ]
             },
-            "GstTranslationSrcPad": {
+            "GstTranslateSrcPad": {
                 "hierarchy": [
-                    "GstTranslationSrcPad",
+                    "GstTranslateSrcPad",
                     "GstPad",
                     "GstObject",
                     "GInitiallyUnowned",
