@@ -15,7 +15,6 @@ use aws_sdk_transcribestreaming::model;
 
 use futures::channel::mpsc;
 use futures::prelude::*;
-use tokio::sync::broadcast;
 
 use std::sync::Arc;
 
@@ -23,7 +22,7 @@ use super::imp::{Settings, Transcriber};
 use super::CAT;
 
 #[derive(Debug)]
-pub struct TranscriptionSettings {
+pub struct TranscriberSettings {
     lang_code: model::LanguageCode,
     sample_rate: i32,
     vocabulary: Option<String>,
@@ -33,9 +32,9 @@ pub struct TranscriptionSettings {
     results_stability: model::PartialResultsStability,
 }
 
-impl TranscriptionSettings {
+impl TranscriberSettings {
     pub(super) fn from(settings: &Settings, sample_rate: i32) -> Self {
-        TranscriptionSettings {
+        TranscriberSettings {
             lang_code: settings.language_code.as_str().into(),
             sample_rate,
             vocabulary: settings.vocabulary.clone(),
@@ -83,43 +82,30 @@ impl From<Vec<TranscriptItem>> for TranscriptEvent {
     }
 }
 
-pub struct TranscriberLoop {
+pub struct TranscriberStream {
     imp: glib::subclass::ObjectImplRef<Transcriber>,
-    client: aws_transcribe::Client,
-    settings: Option<TranscriptionSettings>,
+    output: aws_transcribe::output::StartStreamTranscriptionOutput,
     lateness: gst::ClockTime,
-    buffer_rx: Option<mpsc::Receiver<gst::Buffer>>,
-    transcript_items_tx: broadcast::Sender<TranscriptEvent>,
     partial_index: usize,
 }
 
-impl TranscriberLoop {
-    pub fn new(
+impl TranscriberStream {
+    pub async fn try_new(
         imp: &Transcriber,
-        settings: TranscriptionSettings,
+        settings: TranscriberSettings,
         lateness: gst::ClockTime,
         buffer_rx: mpsc::Receiver<gst::Buffer>,
-        transcript_items_tx: broadcast::Sender<TranscriptEvent>,
-    ) -> Self {
-        let aws_config = imp.aws_config.lock().unwrap();
-        let aws_config = aws_config
-            .as_ref()
-            .expect("aws_config must be initialized at this stage");
+    ) -> Result<Self, gst::ErrorMessage> {
+        let client = {
+            let aws_config = imp.aws_config.lock().unwrap();
+            let aws_config = aws_config
+                .as_ref()
+                .expect("aws_config must be initialized at this stage");
+            aws_transcribe::Client::new(aws_config)
+        };
 
-        TranscriberLoop {
-            imp: imp.ref_counted(),
-            client: aws_transcribe::Client::new(aws_config),
-            settings: Some(settings),
-            lateness,
-            buffer_rx: Some(buffer_rx),
-            transcript_items_tx,
-            partial_index: 0,
-        }
-    }
-
-    pub async fn run(mut self) -> Result<(), gst::ErrorMessage> {
         // Stream the incoming buffers chunked
-        let chunk_stream = self.buffer_rx.take().unwrap().flat_map(move |buffer: gst::Buffer| {
+        let chunk_stream = buffer_rx.flat_map(move |buffer: gst::Buffer| {
             async_stream::stream! {
                 let data = buffer.map_readable().unwrap();
                 use aws_transcribe::{model::{AudioEvent, AudioStream}, types::Blob};
@@ -129,9 +115,7 @@ impl TranscriberLoop {
             }
         });
 
-        let settings = self.settings.take().unwrap();
-        let mut transcribe_builder = self
-            .client
+        let mut transcribe_builder = client
             .start_stream_transcription()
             .language_code(settings.lang_code)
             .media_sample_rate_hertz(settings.sample_rate)
@@ -147,26 +131,42 @@ impl TranscriberLoop {
                 .vocabulary_filter_method(settings.vocabulary_filter_method);
         }
 
-        let mut output = transcribe_builder
+        let output = transcribe_builder
             .audio_stream(chunk_stream.into())
             .send()
             .await
             .map_err(|err| {
                 let err = format!("Transcribe ws init error: {err}");
-                gst::error!(CAT, imp: self.imp, "{err}");
+                gst::error!(CAT, imp: imp, "{err}");
                 gst::error_msg!(gst::LibraryError::Init, ["{err}"])
             })?;
 
-        while let Some(event) = output
-            .transcript_result_stream
-            .recv()
-            .await
-            .map_err(|err| {
-                let err = format!("Transcribe ws stream error: {err}");
-                gst::error!(CAT, imp: self.imp, "{err}");
-                gst::error_msg!(gst::LibraryError::Failed, ["{err}"])
-            })?
-        {
+        Ok(TranscriberStream {
+            imp: imp.ref_counted(),
+            output,
+            lateness,
+            partial_index: 0,
+        })
+    }
+
+    pub async fn next(&mut self) -> Result<TranscriptEvent, gst::ErrorMessage> {
+        loop {
+            let event = self
+                .output
+                .transcript_result_stream
+                .recv()
+                .await
+                .map_err(|err| {
+                    let err = format!("Transcribe ws stream error: {err}");
+                    gst::error!(CAT, imp: self.imp, "{err}");
+                    gst::error_msg!(gst::LibraryError::Failed, ["{err}"])
+                })?;
+
+            let Some(event) = event else {
+                gst::debug!(CAT, imp: self.imp, "Transcriber loop sending EOS");
+                return Ok(TranscriptEvent::Eos);
+            };
+
             if let model::TranscriptResultStream::TranscriptEvent(transcript_evt) = event {
                 let mut ready_items = None;
 
@@ -188,10 +188,7 @@ impl TranscriberLoop {
                 }
 
                 if let Some(ready_items) = ready_items {
-                    if self.transcript_items_tx.send(ready_items.into()).is_err() {
-                        gst::debug!(CAT, imp: self.imp, "No transcript items receivers");
-                        break;
-                    }
+                    return Ok(ready_items.into());
                 }
             } else {
                 gst::warning!(
@@ -201,13 +198,6 @@ impl TranscriberLoop {
                 )
             }
         }
-
-        gst::debug!(CAT, imp: self.imp, "Transcriber loop sending EOS");
-        let _ = self.transcript_items_tx.send(TranscriptEvent::Eos);
-
-        gst::debug!(CAT, imp: self.imp, "Exiting transcriber loop");
-
-        Ok(())
     }
 
     /// Builds a list from the provided stable items.

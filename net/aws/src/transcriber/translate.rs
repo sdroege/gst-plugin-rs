@@ -14,7 +14,7 @@ use aws_sdk_translate as aws_translate;
 use futures::channel::mpsc;
 use futures::prelude::*;
 
-use std::collections::VecDeque;
+use std::sync::Arc;
 
 use super::imp::TranslateSrcPad;
 use super::transcribe::TranscriptItem;
@@ -40,77 +40,13 @@ impl From<&TranscriptItem> for TranslatedItem {
     }
 }
 
-#[derive(Default)]
-pub struct TranslateQueue {
-    items: VecDeque<TranscriptItem>,
-}
-
-impl TranslateQueue {
-    pub fn is_empty(&self) -> bool {
-        self.items.is_empty()
-    }
-
-    /// Pushes the provided item.
-    ///
-    /// Returns `Some(..)` if items are ready for translation.
-    pub fn push(&mut self, transcript_item: &TranscriptItem) -> Option<Vec<TranscriptItem>> {
-        // Keep track of the item individually so we can schedule translation precisely.
-        self.items.push_back(transcript_item.clone());
-
-        if transcript_item.is_punctuation {
-            // This makes it a good chunk for translation.
-            // Concatenate as a single item for translation
-
-            return Some(self.items.drain(..).collect());
-        }
-
-        // Regular case: no separator detected, don't push transcript items
-        // to translation now. They will be pushed either if a punctuation
-        // is found or of a `dequeue()` is requested.
-
-        None
-    }
-
-    /// Dequeues items from the specified `deadline` up to `lookahead`.
-    ///
-    /// Returns `Some(..)` if some items match the criteria.
-    pub fn dequeue(
-        &mut self,
-        latency: gst::ClockTime,
-        threshold: gst::ClockTime,
-        lookahead: gst::ClockTime,
-    ) -> Option<Vec<TranscriptItem>> {
-        let first_pts = self.items.front()?.pts;
-        if first_pts + latency > threshold {
-            // First item is too early to be sent to translation now
-            // we can wait for more items to accumulate.
-            return None;
-        }
-
-        // Can't wait any longer to send the first item to translation
-        // Try to get up to lookahead worth of items to improve translation accuracy
-        let limit = first_pts + lookahead;
-
-        let mut items_acc = vec![self.items.pop_front().unwrap()];
-        while let Some(item) = self.items.front() {
-            if item.pts > limit {
-                break;
-            }
-
-            items_acc.push(self.items.pop_front().unwrap());
-        }
-
-        Some(items_acc)
-    }
-}
-
 pub struct TranslateLoop {
     pad: glib::subclass::ObjectImplRef<TranslateSrcPad>,
     client: aws_translate::Client,
     input_lang: String,
     output_lang: String,
     tokenization_method: TranslationTokenizationMethod,
-    transcript_rx: mpsc::Receiver<Vec<TranscriptItem>>,
+    transcript_rx: mpsc::Receiver<Arc<Vec<TranscriptItem>>>,
     translate_tx: mpsc::Sender<Vec<TranslatedItem>>,
 }
 
@@ -121,7 +57,7 @@ impl TranslateLoop {
         input_lang: &str,
         output_lang: &str,
         tokenization_method: TranslationTokenizationMethod,
-        transcript_rx: mpsc::Receiver<Vec<TranscriptItem>>,
+        transcript_rx: mpsc::Receiver<Arc<Vec<TranscriptItem>>>,
         translate_tx: mpsc::Sender<Vec<TranslatedItem>>,
     ) -> Self {
         let aws_config = imp.aws_config.lock().unwrap();
@@ -175,12 +111,12 @@ impl TranslateLoop {
 
             let (ts_duration_list, content): (Vec<(gst::ClockTime, gst::ClockTime)>, String) =
                 transcript_items
-                    .into_iter()
+                    .iter()
                     .map(|item| {
                         (
                             (item.pts, item.duration),
                             match self.tokenization_method {
-                                Tokenization::None => item.content,
+                                Tokenization::None => item.content.clone(),
                                 Tokenization::SpanBased => {
                                     format!("{SPAN_START}{}{SPAN_END}", item.content)
                                 }
