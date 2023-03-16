@@ -793,7 +793,7 @@
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
-                        "default": "5000",
+                        "default": "3000",
                         "max": "-1",
                         "min": "0",
                         "mutable": "ready",

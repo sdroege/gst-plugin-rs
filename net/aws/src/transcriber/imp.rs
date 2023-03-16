@@ -60,7 +60,7 @@ const TRANSLATE_LATENCY_PROPERTY: &str = "translate-latency";
 pub const DEFAULT_TRANSLATE_LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(500);
 
 const TRANSLATE_LOOKAHEAD_PROPERTY: &str = "translate-lookahead";
-pub const DEFAULT_TRANSLATE_LOOKAHEAD: gst::ClockTime = gst::ClockTime::from_seconds(5);
+pub const DEFAULT_TRANSLATE_LOOKAHEAD: gst::ClockTime = gst::ClockTime::from_seconds(3);
 
 const DEFAULT_LATENESS: gst::ClockTime = gst::ClockTime::ZERO;
 pub const DEFAULT_INPUT_LANG_CODE: &str = "en-US";
@@ -115,12 +115,12 @@ impl Default for Settings {
     }
 }
 
-pub(super) struct State {
+struct State {
     buffer_tx: Option<mpsc::Sender<gst::Buffer>>,
     transcriber_loop_handle: Option<task::JoinHandle<Result<(), gst::ErrorMessage>>>,
     srcpads: BTreeSet<super::TranslateSrcPad>,
     pad_serial: u32,
-    pub seqnum: gst::Seqnum,
+    seqnum: gst::Seqnum,
 }
 
 impl Default for State {
@@ -1059,25 +1059,21 @@ impl TranslationPadTask {
         }
 
         if self.needs_translate && !self.translate_queue.is_empty() {
-            // Maximum delay for an item to be pushed to stream on time
+            // Latency budget for an item to be pushed to stream on time
             // Margin:
-            // - 1 * GRANULARITY: the time it will take before we can check this again,
-            //   without running late, in the case of a timeout.
-            // - 2 * GRANULARITY: extra margin to account for additional overheads.
-            //   FIXME explaing which ones.
-            let max_delay = self.our_latency.saturating_sub(3 * GRANULARITY);
+            // - 2 * GRANULARITY: to make sure we don't push items up to GRANULARITY late.
+            // - 1 * GRANULARITY: extra margin to account for additional overheads.
+            let latency = self.our_latency.saturating_sub(3 * GRANULARITY);
 
             // Estimated time of arrival for an item sent to translation now.
             // (in transcript item ts base)
             let translation_eta = now + self.translate_latency - start_time;
 
-            let deadline = translation_eta.saturating_sub(max_delay);
-
-            if let Some(ready_items) = self
-                .translate_queue
-                .dequeue(deadline, self.translate_lookahead)
+            if let Some(ready_items) =
+                self.translate_queue
+                    .dequeue(latency, translation_eta, self.translate_lookahead)
             {
-                gst::debug!(CAT, imp: self.pad, "Forcing  {} transcripts to translation", ready_items.len());
+                gst::debug!(CAT, imp: self.pad, "Forcing to translation: {ready_items:?}");
                 if self.send_for_translation(ready_items).await.is_err() {
                     return false;
                 }
@@ -1097,10 +1093,8 @@ impl TranslationPadTask {
             );
 
             // Margin:
-            // - 1 * GRANULARITY: the time it will take before we can check this again,
-            //   without running late, in the case of a timeout.
-            // - 2 * GRANULARITY: extra margin to account for additional overheads.
-            //   FIXME explaing which ones.
+            // - 2 * GRANULARITY: to make sure we don't push items up to GRANULARITY late.
+            // - 1 * GRANULARITY: extra margin to account for additional overheads.
             if item.pts + self.our_latency.saturating_sub(3 * GRANULARITY) < now - start_time {
                 /* Safe unwrap, we know we have an item */
                 let TranslatedItem {
@@ -1459,9 +1453,7 @@ impl TranslateSrcPad {
             &elem_settings.language_code,
             pad_settings.language_code.as_deref(),
         ) {
-            elem_settings.transcribe_latency
-                + elem_settings.translate_lookahead
-                + elem_settings.translate_latency
+            elem_settings.transcribe_latency + elem_settings.translate_latency
         } else {
             elem_settings.transcribe_latency
         }

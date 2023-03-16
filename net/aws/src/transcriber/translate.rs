@@ -76,18 +76,20 @@ impl TranslateQueue {
     /// Returns `Some(..)` if some items match the criteria.
     pub fn dequeue(
         &mut self,
-        deadline: gst::ClockTime,
+        latency: gst::ClockTime,
+        threshold: gst::ClockTime,
         lookahead: gst::ClockTime,
     ) -> Option<Vec<TranscriptItem>> {
-        if self.items.front()?.pts < deadline {
+        let first_pts = self.items.front()?.pts;
+        if first_pts + latency > threshold {
             // First item is too early to be sent to translation now
             // we can wait for more items to accumulate.
             return None;
         }
 
         // Can't wait any longer to send the first item to translation
-        // Try to get up to lookahead more items to improve translation accuracy
-        let limit = deadline + lookahead;
+        // Try to get up to lookahead worth of items to improve translation accuracy
+        let limit = first_pts + lookahead;
 
         let mut items_acc = vec![self.items.pop_front().unwrap()];
         while let Some(item) = self.items.front() {
