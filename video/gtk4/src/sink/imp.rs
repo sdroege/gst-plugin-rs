@@ -853,7 +853,7 @@ impl PaintableSink {
             let wrapped_context = match wrapped_context {
                 None => {
                     gst::error!(CAT, imp: self, "Failed to create wrapped GL context");
-                    return;
+                    return None;
                 }
                 Some(wrapped_context) => wrapped_context,
             };
