@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-dav1d"
-version = "0.10.4"
+version = "0.10.5"
 authors = ["Philippe Normand <philn@igalia.com>"]
 edition = "2021"
 rust-version = "1.63"
