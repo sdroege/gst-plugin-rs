@@ -133,6 +133,16 @@ version = "0.42"
 name = "socket2"
 version = "0.4"
 
+# Various crates depend on an older version of syn
+[[bans.skip]]
+name = "syn"
+version = "1.0"
+
+# Various crates depend on an older version of bitflags
+[[bans.skip]]
+name = "bitflags"
+version = "1.0"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
