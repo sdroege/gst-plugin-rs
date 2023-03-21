@@ -100,19 +100,16 @@ impl Signaller {
                                 );
                                 self.obj().emit_by_name::<()>(
                                     "session-requested",
-                                    &[&msg.sender_client_id, &msg.sender_client_id],
-                                );
-                                self.obj().emit_by_name::<()>(
-                                    "session-description",
                                     &[
                                         &msg.sender_client_id,
-                                        &gst_webrtc::WebRTCSessionDescription::new(
+                                        &msg.sender_client_id,
+                                        &Some(gst_webrtc::WebRTCSessionDescription::new(
                                             gst_webrtc::WebRTCSDPType::Offer,
                                             gst_sdp::SDPMessage::parse_buffer(
                                                 sdp_msg.sdp.as_bytes(),
                                             )
                                             .unwrap(),
-                                        ),
+                                        )),
                                     ],
                                 );
                             } else {
@@ -355,7 +352,7 @@ impl Signaller {
         self.obj().connect_closure(
             "consumer-added",
             false,
-            glib::closure!(|_webrtcsink: &gst::Element,
+            glib::closure!(|_signaller: &super::AwsKvsSignaller,
                             _consumer_identifier: &str,
                             webrtcbin: &gst::Element| {
                 webrtcbin.set_property(
@@ -560,7 +557,7 @@ impl SignallableImpl for Signaller {
         &self,
         session_id: &str,
         candidate: &str,
-        sdp_m_line_index: Option<u32>,
+        sdp_m_line_index: u32,
         _sdp_mid: Option<String>,
     ) {
         let state = self.state.lock().unwrap();
@@ -570,8 +567,8 @@ impl SignallableImpl for Signaller {
             message_payload: BASE64.encode(
                 &serde_json::to_string(&p::OutgoingIceCandidate {
                     candidate: candidate.to_string(),
-                    sdp_mid: sdp_m_line_index.unwrap().to_string(),
-                    sdp_m_line_index: sdp_m_line_index.unwrap(),
+                    sdp_mid: sdp_m_line_index.to_string(),
+                    sdp_m_line_index,
                 })
                 .unwrap()
                 .into_bytes(),

@@ -321,7 +321,7 @@ impl Signaller {
                             gst::info!(CAT, imp: self, "Session {session_id} ended");
 
                             self.obj()
-                                .emit_by_name::<()>("session-ended", &[&session_id]);
+                                .emit_by_name::<bool>("session-ended", &[&session_id]);
                         }
                         p::OutgoingMessage::Peer(p::PeerMessage {
                             session_id,
@@ -549,7 +549,7 @@ impl SignallableImpl for Signaller {
         &self,
         session_id: &str,
         candidate: &str,
-        sdp_m_line_index: Option<u32>,
+        sdp_m_line_index: u32,
         _sdp_mid: Option<String>,
     ) {
         gst::debug!(
@@ -562,7 +562,7 @@ impl SignallableImpl for Signaller {
             session_id: session_id.to_string(),
             peer_message: p::PeerMessageInner::Ice {
                 candidate: candidate.to_string(),
-                sdp_m_line_index: sdp_m_line_index.unwrap(),
+                sdp_m_line_index,
             },
         });
 

@@ -1890,7 +1890,7 @@ impl WebRTCSink {
         let settings = self.settings.lock().unwrap();
         settings
             .signaller
-            .add_ice(&session_id, &candidate, Some(sdp_m_line_index), None)
+            .add_ice(&session_id, &candidate, sdp_m_line_index, None)
     }
 
     /// Called by the signaller to add a new session

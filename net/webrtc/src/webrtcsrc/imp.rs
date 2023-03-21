@@ -865,12 +865,7 @@ impl WebRTCSrc {
                 return;
             }
         };
-        signaller.add_ice(
-            &session_id,
-            &candidate,
-            Some(sdp_m_line_index),
-            None::<String>,
-        );
+        signaller.add_ice(&session_id, &candidate, sdp_m_line_index, None::<String>);
     }
 
     /// Called by the signaller with an ice candidate
