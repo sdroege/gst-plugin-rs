@@ -261,7 +261,7 @@ fn create_navigation_event(sink: &super::WebRTCSink, msg: &str) {
 
 /// Wrapper around `gst::ElementFactory::make` with a better error
 /// message
-pub fn make_element(element: &str, name: Option<&str>) -> Result<gst::Element, Error> {
+fn make_element(element: &str, name: Option<&str>) -> Result<gst::Element, Error> {
     let mut builder = gst::ElementFactory::make(element);
     if let Some(name) = name {
         builder = builder.name(name);
@@ -655,7 +655,7 @@ impl VideoEncoder {
         }
     }
 
-    pub fn bitrate(&self) -> i32 {
+    fn bitrate(&self) -> i32 {
         match self.factory_name.as_str() {
             "vp8enc" | "vp9enc" => self.element.property::<i32>("target-bitrate"),
             "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" => {
@@ -668,7 +668,7 @@ impl VideoEncoder {
         }
     }
 
-    pub fn scale_height_round_2(&self, height: i32) -> i32 {
+    fn scale_height_round_2(&self, height: i32) -> i32 {
         let ratio = gst_video::calculate_display_ratio(
             self.video_info.width(),
             self.video_info.height(),
@@ -682,7 +682,7 @@ impl VideoEncoder {
         (width + 1) & !1
     }
 
-    pub fn set_bitrate(&mut self, element: &super::WebRTCSink, bitrate: i32) {
+    pub(crate) fn set_bitrate(&mut self, element: &super::WebRTCSink, bitrate: i32) {
         match self.factory_name.as_str() {
             "vp8enc" | "vp9enc" => self.element.set_property("target-bitrate", bitrate),
             "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" => self
@@ -1097,7 +1097,7 @@ impl InputStream {
 }
 
 impl NavigationEventHandler {
-    pub fn new(element: &super::WebRTCSink, webrtcbin: &gst::Element) -> Self {
+    fn new(element: &super::WebRTCSink, webrtcbin: &gst::Element) -> Self {
         gst::info!(CAT, "Creating navigation data channel");
         let channel = webrtcbin.emit_by_name::<WebRTCDataChannel>(
             "create-data-channel",
@@ -1511,19 +1511,8 @@ impl WebRTCSink {
         Ok(())
     }
 
-    /// Called by the signaller when it has encountered an error
-    pub fn handle_signalling_error(&self, element: &super::WebRTCSink, error: anyhow::Error) {
-        gst::error!(CAT, obj: element, "Signalling error: {:?}", error);
-
-        gst::element_error!(
-            element,
-            gst::StreamError::Failed,
-            ["Signalling error: {:?}", error]
-        );
-    }
-
     /// Called by the signaller when it wants to shut down gracefully
-    pub fn shutdown(&self, element: &super::WebRTCSink) {
+    fn shutdown(&self, element: &super::WebRTCSink) {
         gst::info!(CAT, "Shutting down");
         let _ = element.post_message(gst::message::Eos::builder().src(element).build());
     }
@@ -1894,7 +1883,7 @@ impl WebRTCSink {
     }
 
     /// Called by the signaller to add a new session
-    pub fn start_session(
+    fn start_session(
         &self,
         session_id: &str,
         peer_id: &str,
@@ -2373,7 +2362,7 @@ impl WebRTCSink {
     }
 
     /// Called by the signaller to remove a consumer
-    pub fn remove_session(
+    fn remove_session(
         &self,
         element: &super::WebRTCSink,
         session_id: &str,
@@ -2574,7 +2563,7 @@ impl WebRTCSink {
     }
 
     /// Called by the signaller with an ice candidate
-    pub fn handle_ice(
+    fn handle_ice(
         &self,
         session_id: &str,
         sdp_m_line_index: Option<u32>,
@@ -2601,7 +2590,7 @@ impl WebRTCSink {
         }
     }
 
-    pub fn handle_sdp_answer(
+    fn handle_sdp_answer(
         &self,
         element: &super::WebRTCSink,
         session_id: &str,
