@@ -40,7 +40,6 @@ impl Signaller {
 
 pub use iface::SignallableExt;
 pub use iface::SignallableImpl;
-pub use iface::SignallableImplExt;
 
 unsafe impl Send for Signallable {}
 unsafe impl Sync for Signallable {}

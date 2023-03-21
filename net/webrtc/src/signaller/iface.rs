@@ -303,101 +303,18 @@ where
 }
 
 pub trait SignallableImpl: object::ObjectImpl + 'static {
-    fn start(&self) {
-        SignallableImplExt::parent_vstart(self)
-    }
-    fn stop(&self) {
-        SignallableImplExt::parent_vstop(self)
-    }
-    fn send_sdp(&self, session_id: &str, sdp: &gst_webrtc::WebRTCSessionDescription) {
-        SignallableImplExt::parent_send_sdp(self, session_id, sdp)
-    }
+    fn start(&self) {}
+    fn stop(&self) {}
+    fn send_sdp(&self, _session_id: &str, _sdp: &gst_webrtc::WebRTCSessionDescription) {}
     fn add_ice(
         &self,
-        session_id: &str,
-        candidate: &str,
-        sdp_m_line_index: Option<u32>,
-        sdp_mid: Option<String>,
+        _session_id: &str,
+        _candidate: &str,
+        _sdp_m_line_index: Option<u32>,
+        _sdp_mid: Option<String>,
     ) {
-        SignallableImplExt::parent_add_ice(self, session_id, candidate, sdp_m_line_index, sdp_mid)
     }
-    fn end_session(&self, session_id: &str) {
-        SignallableImplExt::parent_end_session(self, session_id)
-    }
-}
-
-pub trait SignallableImplExt: types::ObjectSubclass {
-    fn parent_vstart(&self);
-    fn parent_vstop(&self);
-    fn parent_send_sdp(&self, session_id: &str, sdp: &gst_webrtc::WebRTCSessionDescription);
-    fn parent_add_ice(
-        &self,
-        session_id: &str,
-        candidate: &str,
-        sdp_m_line_index: Option<u32>,
-        sdp_mid: Option<String>,
-    );
-    fn parent_end_session(&self, session_id: &str);
-}
-
-type ClassType = *mut <super::Signallable as glib::object::ObjectType>::GlibClassType;
-impl<Obj: SignallableImpl> SignallableImplExt for Obj {
-    fn parent_vstart(&self) {
-        let obj = self.obj();
-        let obj = unsafe { obj.unsafe_cast_ref::<super::Signallable>() };
-        let vtable = unsafe {
-            &*(Self::type_data()
-                .as_ref()
-                .parent_interface::<super::Signallable>() as ClassType)
-        };
-        (vtable.start)(obj)
-    }
-    fn parent_vstop(&self) {
-        let obj = self.obj();
-        let obj = unsafe { obj.unsafe_cast_ref::<super::Signallable>() };
-        let vtable = unsafe {
-            &*(Self::type_data()
-                .as_ref()
-                .parent_interface::<super::Signallable>() as ClassType)
-        };
-        (vtable.stop)(obj)
-    }
-    fn parent_send_sdp(&self, session_id: &str, sdp: &gst_webrtc::WebRTCSessionDescription) {
-        let obj = self.obj();
-        let obj = unsafe { obj.unsafe_cast_ref::<super::Signallable>() };
-        let vtable = unsafe {
-            &*(Self::type_data()
-                .as_ref()
-                .parent_interface::<super::Signallable>() as ClassType)
-        };
-        (vtable.send_sdp)(obj, session_id, sdp)
-    }
-    fn parent_add_ice(
-        &self,
-        session_id: &str,
-        candidate: &str,
-        sdp_m_line_index: Option<u32>,
-        sdp_mid: Option<String>,
-    ) {
-        let obj = self.obj();
-        let obj = unsafe { obj.unsafe_cast_ref::<super::Signallable>() };
-        let vtable = unsafe {
-            &*(Self::type_data()
-                .as_ref()
-                .parent_interface::<super::Signallable>() as ClassType)
-        };
-        (vtable.add_ice)(obj, session_id, candidate, sdp_m_line_index, sdp_mid)
-    }
-    fn parent_end_session(&self, session_id: &str) {
-        let obj = self.obj();
-        let obj = unsafe { obj.unsafe_cast_ref::<super::Signallable>() };
-        let vtable = unsafe {
-            &*(Self::type_data()
-                .as_ref()
-                .parent_interface::<super::Signallable>() as ClassType)
-        };
-        (vtable.end_session)(obj, session_id)
-    }
+    fn end_session(&self, _session_id: &str) {}
 }
 
 pub trait SignallableExt: 'static {
