@@ -261,10 +261,6 @@ impl TranscriberBin {
         state.transcriber.set_property("latency", latency_ms);
 
         if !settings.passthrough {
-            let audio_tee_pad = state.audio_tee.request_pad_simple("src_%u").unwrap();
-            let transcription_sink_pad = state.transcription_bin.static_pad("sink").unwrap();
-            audio_tee_pad.link(&transcription_sink_pad).unwrap();
-
             state
                 .transcription_bin
                 .link_pads(Some("src"), &state.cccombiner, Some("caption"))
@@ -272,6 +268,10 @@ impl TranscriberBin {
 
             state.transcription_bin.set_locked_state(false);
             state.transcription_bin.sync_state_with_parent().unwrap();
+
+            let audio_tee_pad = state.audio_tee.request_pad_simple("src_%u").unwrap();
+            let transcription_sink_pad = state.transcription_bin.static_pad("sink").unwrap();
+            audio_tee_pad.link(&transcription_sink_pad).unwrap();
         }
 
         drop(settings);
