@@ -7,7 +7,7 @@ use gst::subclass::prelude::*;
 use gst_rtp::prelude::*;
 use gst_utils::StreamProducer;
 use gst_video::subclass::prelude::*;
-use gst_webrtc::WebRTCDataChannel;
+use gst_webrtc::{WebRTCDataChannel, WebRTCICETransportPolicy};
 
 use futures::prelude::*;
 
@@ -51,6 +51,7 @@ const DEFAULT_CONGESTION_CONTROL: WebRTCSinkCongestionControl =
 const DEFAULT_DO_FEC: bool = true;
 const DEFAULT_DO_RETRANSMISSION: bool = true;
 const DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION: bool = false;
+const DEFAULT_ICE_TRANSPORT_POLICY: WebRTCICETransportPolicy = WebRTCICETransportPolicy::All;
 const DEFAULT_START_BITRATE: u32 = 2048000;
 /* Start adding some FEC when the bitrate > 2Mbps as we found experimentally
  * that it is not worth it below that threshold */
@@ -76,6 +77,7 @@ struct Settings {
     do_retransmission: bool,
     enable_data_channel_navigation: bool,
     meta: Option<gst::Structure>,
+    ice_transport_policy: WebRTCICETransportPolicy,
 }
 
 /// Represents a codec we can offer
@@ -294,6 +296,7 @@ impl Default for Settings {
             do_retransmission: DEFAULT_DO_RETRANSMISSION,
             enable_data_channel_navigation: DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION,
             meta: None,
+            ice_transport_policy: DEFAULT_ICE_TRANSPORT_POLICY,
         }
     }
 }
@@ -1860,6 +1863,7 @@ impl WebRTCSink {
             })?;
 
         webrtcbin.set_property_from_str("bundle-policy", "max-bundle");
+        webrtcbin.set_property("ice-transport-policy", settings.ice_transport_policy);
 
         if let Some(stun_server) = settings.stun_server.as_ref() {
             webrtcbin.set_property("stun-server", stun_server);
@@ -3001,6 +3005,11 @@ impl ObjectImpl for WebRTCSink {
                     .nick("Meta")
                     .blurb("Free form metadata about the producer")
                     .build(),
+                glib::ParamSpecEnum::builder_with_default("ice-transport-policy", DEFAULT_ICE_TRANSPORT_POLICY)
+                    .nick("ICE Transport Policy")
+                    .blurb("The policy to apply for ICE transport")
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -3070,6 +3079,12 @@ impl ObjectImpl for WebRTCSink {
                     .get::<Option<gst::Structure>>()
                     .expect("type checked upstream")
             }
+            "ice-transport-policy" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.ice_transport_policy = value
+                    .get::<WebRTCICETransportPolicy>()
+                    .expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -3124,6 +3139,10 @@ impl ObjectImpl for WebRTCSink {
             "meta" => {
                 let settings = self.settings.lock().unwrap();
                 settings.meta.to_value()
+            }
+            "ice-transport-policy" => {
+                let settings = self.settings.lock().unwrap();
+                settings.ice_transport_policy.to_value()
             }
             _ => unimplemented!(),
         }
