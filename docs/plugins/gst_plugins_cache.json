@@ -5994,6 +5994,18 @@
                         "type": "gboolean",
                         "writable": true
                     },
+                    "ice-transport-policy": {
+                        "blurb": "The policy to apply for ICE transport",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "all (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstWebRTCICETransportPolicy",
+                        "writable": true
+                    },
                     "max-bitrate": {
                         "blurb": "Minimal bitrate to use (in bit/sec) when computing it through the congestion control algorithm",
                         "conditionally-available": false,
