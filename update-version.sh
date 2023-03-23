@@ -5,4 +5,5 @@ if [ -z "$1" ]
 fi
 
 find . -name "Cargo.toml" -exec sed -i "s/^version =.*/version = \"$1\"/" {} \;
+cargo update -w
 sed -i "s/version: .*/version: '$1',/" meson.build
