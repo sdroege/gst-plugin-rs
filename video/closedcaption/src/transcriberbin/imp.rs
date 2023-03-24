@@ -7,10 +7,11 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::ttutils::Cea608Mode;
-use anyhow::Error;
+use anyhow::{anyhow, Error};
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 use once_cell::sync::Lazy;
@@ -27,9 +28,41 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 const DEFAULT_PASSTHROUGH: bool = false;
 const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_seconds(4);
+const DEFAULT_TRANSLATE_LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(500);
 const DEFAULT_ACCUMULATE: gst::ClockTime = gst::ClockTime::ZERO;
 const DEFAULT_MODE: Cea608Mode = Cea608Mode::RollUp2;
 const DEFAULT_CAPTION_SOURCE: CaptionSource = CaptionSource::Both;
+
+const CEA608MUX_LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(100);
+
+/* One per language, including original */
+struct TranscriptionChannel {
+    queue: gst::Element,
+    textwrap: gst::Element,
+    tttocea608: gst::Element,
+    language: String,
+}
+
+impl TranscriptionChannel {
+    fn link_transcriber(&self, transcriber: &gst::Element) -> Result<(), Error> {
+        let transcriber_src_pad = match self.language.as_str() {
+            "transcript" => transcriber
+                .static_pad("src")
+                .ok_or(anyhow!("Failed to retrieve transcription source pad"))?,
+            language => {
+                let pad = transcriber
+                    .request_pad_simple("translate_src_%u")
+                    .ok_or(anyhow!("Failed to request translation source pad"))?;
+                pad.set_property("language-code", language);
+                pad
+            }
+        };
+
+        transcriber_src_pad.link(&self.queue.static_pad("sink").unwrap())?;
+
+        Ok(())
+    }
+}
 
 struct State {
     framerate: Option<gst::Fraction>,
@@ -40,11 +73,9 @@ struct State {
     audio_tee: gst::Element,
     transcriber_aconv: gst::Element,
     transcriber: gst::Element,
-    transcriber_queue: gst::Element,
     cccombiner: gst::Element,
     transcription_bin: gst::Bin,
-    textwrap: gst::Element,
-    tttocea608: gst::Element,
+    transcription_channels: HashMap<String, TranscriptionChannel>,
     cccapsfilter: gst::Element,
     transcription_valve: gst::Element,
 }
@@ -52,10 +83,12 @@ struct State {
 struct Settings {
     cc_caps: gst::Caps,
     latency: gst::ClockTime,
+    translate_latency: gst::ClockTime,
     passthrough: bool,
     accumulate_time: gst::ClockTime,
     mode: Cea608Mode,
     caption_source: CaptionSource,
+    translation_languages: Option<gst::Structure>,
 }
 
 impl Default for Settings {
@@ -66,9 +99,11 @@ impl Default for Settings {
                 .build(),
             passthrough: DEFAULT_PASSTHROUGH,
             latency: DEFAULT_LATENCY,
+            translate_latency: DEFAULT_TRANSLATE_LATENCY,
             accumulate_time: DEFAULT_ACCUMULATE,
             mode: DEFAULT_MODE,
             caption_source: DEFAULT_CAPTION_SOURCE,
+            translation_languages: None,
         }
     }
 }
@@ -95,15 +130,14 @@ impl TranscriberBin {
             .property("max-size-time", 5_000_000_000u64)
             .property_from_str("leaky", "downstream")
             .build()?;
+        let ccmux = gst::ElementFactory::make("cea608mux").build()?;
         let ccconverter = gst::ElementFactory::make("ccconverter").build()?;
 
         state.transcription_bin.add_many([
             &aqueue_transcription,
             &state.transcriber_aconv,
             &state.transcriber,
-            &state.transcriber_queue,
-            &state.textwrap,
-            &state.tttocea608,
+            &ccmux,
             &ccconverter,
             &state.cccapsfilter,
             &state.transcription_valve,
@@ -113,13 +147,57 @@ impl TranscriberBin {
             &aqueue_transcription,
             &state.transcriber_aconv,
             &state.transcriber,
-            &state.transcriber_queue,
-            &state.textwrap,
-            &state.tttocea608,
+        ])?;
+
+        gst::Element::link_many([
+            &ccmux,
             &ccconverter,
             &state.cccapsfilter,
             &state.transcription_valve,
         ])?;
+
+        for (padname, channel) in &state.transcription_channels {
+            let channel_capsfilter = gst::ElementFactory::make("capsfilter").build()?;
+            let channel_converter = gst::ElementFactory::make("ccconverter").build()?;
+
+            state.transcription_bin.add_many([
+                &channel.queue,
+                &channel.textwrap,
+                &channel.tttocea608,
+                &channel_capsfilter,
+                &channel_converter,
+            ])?;
+
+            channel.link_transcriber(&state.transcriber)?;
+
+            gst::Element::link_many([
+                &channel.queue,
+                &channel.textwrap,
+                &channel.tttocea608,
+                &channel_capsfilter,
+                &channel_converter,
+            ])?;
+            let ccmux_pad = ccmux
+                .request_pad_simple(padname)
+                .ok_or(anyhow!("Failed to request ccmux sink pad"))?;
+            channel_converter
+                .static_pad("src")
+                .unwrap()
+                .link(&ccmux_pad)?;
+
+            channel_capsfilter.set_property(
+                "caps",
+                gst::Caps::builder("closedcaption/x-cea-608")
+                    .field("format", "raw")
+                    .field("framerate", gst::Fraction::new(30000, 1001))
+                    .build(),
+            );
+            channel.queue.set_property("max-size-buffers", 0u32);
+            channel.queue.set_property("max-size-time", 0u64);
+            channel.textwrap.set_property("lines", 2u32);
+        }
+
+        ccmux.set_property("latency", CEA608MUX_LATENCY);
 
         let transcription_audio_sinkpad = gst::GhostPad::with_target(
             Some("sink"),
@@ -137,14 +215,7 @@ impl TranscriberBin {
             .transcription_bin
             .add_pad(&transcription_audio_srcpad)?;
 
-        state
-            .transcriber_queue
-            .set_property("max-size-buffers", 0u32);
-        state.transcriber_queue.set_property("max-size-time", 0u64);
-
         state.internal_bin.add(&state.transcription_bin)?;
-
-        state.textwrap.set_property("lines", 2u32);
 
         state.transcription_bin.set_locked_state(true);
 
@@ -249,7 +320,10 @@ impl TranscriberBin {
 
         state.cccapsfilter.set_property("caps", &cc_caps);
 
-        let max_size_time = settings.latency + settings.accumulate_time;
+        let max_size_time = settings.latency
+            + settings.translate_latency
+            + settings.accumulate_time
+            + CEA608MUX_LATENCY;
 
         for queue in [&state.audio_queue_passthrough, &state.video_queue] {
             queue.set_property("max-size-bytes", 0u32);
@@ -259,6 +333,11 @@ impl TranscriberBin {
 
         let latency_ms = settings.latency.mseconds() as u32;
         state.transcriber.set_property("latency", latency_ms);
+
+        let translate_latency_ms = settings.translate_latency.mseconds() as u32;
+        state
+            .transcriber
+            .set_property("translate-latency", translate_latency_ms);
 
         if !settings.passthrough {
             state
@@ -357,16 +436,18 @@ impl TranscriberBin {
 
         gst::debug!(CAT, imp: self, "setting CC mode {:?}", mode);
 
-        state.tttocea608.set_property("mode", mode);
+        for channel in state.transcription_channels.values() {
+            channel.tttocea608.set_property("mode", mode);
 
-        if mode.is_rollup() {
-            state.textwrap.set_property("accumulate-time", 0u64);
-        } else {
-            let accumulate_time = self.settings.lock().unwrap().accumulate_time;
+            if mode.is_rollup() {
+                channel.textwrap.set_property("accumulate-time", 0u64);
+            } else {
+                let accumulate_time = self.settings.lock().unwrap().accumulate_time;
 
-            state
-                .textwrap
-                .set_property("accumulate-time", accumulate_time);
+                channel
+                    .textwrap
+                    .set_property("accumulate-time", accumulate_time);
+            }
         }
     }
 
@@ -377,7 +458,7 @@ impl TranscriberBin {
         state: &mut State,
         old_transcriber: &gst::Element,
     ) -> Result<(), Error> {
-        gst::error!(
+        gst::debug!(
             CAT,
             imp: self,
             "Relinking transcriber, old: {:?}, new: {:?}",
@@ -386,17 +467,20 @@ impl TranscriberBin {
         );
 
         state.transcriber_aconv.unlink(old_transcriber);
-        old_transcriber.unlink(&state.transcriber_queue);
+
+        for channel in state.transcription_channels.values() {
+            old_transcriber.unlink(&channel.queue);
+        }
         state.transcription_bin.remove(old_transcriber).unwrap();
         old_transcriber.set_state(gst::State::Null).unwrap();
 
         state.transcription_bin.add(&state.transcriber)?;
         state.transcriber.sync_state_with_parent().unwrap();
-        gst::Element::link_many([
-            &state.transcriber_aconv,
-            &state.transcriber,
-            &state.transcriber_queue,
-        ])?;
+        state.transcriber_aconv.link(&state.transcriber)?;
+
+        for channel in state.transcription_channels.values() {
+            channel.link_transcriber(&state.transcriber)?;
+        }
 
         Ok(())
     }
@@ -415,18 +499,35 @@ impl TranscriberBin {
 
                 if ret {
                     let (_, mut min, _) = upstream_query.result();
-                    let received_framerate = {
+                    let (received_framerate, translating) = {
                         let state = self.state.lock().unwrap();
                         if let Some(state) = state.as_ref() {
-                            state.framerate.is_some()
+                            (
+                                state.framerate,
+                                state
+                                    .transcription_channels
+                                    .values()
+                                    .any(|c| c.language != "transcript"),
+                            )
                         } else {
-                            false
+                            (None, false)
                         }
                     };
 
                     let settings = self.settings.lock().unwrap();
-                    if settings.passthrough || !received_framerate {
-                        min += settings.latency + settings.accumulate_time;
+                    if settings.passthrough || received_framerate.is_none() {
+                        min += settings.latency + settings.accumulate_time + CEA608MUX_LATENCY;
+
+                        if translating {
+                            min += settings.translate_latency;
+                        }
+
+                        /* The sub latency introduced by cea608mux */
+                        if let Some(framerate) = received_framerate {
+                            min += gst::ClockTime::SECOND
+                                .mul_div_floor(framerate.denom() as u64, framerate.numer() as u64)
+                                .unwrap();
+                        }
                     } else if settings.mode.is_rollup() {
                         min += settings.accumulate_time;
                     }
@@ -451,23 +552,56 @@ impl TranscriberBin {
         let cccombiner = gst::ElementFactory::make("cccombiner")
             .name("cccombiner")
             .build()?;
-        let textwrap = gst::ElementFactory::make("textwrap")
-            .name("textwrap")
-            .build()?;
-        let tttocea608 = gst::ElementFactory::make("tttocea608")
-            .name("tttocea608")
-            .build()?;
         let transcriber_aconv = gst::ElementFactory::make("audioconvert").build()?;
         let transcriber = gst::ElementFactory::make("awstranscriber")
             .name("transcriber")
             .build()?;
-        let transcriber_queue = gst::ElementFactory::make("queue").build()?;
         let audio_queue_passthrough = gst::ElementFactory::make("queue").build()?;
         let video_queue = gst::ElementFactory::make("queue").build()?;
         let cccapsfilter = gst::ElementFactory::make("capsfilter").build()?;
         let transcription_valve = gst::ElementFactory::make("valve")
             .property_from_str("drop-mode", "transform-to-gap")
             .build()?;
+
+        let mut transcription_channels = HashMap::new();
+
+        if let Some(ref map) = self.settings.lock().unwrap().translation_languages {
+            for (key, value) in map.iter() {
+                let channel = key.to_lowercase();
+                if !["cc1", "cc3"].contains(&channel.as_str()) {
+                    anyhow::bail!("Unknown 608 channel {}, valid values are cc1, cc3", channel);
+                }
+                let language_code = value.get::<String>()?;
+
+                transcription_channels.insert(
+                    channel.to_owned(),
+                    TranscriptionChannel {
+                        queue: gst::ElementFactory::make("queue").build()?,
+                        textwrap: gst::ElementFactory::make("textwrap")
+                            .name(format!("textwrap_{channel}"))
+                            .build()?,
+                        tttocea608: gst::ElementFactory::make("tttocea608")
+                            .name(format!("tttocea608_{channel}"))
+                            .build()?,
+                        language: language_code,
+                    },
+                );
+            }
+        } else {
+            transcription_channels.insert(
+                "cc1".to_string(),
+                TranscriptionChannel {
+                    queue: gst::ElementFactory::make("queue").build()?,
+                    textwrap: gst::ElementFactory::make("textwrap")
+                        .name("textwrap".to_string())
+                        .build()?,
+                    tttocea608: gst::ElementFactory::make("tttocea608")
+                        .name("tttocea608".to_string())
+                        .build()?,
+                    language: "transcript".to_string(),
+                },
+            );
+        }
 
         Ok(State {
             framerate: None,
@@ -476,12 +610,10 @@ impl TranscriberBin {
             video_queue,
             transcriber_aconv,
             transcriber,
-            transcriber_queue,
             audio_tee,
             cccombiner,
             transcription_bin,
-            textwrap,
-            tttocea608,
+            transcription_channels,
             cccapsfilter,
             transcription_valve,
             tearing_down: false,
@@ -623,6 +755,17 @@ impl ObjectImpl for TranscriberBin {
                     of the other source will be dropped by transcriberbin")
                     .mutable_playing()
                     .build(),
+                glib::ParamSpecBoxed::builder::<gst::Structure>("translation-languages")
+                    .nick("Translation languages")
+                    .blurb("A map of CEA 608 channels to language codes, eg translation-languages=\"languages, CC1=fr, CC3=transcript\" will map the French translation to CC1 and the original transcript to CC3")
+                    .construct_only()
+                    .build(),
+                glib::ParamSpecUInt::builder("translate-latency")
+                    .nick("Translation Latency")
+                    .blurb("Amount of extra milliseconds to allow for translating")
+                    .default_value(DEFAULT_TRANSLATE_LATENCY.mseconds() as u32)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -703,6 +846,18 @@ impl ObjectImpl for TranscriberBin {
                     }
                 }
             }
+            "translation-languages" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.translation_languages = value
+                    .get::<Option<gst::Structure>>()
+                    .expect("type checked upstream")
+            }
+            "translate-latency" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.translate_latency = gst::ClockTime::from_mseconds(
+                    value.get::<u32>().expect("type checked upstream").into(),
+                );
+            }
             _ => unimplemented!(),
         }
     }
@@ -741,6 +896,14 @@ impl ObjectImpl for TranscriberBin {
             "caption-source" => {
                 let settings = self.settings.lock().unwrap();
                 settings.caption_source.to_value()
+            }
+            "translation-languages" => {
+                let settings = self.settings.lock().unwrap();
+                settings.translation_languages.to_value()
+            }
+            "translate-latency" => {
+                let settings = self.settings.lock().unwrap();
+                (settings.translate_latency.mseconds() as u32).to_value()
             }
             _ => unimplemented!(),
         }

@@ -4976,6 +4976,31 @@
                         "readable": true,
                         "type": "GstElement",
                         "writable": true
+                    },
+                    "translate-latency": {
+                        "blurb": "Amount of extra milliseconds to allow for translating",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "500",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "translation-languages": {
+                        "blurb": "A map of CEA 608 channels to language codes, eg translation-languages=\"languages, CC1=fr, CC3=transcript\" will map the French translation to CC1 and the original transcript to CC3",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": true,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": true
                     }
                 },
                 "rank": "none"
