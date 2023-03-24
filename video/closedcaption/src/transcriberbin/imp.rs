@@ -853,6 +853,7 @@ impl ElementImpl for TranscriberBin {
                         self.setup_transcription(state);
                     }
                 } else {
+                    drop(state);
                     gst::element_imp_error!(
                         self,
                         gst::StreamError::Failed,
