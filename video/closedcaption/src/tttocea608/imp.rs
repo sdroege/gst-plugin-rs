@@ -864,6 +864,8 @@ impl TtToCea608 {
                 );
                 s.fixate();
 
+                let caps = gst::Caps::builder_full().structure(s.to_owned()).build();
+
                 let mut state = self.state.lock().unwrap();
                 state.framerate = s.get::<gst::Fraction>("framerate").unwrap();
 
@@ -873,7 +875,7 @@ impl TtToCea608 {
 
                 gst::debug!(CAT, obj: pad, "Pushing caps {}", caps);
 
-                let new_event = gst::event::Caps::new(&downstream_caps);
+                let new_event = gst::event::Caps::new(&caps);
 
                 drop(state);
 
