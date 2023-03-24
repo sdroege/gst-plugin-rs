@@ -661,7 +661,16 @@ impl TtToCea608 {
                     }
 
                     if is_specialna(cc_data) {
-                        state.resume_caption_loading(self, mut_list);
+                        // adapted from libcaption's generation code:
+                        // specialna are treated as control charcters. Duplicated control charcters are discarded
+                        // So we write a resume after a specialna as a noop control command to break repetition detection
+                        match state.mode {
+                            Cea608Mode::RollUp2 => state.roll_up_2(self, mut_list),
+                            Cea608Mode::RollUp3 => state.roll_up_3(self, mut_list),
+                            Cea608Mode::RollUp4 => state.roll_up_4(self, mut_list),
+                            Cea608Mode::PopOn => state.resume_caption_loading(self, mut_list),
+                            Cea608Mode::PaintOn => state.resume_direct_captioning(self, mut_list),
+                        }
                     }
 
                     col += 1;
