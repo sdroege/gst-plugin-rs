@@ -105,12 +105,6 @@ version = "0.5"
 name = "idna"
 version = "0.2"
 
-# image depends on older gif
-# https://github.com/image-rs/image/pull/1826
-[[bans.skip]]
-name = "gif"
-version = "0.11"
-
 # field-offset and nix depend on an older memoffset
 # https://github.com/Diggsey/rust-field-offset/pull/23
 # https://github.com/nix-rust/nix/pull/1885
@@ -150,6 +144,12 @@ version = "1.0"
 [[bans.skip]]
 name = "bitflags"
 version = "1.0"
+
+# cargo-lock depends on an old version of the toml crate
+# https://github.com/rustsec/rustsec/pull/805
+[[bans.skip]]
+name = "toml"
+version = "0.5"
 
 [sources]
 unknown-registry = "deny"
