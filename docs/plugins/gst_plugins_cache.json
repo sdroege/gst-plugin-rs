@@ -5608,7 +5608,7 @@
                         "writable": true
                     },
                     "max-bitrate": {
-                        "blurb": "Maximal bitrate to use (in bit/sec) when computing it through the bandwidth estimation algorithm",
+                        "blurb": "Maximum bitrate to use (in bit/sec) when computing it through the bandwidth estimation algorithm",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -6007,7 +6007,7 @@
                         "writable": true
                     },
                     "max-bitrate": {
-                        "blurb": "Minimal bitrate to use (in bit/sec) when computing it through the congestion control algorithm",
+                        "blurb": "Maximum bitrate to use (in bit/sec) when computing it through the congestion control algorithm",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,

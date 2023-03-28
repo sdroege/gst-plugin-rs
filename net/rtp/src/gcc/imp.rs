@@ -1265,8 +1265,8 @@ impl ObjectImpl for BandwidthEstimator {
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecUInt::builder("max-bitrate")
-                    .nick("Maximal Bitrate")
-                    .blurb("Maximal bitrate to use (in bit/sec) when computing it through the bandwidth estimation algorithm")
+                    .nick("Maximum Bitrate")
+                    .blurb("Maximum bitrate to use (in bit/sec) when computing it through the bandwidth estimation algorithm")
                     .minimum(1)
                     .maximum(u32::MAX)
                     .default_value(DEFAULT_MAX_BITRATE)
