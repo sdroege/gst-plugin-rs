@@ -2963,8 +2963,8 @@ impl ObjectImpl for WebRTCSink {
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecUInt::builder("max-bitrate")
-                    .nick("Minimal Bitrate")
-                    .blurb("Minimal bitrate to use (in bit/sec) when computing it through the congestion control algorithm")
+                    .nick("Maximum Bitrate")
+                    .blurb("Maximum bitrate to use (in bit/sec) when computing it through the congestion control algorithm")
                     .minimum(1)
                     .maximum(u32::MAX)
                     .default_value(DEFAULT_MAX_BITRATE)
