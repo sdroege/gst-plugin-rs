@@ -1850,19 +1850,21 @@ impl WebRTCSink {
         let mut state = element.imp().state.lock().unwrap();
 
         if let Some(session) = state.sessions.get_mut(peer_id) {
+            let n_encoders = session.encoders.len();
+
             let fec_ratio = {
                 if settings.do_fec && bitrate > DO_FEC_THRESHOLD {
                     (bitrate as f64 - DO_FEC_THRESHOLD as f64)
-                        / (session.cc_info.max_bitrate as f64 - DO_FEC_THRESHOLD as f64)
+                        / ((session.cc_info.max_bitrate as usize * n_encoders) as f64
+                            - DO_FEC_THRESHOLD as f64)
                 } else {
                     0f64
                 }
             };
 
             let fec_percentage = fec_ratio * 50f64;
-            let encoders_bitrate = ((bitrate as f64)
-                / (1. + (fec_percentage / 100.))
-                / (session.encoders.len() as f64)) as i32;
+            let encoders_bitrate =
+                ((bitrate as f64) / (1. + (fec_percentage / 100.)) / (n_encoders as f64)) as i32;
 
             if let Some(rtpxsend) = session.rtprtxsend.as_ref() {
                 rtpxsend.set_property("stuffing-kbps", (bitrate as f64 / 1000.) as i32);
@@ -1872,7 +1874,7 @@ impl WebRTCSink {
                 encoder.set_bitrate(element, encoders_bitrate);
                 encoder
                     .transceiver
-                    .set_property("fec-percentage", fec_percentage as u32);
+                    .set_property("fec-percentage", (fec_percentage as u32).min(100));
             }
         }
     }
