@@ -18,7 +18,7 @@ use tokio::task;
 use aws_config::default_provider::credentials::DefaultCredentialsChain;
 use aws_credential_types::{provider::ProvideCredentials, Credentials};
 use aws_sdk_kinesisvideo::{
-    model::{ChannelProtocol, ChannelRole, SingleMasterChannelEndpointConfiguration},
+    types::{ChannelProtocol, ChannelRole, SingleMasterChannelEndpointConfiguration},
     Client,
 };
 use aws_sdk_kinesisvideosignaling::Client as SignalingClient;
