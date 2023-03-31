@@ -11,7 +11,7 @@ use gst::subclass::prelude::*;
 use gst::{glib, prelude::*};
 
 use aws_sdk_transcribestreaming as aws_transcribe;
-use aws_sdk_transcribestreaming::model;
+use aws_sdk_transcribestreaming::types;
 
 use futures::channel::mpsc;
 use futures::prelude::*;
@@ -23,13 +23,13 @@ use super::CAT;
 
 #[derive(Debug)]
 pub struct TranscriberSettings {
-    lang_code: model::LanguageCode,
+    lang_code: types::LanguageCode,
     sample_rate: i32,
     vocabulary: Option<String>,
     vocabulary_filter: Option<String>,
-    vocabulary_filter_method: model::VocabularyFilterMethod,
+    vocabulary_filter_method: types::VocabularyFilterMethod,
     session_id: Option<String>,
-    results_stability: model::PartialResultsStability,
+    results_stability: types::PartialResultsStability,
 }
 
 impl TranscriberSettings {
@@ -55,7 +55,7 @@ pub struct TranscriptItem {
 }
 
 impl TranscriptItem {
-    pub fn from(item: model::Item, lateness: gst::ClockTime) -> Option<TranscriptItem> {
+    pub fn from(item: types::Item, lateness: gst::ClockTime) -> Option<TranscriptItem> {
         let content = item.content?;
 
         let start_time = ((item.start_time * 1_000_000_000.0) as u64).nseconds() + lateness;
@@ -65,7 +65,7 @@ impl TranscriptItem {
             pts: start_time,
             duration: end_time - start_time,
             content,
-            is_punctuation: matches!(item.r#type, Some(model::ItemType::Punctuation)),
+            is_punctuation: matches!(item.r#type, Some(types::ItemType::Punctuation)),
         })
     }
 }
@@ -84,7 +84,7 @@ impl From<Vec<TranscriptItem>> for TranscriptEvent {
 
 pub struct TranscriberStream {
     imp: glib::subclass::ObjectImplRef<Transcriber>,
-    output: aws_transcribe::output::StartStreamTranscriptionOutput,
+    output: aws_transcribe::operation::start_stream_transcription::StartStreamTranscriptionOutput,
     lateness: gst::ClockTime,
     partial_index: usize,
 }
@@ -108,7 +108,7 @@ impl TranscriberStream {
         let chunk_stream = buffer_rx.flat_map(move |buffer: gst::Buffer| {
             async_stream::stream! {
                 let data = buffer.map_readable().unwrap();
-                use aws_transcribe::{model::{AudioEvent, AudioStream}, types::Blob};
+                use aws_transcribe::{types::{AudioEvent, AudioStream}, primitives::Blob};
                 for chunk in data.chunks(8192) {
                     yield Ok(AudioStream::AudioEvent(AudioEvent::builder().audio_chunk(Blob::new(chunk)).build()));
                 }
@@ -119,7 +119,7 @@ impl TranscriberStream {
             .start_stream_transcription()
             .language_code(settings.lang_code)
             .media_sample_rate_hertz(settings.sample_rate)
-            .media_encoding(model::MediaEncoding::Pcm)
+            .media_encoding(types::MediaEncoding::Pcm)
             .enable_partial_results_stabilization(true)
             .partial_results_stability(settings.results_stability)
             .set_vocabulary_name(settings.vocabulary)
@@ -167,7 +167,7 @@ impl TranscriberStream {
                 return Ok(TranscriptEvent::Eos);
             };
 
-            if let model::TranscriptResultStream::TranscriptEvent(transcript_evt) = event {
+            if let types::TranscriptResultStream::TranscriptEvent(transcript_evt) = event {
                 let mut ready_items = None;
 
                 if let Some(result) = transcript_evt
@@ -203,7 +203,7 @@ impl TranscriberStream {
     /// Builds a list from the provided stable items.
     fn get_ready_transcript_items(
         &mut self,
-        mut items: Vec<model::Item>,
+        mut items: Vec<types::Item>,
         partial: bool,
     ) -> Option<Vec<TranscriptItem>> {
         if items.len() <= self.partial_index {

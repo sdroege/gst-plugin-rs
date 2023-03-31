@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use aws_config::meta::region::RegionProviderChain;
-use aws_sdk_s3::{config::timeout::TimeoutConfig, Credentials, Region};
+use aws_sdk_s3::config::{timeout::TimeoutConfig, Credentials, Region};
 use aws_types::sdk_config::SdkConfig;
 
 use aws_smithy_http::byte_stream::{error::Error, ByteStream};

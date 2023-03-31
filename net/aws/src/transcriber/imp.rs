@@ -513,7 +513,7 @@ impl Transcriber {
             (Some(key), Some(secret_key)) => {
                 gst::debug!(CAT, imp: self, "Using settings credentials");
                 aws_config::ConfigLoader::default().credentials_provider(
-                    aws_transcribe::Credentials::new(
+                    aws_transcribe::config::Credentials::new(
                         key,
                         secret_key,
                         session_token,

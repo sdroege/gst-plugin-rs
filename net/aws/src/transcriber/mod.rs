@@ -23,7 +23,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-use aws_sdk_transcribestreaming::model::{PartialResultsStability, VocabularyFilterMethod};
+use aws_sdk_transcribestreaming::types::{PartialResultsStability, VocabularyFilterMethod};
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]
