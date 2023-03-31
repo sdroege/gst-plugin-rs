@@ -814,6 +814,7 @@ impl LiveSync {
                     imp: self,
                     "Can't query upstream latency -- assuming zero"
                 );
+                state.upstream_latency = Some(gst::ClockTime::ZERO);
             }
         }
 
