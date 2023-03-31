@@ -62,7 +62,7 @@ async fn test_s3() {
     );
 
     let region_provider = aws_config::meta::region::RegionProviderChain::first_try(
-        aws_sdk_s3::Region::new(region.clone()),
+        aws_sdk_s3::config::Region::new(region.clone()),
     )
     .or_default_provider();
 

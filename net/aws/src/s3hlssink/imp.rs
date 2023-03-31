@@ -19,10 +19,12 @@ use std::time::Duration;
 
 use gst::{element_imp_error, glib, prelude::*, subclass::prelude::*};
 
-use aws_sdk_s3::config;
-use aws_sdk_s3::model::ObjectCannedAcl;
-use aws_sdk_s3::types::ByteStream;
-use aws_sdk_s3::{config::retry::RetryConfig, Client, Credentials, Region};
+use aws_sdk_s3::{
+    config::{self, retry::RetryConfig, Credentials, Region},
+    primitives::ByteStream,
+    types::ObjectCannedAcl,
+    Client,
+};
 use aws_types::sdk_config::SdkConfig;
 
 use crate::s3utils;

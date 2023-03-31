@@ -6,7 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use aws_sdk_s3::Region;
+use aws_sdk_s3::config::Region;
 use percent_encoding::{percent_decode, percent_encode, AsciiSet, CONTROLS};
 use url::Url;
 

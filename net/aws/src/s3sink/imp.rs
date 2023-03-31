@@ -11,13 +11,18 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_base::subclass::prelude::*;
 
-use aws_sdk_s3::client::fluent_builders::{
-    AbortMultipartUpload, CompleteMultipartUpload, CreateMultipartUpload, UploadPart,
+use aws_sdk_s3::{
+    config::{self, retry::RetryConfig, Credentials, Region},
+    operation::{
+        abort_multipart_upload::builders::AbortMultipartUploadFluentBuilder,
+        complete_multipart_upload::builders::CompleteMultipartUploadFluentBuilder,
+        create_multipart_upload::builders::CreateMultipartUploadFluentBuilder,
+        upload_part::builders::UploadPartFluentBuilder,
+    },
+    primitives::ByteStream,
+    types::{CompletedMultipartUpload, CompletedPart},
+    Client,
 };
-use aws_sdk_s3::config;
-use aws_sdk_s3::model::{CompletedMultipartUpload, CompletedPart};
-use aws_sdk_s3::types::ByteStream;
-use aws_sdk_s3::{config::retry::RetryConfig, Client, Credentials, Region};
 
 use futures::future;
 use once_cell::sync::Lazy;
@@ -236,7 +241,7 @@ impl S3Sink {
     }
 
     fn flush_current_buffer(&self) -> Result<(), Option<gst::ErrorMessage>> {
-        let upload_part_req: UploadPart = self.create_upload_part_request()?;
+        let upload_part_req = self.create_upload_part_request()?;
 
         let mut state = self.state.lock().unwrap();
         let state = match *state {
@@ -275,7 +280,7 @@ impl S3Sink {
         Ok(())
     }
 
-    fn create_upload_part_request(&self) -> Result<UploadPart, gst::ErrorMessage> {
+    fn create_upload_part_request(&self) -> Result<UploadPartFluentBuilder, gst::ErrorMessage> {
         let url = self.url.lock().unwrap();
         let settings = self.settings.lock().unwrap();
         let mut state = self.state.lock().unwrap();
@@ -314,7 +319,7 @@ impl S3Sink {
     fn create_complete_multipart_upload_request(
         &self,
         started_state: &mut Started,
-    ) -> CompleteMultipartUpload {
+    ) -> CompleteMultipartUploadFluentBuilder {
         started_state
             .completed_parts
             .sort_by(|a, b| a.part_number.cmp(&b.part_number));
@@ -344,7 +349,7 @@ impl S3Sink {
         client: &Client,
         url: &GstS3Url,
         settings: &Settings,
-    ) -> CreateMultipartUpload {
+    ) -> CreateMultipartUploadFluentBuilder {
         let bucket = Some(url.bucket.clone());
         let key = Some(url.object.clone());
         let content_type = settings.content_type.clone();
@@ -365,7 +370,7 @@ impl S3Sink {
         client: &Client,
         url: &GstS3Url,
         started_state: &Started,
-    ) -> AbortMultipartUpload {
+    ) -> AbortMultipartUploadFluentBuilder {
         let bucket = Some(url.bucket.clone());
         let key = Some(url.object.clone());
 
