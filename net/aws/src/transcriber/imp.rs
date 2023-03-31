@@ -280,6 +280,16 @@ impl Transcriber {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::log!(CAT, obj: pad, "Handling {buffer:?}");
 
+        if buffer.pts().is_none() {
+            gst::element_imp_error!(
+                self,
+                gst::StreamError::Format,
+                ["Stream with timestamped buffers required"]
+            );
+
+            return Err(gst::FlowError::Error);
+        }
+
         self.ensure_connection().map_err(|err| {
             gst::element_imp_error!(self, gst::StreamError::Failed, ["Streaming failed: {err}"]);
             gst::FlowError::Error
@@ -1311,12 +1321,12 @@ impl TranslationPadTask {
         let (mut last_position, mut discont_pending) = {
             let mut state = self.pad.state.lock().unwrap();
 
-            let last_position = if let Some(pos) = state.out_segment.position() {
-                pos
-            } else {
+            if state.start_time.is_none() {
+                state.start_time = Some(start_time);
                 state.out_segment.set_position(start_time);
-                start_time
-            };
+            }
+
+            let last_position = state.out_segment.position().unwrap();
 
             (last_position, state.discont_pending)
         };
@@ -1517,6 +1527,7 @@ struct TranslationPadState {
     discont_pending: bool,
     out_segment: gst::FormattedSegment<gst::ClockTime>,
     task_abort_handle: Option<AbortHandle>,
+    start_time: Option<gst::ClockTime>,
 }
 
 impl Default for TranslationPadState {
@@ -1525,6 +1536,7 @@ impl Default for TranslationPadState {
             discont_pending: true,
             out_segment: Default::default(),
             task_abort_handle: None,
+            start_time: None,
         }
     }
 }
