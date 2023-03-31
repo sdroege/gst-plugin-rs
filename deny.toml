@@ -121,6 +121,30 @@ version = "0.13"
 [[bans.skip]]
 name = "windows-sys"
 version = "0.42"
+[[bans.skip]]
+name = "windows_x86_64_msvc"
+version = "0.42"
+[[bans.skip]]
+name = "windows_x86_64_gnullvm"
+version = "0.42"
+[[bans.skip]]
+name = "windows_x86_64_gnu"
+version = "0.42"
+[[bans.skip]]
+name = "windows_i686_msvc"
+version = "0.42"
+[[bans.skip]]
+name = "windows_i686_gnu"
+version = "0.42"
+[[bans.skip]]
+name = "windows_aarch64_msvc"
+version = "0.42"
+[[bans.skip]]
+name = "windows_aarch64_gnullvm"
+version = "0.42"
+[[bans.skip]]
+name = "windows-targets"
+version = "0.42"
 
 # Various crates depend on an older version of socket2
 [[bans.skip]]
@@ -142,6 +166,11 @@ version = "1.0"
 [[bans.skip]]
 name = "toml"
 version = "0.5"
+
+# Various crates depend on an older version of redox_syscall
+[[bans.skip]]
+name = "redox_syscall"
+version = "0.2"
 
 [sources]
 unknown-registry = "deny"
