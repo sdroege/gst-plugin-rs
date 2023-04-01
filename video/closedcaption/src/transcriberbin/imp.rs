@@ -130,7 +130,9 @@ impl TranscriberBin {
             .property("max-size-time", 5_000_000_000u64)
             .property_from_str("leaky", "downstream")
             .build()?;
-        let ccmux = gst::ElementFactory::make("cea608mux").build()?;
+        let ccmux = gst::ElementFactory::make("cea608mux")
+            .property_from_str("start-time-selection", "first")
+            .build()?;
         let ccconverter = gst::ElementFactory::make("ccconverter").build()?;
 
         state.transcription_bin.add_many([
