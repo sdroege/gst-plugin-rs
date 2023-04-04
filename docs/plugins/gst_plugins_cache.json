@@ -5020,9 +5020,9 @@
                         "blurb": "A map of CEA 608 channels to language codes, eg translation-languages=\"languages, CC1=fr, CC3=transcript\" will map the French translation to CC1 and the original transcript to CC3",
                         "conditionally-available": false,
                         "construct": false,
-                        "construct-only": true,
+                        "construct-only": false,
                         "controllable": false,
-                        "mutable": "null",
+                        "mutable": "playing",
                         "readable": true,
                         "type": "GstStructure",
                         "writable": true

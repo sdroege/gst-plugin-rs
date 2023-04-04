@@ -73,6 +73,7 @@ struct State {
     audio_tee: gst::Element,
     transcriber_aconv: gst::Element,
     transcriber: gst::Element,
+    ccmux: gst::Element,
     cccombiner: gst::Element,
     transcription_bin: gst::Bin,
     transcription_channels: HashMap<String, TranscriptionChannel>,
@@ -168,16 +169,13 @@ impl TranscriberBin {
             .property("max-size-time", 5_000_000_000u64)
             .property_from_str("leaky", "downstream")
             .build()?;
-        let ccmux = gst::ElementFactory::make("cea608mux")
-            .property_from_str("start-time-selection", "first")
-            .build()?;
         let ccconverter = gst::ElementFactory::make("ccconverter").build()?;
 
         state.transcription_bin.add_many([
             &aqueue_transcription,
             &state.transcriber_aconv,
             &state.transcriber,
-            &ccmux,
+            &state.ccmux,
             &ccconverter,
             &state.cccapsfilter,
             &state.transcription_valve,
@@ -190,7 +188,7 @@ impl TranscriberBin {
         ])?;
 
         gst::Element::link_many([
-            &ccmux,
+            &state.ccmux,
             &ccconverter,
             &state.cccapsfilter,
             &state.transcription_valve,
@@ -201,13 +199,14 @@ impl TranscriberBin {
 
             channel.link_transcriber(&state.transcriber)?;
 
-            let ccmux_pad = ccmux
+            let ccmux_pad = state
+                .ccmux
                 .request_pad_simple(padname)
                 .ok_or(anyhow!("Failed to request ccmux sink pad"))?;
             channel.bin.static_pad("src").unwrap().link(&ccmux_pad)?;
         }
 
-        ccmux.set_property("latency", CEA608MUX_LATENCY);
+        state.ccmux.set_property("latency", CEA608MUX_LATENCY);
 
         let transcription_audio_sinkpad = gst::GhostPad::with_target(
             Some("sink"),
@@ -358,9 +357,12 @@ impl TranscriberBin {
             state.transcription_bin.set_locked_state(false);
             state.transcription_bin.sync_state_with_parent().unwrap();
 
-            let audio_tee_pad = state.audio_tee.request_pad_simple("src_%u").unwrap();
             let transcription_sink_pad = state.transcription_bin.static_pad("sink").unwrap();
-            audio_tee_pad.link(&transcription_sink_pad).unwrap();
+            // Might be linked already if "translation-languages" is set
+            if transcription_sink_pad.peer().is_none() {
+                let audio_tee_pad = state.audio_tee.request_pad_simple("src_%u").unwrap();
+                audio_tee_pad.link(&transcription_sink_pad).unwrap();
+            }
         }
 
         drop(settings);
@@ -495,6 +497,139 @@ impl TranscriberBin {
         Ok(())
     }
 
+    fn reconfigure_channels(&self) -> Result<(), Error> {
+        let mut state = self.state.lock().unwrap();
+
+        if let Some(ref mut state) = state.as_mut() {
+            let settings = self.settings.lock().unwrap();
+
+            gst::debug!(
+                CAT,
+                imp: self,
+                "Updating transcription/translation channel configuration"
+            );
+
+            // Unlink sinkpad temporarily
+            let sinkpad = state.transcription_bin.static_pad("sink").unwrap();
+            let peer = sinkpad.peer();
+            if let Some(peer) = &peer {
+                gst::debug!(CAT, imp: self, "Unlinking {:?}", peer);
+                peer.unlink(&sinkpad)?;
+                state.audio_tee.release_request_pad(peer);
+            }
+
+            state.transcription_bin.set_locked_state(true);
+            state.transcription_bin.set_state(gst::State::Null).unwrap();
+
+            for channel in state.transcription_channels.values() {
+                let sinkpad = channel.bin.static_pad("sink").unwrap();
+                if let Some(peer) = sinkpad.peer() {
+                    peer.unlink(&sinkpad)?;
+                    if channel.language != "transcript" {
+                        state.transcriber.release_request_pad(&peer);
+                    }
+                }
+
+                let srcpad = channel.bin.static_pad("src").unwrap();
+                if let Some(peer) = srcpad.peer() {
+                    srcpad.unlink(&peer)?;
+                    state.ccmux.release_request_pad(&peer);
+                }
+
+                state.transcription_bin.remove(&channel.bin)?;
+            }
+
+            state.transcription_channels.clear();
+
+            if let Some(ref map) = settings.translation_languages {
+                for (key, value) in map.iter() {
+                    let channel = key.to_lowercase();
+                    if !["cc1", "cc3"].contains(&channel.as_str()) {
+                        anyhow::bail!("Unknown 608 channel {}, valid values are cc1, cc3", channel);
+                    }
+                    let language_code = value.get::<String>()?;
+
+                    state.transcription_channels.insert(
+                        channel.to_owned(),
+                        self.construct_channel_bin(&language_code).unwrap(),
+                    );
+                }
+            } else {
+                state.transcription_channels.insert(
+                    "cc1".to_string(),
+                    self.construct_channel_bin("transcript").unwrap(),
+                );
+            }
+
+            for (padname, channel) in &state.transcription_channels {
+                state.transcription_bin.add(&channel.bin)?;
+
+                channel.link_transcriber(&state.transcriber)?;
+
+                let ccmux_pad = state
+                    .ccmux
+                    .request_pad_simple(padname)
+                    .ok_or(anyhow!("Failed to request ccmux sink pad"))?;
+                channel.bin.static_pad("src").unwrap().link(&ccmux_pad)?;
+            }
+
+            drop(settings);
+            self.setup_cc_mode(state);
+
+            if !self.settings.lock().unwrap().passthrough {
+                gst::debug!(CAT, imp: self, "Syncing state with parent");
+
+                state.transcription_bin.set_locked_state(false);
+                state.transcription_bin.sync_state_with_parent()?;
+
+                let audio_tee_pad = state.audio_tee.request_pad_simple("src_%u").unwrap();
+                audio_tee_pad.link(&sinkpad)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn update_channels(&self) {
+        let s = self.state.lock().unwrap();
+
+        if let Some(state) = s.as_ref() {
+            gst::debug!(
+                CAT,
+                imp: self,
+                "Schedule transcription/translation channel update"
+            );
+
+            let sinkpad = state.transcription_bin.static_pad("sink").unwrap();
+            let imp_weak = self.downgrade();
+            drop(s);
+
+            let _ = sinkpad.add_probe(
+                gst::PadProbeType::IDLE
+                    | gst::PadProbeType::BUFFER
+                    | gst::PadProbeType::EVENT_DOWNSTREAM,
+                move |_pad, _info| {
+                    let imp = match imp_weak.upgrade() {
+                        None => return gst::PadProbeReturn::Remove,
+                        Some(imp) => imp,
+                    };
+
+                    if imp.reconfigure_channels().is_err() {
+                        gst::element_imp_error!(
+                            imp,
+                            gst::StreamError::Failed,
+                            ["Couldn't reconfigure channels"]
+                        );
+                    }
+
+                    gst::PadProbeReturn::Remove
+                },
+            );
+        } else {
+            gst::debug!(CAT, imp: self, "Transcriber is not configured yet");
+        }
+    }
+
     #[allow(clippy::single_match)]
     fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
@@ -572,6 +707,9 @@ impl TranscriberBin {
         let transcription_valve = gst::ElementFactory::make("valve")
             .property_from_str("drop-mode", "transform-to-gap")
             .build()?;
+        let ccmux = gst::ElementFactory::make("cea608mux")
+            .property_from_str("start-time-selection", "first")
+            .build()?;
 
         let mut transcription_channels = HashMap::new();
 
@@ -602,6 +740,7 @@ impl TranscriberBin {
             video_queue,
             transcriber_aconv,
             transcriber,
+            ccmux,
             audio_tee,
             cccombiner,
             transcription_bin,
@@ -750,7 +889,7 @@ impl ObjectImpl for TranscriberBin {
                 glib::ParamSpecBoxed::builder::<gst::Structure>("translation-languages")
                     .nick("Translation languages")
                     .blurb("A map of CEA 608 channels to language codes, eg translation-languages=\"languages, CC1=fr, CC3=transcript\" will map the French translation to CC1 and the original transcript to CC3")
-                    .construct_only()
+                    .mutable_playing()
                     .build(),
                 glib::ParamSpecUInt::builder("translate-latency")
                     .nick("Translation Latency")
@@ -842,7 +981,16 @@ impl ObjectImpl for TranscriberBin {
                 let mut settings = self.settings.lock().unwrap();
                 settings.translation_languages = value
                     .get::<Option<gst::Structure>>()
-                    .expect("type checked upstream")
+                    .expect("type checked upstream");
+                gst::debug!(
+                    CAT,
+                    imp: self,
+                    "Updated translation-languages {:?}",
+                    settings.translation_languages
+                );
+                drop(settings);
+
+                self.update_channels();
             }
             "translate-latency" => {
                 let mut settings = self.settings.lock().unwrap();
