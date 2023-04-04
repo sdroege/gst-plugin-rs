@@ -1178,8 +1178,13 @@ impl FallbackSrc {
 
         let dummy_srcpad = dummy_source.static_pad("src").unwrap();
         let dummy_sinkpad = switch.request_pad_simple("sink_%u").unwrap();
-        dummy_srcpad.link(&dummy_sinkpad).unwrap();
         dummy_sinkpad.set_property("priority", 2u32);
+        dummy_srcpad
+            .link_full(
+                &dummy_sinkpad,
+                gst::PadLinkCheck::all() & !gst::PadLinkCheck::CAPS,
+            )
+            .unwrap();
 
         switch.connect_notify(Some("active-pad"), move |switch, _pspec| {
             let element = match switch
@@ -1894,7 +1899,12 @@ impl FallbackSrc {
         // Link the new source pad in
         let switch_pad = switch.request_pad_simple("sink_%u").unwrap();
         switch_pad.set_property("priority", u32::from(fallback_source));
-        ghostpad.link(&switch_pad).unwrap();
+        ghostpad
+            .link_full(
+                &switch_pad,
+                gst::PadLinkCheck::all() & !gst::PadLinkCheck::CAPS,
+            )
+            .unwrap();
 
         pad.add_probe(gst::PadProbeType::EVENT_DOWNSTREAM, move |pad, info| {
             let element = match pad
