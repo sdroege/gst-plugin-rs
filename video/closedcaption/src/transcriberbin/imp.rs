@@ -37,7 +37,7 @@ const CEA608MUX_LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(100);
 
 /* One per language, including original */
 struct TranscriptionChannel {
-    queue: gst::Element,
+    bin: gst::Bin,
     textwrap: gst::Element,
     tttocea608: gst::Element,
     language: String,
@@ -58,7 +58,7 @@ impl TranscriptionChannel {
             }
         };
 
-        transcriber_src_pad.link(&self.queue.static_pad("sink").unwrap())?;
+        transcriber_src_pad.link(&self.bin.static_pad("sink").unwrap())?;
 
         Ok(())
     }
@@ -120,6 +120,44 @@ pub struct TranscriberBin {
 }
 
 impl TranscriberBin {
+    fn construct_channel_bin(&self, lang: &str) -> Result<TranscriptionChannel, Error> {
+        let bin = gst::Bin::new(None);
+        let queue = gst::ElementFactory::make("queue").build()?;
+        let textwrap = gst::ElementFactory::make("textwrap").build()?;
+        let tttocea608 = gst::ElementFactory::make("tttocea608").build()?;
+        let capsfilter = gst::ElementFactory::make("capsfilter").build()?;
+        let converter = gst::ElementFactory::make("ccconverter").build()?;
+
+        bin.add_many([&queue, &textwrap, &tttocea608, &capsfilter, &converter])?;
+        gst::Element::link_many([&queue, &textwrap, &tttocea608, &capsfilter, &converter])?;
+
+        queue.set_property("max-size-buffers", 0u32);
+        queue.set_property("max-size-time", 0u64);
+
+        textwrap.set_property("lines", 2u32);
+
+        capsfilter.set_property(
+            "caps",
+            gst::Caps::builder("closedcaption/x-cea-608")
+                .field("format", "raw")
+                .field("framerate", gst::Fraction::new(30000, 1001))
+                .build(),
+        );
+
+        let sinkpad = gst::GhostPad::with_target(Some("sink"), &queue.static_pad("sink").unwrap())?;
+        let srcpad =
+            gst::GhostPad::with_target(Some("src"), &converter.static_pad("src").unwrap())?;
+        bin.add_pad(&sinkpad)?;
+        bin.add_pad(&srcpad)?;
+
+        Ok(TranscriptionChannel {
+            bin,
+            textwrap,
+            tttocea608,
+            language: String::from(lang),
+        })
+    }
+
     fn construct_transcription_bin(&self, state: &mut State) -> Result<(), Error> {
         gst::debug!(CAT, imp: self, "Building transcription bin");
 
@@ -159,44 +197,14 @@ impl TranscriberBin {
         ])?;
 
         for (padname, channel) in &state.transcription_channels {
-            let channel_capsfilter = gst::ElementFactory::make("capsfilter").build()?;
-            let channel_converter = gst::ElementFactory::make("ccconverter").build()?;
-
-            state.transcription_bin.add_many([
-                &channel.queue,
-                &channel.textwrap,
-                &channel.tttocea608,
-                &channel_capsfilter,
-                &channel_converter,
-            ])?;
+            state.transcription_bin.add(&channel.bin)?;
 
             channel.link_transcriber(&state.transcriber)?;
 
-            gst::Element::link_many([
-                &channel.queue,
-                &channel.textwrap,
-                &channel.tttocea608,
-                &channel_capsfilter,
-                &channel_converter,
-            ])?;
             let ccmux_pad = ccmux
                 .request_pad_simple(padname)
                 .ok_or(anyhow!("Failed to request ccmux sink pad"))?;
-            channel_converter
-                .static_pad("src")
-                .unwrap()
-                .link(&ccmux_pad)?;
-
-            channel_capsfilter.set_property(
-                "caps",
-                gst::Caps::builder("closedcaption/x-cea-608")
-                    .field("format", "raw")
-                    .field("framerate", gst::Fraction::new(30000, 1001))
-                    .build(),
-            );
-            channel.queue.set_property("max-size-buffers", 0u32);
-            channel.queue.set_property("max-size-time", 0u64);
-            channel.textwrap.set_property("lines", 2u32);
+            channel.bin.static_pad("src").unwrap().link(&ccmux_pad)?;
         }
 
         ccmux.set_property("latency", CEA608MUX_LATENCY);
@@ -471,7 +479,7 @@ impl TranscriberBin {
         state.transcriber_aconv.unlink(old_transcriber);
 
         for channel in state.transcription_channels.values() {
-            old_transcriber.unlink(&channel.queue);
+            old_transcriber.unlink(&channel.bin);
         }
         state.transcription_bin.remove(old_transcriber).unwrap();
         old_transcriber.set_state(gst::State::Null).unwrap();
@@ -577,31 +585,13 @@ impl TranscriberBin {
 
                 transcription_channels.insert(
                     channel.to_owned(),
-                    TranscriptionChannel {
-                        queue: gst::ElementFactory::make("queue").build()?,
-                        textwrap: gst::ElementFactory::make("textwrap")
-                            .name(format!("textwrap_{channel}"))
-                            .build()?,
-                        tttocea608: gst::ElementFactory::make("tttocea608")
-                            .name(format!("tttocea608_{channel}"))
-                            .build()?,
-                        language: language_code,
-                    },
+                    self.construct_channel_bin(&language_code).unwrap(),
                 );
             }
         } else {
             transcription_channels.insert(
                 "cc1".to_string(),
-                TranscriptionChannel {
-                    queue: gst::ElementFactory::make("queue").build()?,
-                    textwrap: gst::ElementFactory::make("textwrap")
-                        .name("textwrap".to_string())
-                        .build()?,
-                    tttocea608: gst::ElementFactory::make("tttocea608")
-                        .name("tttocea608".to_string())
-                        .build()?,
-                    language: "transcript".to_string(),
-                },
+                self.construct_channel_bin("transcript").unwrap(),
             );
         }
 
