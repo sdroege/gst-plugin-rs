@@ -67,17 +67,17 @@ unsafe impl prelude::ObjectInterface for Signallable {
                     // return value (glib limitation).  Use a dummy bool for this purpose.
                     .return_type::<bool>()
                     .class_handler(|_token, args| {
-                        let arg0 = args[0usize]
+                        let this = args[0usize]
                             .get::<&super::Signallable>()
                             .unwrap_or_else(|e| {
                                 panic!("Wrong type for argument {}: {:?}", 0usize, e)
                             });
-                        let arg1 = args[1usize].get::<&str>().unwrap_or_else(|e| {
+                        let session_id = args[1usize].get::<&str>().unwrap_or_else(|e| {
                             panic!("Wrong type for argument {}: {:?}", 1usize, e)
                         });
-                        let vtable = arg0.interface::<super::Signallable>().unwrap();
+                        let vtable = this.interface::<super::Signallable>().unwrap();
                         let vtable = vtable.as_ref();
-                        (vtable.end_session)(arg0, arg1);
+                        (vtable.end_session)(this, session_id);
 
                         Some(false.into())
                     })
@@ -153,12 +153,12 @@ unsafe impl prelude::ObjectInterface for Signallable {
                 Signal::builder("request-meta")
                     .return_type::<Option<gst::Structure>>()
                     .class_handler(|_token, args| {
-                        let arg0 = args[0usize]
+                        let this = args[0usize]
                             .get::<&super::Signallable>()
                             .unwrap_or_else(|e| {
                                 panic!("Wrong type for argument {}: {:?}", 0usize, e)
                             });
-                        Some(Signallable::request_meta(arg0).to_value())
+                        Some(Signallable::request_meta(this).to_value())
                     })
                     .accumulator(move |_hint, output, input| {
                         *output = input.clone();
@@ -209,14 +209,14 @@ unsafe impl prelude::ObjectInterface for Signallable {
                     .run_last()
                     .return_type::<bool>()
                     .class_handler(|_token, args| {
-                        let arg0 = args[0usize]
+                        let this = args[0usize]
                             .get::<&super::Signallable>()
                             .unwrap_or_else(|e| {
                                 panic!("Wrong type for argument {}: {:?}", 0usize, e)
                             });
-                        let vtable = arg0.interface::<super::Signallable>().unwrap();
+                        let vtable = this.interface::<super::Signallable>().unwrap();
                         let vtable = vtable.as_ref();
-                        (vtable.start)(arg0);
+                        (vtable.start)(this);
 
                         Some(false.into())
                     })
@@ -235,14 +235,14 @@ unsafe impl prelude::ObjectInterface for Signallable {
                     .run_last()
                     .return_type::<bool>()
                     .class_handler(|_tokens, args| {
-                        let arg0 = args[0usize]
+                        let this = args[0usize]
                             .get::<&super::Signallable>()
                             .unwrap_or_else(|e| {
                                 panic!("Wrong type for argument {}: {:?}", 0usize, e)
                             });
-                        let vtable = arg0.interface::<super::Signallable>().unwrap();
+                        let vtable = this.interface::<super::Signallable>().unwrap();
                         let vtable = vtable.as_ref();
-                        (vtable.stop)(arg0);
+                        (vtable.stop)(this);
 
                         Some(false.into())
                     })
@@ -297,22 +297,22 @@ unsafe impl prelude::ObjectInterface for Signallable {
                     ])
                     .return_type::<bool>()
                     .class_handler(|_tokens, args| {
-                        let arg0 = args[0usize]
+                        let this = args[0usize]
                             .get::<&super::Signallable>()
                             .unwrap_or_else(|e| {
                                 panic!("Wrong type for argument {}: {:?}", 0usize, e)
                             });
-                        let arg1 = args[1usize].get::<&str>().unwrap_or_else(|e| {
+                        let session_id = args[1usize].get::<&str>().unwrap_or_else(|e| {
                             panic!("Wrong type for argument {}: {:?}", 1usize, e)
                         });
-                        let arg2 = args[2usize]
+                        let desc = args[2usize]
                             .get::<&gst_webrtc::WebRTCSessionDescription>()
                             .unwrap_or_else(|e| {
                                 panic!("Wrong type for argument {}: {:?}", 2usize, e)
                             });
-                        let vtable = arg0.interface::<super::Signallable>().unwrap();
+                        let vtable = this.interface::<super::Signallable>().unwrap();
                         let vtable = vtable.as_ref();
-                        (vtable.send_sdp)(arg0, arg1, arg2);
+                        (vtable.send_sdp)(this, session_id, desc);
 
                         Some(false.into())
                     })
@@ -340,26 +340,26 @@ unsafe impl prelude::ObjectInterface for Signallable {
                     ])
                     .return_type::<bool>()
                     .class_handler(|_tokens, args| {
-                        let arg0 = args[0usize]
+                        let this = args[0usize]
                             .get::<&super::Signallable>()
                             .unwrap_or_else(|e| {
                                 panic!("Wrong type for argument {}: {:?}", 0usize, e)
                             });
-                        let arg1 = args[1usize].get::<&str>().unwrap_or_else(|e| {
+                        let session_id = args[1usize].get::<&str>().unwrap_or_else(|e| {
                             panic!("Wrong type for argument {}: {:?}", 1usize, e)
                         });
-                        let arg2 = args[2usize].get::<&str>().unwrap_or_else(|e| {
+                        let candidate = args[2usize].get::<&str>().unwrap_or_else(|e| {
                             panic!("Wrong type for argument {}: {:?}", 2usize, e)
                         });
-                        let arg3 = args[3usize].get::<u32>().unwrap_or_else(|e| {
+                        let sdp_m_line_index = args[3usize].get::<u32>().unwrap_or_else(|e| {
                             panic!("Wrong type for argument {}: {:?}", 2usize, e)
                         });
-                        let arg4 = args[4usize].get::<Option<String>>().unwrap_or_else(|e| {
+                        let sdp_mid = args[4usize].get::<Option<String>>().unwrap_or_else(|e| {
                             panic!("Wrong type for argument {}: {:?}", 2usize, e)
                         });
-                        let vtable = arg0.interface::<super::Signallable>().unwrap();
+                        let vtable = this.interface::<super::Signallable>().unwrap();
                         let vtable = vtable.as_ref();
-                        (vtable.add_ice)(arg0, arg1, arg2, arg3, arg4);
+                        (vtable.add_ice)(this, session_id, candidate, sdp_m_line_index, sdp_mid);
 
                         Some(false.into())
                     })
