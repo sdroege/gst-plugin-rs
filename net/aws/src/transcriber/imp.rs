@@ -211,6 +211,8 @@ impl Transcriber {
             transcriber_loop_handle.abort();
         }
 
+        state.start_time = None;
+
         gst::debug!(CAT, imp: self, "Tasks Stopped");
     }
 
@@ -1488,6 +1490,7 @@ impl TranslationPadTask {
 
             self.seqnum = elem_state.seqnum;
             pad_state.out_segment = Default::default();
+            pad_state.start_time = None;
 
             events.push(
                 gst::event::StreamStart::builder("transcription")
