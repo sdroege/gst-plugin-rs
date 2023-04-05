@@ -1376,105 +1376,131 @@ impl Receiver {
                         } else {
                             4 * vframe.width() as usize
                         };
+
                         let dest_stride = vframe.plane_stride()[0] as usize;
                         let dest = vframe.plane_data_mut(0).unwrap();
                         let src_stride = video_frame.line_stride_or_data_size_in_bytes() as usize;
+                        let plane_size = video_frame.yres() as usize * src_stride;
+
+                        if src.len() < plane_size || src_stride < line_bytes {
+                            gst::error!(CAT, obj: element, "Video packet has wrong stride or size");
+                            gst::element_error!(
+                                element,
+                                gst::StreamError::Format,
+                                ["Video packet has wrong stride or size"]
+                            );
+                            return Err(gst::FlowError::Error);
+                        }
 
                         for (dest, src) in dest
                             .chunks_exact_mut(dest_stride)
                             .zip(src.chunks_exact(src_stride))
                         {
-                            dest.copy_from_slice(src);
-                            dest.copy_from_slice(&src[..line_bytes]);
+                            dest[..line_bytes].copy_from_slice(&src[..line_bytes]);
                         }
                     }
                     gst_video::VideoFormat::Nv12 => {
+                        let line_bytes = vframe.width() as usize;
+                        let src_stride = video_frame.line_stride_or_data_size_in_bytes() as usize;
+                        let plane_size = video_frame.yres() as usize * src_stride;
+
+                        if src.len() < 2 * plane_size || src_stride < line_bytes {
+                            gst::error!(CAT, obj: element, "Video packet has wrong stride or size");
+                            gst::element_error!(
+                                element,
+                                gst::StreamError::Format,
+                                ["Video packet has wrong stride or size"]
+                            );
+                            return Err(gst::FlowError::Error);
+                        }
+
                         // First plane
                         {
-                            let line_bytes = vframe.width() as usize;
                             let dest_stride = vframe.plane_stride()[0] as usize;
                             let dest = vframe.plane_data_mut(0).unwrap();
-                            let src_stride =
-                                video_frame.line_stride_or_data_size_in_bytes() as usize;
+                            let src = &src[..plane_size];
 
                             for (dest, src) in dest
                                 .chunks_exact_mut(dest_stride)
                                 .zip(src.chunks_exact(src_stride))
                             {
-                                dest.copy_from_slice(&src[..line_bytes]);
+                                dest[..line_bytes].copy_from_slice(&src[..line_bytes]);
                             }
                         }
 
                         // Second plane
                         {
-                            let line_bytes = vframe.width() as usize;
                             let dest_stride = vframe.plane_stride()[1] as usize;
                             let dest = vframe.plane_data_mut(1).unwrap();
-                            let src_stride =
-                                video_frame.line_stride_or_data_size_in_bytes() as usize;
-                            let src = &src[(video_frame.yres() as usize * src_stride)..];
+                            let src = &src[plane_size..];
 
                             for (dest, src) in dest
                                 .chunks_exact_mut(dest_stride)
                                 .zip(src.chunks_exact(src_stride))
                             {
-                                dest.copy_from_slice(&src[..line_bytes]);
+                                dest[..line_bytes].copy_from_slice(&src[..line_bytes]);
                             }
                         }
                     }
                     gst_video::VideoFormat::Yv12 | gst_video::VideoFormat::I420 => {
+                        let line_bytes = vframe.width() as usize;
+                        let line_bytes1 = (line_bytes + 1) / 2;
+
+                        let src_stride = video_frame.line_stride_or_data_size_in_bytes() as usize;
+                        let src_stride1 = (src_stride + 1) / 2;
+
+                        let plane_size = video_frame.yres() as usize * src_stride;
+                        let plane_size1 = ((video_frame.yres() as usize + 1) / 2) * src_stride1;
+
+                        if src.len() < plane_size + 2 * plane_size1 || src_stride < line_bytes {
+                            gst::error!(CAT, obj: element, "Video packet has wrong stride or size");
+                            gst::element_error!(
+                                element,
+                                gst::StreamError::Format,
+                                ["Video packet has wrong stride or size"]
+                            );
+                            return Err(gst::FlowError::Error);
+                        }
+
                         // First plane
                         {
-                            let line_bytes = vframe.width() as usize;
                             let dest_stride = vframe.plane_stride()[0] as usize;
                             let dest = vframe.plane_data_mut(0).unwrap();
-                            let src_stride =
-                                video_frame.line_stride_or_data_size_in_bytes() as usize;
+                            let src = &src[..plane_size];
 
                             for (dest, src) in dest
                                 .chunks_exact_mut(dest_stride)
                                 .zip(src.chunks_exact(src_stride))
                             {
-                                dest.copy_from_slice(&src[..line_bytes]);
+                                dest[..line_bytes].copy_from_slice(&src[..line_bytes]);
                             }
                         }
 
                         // Second plane
                         {
-                            let line_bytes = (vframe.width() as usize + 1) / 2;
                             let dest_stride = vframe.plane_stride()[1] as usize;
                             let dest = vframe.plane_data_mut(1).unwrap();
-                            let src_stride =
-                                video_frame.line_stride_or_data_size_in_bytes() as usize;
-                            let src_stride1 =
-                                video_frame.line_stride_or_data_size_in_bytes() as usize / 2;
-                            let src = &src[(video_frame.yres() as usize * src_stride)..];
+                            let src = &src[plane_size..][..plane_size1];
 
                             for (dest, src) in dest
                                 .chunks_exact_mut(dest_stride)
                                 .zip(src.chunks_exact(src_stride1))
                             {
-                                dest.copy_from_slice(&src[..line_bytes]);
+                                dest[..line_bytes1].copy_from_slice(&src[..line_bytes1]);
                             }
                         }
 
                         // Third plane
                         {
-                            let line_bytes = (vframe.width() as usize + 1) / 2;
                             let dest_stride = vframe.plane_stride()[2] as usize;
                             let dest = vframe.plane_data_mut(2).unwrap();
-                            let src_stride =
-                                video_frame.line_stride_or_data_size_in_bytes() as usize;
-                            let src_stride1 =
-                                video_frame.line_stride_or_data_size_in_bytes() as usize / 2;
-                            let src = &src[(video_frame.yres() as usize * src_stride
-                                + (video_frame.yres() as usize + 1) / 2 * src_stride1)..];
+                            let src = &src[plane_size + plane_size1..][..plane_size1];
 
                             for (dest, src) in dest
                                 .chunks_exact_mut(dest_stride)
                                 .zip(src.chunks_exact(src_stride1))
                             {
-                                dest.copy_from_slice(&src[..line_bytes]);
+                                dest[..line_bytes1].copy_from_slice(&src[..line_bytes1]);
                             }
                         }
                     }
