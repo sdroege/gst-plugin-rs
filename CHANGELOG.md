@@ -5,6 +5,22 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.10.6] - 2023-04-06
+### Fixed
+- webrtcsink: Fix max/min-bitrate property blurb/nick.
+- uriplaylistbin: Add missing queues to example.
+- tttocea608: Fix pushing of caps events that sometimes contained unfixed caps.
+- tttocea608: Fix disappearing text after special character in non-popon mode.
+- transcriberbin: Fix deadlock on construction.
+- transcriberbin: Fix initial bin setup.
+- fallbacksrc: Handle incompatible downstream caps without panicking.
+- ndisrc: Fix copying of raw video frames with different NDI/GStreamer strides.
+- livesync: Correctly assume zero upstream latency if latency query fails.
+
+### Added
+- webrtcsink: Add `ice-transport-policy` property that proxies the same
+  `webrtcbin` property.
+
 ## [0.10.5] - 2023-03-19
 ### Fixed
 - gtk4: Fix build with OpenGL support on macOS.
