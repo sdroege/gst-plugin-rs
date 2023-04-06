@@ -216,6 +216,8 @@ All the rust code in this repository is licensed under the
 Code in [gstwebrtc-api](gstwebrtc-api) is also licensed under the
 [Mozilla Public License Version 2.0].
 
+[Mozilla Public License Version 2.0]: http://opensource.org/licenses/MPL-2.0
+
 ## Using the AWS KVS signaller
 
 * Setup AWS Kinesis Video Streams
@@ -230,4 +232,31 @@ AWS_ACCESS_KEY_ID="XXX" AWS_SECRET_ACCESS_KEY="XXX" gst-launch-1.0 videotestsrc 
 
 * Connect a viewer @ <https://awslabs.github.io/amazon-kinesis-video-streams-webrtc-sdk-js/examples/index.html>
 
-[Mozilla Public License Version 2.0]: http://opensource.org/licenses/MPL-2.0
+## Using the WHIP Signaller
+
+Testing the whip signaller can be done by setting up janus and
+<https://github.com/meetecho/simple-whip-server/>.
+
+* Set up a [janus] instance with the videoroom plugin configured
+  to expose a room with ID 1234 (configuration in `janus.plugin.videoroom.jcfg`)
+
+* Open the <janus/share/janus/demos/videoroomtest.html> web page, click start
+  and join the room
+
+* Set up the [simple whip server] as explained in its README
+
+* Navigate to <http://localhost:7080/>, create an endpoint named room1234
+  pointing to the Janus room with ID 1234
+
+* Finally, send a stream to the endpoint with:
+
+``` shell
+gst-launch-1.0 -e uridecodebin uri=file:///home/meh/path/to/video/file ! \
+  videoconvert ! video/x-raw ! queue ! \
+  whipwebrtcsink name=ws signaller::whip-endpoint="http://127.0.0.1:7080/whip/endpoint/room1234"
+```
+
+You should see a second video displayed in the videoroomtest web page.
+
+[janus]: https://github.com/meetecho/janus-gateway
+[simple whip server]: https://github.com/meetecho/simple-whip-server/

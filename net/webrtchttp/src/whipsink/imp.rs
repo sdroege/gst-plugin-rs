@@ -366,6 +366,8 @@ impl ObjectImpl for WhipSink {
 
                         let self_ref = self_.ref_counted();
 
+                        gst::info!(CAT, imp: self_, "ICE gathering complete");
+
                         // With tokio's spawn one does not have to .await the
                         // returned JoinHandle to make the provided future start
                         // execution. It will start running in the background

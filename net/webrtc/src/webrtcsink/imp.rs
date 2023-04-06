@@ -23,6 +23,7 @@ use super::homegrown_cc::CongestionController;
 use super::{WebRTCSinkCongestionControl, WebRTCSinkError, WebRTCSinkMitigationMode};
 use crate::aws_kvs_signaller::AwsKvsSignaller;
 use crate::signaller::{prelude::*, Signallable, Signaller, WebRTCSignallerRole};
+use crate::whip_signaller::WhipSignaller;
 use crate::RUNTIME;
 use std::collections::{BTreeMap, HashSet};
 
@@ -3808,5 +3809,45 @@ impl BaseWebRTCSinkImpl for AwsKvsWebRTCSink {}
 impl ObjectSubclass for AwsKvsWebRTCSink {
     const NAME: &'static str = "GstAwsKvsWebRTCSink";
     type Type = super::AwsKvsWebRTCSink;
+    type ParentType = super::BaseWebRTCSink;
+}
+
+#[derive(Default)]
+pub struct WhipWebRTCSink {}
+
+impl ObjectImpl for WhipWebRTCSink {
+    fn constructed(&self) {
+        let element = self.obj();
+        let ws = element.upcast_ref::<super::BaseWebRTCSink>().imp();
+
+        let _ = ws.set_signaller(WhipSignaller::default().upcast());
+    }
+}
+
+impl GstObjectImpl for WhipWebRTCSink {}
+
+impl ElementImpl for WhipWebRTCSink {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "WhipWebRTCSink",
+                "Sink/Network/WebRTC",
+                "WebRTC sink with WHIP signaller",
+                "Taruntej Kanakamalla <taruntej@asymptotic.io>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+}
+
+impl BinImpl for WhipWebRTCSink {}
+
+impl BaseWebRTCSinkImpl for WhipWebRTCSink {}
+
+#[glib::object_subclass]
+impl ObjectSubclass for WhipWebRTCSink {
+    const NAME: &'static str = "GstWhipWebRTCSink";
+    type Type = super::WhipWebRTCSink;
     type ParentType = super::BaseWebRTCSink;
 }

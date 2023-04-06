@@ -19,6 +19,7 @@ pub mod signaller;
 pub mod utils;
 pub mod webrtcsink;
 pub mod webrtcsrc;
+mod whip_signaller;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     webrtcsink::register(plugin)?;
