@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-gtk4"
-version = "0.10.5"
+version = "0.10.6"
 authors = ["Bilal Elmoussaoui <bil.elmoussaoui@gmail.com>", "Jordan Petridis <jordan@centricular.com>", "Sebastian Dröge <sebastian@centricular.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
