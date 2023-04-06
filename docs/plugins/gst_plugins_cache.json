@@ -6235,6 +6235,17 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "signaller": {
+                        "blurb": "The Signallable object to use to handle WebRTC Signalling",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstRSWebRTCSignallableIface",
+                        "writable": false
+                    },
                     "start-bitrate": {
                         "blurb": "Start bitrate to use (in bit/sec)",
                         "conditionally-available": false,
@@ -6455,6 +6466,34 @@
                 ],
                 "kind": "interface",
                 "signals": {
+                    "consumer-added": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "GstElement"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "consumer-removed": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "GstElement"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
                     "error": {
                         "args": [
                             {
@@ -6466,6 +6505,7 @@
                         "when": "last"
                     },
                     "handle-ice": {
+                        "action": true,
                         "args": [
                             {
                                 "name": "arg0",
@@ -6520,7 +6560,44 @@
                         "return-type": "GstStructure",
                         "when": "last"
                     },
+                    "send-ice": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg2",
+                                "type": "guint"
+                            },
+                            {
+                                "name": "arg3",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "gboolean",
+                        "when": "last"
+                    },
+                    "send-session-description": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "GstWebRTCSessionDescription"
+                            }
+                        ],
+                        "return-type": "gboolean",
+                        "when": "last"
+                    },
                     "session-description": {
+                        "action": true,
                         "args": [
                             {
                                 "name": "arg0",
@@ -6535,13 +6612,14 @@
                         "when": "last"
                     },
                     "session-ended": {
+                        "action": true,
                         "args": [
                             {
                                 "name": "arg0",
                                 "type": "gchararray"
                             }
                         ],
-                        "return-type": "void",
+                        "return-type": "gboolean",
                         "when": "last"
                     },
                     "session-requested": {
@@ -6553,6 +6631,10 @@
                             {
                                 "name": "arg1",
                                 "type": "gchararray"
+                            },
+                            {
+                                "name": "arg2",
+                                "type": "GstWebRTCSessionDescription"
                             }
                         ],
                         "return-type": "void",
@@ -6572,16 +6654,22 @@
                         "return-type": "void",
                         "when": "last"
                     },
-                    "start": {
+                    "shutdown": {
                         "action": true,
                         "args": [],
                         "return-type": "void",
                         "when": "last"
                     },
+                    "start": {
+                        "action": true,
+                        "args": [],
+                        "return-type": "gboolean",
+                        "when": "last"
+                    },
                     "stop": {
                         "action": true,
                         "args": [],
-                        "return-type": "void",
+                        "return-type": "gboolean",
                         "when": "last"
                     }
                 }
