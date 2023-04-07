@@ -1415,7 +1415,6 @@ impl WebRTCSink {
                         gst::StreamError::Failed,
                         ["Signalling error: {}", error]
                     );
-                    false
                 })
             ),
 
