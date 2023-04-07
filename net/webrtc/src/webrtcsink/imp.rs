@@ -2973,6 +2973,7 @@ impl WebRTCSink {
                                         let signaller = settings.signaller.clone();
                                         drop(settings);
                                         if state.should_start_signaller(&element) {
+                                            state.signaller_state = SignallerState::Started;
                                             drop(state);
                                             signaller.start();
                                         }
@@ -3501,6 +3502,7 @@ impl ElementImpl for WebRTCSink {
                 drop(settings);
                 let mut state = self.state.lock().unwrap();
                 if state.should_start_signaller(&element) {
+                    state.signaller_state = SignallerState::Started;
                     drop(state);
                     signaller.start();
                 }
