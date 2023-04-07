@@ -1103,7 +1103,7 @@ impl ElementImpl for TranscriberBin {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let caps = gst::Caps::builder("video/x-raw").build();
+            let caps = gst::Caps::builder("video/x-raw").any_features().build();
             let video_src_pad_template = gst::PadTemplate::new(
                 "src_video",
                 gst::PadDirection::Src,

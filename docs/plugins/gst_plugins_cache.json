@@ -4899,7 +4899,7 @@
                         "presence": "always"
                     },
                     "sink_video": {
-                        "caps": "video/x-raw:\n",
+                        "caps": "video/x-raw(ANY):\n",
                         "direction": "sink",
                         "presence": "always"
                     },
@@ -4909,7 +4909,7 @@
                         "presence": "always"
                     },
                     "src_video": {
-                        "caps": "video/x-raw:\n",
+                        "caps": "video/x-raw(ANY):\n",
                         "direction": "src",
                         "presence": "always"
                     }
