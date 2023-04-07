@@ -74,6 +74,7 @@ struct State {
     transcriber_aconv: gst::Element,
     transcriber: gst::Element,
     ccmux: gst::Element,
+    ccmux_filter: gst::Element,
     cccombiner: gst::Element,
     transcription_bin: gst::Bin,
     transcription_channels: HashMap<String, TranscriptionChannel>,
@@ -176,6 +177,7 @@ impl TranscriberBin {
             &state.transcriber_aconv,
             &state.transcriber,
             &state.ccmux,
+            &state.ccmux_filter,
             &ccconverter,
             &state.cccapsfilter,
             &state.transcription_valve,
@@ -189,6 +191,7 @@ impl TranscriberBin {
 
         gst::Element::link_many([
             &state.ccmux,
+            &state.ccmux_filter,
             &ccconverter,
             &state.cccapsfilter,
             &state.transcription_valve,
@@ -328,6 +331,12 @@ impl TranscriberBin {
         s.set("framerate", state.framerate.unwrap());
 
         state.cccapsfilter.set_property("caps", &cc_caps);
+
+        let ccmux_caps = gst::Caps::builder("closedcaption/x-cea-608")
+            .field("framerate", state.framerate.unwrap())
+            .build();
+
+        state.ccmux_filter.set_property("caps", ccmux_caps);
 
         let max_size_time = settings.latency
             + settings.translate_latency
@@ -710,6 +719,7 @@ impl TranscriberBin {
         let ccmux = gst::ElementFactory::make("cea608mux")
             .property_from_str("start-time-selection", "first")
             .build()?;
+        let ccmux_filter = gst::ElementFactory::make("capsfilter").build()?;
 
         let mut transcription_channels = HashMap::new();
 
@@ -741,6 +751,7 @@ impl TranscriberBin {
             transcriber_aconv,
             transcriber,
             ccmux,
+            ccmux_filter,
             audio_tee,
             cccombiner,
             transcription_bin,
