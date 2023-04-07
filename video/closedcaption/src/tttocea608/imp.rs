@@ -1162,6 +1162,7 @@ impl ElementImpl for TtToCea608 {
             let caps = gst::Caps::builder("closedcaption/x-cea-608")
                 .field("format", "raw")
                 .field("framerate", framerate)
+                .field("field", 0)
                 .build();
 
             let src_pad_template = gst::PadTemplate::new(

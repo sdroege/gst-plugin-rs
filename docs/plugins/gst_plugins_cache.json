@@ -4890,7 +4890,7 @@
                         "presence": "always"
                     },
                     "src": {
-                        "caps": "closedcaption/x-cea-608:\n         format: raw\n      framerate: [ 1/2147483647, 2147483647/1 ]\n",
+                        "caps": "closedcaption/x-cea-608:\n         format: raw\n      framerate: [ 1/2147483647, 2147483647/1 ]\n          field: 0\n",
                         "direction": "src",
                         "presence": "always"
                     }
