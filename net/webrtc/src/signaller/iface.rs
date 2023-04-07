@@ -61,30 +61,8 @@ unsafe impl prelude::ObjectInterface for Signallable {
                  * Notify the underlying webrtc object that a session has ended.
                  */
                 Signal::builder("session-ended")
-                    .flags(glib::SignalFlags::ACTION)
                     .param_types([str::static_type()])
-                    // in order to have an accumulator actually do something, we need to have a
-                    // return value (glib limitation).  Use a dummy bool for this purpose.
                     .return_type::<bool>()
-                    .class_handler(|_token, args| {
-                        let this = args[0usize]
-                            .get::<&super::Signallable>()
-                            .unwrap_or_else(|e| {
-                                panic!("Wrong type for argument {}: {:?}", 0usize, e)
-                            });
-                        let session_id = args[1usize].get::<&str>().unwrap_or_else(|e| {
-                            panic!("Wrong type for argument {}: {:?}", 1usize, e)
-                        });
-                        let vtable = this.interface::<super::Signallable>().unwrap();
-                        let vtable = vtable.as_ref();
-                        (vtable.end_session)(this, session_id);
-
-                        Some(false.into())
-                    })
-                    .accumulator(move |_hint, output, input| {
-                        *output = input.clone();
-                        false
-                    })
                     .build(),
                 /**
                  * GstRSWebRTCSignallableIface::producer-added:
@@ -257,6 +235,37 @@ unsafe impl prelude::ObjectInterface for Signallable {
                  */
                 Signal::builder("shutdown")
                     .flags(glib::SignalFlags::ACTION)
+                    .build(),
+                /**
+                 * GstRSWebRTCSignallableIface::end-session:
+                 * @self: The object implementing #GstRSWebRTCSignallableIface
+                 * @session-id: The ID of the session that should be ended
+                 *
+                 * Notify the signaller that a session should be ended.
+                 */
+                Signal::builder("end-session")
+                    .run_last()
+                    .param_types([str::static_type()])
+                    .return_type::<bool>()
+                    .class_handler(|_tokens, args| {
+                        let this = args[0usize]
+                            .get::<&super::Signallable>()
+                            .unwrap_or_else(|e| {
+                                panic!("Wrong type for argument {}: {:?}", 0usize, e)
+                            });
+                        let session_id = args[1usize].get::<&str>().unwrap_or_else(|e| {
+                            panic!("Wrong type for argument {}: {:?}", 1usize, e)
+                        });
+                        let vtable = this.interface::<super::Signallable>().unwrap();
+                        let vtable = vtable.as_ref();
+                        (vtable.end_session)(this, session_id);
+
+                        Some(false.into())
+                    })
+                    .accumulator(move |_hint, output, input| {
+                        *output = input.clone();
+                        false
+                    })
                     .build(),
                 /**
                  * GstRSWebRTCSignallableIface::consumer-added:
@@ -497,6 +506,6 @@ impl<Obj: glib::IsA<super::Signallable>> SignallableExt for Obj {
     }
 
     fn end_session(&self, session_id: &str) {
-        self.emit_by_name::<bool>("session-ended", &[&session_id]);
+        self.emit_by_name::<bool>("end-session", &[&session_id]);
     }
 }

@@ -6494,6 +6494,16 @@
                         "return-type": "void",
                         "when": "last"
                     },
+                    "end-session": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "gboolean",
+                        "when": "last"
+                    },
                     "error": {
                         "args": [
                             {
