@@ -417,6 +417,7 @@ check commits:
     - when: 'always'
   script:
     - ci-fairy check-commits --textwidth 0 --no-signed-off-by
+    - ci/check-for-symlinks.sh
 
 clippy:
   extends: .img-stable
