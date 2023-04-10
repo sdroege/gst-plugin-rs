@@ -2186,6 +2186,18 @@
                     }
                 },
                 "properties": {
+                    "enable-program-date-time": {
+                        "blurb": "put EXT-X-PROGRAM-DATE-TIME tag in the playlist",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "i-frames-only": {
                         "blurb": "Each video segments is single iframe, So put EXT-X-I-FRAMES-ONLY tag in the playlist",
                         "conditionally-available": false,

@@ -8,6 +8,7 @@
 
 use crate::playlist::{Playlist, SegmentFormatter};
 use crate::HlsSink3PlaylistType;
+use chrono::{DateTime, Duration, Utc};
 use gio::prelude::*;
 use glib::subclass::prelude::*;
 use gst::glib::once_cell::sync::Lazy;
@@ -26,6 +27,7 @@ const DEFAULT_TARGET_DURATION: u32 = 15;
 const DEFAULT_PLAYLIST_LENGTH: u32 = 5;
 const DEFAULT_PLAYLIST_TYPE: HlsSink3PlaylistType = HlsSink3PlaylistType::Unspecified;
 const DEFAULT_I_FRAMES_ONLY_PLAYLIST: bool = false;
+const DEFAULT_PROGRAM_DATE_TIME_TAG: bool = false;
 const DEFAULT_SEND_KEYFRAME_REQUESTS: bool = true;
 
 const SIGNAL_GET_PLAYLIST_STREAM: &str = "get-playlist-stream";
@@ -68,6 +70,7 @@ struct Settings {
     max_num_segment_files: usize,
     target_duration: u32,
     i_frames_only: bool,
+    enable_program_date_time: bool,
     send_keyframe_requests: bool,
 
     splitmuxsink: gst::Element,
@@ -97,6 +100,7 @@ impl Default for Settings {
             target_duration: DEFAULT_TARGET_DURATION,
             send_keyframe_requests: DEFAULT_SEND_KEYFRAME_REQUESTS,
             i_frames_only: DEFAULT_I_FRAMES_ONLY_PLAYLIST,
+            enable_program_date_time: DEFAULT_PROGRAM_DATE_TIME_TAG,
 
             splitmuxsink,
             giostreamsink,
@@ -107,8 +111,11 @@ impl Default for Settings {
 }
 
 pub(crate) struct StartedState {
+    base_date_time: Option<DateTime<Utc>>,
+    base_running_time: Option<gst::ClockTime>,
     playlist: Playlist,
     fragment_opened_at: Option<gst::ClockTime>,
+    fragment_running_time: Option<gst::ClockTime>,
     current_segment_location: Option<String>,
     old_segment_locations: Vec<String>,
 }
@@ -120,9 +127,12 @@ impl StartedState {
         i_frames_only: bool,
     ) -> Self {
         Self {
+            base_date_time: None,
+            base_running_time: None,
             playlist: Playlist::new(target_duration, playlist_type, i_frames_only),
             current_segment_location: None,
             fragment_opened_at: None,
+            fragment_running_time: None,
             old_segment_locations: Vec::new(),
         }
     }
@@ -257,6 +267,7 @@ impl HlsSink3 {
     fn write_playlist(
         &self,
         fragment_closed_at: Option<gst::ClockTime>,
+        date_time: Option<DateTime<Utc>>,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst::info!(CAT, imp: self, "Preparing to write new playlist");
 
@@ -274,6 +285,7 @@ impl HlsSink3 {
             state.playlist.add_segment(
                 segment_filename.clone(),
                 state.fragment_duration_since(fragment_closed),
+                date_time,
             );
             state.old_segment_locations.push(segment_filename);
         }
@@ -362,7 +374,7 @@ impl HlsSink3 {
 
     fn write_final_playlist(&self) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst::debug!(CAT, imp: self, "Preparing to write final playlist");
-        self.write_playlist(None)
+        self.write_playlist(None, None)
     }
 
     fn stop(&self) {
@@ -416,8 +428,66 @@ impl BinImpl for HlsSink3 {
                     }
                     "splitmuxsink-fragment-closed" => {
                         let s = msg.structure().unwrap();
+
+                        let settings = self.settings.lock().unwrap();
+                        let mut state_guard = self.state.lock().unwrap();
+                        let state = match &mut *state_guard {
+                            State::Stopped => {
+                                gst::element_error!(
+                                    self.obj(),
+                                    gst::StreamError::Failed,
+                                    ("Framented closed in wrong state"),
+                                    ["Fragment closed but element is in stopped state"]
+                                );
+                                return;
+                            }
+                            State::Started(state) => state,
+                        };
+
+                        if state.base_running_time.is_none() && state.fragment_running_time.is_some() {
+                            state.base_running_time = state.fragment_running_time;
+                        }
+                        // Calculate the mapping from running time to UTC
+                        if state.base_date_time.is_none() && state.fragment_running_time.is_some() {
+                            let fragment_pts = state.fragment_running_time.unwrap();
+                            let now_utc = Utc::now();
+                            let now_gst = settings.giostreamsink.clock().unwrap().time().unwrap();
+                            let pts_clock_time =
+                                fragment_pts + settings.giostreamsink.base_time().unwrap();
+
+                            let diff = now_gst.checked_sub(pts_clock_time).unwrap();
+                            let pts_utc = now_utc
+                                .checked_sub_signed(Duration::nanoseconds(diff.nseconds() as i64))
+                                .unwrap();
+
+                            state.base_date_time = Some(pts_utc);
+                        }
+
+                        let fragment_date_time = if settings.enable_program_date_time
+                            && state.base_running_time.is_some()
+                            && state.fragment_running_time.is_some()
+                        {
+                            // Add the diff of running time to UTC time
+                            // date_time = first_segment_utc + (current_seg_running_time - first_seg_running_time)
+                            state.base_date_time.unwrap().checked_add_signed(
+                                Duration::nanoseconds(
+                                    state
+                                        .fragment_running_time
+                                        .opt_checked_sub(state.base_running_time)
+                                        .unwrap()
+                                        .unwrap()
+                                        .nseconds() as i64,
+                                ),
+                            )
+                        } else {
+                            None
+                        };
+                        drop(state_guard);
+                        drop(settings);
+
                         if let Ok(fragment_closed_at) = s.get::<gst::ClockTime>("running-time") {
-                            let _ = self.write_playlist(Some(fragment_closed_at));
+                            let _ =
+                                self.write_playlist(Some(fragment_closed_at), fragment_date_time);
                         }
                     }
                     _ => {}
@@ -468,6 +538,11 @@ impl ObjectImpl for HlsSink3 {
                     .nick("I-Frames only playlist")
                     .blurb("Each video segments is single iframe, So put EXT-X-I-FRAMES-ONLY tag in the playlist")
                     .default_value(DEFAULT_I_FRAMES_ONLY_PLAYLIST)
+                    .build(),
+                glib::ParamSpecBoolean::builder("enable-program-date-time")
+                    .nick("add EXT-X-PROGRAM-DATE-TIME tag")
+                    .blurb("put EXT-X-PROGRAM-DATE-TIME tag in the playlist")
+                    .default_value(DEFAULT_PROGRAM_DATE_TIME_TAG)
                     .build(),
                 glib::ParamSpecBoolean::builder("send-keyframe-requests")
                     .nick("Send Keyframe Requests")
@@ -536,6 +611,9 @@ impl ObjectImpl for HlsSink3 {
                     );
                 }
             }
+            "enable-program-date-time" => {
+                settings.enable_program_date_time = value.get().expect("type checked upstream");
+            }
             "send-keyframe-requests" => {
                 settings.send_keyframe_requests = value.get().expect("type checked upstream");
                 settings
@@ -563,6 +641,7 @@ impl ObjectImpl for HlsSink3 {
                 playlist_type.to_value()
             }
             "i-frames-only" => settings.i_frames_only.to_value(),
+            "enable-program-date-time" => settings.enable_program_date_time.to_value(),
             "send-keyframe-requests" => settings.send_keyframe_requests.to_value(),
             _ => unimplemented!(),
         }
@@ -660,27 +739,60 @@ impl ObjectImpl for HlsSink3 {
         ]);
 
         obj.add(&settings.splitmuxsink).unwrap();
+        let state = self.state.clone();
+        settings
+            .splitmuxsink
+            .connect("format-location-full", false, {
+                let self_weak = self.downgrade();
+                move |args| {
+                    let self_ = match self_weak.upgrade() {
+                        Some(self_) => self_,
+                        None => return Some(None::<String>.to_value()),
+                    };
+                    let fragment_id = args[1].get::<u32>().unwrap();
+                    gst::info!(CAT, imp: self_, "Got fragment-id: {}", fragment_id);
 
-        settings.splitmuxsink.connect("format-location", false, {
-            let self_weak = self.downgrade();
-            move |args| {
-                let self_ = match self_weak.upgrade() {
-                    Some(self_) => self_,
-                    None => return Some(None::<String>.to_value()),
-                };
-                let fragment_id = args[1].get::<u32>().unwrap();
+                    let mut state_guard = state.lock().unwrap();
+                    let mut state = match &mut *state_guard {
+                        State::Stopped => {
+                            gst::error!(
+                                CAT,
+                                imp: self_,
+                                "on format location called with Stopped state"
+                            );
+                            return Some("unknown_segment".to_value());
+                        }
+                        State::Started(s) => s,
+                    };
 
-                gst::info!(CAT, imp: self_, "Got fragment-id: {}", fragment_id);
+                    let sample = args[2].get::<gst::Sample>().unwrap();
+                    let buffer = sample.buffer();
+                    if let Some(buffer) = buffer {
+                        let segment = sample
+                            .segment()
+                            .expect("segment not available")
+                            .downcast_ref::<gst::ClockTime>()
+                            .expect("no time segment");
+                        state.fragment_running_time = segment.to_running_time(buffer.pts().unwrap());
+                    } else {
+                        gst::warning!(
+                            CAT,
+                            imp: self_,
+                            "buffer null for fragment-id: {}",
+                            fragment_id
+                        );
+                    }
+                    drop(state_guard);
 
-                match self_.on_format_location(fragment_id) {
-                    Ok(segment_location) => Some(segment_location.to_value()),
-                    Err(err) => {
-                        gst::error!(CAT, imp: self_, "on format-location handler: {}", err);
-                        Some("unknown_segment".to_value())
+                    match self_.on_format_location(fragment_id) {
+                        Ok(segment_location) => Some(segment_location.to_value()),
+                        Err(err) => {
+                            gst::error!(CAT, imp: self_, "on format-location handler: {}", err);
+                            Some("unknown_segment".to_value())
+                        }
                     }
                 }
-            }
-        });
+            });
     }
 }
 
@@ -739,6 +851,19 @@ impl ElementImpl for HlsSink3 {
         let ret = self.parent_change_state(transition)?;
 
         match transition {
+            gst::StateChange::PlayingToPaused => {
+                let mut state = self.state.lock().unwrap();
+                match &mut *state {
+                    State::Stopped => (),
+                    State::Started(state) => {
+                        // reset mapping from rt to utc. during pause
+                        // rt is stopped but utc keep moving so need to
+                        // calculate the mapping again
+                        state.base_running_time = None;
+                        state.base_date_time = None
+                    }
+                }
+            }
             gst::StateChange::PausedToReady => {
                 let write_final = {
                     let mut state = self.state.lock().unwrap();
