@@ -1,0 +1,21 @@
+[default.extend-words]
+ND = "ND" # net/ndi
+encrypter = "encrypter"
+numer = "numer" # numerator
+paeth = "paeth"
+seeked = "seeked"
+
+# mux/mp4
+fiel = "fiel"
+trun = "trun"
+
+[files]
+extend-exclude = [
+    "*.mcc",
+    "*.ref",
+    "*.scc",
+    "net/webrtc/gstwebrtc-api/src/keysyms.js",
+    # third party code
+    "video/closedcaption/src/c/*",
+    "net/webrtc/gstwebrtc-api/third-party/*",
+]

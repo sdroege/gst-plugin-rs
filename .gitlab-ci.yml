@@ -400,6 +400,14 @@ rustfmt:
     - cargo fmt --version
     - cargo fmt -- --color=always --check
 
+typos:
+  extends: .img-stable
+  stage: "lint"
+  rules:
+    - when: 'always'
+  script:
+    - typos
+
 gstwebrtc-api lint:
   image: node:lts
   stage: "lint"
