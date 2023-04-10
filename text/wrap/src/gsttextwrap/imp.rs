@@ -148,6 +148,8 @@ impl TextWrap {
             gst::FlowError::Error
         })?;
 
+        gst::log!(CAT, imp: self, "processing {data} in {buffer:?}");
+
         let accumulate_time = self.settings.lock().unwrap().accumulate_time;
         let mut state = self.state.lock().unwrap();
 
@@ -264,6 +266,8 @@ impl TextWrap {
                     .expect("We should have a wrapper by now");
                 textwrap::fill(data, options)
             };
+
+            gst::log!(CAT, imp: self, "fill result: {data}");
 
             // If the lines property was set, we want to split the result into buffers
             // of at most N lines. We compute the duration for each of those based on
