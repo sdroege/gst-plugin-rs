@@ -1358,7 +1358,7 @@ impl TranslationPadTask {
 
                 let mut pts = start_time + item_pts;
 
-                let mut buf = gst::Buffer::from_mut_slice(content.into_bytes());
+                let mut buf = gst::Buffer::from_mut_slice(content.clone().into_bytes());
                 {
                     let buf = buf.get_mut().unwrap();
 
@@ -1413,7 +1413,7 @@ impl TranslationPadTask {
 
                 last_position = pts + duration;
 
-                gst::debug!(CAT, imp: self.pad, "Pushing buffer: {pts} -> {}", pts + duration);
+                gst::debug!(CAT, imp: self.pad, "Pushing buffer with content {content}: {pts} -> {}", pts + duration);
 
                 if self.pad.obj().push(buf).is_err() {
                     return false;
