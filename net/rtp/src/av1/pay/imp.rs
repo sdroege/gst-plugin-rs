@@ -215,7 +215,7 @@ impl RTPAv1Pay {
     }
 
     /// Look at the size the currently stored OBUs would require,
-    /// as well as their temportal IDs to decide if it is time to construct a
+    /// as well as their temporal IDs to decide if it is time to construct a
     /// new packet, and what OBUs to include in it.
     ///
     /// If `true` is passed for `force`, packets of any size will be accepted,

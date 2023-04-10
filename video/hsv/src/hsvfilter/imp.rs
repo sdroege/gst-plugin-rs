@@ -262,7 +262,7 @@ impl ElementImpl for HsvFilter {
             gst::subclass::ElementMetadata::new(
                 "HSV filter",
                 "Filter/Effect/Converter/Video",
-                "Works within the HSV colorspace to apply tranformations to incoming frames",
+                "Works within the HSV colorspace to apply transformations to incoming frames",
                 "Julien Bardagi <julien.bardagi@gmail.com>",
             )
         });

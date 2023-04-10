@@ -200,7 +200,7 @@ impl S3Src {
         Ok(output.content_length as u64)
     }
 
-    /* Returns the bytes, Some(error) if one occured, or a None error if interrupted */
+    /* Returns the bytes, Some(error) if one occurred, or a None error if interrupted */
     fn get(self: &S3Src, offset: u64, length: u64) -> Result<Bytes, Option<gst::ErrorMessage>> {
         let state = self.state.lock().unwrap();
 

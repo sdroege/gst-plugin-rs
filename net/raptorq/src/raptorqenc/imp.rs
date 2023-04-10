@@ -161,7 +161,7 @@ impl RaptorqEnc {
 
         let sbl = state.symbols_per_block;
 
-        // Initial sequnce number in Repair Payload ID is a sequence number of
+        // Initial sequence number in Repair Payload ID is a sequence number of
         // the first packet in the Source Block.
         let seq = state.seqnums.first().cloned().unwrap();
 
@@ -568,7 +568,7 @@ impl RaptorqEnc {
 
         // this is the number of repair symbols placed in each repair packet,
         // it SHALL be the same for all repair packets in a block. This include
-        // 1 byte of flow indication and 2 bytes of lenght indication as defined
+        // 1 byte of flow indication and 2 bytes of length indication as defined
         // in RFC6881, section 8.2.4.
         let symbols_per_packet = (mtu + 3 + symbol_size - 1) / symbol_size;
         let symbols_per_block = symbols_per_packet * protected_packets_num;

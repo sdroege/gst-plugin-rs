@@ -198,14 +198,14 @@ mod test {
 
         let running_time = gst::ClockTime::from_seconds(2);
 
-        let mut messsage = VideoCompareMessage::default();
-        messsage.pad_distances.push(PadDistance {
+        let mut message = VideoCompareMessage::default();
+        message.pad_distances.push(PadDistance {
             pad: gst::Pad::new(Some("sink_0"), gst::PadDirection::Sink),
             distance: 42_f64,
         });
-        messsage.running_time = Some(running_time);
+        message.running_time = Some(running_time);
 
-        let structure: gst::Structure = messsage.into();
+        let structure: gst::Structure = message.into();
 
         let pad_distances = structure.get::<gst::Array>("pad-distances").unwrap();
         let first = pad_distances

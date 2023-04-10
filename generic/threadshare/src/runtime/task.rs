@@ -373,7 +373,7 @@ pub trait TaskImpl: Send + 'static {
         future::ok(()).boxed()
     }
 
-    /// Handles an error occuring during the execution of the `Task` loop.
+    /// Handles an error occurring during the execution of the `Task` loop.
     ///
     /// This include errors returned by [`Self::try_next`] & [`Self::handle_item`].
     ///
@@ -410,7 +410,7 @@ pub trait TaskImpl: Send + 'static {
         .boxed()
     }
 
-    /// Handles an error occuring during the execution of a transition action.
+    /// Handles an error occurring during the execution of a transition action.
     ///
     /// This handler also catches errors returned by subtasks spawned by the transition action.
     ///

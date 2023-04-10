@@ -121,7 +121,7 @@ impl ObjectSubclass for SineSrc {
     // Our element here can output f32 and f64
     fn class_init(klass: &mut Self::Class) {
         // Set the element specific metadata. This information is what
-        // is visible from gst-inspect-1.0 and can also be programatically
+        // is visible from gst-inspect-1.0 and can also be programmatically
         // retrieved from the gst::Registry after initial registration
         // without having to load the plugin in memory.
         klass.set_metadata(

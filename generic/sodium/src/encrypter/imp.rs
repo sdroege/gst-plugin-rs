@@ -98,7 +98,7 @@ impl State {
             })?;
 
         // This env variable is only meant to bypass nonce regeneration during
-        // tests to get determinisic results. It should never be used outside
+        // tests to get deterministic results. It should never be used outside
         // of testing environments.
         let nonce = if let Ok(val) = std::env::var("GST_SODIUM_ENCRYPT_NONCE") {
             let bytes = hex::decode(val).expect("Failed to decode hex variable");
@@ -216,7 +216,7 @@ impl Encrypter {
                 let mut state_mutex = self.state.lock().unwrap();
                 let mut buffers = BufferVec::new();
                 // This will only be run after READY state,
-                // and will be guaranted to be initialized
+                // and will be guaranteed to be initialized
                 let state = state_mutex.as_mut().unwrap();
 
                 // Now that all the full size blocks are pushed, drain the

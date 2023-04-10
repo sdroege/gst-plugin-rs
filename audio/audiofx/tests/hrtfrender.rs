@@ -156,7 +156,7 @@ fn test_hrtfrender_explicit_spatial_objects() {
 }
 
 #[test]
-// Caps negotation should fail if we have mismatch between input channels and
+// Caps negotiation should fail if we have mismatch between input channels and
 // of objects that we set via property. In this test case input has 6 channels
 // but the number of spatial objects set is 2.
 fn test_hrtfrender_caps_negotiation_fail() {

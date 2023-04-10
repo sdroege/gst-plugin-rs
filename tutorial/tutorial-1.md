@@ -70,7 +70,7 @@ If you now run the `gst-inspect-1.0` tool on the `libgstrstutorial.so`, it will 
 
 Let’s start editing `src/lib.rs` to make this an actual GStreamer plugin.
 
-Next we make use of the `gst::plugin_define!` `macro` from the `gstreamer` crate to set-up the static metadata of the plugin (and make the shared library recognizeable by GStreamer to be a valid plugin), and to define the name of our entry point function (`plugin_init`) where we will register all the elements that this plugin provides.
+Next we make use of the `gst::plugin_define!` `macro` from the `gstreamer` crate to set-up the static metadata of the plugin (and make the shared library recognizable by GStreamer to be a valid plugin), and to define the name of our entry point function (`plugin_init`) where we will register all the elements that this plugin provides.
 
 ```rust
 gst::plugin_define!(
@@ -210,7 +210,7 @@ In addition, we also define a `register` function (the one that is already calle
 
 ## Type Class & Instance Initialization
 
-As a next step we implement the `new` funtion and `class_init` functions. In the first version, this struct is empty for now but we will later use it to store all state of our element.
+As a next step we implement the `new` function and `class_init` functions. In the first version, this struct is empty for now but we will later use it to store all state of our element.
 
 ```rust
 use gst::glib;
@@ -326,7 +326,7 @@ the convention with GStreamer elements.
 
 Data flow of GStreamer elements is happening via pads, which are the input(s) and output(s) (or sinks and sources in GStreamer terminology) of an element. Via the pads, buffers containing actual media data, events or queries are transferred. An element can have any number of sink and source pads, but our new element will only have one of each.
 
-To be able to declare what kinds of pads an element can create (they are not necessarily all static but could be created at runtime by the element or the application), it is necessary to install so-called pad templates during the class initialization (in the `class_init` funtion). These pad templates contain the name (or rather “name template”, it could be something like `src_%u` for e.g. pad templates that declare multiple possible pads), the direction of the pad (sink or source), the availability of the pad (is it always there, sometimes added/removed by the element or to be requested by the application) and all the possible media types (called caps) that the pad can consume (sink pads) or produce (src pads).
+To be able to declare what kinds of pads an element can create (they are not necessarily all static but could be created at runtime by the element or the application), it is necessary to install so-called pad templates during the class initialization (in the `class_init` function). These pad templates contain the name (or rather “name template”, it could be something like `src_%u` for e.g. pad templates that declare multiple possible pads), the direction of the pad (sink or source), the availability of the pad (is it always there, sometimes added/removed by the element or to be requested by the application) and all the possible media types (called caps) that the pad can consume (sink pads) or produce (src pads).
 
 In our case we only have always pads, one sink pad called “sink”, on which we can only accept RGB (BGRx to be exact) data with any width/height/framerate and one source pad called “src”, on which we will produce either RGB (BGRx) data or GRAY8 (8-bit grayscale) data. We do this by adding the following code to the class_init function.
 

@@ -149,7 +149,7 @@ unsafe impl prelude::ObjectInterface for Signallable {
                  * @session_id: Id of the session the ice information is about
                  * @sdp_m_line_index: The mlineindex of the ice candidate
                  * @sdp_mid: Media ID of the ice candidate
-                 * @candiate: Information about the candidate
+                 * @candidate: Information about the candidate
                  *
                  * Notify the underlying webrtc object of an ICE candidate.
                  */

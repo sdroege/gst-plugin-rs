@@ -14,7 +14,7 @@
 //! multiple languages.
 //!
 //! This module contains the element implementation as well as the `TranslateSrcPad`
-//! sublcass and its `TranslationPadTask`.
+//! subclass and its `TranslationPadTask`.
 //!
 //! Web service specific code can be found in the `transcribe` and `translate` modules.
 

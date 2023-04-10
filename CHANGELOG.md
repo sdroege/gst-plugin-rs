@@ -112,7 +112,7 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - fmp4mux: Add support for CMAF-style chunking, e.g. low-latency / LL HLS and DASH
 - gtk4: Support for rendering GL textures on X11/EGL, X11/GLX, Wayland and macOS
 - hlssink3: Allow generating i-frame-only playlist
-- livesync: New element that alllows maintaining a contiguous live stream
+- livesync: New element that allows maintaining a contiguous live stream
   without gaps from a potentially unstable source.
 - mp4mux: New non-fragmented MP4 muxer element
 - spotifyaudiosrc: Support configurable bitrate

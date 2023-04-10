@@ -486,7 +486,7 @@ impl Decrypter {
         let block_size = {
             let mut mutex_state = self.state.lock().unwrap();
             // This will only be run after READY state,
-            // and will be guaranted to be initialized
+            // and will be guaranteed to be initialized
             let state = mutex_state.as_mut().unwrap();
             // Cleanup the adapter
             state.adapter.clear();
@@ -508,7 +508,7 @@ impl Decrypter {
 
         let mut state = self.state.lock().unwrap();
         // This will only be run after READY state,
-        // and will be guaranted to be initialized
+        // and will be guaranteed to be initialized
         let state = state.as_mut().unwrap();
 
         state.decrypt_into_adapter(self, &self.srcpad, &pulled_buffer, chunk_index)?;

@@ -649,7 +649,7 @@ impl Async<UdpSocket> {
 
     /// Sends data to the specified address.
     ///
-    /// Returns the number of bytes writen.
+    /// Returns the number of bytes written.
     pub async fn send_to<A: Into<SocketAddr>>(&self, buf: &[u8], addr: A) -> io::Result<usize> {
         let addr = addr.into();
         self.write_with(|io| io.send_to(buf, addr)).await

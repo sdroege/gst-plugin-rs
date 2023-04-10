@@ -2143,7 +2143,7 @@ impl WebRTCSink {
                                 => move |rtpbin: gst::Object, session_id: u32, _src: u32| {
                         let rtp_session = rtpbin.emit_by_name::<gst::Element>("get-session", &[&session_id]);
 
-                        let element = element.expect("on-new-ssrc emited when webrtcsink has been disposed?");
+                        let element = element.expect("on-new-ssrc emitted when webrtcsink has been disposed?");
                         let webrtcbin = webrtcbin.unwrap();
                         let mut state = element.imp().state.lock().unwrap();
                         if let Some(mut session) = state.sessions.get_mut(&session_id_str) {

@@ -663,7 +663,7 @@ impl TtToCea608 {
 
                     if is_specialna(cc_data) {
                         // adapted from libcaption's generation code:
-                        // specialna are treated as control charcters. Duplicated control charcters are discarded
+                        // specialna are treated as control characters. Duplicated control characters are discarded
                         // So we write a resume after a specialna as a noop control command to break repetition detection
                         match state.mode {
                             Cea608Mode::RollUp2 => state.roll_up_2(self, mut_list),

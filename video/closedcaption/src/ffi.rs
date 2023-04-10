@@ -586,7 +586,7 @@ extern "C" {
     pub fn utf8_char_count(data: *const ::std::os::raw::c_char, size: usize) -> utf8_size_t;
 }
 extern "C" {
-    pub fn utf8_trimmed_length(data: *const utf8_char_t, charcters: utf8_size_t) -> utf8_size_t;
+    pub fn utf8_trimmed_length(data: *const utf8_char_t, characters: utf8_size_t) -> utf8_size_t;
 }
 extern "C" {
     pub fn utf8_line_length(data: *const utf8_char_t) -> usize;

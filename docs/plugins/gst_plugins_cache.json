@@ -2472,7 +2472,7 @@
             },
             "hsvfilter": {
                 "author": "Julien Bardagi <julien.bardagi@gmail.com>",
-                "description": "Works within the HSV colorspace to apply tranformations to incoming frames",
+                "description": "Works within the HSV colorspace to apply transformations to incoming frames",
                 "hierarchy": [
                     "GstHsvFilter",
                     "GstVideoFilter",

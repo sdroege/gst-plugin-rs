@@ -215,7 +215,7 @@ impl Context {
 
     /// Executes the provided function relatively to this [`Context`].
     ///
-    /// Usefull to initialze i/o sources and timers from outside
+    /// Usefull to initialize i/o sources and timers from outside
     /// of a [`Context`].
     ///
     /// # Panic
@@ -511,7 +511,7 @@ mod tests {
         });
 
         // Panic: task has failed
-        // (enforced by `async-task`, see comment in `Future` impl for `JoinHanlde`).
+        // (enforced by `async-task`, see comment in `Future` impl for `JoinHandle`).
         futures::executor::block_on(join_handle).unwrap_err();
     }
 

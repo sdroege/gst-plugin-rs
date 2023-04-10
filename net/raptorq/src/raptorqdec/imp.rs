@@ -183,7 +183,7 @@ impl RaptorqDec {
             }
 
             // Build Source Block from received Data Packets and append
-            // Repair Packets that have the same initial sequnce number
+            // Repair Packets that have the same initial sequence number
             let mut source_block = Vec::with_capacity(
                 (data_packets_num + repair_packets_num)
                     .checked_mul(state.symbol_size)
@@ -301,7 +301,7 @@ impl RaptorqDec {
                         gst::debug!(
                             CAT,
                             imp: self,
-                            "Succesfully recovered packet: seqnum: {}, len: {}, ts: {}",
+                            "Successfully recovered packet: seqnum: {}, len: {}, ts: {}",
                             rtpbuf.seq(),
                             rtpbuf.payload_size(),
                             rtpbuf.timestamp(),
@@ -337,7 +337,7 @@ impl RaptorqDec {
             );
 
             // Expand cyclic sequence numbers to u64, start from u16::MAX so we
-            // never overflow substraction.
+            // never overflow subtraction.
             let seq = rtpbuf.seq();
             let prev_seq = state.extended_media_seq.unwrap_or(65_535 + seq as u64);
 
@@ -448,7 +448,7 @@ impl RaptorqDec {
         );
 
         // Expand cyclic sequence numbers to u64, start from u16::MAX so we
-        // never overflow substraction.
+        // never overflow subtraction.
         let prev_seq = state.extended_repair_seq.unwrap_or(65_535 + i as u64);
         let delta = gst_rtp::compare_seqnum(prev_seq as u16, i);
 
@@ -763,7 +763,7 @@ impl ElementImpl for RaptorqDec {
 
             let sink_fec_caps = gst::Caps::builder("application/x-rtp")
                 .field("raptor-scheme-id", fecscheme::FEC_SCHEME_ID.to_string())
-                // All fmtp paramters from SDP are string in caps, those are
+                // All fmtp parameters from SDP are string in caps, those are
                 // required parameters that cannot be expressed as string:
                 // .field("kmax", (string) [1, MAX_SOURCE_BLOCK_LEN])
                 // .field("t", (string) [1, MAX_ENCODING_SYMBOL_SIZE])

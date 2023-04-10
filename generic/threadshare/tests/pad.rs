@@ -505,7 +505,7 @@ mod imp_sink {
     impl ElementSinkTest {
         async fn forward_item(&self, item: Item) -> Result<gst::FlowSuccess, gst::FlowError> {
             if !self.flushing.load(Ordering::SeqCst) {
-                gst::debug!(SINK_CAT, imp: self, "Fowarding {:?}", item);
+                gst::debug!(SINK_CAT, imp: self, "Forwarding {:?}", item);
                 let mut sender = self
                     .sender
                     .lock()
@@ -522,7 +522,7 @@ mod imp_sink {
                 gst::debug!(
                     SINK_CAT,
                     imp: self,
-                    "Not fowarding {:?} due to flushing",
+                    "Not forwarding {:?} due to flushing",
                     item
                 );
                 Err(gst::FlowError::Flushing)

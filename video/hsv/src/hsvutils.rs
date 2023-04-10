@@ -11,7 +11,7 @@
 // Reference used for implementation: https://en.wikipedia.org/wiki/HSL_and_HSV
 
 // Since the standard 'clamp' feature is still considered unstable, we provide
-// a subsititute implementaion here so we can still build with the stable toolchain.
+// a subsititute implementation here so we can still build with the stable toolchain.
 // Source: https://github.com/rust-lang/rust/issues/44095#issuecomment-624879262
 pub trait Clamp: Sized {
     fn clamp<L, U>(self, lower: L, upper: U) -> Self

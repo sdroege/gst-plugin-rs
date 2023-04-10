@@ -170,7 +170,7 @@ impl GstObjectImpl for Rgb2Gray {}
 // Implementation of gst::Element virtual methods
 impl ElementImpl for Rgb2Gray {
     // Set the element specific metadata. This information is what
-    // is visible from gst-inspect-1.0 and can also be programatically
+    // is visible from gst-inspect-1.0 and can also be programmatically
     // retrieved from the gst::Registry after initial registration
     // without having to load the plugin in memory.
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {

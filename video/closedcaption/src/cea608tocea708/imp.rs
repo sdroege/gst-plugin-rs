@@ -385,7 +385,7 @@ impl State {
                     "change of rollup row count from {old_count} to {new_count}",
                 );
                 if old_count > new_count {
-                    // push the captions ot the top of the window before we shrink the size of the
+                    // push the captions on the top of the window before we shrink the size of the
                     // window
                     for _ in new_count..old_count {
                         self.cea708.service_state[idx]

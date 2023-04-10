@@ -1057,7 +1057,7 @@ impl TaskImpl for JitterBufferTask {
     // It should also be possible to store latency and context_wait as
     // fields of JitterBufferTask so as to avoid locking the settings.
     // If latency can change during processing, a command based mechanism
-    // could be implemented. See the command implemention for ts-udpsink as
+    // could be implemented. See the command implementation for ts-udpsink as
     // an example.
     fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
         async move {

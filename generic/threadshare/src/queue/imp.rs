@@ -406,7 +406,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 impl Queue {
-    /* Try transfering all the items from the pending queue to the DataQueue, then
+    /* Try transferring all the items from the pending queue to the DataQueue, then
      * the current item. Errors out if the DataQueue was full, or the pending queue
      * is already scheduled, in which case the current item should be added to the
      * pending queue */

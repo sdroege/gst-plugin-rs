@@ -782,7 +782,7 @@ impl JsonGstParse {
                 }
             }
             QueryViewMut::Position(q) => {
-                // For Time answer ourselfs, otherwise forward
+                // For Time answer ourselves, otherwise forward
                 if q.format() == gst::Format::Time {
                     let state = self.state.lock().unwrap();
                     q.set(state.last_position);
@@ -792,7 +792,7 @@ impl JsonGstParse {
                 }
             }
             QueryViewMut::Duration(q) => {
-                // For Time answer ourselfs, otherwise forward
+                // For Time answer ourselves, otherwise forward
                 let state = self.state.lock().unwrap();
                 if q.format() == gst::Format::Time {
                     if let Some(pull) = state.pull.as_ref() {

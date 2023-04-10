@@ -127,9 +127,9 @@ impl CsoundFilter {
         let spout = csound.get_spout().unwrap();
 
         let in_chunks = idata.chunks_exact(spin.len());
-        let out_chuncks = odata.chunks_exact_mut(spout.len());
+        let out_chunks = odata.chunks_exact_mut(spout.len());
         let mut end_score = false;
-        for (ichunk, ochunk) in in_chunks.zip(out_chuncks) {
+        for (ichunk, ochunk) in in_chunks.zip(out_chunks) {
             spin.copy_from_slice(ichunk);
             end_score = csound.perform_ksmps();
             spout.copy_to_slice(ochunk);
@@ -254,7 +254,7 @@ impl CsoundFilter {
         );
 
         // Get the required amount of bytes to be read from
-        // the adapter to fill an ouput buffer of size output_size
+        // the adapter to fill an output buffer of size output_size
         let bytes_to_read = state.bytes_to_read(output_size);
 
         let indata = state
@@ -554,7 +554,7 @@ impl BaseTransformImpl for CsoundFilter {
         // Flush previous state
         if self.state.lock().unwrap().is_some() {
             self.drain()
-                .map_err(|e| loggable_error!(CAT, "Error flusing previous state data {:?}", e))?;
+                .map_err(|e| loggable_error!(CAT, "Error flushing previous state data {:?}", e))?;
         }
 
         let in_info = gst_audio::AudioInfo::from_caps(incaps)

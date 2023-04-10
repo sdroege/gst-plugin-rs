@@ -105,7 +105,7 @@ export default class WebRTCSession extends EventTarget {
   }
 
   /**
-     * The internal {@link external:RTCPeerConnection} used to manage the underlying WebRTC connnection with session
+     * The internal {@link external:RTCPeerConnection} used to manage the underlying WebRTC connection with session
      * peer. Value may be null if session has no active WebRTC connection. You can listen to the
      * {@link gstWebRTCAPI#event:RTCPeerConnectionChangedEvent} event to be informed when the connection is established
      * or destroyed.

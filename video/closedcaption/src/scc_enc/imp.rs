@@ -122,7 +122,7 @@ impl State {
                     ["Stream with timecodes on each buffer required"]
                 );
 
-                // If we neeed to skip a buffer, increment the frame if it exists
+                // If we need to skip a buffer, increment the frame if it exists
                 // to avoid getting out of sync
                 if let Some(ref mut timecode) = self.expected_timecode {
                     timecode.increment_frame();

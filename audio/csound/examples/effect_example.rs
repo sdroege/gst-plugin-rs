@@ -19,7 +19,7 @@ const AUDIO_SINK: &str = "audioconvert ! autoaudiosink";
 // from the global accumulator(gasig), then reads these buffers at a fixed delay time, creating the adelL, adelM and adelR buffers,
 // also, It multiplies the audio samples in the right channel by 0.5 * kdel, being kdel a line of values starting at 0.5 at increments of 0.001.
 // Finally, those buffers are mixed with the accumulator, and an audio envelop is applied(aseg) to them.
-// The result is similar to an audio echo in which the buffered samples are read at different delay times and also modified in frecuency(right channel),
+// The result is similar to an audio echo in which the buffered samples are read at different delay times and also modified in frequency(right channel),
 // this creates an space effect using just one channel audio input.
 const CSD: &str = "
     <CsoundSynthesizer>

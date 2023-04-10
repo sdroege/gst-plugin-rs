@@ -348,9 +348,9 @@ impl State {
             true_peak
         );
 
-        // Difference between targetted and calculated LUFS loudness as a linear scalefactor.
+        // Difference between targeted and calculated LUFS loudness as a linear scalefactor.
         let offset = f64::powf(10., (self.target_i - global) / 20.);
-        // What the new peak would be after adjusting for the targetted loudness.
+        // What the new peak would be after adjusting for the targeted loudness.
         let offset_tp = true_peak * offset;
 
         // If the new peak would be more quiet than targeted one, take it. Otherwise only go as
@@ -705,7 +705,7 @@ impl State {
             self.process_fill_final_frame(imp, num_samples, FRAME_SIZE);
         }
 
-        // Now repeatadly run the limiter, output the output gain, update the gains, copy further
+        // Now repeatedly run the limiter, output the output gain, update the gains, copy further
         // data from the buf to limiter_buf until we have output everything.
         //
         // At this point we have to output 3s - (FRAME_SIZE - num_samples)

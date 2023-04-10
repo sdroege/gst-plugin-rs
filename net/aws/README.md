@@ -54,7 +54,7 @@ $ gst-launch-1.0 \
 Writes a single variant HLS stream directly to a specified S3 (region, bucket,
 path prefix) tuple. Takes the encoded audio and video stream as input, and uses
 `hlssink3` if available, else `hlssink2`. HLS stream parameters such as
-playlist length, segment duration, etc. can be tweaked by accesing the
+playlist length, segment duration, etc. can be tweaked by accessing the
 underlying sink using the `hlssink` property.
 
 ## awstranscriber
