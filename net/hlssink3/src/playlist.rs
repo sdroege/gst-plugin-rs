@@ -6,6 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use chrono::{DateTime, Utc};
 use gst::glib::once_cell::sync::Lazy;
 use m3u8_rs::{MediaPlaylist, MediaPlaylistType, MediaSegment};
 use regex::Regex;
@@ -68,8 +69,10 @@ impl Playlist {
     }
 
     /// Adds a new segment to the playlist.
-    pub fn add_segment(&mut self, uri: String, duration: f32) {
+    pub fn add_segment(&mut self, uri: String, duration: f32, date_time: Option<DateTime<Utc>>) {
         self.start();
+        // TODO: We are adding date-time to each segment, hence during write all the segments have
+        // program-date-time header.
         self.inner.segments.push(MediaSegment {
             uri,
             duration,
@@ -78,7 +81,7 @@ impl Playlist {
             discontinuity: false,
             key: None,
             map: None,
-            program_date_time: None,
+            program_date_time: date_time.map(|d| d.into()),
             daterange: None,
             unknown_tags: vec![],
         });
