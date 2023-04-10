@@ -109,23 +109,34 @@ impl TranslateLoop {
                 continue;
             }
 
-            let (ts_duration_list, content): (Vec<(gst::ClockTime, gst::ClockTime)>, String) =
-                transcript_items
-                    .iter()
-                    .map(|item| {
-                        (
-                            (item.pts, item.duration),
-                            match self.tokenization_method {
-                                Tokenization::None => item.content.clone(),
-                                Tokenization::SpanBased => {
-                                    format!("{SPAN_START}{}{SPAN_END}", item.content)
-                                }
-                            },
-                        )
-                    })
-                    .unzip();
+            let mut ts_duration_list: Vec<(gst::ClockTime, gst::ClockTime)> = vec![];
+            let mut content: Vec<String> = vec![];
 
-            gst::trace!(CAT, imp: self.pad, "Translating {content} with {ts_duration_list:?}");
+            let mut it = transcript_items.iter().peekable();
+
+            while let Some(item) = it.next() {
+                let suffix = match it.peek() {
+                    Some(next_item) => {
+                        if next_item.is_punctuation {
+                            ""
+                        } else {
+                            " "
+                        }
+                    }
+                    None => "",
+                };
+                ts_duration_list.push((item.pts, item.duration));
+                content.push(match self.tokenization_method {
+                    Tokenization::None => format!("{}{}", item.content, suffix),
+                    Tokenization::SpanBased => {
+                        format!("{SPAN_START}{}{SPAN_END}{}", item.content, suffix)
+                    }
+                });
+            }
+
+            let content: String = content.join("");
+
+            gst::debug!(CAT, imp: self.pad, "Translating {content} with {ts_duration_list:?}");
 
             let translated_text = self
                 .client
@@ -143,7 +154,7 @@ impl TranslateLoop {
                 .translated_text
                 .unwrap_or_default();
 
-            gst::trace!(CAT, imp: self.pad, "Got translation {translated_text}");
+            gst::debug!(CAT, imp: self.pad, "Got translation {translated_text}");
 
             let translated_items = match self.tokenization_method {
                 Tokenization::None => {
