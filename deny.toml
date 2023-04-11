@@ -175,6 +175,11 @@ version = "0.5"
 name = "redox_syscall"
 version = "0.2"
 
+# Various crates depend on an older version of miniz_oxide
+[[bans.skip]]
+name = "miniz_oxide"
+version = "0.6"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
