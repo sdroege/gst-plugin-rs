@@ -577,16 +577,15 @@ impl WebRTCSrc {
             session_ended: signaller.connect_closure(
                 "session-ended",
                 false,
-                glib::closure!(@to-owned self as this => move |
-                    _signaller: glib::Object, _peer_id: &str| {
-                    gst::debug!(CAT, imp: this, "Session ended.");
-
+                glib::closure!(@to-owned self as this => move |_signaler: glib::Object, _session_id: &str|{
                     this.state.lock().unwrap().session_id = None;
                     this.obj().iterate_src_pads().into_iter().for_each(|pad|
                         { if let Err(e) = pad.map(|pad| pad.push_event(gst::event::Eos::new())) {
                             gst::error!(CAT, "Could not send EOS: {e:?}");
                         }}
                     );
+
+                    false
                 }),
             ),
 
