@@ -279,12 +279,13 @@ fn test_long_drop_and_recover(live: bool) {
     let buffer = pull_buffer(&pipeline);
     assert_fallback_buffer!(buffer, Some(4.seconds()));
 
-    // Produce a sixth frame from the normal source
+    // Produce a sixth frame from the normal source, which
+    // will make it healthy again
     push_buffer(&pipeline, 5.seconds());
     set_time(&pipeline, 5.seconds() + 10.mseconds());
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(5.seconds()));
-    assert!(!mainsink.property::<bool>("is-healthy"));
+    assert!(mainsink.property::<bool>("is-healthy"));
     drop(mainsink);
     drop(switch);
 
