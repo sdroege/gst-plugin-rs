@@ -130,7 +130,7 @@ $ gst-launch-1.0 videotestsrc ! agingtv ! webrtcsink meta="meta,name=native-stre
 
 By default *webrtcsink* element uses *ws://127.0.0.1:8443* for the signalling server address, so there is no need
 for more arguments. If you're hosting the signalling server elsewhere, you can specify its address by adding
-`signaller::address="ws[s]://[signalling server]"` to the list of *webrtcsink* properties.
+`signaller::uri="ws[s]://[signalling server]"` to the list of *webrtcsink* properties.
 
 Once the GStreamer pipeline launched, you will see the registration of a new producer in the logs of the signalling
 server and a new remote stream, with the name *native-stream*, will appear on the webpage.

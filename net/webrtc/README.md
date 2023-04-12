@@ -132,7 +132,7 @@ can be accessed through the `gst::ChildProxy` interface, for example
 with gst-launch:
 
 ``` shell
-gst-launch-1.0 webrtcsink signaller::address="ws://127.0.0.1:8443" ..
+gst-launch-1.0 webrtcsink signaller::uri="ws://127.0.0.1:8443" ..
 ```
 
 ### Enable 'navigation' a.k.a user interactivity with the content
