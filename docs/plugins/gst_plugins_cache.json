@@ -1593,7 +1593,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "primary + 1"
+                "rank": "none"
             }
         },
         "filename": "gstffv1",
