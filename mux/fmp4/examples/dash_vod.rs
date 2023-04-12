@@ -14,7 +14,6 @@
 
 use gst::prelude::*;
 
-use std::fmt::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -151,29 +150,30 @@ fn main() -> Result<(), Error> {
 
                 println!("writing manifest to {}", path.display());
 
-                let duration = state.end_time.opt_checked_sub(state.start_time).ok().flatten().unwrap().mseconds() as f64 / 1000.0;
+                let duration = state
+                    .end_time
+                    .opt_checked_sub(state.start_time)
+                    .ok()
+                    .flatten()
+                    .unwrap()
+                    .mseconds();
 
                 // Write the whole segment timeline out here, compressing multiple segments with
                 // the same duration to a repeated segment.
-                let mut segment_timeline = String::new();
-                let mut write_segment = |start: gst::ClockTime, duration: gst::ClockTime, repeat: usize| {
-                    if repeat > 0 {
-                        writeln!(
-                            &mut segment_timeline,
-                            "                        <S t=\"{time}\" d=\"{duration}\" r=\"{repeat}\" />",
-                            time = start.mseconds(),
-                            duration = duration.mseconds(),
-                            repeat = repeat
-                        ).unwrap();
-                    } else {
-                        writeln!(
-                            &mut segment_timeline,
-                            "                        <S t=\"{time}\" d=\"{duration}\" />",
-                            time = start.mseconds(),
-                            duration = duration.mseconds()
-                        ).unwrap();
-                    }
-                };
+                let mut segments = vec![];
+                let mut write_segment =
+                    |start: gst::ClockTime, duration: gst::ClockTime, repeat: usize| {
+                        let mut s = dash_mpd::S {
+                            t: Some(start.mseconds() as i64),
+                            d: duration.mseconds() as i64,
+                            ..Default::default()
+                        };
+                        if repeat > 0 {
+                            s.r = Some(repeat as i64);
+                        }
+
+                        segments.push(s);
+                    };
 
                 let mut start = None;
                 let mut num_segments = 0;
@@ -203,26 +203,61 @@ fn main() -> Result<(), Error> {
                     write_segment(start.unwrap(), last_duration.unwrap(), num_segments - 1);
                 }
 
-                let manifest = format!(r###"<?xml version="1.0" encoding="UTF-8"?>
-<MPD
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xmlns="urn:mpeg:dash:schema:mpd:2011"
-    xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd"
-    type="static"
-    mediaPresentationDuration="PT{duration:.3}S"
-    profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">
-    <Period>
-        <AdaptationSet mimeType="video/mp4" codecs="avc1.4d0228" frameRate="30/1" segmentAlignment="true" startWithSAP="1">
-            <Representation id="A" bandwidth="2048000" with="1280" height="720">
-                <SegmentTemplate timescale="1000" initialization="init.cmfi" media="segment_$Number$.cmfv">
-                    <SegmentTimeline>
-{segment_timeline}                    </SegmentTimeline>
-                </SegmentTemplate>
-            </Representation>
-        </AdaptationSet>
-    </Period>
-</MPD>
-"###);
+                let segment_template = dash_mpd::SegmentTemplate {
+                    timescale: Some(1000),
+                    initialization: Some("init.cmfi".to_string()),
+                    media: Some("segment_$Number$.cmfv".to_string()),
+                    SegmentTimeline: Some(dash_mpd::SegmentTimeline { segments }),
+                    ..Default::default()
+                };
+
+                let rep = dash_mpd::Representation {
+                    id: Some("A".to_string()),
+                    width: Some(1280),
+                    height: Some(720),
+                    bandwidth: Some(2048000),
+                    SegmentTemplate: Some(segment_template),
+                    ..Default::default()
+                };
+
+                let adapt = dash_mpd::AdaptationSet {
+                    contentType: Some("video".to_string()),
+                    mimeType: Some("video/mp4".to_string()),
+                    codecs: Some("avc1.4d0228".to_string()),
+                    frameRate: Some("30/1".to_string()),
+                    segmentAlignment: Some(true),
+                    subsegmentStartsWithSAP: Some(1),
+                    representations: vec![rep],
+                    ..Default::default()
+                };
+
+                let period = dash_mpd::Period {
+                    adaptations: vec![adapt],
+                    ..Default::default()
+                };
+
+                let mpd = dash_mpd::MPD {
+                    mpdtype: Some("static".to_string()),
+                    xmlns: Some("urn:mpeg:dash:schema:mpd:2011".to_string()),
+                    schemaLocation: Some("urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd".to_string()),
+                    profiles: Some("urn:mpeg:dash:profile:isoff-on-demand:2011".to_string()),
+                    periods: vec![period],
+                    mediaPresentationDuration: Some(std::time::Duration::from_millis(duration)),
+                    ..Default::default()
+                };
+
+                use serde::ser::Serialize;
+
+                let mut xml = String::new();
+                let mut ser = quick_xml::se::Serializer::new(&mut xml);
+                ser.indent(' ', 4);
+                mpd.serialize(ser).unwrap();
+
+                let manifest = format!(
+                    r###"<?xml version="1.0" encoding="UTF-8"?>
+{xml}
+"###
+                );
 
                 std::fs::write(path, manifest).expect("failed to write manifest");
             })
