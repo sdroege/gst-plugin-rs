@@ -6065,10 +6065,10 @@
         "elements": {
             "awskvswebrtcsink": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
-                "description": "WebRTC sink",
+                "description": "WebRTC sink with kinesis video streams signaller",
                 "hierarchy": [
                     "GstAwsKvsWebRTCSink",
-                    "GstWebRTCSink",
+                    "GstBaseWebRTCSink",
                     "GstBin",
                     "GstElement",
                     "GstObject",
@@ -6096,9 +6096,10 @@
             },
             "webrtcsink": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
-                "description": "WebRTC sink",
+                "description": "WebRTC sink with custom protocol signaller",
                 "hierarchy": [
                     "GstWebRTCSink",
+                    "GstBaseWebRTCSink",
                     "GstBin",
                     "GstElement",
                     "GstObject",
@@ -6110,7 +6111,6 @@
                     "GstNavigation"
                 ],
                 "klass": "Sink/Network/WebRTC",
-                "long-name": "WebRTCSink",
                 "pad-templates": {
                     "audio_%%u": {
                         "caps": "audio/x-raw:\n",
@@ -6123,6 +6123,117 @@
                         "presence": "request"
                     }
                 },
+                "rank": "none"
+            },
+            "webrtcsrc": {
+                "author": "Thibault Saunier <tsaunier@igalia.com>",
+                "description": "WebRTC src",
+                "hierarchy": [
+                    "GstWebRTCSrc",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy",
+                    "GstURIHandler"
+                ],
+                "klass": "Source/Network/WebRTC",
+                "long-name": "WebRTCSrc",
+                "pad-templates": {
+                    "audio_%%u": {
+                        "caps": "audio/x-raw(ANY):\naudio/x-opus:\napplication/x-rtp:\n",
+                        "direction": "src",
+                        "presence": "sometimes",
+                        "type": "GstWebRTCSrcPad"
+                    },
+                    "video_%%u": {
+                        "caps": "video/x-raw(ANY):\napplication/x-rtp:\n",
+                        "direction": "src",
+                        "presence": "sometimes",
+                        "type": "GstWebRTCSrcPad"
+                    }
+                },
+                "properties": {
+                    "audio-codecs": {
+                        "blurb": "Names of audio codecs to be be used during the SDP negotiation. Valid values: [OPUS]",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": true
+                    },
+                    "meta": {
+                        "blurb": "Free form metadata about the consumer",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": true
+                    },
+                    "signaller": {
+                        "blurb": "The Signallable object to use to handle WebRTC Signalling",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstRSWebRTCSignallableIface",
+                        "writable": true
+                    },
+                    "stun-server": {
+                        "blurb": "NULL",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "stun://stun.l.google.com:19302",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "video-codecs": {
+                        "blurb": "Names of video codecs to be be used during the SDP negotiation. Valid values: [VP8, H264, VP9, H265]",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": true
+                    }
+                },
+                "rank": "primary"
+            }
+        },
+        "filename": "gstrswebrtc",
+        "license": "MPL-2.0",
+        "other-types": {
+            "GstBaseWebRTCSink": {
+                "hierarchy": [
+                    "GstBaseWebRTCSink",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy",
+                    "GstNavigation"
+                ],
+                "kind": "object",
                 "properties": {
                     "audio-caps": {
                         "blurb": "Governs what audio codecs will be proposed",
@@ -6308,7 +6419,6 @@
                         "writable": true
                     }
                 },
-                "rank": "none",
                 "signals": {
                     "consumer-added": {
                         "args": [
@@ -6364,101 +6474,6 @@
                     }
                 }
             },
-            "webrtcsrc": {
-                "author": "Thibault Saunier <tsaunier@igalia.com>",
-                "description": "WebRTC src",
-                "hierarchy": [
-                    "GstWebRTCSrc",
-                    "GstBin",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "interfaces": [
-                    "GstChildProxy",
-                    "GstURIHandler"
-                ],
-                "klass": "Source/Network/WebRTC",
-                "long-name": "WebRTCSrc",
-                "pad-templates": {
-                    "audio_%%u": {
-                        "caps": "audio/x-raw(ANY):\naudio/x-opus:\napplication/x-rtp:\n",
-                        "direction": "src",
-                        "presence": "sometimes",
-                        "type": "GstWebRTCSrcPad"
-                    },
-                    "video_%%u": {
-                        "caps": "video/x-raw(ANY):\napplication/x-rtp:\n",
-                        "direction": "src",
-                        "presence": "sometimes",
-                        "type": "GstWebRTCSrcPad"
-                    }
-                },
-                "properties": {
-                    "audio-codecs": {
-                        "blurb": "Names of audio codecs to be be used during the SDP negotiation. Valid values: [OPUS]",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "GstValueArray",
-                        "writable": true
-                    },
-                    "meta": {
-                        "blurb": "Free form metadata about the consumer",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "GstStructure",
-                        "writable": true
-                    },
-                    "signaller": {
-                        "blurb": "The Signallable object to use to handle WebRTC Signalling",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "GstRSWebRTCSignallableIface",
-                        "writable": true
-                    },
-                    "stun-server": {
-                        "blurb": "NULL",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "stun://stun.l.google.com:19302",
-                        "mutable": "null",
-                        "readable": true,
-                        "type": "gchararray",
-                        "writable": true
-                    },
-                    "video-codecs": {
-                        "blurb": "Names of video codecs to be be used during the SDP negotiation. Valid values: [VP8, H264, VP9, H265]",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "GstValueArray",
-                        "writable": true
-                    }
-                },
-                "rank": "primary"
-            }
-        },
-        "filename": "gstrswebrtc",
-        "license": "MPL-2.0",
-        "other-types": {
             "GstRSWebRTCSignallableIface": {
                 "hierarchy": [
                     "GstRSWebRTCSignallableIface",

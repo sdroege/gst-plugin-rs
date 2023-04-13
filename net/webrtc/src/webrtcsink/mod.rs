@@ -16,11 +16,15 @@ mod homegrown_cc;
 mod imp;
 
 glib::wrapper! {
-    pub struct WebRTCSink(ObjectSubclass<imp::WebRTCSink>) @extends gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
+    pub struct BaseWebRTCSink(ObjectSubclass<imp::BaseWebRTCSink>) @extends gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
 }
 
 glib::wrapper! {
-    pub struct AwsKvsWebRTCSink(ObjectSubclass<imp::AwsKvsWebRTCSink>) @extends WebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
+    pub struct WebRTCSink(ObjectSubclass<imp::WebRTCSink>) @extends BaseWebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
+}
+
+glib::wrapper! {
+    pub struct AwsKvsWebRTCSink(ObjectSubclass<imp::AwsKvsWebRTCSink>) @extends BaseWebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -43,15 +47,15 @@ pub enum WebRTCSinkError {
     },
 }
 
-impl Default for WebRTCSink {
+impl Default for BaseWebRTCSink {
     fn default() -> Self {
         glib::Object::new()
     }
 }
 
-impl WebRTCSink {
+impl BaseWebRTCSink {
     pub fn with_signaller(signaller: Signallable) -> Self {
-        let ret: WebRTCSink = glib::Object::new();
+        let ret: BaseWebRTCSink = glib::Object::new();
 
         let ws = ret.imp();
         ws.set_signaller(signaller).unwrap();
@@ -83,6 +87,7 @@ enum WebRTCSinkMitigationMode {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    BaseWebRTCSink::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     WebRTCSinkCongestionControl::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     gst::Element::register(
         Some(plugin),

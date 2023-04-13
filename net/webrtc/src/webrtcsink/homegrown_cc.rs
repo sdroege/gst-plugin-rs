@@ -110,7 +110,7 @@ impl CongestionController {
 
     fn update_delay(
         &mut self,
-        element: &super::WebRTCSink,
+        element: &super::BaseWebRTCSink,
         twcc_stats: &gst::StructureRef,
         rtt: f64,
     ) -> CongestionControlOp {
@@ -291,7 +291,7 @@ impl CongestionController {
 
     pub fn loss_control(
         &mut self,
-        element: &super::WebRTCSink,
+        element: &super::BaseWebRTCSink,
         stats: &gst::StructureRef,
         encoders: &mut Vec<VideoEncoder>,
     ) {
@@ -316,7 +316,7 @@ impl CongestionController {
 
     pub fn delay_control(
         &mut self,
-        element: &super::WebRTCSink,
+        element: &super::BaseWebRTCSink,
         stats: &gst::StructureRef,
         encoders: &mut Vec<VideoEncoder>,
     ) {
@@ -328,7 +328,7 @@ impl CongestionController {
 
     fn apply_control_op(
         &mut self,
-        element: &super::WebRTCSink,
+        element: &super::BaseWebRTCSink,
         encoders: &mut Vec<VideoEncoder>,
         control_op: CongestionControlOp,
         controller_type: ControllerType,

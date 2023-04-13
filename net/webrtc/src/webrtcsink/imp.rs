@@ -220,7 +220,7 @@ struct State {
     signaller_signals: Option<SignallerSignals>,
 }
 
-fn create_navigation_event(sink: &super::WebRTCSink, msg: &str) {
+fn create_navigation_event(sink: &super::BaseWebRTCSink, msg: &str) {
     let event: Result<NavigationEvent, _> = serde_json::from_str(msg);
 
     if let Ok(event) = event {
@@ -281,7 +281,7 @@ struct NavigationEventHandler((glib::SignalHandlerId, WebRTCDataChannel));
 
 /// Our instance structure
 #[derive(Default)]
-pub struct WebRTCSink {
+pub struct BaseWebRTCSink {
     state: Mutex<State>,
     settings: Mutex<Settings>,
 }
@@ -486,7 +486,7 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
 /// the codec discovery code, and this gets the job done.
 #[allow(clippy::too_many_arguments)] // This needs some more refactoring and it will happen soon
 fn setup_encoding(
-    element: &super::WebRTCSink,
+    element: &super::BaseWebRTCSink,
     pipeline: &gst::Pipeline,
     src: &gst::Element,
     input_caps: &gst::Caps,
@@ -681,7 +681,7 @@ impl VideoEncoder {
         (width + 1) & !1
     }
 
-    pub(crate) fn set_bitrate(&mut self, element: &super::WebRTCSink, bitrate: i32) {
+    pub(crate) fn set_bitrate(&mut self, element: &super::BaseWebRTCSink, bitrate: i32) {
         match self.factory_name.as_str() {
             "vp8enc" | "vp9enc" => self.element.set_property("target-bitrate", bitrate),
             "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" => self
@@ -795,7 +795,7 @@ impl State {
         }
     }
 
-    fn should_start_signaller(&mut self, element: &super::WebRTCSink) -> bool {
+    fn should_start_signaller(&mut self, element: &super::BaseWebRTCSink) -> bool {
         self.signaller_state == SignallerState::Stopped
             && element.current_state() >= gst::State::Paused
             && self.codec_discovery_done
@@ -854,7 +854,7 @@ impl Session {
     /// to a given WebRTCPad
     fn connect_input_stream(
         &mut self,
-        element: &super::WebRTCSink,
+        element: &super::BaseWebRTCSink,
         producer: &StreamProducer,
         webrtc_pad: &WebRTCPad,
         codecs: &BTreeMap<i32, Codec>,
@@ -1045,7 +1045,7 @@ impl Drop for PipelineWrapper {
 
 impl InputStream {
     /// Called when transitioning state up to Paused
-    fn prepare(&mut self, element: &super::WebRTCSink) -> Result<(), Error> {
+    fn prepare(&mut self, element: &super::BaseWebRTCSink) -> Result<(), Error> {
         let clocksync = make_element("clocksync", None)?;
         let appsink = make_element("appsink", None)?
             .downcast::<gst_app::AppSink>()
@@ -1072,7 +1072,7 @@ impl InputStream {
     }
 
     /// Called when transitioning state back down to Ready
-    fn unprepare(&mut self, element: &super::WebRTCSink) {
+    fn unprepare(&mut self, element: &super::BaseWebRTCSink) {
         self.sink_pad.set_target(None::<&gst::Pad>).unwrap();
 
         if let Some(clocksync) = self.clocksync.take() {
@@ -1089,7 +1089,7 @@ impl InputStream {
 }
 
 impl NavigationEventHandler {
-    fn new(element: &super::WebRTCSink, webrtcbin: &gst::Element) -> Self {
+    fn new(element: &super::BaseWebRTCSink, webrtcbin: &gst::Element) -> Self {
         gst::info!(CAT, "Creating navigation data channel");
         let channel = webrtcbin.emit_by_name::<WebRTCDataChannel>(
             "create-data-channel",
@@ -1117,8 +1117,11 @@ impl NavigationEventHandler {
     }
 }
 
-impl WebRTCSink {
-    fn generate_ssrc(element: &super::WebRTCSink, webrtc_pads: &HashMap<u32, WebRTCPad>) -> u32 {
+impl BaseWebRTCSink {
+    fn generate_ssrc(
+        element: &super::BaseWebRTCSink,
+        webrtc_pads: &HashMap<u32, WebRTCPad>,
+    ) -> u32 {
         loop {
             let ret = fastrand::u32(..);
 
@@ -1130,12 +1133,12 @@ impl WebRTCSink {
     }
 
     fn request_inactive_webrtcbin_pad(
-        element: &super::WebRTCSink,
+        element: &super::BaseWebRTCSink,
         webrtcbin: &gst::Element,
         webrtc_pads: &mut HashMap<u32, WebRTCPad>,
         is_video: bool,
     ) {
-        let ssrc = WebRTCSink::generate_ssrc(element, webrtc_pads);
+        let ssrc = BaseWebRTCSink::generate_ssrc(element, webrtc_pads);
         let media_idx = webrtc_pads.len() as i32;
 
         let pad = webrtcbin
@@ -1169,7 +1172,7 @@ impl WebRTCSink {
     }
 
     async fn request_webrtcbin_pad(
-        element: &super::WebRTCSink,
+        element: &super::BaseWebRTCSink,
         webrtcbin: &gst::Element,
         stream: &InputStream,
         media: Option<&gst_sdp::SDPMediaRef>,
@@ -1177,7 +1180,7 @@ impl WebRTCSink {
         webrtc_pads: &mut HashMap<u32, WebRTCPad>,
         codecs: &mut BTreeMap<i32, Codec>,
     ) {
-        let ssrc = WebRTCSink::generate_ssrc(element, webrtc_pads);
+        let ssrc = BaseWebRTCSink::generate_ssrc(element, webrtc_pads);
         let media_idx = webrtc_pads.len() as i32;
 
         let mut payloader_caps = match media {
@@ -1192,7 +1195,7 @@ impl WebRTCSink {
                     gst::Rank::Marginal,
                 );
 
-                let codec = WebRTCSink::select_codec(
+                let codec = BaseWebRTCSink::select_codec(
                     element,
                     &encoders,
                     &payloaders,
@@ -1224,7 +1227,7 @@ impl WebRTCSink {
         };
 
         if payloader_caps.is_empty() {
-            WebRTCSink::request_inactive_webrtcbin_pad(
+            BaseWebRTCSink::request_inactive_webrtcbin_pad(
                 element,
                 webrtcbin,
                 webrtc_pads,
@@ -1336,7 +1339,7 @@ impl WebRTCSink {
 
     /// Prepare for accepting consumers, by setting
     /// up StreamProducers for each of our sink pads
-    fn prepare(&self, element: &super::WebRTCSink) -> Result<(), Error> {
+    fn prepare(&self, element: &super::BaseWebRTCSink) -> Result<(), Error> {
         gst::debug!(CAT, obj: element, "preparing");
 
         self.state
@@ -1351,7 +1354,7 @@ impl WebRTCSink {
 
     /// Unprepare by stopping consumers, then the signaller object.
     /// Might abort codec discovery
-    fn unprepare(&self, element: &super::WebRTCSink) -> Result<(), Error> {
+    fn unprepare(&self, element: &super::BaseWebRTCSink) -> Result<(), Error> {
         gst::info!(CAT, obj: element, "unpreparing");
 
         let settings = self.settings.lock().unwrap();
@@ -1503,14 +1506,14 @@ impl WebRTCSink {
     }
 
     /// Called by the signaller when it wants to shut down gracefully
-    fn shutdown(&self, element: &super::WebRTCSink) {
+    fn shutdown(&self, element: &super::BaseWebRTCSink) {
         gst::info!(CAT, "Shutting down");
         let _ = element.post_message(gst::message::Eos::builder().src(element).build());
     }
 
     fn on_offer_created(
         &self,
-        _element: &super::WebRTCSink,
+        _element: &super::BaseWebRTCSink,
         offer: gst_webrtc::WebRTCSessionDescription,
         session_id: &str,
     ) {
@@ -1531,7 +1534,7 @@ impl WebRTCSink {
 
     fn on_answer_created(
         &self,
-        element: &super::WebRTCSink,
+        element: &super::BaseWebRTCSink,
         answer: gst_webrtc::WebRTCSessionDescription,
         session_id: &str,
     ) {
@@ -1567,7 +1570,7 @@ impl WebRTCSink {
         }
     }
 
-    fn on_remote_description_offer_set(&self, element: &super::WebRTCSink, session_id: String) {
+    fn on_remote_description_offer_set(&self, element: &super::BaseWebRTCSink, session_id: String) {
         let state = self.state.lock().unwrap();
 
         if let Some(session) = state.sessions.get(&session_id) {
@@ -1663,7 +1666,7 @@ impl WebRTCSink {
     }
 
     async fn select_codec(
-        element: &super::WebRTCSink,
+        element: &super::BaseWebRTCSink,
         encoders: &gst::glib::List<gst::ElementFactory>,
         payloaders: &gst::glib::List<gst::ElementFactory>,
         media: &gst_sdp::SDPMediaRef,
@@ -1713,7 +1716,7 @@ impl WebRTCSink {
             let encoding_name = s.get::<String>("encoding-name").unwrap();
 
             if let Some(codec) =
-                WebRTCSink::build_codec(&encoding_name, payload, encoders, payloaders)
+                BaseWebRTCSink::build_codec(&encoding_name, payload, encoders, payloaders)
             {
                 for (user_caps, codecs_and_caps) in ordered_codecs_and_caps.iter_mut() {
                     if codec.caps.is_subset(user_caps) {
@@ -1751,7 +1754,7 @@ impl WebRTCSink {
             .iter()
             .flat_map(|(_, codecs_and_caps)| codecs_and_caps)
             .map(|(codec, caps)| async move {
-                WebRTCSink::run_discovery_pipeline(element, codec, in_caps, caps, twcc_idx)
+                BaseWebRTCSink::run_discovery_pipeline(element, codec, in_caps, caps, twcc_idx)
                     .await
                     .map(|s| {
                         let mut codec = codec.clone();
@@ -1772,7 +1775,7 @@ impl WebRTCSink {
 
     fn negotiate(
         &self,
-        element: &super::WebRTCSink,
+        element: &super::BaseWebRTCSink,
         session_id: &str,
         offer: Option<&gst_webrtc::WebRTCSessionDescription>,
     ) {
@@ -1866,7 +1869,7 @@ impl WebRTCSink {
 
     fn on_ice_candidate(
         &self,
-        _element: &super::WebRTCSink,
+        _element: &super::BaseWebRTCSink,
         session_id: String,
         sdp_m_line_index: u32,
         candidate: String,
@@ -2267,7 +2270,7 @@ impl WebRTCSink {
                             media_is_video == stream_is_video
                         }) {
                             let stream = streams.remove(idx);
-                            WebRTCSink::request_webrtcbin_pad(
+                            BaseWebRTCSink::request_webrtcbin_pad(
                                 &element,
                                 &webrtcbin,
                                 &stream,
@@ -2278,7 +2281,7 @@ impl WebRTCSink {
                             )
                             .await;
                         } else {
-                            WebRTCSink::request_inactive_webrtcbin_pad(
+                            BaseWebRTCSink::request_inactive_webrtcbin_pad(
                                 &element,
                                 &webrtcbin,
                                 &mut webrtc_pads,
@@ -2288,7 +2291,7 @@ impl WebRTCSink {
                     }
                 } else {
                     for stream in streams {
-                        WebRTCSink::request_webrtcbin_pad(
+                        BaseWebRTCSink::request_webrtcbin_pad(
                             &element,
                             &webrtcbin,
                             &stream,
@@ -2359,7 +2362,7 @@ impl WebRTCSink {
     /// Called by the signaller to remove a consumer
     fn remove_session(
         &self,
-        element: &super::WebRTCSink,
+        element: &super::BaseWebRTCSink,
         session_id: &str,
         signal: bool,
     ) -> Result<(), WebRTCSinkError> {
@@ -2387,7 +2390,7 @@ impl WebRTCSink {
 
     fn process_loss_stats(
         &self,
-        element: &super::WebRTCSink,
+        element: &super::BaseWebRTCSink,
         session_id: &str,
         stats: &gst::Structure,
     ) {
@@ -2402,7 +2405,7 @@ impl WebRTCSink {
 
     fn process_stats(
         &self,
-        element: &super::WebRTCSink,
+        element: &super::BaseWebRTCSink,
         webrtcbin: gst::Element,
         session_id: &str,
     ) {
@@ -2425,7 +2428,12 @@ impl WebRTCSink {
         webrtcbin.emit_by_name::<()>("get-stats", &[&None::<gst::Pad>, &promise]);
     }
 
-    fn set_rtptrxsend(&self, element: &super::WebRTCSink, peer_id: &str, rtprtxsend: gst::Element) {
+    fn set_rtptrxsend(
+        &self,
+        element: &super::BaseWebRTCSink,
+        peer_id: &str,
+        rtprtxsend: gst::Element,
+    ) {
         let mut state = element.imp().state.lock().unwrap();
 
         if let Some(session) = state.sessions.get_mut(peer_id) {
@@ -2433,7 +2441,7 @@ impl WebRTCSink {
         }
     }
 
-    fn set_bitrate(&self, element: &super::WebRTCSink, peer_id: &str, bitrate: u32) {
+    fn set_bitrate(&self, element: &super::BaseWebRTCSink, peer_id: &str, bitrate: u32) {
         let settings = element.imp().settings.lock().unwrap();
         let mut state = element.imp().state.lock().unwrap();
 
@@ -2467,7 +2475,7 @@ impl WebRTCSink {
         }
     }
 
-    fn on_remote_description_set(&self, element: &super::WebRTCSink, session_id: String) {
+    fn on_remote_description_set(&self, element: &super::BaseWebRTCSink, session_id: String) {
         let mut state = self.state.lock().unwrap();
         let mut remove = false;
         let codecs = state.codecs.clone();
@@ -2587,7 +2595,7 @@ impl WebRTCSink {
 
     fn handle_sdp_answer(
         &self,
-        element: &super::WebRTCSink,
+        element: &super::BaseWebRTCSink,
         session_id: &str,
         desc: &gst_webrtc::WebRTCSessionDescription,
     ) {
@@ -2681,7 +2689,7 @@ impl WebRTCSink {
     }
 
     async fn run_discovery_pipeline(
-        element: &super::WebRTCSink,
+        element: &super::BaseWebRTCSink,
         codec: &Codec,
         caps: &gst::Caps,
         output_caps: &gst::Caps,
@@ -2802,7 +2810,7 @@ impl WebRTCSink {
     }
 
     async fn lookup_caps(
-        element: &super::WebRTCSink,
+        element: &super::BaseWebRTCSink,
         name: String,
         in_caps: gst::Caps,
         output_caps: gst::Caps,
@@ -2823,7 +2831,7 @@ impl WebRTCSink {
             .iter()
             .filter(|(_, codec)| codec.is_video() == is_video)
             .map(|(_, codec)| {
-                WebRTCSink::run_discovery_pipeline(
+                BaseWebRTCSink::run_discovery_pipeline(
                     element,
                     codec,
                     &sink_caps,
@@ -2854,7 +2862,7 @@ impl WebRTCSink {
         (name, payloader_caps)
     }
 
-    async fn lookup_streams_caps(&self, element: &super::WebRTCSink) -> Result<(), Error> {
+    async fn lookup_streams_caps(&self, element: &super::BaseWebRTCSink) -> Result<(), Error> {
         let codecs = self.lookup_codecs();
 
         gst::debug!(CAT, obj: element, "Looked up codecs {codecs:?}");
@@ -2866,7 +2874,7 @@ impl WebRTCSink {
             .streams
             .iter()
             .map(|(name, stream)| {
-                WebRTCSink::lookup_caps(
+                BaseWebRTCSink::lookup_caps(
                     element,
                     name.to_owned(),
                     stream.in_caps.as_ref().unwrap().to_owned(),
@@ -2907,7 +2915,12 @@ impl WebRTCSink {
         )
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &super::WebRTCSink, event: gst::Event) -> bool {
+    fn sink_event(
+        &self,
+        pad: &gst::Pad,
+        element: &super::BaseWebRTCSink,
+        event: gst::Event,
+    ) -> bool {
         use gst::EventView;
 
         match event.view() {
@@ -2995,22 +3008,22 @@ impl WebRTCSink {
 }
 
 #[glib::object_subclass]
-impl ObjectSubclass for WebRTCSink {
-    const NAME: &'static str = "GstWebRTCSink";
-    type Type = super::WebRTCSink;
+impl ObjectSubclass for BaseWebRTCSink {
+    const NAME: &'static str = "GstBaseWebRTCSink";
+    type Type = super::BaseWebRTCSink;
     type ParentType = gst::Bin;
     type Interfaces = (gst::ChildProxy, gst_video::Navigation);
 }
 
-unsafe impl<T: WebRTCSinkImpl> IsSubclassable<T> for super::WebRTCSink {
+unsafe impl<T: BaseWebRTCSinkImpl> IsSubclassable<T> for super::BaseWebRTCSink {
     fn class_init(class: &mut glib::Class<Self>) {
         Self::parent_class_init::<T>(class);
     }
 }
 
-pub(crate) trait WebRTCSinkImpl: BinImpl {}
+pub(crate) trait BaseWebRTCSinkImpl: BinImpl {}
 
-impl ObjectImpl for WebRTCSink {
+impl ObjectImpl for BaseWebRTCSink {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
@@ -3247,7 +3260,7 @@ impl ObjectImpl for WebRTCSink {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
             vec![
                 /**
-                 * RsWebRTCSink::consumer-added:
+                 * RsBaseWebRTCSink::consumer-added:
                  * @consumer_id: Identifier of the consumer added
                  * @webrtcbin: The new webrtcbin
                  *
@@ -3258,7 +3271,7 @@ impl ObjectImpl for WebRTCSink {
                     .param_types([String::static_type(), gst::Element::static_type()])
                     .build(),
                 /**
-                 * RsWebRTCSink::consumer_removed:
+                 * RsBaseWebRTCSink::consumer_removed:
                  * @consumer_id: Identifier of the consumer that was removed
                  * @webrtcbin: The webrtcbin connected to the newly removed consumer
                  *
@@ -3269,14 +3282,14 @@ impl ObjectImpl for WebRTCSink {
                     .param_types([String::static_type(), gst::Element::static_type()])
                     .build(),
                 /**
-                 * RsWebRTCSink::get_sessions:
+                 * RsBaseWebRTCSink::get_sessions:
                  *
                  * List all sessions (by ID).
                  */
                 glib::subclass::Signal::builder("get-sessions")
                     .action()
                     .class_handler(|_, args| {
-                        let element = args[0].get::<super::WebRTCSink>().expect("signal arg");
+                        let element = args[0].get::<super::BaseWebRTCSink>().expect("signal arg");
                         let this = element.imp();
 
                         let res = Some(
@@ -3294,7 +3307,7 @@ impl ObjectImpl for WebRTCSink {
                     .return_type::<Vec<String>>()
                     .build(),
                 /**
-                 * RsWebRTCSink::encoder-setup:
+                 * RsBaseWebRTCSink::encoder-setup:
                  * @consumer_id: Identifier of the consumer
                  * @pad_name: The name of the corresponding input pad
                  * @encoder: The constructed encoder
@@ -3313,7 +3326,7 @@ impl ObjectImpl for WebRTCSink {
                     .return_type::<bool>()
                     .accumulator(|_hint, _ret, value| !value.get::<bool>().unwrap())
                     .class_handler(|_, args| {
-                        let element = args[0].get::<super::WebRTCSink>().expect("signal arg");
+                        let element = args[0].get::<super::BaseWebRTCSink>().expect("signal arg");
                         let enc = args[3].get::<gst::Element>().unwrap();
 
                         gst::debug!(
@@ -3349,22 +3362,9 @@ impl ObjectImpl for WebRTCSink {
     }
 }
 
-impl GstObjectImpl for WebRTCSink {}
+impl GstObjectImpl for BaseWebRTCSink {}
 
-impl ElementImpl for WebRTCSink {
-    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
-            gst::subclass::ElementMetadata::new(
-                "WebRTCSink",
-                "Sink/Network/WebRTC",
-                "WebRTC sink",
-                "Mathieu Duponchelle <mathieu@centricular.com>",
-            )
-        });
-
-        Some(&*ELEMENT_METADATA)
-    }
-
+impl ElementImpl for BaseWebRTCSink {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
             let caps = gst::Caps::builder_full()
@@ -3436,7 +3436,7 @@ impl ElementImpl for WebRTCSink {
 
         let sink_pad = gst::GhostPad::builder_with_template(templ, Some(name.as_str()))
             .event_function(|pad, parent, event| {
-                WebRTCSink::catch_panic_pad_function(
+                BaseWebRTCSink::catch_panic_pad_function(
                     parent,
                     || false,
                     |this| this.sink_event(pad.upcast_ref(), &this.obj(), event),
@@ -3514,9 +3514,9 @@ impl ElementImpl for WebRTCSink {
     }
 }
 
-impl BinImpl for WebRTCSink {}
+impl BinImpl for BaseWebRTCSink {}
 
-impl ChildProxyImpl for WebRTCSink {
+impl ChildProxyImpl for BaseWebRTCSink {
     fn child_by_index(&self, _index: u32) -> Option<glib::Object> {
         None
     }
@@ -3533,7 +3533,7 @@ impl ChildProxyImpl for WebRTCSink {
     }
 }
 
-impl NavigationImpl for WebRTCSink {
+impl NavigationImpl for BaseWebRTCSink {
     fn send_event(&self, event_def: gst::Structure) {
         let mut state = self.state.lock().unwrap();
         let event = gst::event::Navigation::new(event_def);
@@ -3551,12 +3551,45 @@ impl NavigationImpl for WebRTCSink {
 }
 
 #[derive(Default)]
+pub struct WebRTCSink {}
+
+impl ObjectImpl for WebRTCSink {}
+
+impl GstObjectImpl for WebRTCSink {}
+
+impl ElementImpl for WebRTCSink {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "WebRTCSink",
+                "Sink/Network/WebRTC",
+                "WebRTC sink with custom protocol signaller",
+                "Mathieu Duponchelle <mathieu@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+}
+
+impl BinImpl for WebRTCSink {}
+
+impl BaseWebRTCSinkImpl for WebRTCSink {}
+
+#[glib::object_subclass]
+impl ObjectSubclass for WebRTCSink {
+    const NAME: &'static str = "GstWebRTCSink";
+    type Type = super::WebRTCSink;
+    type ParentType = super::BaseWebRTCSink;
+}
+
+#[derive(Default)]
 pub struct AwsKvsWebRTCSink {}
 
 impl ObjectImpl for AwsKvsWebRTCSink {
     fn constructed(&self) {
         let element = self.obj();
-        let ws = element.upcast_ref::<super::WebRTCSink>().imp();
+        let ws = element.upcast_ref::<super::BaseWebRTCSink>().imp();
 
         let _ = ws.set_signaller(AwsKvsSignaller::default().upcast());
     }
@@ -3564,15 +3597,28 @@ impl ObjectImpl for AwsKvsWebRTCSink {
 
 impl GstObjectImpl for AwsKvsWebRTCSink {}
 
-impl ElementImpl for AwsKvsWebRTCSink {}
+impl ElementImpl for AwsKvsWebRTCSink {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "AwsKvsWebRTCSink",
+                "Sink/Network/WebRTC",
+                "WebRTC sink with kinesis video streams signaller",
+                "Mathieu Duponchelle <mathieu@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+}
 
 impl BinImpl for AwsKvsWebRTCSink {}
 
-impl WebRTCSinkImpl for AwsKvsWebRTCSink {}
+impl BaseWebRTCSinkImpl for AwsKvsWebRTCSink {}
 
 #[glib::object_subclass]
 impl ObjectSubclass for AwsKvsWebRTCSink {
     const NAME: &'static str = "GstAwsKvsWebRTCSink";
     type Type = super::AwsKvsWebRTCSink;
-    type ParentType = super::WebRTCSink;
+    type ParentType = super::BaseWebRTCSink;
 }
