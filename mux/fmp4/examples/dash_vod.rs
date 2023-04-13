@@ -72,7 +72,10 @@ fn main() -> Result<(), Error> {
                 // header, i.e. the `ftyp`, `moov` and other media boxes.
                 //
                 // This might be the initial header or the updated header at the end of the stream.
-                if first.flags().contains(gst::BufferFlags::DISCONT | gst::BufferFlags::HEADER) {
+                if first
+                    .flags()
+                    .contains(gst::BufferFlags::DISCONT | gst::BufferFlags::HEADER)
+                {
                     let mut path = state.path.clone();
                     std::fs::create_dir_all(&path).expect("failed to create directory");
                     path.push("init.cmfi");
@@ -99,32 +102,47 @@ fn main() -> Result<(), Error> {
                 // followed by one or more actual media buffers.
                 assert!(first.flags().contains(gst::BufferFlags::HEADER));
 
-                let segment = sample.segment().expect("no segment")
-                    .downcast_ref::<gst::ClockTime>().expect("no time segment");
+                let segment = sample
+                    .segment()
+                    .expect("no segment")
+                    .downcast_ref::<gst::ClockTime>()
+                    .expect("no time segment");
 
                 // Initialize the start time with the first PTS we observed. This will be used
                 // later for calculating the duration of the whole media for the DASH manifest.
                 //
                 // The PTS of the segment header is equivalent to the earliest PTS of the whole
                 // segment.
-                let pts = segment.to_running_time(first.pts().unwrap()).expect("can't get running time");
+                let pts = segment
+                    .to_running_time(first.pts().unwrap())
+                    .expect("can't get running time");
                 if state.start_time.is_none() {
                     state.start_time = Some(pts);
                 }
 
                 // The metadata of the first media buffer is duplicated to the segment header.
                 // Based on this we can know the timecode of the first frame in this segment.
-                let meta = first.meta::<gst_video::VideoTimeCodeMeta>().expect("no timecode meta");
+                let meta = first
+                    .meta::<gst_video::VideoTimeCodeMeta>()
+                    .expect("no timecode meta");
 
                 let mut path = state.path.clone();
                 path.push(format!("segment_{}.cmfv", state.segments.len() + 1));
-                println!("writing segment with timecode {} to {}", meta.tc(), path.display());
+                println!(
+                    "writing segment with timecode {} to {}",
+                    meta.tc(),
+                    path.display()
+                );
 
                 // Calculate the end time at this point. The duration of the segment header is set
                 // to the whole duration of this segment.
                 let duration = first.duration().unwrap();
                 let end_time = first.pts().unwrap() + first.duration().unwrap();
-                state.end_time = Some(segment.to_running_time(end_time).expect("can't get running time"));
+                state.end_time = Some(
+                    segment
+                        .to_running_time(end_time)
+                        .expect("can't get running time"),
+                );
 
                 let mut file = std::fs::File::create(path).expect("failed to open fragment");
                 for buffer in &*buffer_list {
