@@ -2220,10 +2220,6 @@ impl BaseWebRTCSink {
             }
         });
 
-        if settings.enable_data_channel_navigation {
-            state.navigation_handler = Some(NavigationEventHandler::new(&element, &webrtcbin));
-        }
-
         state.sessions.insert(session_id.to_string(), session);
 
         let mut streams: Vec<InputStream> = state.streams.values().cloned().collect();
@@ -2303,6 +2299,9 @@ impl BaseWebRTCSink {
                         .await;
                     }
                 }
+
+                let enable_data_channel_navigation = settings_clone.enable_data_channel_navigation;
+
                 drop(settings_clone);
 
                 {
@@ -2325,6 +2324,12 @@ impl BaseWebRTCSink {
                     );
                     let _ = this.remove_session(&element, &session_id, true);
                     return;
+                }
+
+                if enable_data_channel_navigation {
+                    let mut state = this.state.lock().unwrap();
+                    state.navigation_handler =
+                        Some(NavigationEventHandler::new(&element, &webrtcbin));
                 }
 
                 // This is intentionally emitted with the pipeline in the Ready state,
