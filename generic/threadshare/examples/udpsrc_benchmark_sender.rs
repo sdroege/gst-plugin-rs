@@ -170,31 +170,32 @@ fn run(pipeline: gst::Pipeline) {
 
     let bus = pipeline.bus().unwrap();
     let l_clone = l.clone();
-    bus.add_watch(move |_, msg| {
-        use gst::MessageView;
-        match msg.view() {
-            MessageView::Eos(_) => {
-                gst::info!(CAT, "Received eos");
-                l_clone.quit();
+    let _bus_watch = bus
+        .add_watch(move |_, msg| {
+            use gst::MessageView;
+            match msg.view() {
+                MessageView::Eos(_) => {
+                    gst::info!(CAT, "Received eos");
+                    l_clone.quit();
 
-                glib::Continue(false)
-            }
-            MessageView::Error(msg) => {
-                gst::error!(
-                    CAT,
-                    "Error from {:?}: {} ({:?})",
-                    msg.src().map(|s| s.path_string()),
-                    msg.error(),
-                    msg.debug()
-                );
-                l_clone.quit();
+                    glib::Continue(false)
+                }
+                MessageView::Error(msg) => {
+                    gst::error!(
+                        CAT,
+                        "Error from {:?}: {} ({:?})",
+                        msg.src().map(|s| s.path_string()),
+                        msg.error(),
+                        msg.debug()
+                    );
+                    l_clone.quit();
 
-                glib::Continue(false)
+                    glib::Continue(false)
+                }
+                _ => glib::Continue(true),
             }
-            _ => glib::Continue(true),
-        }
-    })
-    .expect("Failed to add bus watch");
+        })
+        .expect("Failed to add bus watch");
 
     pipeline.set_state(gst::State::Playing).unwrap();
     l.run();

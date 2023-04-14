@@ -135,38 +135,39 @@ fn multiple_contexts_queue() {
 
     let bus = pipeline.bus().unwrap();
     let l_clone = l.clone();
-    bus.add_watch(move |_, msg| {
-        use gst::MessageView;
+    let _bus_watch = bus
+        .add_watch(move |_, msg| {
+            use gst::MessageView;
 
-        match msg.view() {
-            MessageView::StateChanged(state_changed) => {
-                if let Some(source) = state_changed.src() {
-                    if source.type_() == gst::Pipeline::static_type()
-                        && state_changed.old() == gst::State::Paused
-                        && state_changed.current() == gst::State::Playing
-                    {
-                        if let Some(test_scenario) = test_scenario.take() {
-                            std::thread::spawn(test_scenario);
+            match msg.view() {
+                MessageView::StateChanged(state_changed) => {
+                    if let Some(source) = state_changed.src() {
+                        if source.type_() == gst::Pipeline::static_type()
+                            && state_changed.old() == gst::State::Paused
+                            && state_changed.current() == gst::State::Playing
+                        {
+                            if let Some(test_scenario) = test_scenario.take() {
+                                std::thread::spawn(test_scenario);
+                            }
                         }
                     }
                 }
-            }
-            MessageView::Error(err) => {
-                gst::error!(
-                    CAT,
-                    "multiple_contexts_queue: Error from {:?}: {} ({:?})",
-                    err.src().map(|s| s.path_string()),
-                    err.error(),
-                    err.debug()
-                );
-                l_clone.quit();
-            }
-            _ => (),
-        };
+                MessageView::Error(err) => {
+                    gst::error!(
+                        CAT,
+                        "multiple_contexts_queue: Error from {:?}: {} ({:?})",
+                        err.src().map(|s| s.path_string()),
+                        err.error(),
+                        err.debug()
+                    );
+                    l_clone.quit();
+                }
+                _ => (),
+            };
 
-        glib::Continue(true)
-    })
-    .unwrap();
+            glib::Continue(true)
+        })
+        .unwrap();
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -281,38 +282,39 @@ fn multiple_contexts_proxy() {
 
     let bus = pipeline.bus().unwrap();
     let l_clone = l.clone();
-    bus.add_watch(move |_, msg| {
-        use gst::MessageView;
+    let _bus_watch = bus
+        .add_watch(move |_, msg| {
+            use gst::MessageView;
 
-        match msg.view() {
-            MessageView::StateChanged(state_changed) => {
-                if let Some(source) = state_changed.src() {
-                    if source.type_() == gst::Pipeline::static_type()
-                        && state_changed.old() == gst::State::Paused
-                        && state_changed.current() == gst::State::Playing
-                    {
-                        if let Some(test_scenario) = test_scenario.take() {
-                            std::thread::spawn(test_scenario);
+            match msg.view() {
+                MessageView::StateChanged(state_changed) => {
+                    if let Some(source) = state_changed.src() {
+                        if source.type_() == gst::Pipeline::static_type()
+                            && state_changed.old() == gst::State::Paused
+                            && state_changed.current() == gst::State::Playing
+                        {
+                            if let Some(test_scenario) = test_scenario.take() {
+                                std::thread::spawn(test_scenario);
+                            }
                         }
                     }
                 }
-            }
-            MessageView::Error(err) => {
-                gst::error!(
-                    CAT,
-                    "multiple_contexts_proxy: Error from {:?}: {} ({:?})",
-                    err.src().map(|s| s.path_string()),
-                    err.error(),
-                    err.debug()
-                );
-                l_clone.quit();
-            }
-            _ => (),
-        };
+                MessageView::Error(err) => {
+                    gst::error!(
+                        CAT,
+                        "multiple_contexts_proxy: Error from {:?}: {} ({:?})",
+                        err.src().map(|s| s.path_string()),
+                        err.error(),
+                        err.debug()
+                    );
+                    l_clone.quit();
+                }
+                _ => (),
+            };
 
-        glib::Continue(true)
-    })
-    .unwrap();
+            glib::Continue(true)
+        })
+        .unwrap();
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -405,7 +407,7 @@ fn eos() {
     });
 
     let l_clone = l.clone();
-    pipeline
+    let _bus_watch = pipeline
         .bus()
         .unwrap()
         .add_watch(move |_, msg| {
@@ -561,7 +563,7 @@ fn premature_shutdown() {
     });
 
     let l_clone = l.clone();
-    pipeline
+    let _bus_watch = pipeline
         .bus()
         .unwrap()
         .add_watch(move |_, msg| {
@@ -657,7 +659,7 @@ fn socket_play_null_play() {
     });
 
     let l_clone = l.clone();
-    pipeline
+    let _bus_watch = pipeline
         .bus()
         .unwrap()
         .add_watch(move |_, msg| {

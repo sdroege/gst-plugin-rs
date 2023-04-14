@@ -95,42 +95,44 @@ fn create_ui(app: &gtk::Application) {
         .expect("Unable to set the pipeline to the `Playing` state");
 
     let app_weak = app.downgrade();
-    bus.add_watch_local(move |_, msg| {
-        use gst::MessageView;
+    let bus_watch = bus
+        .add_watch_local(move |_, msg| {
+            use gst::MessageView;
 
-        let app = match app_weak.upgrade() {
-            Some(app) => app,
-            None => return glib::Continue(false),
-        };
+            let app = match app_weak.upgrade() {
+                Some(app) => app,
+                None => return glib::Continue(false),
+            };
 
-        match msg.view() {
-            MessageView::Eos(..) => app.quit(),
-            MessageView::Error(err) => {
-                println!(
-                    "Error from {:?}: {} ({:?})",
-                    err.src().map(|s| s.path_string()),
-                    err.error(),
-                    err.debug()
-                );
-                app.quit();
-            }
-            _ => (),
-        };
+            match msg.view() {
+                MessageView::Eos(..) => app.quit(),
+                MessageView::Error(err) => {
+                    println!(
+                        "Error from {:?}: {} ({:?})",
+                        err.src().map(|s| s.path_string()),
+                        err.error(),
+                        err.debug()
+                    );
+                    app.quit();
+                }
+                _ => (),
+            };
 
-        glib::Continue(true)
-    })
-    .expect("Failed to add bus watch");
+            glib::Continue(true)
+        })
+        .expect("Failed to add bus watch");
 
     let timeout_id = RefCell::new(Some(timeout_id));
     let pipeline = RefCell::new(Some(pipeline));
+    let bus_watch = RefCell::new(Some(bus_watch));
     app.connect_shutdown(move |_| {
         window.close();
 
+        drop(bus_watch.borrow_mut().take());
         if let Some(pipeline) = pipeline.borrow_mut().take() {
             pipeline
                 .set_state(gst::State::Null)
                 .expect("Unable to set the pipeline to the `Null` state");
-            pipeline.bus().unwrap().remove_watch().unwrap();
         }
 
         if let Some(timeout_id) = timeout_id.borrow_mut().take() {

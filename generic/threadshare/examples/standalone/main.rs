@@ -108,45 +108,46 @@ fn main() {
     let terminated_count = Arc::new(AtomicU32::new(0));
     let pipeline_clone = pipeline.clone();
     let l_clone = l.clone();
-    bus.add_watch(move |_, msg| {
-        use gst::MessageView;
-        match msg.view() {
-            MessageView::Eos(_) => {
-                // Actually, we don't post EOS (see sinks impl).
-                gst::info!(CAT, "Received eos");
-                l_clone.quit();
+    let _bus_watch = bus
+        .add_watch(move |_, msg| {
+            use gst::MessageView;
+            match msg.view() {
+                MessageView::Eos(_) => {
+                    // Actually, we don't post EOS (see sinks impl).
+                    gst::info!(CAT, "Received eos");
+                    l_clone.quit();
 
-                glib::Continue(false)
-            }
-            MessageView::Error(msg) => {
-                if let gst::MessageView::Error(msg) = msg.message().view() {
-                    if msg.error().matches(gst::LibraryError::Shutdown) {
-                        if terminated_count.fetch_add(1, Ordering::SeqCst) == args.streams - 1 {
-                            gst::info!(CAT, "Received all shutdown requests");
-                            l_clone.quit();
+                    glib::Continue(false)
+                }
+                MessageView::Error(msg) => {
+                    if let gst::MessageView::Error(msg) = msg.message().view() {
+                        if msg.error().matches(gst::LibraryError::Shutdown) {
+                            if terminated_count.fetch_add(1, Ordering::SeqCst) == args.streams - 1 {
+                                gst::info!(CAT, "Received all shutdown requests");
+                                l_clone.quit();
 
-                            return glib::Continue(false);
-                        } else {
-                            return glib::Continue(true);
+                                return glib::Continue(false);
+                            } else {
+                                return glib::Continue(true);
+                            }
                         }
                     }
+
+                    gst::error!(
+                        CAT,
+                        "Error from {:?}: {} ({:?})",
+                        msg.src().map(|s| s.path_string()),
+                        msg.error(),
+                        msg.debug()
+                    );
+                    l_clone.quit();
+
+                    glib::Continue(false)
                 }
-
-                gst::error!(
-                    CAT,
-                    "Error from {:?}: {} ({:?})",
-                    msg.src().map(|s| s.path_string()),
-                    msg.error(),
-                    msg.debug()
-                );
-                l_clone.quit();
-
-                glib::Continue(false)
+                _ => glib::Continue(true),
             }
-            _ => glib::Continue(true),
-        }
-    })
-    .expect("Failed to add bus watch");
+        })
+        .expect("Failed to add bus watch");
 
     gst::info!(CAT, "Switching to Ready");
     let start = Instant::now();

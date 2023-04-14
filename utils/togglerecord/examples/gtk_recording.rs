@@ -284,41 +284,42 @@ fn create_ui(app: &gtk::Application) {
 
     let bus = pipeline.bus().unwrap();
     let app_weak = app.downgrade();
-    bus.add_watch_local(move |_, msg| {
-        use gst::MessageView;
+    let bus_watch = bus
+        .add_watch_local(move |_, msg| {
+            use gst::MessageView;
 
-        let app = match app_weak.upgrade() {
-            Some(app) => app,
-            None => return glib::Continue(false),
-        };
+            let app = match app_weak.upgrade() {
+                Some(app) => app,
+                None => return glib::Continue(false),
+            };
 
-        match msg.view() {
-            MessageView::Eos(..) => app.quit(),
-            MessageView::Error(err) => {
-                println!(
-                    "Error from {:?}: {} ({:?})",
-                    msg.src().map(|s| s.path_string()),
-                    err.error(),
-                    err.debug()
-                );
-                app.quit();
-            }
-            _ => (),
-        };
+            match msg.view() {
+                MessageView::Eos(..) => app.quit(),
+                MessageView::Error(err) => {
+                    println!(
+                        "Error from {:?}: {} ({:?})",
+                        msg.src().map(|s| s.path_string()),
+                        err.error(),
+                        err.debug()
+                    );
+                    app.quit();
+                }
+                _ => (),
+            };
 
-        glib::Continue(true)
-    })
-    .expect("Failed to add bus watch");
+            glib::Continue(true)
+        })
+        .expect("Failed to add bus watch");
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
     // Pipeline reference is owned by the closure below, so will be
     // destroyed once the app is destroyed
     let timeout_id = RefCell::new(Some(timeout_id));
+    let bus_watch = RefCell::new(Some(bus_watch));
     app.connect_shutdown(move |_| {
+        drop(bus_watch.borrow_mut().take());
         pipeline.set_state(gst::State::Null).unwrap();
-
-        bus.remove_watch().unwrap();
 
         if let Some(timeout_id) = timeout_id.borrow_mut().take() {
             timeout_id.remove();

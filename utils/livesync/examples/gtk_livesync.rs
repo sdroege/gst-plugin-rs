@@ -10,7 +10,7 @@
 use gio::prelude::*;
 use gst::{glib, prelude::*};
 use gtk::prelude::*;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 
 struct DroppingProbe(glib::WeakRef<gst::Pad>, Option<gst::PadProbeId>);
 
@@ -106,7 +106,7 @@ fn create_window(app: &gtk::Application) {
         }
     });
 
-    {
+    let bus_watch = {
         let bus = pipeline.bus().unwrap();
         let window = window.downgrade();
         bus.add_watch_local(move |_, msg| {
@@ -136,8 +136,8 @@ fn create_window(app: &gtk::Application) {
 
             glib::Continue(true)
         })
-        .unwrap();
-    }
+        .unwrap()
+    };
 
     {
         let pipeline = pipeline.clone();
@@ -148,7 +148,9 @@ fn create_window(app: &gtk::Application) {
         });
     }
 
+    let bus_watch = RefCell::new(Some(bus_watch));
     window.connect_unrealize(move |_| {
+        drop(bus_watch.borrow_mut().take());
         pipeline
             .set_state(gst::State::Null)
             .expect("Failed to stop pipeline");
