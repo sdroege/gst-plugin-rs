@@ -1200,11 +1200,9 @@ impl ObjectSubclass for BandwidthEstimator {
                                         let mut state = this.state.lock().unwrap();
 
                                         state.detector.update(&mut packets);
-                                        if !state.delay_control(&bwe) {
-                                            state.loss_control(&bwe)
-                                        } else {
-                                            true
-                                        }
+                                        let bitrate_updated_by_delay = state.delay_control(&bwe);
+                                        let bitrate_updated_by_loss = state.loss_control(&bwe);
+                                        bitrate_updated_by_delay || bitrate_updated_by_loss
                                     };
 
                                     if bitrate_changed {
