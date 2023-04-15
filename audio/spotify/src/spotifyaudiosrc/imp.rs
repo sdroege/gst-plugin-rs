@@ -488,9 +488,7 @@ impl SpotifyAudioSrc {
                         bail!("password is not set and credentials are not in cache");
                     }
 
-                    let cred = Credentials::with_password(&settings.username, &settings.password);
-                    cache.save_credentials(&cred);
-                    cred
+                    Credentials::with_password(&settings.username, &settings.password)
                 }
             };
 
@@ -505,7 +503,7 @@ impl SpotifyAudioSrc {
         };
 
         let (session, _credentials) =
-            Session::connect(SessionConfig::default(), credentials, Some(cache), false).await?;
+            Session::connect(SessionConfig::default(), credentials, Some(cache), true).await?;
 
         let player_config = PlayerConfig {
             passthrough: true,
