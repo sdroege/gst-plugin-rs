@@ -131,29 +131,37 @@ impl Settings {
 
         let cache = Cache::new(credentials_cache, None, files_cache, max_size)?;
 
-        let credentials = match cache.credentials() {
-            Some(cached_cred) => {
-                gst::debug!(cat, obj: &src, "reuse credentials from cache",);
-                cached_cred
+        if let Some(cached_cred) = cache.credentials() {
+            gst::debug!(cat, obj: &src, "reuse credentials from cache",);
+            if let Ok((session, _credentials)) = Session::connect(
+                SessionConfig::default(),
+                cached_cred,
+                Some(cache.clone()),
+                true,
+            )
+            .await
+            {
+                return Ok(session);
             }
-            None => {
-                gst::debug!(cat, obj: &src, "credentials not in cache",);
+        }
 
-                if self.username.is_empty() {
-                    bail!("username is not set and credentials are not in cache");
-                }
-                if self.password.is_empty() {
-                    bail!("password is not set and credentials are not in cache");
-                }
+        gst::debug!(
+            cat,
+            obj: &src,
+            "credentials not in cache or cached credentials invalid",
+        );
 
-                let cred = Credentials::with_password(&self.username, &self.password);
-                cache.save_credentials(&cred);
-                cred
-            }
-        };
+        if self.username.is_empty() {
+            bail!("username is not set and credentials are not in cache");
+        }
+        if self.password.is_empty() {
+            bail!("password is not set and credentials are not in cache");
+        }
+
+        let cred = Credentials::with_password(&self.username, &self.password);
 
         let (session, _credentials) =
-            Session::connect(SessionConfig::default(), credentials, Some(cache), false).await?;
+            Session::connect(SessionConfig::default(), cred, Some(cache), true).await?;
 
         Ok(session)
     }
