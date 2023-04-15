@@ -1194,19 +1194,22 @@ impl ObjectSubclass for BandwidthEstimator {
                                     })
                                     .collect::<Vec<Packet>>();
 
-                                let bitrate_changed = {
-                                    let mut state = this.state.lock().unwrap();
+                                // The list of packets could be empty once parsed
+                                if !packets.is_empty() {
+                                    let bitrate_changed = {
+                                        let mut state = this.state.lock().unwrap();
 
-                                    state.detector.update(&mut packets);
-                                    if !state.delay_control(&bwe) {
-                                        state.loss_control(&bwe)
-                                    } else {
-                                        true
+                                        state.detector.update(&mut packets);
+                                        if !state.delay_control(&bwe) {
+                                            state.loss_control(&bwe)
+                                        } else {
+                                            true
+                                        }
+                                    };
+
+                                    if bitrate_changed {
+                                        bwe.notify("estimated-bitrate")
                                     }
-                                };
-
-                                if bitrate_changed {
-                                    bwe.notify("estimated-bitrate")
                                 }
                             }
                         }
