@@ -105,6 +105,8 @@ struct InputStream {
     out_caps: Option<gst::Caps>,
     /// Pace input data
     clocksync: Option<gst::Element>,
+    /// The serial number picked for this stream
+    serial: u32,
 }
 
 /// Wrapper around webrtcbin pads
@@ -1666,10 +1668,11 @@ impl WebRTCSink {
             }
         }
 
-        state
-            .streams
+        let mut streams: Vec<InputStream> = state.streams.values().cloned().collect();
+        streams.sort_by_key(|s| s.serial);
+        streams
             .iter()
-            .for_each(|(_, stream)| session.request_webrtcbin_pad(element, &settings, stream));
+            .for_each(|stream| session.request_webrtcbin_pad(element, &settings, stream));
 
         let clock = element.clock();
 
@@ -2756,12 +2759,16 @@ impl ElementImpl for WebRTCSink {
 
         let mut state = self.state.lock().unwrap();
 
+        let serial;
+
         let name = if templ.name().starts_with("video_") {
             let name = format!("video_{}", state.video_serial);
+            serial = state.video_serial;
             state.video_serial += 1;
             name
         } else {
             let name = format!("audio_{}", state.audio_serial);
+            serial = state.audio_serial;
             state.audio_serial += 1;
             name
         };
@@ -2788,6 +2795,7 @@ impl ElementImpl for WebRTCSink {
                 in_caps: None,
                 out_caps: None,
                 clocksync: None,
+                serial,
             },
         );
 
