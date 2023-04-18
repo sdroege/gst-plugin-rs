@@ -355,6 +355,10 @@ foreach plugin_name, details: plugins
   endif
 endforeach
 
+feature_args = []
+if features.length() > 0
+  feature_args += ['--features', features]
+endif
 
 plugins_install_dir = get_option('libdir') / 'gstreamer-1.0'
 pkgconfig_install_dir = get_option('libdir') / 'pkgconfig'
@@ -397,10 +401,9 @@ rs_plugins = custom_target('gst-plugins-rs',
     get_option('prefix'),
     get_option('libdir'),
     '--packages', packages,
-    '--features', features,
     '--depfile', '@DEPFILE@',
     '--lib-suffixes', library_suffixes,
-  ] + extra_args)
+  ] + feature_args + extra_args)
 
 plugins = rs_plugins.to_list()
 
@@ -521,10 +524,9 @@ if get_option('examples').allowed() and examples.length() > 0
       get_option('libdir'),
       '--depfile', '@DEPFILE@',
       '--packages', packages,
-      '--features', features,
       '--examples', examples,
       '--exe-suffix', exe_suffix,
-    ])
+    ] + feature_args)
 endif
 
 test('tests',
