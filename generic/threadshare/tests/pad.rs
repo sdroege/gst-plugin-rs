@@ -694,7 +694,7 @@ fn setup(
 
     // Src
     let src_element = glib::Object::new::<ElementSrcTest>();
-    src_element.set_property("context", &context_name);
+    src_element.set_property("context", context_name);
     pipeline.add(&src_element).unwrap();
 
     let mut last_element = src_element.clone().upcast::<gst::Element>();
