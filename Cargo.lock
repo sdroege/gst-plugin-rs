@@ -5112,6 +5112,7 @@ dependencies = [
  "gstreamer-audio",
  "gstreamer-base",
  "gstreamer-net",
+ "gstreamer-pbutils",
  "gstreamer-rtp",
  "gstreamer-sdp",
  "gstreamer-utils",

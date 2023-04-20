@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::utils::{
-    CONTROL_DATA_CHANNEL_LABEL, Codec, Codecs, INPUT_DATA_CHANNEL_LABEL, NavigationEvent,
-    cleanup_codec_caps, has_raw_caps, make_element,
+    CONTROL_DATA_CHANNEL_LABEL, Codec, Codecs, H264_PROFILES_COMPAT, INPUT_DATA_CHANNEL_LABEL,
+    NavigationEvent, cleanup_codec_caps, has_raw_caps, make_element,
 };
 use anyhow::Context;
 use gst::glib;
@@ -916,6 +916,7 @@ fn setup_signal_accumulator(
 struct EncodingChain {
     raw_filter: Option<gst::Element>,
     encoder: Option<gst::Element>,
+    enc_filter: gst::Element,
     pay_filter: gst::Element,
 }
 
@@ -1019,6 +1020,7 @@ impl PayloadChainBuilder {
         let force_profile = self.output_caps.is_any() && needs_encoding;
         elements.push(
             gst::ElementFactory::make("capsfilter")
+                .name("codec-parser-caps")
                 .property("caps", self.codec.parser_caps(force_profile))
                 .build()
                 .with_context(|| "Failed to make element capsfilter")?,
@@ -1028,6 +1030,12 @@ impl PayloadChainBuilder {
             elements.push(encoded_filter.clone());
         }
 
+        let enc_filter = gst::ElementFactory::make("capsfilter")
+            .name("webrtc-enc-filter")
+            .build()
+            .with_context(|| "Failed to make webrtc encoder capsfilter")?;
+        elements.push(enc_filter.clone());
+
         let pay = self
             .codec
             .create_payloader()
@@ -1035,10 +1043,18 @@ impl PayloadChainBuilder {
 
         elements.push(pay.clone());
 
+        elements.push(
+            gst::ElementFactory::make("capsfilter")
+                .name("payload-chain-output-caps")
+                .property("caps", self.output_caps)
+                .build()
+                .with_context(|| "Failed to make payloader")?,
+        );
+
         let pay_filter = gst::ElementFactory::make("capsfilter")
-            .property("caps", self.output_caps)
+            .name("webrtc-pay-filter")
             .build()
-            .with_context(|| "Failed to make payloader")?;
+            .with_context(|| "Failed to make webrtc payloader capsfilter")?;
         elements.push(pay_filter.clone());
 
         for element in &elements {
@@ -1053,6 +1069,7 @@ impl PayloadChainBuilder {
             encoding_chain: EncodingChain {
                 raw_filter,
                 encoder,
+                enc_filter,
                 pay_filter,
             },
             payloader: pay,
@@ -1441,9 +1458,6 @@ impl SessionInner {
             webrtc_pad.media_idx
         );
 
-        let pay_filter = make_element("capsfilter", None)?;
-        self.pipeline.add(&pay_filter).unwrap();
-
         // At this point, the peer has provided its answer, and we want to
         // let the payloader / encoder perform negotiation according to that.
         //
@@ -1456,34 +1470,12 @@ impl SessionInner {
             .property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
         transceiver.set_property("codec-preferences", None::<gst::Caps>);
 
-        let s = caps.structure(0).unwrap();
-        let mut filtered_s = gst::Structure::new_empty("application/x-rtp");
-
-        filtered_s.extend(s.iter().filter_map(|(key, value)| {
-            if key.starts_with("a-") {
-                None
-            } else if key.starts_with("extmap-")
-                && value
-                    .get::<&str>()
-                    .is_ok_and(|v| v == "urn:ietf:params:rtp-hdrext:ssrc-audio-level")
-            {
-                // Workaround for the audio-level header extension: our extmap for this will usually be an array
-                // with "vad=on", but browsers strip that (because it's the default) and just give us a string
-                // with the uri. To make the capsfilter work, lets re-add the vad=on variant to the caps.
-                let vad_on_array =
-                    gst::Array::new(["", "urn:ietf:params:rtp-hdrext:ssrc-audio-level", "vad=on"])
-                        .to_send_value();
-                let list = gst::List::new([vad_on_array, value.to_owned()]).to_send_value();
-                Some((key, list))
-            } else {
-                Some((key, value.to_owned()))
-            }
-        }));
-        filtered_s.set("ssrc", webrtc_pad.ssrc);
-
-        let caps = gst::Caps::builder_full().structure(filtered_s).build();
-
-        pay_filter.set_property("caps", caps);
+        let (enc_caps, pay_caps) =
+            codec.webrtc_negotiated_caps(&caps, webrtc_pad.ssrc, &webrtc_pad.in_caps);
+        gst::info!(CAT, "Encoder filter caps: {:#?}", enc_caps);
+        encoding_chain.enc_filter.set_property("caps", enc_caps);
+        gst::info!(CAT, "Payloader filter caps: {:#?}", pay_caps);
+        encoding_chain.pay_filter.set_property("caps", pay_caps);
 
         if codec.is_video() {
             let video_info = gst_video::VideoInfo::from_caps(&webrtc_pad.in_caps)?;
@@ -1545,9 +1537,7 @@ impl SessionInner {
             .sync_children_states()
             .with_context(|| format!("Connecting input stream for {}", self.peer_id))?;
 
-        encoding_chain.pay_filter.link(&pay_filter)?;
-
-        let srcpad = pay_filter.static_pad("src").unwrap();
+        let srcpad = encoding_chain.pay_filter.static_pad("src").unwrap();
 
         srcpad
             .link(&webrtc_pad.pad)
@@ -4538,6 +4528,118 @@ impl BaseWebRTCSink {
         )
     }
 
+    fn get_max_h264_profile_level(&self) -> (Option<usize>, Option<u8>) {
+        let mut max_profile: i32 = -1;
+        let mut max_level_idc: i32 = -1;
+
+        self.settings
+            .lock()
+            .unwrap()
+            .video_caps
+            .iter()
+            .for_each(|c| {
+                if let Ok(profile) = c.get::<&str>("profile") {
+                    let profile = H264_PROFILES_COMPAT
+                        .iter()
+                        .position(|p| p == &profile)
+                        .expect("Unsupported H264 profile, please add support")
+                        as i32;
+
+                    if profile > max_profile {
+                        max_profile = profile;
+                    }
+                }
+
+                if let Ok(level) = c.get::<&str>("level") {
+                    let level_idc = gst_pbutils::codec_utils_h264_get_level_idc(level) as i32;
+
+                    if level_idc > max_level_idc {
+                        max_level_idc = level_idc;
+                    }
+                }
+            });
+
+        (
+            if max_profile >= 0 {
+                Some(max_profile as usize)
+            } else {
+                None
+            },
+            if max_level_idc >= 0 {
+                Some(max_level_idc as u8)
+            } else {
+                None
+            },
+        )
+    }
+
+    fn check_h264_caps_compatibility(
+        &self,
+        current_struct: &gst::StructureRef,
+        new_struct: &gst::StructureRef,
+    ) -> bool {
+        let (max_h264_profile, max_h264_level_idc) = self.get_max_h264_profile_level();
+
+        if let (Ok(current_profile), Ok(new_profile)) = (
+            current_struct.get::<&str>("profile"),
+            new_struct.get::<&str>("profile"),
+        ) {
+            let new_profile_idc = H264_PROFILES_COMPAT
+                .iter()
+                .position(|p| p == &new_profile)
+                .expect("Unsupported H264 profile, please add support");
+            if let Some(max_h264_profile) = max_h264_profile {
+                if new_profile_idc > max_h264_profile {
+                    gst::error!(
+                        CAT,
+                        "Incompatible H264 profiles: {new_profile} - max profile is: {}",
+                        H264_PROFILES_COMPAT[max_h264_profile]
+                    );
+
+                    return false;
+                }
+            } else if H264_PROFILES_COMPAT
+                .iter()
+                .position(|p| p == &current_profile)
+                .expect("Unsupported H264 profile, please add support")
+                < new_profile_idc
+            {
+                gst::error!(
+                    CAT,
+                    "Incompatible H264 profiles: {current_profile} and {new_profile}"
+                );
+                return false;
+            }
+        }
+
+        if let (Ok(current_level), Ok(new_level)) = (
+            current_struct.get::<&str>("level"),
+            new_struct.get::<&str>("level"),
+        ) {
+            if let Some(max_h264_level_idc) = max_h264_level_idc {
+                let new_level_idc = gst_pbutils::codec_utils_h264_get_level_idc(new_level);
+                if new_level_idc > max_h264_level_idc {
+                    gst::error!(
+                        CAT,
+                        "Incompatible H264 levels: {new_level} - max level is: {}",
+                        max_h264_level_idc
+                    );
+                    return false;
+                }
+            } else if gst_pbutils::codec_utils_h264_get_level_idc(current_level)
+                < gst_pbutils::codec_utils_h264_get_level_idc(new_level)
+            {
+                gst::error!(
+                    CAT,
+                    "Incompatible H264 levels: {current_level} and {new_level}"
+                );
+                return false;
+            }
+        }
+
+        true
+    }
+
     /// Check if the caps of a sink pad can be changed from `current` to `new` without requiring a WebRTC renegotiation
     fn input_caps_change_allowed(&self, current: &gst::CapsRef, new: &gst::CapsRef) -> bool {
         let mut current = cleanup_codec_caps(current.to_owned());
@@ -4560,6 +4662,17 @@ impl BaseWebRTCSink {
         // a renegotiation.
         let caps_type = current.name();
         if caps_type.starts_with("video/") {
+            if caps_type == "video/x-h264" {
+                if !self.check_h264_caps_compatibility(current, new) {
+                    return false;
+                }
+
+                const H264_ALLOWED_CHANGES: &[&str] = &["profile", "level"];
+
+                current.remove_fields(H264_ALLOWED_CHANGES.iter().copied());
+                new.remove_fields(H264_ALLOWED_CHANGES.iter().copied());
+            }
+
             const VIDEO_ALLOWED_CHANGES: &[&str] = &[
                 "width",
                 "height",

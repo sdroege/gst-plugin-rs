@@ -12,6 +12,7 @@ rust-version.workspace = true
 gst = { workspace = true, features = ["v1_22", "serde"] }
 gst-app = { workspace = true, features = ["v1_22"] }
 gst-audio = { workspace = true, features = ["v1_22", "serde"] }
+gst-pbutils = { workspace = true, features = ["v1_22" ] }
 gst-video = { workspace = true, features = ["v1_22", "serde"] }
 gst-net = { workspace = true, features = ["v1_22"] }
 gst-webrtc = { workspace = true, features = ["v1_22"] }

@@ -800,6 +800,70 @@ impl Codec {
             _ => gst::Caps::new_any(),
         }
     }
+
+    pub fn webrtc_negotiated_caps(
+        &self,
+        caps: &gst::Caps,
+        ssrc: u32,
+        in_caps: &gst::Caps,
+    ) -> (gst::Caps, gst::Caps) {
+        let s = caps.structure(0).unwrap();
+        let codec_caps_name = self.caps.structure(0).unwrap().name();
+        let mut enc_s = gst::Structure::new_empty(codec_caps_name);
+        let mut pay_s = gst::Structure::new_empty("application/x-rtp");
+
+        let is_h264 = self.name == "H264";
+
+        for (key, value) in s {
+            if key.starts_with("a-") {
+                continue;
+            } else if is_h264 && key == "profile" {
+                let profile = in_caps
+                    .structure(0)
+                    .unwrap()
+                    .get::<&str>("profile")
+                    .unwrap_or(value.get::<&str>().unwrap());
+                let profile_idc = H264_PROFILES_COMPAT
+                    .iter()
+                    .position(|p| p == &profile)
+                    .expect("Unsupported profile, please implement");
+                enc_s.set(key, gst::List::new(H264_PROFILES_COMPAT[0..profile_idc + 1].to_vec()));
+            } else if is_h264 && key == "level" {
+                let level = in_caps
+                    .structure(0)
+                    .unwrap()
+                    .get::<&str>("level")
+                    .unwrap_or(value.get::<&str>().unwrap());
+                let level_idc = H264_LEVELS
+                    .iter()
+                    .position(|p| p == &level)
+                    .expect("Unsupported level, please implement");
+
+                enc_s.set(key, gst::List::new(H264_LEVELS[0..level_idc + 1].to_vec()));
+            } else if key.starts_with("extmap-")
+                && value
+                    .get::<&str>()
+                    .is_ok_and(|v| v == "urn:ietf:params:rtp-hdrext:ssrc-audio-level")
+            {
+                // Workaround for the audio-level header extension: our extmap for this will usually be an array
+                // with "vad=on", but browsers strip that (because it's the default) and just give us a string
+                // with the uri. To make the capsfilter work, lets re-add the vad=on variant to the caps.
+                let vad_on_array =
+                    gst::Array::new(["", "urn:ietf:params:rtp-hdrext:ssrc-audio-level", "vad=on"])
+                        .to_send_value();
+                let list = gst::List::new([vad_on_array, value.to_owned()]).to_send_value();
+                pay_s.set(key, list);
+            } else {
+                pay_s.set(key, value.to_owned());
+            }
+        }
+        pay_s.set("ssrc", ssrc);
+
+        (
+            gst::Caps::builder_full().structure(enc_s).build(),
+            gst::Caps::builder_full().structure(pay_s).build(),
+        )
+    }
 }
 
 fn can_leak(mut caps: gst::Caps) -> gst::Caps {
@@ -832,6 +896,32 @@ pub static AV1_CAPS: LazyLock<gst::Caps> =
 
 pub static RTP_CAPS: LazyLock<gst::Caps> =
     LazyLock::new(|| can_leak(gst::Caps::new_empty_simple("application/x-rtp")));
+
+pub const H264_PROFILES_COMPAT: [&str; 7] = [
+    "constrained-baseline",
+    "baseline",
+    "main",
+    "high",
+    "high-10",
+    "high-4:2:2",
+    "high-4:4:4",
+];
+
+static H264_LEVELS: LazyLock<Vec<String>> = LazyLock::new(|| {
+    let mut sps = [0u8; 3];
+    let mut res = Vec::with_capacity(20);
+
+    res.push("1b".to_string());
+    for i in 10..63 {
+        sps[2] = i;
+
+        if let Ok(level) = gst_pbutils::codec_utils_h264_get_level(&sps) {
+            res.push(level.to_string());
+        }
+    }
+
+    res
+});
 
 #[derive(Debug, Clone)]
 pub struct Codecs(Vec<Codec>);
