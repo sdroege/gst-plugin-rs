@@ -549,7 +549,7 @@ fn test_cookies_property() {
         |src| {
             src.set_property(
                 "cookies",
-                &vec![
+                vec![
                     String::from("foo=1"),
                     String::from("bar=2"),
                     String::from("baz=3"),

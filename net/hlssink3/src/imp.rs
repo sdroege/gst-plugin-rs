@@ -512,10 +512,9 @@ impl ObjectImpl for HlsSink3 {
             }
             "target-duration" => {
                 settings.target_duration = value.get().expect("type checked upstream");
-                settings.splitmuxsink.set_property(
-                    "max-size-time",
-                    &((settings.target_duration as u64).seconds()),
-                );
+                settings
+                    .splitmuxsink
+                    .set_property("max-size-time", (settings.target_duration as u64).seconds());
             }
             "playlist-length" => {
                 settings.playlist_length = value.get().expect("type checked upstream");
@@ -541,7 +540,7 @@ impl ObjectImpl for HlsSink3 {
                 settings.send_keyframe_requests = value.get().expect("type checked upstream");
                 settings
                     .splitmuxsink
-                    .set_property("send-keyframe-requests", &settings.send_keyframe_requests);
+                    .set_property("send-keyframe-requests", settings.send_keyframe_requests);
             }
             _ => unimplemented!(),
         };

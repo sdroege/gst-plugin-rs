@@ -34,7 +34,7 @@ impl Default for Signaller {
 
 impl Signaller {
     pub fn new(mode: WebRTCSignallerRole) -> Self {
-        glib::Object::builder().property("role", &mode).build()
+        glib::Object::builder().property("role", mode).build()
     }
 }
 
