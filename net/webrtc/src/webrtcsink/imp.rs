@@ -467,6 +467,7 @@ fn setup_encoding(
     src: &gst::Element,
     input_caps: &gst::Caps,
     codec: &Codec,
+    mut encoded_filter: Option<gst::Element>,
     ssrc: Option<u32>,
     twcc: bool,
 ) -> Result<(gst::Element, gst::Element, gst::Element), Error> {
@@ -504,6 +505,16 @@ fn setup_encoding(
 
     let codec_name = codec.caps.structure(0).unwrap().name();
 
+    let enc_last = if let Some(encoded_filter) = encoded_filter.take() {
+        pipeline.add(&encoded_filter).unwrap();
+        enc.link(&encoded_filter)
+            .with_context(|| "Linking encoded filter")?;
+
+        encoded_filter
+    } else {
+        enc.clone()
+    };
+
     if let Some(parser) = if codec_name == "video/x-h264" {
         Some(make_element("h264parse", None)?)
     } else if codec_name == "video/x-h265" {
@@ -512,10 +523,10 @@ fn setup_encoding(
         None
     } {
         pipeline.add(&parser).unwrap();
-        gst::Element::link_many(&[&enc, &parser, &parse_filter])
+        gst::Element::link_many(&[&enc_last, &parser, &parse_filter])
             .with_context(|| "Linking encoding elements")?;
     } else {
-        gst::Element::link_many(&[&enc, &parse_filter])
+        gst::Element::link_many(&[&enc_last, &parse_filter])
             .with_context(|| "Linking encoding elements")?;
     }
 
@@ -934,11 +945,17 @@ impl Session {
         let pay_filter = make_element("capsfilter", None)?;
         self.pipeline.add(&pay_filter).unwrap();
 
+        let encoded_filter = element.emit_by_name::<Option<gst::Element>>(
+            "request-encoded-filter",
+            &[&Some(&self.peer_id), &webrtc_pad.stream_name, &codec.caps],
+        );
+
         let (enc, raw_filter, pay) = setup_encoding(
             &self.pipeline,
             &appsrc,
             &webrtc_pad.in_caps,
             codec,
+            encoded_filter,
             Some(webrtc_pad.ssrc),
             false,
         )?;
@@ -2088,6 +2105,7 @@ impl WebRTCSink {
 
     async fn run_discovery_pipeline(
         element: &super::WebRTCSink,
+        name: &str,
         codec: &Codec,
         caps: &gst::Caps,
     ) -> Result<gst::Structure, Error> {
@@ -2117,7 +2135,20 @@ impl WebRTCSink {
         gst::Element::link_many(elements_slice)
             .with_context(|| format!("Running discovery pipeline for caps {caps}"))?;
 
-        let (_, _, pay) = setup_encoding(&pipe.0, &capsfilter, caps, codec, None, true)?;
+        let encoded_filter = element.emit_by_name::<Option<gst::Element>>(
+            "request-encoded-filter",
+            &[&Option::<String>::None, &name, &codec.caps],
+        );
+
+        let (_, _, pay) = setup_encoding(
+            &pipe.0,
+            &capsfilter,
+            caps,
+            codec,
+            encoded_filter,
+            None,
+            true,
+        )?;
 
         let sink = make_element("fakesink", None)?;
 
@@ -2204,7 +2235,9 @@ impl WebRTCSink {
         let futs = codecs
             .iter()
             .filter(|(_, codec)| codec.is_video() == is_video)
-            .map(|(_, codec)| WebRTCSink::run_discovery_pipeline(element, codec, &sink_caps));
+            .map(|(_, codec)| {
+                WebRTCSink::run_discovery_pipeline(element, &name, codec, &sink_caps)
+            });
 
         for ret in futures::future::join_all(futs).await {
             match ret {
@@ -2683,6 +2716,27 @@ impl ObjectImpl for WebRTCSink {
                         // Return false here so that latter handlers get called
                         Some(false.to_value())
                     })
+                    .build(),
+                /**
+                 * RsWebRTCSink::request-encoded-filter:
+                 * @consumer_id: Identifier of the consumer
+                 * @pad_name: The name of the corresponding input pad
+                 * @encoded_caps: The Caps of the encoded stream
+                 *
+                 * This signal can be used to insert a filter
+                 * element between the encoder and the payloader.
+                 *
+                 * When called during Caps discovery, the `consumer_id` is `None`.
+                 *
+                 * Returns: the element to insert.
+                 */
+                glib::subclass::Signal::builder("request-encoded-filter")
+                    .param_types([
+                        Option::<String>::static_type(),
+                        String::static_type(),
+                        gst::Caps::static_type(),
+                    ])
+                    .return_type::<gst::Element>()
                     .build(),
             ]
         });
