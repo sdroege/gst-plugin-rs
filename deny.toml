@@ -180,6 +180,11 @@ version = "0.2"
 name = "miniz_oxide"
 version = "0.6"
 
+# tracing-subscriber depends on an older version of regex-syntax
+[[bans.skip]]
+name = "regex-syntax"
+version = "0.6"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
