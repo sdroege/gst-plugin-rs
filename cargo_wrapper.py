@@ -82,6 +82,16 @@ if __name__ == "__main__":
     pkg_config_path.append(str(opts.root_dir / 'meson-uninstalled'))
     env['PKG_CONFIG_PATH'] = os.pathsep.join(pkg_config_path)
 
+    rustc_target = None
+    if 'RUSTFLAGS' in env:
+        # grab target from RUSTFLAGS
+        rust_flags = env['RUSTFLAGS'].split()
+        if '--target' in rust_flags:
+            rustc_target_idx = rust_flags.index('--target')
+            _ = rust_flags.pop(rustc_target_idx)  # drop '--target'
+            rustc_target = rust_flags.pop(rustc_target_idx)
+        env['RUSTFLAGS'] = ' '.join(rust_flags)
+
     features = opts.features
     if opts.command == 'build':
         cargo_cmd = ['cargo']
@@ -100,6 +110,8 @@ if __name__ == "__main__":
         print("Unknown command:", opts.command, file=logfile)
         sys.exit(1)
 
+    if rustc_target:
+        cargo_cmd += ['--target', rustc_target]
     if features:
         cargo_cmd += ['--features', ','.join(features)]
     cargo_cmd += ['--target-dir', cargo_target_dir]

@@ -21,13 +21,14 @@ endif
 cargo = find_program('cargo', version:'>=1.40')
 cargo_wrapper = find_program('cargo_wrapper.py')
 cargo_c = find_program('cargo-cbuild', version:'>=0.9.3', required: false)
-rustc = find_program('rustc', version:'>=1.52')
+
+rustc = meson.get_compiler('rust')
 
 if not cargo_c.found()
   error('cargo-c missing, install it with: \'cargo install cargo-c\'')
 endif
 
-system = build_machine.system()
+system = host_machine.system()
 exe_suffix = ''
 if system == 'windows'
   exe_suffix = '.exe'
@@ -365,7 +366,7 @@ pkgconfig_install_dir = get_option('libdir') / 'pkgconfig'
 
 extra_args = []
 if get_option('doc').disabled()
-  extra_args = ['--disable-doc']
+  extra_args += ['--disable-doc']
 endif
 
 # 'pkgconfig' is the entry in the machine file, if specified
@@ -382,6 +383,18 @@ if pkg_config_path.length() > 0
   endif
   extra_env += {'PKG_CONFIG_PATH': pathsep.join(pkg_config_path)}
 endif
+
+# get compiler and flags for rust (if any)
+rustc_cmd = ''
+rust_flags = []
+foreach rustc_arg : rustc.cmd_array()
+  if rustc_cmd == ''
+    rustc_cmd = rustc_arg
+  else
+    rust_flags += [rustc_arg]
+  endif
+endforeach
+extra_env += {'RUSTC': rustc_cmd, 'RUSTFLAGS': ' '.join(rust_flags)}
 
 rs_plugins = custom_target('gst-plugins-rs',
   build_by_default: true,
