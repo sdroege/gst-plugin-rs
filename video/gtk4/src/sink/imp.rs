@@ -592,11 +592,11 @@ impl PaintableSink {
         };
 
         match gdk_context.type_().name() {
-            #[cfg(all(target_os = "linux", feature = "x11egl"))]
+            #[cfg(feature = "x11egl")]
             "GdkX11GLContextEGL" => (),
-            #[cfg(all(target_os = "linux", feature = "x11glx"))]
+            #[cfg(feature = "x11glx")]
             "GdkX11GLContextGLX" => (),
-            #[cfg(all(target_os = "linux", feature = "wayland"))]
+            #[cfg(feature = "wayland")]
             "GdkWaylandGLContext" => (),
             #[cfg(target_os = "macos")]
             "GdkMacosGLContext" => (),
@@ -618,11 +618,11 @@ impl PaintableSink {
         gdk_context.make_current();
 
         let res = match gdk_context.type_().name() {
-            #[cfg(all(target_os = "linux", feature = "x11egl"))]
+            #[cfg(feature = "x11egl")]
             "GdkX11GLContextEGL" => self.initialize_x11egl(gdk_display),
-            #[cfg(all(target_os = "linux", feature = "x11glx"))]
+            #[cfg(feature = "x11glx")]
             "GdkX11GLContextGLX" => self.initialize_x11glx(gdk_display),
-            #[cfg(all(target_os = "linux", feature = "wayland"))]
+            #[cfg(feature = "wayland")]
             "GdkWaylandGLContext" => self.initialize_waylandegl(gdk_display),
             #[cfg(target_os = "macos")]
             "GdkMacosGLContext" => self.initialize_macosgl(gdk_display),
@@ -672,7 +672,7 @@ impl PaintableSink {
         };
     }
 
-    #[cfg(all(target_os = "linux", feature = "x11egl"))]
+    #[cfg(feature = "x11egl")]
     fn initialize_x11egl(
         &self,
         display: gdk::Display,
@@ -722,7 +722,7 @@ impl PaintableSink {
         }
     }
 
-    #[cfg(all(target_os = "linux", feature = "x11glx"))]
+    #[cfg(feature = "x11glx")]
     fn initialize_x11glx(
         &self,
         display: gdk::Display,
@@ -771,7 +771,7 @@ impl PaintableSink {
         }
     }
 
-    #[cfg(all(target_os = "linux", feature = "wayland"))]
+    #[cfg(feature = "wayland")]
     fn initialize_waylandegl(
         &self,
         display: gdk::Display,
