@@ -252,17 +252,15 @@ if get_option('gtk4').allowed()
   gtk4_features = []
   gl_winsys = gst_gl_dep.get_variable('gl_winsys').split()
   gl_platforms = gst_gl_dep.get_variable('gl_platforms').split()
-  if host_system == 'linux'
-    if 'wayland' in gl_winsys
-      gtk4_features += 'wayland'
+  if 'wayland' in gl_winsys
+    gtk4_features += 'wayland'
+  endif
+  if 'x11' in gl_winsys
+    if 'egl' in gl_platforms
+      gtk4_features += 'x11egl'
     endif
-    if 'x11' in gl_winsys
-      if 'egl' in gl_platforms
-        gtk4_features += 'x11egl'
-      endif
-      if 'glx' in gl_platforms
-        gtk4_features += 'x11glx'
-      endif
+    if 'glx' in gl_platforms
+      gtk4_features += 'x11glx'
     endif
   endif
   plugins += {'gtk4': {
