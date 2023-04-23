@@ -132,16 +132,31 @@ impl Settings {
         let cache = Cache::new(credentials_cache, None, files_cache, max_size)?;
 
         if let Some(cached_cred) = cache.credentials() {
-            gst::debug!(cat, obj: &src, "reuse credentials from cache",);
-            if let Ok((session, _credentials)) = Session::connect(
-                SessionConfig::default(),
-                cached_cred,
-                Some(cache.clone()),
-                true,
-            )
-            .await
-            {
-                return Ok(session);
+            if !self.username.is_empty() && self.username != cached_cred.username {
+                gst::debug!(
+                    cat,
+                    obj: &src,
+                    "ignore cached credentials for user {} which mismatch user {}",
+                    cached_cred.username,
+                    self.username
+                );
+            } else {
+                gst::debug!(
+                    cat,
+                    obj: &src,
+                    "reuse cached credentials for user {}",
+                    cached_cred.username
+                );
+                if let Ok((session, _credentials)) = Session::connect(
+                    SessionConfig::default(),
+                    cached_cred,
+                    Some(cache.clone()),
+                    true,
+                )
+                .await
+                {
+                    return Ok(session);
+                }
             }
         }
 
