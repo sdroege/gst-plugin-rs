@@ -474,11 +474,14 @@ impl SpotifyAudioSrc {
             let cache = Cache::new(credentials_cache, None, files_cache, max_size)?;
 
             let credentials = match cache.credentials() {
-                Some(cached_cred) => {
+                Some(cached_cred)
+                    if settings.username.is_empty()
+                        || settings.username == cached_cred.username =>
+                {
                     gst::debug!(CAT, imp: self, "reuse credentials from cache",);
                     cached_cred
                 }
-                None => {
+                _ => {
                     gst::debug!(CAT, imp: self, "credentials not in cache",);
 
                     if settings.username.is_empty() {
