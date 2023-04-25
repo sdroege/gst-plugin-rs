@@ -71,8 +71,9 @@ impl Playlist {
     /// Adds a new segment to the playlist.
     pub fn add_segment(&mut self, uri: String, duration: f32, date_time: Option<DateTime<Utc>>) {
         self.start();
-        // TODO: We are adding date-time to each segment, hence during write all the segments have
-        // program-date-time header.
+        // We are adding date-time to each segment.Putting date-time-tag only for the first segment in the playlist
+        // is also valid. But it is better to put program-date-time tag for every segment to take care of any drift.
+        // FFMPEG also put PDT tag for each segment.
         self.inner.segments.push(MediaSegment {
             uri,
             duration,
