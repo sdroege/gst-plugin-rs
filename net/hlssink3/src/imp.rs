@@ -28,6 +28,7 @@ const DEFAULT_PLAYLIST_LENGTH: u32 = 5;
 const DEFAULT_PLAYLIST_TYPE: HlsSink3PlaylistType = HlsSink3PlaylistType::Unspecified;
 const DEFAULT_I_FRAMES_ONLY_PLAYLIST: bool = false;
 const DEFAULT_PROGRAM_DATE_TIME_TAG: bool = false;
+const DEFAULT_CLOCK_TRACKING_FOR_PDT: bool = true;
 const DEFAULT_SEND_KEYFRAME_REQUESTS: bool = true;
 
 const SIGNAL_GET_PLAYLIST_STREAM: &str = "get-playlist-stream";
@@ -71,6 +72,7 @@ struct Settings {
     target_duration: u32,
     i_frames_only: bool,
     enable_program_date_time: bool,
+    pdt_follows_pipeline_clock: bool,
     send_keyframe_requests: bool,
 
     splitmuxsink: gst::Element,
@@ -101,6 +103,7 @@ impl Default for Settings {
             send_keyframe_requests: DEFAULT_SEND_KEYFRAME_REQUESTS,
             i_frames_only: DEFAULT_I_FRAMES_ONLY_PLAYLIST,
             enable_program_date_time: DEFAULT_PROGRAM_DATE_TIME_TAG,
+            pdt_follows_pipeline_clock: DEFAULT_CLOCK_TRACKING_FOR_PDT,
 
             splitmuxsink,
             giostreamsink,
@@ -112,7 +115,7 @@ impl Default for Settings {
 
 pub(crate) struct StartedState {
     base_date_time: Option<DateTime<Utc>>,
-    base_running_time: Option<gst::ClockTime>,
+    pdt_base_running_time: Option<gst::ClockTime>,
     playlist: Playlist,
     fragment_opened_at: Option<gst::ClockTime>,
     fragment_running_time: Option<gst::ClockTime>,
@@ -128,7 +131,7 @@ impl StartedState {
     ) -> Self {
         Self {
             base_date_time: None,
-            base_running_time: None,
+            pdt_base_running_time: None,
             playlist: Playlist::new(target_duration, playlist_type, i_frames_only),
             current_segment_location: None,
             fragment_opened_at: None,
@@ -436,7 +439,7 @@ impl BinImpl for HlsSink3 {
                                 gst::element_error!(
                                     self.obj(),
                                     gst::StreamError::Failed,
-                                    ("Framented closed in wrong state"),
+                                    ("Fragment closed in wrong state"),
                                     ["Fragment closed but element is in stopped state"]
                                 );
                                 return;
@@ -444,41 +447,47 @@ impl BinImpl for HlsSink3 {
                             State::Started(state) => state,
                         };
 
-                        if state.base_running_time.is_none() && state.fragment_running_time.is_some() {
-                            state.base_running_time = state.fragment_running_time;
+                        let fragment_pts = state
+                            .fragment_running_time
+                            .expect("fragment running time must be set by format-location-full");
+
+                        if state.pdt_base_running_time.is_none() {
+                            state.pdt_base_running_time = state.fragment_running_time;
                         }
                         // Calculate the mapping from running time to UTC
-                        if state.base_date_time.is_none() && state.fragment_running_time.is_some() {
-                            let fragment_pts = state.fragment_running_time.unwrap();
+                        // calculate base_date_time for each segment for !pdt_follows_pipeline_clock
+                        // when pdt_follows_pipeline_clock is set, we calculate the base time every time
+                        // this avoids the drift between pdt tag and external clock (if gst clock has skew w.r.t external clock)
+                        if state.base_date_time.is_none() || !settings.pdt_follows_pipeline_clock {
                             let now_utc = Utc::now();
                             let now_gst = settings.giostreamsink.clock().unwrap().time().unwrap();
                             let pts_clock_time =
                                 fragment_pts + settings.giostreamsink.base_time().unwrap();
 
-                            let diff = now_gst.checked_sub(pts_clock_time).unwrap();
+                            let diff = now_gst.checked_sub(pts_clock_time).expect("time between fragments running time and current running time overflow");
                             let pts_utc = now_utc
                                 .checked_sub_signed(Duration::nanoseconds(diff.nseconds() as i64))
-                                .unwrap();
+                                .expect("offsetting the utc with gstreamer clock-diff overflow");
 
                             state.base_date_time = Some(pts_utc);
                         }
 
                         let fragment_date_time = if settings.enable_program_date_time
-                            && state.base_running_time.is_some()
-                            && state.fragment_running_time.is_some()
+                            && state.pdt_base_running_time.is_some()
                         {
                             // Add the diff of running time to UTC time
                             // date_time = first_segment_utc + (current_seg_running_time - first_seg_running_time)
-                            state.base_date_time.unwrap().checked_add_signed(
-                                Duration::nanoseconds(
+                            state
+                                .base_date_time
+                                .unwrap()
+                                .checked_add_signed(Duration::nanoseconds(
                                     state
                                         .fragment_running_time
-                                        .opt_checked_sub(state.base_running_time)
+                                        .opt_checked_sub(state.pdt_base_running_time)
                                         .unwrap()
                                         .unwrap()
                                         .nseconds() as i64,
-                                ),
-                            )
+                                ))
                         } else {
                             None
                         };
@@ -543,6 +552,11 @@ impl ObjectImpl for HlsSink3 {
                     .nick("add EXT-X-PROGRAM-DATE-TIME tag")
                     .blurb("put EXT-X-PROGRAM-DATE-TIME tag in the playlist")
                     .default_value(DEFAULT_PROGRAM_DATE_TIME_TAG)
+                    .build(),
+                glib::ParamSpecBoolean::builder("pdt-follows-pipeline-clock")
+                    .nick("Whether Program-Date-Time should follow the pipeline clock")
+                    .blurb("As there might be drift between the wallclock and pipeline clock, this controls whether the Program-Date-Time markers should follow the pipeline clock rate (true), or be skewed to match the wallclock rate (false).")
+                    .default_value(DEFAULT_CLOCK_TRACKING_FOR_PDT)
                     .build(),
                 glib::ParamSpecBoolean::builder("send-keyframe-requests")
                     .nick("Send Keyframe Requests")
@@ -614,6 +628,9 @@ impl ObjectImpl for HlsSink3 {
             "enable-program-date-time" => {
                 settings.enable_program_date_time = value.get().expect("type checked upstream");
             }
+            "pdt-follows-pipeline-clock" => {
+                settings.pdt_follows_pipeline_clock = value.get().expect("type checked upstream");
+            }
             "send-keyframe-requests" => {
                 settings.send_keyframe_requests = value.get().expect("type checked upstream");
                 settings
@@ -642,6 +659,7 @@ impl ObjectImpl for HlsSink3 {
             }
             "i-frames-only" => settings.i_frames_only.to_value(),
             "enable-program-date-time" => settings.enable_program_date_time.to_value(),
+            "pdt-follows-pipeline-clock" => settings.pdt_follows_pipeline_clock.to_value(),
             "send-keyframe-requests" => settings.send_keyframe_requests.to_value(),
             _ => unimplemented!(),
         }
@@ -753,7 +771,7 @@ impl ObjectImpl for HlsSink3 {
                     gst::info!(CAT, imp: self_, "Got fragment-id: {}", fragment_id);
 
                     let mut state_guard = state.lock().unwrap();
-                    let mut state = match &mut *state_guard {
+                    let state = match &mut *state_guard {
                         State::Stopped => {
                             gst::error!(
                                 CAT,
@@ -773,7 +791,8 @@ impl ObjectImpl for HlsSink3 {
                             .expect("segment not available")
                             .downcast_ref::<gst::ClockTime>()
                             .expect("no time segment");
-                        state.fragment_running_time = segment.to_running_time(buffer.pts().unwrap());
+                        state.fragment_running_time =
+                            segment.to_running_time(buffer.pts().unwrap());
                     } else {
                         gst::warning!(
                             CAT,
@@ -859,7 +878,7 @@ impl ElementImpl for HlsSink3 {
                         // reset mapping from rt to utc. during pause
                         // rt is stopped but utc keep moving so need to
                         // calculate the mapping again
-                        state.base_running_time = None;
+                        state.pdt_base_running_time = None;
                         state.base_date_time = None
                     }
                 }
