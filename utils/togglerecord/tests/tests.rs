@@ -11,7 +11,7 @@ use gst::prelude::*;
 use either::*;
 
 use std::sync::{mpsc, Mutex};
-use std::thread;
+use std::{thread, time::Duration};
 
 fn init() {
     use std::sync::Once;
@@ -37,6 +37,7 @@ fn setup_sender_receiver(
     togglerecord: &gst::Element,
     pad: &str,
     offset: gst::ClockTime,
+    live: bool,
 ) -> (
     mpsc::Sender<SendData>,
     mpsc::Receiver<()>,
@@ -61,6 +62,25 @@ fn setup_sender_receiver(
         let srcpad = sinkpad.iterate_internal_links().next().unwrap().unwrap();
         (srcpad, sinkpad)
     };
+
+    sinkpad.add_probe(
+        gst::PadProbeType::QUERY_UPSTREAM,
+        move |_pad, probe_info| {
+            let query = match &mut probe_info.data {
+                Some(gst::PadProbeData::Query(q)) => q,
+                _ => unreachable!(),
+            };
+
+            use gst::QueryViewMut::*;
+            match query.view_mut() {
+                Latency(q) => {
+                    q.set(live, gst::ClockTime::ZERO, None);
+                    gst::PadProbeReturn::Handled
+                }
+                _ => gst::PadProbeReturn::Ok,
+            }
+        },
+    );
 
     let fakesink_sinkpad = fakesink.static_pad("sink").unwrap();
     srcpad.link(&fakesink_sinkpad).unwrap();
@@ -272,6 +292,76 @@ fn test_create_pads() {
 }
 
 #[test]
+fn test_one_stream_open_nonlivein_nonliveout() {
+    init();
+
+    let pipeline = gst::Pipeline::default();
+    let togglerecord = gst::ElementFactory::make("togglerecord")
+        .property("is-live", false)
+        .build()
+        .unwrap();
+    pipeline.add(&togglerecord).unwrap();
+
+    let (sender_input, _, receiver_output, thread) =
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, false);
+
+    pipeline.set_state(gst::State::Playing).unwrap();
+
+    togglerecord.set_property("record", true);
+    sender_input.send(SendData::Buffers(10)).unwrap();
+    drop(sender_input);
+
+    let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
+    let (buffers, _) = recv_buffers(&receiver_output, &mut segment, 0);
+    assert_eq!(buffers.len(), 10);
+    for (index, &(running_time, pts, duration)) in buffers.iter().enumerate() {
+        let index = index as u64;
+        assert_eq!(running_time.unwrap(), index * 20.mseconds());
+        assert_eq!(pts.unwrap(), index * 20.mseconds());
+        assert_eq!(duration.unwrap(), 20.mseconds());
+    }
+
+    thread.join().unwrap();
+
+    pipeline.set_state(gst::State::Null).unwrap();
+}
+
+#[test]
+fn test_one_stream_open_nonlivein_liveout() {
+    init();
+
+    let pipeline = gst::Pipeline::default();
+    let togglerecord = gst::ElementFactory::make("togglerecord")
+        .property("is-live", true)
+        .build()
+        .unwrap();
+    pipeline.add(&togglerecord).unwrap();
+
+    let (sender_input, _, receiver_output, thread) =
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, false);
+
+    pipeline.set_state(gst::State::Playing).unwrap();
+
+    togglerecord.set_property("record", true);
+    sender_input.send(SendData::Buffers(10)).unwrap();
+    drop(sender_input);
+
+    let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
+    let (buffers, _) = recv_buffers(&receiver_output, &mut segment, 0);
+    assert_eq!(buffers.len(), 10);
+    for (index, &(running_time, pts, duration)) in buffers.iter().enumerate() {
+        let index = index as u64;
+        assert_eq!(running_time.unwrap(), index * 20.mseconds());
+        assert_eq!(pts.unwrap(), index * 20.mseconds());
+        assert_eq!(duration.unwrap(), 20.mseconds());
+    }
+
+    thread.join().unwrap();
+
+    pipeline.set_state(gst::State::Null).unwrap();
+}
+
+#[test]
 fn test_one_stream_open() {
     init();
 
@@ -280,7 +370,7 @@ fn test_one_stream_open() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input, _, receiver_output, thread) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, true);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -312,7 +402,7 @@ fn test_one_stream_gaps_open() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input, _, receiver_output, thread) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, true);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -345,7 +435,7 @@ fn test_one_stream_close_open() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input, receiver_input_done, receiver_output, thread) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, true);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -379,7 +469,7 @@ fn test_one_stream_open_close() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input, receiver_input_done, receiver_output, thread) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, true);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -414,7 +504,7 @@ fn test_one_stream_open_close_open() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input, receiver_input_done, receiver_output, thread) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, true);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -458,9 +548,15 @@ fn test_two_stream_open() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, true);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            gst::ClockTime::ZERO,
+            true,
+        );
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -511,9 +607,9 @@ fn test_two_stream_open_shift() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, true);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 5.mseconds());
+        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 5.mseconds(), true);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -568,9 +664,15 @@ fn test_two_stream_open_shift_main() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 5.mseconds());
+        setup_sender_receiver(&pipeline, &togglerecord, "src", 5.mseconds(), true);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            gst::ClockTime::ZERO,
+            true,
+        );
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -633,9 +735,15 @@ fn test_two_stream_open_close() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, true);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            gst::ClockTime::ZERO,
+            true,
+        );
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -702,9 +810,15 @@ fn test_two_stream_close_open() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, true);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            gst::ClockTime::ZERO,
+            true,
+        );
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -763,6 +877,256 @@ fn test_two_stream_close_open() {
 }
 
 #[test]
+fn test_two_stream_open_close_open_nonlivein_liveout() {
+    init();
+
+    let testclock = gst_check::TestClock::new();
+    let pipeline = gst::Pipeline::default();
+    pipeline.use_clock(Some(&testclock));
+    let togglerecord = gst::ElementFactory::make("togglerecord")
+        .property("is-live", true)
+        .build()
+        .unwrap();
+    togglerecord.set_clock(Some(&testclock)).unwrap();
+    pipeline.add(&togglerecord).unwrap();
+    let testclock = testclock.downcast::<gst_check::TestClock>().unwrap();
+    testclock.set_time(gst::ClockTime::ZERO);
+
+    let main_buffers_before_gap = 10u64;
+    let secondary_buffers_before_gap = main_buffers_before_gap + 1;
+    let buffers_in_gap = 10u64;
+    let buffers_after_gap = 10u64;
+    let recv_timeout = Duration::from_secs(10);
+
+    let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, false);
+    let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            gst::ClockTime::ZERO,
+            false,
+        );
+
+    pipeline.set_state(gst::State::Playing).unwrap();
+
+    togglerecord.set_property("record", true);
+
+    sender_input_1
+        .send(SendData::Buffers(main_buffers_before_gap as usize))
+        .unwrap();
+    sender_input_2
+        .send(SendData::Buffers(
+            (secondary_buffers_before_gap - 1) as usize,
+        ))
+        .unwrap();
+
+    // Sender 2 is waiting for sender 1 to continue, sender 1 is finished
+    receiver_input_done_1.recv_timeout(recv_timeout).unwrap();
+    receiver_input_done_2.recv_timeout(recv_timeout).unwrap();
+    sender_input_2.send(SendData::Buffers(1)).unwrap();
+    assert_eq!(
+        receiver_input_done_2.recv_timeout(Duration::from_millis(20)),
+        Err(mpsc::RecvTimeoutError::Timeout)
+    );
+
+    // Stop recording and push new buffers to sender 1, this will block
+    togglerecord.set_property("record", false);
+    sender_input_1
+        .send(SendData::Buffers(buffers_in_gap as usize))
+        .unwrap();
+
+    // Send another 10 buffers to sender 2, both are the same position at 9 buffers, the next one
+    // will block until record=true
+    sender_input_2
+        .send(SendData::Buffers(buffers_in_gap as usize))
+        .unwrap();
+
+    receiver_input_done_2.recv_timeout(recv_timeout).unwrap();
+    // Advance the clock
+    let block_time = gst::ClockTime::from_mseconds(42);
+    testclock.advance_time(block_time.nseconds() as i64);
+
+    // Start recording again and send another set of buffers to both senders
+    togglerecord.set_property("record", true);
+    sender_input_1
+        .send(SendData::Buffers(buffers_after_gap as usize))
+        .unwrap();
+    sender_input_2
+        .send(SendData::Buffers(buffers_after_gap as usize))
+        .unwrap();
+    receiver_input_done_1.recv_timeout(recv_timeout).unwrap();
+    // The single buffer above for sender 1 should be handled now
+    receiver_input_done_2.recv_timeout(recv_timeout).unwrap();
+
+    // Send EOS and wait for it to be handled
+    sender_input_1.send(SendData::Eos).unwrap();
+    sender_input_2.send(SendData::Eos).unwrap();
+    receiver_input_done_1.recv_timeout(recv_timeout).unwrap();
+    receiver_input_done_2.recv_timeout(recv_timeout).unwrap();
+    receiver_input_done_2.recv_timeout(recv_timeout).unwrap();
+
+    let mut segment_1 = gst::FormattedSegment::<gst::ClockTime>::new();
+    let (buffers_1, _) = recv_buffers(
+        &receiver_output_1,
+        &mut segment_1,
+        main_buffers_before_gap as usize,
+    );
+    for (index, &(running_time, pts, duration)) in buffers_1.iter().enumerate() {
+        let index = index as u64;
+        assert_eq!(running_time.unwrap(), index * 20.mseconds());
+        assert_eq!(pts.unwrap(), index * 20.mseconds());
+        assert_eq!(duration.unwrap(), 20.mseconds());
+    }
+    let (buffers_1, _) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
+    for (index, &(running_time, pts, duration)) in buffers_1.iter().enumerate() {
+        let index = index as u64;
+        assert_eq!(
+            running_time.unwrap(),
+            block_time + (index + main_buffers_before_gap) * 20.mseconds()
+        );
+        assert_eq!(
+            pts.unwrap(),
+            (index + main_buffers_before_gap) * 20.mseconds()
+        );
+        assert_eq!(duration.unwrap(), 20.mseconds());
+    }
+    assert_eq!(
+        buffers_1.len(),
+        (buffers_in_gap + buffers_after_gap) as usize
+    );
+
+    // Last buffer should be dropped from second stream
+    let mut segment_2 = gst::FormattedSegment::<gst::ClockTime>::new();
+    let (buffers_2, _) = recv_buffers(
+        &receiver_output_2,
+        &mut segment_2,
+        secondary_buffers_before_gap as usize,
+    );
+    for (index, &(running_time, pts, duration)) in buffers_2.iter().enumerate() {
+        let index = index as u64;
+        assert_eq!(running_time.unwrap(), index * 20.mseconds());
+        assert_eq!(pts.unwrap(), index * 20.mseconds());
+        assert_eq!(duration.unwrap(), 20.mseconds());
+    }
+    let (buffers_2, _) = recv_buffers(&receiver_output_2, &mut segment_2, 0);
+    for (index, &(running_time, pts, duration)) in buffers_2.iter().enumerate() {
+        let index = index as u64;
+        assert_eq!(
+            running_time.unwrap(),
+            block_time + (index + secondary_buffers_before_gap) * 20.mseconds()
+        );
+        assert_eq!(
+            pts.unwrap(),
+            (index + secondary_buffers_before_gap) * 20.mseconds()
+        );
+        assert_eq!(duration.unwrap(), 20.mseconds());
+    }
+    assert_eq!(
+        buffers_2.len(),
+        (buffers_in_gap + buffers_after_gap - 1) as usize
+    );
+
+    thread_1.join().unwrap();
+    thread_2.join().unwrap();
+
+    pipeline.set_state(gst::State::Null).unwrap();
+}
+#[test]
+fn test_two_stream_open_close_open_nonlivein_nonliveout() {
+    init();
+
+    let pipeline = gst::Pipeline::default();
+    let togglerecord = gst::ElementFactory::make("togglerecord")
+        .property("is-live", false)
+        .build()
+        .unwrap();
+    pipeline.add(&togglerecord).unwrap();
+
+    let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, false);
+    let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            gst::ClockTime::ZERO,
+            false,
+        );
+
+    let recv_timeout = Duration::from_secs(10);
+
+    pipeline.set_state(gst::State::Playing).unwrap();
+
+    togglerecord.set_property("record", true);
+
+    sender_input_1.send(SendData::Buffers(10)).unwrap();
+    sender_input_2.send(SendData::Buffers(10)).unwrap();
+
+    receiver_input_done_1.recv_timeout(recv_timeout).unwrap();
+    receiver_input_done_2.recv_timeout(recv_timeout).unwrap();
+
+    // Sender 2 is waiting for sender 1 to continue, sender 1 is finished
+    sender_input_2.send(SendData::Buffers(1)).unwrap();
+    assert_eq!(
+        receiver_input_done_2.recv_timeout(Duration::from_millis(20)),
+        Err(mpsc::RecvTimeoutError::Timeout)
+    );
+
+    // Stop recording and push new buffers to sender 1, this will block
+    togglerecord.set_property("record", false);
+    sender_input_1.send(SendData::Buffers(10)).unwrap();
+
+    // Send another 9 buffers to sender 2, both are the same position now
+    sender_input_2.send(SendData::Buffers(9)).unwrap();
+
+    // Send another buffer to sender 2, this will block until record=true
+    sender_input_2.send(SendData::Buffers(1)).unwrap();
+
+    // Start recording again and send another set of buffers to both senders
+    togglerecord.set_property("record", true);
+    sender_input_1.send(SendData::Buffers(10)).unwrap();
+    sender_input_2.send(SendData::Buffers(10)).unwrap();
+    receiver_input_done_1.recv_timeout(recv_timeout).unwrap();
+    // The single buffer above for sender 1 should be handled now
+    receiver_input_done_2.recv_timeout(recv_timeout).unwrap();
+
+    // Send EOS and wait for it to be handled
+    sender_input_1.send(SendData::Eos).unwrap();
+    sender_input_2.send(SendData::Eos).unwrap();
+    receiver_input_done_1.recv_timeout(recv_timeout).unwrap();
+    receiver_input_done_2.recv_timeout(recv_timeout).unwrap();
+    receiver_input_done_2.recv_timeout(recv_timeout).unwrap();
+
+    let mut segment_1 = gst::FormattedSegment::<gst::ClockTime>::new();
+    let (buffers_1, _) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
+    for (index, &(running_time, pts, duration)) in buffers_1.iter().enumerate() {
+        let index = index as u64;
+        assert_eq!(running_time.unwrap(), index * 20.mseconds());
+        assert_eq!(pts.unwrap(), index * 20.mseconds());
+        assert_eq!(duration.unwrap(), 20.mseconds());
+    }
+    assert_eq!(buffers_1.len(), 30);
+
+    // Last buffer should be dropped from second stream
+    let mut segment_2 = gst::FormattedSegment::<gst::ClockTime>::new();
+    let (buffers_2, _) = recv_buffers(&receiver_output_2, &mut segment_2, 0);
+    for (index, &(running_time, pts, duration)) in buffers_2.iter().enumerate() {
+        let index = index as u64;
+        assert_eq!(running_time.unwrap(), index * 20.mseconds());
+        assert_eq!(pts.unwrap(), index * 20.mseconds());
+        assert_eq!(duration.unwrap(), 20.mseconds());
+    }
+    assert_eq!(buffers_2.len(), 30);
+
+    thread_1.join().unwrap();
+    thread_2.join().unwrap();
+
+    pipeline.set_state(gst::State::Null).unwrap();
+}
+
+#[test]
 fn test_two_stream_open_close_open() {
     init();
 
@@ -771,9 +1135,15 @@ fn test_two_stream_open_close_open() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, true);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            gst::ClockTime::ZERO,
+            true,
+        );
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -865,9 +1235,15 @@ fn test_two_stream_open_close_open_gaps() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, true);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            gst::ClockTime::ZERO,
+            true,
+        );
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -965,9 +1341,15 @@ fn test_two_stream_close_open_close_delta() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, true);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            gst::ClockTime::ZERO,
+            true,
+        );
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -1054,11 +1436,23 @@ fn test_three_stream_open_close_open() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, true);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            gst::ClockTime::ZERO,
+            true,
+        );
     let (sender_input_3, receiver_input_done_3, receiver_output_3, thread_3) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            gst::ClockTime::ZERO,
+            true,
+        );
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -1178,9 +1572,15 @@ fn test_two_stream_main_eos() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, true);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            gst::ClockTime::ZERO,
+            true,
+        );
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -1253,9 +1653,15 @@ fn test_two_stream_secondary_eos_first() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, true);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            gst::ClockTime::ZERO,
+            true,
+        );
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -1321,11 +1727,23 @@ fn test_three_stream_main_eos() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, true);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            gst::ClockTime::ZERO,
+            true,
+        );
     let (sender_input_3, receiver_input_done_3, receiver_output_3, thread_3) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            gst::ClockTime::ZERO,
+            true,
+        );
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -1422,11 +1840,23 @@ fn test_three_stream_main_and_second_eos() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, true);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            gst::ClockTime::ZERO,
+            true,
+        );
     let (sender_input_3, receiver_input_done_3, receiver_output_3, thread_3) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            gst::ClockTime::ZERO,
+            true,
+        );
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -1523,11 +1953,23 @@ fn test_three_stream_secondary_eos_first() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO, true);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            gst::ClockTime::ZERO,
+            true,
+        );
     let (sender_input_3, receiver_input_done_3, receiver_output_3, thread_3) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            gst::ClockTime::ZERO,
+            true,
+        );
 
     pipeline.set_state(gst::State::Playing).unwrap();
 

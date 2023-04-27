@@ -8486,7 +8486,7 @@
         "elements": {
             "togglerecord": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
-                "description": "Valve that ensures multiple streams start/end at the same time",
+                "description": "Valve that ensures multiple streams start/end at the same time. If the input comes from a live stream, when not recording it will be dropped. If it comes from a non-live stream, when not recording it will be blocked.",
                 "hierarchy": [
                     "GstToggleRecord",
                     "GstElement",
@@ -8520,7 +8520,7 @@
                 },
                 "properties": {
                     "is-live": {
-                        "blurb": "Live mode: no \"gap eating\", forward incoming segment",
+                        "blurb": "Live output mode: no \"gap eating\", forward incoming segment for live input, create a gap to fill the paused duration for non-live input",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
