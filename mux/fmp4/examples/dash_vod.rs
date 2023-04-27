@@ -261,6 +261,7 @@ fn main() -> Result<(), Error> {
                     profiles: Some("urn:mpeg:dash:profile:isoff-on-demand:2011".to_string()),
                     periods: vec![period],
                     mediaPresentationDuration: Some(std::time::Duration::from_millis(duration)),
+                    minBufferTime: Some(std::time::Duration::from_secs(1)),
                     ..Default::default()
                 };
 
