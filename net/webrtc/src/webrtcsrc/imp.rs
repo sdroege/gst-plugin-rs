@@ -458,12 +458,12 @@ impl WebRTCSrc {
     fn prepare(&self) -> Result<(), Error> {
         let webrtcbin = gst::ElementFactory::make("webrtcbin")
             .property("bundle-policy", gst_webrtc::WebRTCBundlePolicy::MaxBundle)
-            .property(
-                "stun-server",
-                &self.settings.lock().unwrap().stun_server.to_value(),
-            )
             .build()
             .with_context(|| "Failed to make element webrtcbin".to_string())?;
+
+        if let Some(stun_server) = self.settings.lock().unwrap().stun_server.as_ref() {
+            webrtcbin.set_property("stun-server", stun_server);
+        }
 
         let bin = gst::Bin::new(None);
         bin.connect_pad_removed(glib::clone!(@weak self as this => move |_, pad|
