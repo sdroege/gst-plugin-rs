@@ -17,8 +17,8 @@ gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/g
 gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20" }
 gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20", features = ["v1_16"] }
 aws-config = "0.55.0"
-aws-sdk-s3 = "0.26.0"
-aws-sdk-transcribe = "0.26.0"
+aws-sdk-s3 = "0.27.0"
+aws-sdk-transcribe = "0.27.0"
 aws-types = "0.55.0"
 aws-credential-types = "0.55.0"
 aws-sig-auth = "0.55.0"
@@ -29,7 +29,7 @@ chrono = "0.4"
 url = "2"
 percent-encoding = "2"
 tokio = { version = "1.0", features = [ "full" ] }
-async-tungstenite = { version = "0.21", features = ["tokio", "tokio-runtime", "tokio-native-tls"] }
+async-tungstenite = { version = "0.22", features = ["tokio", "tokio-runtime", "tokio-native-tls"] }
 nom = "7"
 crc = "3"
 byteorder = "1.3.4"
