@@ -13,6 +13,7 @@ gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/g
 once_cell = "1.0"
 anyhow = "1"
 clap = { version = "4", optional = true, features = ["derive"] }
+thiserror = "1"
 
 [dev-dependencies]
 gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.19", version = "0.19" }
