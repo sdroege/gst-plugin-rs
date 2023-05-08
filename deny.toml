@@ -14,8 +14,6 @@ ignore = [
     "RUSTSEC-2020-0071",
     # sodiumoxide is deprecated
     "RUSTSEC-2021-0137",
-    # https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/256
-    "RUSTSEC-2022-0048",
 ]
 
 [licenses]
