@@ -4953,6 +4953,18 @@
                         "type": "GstCaps",
                         "writable": true
                     },
+                    "language-code": {
+                        "blurb": "The language of the input stream",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "en-US",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "latency": {
                         "blurb": "Amount of milliseconds to allow the transcriber",
                         "conditionally-available": false,

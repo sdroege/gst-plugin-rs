@@ -32,6 +32,7 @@ const DEFAULT_TRANSLATE_LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(
 const DEFAULT_ACCUMULATE: gst::ClockTime = gst::ClockTime::ZERO;
 const DEFAULT_MODE: Cea608Mode = Cea608Mode::RollUp2;
 const DEFAULT_CAPTION_SOURCE: CaptionSource = CaptionSource::Both;
+const DEFAULT_INPUT_LANG_CODE: &str = "en-US";
 
 const CEA608MUX_LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(100);
 
@@ -91,6 +92,7 @@ struct Settings {
     mode: Cea608Mode,
     caption_source: CaptionSource,
     translation_languages: Option<gst::Structure>,
+    language_code: String,
 }
 
 impl Default for Settings {
@@ -106,6 +108,7 @@ impl Default for Settings {
             mode: DEFAULT_MODE,
             caption_source: DEFAULT_CAPTION_SOURCE,
             translation_languages: None,
+            language_code: String::from(DEFAULT_INPUT_LANG_CODE),
         }
     }
 }
@@ -506,7 +509,7 @@ impl TranscriberBin {
         Ok(())
     }
 
-    fn reconfigure_channels(&self) -> Result<(), Error> {
+    fn reconfigure_transcription_bin(&self, lang_code_only: bool) -> Result<(), Error> {
         let mut state = self.state.lock().unwrap();
 
         if let Some(ref mut state) = state.as_mut() {
@@ -515,7 +518,7 @@ impl TranscriberBin {
             gst::debug!(
                 CAT,
                 imp: self,
-                "Updating transcription/translation channel configuration"
+                "Updating transcription/translation language"
             );
 
             // Unlink sinkpad temporarily
@@ -529,6 +532,26 @@ impl TranscriberBin {
 
             state.transcription_bin.set_locked_state(true);
             state.transcription_bin.set_state(gst::State::Null).unwrap();
+
+            state
+                .transcriber
+                .set_property("language-code", &settings.language_code);
+
+            if lang_code_only {
+                if !settings.passthrough {
+                    gst::debug!(CAT, imp: self, "Syncing state with parent");
+
+                    drop(settings);
+
+                    state.transcription_bin.set_locked_state(false);
+                    state.transcription_bin.sync_state_with_parent()?;
+
+                    let audio_tee_pad = state.audio_tee.request_pad_simple("src_%u").unwrap();
+                    audio_tee_pad.link(&sinkpad)?;
+                }
+
+                return Ok(());
+            }
 
             for channel in state.transcription_channels.values() {
                 let sinkpad = channel.bin.static_pad("sink").unwrap();
@@ -599,14 +622,14 @@ impl TranscriberBin {
         Ok(())
     }
 
-    fn update_channels(&self) {
+    fn update_languages(&self, lang_code_only: bool) {
         let s = self.state.lock().unwrap();
 
         if let Some(state) = s.as_ref() {
             gst::debug!(
                 CAT,
                 imp: self,
-                "Schedule transcription/translation channel update"
+                "Schedule transcription/translation language update"
             );
 
             let sinkpad = state.transcription_bin.static_pad("sink").unwrap();
@@ -623,7 +646,7 @@ impl TranscriberBin {
                         Some(imp) => imp,
                     };
 
-                    if imp.reconfigure_channels().is_err() {
+                    if imp.reconfigure_transcription_bin(lang_code_only).is_err() {
                         gst::element_imp_error!(
                             imp,
                             gst::StreamError::Failed,
@@ -709,6 +732,10 @@ impl TranscriberBin {
         let transcriber_aconv = gst::ElementFactory::make("audioconvert").build()?;
         let transcriber = gst::ElementFactory::make("awstranscriber")
             .name("transcriber")
+            .property(
+                "language-code",
+                &self.settings.lock().unwrap().language_code,
+            )
             .build()?;
         let audio_queue_passthrough = gst::ElementFactory::make("queue").build()?;
         let video_queue = gst::ElementFactory::make("queue").build()?;
@@ -908,6 +935,12 @@ impl ObjectImpl for TranscriberBin {
                     .default_value(DEFAULT_TRANSLATE_LATENCY.mseconds() as u32)
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecString::builder("language-code")
+                    .nick("Language Code")
+                    .blurb("The language of the input stream")
+                    .default_value(Some(DEFAULT_INPUT_LANG_CODE))
+                    .mutable_playing()
+                    .build(),
             ]
         });
 
@@ -1001,13 +1034,34 @@ impl ObjectImpl for TranscriberBin {
                 );
                 drop(settings);
 
-                self.update_channels();
+                self.update_languages(false);
             }
             "translate-latency" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.translate_latency = gst::ClockTime::from_mseconds(
                     value.get::<u32>().expect("type checked upstream").into(),
                 );
+            }
+            "language-code" => {
+                let code = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream")
+                    .unwrap_or_else(|| String::from(DEFAULT_INPUT_LANG_CODE));
+                let mut settings = self.settings.lock().unwrap();
+                if settings.language_code != code {
+                    gst::debug!(
+                        CAT,
+                        imp: self,
+                        "Updating language code {} -> {}",
+                        settings.language_code,
+                        code
+                    );
+
+                    settings.language_code = code;
+                    drop(settings);
+
+                    self.update_languages(true)
+                }
             }
             _ => unimplemented!(),
         }
@@ -1055,6 +1109,10 @@ impl ObjectImpl for TranscriberBin {
             "translate-latency" => {
                 let settings = self.settings.lock().unwrap();
                 (settings.translate_latency.mseconds() as u32).to_value()
+            }
+            "language-code" => {
+                let settings = self.settings.lock().unwrap();
+                settings.language_code.to_value()
             }
             _ => unimplemented!(),
         }
