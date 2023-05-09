@@ -6214,7 +6214,27 @@
                         "writable": true
                     }
                 },
-                "rank": "primary"
+                "rank": "primary",
+                "signals": {
+                    "request-encoded-filter": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg2",
+                                "type": "GstCaps"
+                            }
+                        ],
+                        "return-type": "GstElement",
+                        "when": "last"
+                    }
+                }
             }
         },
         "filename": "gstrswebrtc",
@@ -6470,6 +6490,24 @@
                         "action": true,
                         "args": [],
                         "return-type": "GStrv",
+                        "when": "last"
+                    },
+                    "request-encoded-filter": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg2",
+                                "type": "GstCaps"
+                            }
+                        ],
+                        "return-type": "GstElement",
                         "when": "last"
                     }
                 }

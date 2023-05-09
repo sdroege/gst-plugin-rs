@@ -285,6 +285,38 @@ impl ObjectImpl for WebRTCSrc {
         }
     }
 
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+            vec![
+                /**
+                 * WebRTCSrc::request-encoded-filter:
+                 * @producer_id: Identifier of the producer
+                 * @pad_name: The name of the output pad
+                 * @allowed_caps: the allowed caps for the output pad
+                 *
+                 * This signal can be used to insert a filter
+                 * element between:
+                 *
+                 * - the depayloader and the decoder.
+                 * - the depayloader and downstream element if
+                 *   no decoders are used.
+                 *
+                 * Returns: the element to insert.
+                 */
+                glib::subclass::Signal::builder("request-encoded-filter")
+                    .param_types([
+                        String::static_type(),
+                        String::static_type(),
+                        Option::<gst::Caps>::static_type(),
+                    ])
+                    .return_type::<gst::Element>()
+                    .build(),
+            ]
+        });
+
+        SIGNALS.as_ref()
+    }
+
     fn constructed(&self) {
         self.parent_constructed();
         let signaller = self.settings.lock().unwrap().signaller.clone();
@@ -418,6 +450,12 @@ impl WebRTCSrc {
             .expect("Adding ghostpad to the bin should always work");
 
         if let Some(srcpad) = srcpad {
+            let producer_id = self.signaller().property::<String>("producer-peer-id");
+            let encoded_filter = self.obj().emit_by_name::<Option<gst::Element>>(
+                "request-encoded-filter",
+                &[&producer_id, &srcpad.name(), &srcpad.allowed_caps()],
+            );
+
             if srcpad.imp().needs_decoding() {
                 let decodebin = gst::ElementFactory::make("decodebin3")
                     .build()
@@ -435,12 +473,40 @@ impl WebRTCSrc {
                 );
 
                 gst::debug!(CAT, imp: self, "Decoding for {}", srcpad.imp().stream_id());
-                let sinkpad = decodebin
-                    .static_pad("sink")
-                    .expect("decodebin has a sink pad");
-                ghostpad
-                    .link(&sinkpad)
-                    .expect("webrtcbin ! decodebin3 linking failed");
+
+                if let Some(encoded_filter) = encoded_filter {
+                    let filter_sink_pad = encoded_filter
+                        .static_pad("sink")
+                        .expect("encoded filter must expose a static sink pad");
+
+                    let parsebin = gst::ElementFactory::make("parsebin")
+                        .build()
+                        .expect("parsebin needs to be present!");
+                    self.obj().add_many([&parsebin, &encoded_filter]).unwrap();
+
+                    parsebin.connect_pad_added(move |_, pad| {
+                        pad.link(&filter_sink_pad)
+                            .expect("parsebin ! encoded_filter linking failed");
+                        encoded_filter
+                            .link(&decodebin)
+                            .expect("encoded_filter ! decodebin3 linking failed");
+
+                        encoded_filter.sync_state_with_parent().unwrap();
+                    });
+
+                    ghostpad
+                        .link(&parsebin.static_pad("sink").unwrap())
+                        .expect("webrtcbin ! parsebin linking failed");
+
+                    parsebin.sync_state_with_parent().unwrap();
+                } else {
+                    let sinkpad = decodebin
+                        .static_pad("sink")
+                        .expect("decodebin has a sink pad");
+                    ghostpad
+                        .link(&sinkpad)
+                        .expect("webrtcbin ! decodebin3 linking failed");
+                }
             } else {
                 gst::debug!(
                     CAT,
@@ -448,7 +514,26 @@ impl WebRTCSrc {
                     "NO decoding for {}",
                     srcpad.imp().stream_id()
                 );
-                srcpad.set_target(Some(&ghostpad)).unwrap();
+
+                if let Some(encoded_filter) = encoded_filter {
+                    let filter_sink_pad = encoded_filter
+                        .static_pad("sink")
+                        .expect("encoded filter must expose a static sink pad");
+                    let filter_src_pad = encoded_filter
+                        .static_pad("src")
+                        .expect("encoded filter must expose a static src pad");
+
+                    self.obj().add(&encoded_filter).unwrap();
+
+                    ghostpad
+                        .link(&filter_sink_pad)
+                        .expect("webrtcbin ! encoded_filter linking failed");
+                    srcpad.set_target(Some(&filter_src_pad)).unwrap();
+
+                    encoded_filter.sync_state_with_parent().unwrap();
+                } else {
+                    srcpad.set_target(Some(&ghostpad)).unwrap();
+                }
             }
         } else {
             gst::debug!(CAT, imp: self, "Unused webrtcbin pad {pad:?}");
