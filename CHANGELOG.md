@@ -5,6 +5,28 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.10.7] - 2023-05-09
+### Fixed
+- ffv1dec: Drop rank until the implementation is feature-complete.
+- spotifyaudiosrc: Check cached credentials before use and fix usage of
+  credentials cache.
+- tttocea608: Specify raw CEA608 field.
+- gtk4paintablesink: Fix compilation on non-Linux UNIX systems.
+- webrtcsrc: Don't set stun-server to the empty string if none was set.
+- webrtcsink: Abort statistics collection before stopping the signaller.
+- rtpgccbwe: Don't process empty lists.
+
+### Changed
+- ndi: Update to libloading 0.8.
+- aws: Update to AWS SDK 0.55/0.27.
+- webrtcsink: Order pads by serial number.
+- Update to async-tungstenite 0.22.
+
+### Added
+- webrtcsink/webrtcsrc: Add `request-encoded-filter` signal to add support for
+  inserting custom filters between encoder/payloader or depayloader/decoder.
+  This allows interacting with the "insertable streams" API from Chrome.
+
 ## [0.10.6] - 2023-04-06
 ### Fixed
 - webrtcsink: Fix max/min-bitrate property blurb/nick.
@@ -129,7 +151,9 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.5...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.7...HEAD
+[0.10.7]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.6...0.10.7
+[0.10.6]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.5...0.10.6
 [0.10.5]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.4...0.10.5
 [0.10.4]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.3...0.10.4
 [0.10.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.2...0.10.3
