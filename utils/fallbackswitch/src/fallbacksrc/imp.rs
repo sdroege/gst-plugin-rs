@@ -943,8 +943,7 @@ impl FallbackSrc {
         ])
         .unwrap();
 
-        let ghostpad =
-            gst::GhostPad::with_target(Some("src"), &queue.static_pad("src").unwrap()).unwrap();
+        let ghostpad = gst::GhostPad::with_target(&queue.static_pad("src").unwrap()).unwrap();
         ghostpad.set_active(true).unwrap();
         bin.add_pad(&ghostpad).unwrap();
 
@@ -1002,8 +1001,7 @@ impl FallbackSrc {
         ])
         .unwrap();
 
-        let ghostpad =
-            gst::GhostPad::with_target(Some("src"), &queue.static_pad("src").unwrap()).unwrap();
+        let ghostpad = gst::GhostPad::with_target(&queue.static_pad("src").unwrap()).unwrap();
         ghostpad.set_active(true).unwrap();
         bin.add_pad(&ghostpad).unwrap();
 
@@ -1204,7 +1202,9 @@ impl FallbackSrc {
             .obj()
             .pad_template(if is_audio { "audio" } else { "video" })
             .unwrap();
-        let ghostpad = gst::GhostPad::builder_with_template(&templ, Some(&templ.name()))
+        let ghostpad = gst::GhostPad::builder_from_template_with_target(&templ, &srcpad)
+            .unwrap()
+            .name(templ.name())
             .proxy_pad_chain_function({
                 move |pad, parent, buffer| {
                     let parent = parent.and_then(|p| p.parent());
@@ -1215,8 +1215,7 @@ impl FallbackSrc {
                     )
                 }
             })
-            .build_with_target(&srcpad)
-            .unwrap();
+            .build();
 
         let _ = ghostpad.set_active(true);
 
@@ -1612,14 +1611,11 @@ impl FallbackSrc {
         gst::Element::link_many([&videoconvert, &videoscale, &imagefreeze, &capsfilter]).unwrap();
 
         let ghostpad =
-            gst::GhostPad::with_target(Some("sink"), &videoconvert.static_pad("sink").unwrap())
-                .unwrap();
+            gst::GhostPad::with_target(&videoconvert.static_pad("sink").unwrap()).unwrap();
         ghostpad.set_active(true).unwrap();
         bin.add_pad(&ghostpad).unwrap();
 
-        let ghostpad =
-            gst::GhostPad::with_target(Some("src"), &capsfilter.static_pad("src").unwrap())
-                .unwrap();
+        let ghostpad = gst::GhostPad::with_target(&capsfilter.static_pad("src").unwrap()).unwrap();
         ghostpad.set_active(true).unwrap();
         bin.add_pad(&ghostpad).unwrap();
 
@@ -1660,14 +1656,11 @@ impl FallbackSrc {
         gst::Element::link_many([&videoconvert, &videoscale, &capsfilter]).unwrap();
 
         let ghostpad =
-            gst::GhostPad::with_target(Some("sink"), &videoconvert.static_pad("sink").unwrap())
-                .unwrap();
+            gst::GhostPad::with_target(&videoconvert.static_pad("sink").unwrap()).unwrap();
         ghostpad.set_active(true).unwrap();
         bin.add_pad(&ghostpad).unwrap();
 
-        let ghostpad =
-            gst::GhostPad::with_target(Some("src"), &capsfilter.static_pad("src").unwrap())
-                .unwrap();
+        let ghostpad = gst::GhostPad::with_target(&capsfilter.static_pad("src").unwrap()).unwrap();
         ghostpad.set_active(true).unwrap();
         bin.add_pad(&ghostpad).unwrap();
 
@@ -1708,14 +1701,11 @@ impl FallbackSrc {
         gst::Element::link_many([&audioconvert, &audioresample, &capsfilter]).unwrap();
 
         let ghostpad =
-            gst::GhostPad::with_target(Some("sink"), &audioconvert.static_pad("sink").unwrap())
-                .unwrap();
+            gst::GhostPad::with_target(&audioconvert.static_pad("sink").unwrap()).unwrap();
         ghostpad.set_active(true).unwrap();
         bin.add_pad(&ghostpad).unwrap();
 
-        let ghostpad =
-            gst::GhostPad::with_target(Some("src"), &capsfilter.static_pad("src").unwrap())
-                .unwrap();
+        let ghostpad = gst::GhostPad::with_target(&capsfilter.static_pad("src").unwrap()).unwrap();
         ghostpad.set_active(true).unwrap();
         bin.add_pad(&ghostpad).unwrap();
 
@@ -1891,8 +1881,10 @@ impl FallbackSrc {
 
         gst::Element::link_many([&converters, &queue, &clocksync]).unwrap();
 
-        let ghostpad =
-            gst::GhostPad::with_target(Some(type_), &clocksync.static_pad("src").unwrap()).unwrap();
+        let ghostpad = gst::GhostPad::builder_with_target(&clocksync.static_pad("src").unwrap())
+            .unwrap()
+            .name(type_)
+            .build();
         let _ = ghostpad.set_active(true);
         source.source.add_pad(&ghostpad).unwrap();
 

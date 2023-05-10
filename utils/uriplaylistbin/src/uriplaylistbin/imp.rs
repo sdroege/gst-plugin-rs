@@ -1342,7 +1342,10 @@ impl UriPlaylistBin {
                     // ghost streamsynchronizer src pad
                     let sync_src_name = sync_sink.name().as_str().replace("sink", "src");
                     let src = state.streamsynchronizer.static_pad(&sync_src_name).unwrap();
-                    let ghost = gst::GhostPad::with_target(Some(pad_name.as_str()), &src).unwrap();
+                    let ghost = gst::GhostPad::builder_with_target(&src)
+                        .unwrap()
+                        .name(pad_name.as_str())
+                        .build();
                     ghost.set_active(true).unwrap();
 
                     // proxy sticky events

@@ -884,9 +884,7 @@ impl ElementImpl for S3HlsSink {
                 }
 
                 let audio_pad = self.hlssink.request_pad_simple("audio").unwrap();
-                let sink_pad =
-                    gst::GhostPad::from_template_with_target(templ, Some("audio"), &audio_pad)
-                        .unwrap();
+                let sink_pad = gst::GhostPad::from_template_with_target(templ, &audio_pad).unwrap();
                 self.obj().add_pad(&sink_pad).unwrap();
                 sink_pad.set_active(true).unwrap();
                 settings.audio_sink = true;
@@ -904,9 +902,7 @@ impl ElementImpl for S3HlsSink {
                 }
 
                 let video_pad = self.hlssink.request_pad_simple("video").unwrap();
-                let sink_pad =
-                    gst::GhostPad::from_template_with_target(templ, Some("video"), &video_pad)
-                        .unwrap();
+                let sink_pad = gst::GhostPad::from_template_with_target(templ, &video_pad).unwrap();
                 self.obj().add_pad(&sink_pad).unwrap();
                 sink_pad.set_active(true).unwrap();
                 settings.video_sink = true;

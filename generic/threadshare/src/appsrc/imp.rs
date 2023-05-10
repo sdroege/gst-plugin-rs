@@ -432,7 +432,7 @@ impl ObjectSubclass for AppSrc {
     fn with_class(klass: &Self::Class) -> Self {
         Self {
             src_pad: PadSrc::new(
-                gst::Pad::from_template(&klass.pad_template("src").unwrap(), Some("src")),
+                gst::Pad::from_template(&klass.pad_template("src").unwrap()),
                 AppSrcPadHandler,
             ),
             task: Task::default(),

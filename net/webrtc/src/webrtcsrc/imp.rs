@@ -417,7 +417,9 @@ impl WebRTCSrc {
             pad.store_sticky_event(&builder.build()).ok();
         }
 
-        let ghostpad = gst::GhostPad::builder(None, gst::PadDirection::Src)
+        let ghostpad = gst::GhostPad::builder(gst::PadDirection::Src)
+            .with_target(pad)
+            .unwrap()
             .proxy_pad_chain_function(glib::clone!(@weak self as this => @default-panic, move
                 |pad, parent, buffer| {
                     let padret = gst::ProxyPad::chain_default(pad, parent, buffer);
@@ -443,8 +445,7 @@ impl WebRTCSrc {
 
                 gst::Pad::event_default(pad, parent, event)
             }))
-            .build_with_target(pad)
-            .unwrap();
+            .build();
 
         bin.add_pad(&ghostpad)
             .expect("Adding ghostpad to the bin should always work");
@@ -550,7 +551,7 @@ impl WebRTCSrc {
             webrtcbin.set_property("stun-server", stun_server);
         }
 
-        let bin = gst::Bin::new(None);
+        let bin = gst::Bin::new();
         bin.connect_pad_removed(glib::clone!(@weak self as this => move |_, pad|
             this.state.lock().unwrap().flow_combiner.remove_pad(pad);
         ));
@@ -751,7 +752,8 @@ impl WebRTCSrc {
         let caps_with_raw = [caps.clone(), raw_caps.clone()]
             .into_iter()
             .collect::<gst::Caps>();
-        let ghost = gst::GhostPad::builder_with_template(&template, Some(&name))
+        let ghost = gst::GhostPad::builder_from_template(&template)
+            .name(name)
             .build()
             .downcast::<WebRTCSrcPad>()
             .unwrap();

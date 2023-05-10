@@ -590,7 +590,7 @@ impl ObjectSubclass for RaptorqDec {
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
+        let sinkpad = gst::Pad::builder_from_template(&templ)
             .chain_function(|pad, parent, buffer| {
                 Self::catch_panic_pad_function(
                     parent,
@@ -612,7 +612,7 @@ impl ObjectSubclass for RaptorqDec {
             .build();
 
         let templ = klass.pad_template("src").unwrap();
-        let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
+        let srcpad = gst::Pad::builder_from_template(&templ)
             .iterate_internal_links_function(|pad, parent| {
                 Self::catch_panic_pad_function(
                     parent,
@@ -821,7 +821,8 @@ impl ElementImpl for RaptorqDec {
             return None;
         }
 
-        let sinkpad_fec = gst::Pad::builder_with_template(templ, name)
+        let sinkpad_fec = gst::Pad::builder_from_template(templ)
+            .maybe_name(name)
             .chain_function(|pad, parent, buffer| {
                 Self::catch_panic_pad_function(
                     parent,

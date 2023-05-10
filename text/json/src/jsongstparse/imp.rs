@@ -822,7 +822,7 @@ impl ObjectSubclass for JsonGstParse {
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
+        let sinkpad = gst::Pad::builder_from_template(&templ)
             .activate_function(|pad, parent| {
                 JsonGstParse::catch_panic_pad_function(
                     parent,
@@ -859,7 +859,7 @@ impl ObjectSubclass for JsonGstParse {
             .build();
 
         let templ = klass.pad_template("src").unwrap();
-        let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
+        let srcpad = gst::Pad::builder_from_template(&templ)
             .event_function(|pad, parent, event| {
                 JsonGstParse::catch_panic_pad_function(
                     parent,

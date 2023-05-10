@@ -52,9 +52,7 @@ impl ObjectSubclass for NdiSinkCombiner {
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.pad_template("video").unwrap();
-        let video_pad =
-            gst::PadBuilder::<gst_base::AggregatorPad>::from_template(&templ, Some("video"))
-                .build();
+        let video_pad = gst::PadBuilder::<gst_base::AggregatorPad>::from_template(&templ).build();
 
         Self {
             video_pad,
@@ -176,8 +174,7 @@ impl AggregatorImpl for NdiSinkCombiner {
             return None;
         }
 
-        let pad =
-            gst::PadBuilder::<gst_base::AggregatorPad>::from_template(templ, Some("audio")).build();
+        let pad = gst::PadBuilder::<gst_base::AggregatorPad>::from_template(templ).build();
         *audio_pad_storage = Some(pad.clone());
 
         gst::debug!(CAT, imp: self, "Requested audio pad");

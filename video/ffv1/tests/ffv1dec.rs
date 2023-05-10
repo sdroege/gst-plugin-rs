@@ -44,7 +44,7 @@ fn test_decode(name: &str) {
     .unwrap();
 
     let srcpad = bin.by_name("ffv1dec").unwrap().static_pad("src").unwrap();
-    let _ = bin.add_pad(&gst::GhostPad::with_target(Some("src"), &srcpad).unwrap());
+    let _ = bin.add_pad(&gst::GhostPad::with_target(&srcpad).unwrap());
 
     let mut h = gst_check::Harness::with_element(&bin, None, Some("src"));
 

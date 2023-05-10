@@ -292,9 +292,10 @@ impl CustomSource {
             (self.obj().pad_template("video_%u").unwrap(), name)
         };
 
-        let ghost_pad = gst::GhostPad::builder_with_template(&templ, Some(&name))
-            .build_with_target(pad)
-            .unwrap();
+        let ghost_pad = gst::GhostPad::builder_from_template_with_target(&templ, pad)
+            .unwrap()
+            .name(name)
+            .build();
 
         let stream = Stream {
             source_pad: pad.clone(),

@@ -199,72 +199,70 @@ impl ObjectSubclass for LiveSync {
     type ParentType = gst::Element;
 
     fn with_class(class: &Self::Class) -> Self {
-        let sinkpad =
-            gst::Pad::builder_with_template(&class.pad_template("sink").unwrap(), Some("sink"))
-                .activatemode_function(|pad, parent, mode, active| {
-                    Self::catch_panic_pad_function(
-                        parent,
-                        || Err(gst::loggable_error!(CAT, "sink_activate_mode panicked")),
-                        |livesync| livesync.sink_activate_mode(pad, mode, active),
-                    )
-                })
-                .event_function(|pad, parent, event| {
-                    Self::catch_panic_pad_function(
-                        parent,
-                        || false,
-                        |livesync| livesync.sink_event(pad, event),
-                    )
-                })
-                .query_function(|pad, parent, query| {
-                    Self::catch_panic_pad_function(
-                        parent,
-                        || false,
-                        |livesync| livesync.sink_query(pad, query),
-                    )
-                })
-                .chain_function(|pad, parent, buffer| {
-                    Self::catch_panic_pad_function(
-                        parent,
-                        || Err(gst::FlowError::Error),
-                        |livesync| livesync.sink_chain(pad, buffer),
-                    )
-                })
-                .flags(
-                    gst::PadFlags::PROXY_CAPS
-                        | gst::PadFlags::PROXY_ALLOCATION
-                        | gst::PadFlags::PROXY_SCHEDULING,
+        let sinkpad = gst::Pad::builder_from_template(&class.pad_template("sink").unwrap())
+            .activatemode_function(|pad, parent, mode, active| {
+                Self::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::loggable_error!(CAT, "sink_activate_mode panicked")),
+                    |livesync| livesync.sink_activate_mode(pad, mode, active),
                 )
-                .build();
+            })
+            .event_function(|pad, parent, event| {
+                Self::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |livesync| livesync.sink_event(pad, event),
+                )
+            })
+            .query_function(|pad, parent, query| {
+                Self::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |livesync| livesync.sink_query(pad, query),
+                )
+            })
+            .chain_function(|pad, parent, buffer| {
+                Self::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |livesync| livesync.sink_chain(pad, buffer),
+                )
+            })
+            .flags(
+                gst::PadFlags::PROXY_CAPS
+                    | gst::PadFlags::PROXY_ALLOCATION
+                    | gst::PadFlags::PROXY_SCHEDULING,
+            )
+            .build();
 
-        let srcpad =
-            gst::Pad::builder_with_template(&class.pad_template("src").unwrap(), Some("src"))
-                .activatemode_function(|pad, parent, mode, active| {
-                    Self::catch_panic_pad_function(
-                        parent,
-                        || Err(gst::loggable_error!(CAT, "src_activate_mode panicked")),
-                        |livesync| livesync.src_activate_mode(pad, mode, active),
-                    )
-                })
-                .event_function(|pad, parent, event| {
-                    Self::catch_panic_pad_function(
-                        parent,
-                        || false,
-                        |livesync| livesync.src_event(pad, event),
-                    )
-                })
-                .query_function(|pad, parent, query| {
-                    Self::catch_panic_pad_function(
-                        parent,
-                        || false,
-                        |livesync| livesync.src_query(pad, query),
-                    )
-                })
-                .flags(
-                    gst::PadFlags::PROXY_CAPS
-                        | gst::PadFlags::PROXY_ALLOCATION
-                        | gst::PadFlags::PROXY_SCHEDULING,
+        let srcpad = gst::Pad::builder_from_template(&class.pad_template("src").unwrap())
+            .activatemode_function(|pad, parent, mode, active| {
+                Self::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::loggable_error!(CAT, "src_activate_mode panicked")),
+                    |livesync| livesync.src_activate_mode(pad, mode, active),
                 )
-                .build();
+            })
+            .event_function(|pad, parent, event| {
+                Self::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |livesync| livesync.src_event(pad, event),
+                )
+            })
+            .query_function(|pad, parent, query| {
+                Self::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |livesync| livesync.src_query(pad, query),
+                )
+            })
+            .flags(
+                gst::PadFlags::PROXY_CAPS
+                    | gst::PadFlags::PROXY_ALLOCATION
+                    | gst::PadFlags::PROXY_SCHEDULING,
+            )
+            .build();
 
         Self {
             state: Default::default(),

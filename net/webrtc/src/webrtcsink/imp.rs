@@ -399,10 +399,8 @@ fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error
         }
     };
 
-    ret.add_pad(
-        &gst::GhostPad::with_target(Some("sink"), &head.static_pad("sink").unwrap()).unwrap(),
-    )
-    .unwrap();
+    ret.add_pad(&gst::GhostPad::with_target(&head.static_pad("sink").unwrap()).unwrap())
+        .unwrap();
 
     if video_info.fps().numer() != 0 {
         let vrate = make_element("videorate", None)?;
@@ -414,10 +412,8 @@ fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error
         tail = vrate;
     }
 
-    ret.add_pad(
-        &gst::GhostPad::with_target(Some("src"), &tail.static_pad("src").unwrap()).unwrap(),
-    )
-    .unwrap();
+    ret.add_pad(&gst::GhostPad::with_target(&tail.static_pad("src").unwrap()).unwrap())
+        .unwrap();
 
     Ok(ret.upcast())
 }
@@ -3503,7 +3499,8 @@ impl ElementImpl for BaseWebRTCSink {
             (name, false)
         };
 
-        let sink_pad = gst::GhostPad::builder_with_template(templ, Some(name.as_str()))
+        let sink_pad = gst::GhostPad::builder_from_template(templ)
+            .name(name.as_str())
             .event_function(|pad, parent, event| {
                 BaseWebRTCSink::catch_panic_pad_function(
                     parent,

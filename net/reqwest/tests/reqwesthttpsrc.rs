@@ -72,7 +72,8 @@ impl Harness {
         let (sender, receiver) = mpsc::sync_channel(0);
 
         // Sink pad that receives everything the source is generating
-        let pad = gst::Pad::builder(Some("sink"), gst::PadDirection::Sink)
+        let pad = gst::Pad::builder(gst::PadDirection::Sink)
+            .name("sink")
             .chain_function({
                 let sender_clone = sender.clone();
                 move |_pad, _parent, buffer| {

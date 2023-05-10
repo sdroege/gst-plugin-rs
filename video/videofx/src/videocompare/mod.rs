@@ -200,7 +200,9 @@ mod test {
 
         let mut message = VideoCompareMessage::default();
         message.pad_distances.push(PadDistance {
-            pad: gst::Pad::new(Some("sink_0"), gst::PadDirection::Sink),
+            pad: gst::Pad::builder(gst::PadDirection::Sink)
+                .name("sink_0")
+                .build(),
             distance: 42_f64,
         });
         message.running_time = Some(running_time);
@@ -236,7 +238,9 @@ mod test {
                 gst::Array::from_iter([gst::Structure::builder("pad-distance")
                     .field(
                         "pad",
-                        gst::Pad::new(Some("sink_0"), gst::PadDirection::Sink),
+                        gst::Pad::builder(gst::PadDirection::Sink)
+                            .name("sink_0")
+                            .build(),
                     )
                     .field("distance", 42f64)
                     .build()

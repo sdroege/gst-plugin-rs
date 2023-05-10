@@ -377,7 +377,7 @@ impl ObjectSubclass for Cea608ToTt {
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
+        let sinkpad = gst::Pad::builder_from_template(&templ)
             .chain_function(|pad, parent, buffer| {
                 Cea608ToTt::catch_panic_pad_function(
                     parent,
@@ -396,7 +396,7 @@ impl ObjectSubclass for Cea608ToTt {
             .build();
 
         let templ = klass.pad_template("src").unwrap();
-        let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
+        let srcpad = gst::Pad::builder_from_template(&templ)
             .flags(gst::PadFlags::FIXED_CAPS)
             .build();
 

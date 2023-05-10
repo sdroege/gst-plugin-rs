@@ -40,7 +40,7 @@ impl ObjectSubclass for NdiSrcDemux {
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
+        let sinkpad = gst::Pad::builder_from_template(&templ)
             .flags(gst::PadFlags::FIXED_CAPS)
             .chain_function(|pad, parent, buffer| {
                 NdiSrcDemux::catch_panic_pad_function(
@@ -180,7 +180,7 @@ impl NdiSrcDemux {
                     gst::debug!(CAT, imp: self, "Adding audio pad with caps {}", caps);
 
                     let templ = self.obj().element_class().pad_template("audio").unwrap();
-                    let pad = gst::Pad::builder_with_template(&templ, Some("audio"))
+                    let pad = gst::Pad::builder_from_template(&templ)
                         .flags(gst::PadFlags::FIXED_CAPS)
                         .build();
 
@@ -229,7 +229,7 @@ impl NdiSrcDemux {
                     gst::debug!(CAT, imp: self, "Adding video pad with caps {}", caps);
 
                     let templ = self.obj().element_class().pad_template("video").unwrap();
-                    let pad = gst::Pad::builder_with_template(&templ, Some("video"))
+                    let pad = gst::Pad::builder_from_template(&templ)
                         .flags(gst::PadFlags::FIXED_CAPS)
                         .build();
 

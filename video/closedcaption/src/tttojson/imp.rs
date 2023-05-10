@@ -192,7 +192,7 @@ impl ObjectSubclass for TtToJson {
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
+        let sinkpad = gst::Pad::builder_from_template(&templ)
             .chain_function(|pad, parent, buffer| {
                 TtToJson::catch_panic_pad_function(
                     parent,
@@ -210,7 +210,7 @@ impl ObjectSubclass for TtToJson {
             .build();
 
         let templ = klass.pad_template("src").unwrap();
-        let srcpad = gst::Pad::builder_with_template(&templ, Some("src")).build();
+        let srcpad = gst::Pad::from_template(&templ);
 
         Self {
             srcpad,

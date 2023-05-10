@@ -797,9 +797,7 @@ impl ElementImpl for HlsSink3 {
                 }
 
                 let peer_pad = settings.splitmuxsink.request_pad_simple("audio_0").unwrap();
-                let sink_pad =
-                    gst::GhostPad::from_template_with_target(templ, Some("audio"), &peer_pad)
-                        .unwrap();
+                let sink_pad = gst::GhostPad::from_template_with_target(templ, &peer_pad).unwrap();
                 self.obj().add_pad(&sink_pad).unwrap();
                 sink_pad.set_active(true).unwrap();
                 settings.audio_sink = true;
@@ -817,9 +815,7 @@ impl ElementImpl for HlsSink3 {
                 }
                 let peer_pad = settings.splitmuxsink.request_pad_simple("video").unwrap();
 
-                let sink_pad =
-                    gst::GhostPad::from_template_with_target(templ, Some("video"), &peer_pad)
-                        .unwrap();
+                let sink_pad = gst::GhostPad::from_template_with_target(templ, &peer_pad).unwrap();
                 self.obj().add_pad(&sink_pad).unwrap();
                 sink_pad.set_active(true).unwrap();
                 settings.video_sink = true;

@@ -282,7 +282,7 @@ mod imp_src {
         fn with_class(klass: &Self::Class) -> Self {
             ElementSrcTest {
                 src_pad: PadSrc::new(
-                    gst::Pad::from_template(&klass.pad_template("src").unwrap(), Some("src")),
+                    gst::Pad::from_template(&klass.pad_template("src").unwrap()),
                     PadSrcTestHandler,
                 ),
                 task: Task::default(),
@@ -575,7 +575,7 @@ mod imp_sink {
         fn with_class(klass: &Self::Class) -> Self {
             ElementSinkTest {
                 sink_pad: PadSink::new(
-                    gst::Pad::from_template(&klass.pad_template("sink").unwrap(), Some("sink")),
+                    gst::Pad::from_template(&klass.pad_template("sink").unwrap()),
                     PadSinkTestHandler,
                 ),
                 flushing: AtomicBool::new(true),

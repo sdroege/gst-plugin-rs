@@ -58,9 +58,9 @@ impl ObjectSubclass for ProgressBin {
         //
         // We do that and adding the pads inside glib::Object::constructed() later.
         let templ = klass.pad_template("sink").unwrap();
-        let sinkpad = gst::GhostPad::from_template(&templ, Some("sink"));
+        let sinkpad = gst::GhostPad::from_template(&templ);
         let templ = klass.pad_template("src").unwrap();
-        let srcpad = gst::GhostPad::from_template(&templ, Some("src"));
+        let srcpad = gst::GhostPad::from_template(&templ);
 
         // Create the progressreport element.
         let progress = gst::ElementFactory::make("progressreport")

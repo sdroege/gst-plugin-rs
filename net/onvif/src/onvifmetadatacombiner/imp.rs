@@ -42,12 +42,11 @@ impl ObjectSubclass for OnvifMetadataCombiner {
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.pad_template("media").unwrap();
         let media_sink_pad =
-            gst::PadBuilder::<gst_base::AggregatorPad>::from_template(&templ, Some("media"))
-                .build();
+            gst::PadBuilder::<gst_base::AggregatorPad>::from_template(&templ).build();
 
         let templ = klass.pad_template("meta").unwrap();
         let meta_sink_pad =
-            gst::PadBuilder::<gst_base::AggregatorPad>::from_template(&templ, Some("meta")).build();
+            gst::PadBuilder::<gst_base::AggregatorPad>::from_template(&templ).build();
 
         Self {
             media_sink_pad,

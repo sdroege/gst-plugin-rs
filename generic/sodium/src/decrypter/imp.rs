@@ -526,10 +526,10 @@ impl ObjectSubclass for Decrypter {
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
+        let sinkpad = gst::Pad::from_template(&templ);
 
         let templ = klass.pad_template("src").unwrap();
-        let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
+        let srcpad = gst::Pad::builder_from_template(&templ)
             .getrange_function(|pad, parent, offset, buffer, size| {
                 Decrypter::catch_panic_pad_function(
                     parent,

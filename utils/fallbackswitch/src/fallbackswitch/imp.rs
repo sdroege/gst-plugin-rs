@@ -1043,7 +1043,7 @@ impl ObjectSubclass for FallbackSwitch {
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.pad_template("src").unwrap();
-        let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
+        let srcpad = gst::Pad::builder_from_template(&templ)
             .query_function(|pad, parent, query| {
                 FallbackSwitch::catch_panic_pad_function(
                     parent,
@@ -1334,42 +1334,40 @@ impl ElementImpl for FallbackSwitch {
 
         let pad_serial = self.sink_pad_serial.fetch_add(1, Ordering::SeqCst);
 
-        let pad = gst::PadBuilder::<super::FallbackSwitchSinkPad>::from_template(
-            templ,
-            Some(format!("sink_{pad_serial}").as_str()),
-        )
-        .chain_function(|pad, parent, buffer| {
-            FallbackSwitch::catch_panic_pad_function(
-                parent,
-                || Err(gst::FlowError::Error),
-                |fallbackswitch| fallbackswitch.sink_chain(pad, buffer),
-            )
-        })
-        .chain_list_function(|pad, parent, bufferlist| {
-            FallbackSwitch::catch_panic_pad_function(
-                parent,
-                || Err(gst::FlowError::Error),
-                |fallbackswitch| fallbackswitch.sink_chain_list(pad, bufferlist),
-            )
-        })
-        .event_function(|pad, parent, event| {
-            FallbackSwitch::catch_panic_pad_function(
-                parent,
-                || false,
-                |fallbackswitch| fallbackswitch.sink_event(pad, event),
-            )
-        })
-        .query_function(|pad, parent, query| {
-            FallbackSwitch::catch_panic_pad_function(
-                parent,
-                || false,
-                |fallbackswitch| fallbackswitch.sink_query(pad, query),
-            )
-        })
-        .activatemode_function(|pad, _parent, mode, activate| {
-            Self::sink_activatemode(pad, mode, activate)
-        })
-        .build();
+        let pad = gst::PadBuilder::<super::FallbackSwitchSinkPad>::from_template(templ)
+            .name(format!("sink_{pad_serial}").as_str())
+            .chain_function(|pad, parent, buffer| {
+                FallbackSwitch::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |fallbackswitch| fallbackswitch.sink_chain(pad, buffer),
+                )
+            })
+            .chain_list_function(|pad, parent, bufferlist| {
+                FallbackSwitch::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |fallbackswitch| fallbackswitch.sink_chain_list(pad, bufferlist),
+                )
+            })
+            .event_function(|pad, parent, event| {
+                FallbackSwitch::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |fallbackswitch| fallbackswitch.sink_event(pad, event),
+                )
+            })
+            .query_function(|pad, parent, query| {
+                FallbackSwitch::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |fallbackswitch| fallbackswitch.sink_query(pad, query),
+                )
+            })
+            .activatemode_function(|pad, _parent, mode, activate| {
+                Self::sink_activatemode(pad, mode, activate)
+            })
+            .build();
 
         pad.set_active(true).unwrap();
         self.obj().add_pad(&pad).unwrap();

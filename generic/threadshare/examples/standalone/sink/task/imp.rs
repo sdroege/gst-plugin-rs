@@ -305,7 +305,7 @@ impl ObjectSubclass for TaskSink {
     fn with_class(klass: &Self::Class) -> Self {
         Self {
             sink_pad: PadSink::new(
-                gst::Pad::from_template(&klass.pad_template("sink").unwrap(), Some("sink")),
+                gst::Pad::from_template(&klass.pad_template("sink").unwrap()),
                 TaskPadSinkHandler,
             ),
             task: Task::default(),

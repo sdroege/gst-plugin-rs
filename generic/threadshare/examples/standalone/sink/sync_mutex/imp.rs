@@ -234,7 +234,7 @@ impl ObjectSubclass for DirectSink {
         let sink_pad_handler = SyncPadSinkHandler::default();
         Self {
             sink_pad: PadSink::new(
-                gst::Pad::from_template(&klass.pad_template("sink").unwrap(), Some("sink")),
+                gst::Pad::from_template(&klass.pad_template("sink").unwrap()),
                 sink_pad_handler.clone(),
             ),
             sink_pad_handler,

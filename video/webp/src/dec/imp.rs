@@ -273,7 +273,7 @@ impl ObjectSubclass for WebPDec {
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
+        let sinkpad = gst::Pad::builder_from_template(&templ)
             .chain_function(|pad, parent, buffer| {
                 WebPDec::catch_panic_pad_function(
                     parent,
@@ -291,7 +291,7 @@ impl ObjectSubclass for WebPDec {
             .build();
 
         let templ = klass.pad_template("src").unwrap();
-        let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
+        let srcpad = gst::Pad::builder_from_template(&templ)
             .event_function(|pad, parent, event| {
                 WebPDec::catch_panic_pad_function(parent, || false, |dec| dec.src_event(pad, event))
             })

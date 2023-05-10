@@ -149,9 +149,8 @@ impl TranscriberBin {
                 .build(),
         );
 
-        let sinkpad = gst::GhostPad::with_target(Some("sink"), &queue.static_pad("sink").unwrap())?;
-        let srcpad =
-            gst::GhostPad::with_target(Some("src"), &converter.static_pad("src").unwrap())?;
+        let sinkpad = gst::GhostPad::with_target(&queue.static_pad("sink").unwrap()).unwrap();
+        let srcpad = gst::GhostPad::with_target(&converter.static_pad("src").unwrap()).unwrap();
         bin.add_pad(&sinkpad)?;
         bin.add_pad(&srcpad)?;
 
@@ -214,14 +213,11 @@ impl TranscriberBin {
 
         state.ccmux.set_property("latency", CEA608MUX_LATENCY);
 
-        let transcription_audio_sinkpad = gst::GhostPad::with_target(
-            Some("sink"),
-            &aqueue_transcription.static_pad("sink").unwrap(),
-        )?;
-        let transcription_audio_srcpad = gst::GhostPad::with_target(
-            Some("src"),
-            &state.transcription_valve.static_pad("src").unwrap(),
-        )?;
+        let transcription_audio_sinkpad =
+            gst::GhostPad::with_target(&aqueue_transcription.static_pad("sink").unwrap()).unwrap();
+        let transcription_audio_srcpad =
+            gst::GhostPad::with_target(&state.transcription_valve.static_pad("src").unwrap())
+                .unwrap();
 
         state
             .transcription_bin
@@ -260,22 +256,27 @@ impl TranscriberBin {
             .video_queue
             .link_pads(Some("src"), &state.cccombiner, Some("sink"))?;
 
-        let internal_audio_sinkpad = gst::GhostPad::with_target(
-            Some("audio_sink"),
-            &aclocksync.static_pad("sink").unwrap(),
-        )?;
-        let internal_audio_srcpad = gst::GhostPad::with_target(
-            Some("audio_src"),
+        let internal_audio_sinkpad =
+            gst::GhostPad::builder_with_target(&aclocksync.static_pad("sink").unwrap())
+                .unwrap()
+                .name("audio_sink")
+                .build();
+        let internal_audio_srcpad = gst::GhostPad::builder_with_target(
             &state.audio_queue_passthrough.static_pad("src").unwrap(),
-        )?;
-        let internal_video_sinkpad = gst::GhostPad::with_target(
-            Some("video_sink"),
-            &vclocksync.static_pad("sink").unwrap(),
-        )?;
-        let internal_video_srcpad = gst::GhostPad::with_target(
-            Some("video_src"),
-            &state.cccombiner.static_pad("src").unwrap(),
-        )?;
+        )
+        .unwrap()
+        .name("audio_src")
+        .build();
+        let internal_video_sinkpad =
+            gst::GhostPad::builder_with_target(&vclocksync.static_pad("sink").unwrap())
+                .unwrap()
+                .name("video_sink")
+                .build();
+        let internal_video_srcpad =
+            gst::GhostPad::builder_with_target(&state.cccombiner.static_pad("src").unwrap())
+                .unwrap()
+                .name("video_src")
+                .build();
 
         state.internal_bin.add_pad(&internal_audio_sinkpad)?;
         state.internal_bin.add_pad(&internal_audio_srcpad)?;
@@ -835,9 +836,9 @@ impl ObjectSubclass for TranscriberBin {
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.pad_template("sink_audio").unwrap();
-        let audio_sinkpad = gst::GhostPad::from_template(&templ, Some("sink_audio"));
+        let audio_sinkpad = gst::GhostPad::from_template(&templ);
         let templ = klass.pad_template("src_audio").unwrap();
-        let audio_srcpad = gst::GhostPad::builder_with_template(&templ, Some("src_audio"))
+        let audio_srcpad = gst::GhostPad::builder_from_template(&templ)
             .query_function(|pad, parent, query| {
                 TranscriberBin::catch_panic_pad_function(
                     parent,
@@ -848,7 +849,7 @@ impl ObjectSubclass for TranscriberBin {
             .build();
 
         let templ = klass.pad_template("sink_video").unwrap();
-        let video_sinkpad = gst::GhostPad::builder_with_template(&templ, Some("sink_video"))
+        let video_sinkpad = gst::GhostPad::builder_from_template(&templ)
             .event_function(|pad, parent, event| {
                 TranscriberBin::catch_panic_pad_function(
                     parent,
@@ -858,7 +859,7 @@ impl ObjectSubclass for TranscriberBin {
             })
             .build();
         let templ = klass.pad_template("src_video").unwrap();
-        let video_srcpad = gst::GhostPad::builder_with_template(&templ, Some("src_video"))
+        let video_srcpad = gst::GhostPad::builder_from_template(&templ)
             .query_function(|pad, parent, query| {
                 TranscriberBin::catch_panic_pad_function(
                     parent,

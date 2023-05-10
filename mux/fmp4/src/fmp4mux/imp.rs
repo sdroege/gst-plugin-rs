@@ -2890,10 +2890,9 @@ impl ObjectImpl for FMP4Mux {
             templ.presence() == gst::PadPresence::Always
                 && templ.direction() == gst::PadDirection::Sink
         }) {
-            let sinkpad =
-                gst::PadBuilder::<gst_base::AggregatorPad>::from_template(&templ, Some("sink"))
-                    .flags(gst::PadFlags::ACCEPT_INTERSECT)
-                    .build();
+            let sinkpad = gst::PadBuilder::<gst_base::AggregatorPad>::from_template(&templ)
+                .flags(gst::PadFlags::ACCEPT_INTERSECT)
+                .build();
 
             obj.add_pad(&sinkpad).unwrap();
         }

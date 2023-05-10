@@ -534,9 +534,7 @@ impl WhepSrc {
             );
 
             let templ = self_.obj().pad_template("src_%u").unwrap();
-            let src_pad = gst::GhostPad::builder_with_template(&templ, Some(&pad.name()))
-                .build_with_target(pad)
-                .unwrap();
+            let src_pad = gst::GhostPad::from_template_with_target(&templ, pad).unwrap();
 
             src_pad.set_target(Some(pad)).unwrap();
             src_pad

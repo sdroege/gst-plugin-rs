@@ -1705,7 +1705,7 @@ impl ObjectSubclass for ToggleRecord {
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
+        let sinkpad = gst::Pad::builder_from_template(&templ)
             .chain_function(|pad, parent, buffer| {
                 ToggleRecord::catch_panic_pad_function(
                     parent,
@@ -1737,7 +1737,7 @@ impl ObjectSubclass for ToggleRecord {
             .build();
 
         let templ = klass.pad_template("src").unwrap();
-        let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
+        let srcpad = gst::Pad::builder_from_template(&templ)
             .event_function(|pad, parent, event| {
                 ToggleRecord::catch_panic_pad_function(
                     parent,
@@ -2002,7 +2002,8 @@ impl ElementImpl for ToggleRecord {
         *pad_count += 1;
 
         let templ = self.obj().pad_template("sink_%u").unwrap();
-        let sinkpad = gst::Pad::builder_with_template(&templ, Some(format!("sink_{id}").as_str()))
+        let sinkpad = gst::Pad::builder_from_template(&templ)
+            .name(format!("sink_{id}").as_str())
             .chain_function(|pad, parent, buffer| {
                 ToggleRecord::catch_panic_pad_function(
                     parent,
@@ -2034,7 +2035,8 @@ impl ElementImpl for ToggleRecord {
             .build();
 
         let templ = self.obj().pad_template("src_%u").unwrap();
-        let srcpad = gst::Pad::builder_with_template(&templ, Some(format!("src_{id}").as_str()))
+        let srcpad = gst::Pad::builder_from_template(&templ)
+            .name(format!("src_{id}").as_str())
             .event_function(|pad, parent, event| {
                 ToggleRecord::catch_panic_pad_function(
                     parent,

@@ -48,11 +48,8 @@ fn create_ui(app: &gtk::Application) {
         sink.add(&gtksink).unwrap();
         convert.link(&gtksink).unwrap();
 
-        sink.add_pad(
-            &gst::GhostPad::with_target(Some("sink"), &convert.static_pad("sink").unwrap())
-                .unwrap(),
-        )
-        .unwrap();
+        sink.add_pad(&gst::GhostPad::with_target(&convert.static_pad("sink").unwrap()).unwrap())
+            .unwrap();
 
         (src, sink.upcast())
     };

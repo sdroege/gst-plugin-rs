@@ -589,7 +589,7 @@ impl ObjectSubclass for Transcriber {
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
+        let sinkpad = gst::Pad::builder_from_template(&templ)
             .chain_function(|pad, parent, buffer| {
                 Transcriber::catch_panic_pad_function(
                     parent,
@@ -607,29 +607,28 @@ impl ObjectSubclass for Transcriber {
             .build();
 
         let templ = klass.pad_template("src").unwrap();
-        let static_srcpad =
-            gst::PadBuilder::<super::TranslateSrcPad>::from_template(&templ, Some("src"))
-                .activatemode_function(|pad, parent, mode, active| {
-                    Transcriber::catch_panic_pad_function(
-                        parent,
-                        || {
-                            Err(gst::loggable_error!(
-                                CAT,
-                                "Panic activating TranslateSrcPad"
-                            ))
-                        },
-                        |elem| TranslateSrcPad::activatemode(elem, pad, mode, active),
-                    )
-                })
-                .query_function(|pad, parent, query| {
-                    Transcriber::catch_panic_pad_function(
-                        parent,
-                        || false,
-                        |elem| TranslateSrcPad::src_query(elem, pad, query),
-                    )
-                })
-                .flags(gst::PadFlags::FIXED_CAPS)
-                .build();
+        let static_srcpad = gst::PadBuilder::<super::TranslateSrcPad>::from_template(&templ)
+            .activatemode_function(|pad, parent, mode, active| {
+                Transcriber::catch_panic_pad_function(
+                    parent,
+                    || {
+                        Err(gst::loggable_error!(
+                            CAT,
+                            "Panic activating TranslateSrcPad"
+                        ))
+                    },
+                    |elem| TranslateSrcPad::activatemode(elem, pad, mode, active),
+                )
+            })
+            .query_function(|pad, parent, query| {
+                Transcriber::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |elem| TranslateSrcPad::src_query(elem, pad, query),
+                )
+            })
+            .flags(gst::PadFlags::FIXED_CAPS)
+            .build();
 
         // Setting the channel capacity so that a TranslateSrcPad that would lag
         // behind for some reasons get a chance to catch-up without loosing items.
@@ -986,31 +985,29 @@ impl ElementImpl for Transcriber {
     ) -> Option<gst::Pad> {
         let mut state = self.state.lock().unwrap();
 
-        let pad = gst::PadBuilder::<super::TranslateSrcPad>::from_template(
-            templ,
-            Some(format!("translate_src_{}", state.pad_serial).as_str()),
-        )
-        .activatemode_function(|pad, parent, mode, active| {
-            Transcriber::catch_panic_pad_function(
-                parent,
-                || {
-                    Err(gst::loggable_error!(
-                        CAT,
-                        "Panic activating TranslateSrcPad"
-                    ))
-                },
-                |elem| TranslateSrcPad::activatemode(elem, pad, mode, active),
-            )
-        })
-        .query_function(|pad, parent, query| {
-            Transcriber::catch_panic_pad_function(
-                parent,
-                || false,
-                |elem| TranslateSrcPad::src_query(elem, pad, query),
-            )
-        })
-        .flags(gst::PadFlags::FIXED_CAPS)
-        .build();
+        let pad = gst::PadBuilder::<super::TranslateSrcPad>::from_template(templ)
+            .name(format!("translate_src_{}", state.pad_serial).as_str())
+            .activatemode_function(|pad, parent, mode, active| {
+                Transcriber::catch_panic_pad_function(
+                    parent,
+                    || {
+                        Err(gst::loggable_error!(
+                            CAT,
+                            "Panic activating TranslateSrcPad"
+                        ))
+                    },
+                    |elem| TranslateSrcPad::activatemode(elem, pad, mode, active),
+                )
+            })
+            .query_function(|pad, parent, query| {
+                Transcriber::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |elem| TranslateSrcPad::src_query(elem, pad, query),
+                )
+            })
+            .flags(gst::PadFlags::FIXED_CAPS)
+            .build();
 
         state.srcpads.insert(pad.clone());
 
