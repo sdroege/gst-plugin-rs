@@ -1124,9 +1124,6 @@ impl FMP4Mux {
             return;
         }
 
-        let fragment_start_pts = state.fragment_start_pts;
-        let chunk_start_pts = state.chunk_start_pts;
-
         // Calculate the earliest PTS after queueing input if we can now.
         let mut earliest_pts = None;
         let mut start_dts = None;
@@ -1234,6 +1231,9 @@ impl FMP4Mux {
 
             upstream_events.push((stream.sinkpad.clone(), fku));
         }
+
+        let fragment_start_pts = state.fragment_start_pts;
+        let chunk_start_pts = state.chunk_start_pts;
 
         // Check if any of the streams are already filled enough for the first chunk/fragment.
         for stream in &mut state.streams {
