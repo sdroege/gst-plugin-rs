@@ -138,7 +138,9 @@ impl ObjectImpl for FallbackSwitchSinkPad {
             vec![
                 glib::ParamSpecUInt::builder(PROP_PRIORITY)
                     .nick("Stream Priority")
-                    .blurb("Selection priority for this stream")
+                    .blurb(
+                        "Selection priority for this stream (lower number has a higher priority)",
+                    )
                     .default_value(SinkSettings::default().priority)
                     .build(),
                 glib::ParamSpecBoolean::builder(PROP_IS_HEALTHY)

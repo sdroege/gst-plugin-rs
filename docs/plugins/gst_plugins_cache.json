@@ -1544,7 +1544,7 @@
                         "writable": false
                     },
                     "priority": {
-                        "blurb": "Selection priority for this stream",
+                        "blurb": "Selection priority for this stream (lower number has a higher priority)",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
