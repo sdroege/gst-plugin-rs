@@ -28,7 +28,7 @@ gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org
 gst-pbutils = { package = "gstreamer-pbutils", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_20"] }
 m3u8-rs = "5.0"
 chrono = "0.4"
-dash-mpd = { version = "0.8", default-features = false }
+dash-mpd = { version = "0.9", default-features = false }
 quick-xml = { version = "0.28", features = ["serialize"] }
 serde = "1"
 
