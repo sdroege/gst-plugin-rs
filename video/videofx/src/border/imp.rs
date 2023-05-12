@@ -414,13 +414,7 @@ impl BaseTransformImpl for RoundedCorners {
                             ]),
                         );
                     } else {
-                        s_output.set(
-                            "format",
-                            gst::List::new([
-                                VideoFormat::A420.to_str(),
-                                VideoFormat::I420.to_str(),
-                            ]),
-                        );
+                        s_output.set("format", VideoFormat::A420.to_str());
                     }
                     output_caps.append_structure(s_output);
                 }
