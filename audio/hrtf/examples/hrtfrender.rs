@@ -1,4 +1,4 @@
-// Copyright (C) 2021 Tomasz Andrzejak <andreiltd@gmail.com>
+// Copyright (C) 2021-2024 Tomasz Andrzejak <andreiltd@gmail.com>
 //
 // This Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at
@@ -7,50 +7,96 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use gst::prelude::*;
+use gsthrtf::CoordinateSystem;
 
-use anyhow::{Error, bail};
+use anyhow::Error;
+use clap::{Args, Parser};
 
 use std::sync::{Arc, Condvar, Mutex};
-use std::{env, thread, time};
+use std::{thread, time};
 
 // Rotation in radians to apply to object position every 100 ms
 const ROTATION: f32 = 2.0 / 180.0 * std::f32::consts::PI;
 
+#[derive(Parser)]
+#[command(author, version, about = "An example of HRTF elements usage")]
+struct Cli {
+    /// Sets file that contains HRTF filters
+    #[command(flatten)]
+    hrtf: HrtfFile,
+    /// Sets a WAV file
+    uri: String,
+}
+#[derive(Args)]
+#[group(required = true, multiple = false)]
+struct HrtfFile {
+    /// Sets a SOFA file
+    #[arg(short, long, value_name = "SOFA")]
+    sofa: Option<String>,
+    /// Sets an IRCAM file
+    #[arg(short, long, value_name = "IRCAM")]
+    ircam: Option<String>,
+}
+
+// The IRCAM binaries that the HRTF plugin utilizes can be downloaded from
+// the following URL: https://github.com/mrDIMAS/hrir_sphere_builder/tree/master/hrtf_base/IRCAM
+//
+// This example is also compatible with SOFA files. When using SOFA files,
+// the 'sofalizer' element is employed.
+//
+// It is best to provide a mono input since this example involves moving a
+// single object. If not, the input will be downmixed to mono using the
+// audioconvert element.
+//
+// Running:
+// - cargo run -p gst-plugin-hrtf --example hrtfrender -- --sofa my/sofa/file.sofa file:///awesome-mono.wav
+// - cargo run -p gst-plugin-hrtf --example hrtfrender -- --ircam my/ircam/IRC_1002_C.bin file:///awesome-mono.wav
+//
+// The example is placing an object in front of the listener at the beginning
+// and then updates a position every 100ms to rotate an object clockwise. The
+// `CoordinateSystem` of the spatial object is optional. If omitted, it is
+// initialized by default to the `left-handed system`.
+//
+// In addition, the `sofalizer` has a global property for the coordinates system
+// used in the SOFA file. All positions of the spatial objects will be converted
+// to this system before being passed to the 'sofalizer' renderer.
+//
+// Note that if the `spatial-objects` property is omitted, the locations for
+// rendering the input channels will be calculated from the input `Caps`, based
+// on the input channel map. Therefore, if you have a 5.1 stream, for instance,
+// the channels will be rendered in their canonical positions.
+//
+// For multi-channel inputs, it's also worth considering the addition of a
+// limiter element downstream. This is because the rendered channels are
+// downmixed to the output without any volume compensation.
 fn run() -> Result<(), Error> {
     gst::init()?;
-    gstrsaudiofx::plugin_register_static()?;
+    gsthrtf::plugin_register_static()?;
 
-    let args: Vec<String> = env::args().collect();
+    let cli = Cli::parse();
+    let uri = cli.uri;
 
-    // Ircam binaries that the hrtf plugin is using can be downloaded from:
-    // https://github.com/mrDIMAS/hrir_sphere_builder/tree/master/hrtf_base/IRCAM
-    //
-    // Ideally provide a mono input as this example is moving a single object. Otherwise
-    // the input will be downmixed to mono with the audioconvert element.
-    //
-    // e.g.: hrtfrender 'file:///path/to/my/awesome/mono/wav/awesome.wav' IRC_1002_C.bin
-    if args.len() != 3 {
-        bail!("Usage: {} URI HRIR", args[0].clone());
-    }
-
-    let uri = &args[1];
-    let hrir = &args[2];
+    let renderer = match (cli.hrtf.sofa, cli.hrtf.ircam) {
+        (Some(sofa), None) => format!("sofalizer sofa={sofa}"),
+        (None, Some(ircam)) => format!("hrtfrender hrir-file={ircam}"),
+        _ => unreachable!(),
+    };
 
     let pipeline = gst::parse::launch(&format!(
         "uridecodebin uri={uri} ! audioconvert ! audio/x-raw,channels=1 !
-            hrtfrender hrir-file={hrir} name=hrtf ! audioresample ! autoaudiosink"
+            {renderer} name=hrtf ! audioresample ! autoaudiosink"
     ))?
     .downcast::<gst::Pipeline>()
     .expect("type error");
 
     let hrtf = pipeline.by_name("hrtf").expect("hrtf element not found");
 
-    // At the beginning put an object in front of listener
     let objs = [gst::Structure::builder("application/spatial-object")
         .field("x", 0f32)
         .field("y", 0f32)
         .field("z", 1f32)
         .field("distance-gain", 1f32)
+        .field("coordinate-system", CoordinateSystem::LeftHanded)
         .build()];
 
     hrtf.set_property("spatial-objects", gst::Array::new(objs));

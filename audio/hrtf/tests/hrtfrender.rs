@@ -1,4 +1,4 @@
-// Copyright (C) 2021 Tomasz Andrzejak <andreiltd@gmail.com>
+// Copyright (C) 2021-2024 Tomasz Andrzejak <andreiltd@gmail.com>
 //
 // This Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at
@@ -22,7 +22,7 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
-        gstrsaudiofx::plugin_register_static().expect("Failed to register rsaudiofx plugin");
+        gsthrtf::plugin_register_static().expect("Failed to register rsaudiofx plugin");
     });
 }
 
@@ -223,13 +223,18 @@ fn test_hrtfrender_multiple_instances_sharing_thread_pool() {
 
     let block_length: u64 = hrtf.property::<u64>("block-length");
     let steps: u64 = hrtf.property::<u64>("interpolation-steps");
+    assert!(!hrtf.property::<bool>("use-rayon"));
     let bps: u64 = 4;
 
     drop(hrtf);
     let blksz = (block_length * steps * bps) as usize;
 
     let mut harnesses = (0..4)
-        .map(|_| build_harness(src_caps.clone(), sink_caps.clone()).0)
+        .map(|_| {
+            let (h, hrtf) = build_harness(src_caps.clone(), sink_caps.clone());
+            hrtf.set_property("use-rayon", true);
+            h
+        })
         .collect::<Vec<_>>();
 
     for h in harnesses.iter_mut() {

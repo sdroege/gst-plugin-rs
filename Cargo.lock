@@ -397,6 +397,44 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21e4227379beff4205943696e6c3e0cd809bacdf3f0edd6e3dd153e2269571a4"
 
 [[package]]
+name = "audio-core"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db446410e749ce0157f460ef73d97f002251808aa6b6ca69f476578f36e958e0"
+
+[[package]]
+name = "audioadapter"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98e72b98fa467adcb7a88c5d1b8b686193185c81b9bf9c3fa3ac3524180cd55c"
+dependencies = [
+ "audio-core",
+ "libm",
+ "num-traits",
+]
+
+[[package]]
+name = "audioadapter-buffers"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6af89882334c4e501faa08992888593ada468f9e1ab211635c32f9ada7786e0"
+dependencies = [
+ "audioadapter",
+ "audioadapter-sample",
+ "num-traits",
+]
+
+[[package]]
+name = "audioadapter-sample"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e9a3d502fec0b21aa420febe0b110875cf8a7057c49e83a0cace1df6a73e03e"
+dependencies = [
+ "audio-core",
+ "num-traits",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5037,6 +5075,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "gst-plugin-hrtf"
+version = "0.16.0-alpha"
+dependencies = [
+ "anyhow",
+ "byte-slice-cast",
+ "clap",
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "gstreamer-app",
+ "gstreamer-audio",
+ "gstreamer-base",
+ "gstreamer-check",
+ "hrtf",
+ "rayon",
+ "sofar",
+]
+
+[[package]]
 name = "gst-plugin-hsv"
 version = "0.16.0-alpha"
 dependencies = [
@@ -6645,7 +6701,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0f4de47a84fd55fa33aa5ef337016814fdc869fdad23e7898b5322fa290248e6"
 dependencies = [
  "byteorder",
- "rubato",
+ "rubato 0.14.1",
  "rustfft",
 ]
 
@@ -10094,6 +10150,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "rubato"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90173154a8a14e6adb109ea641743bc95ec81c093d94e70c6763565f7108ebeb"
+dependencies = [
+ "audioadapter",
+ "audioadapter-buffers",
+ "num-complex",
+ "num-integer",
+ "num-traits",
+ "realfft",
+ "visibility",
+ "windowfunctions",
+]
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10970,6 +11042,23 @@ dependencies = [
  "libc",
  "libsodium-sys",
  "serde",
+]
+
+[[package]]
+name = "sofar"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "060ea9e290d57f909c19dfd5673a489cfedf4fdcf02eeae65a470a4923225be2"
+dependencies = [
+ "arrayvec",
+ "audioadapter-buffers",
+ "bitflags 2.11.1",
+ "log",
+ "miniz_oxide",
+ "realfft",
+ "rubato 1.0.1",
+ "thiserror 2.0.18",
+ "winnow 0.7.15",
 ]
 
 [[package]]
@@ -12357,6 +12446,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
+name = "visibility"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d674d135b4a8c1d7e813e2f8d1c9a58308aee4a680323066025e53132218bd91"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "viuer"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12914,6 +13014,15 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
+
+[[package]]
+name = "windowfunctions"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90628d739333b7c5d2ee0b70210b97b8cddc38440c682c96fd9e2c24c2db5f3a"
+dependencies = [
+ "num-traits",
+]
 
 [[package]]
 name = "windows"

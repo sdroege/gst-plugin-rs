@@ -152,8 +152,6 @@ You will find the following plugins in this repository:
       - `audioloudnorm`: [audio normalization](http://k.ylo.ph/2016/04/04/loudnorm.html) filter.
       - `audiornnoise`: Filter for [removing noise](https://jmvalin.ca/demo/rnnoise/).
       - `ebur128level`: Filter for measuring audio loudness according to EBU R-128.
-      - `hrtfrender`: Filter for rendering audio according to a [head-related transfer
-        function](https://en.wikipedia.org/wiki/Head-related_transfer_function).
     - `audioparsers`: Audio parser elements
       - `s302mparse`: Parser for SMPTE S302M audio elementary streams.
 
@@ -166,6 +164,9 @@ You will find the following plugins in this repository:
     - `elevenlabs`:
 
       - `elevenlabssynthesizer`: Generate audio speech from text using the [ElevenLabs](https://elevenlabs.io) API/service.
+    - `hrtf`: Filters for rendering audio according to a [head-related transferfunction](https://en.wikipedia.org/wiki/Head-related_transfer_function).
+      - `hrtfrender`: Read and render filters from IRCAM binary files.
+      - `sofalizer`:  Read and render filters from SOFA files.
 
     - `lewton`: A Vorbis decoder based on the [lewton](https://github.com/RustAudio/lewton) library.
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2021 Tomasz Andrzejak <andreiltd@gmail.com>
+// Copyright (C) 2021-2024 Tomasz Andrzejak <andreiltd@gmail.com>
 //
 // This Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at
@@ -17,11 +17,12 @@ use hrtf::{HrirSphere, HrtfContext, HrtfProcessor, Vec3};
 
 use std::io::Error;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex};
 
 use byte_slice_cast::*;
-use rayon::prelude::*;
-use rayon::{ThreadPool, ThreadPoolBuilder};
+use rayon::{ThreadPool, prelude::*};
+
+use crate::{SpatialObject, thread::thread_pool};
 
 use std::sync::LazyLock;
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
@@ -32,92 +33,15 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     )
 });
 
-static THREAD_POOL: LazyLock<Mutex<Weak<ThreadPool>>> = LazyLock::new(|| Mutex::new(Weak::new()));
-
 const DEFAULT_INTERPOLATION_STEPS: u64 = 8;
 const DEFAULT_BLOCK_LENGTH: u64 = 512;
-const DEFAULT_DISTANCE_GAIN: f32 = 1.0;
-
-#[derive(Clone, Copy)]
-struct SpatialObject {
-    /// Position values use a left-handed Cartesian coordinate system
-    position: Vec3,
-    /// Object attenuation by distance
-    distance_gain: f32,
-}
-
-impl From<gst::Structure> for SpatialObject {
-    fn from(s: gst::Structure) -> Self {
-        SpatialObject {
-            position: Vec3 {
-                x: s.get("x").expect("type checked upstream"),
-                y: s.get("y").expect("type checked upstream"),
-                z: s.get("z").expect("type checked upstream"),
-            },
-            distance_gain: s.get("distance-gain").expect("type checked upstream"),
-        }
-    }
-}
-
-impl From<SpatialObject> for gst::Structure {
-    fn from(obj: SpatialObject) -> Self {
-        gst::Structure::builder("application/spatial-object")
-            .field("x", obj.position.x)
-            .field("y", obj.position.y)
-            .field("z", obj.position.z)
-            .field("distance-gain", obj.distance_gain)
-            .build()
-    }
-}
-
-impl TryFrom<gst_audio::AudioChannelPosition> for SpatialObject {
-    type Error = gst::FlowError;
-
-    fn try_from(pos: gst_audio::AudioChannelPosition) -> Result<Self, gst::FlowError> {
-        use gst_audio::AudioChannelPosition::*;
-
-        let position = match pos {
-            FrontLeft => Vec3::new(-1.45, 0.0, 2.5),
-            FrontRight => Vec3::new(1.45, 0.0, 2.5),
-            FrontCenter | Mono => Vec3::new(0.0, 0.0, 2.5),
-            Lfe1 | Lfe2 => Vec3::new(0.0, 0.0, 0.0),
-            RearLeft => Vec3::new(-1.45, 0.0, -2.5),
-            RearRight => Vec3::new(1.45, 0.0, -2.5),
-            FrontLeftOfCenter => Vec3::new(-0.72, 0.0, 2.5),
-            FrontRightOfCenter => Vec3::new(0.72, 0.0, 2.5),
-            RearCenter => Vec3::new(0.0, 0.0, -2.5),
-            SideLeft => Vec3::new(-2.5, 0.0, -0.44),
-            SideRight => Vec3::new(2.5, 0.0, -0.44),
-            TopFrontLeft => Vec3::new(-0.72, 2.5, 1.25),
-            TopFrontRight => Vec3::new(0.72, 2.5, 1.25),
-            TopFrontCenter => Vec3::new(0.0, 2.5, 1.25),
-            TopCenter => Vec3::new(0.0, 2.5, 0.0),
-            TopRearLeft => Vec3::new(-0.72, 2.5, -1.25),
-            TopRearRight => Vec3::new(0.72, 2.5, -1.25),
-            TopSideLeft => Vec3::new(-1.25, 2.5, -0.22),
-            TopSideRight => Vec3::new(1.25, 2.5, -0.22),
-            TopRearCenter => Vec3::new(0.0, 2.5, -1.25),
-            BottomFrontCenter => Vec3::new(0.0, -2.5, 1.25),
-            BottomFrontLeft => Vec3::new(-0.72, -2.5, 1.25),
-            BottomFrontRight => Vec3::new(0.72, -2.5, 1.25),
-            WideLeft => Vec3::new(-2.5, 0.0, 1.45),
-            WideRight => Vec3::new(2.5, 0.0, 1.45),
-            SurroundLeft => Vec3::new(-2.5, 0.0, -1.45),
-            SurroundRight => Vec3::new(2.5, 0.0, -1.45),
-            _ => return Err(gst::FlowError::NotSupported),
-        };
-
-        Ok(SpatialObject {
-            position,
-            distance_gain: DEFAULT_DISTANCE_GAIN,
-        })
-    }
-}
+const DEFAULT_USE_RAYON: bool = false;
 
 #[derive(Clone)]
 struct Settings {
     interpolation_steps: u64,
     block_length: u64,
+    use_rayon: bool,
     spatial_objects: Option<Vec<SpatialObject>>,
     hrir_raw_bytes: Option<glib::Bytes>,
     hrir_file_location: Option<String>,
@@ -128,6 +52,7 @@ impl Default for Settings {
         Settings {
             interpolation_steps: DEFAULT_INTERPOLATION_STEPS,
             block_length: DEFAULT_BLOCK_LENGTH,
+            use_rayon: DEFAULT_USE_RAYON,
             spatial_objects: None,
             hrir_raw_bytes: None,
             hrir_file_location: None,
@@ -141,7 +66,10 @@ impl Settings {
             .spatial_objects
             .as_ref()
             .ok_or(gst::FlowError::NotNegotiated)?[channel]
-            .position)
+            .position
+            .to_right_handed()
+            .to_vec3()
+            .into())
     }
 
     fn distance_gain(&self, channel: usize) -> Result<f32, gst::FlowError> {
@@ -215,6 +143,24 @@ impl ObjectSubclass for HrtfRender {
 }
 
 impl HrtfRender {
+    fn rayon_thread_pool(&self) -> Result<Arc<ThreadPool>, gst::FlowError> {
+        let mut thread_pool_guard = self.thread_pool.lock().unwrap();
+
+        if thread_pool_guard.is_none() {
+            *thread_pool_guard = Some(thread_pool().map_err(|err| {
+                gst::element_imp_error!(
+                    self,
+                    gst::CoreError::Failed,
+                    ["Could not create rayon thread pool: {:?}", err]
+                );
+
+                gst::FlowError::Error
+            })?);
+        }
+
+        Ok(thread_pool_guard.as_ref().unwrap().clone())
+    }
+
     fn process(
         &self,
         outbuf: &mut gst::BufferRef,
@@ -243,63 +189,68 @@ impl HrtfRender {
 
         let mut written_samples = 0;
 
-        let thread_pool_guard = self.thread_pool.lock().unwrap();
-        let thread_pool = thread_pool_guard.as_ref().ok_or(gst::FlowError::Error)?;
-
         while state.adapter.available() >= inblksz {
             let inbuf = state.adapter.take_buffer(inblksz).map_err(|_| {
                 gst::error!(CAT, imp = self, "Failed to map buffer");
                 gst::FlowError::Error
             })?;
 
-            let inbuf = gst_audio::AudioBuffer::from_buffer_readable(inbuf, &state.ininfo)
-                .map_err(|_| {
-                    gst::error!(CAT, imp = self, "Failed to map buffer");
-                    gst::FlowError::Error
+            let inbuf = inbuf.map_readable().map_err(|_| {
+                gst::error!(CAT, imp = self, "Failed to map buffer");
+                gst::FlowError::Error
+            })?;
+
+            let indata = inbuf.as_slice_of::<f32>().map_err(|_| {
+                gst::error!(CAT, imp = self, "Failed to map buffer");
+                gst::FlowError::Error
+            })?;
+
+            let process_channel =
+                |(i, cp): (usize, &mut ChannelProcessor)| -> Result<(), gst::FlowError> {
+                    let new_distance_gain = settings.distance_gain(i)?;
+                    let new_sample_vector = settings.position(i)?;
+
+                    // Deinterleave the current channel to the scratch buffer
+                    for (x, y) in Iterator::zip(
+                        indata.iter().skip(i).step_by(channels as usize),
+                        cp.indata_scratch.iter_mut(),
+                    ) {
+                        *y = *x;
+                    }
+
+                    cp.processor.process_samples(HrtfContext {
+                        source: &cp.indata_scratch,
+                        output: &mut cp.outdata_scratch,
+                        new_sample_vector,
+                        new_distance_gain,
+                        prev_sample_vector: cp.prev_sample_vector.unwrap_or(new_sample_vector),
+                        prev_distance_gain: cp.prev_distance_gain.unwrap_or(new_distance_gain),
+                        prev_left_samples: &mut cp.prev_left_samples,
+                        prev_right_samples: &mut cp.prev_right_samples,
+                    });
+
+                    cp.prev_sample_vector = Some(new_sample_vector);
+                    cp.prev_distance_gain = Some(new_distance_gain);
+
+                    Ok(())
+                };
+            if settings.use_rayon {
+                let thread_pool = self.rayon_thread_pool()?;
+
+                thread_pool.install(|| -> Result<(), gst::FlowError> {
+                    state
+                        .channel_processors
+                        .par_iter_mut()
+                        .enumerate()
+                        .try_for_each(process_channel)
                 })?;
-
-            let indata = inbuf.plane_data(0).unwrap().as_slice_of::<f32>().unwrap();
-
-            thread_pool.install(|| -> Result<(), gst::FlowError> {
+            } else {
                 state
                     .channel_processors
-                    .par_iter_mut()
+                    .iter_mut()
                     .enumerate()
-                    .try_for_each(|(i, cp)| -> Result<(), gst::FlowError> {
-                        let new_distance_gain = settings.distance_gain(i)?;
-                        let new_sample_vector = settings.position(i)?;
-
-                        // Convert to Right Handed, this is what HRTF crate expects
-                        let new_sample_vector = Vec3 {
-                            z: -new_sample_vector.z,
-                            ..new_sample_vector
-                        };
-
-                        // Deinterleave single channel to scratch buffer
-                        for (x, y) in Iterator::zip(
-                            indata.iter().skip(i).step_by(channels as usize),
-                            cp.indata_scratch.iter_mut(),
-                        ) {
-                            *y = *x;
-                        }
-
-                        cp.processor.process_samples(HrtfContext {
-                            source: &cp.indata_scratch,
-                            output: &mut cp.outdata_scratch,
-                            new_sample_vector,
-                            new_distance_gain,
-                            prev_sample_vector: cp.prev_sample_vector.unwrap_or(new_sample_vector),
-                            prev_distance_gain: cp.prev_distance_gain.unwrap_or(new_distance_gain),
-                            prev_left_samples: &mut cp.prev_left_samples,
-                            prev_right_samples: &mut cp.prev_right_samples,
-                        });
-
-                        cp.prev_sample_vector = Some(new_sample_vector);
-                        cp.prev_distance_gain = Some(new_distance_gain);
-
-                        Ok(())
-                    })
-            })?;
+                    .try_for_each(&process_channel)?;
+            }
 
             // unpack output scratch to output buffer
             state.channel_processors.iter_mut().for_each(|cp| {
@@ -426,6 +377,12 @@ impl ObjectImpl for HrtfRender {
                     .default_value(DEFAULT_BLOCK_LENGTH)
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("use-rayon")
+                    .nick("Use Rayon")
+                    .blurb("Use Rayon to process input channels in parallel")
+                    .default_value(DEFAULT_USE_RAYON)
+                    .mutable_ready()
+                    .build(),
                 gst::ParamSpecArray::builder("spatial-objects")
                     .element_spec(
                         &glib::ParamSpecBoxed::builder::<gst::Structure>("spatial-object")
@@ -460,6 +417,10 @@ impl ObjectImpl for HrtfRender {
             "block-length" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.block_length = value.get().expect("type checked upstream");
+            }
+            "use-rayon" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.use_rayon = value.get().expect("type checked upstream");
             }
             "spatial-objects" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -511,6 +472,10 @@ impl ObjectImpl for HrtfRender {
             "block-length" => {
                 let settings = self.settings.lock().unwrap();
                 settings.block_length.to_value()
+            }
+            "use-rayon" => {
+                let settings = self.settings.lock().unwrap();
+                settings.use_rayon.to_value()
             }
             "spatial-objects" => {
                 let settings = self.settings.lock().unwrap();
@@ -690,20 +655,18 @@ impl BaseTransformImpl for HrtfRender {
         let settings = &mut self.settings.lock().unwrap();
 
         if settings.spatial_objects.is_none() {
-            if let Some(positions) = ininfo.positions() {
-                let objs: Result<Vec<_>, _> = positions
-                    .iter()
-                    .map(|p| SpatialObject::try_from(*p))
-                    .collect();
-
-                if objs.is_err() {
-                    return Err(gst::loggable_error!(CAT, "Unsupported channel position"));
-                }
-
-                settings.spatial_objects = objs.ok();
-            } else {
+            let Some(positions) = ininfo.positions() else {
                 return Err(gst::loggable_error!(CAT, "Cannot infer object positions"));
-            }
+            };
+
+            settings.spatial_objects = Some(
+                positions
+                    .iter()
+                    .copied()
+                    .map(SpatialObject::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|_| gst::loggable_error!(CAT, "Unsupported channel position"))?,
+            );
         }
 
         if settings.spatial_objects.as_ref().unwrap().len() != ininfo.channels() as usize {
@@ -776,27 +739,11 @@ impl BaseTransformImpl for HrtfRender {
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
-        // get global thread pool
-        let mut thread_pool_g = THREAD_POOL.lock().unwrap();
-        let mut thread_pool = self.thread_pool.lock().unwrap();
+        let settings = self.settings.lock().unwrap();
 
-        match thread_pool_g.upgrade() {
-            Some(tp) => {
-                *thread_pool = Some(tp);
-            }
-            _ => {
-                let tp = ThreadPoolBuilder::new().build().map_err(|_| {
-                    gst::error_msg!(
-                        gst::CoreError::Failed,
-                        ["Could not create rayon thread pool"]
-                    )
-                })?;
-
-                let tp = Arc::new(tp);
-
-                *thread_pool = Some(tp);
-                *thread_pool_g = Arc::downgrade(thread_pool.as_ref().unwrap());
-            }
+        if settings.use_rayon {
+            // get global thread pool
+            *self.thread_pool.lock().unwrap() = Some(thread_pool()?);
         }
 
         Ok(())

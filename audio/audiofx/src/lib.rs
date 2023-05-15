@@ -19,7 +19,6 @@ mod audioecho;
 mod audioloudnorm;
 mod audiornnoise;
 mod ebur128level;
-mod hrtfrender;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     agingradio::register(plugin)?;
@@ -27,7 +26,6 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     audioloudnorm::register(plugin)?;
     audiornnoise::register(plugin)?;
     ebur128level::register(plugin)?;
-    hrtfrender::register(plugin)?;
     Ok(())
 }
 

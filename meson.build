@@ -65,7 +65,6 @@ plugins = {
   },
   'audiofx': {
     'library': 'libgstrsaudiofx',
-    'examples': ['hrtfrender'],
   },
   'audioparsers': {
     'library': 'libgstrsaudioparsers',
@@ -75,6 +74,10 @@ plugins = {
   # csound has a non-trivial external dependency, see below
   'csound': {},
   'demucs': {'library': 'libgstdemucs'},
+  'hrtf': {
+    'library': 'libgsthrtf',
+    'examples': ['hrtfrender'],
+  },
   'lewton': {'library': 'libgstlewton'},
   'spotify': {'library': 'libgstspotify'},
 
