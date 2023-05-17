@@ -1681,7 +1681,7 @@ impl WebRTCSink {
                         let element = element.expect("on-new-ssrc emited when webrtcsink has been disposed?");
                         let webrtcbin = webrtcbin.unwrap();
                         let mut state = element.imp().state.lock().unwrap();
-                        if let Some(mut session) = state.sessions.get_mut(&session_id_str) {
+                        if let Some(session) = state.sessions.get_mut(&session_id_str) {
 
                             session.stats_sigid = Some(rtp_session.connect_notify(Some("twcc-stats"),
                                 glib::clone!(@strong session_id_str, @weak webrtcbin, @weak element => @default-panic, move |sess, pspec| {
@@ -1834,7 +1834,7 @@ impl WebRTCSink {
         stats: &gst::Structure,
     ) {
         let mut state = element.imp().state.lock().unwrap();
-        if let Some(mut session) = state.sessions.get_mut(session_id) {
+        if let Some(session) = state.sessions.get_mut(session_id) {
             if let Some(congestion_controller) = session.congestion_controller.as_mut() {
                 congestion_controller.loss_control(element, stats, &mut session.encoders);
             }
@@ -1854,7 +1854,7 @@ impl WebRTCSink {
                 if let Ok(Some(stats)) = reply {
 
                     let mut state = element.imp().state.lock().unwrap();
-                    if let Some(mut session) = state.sessions.get_mut(&session_id) {
+                    if let Some(session) = state.sessions.get_mut(&session_id) {
                         if let Some(congestion_controller) = session.congestion_controller.as_mut() {
                             congestion_controller.delay_control(&element, stats, &mut session.encoders,);
                         }
