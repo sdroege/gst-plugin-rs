@@ -1672,7 +1672,7 @@ impl FallbackSrc {
         filter_caps: &gst::Caps,
         fallback_source: bool,
     ) -> gst::Element {
-        if !fallback_source && filter_caps.is_any() {
+        if !fallback_source || filter_caps.is_any() {
             return gst::ElementFactory::make("identity")
                 .build()
                 .expect("No identity found");
