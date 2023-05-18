@@ -722,7 +722,7 @@ impl WebRTCSrc {
 
     // Creates and adds our `WebRTCSrcPad` source pad, returning caps accepted
     // downstream
-    fn create_and_probe_src_pad(&self, caps: &gst::Caps, stream_id: &str) -> Option<gst::Caps> {
+    fn create_and_probe_src_pad(&self, caps: &gst::Caps, stream_id: &str) -> bool {
         gst::log!(CAT, "Creating pad for {caps:?}, stream: {stream_id}");
 
         let obj = self.obj();
@@ -747,7 +747,7 @@ impl WebRTCSrc {
         } else {
             gst::info!(CAT, imp: self, "Not an audio or video media {media_type:?}");
 
-            return None;
+            return false;
         };
 
         let caps_with_raw = [caps.clone(), raw_caps.clone()]
@@ -769,11 +769,7 @@ impl WebRTCSrc {
             }
         }
 
-        if ghost.imp().needs_decoding() {
-            Some(caps.clone())
-        } else {
-            Some(downstream_caps)
-        }
+        true
     }
 
     fn handle_offer(&self, offer: &gst_webrtc::WebRTCSessionDescription) {
@@ -819,11 +815,11 @@ impl WebRTCSrc {
 
             if !caps.is_empty() {
                 let stream_id = self.get_stream_id(None, Some(i as u32)).unwrap();
-                if let Some(caps) = self.create_and_probe_src_pad(&caps, &stream_id) {
+                if self.create_and_probe_src_pad(&caps, &stream_id) {
                     gst::info!(
                         CAT,
                         imp: self,
-                        "Adding transceiver for {stream_id} with caps: {caps:?}"
+                        "Adding transceiver for {stream_id} with caps: {caps:#?}"
                     );
                     let transceiver = webrtcbin.emit_by_name::<gst_webrtc::WebRTCRTPTransceiver>(
                         "add-transceiver",
