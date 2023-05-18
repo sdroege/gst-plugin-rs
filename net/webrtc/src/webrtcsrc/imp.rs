@@ -9,6 +9,7 @@ use core::ops::Deref;
 use gst::glib;
 use gst::subclass::prelude::*;
 use once_cell::sync::Lazy;
+use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU16;
@@ -696,48 +697,39 @@ impl WebRTCSrc {
         let direction = gst_webrtc::WebRTCRTPTransceiverDirection::Recvonly;
         let webrtcbin = self.webrtcbin();
         for (i, media) in sdp.medias().enumerate() {
-            let all_caps_for_media = media
+            let codec_names = {
+                let settings = self.settings.lock().unwrap();
+                settings
+                    .video_codecs
+                    .iter()
+                    .chain(settings.audio_codecs.iter())
+                    .map(|codec| codec.name.clone())
+                    .collect::<HashSet<String>>()
+            };
+
+            let caps = media
                 .formats()
                 .filter_map(|format| {
                     format.parse::<i32>().ok().and_then(|pt| {
-                        let mut tmpcaps = media.caps_from_media(pt)?;
-                        {
-                            let tmpcaps = tmpcaps.get_mut().unwrap();
-
-                            tmpcaps
-                                .structure_mut(0)
-                                .unwrap()
-                                .set_name("application/x-rtp");
-
-                            if let Err(err) = media.attributes_to_caps(tmpcaps) {
-                                gst::error!(CAT, "Couldn't copy media attributes to caps: {err:?}")
-                            }
+                        let mediacaps = media.caps_from_media(pt)?;
+                        let s = mediacaps.structure(0).unwrap();
+                        if !codec_names.contains(s.get::<&str>("encoding-name").ok()?) {
+                            return None;
                         }
 
-                        Some(tmpcaps)
+                        let mut filtered_s = gst::Structure::new_empty("application/x-rtp");
+                        filtered_s.extend(s.iter().filter_map(|(key, value)| {
+                            if key.starts_with("rtcp-") {
+                                None
+                            } else {
+                                Some((key, value.to_owned()))
+                            }
+                        }));
+
+                        Some(filtered_s)
                     })
                 })
-                .collect::<Vec<gst::Caps>>();
-
-            let mut caps = gst::Caps::new_empty();
-            let settings = self.settings.lock().unwrap();
-            for codec in settings
-                .video_codecs
-                .iter()
-                .chain(settings.audio_codecs.iter())
-            {
-                for media_caps in &all_caps_for_media {
-                    let encoding_name = media_caps
-                        .structure(0)
-                        .unwrap()
-                        .get::<&str>("encoding-name")
-                        .unwrap();
-                    if encoding_name == codec.name {
-                        caps.get_mut().unwrap().append(media_caps.clone());
-                    }
-                }
-            }
-            drop(settings);
+                .collect::<gst::Caps>();
 
             if !caps.is_empty() {
                 let stream_id = self.get_stream_id(None, Some(i as u32)).unwrap();
