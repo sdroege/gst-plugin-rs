@@ -1647,7 +1647,7 @@ impl WebRTCSink {
             }
         });
 
-        let mut session = Session::new(
+        let session = Session::new(
             session_id.clone(),
             pipeline.clone(),
             webrtcbin.clone(),
@@ -1672,8 +1672,7 @@ impl WebRTCSink {
 
         if session.congestion_controller.is_some() {
             let session_id_str = session_id.to_string();
-            if session.stats_sigid.is_none() {
-                session.stats_sigid = Some(rtpbin.connect_closure("on-new-ssrc", true,
+            rtpbin.connect_closure("on-new-ssrc", true,
                 glib::closure!(@weak-allow-none element, @weak-allow-none webrtcbin
                                 => move |rtpbin: gst::Object, session_id: u32, _src: u32| {
                         let rtp_session = rtpbin.emit_by_name::<gst::Element>("get-session", &[&session_id]);
@@ -1683,16 +1682,17 @@ impl WebRTCSink {
                         let mut state = element.imp().state.lock().unwrap();
                         if let Some(session) = state.sessions.get_mut(&session_id_str) {
 
-                            session.stats_sigid = Some(rtp_session.connect_notify(Some("twcc-stats"),
-                                glib::clone!(@strong session_id_str, @weak webrtcbin, @weak element => @default-return (), move |sess, pspec| {
-                                    // Run the Loss-based control algorithm on new peer TWCC feedbacks
-                                    element.imp().process_loss_stats(&element, &session_id_str, &sess.property::<gst::Structure>(pspec.name()));
-                                })
-                            ));
+                            if session.stats_sigid.is_none() {
+                                session.stats_sigid = Some(rtp_session.connect_notify(Some("twcc-stats"),
+                                    glib::clone!(@strong session_id_str, @weak webrtcbin, @weak element => @default-return (), move |sess, pspec| {
+                                        // Run the Loss-based control algorithm on new peer TWCC feedbacks
+                                        element.imp().process_loss_stats(&element, &session_id_str, &sess.property::<gst::Structure>(pspec.name()));
+                                    })
+                                ));
+                            }
                         }
                     })
-                ));
-            }
+                );
         }
 
         let mut streams: Vec<InputStream> = state.streams.values().cloned().collect();
