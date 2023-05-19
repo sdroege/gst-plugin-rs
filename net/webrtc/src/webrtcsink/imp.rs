@@ -1655,7 +1655,7 @@ impl WebRTCSink {
                         if let Some(mut session) = state.sessions.get_mut(&session_id_str) {
 
                             session.stats_sigid = Some(rtp_session.connect_notify(Some("twcc-stats"),
-                                glib::clone!(@strong session_id_str, @weak webrtcbin, @weak element => @default-panic, move |sess, pspec| {
+                                glib::clone!(@strong session_id_str, @weak webrtcbin, @weak element => @default-return (), move |sess, pspec| {
                                     // Run the Loss-based control algorithm on new peer TWCC feedbacks
                                     element.imp().process_loss_stats(&element, &session_id_str, &sess.property::<gst::Structure>(pspec.name()));
                                 })
