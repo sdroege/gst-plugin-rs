@@ -82,3 +82,6 @@ requires_private = "gstreamer-rtp-1.0 >= 1.20, gstreamer-webrtc-1.0 >= 1.20, gst
 
 [[example]]
 name = "webrtcsink-stats-server"
+
+[[example]]
+name = "webrtcsink-high-quality-tune"

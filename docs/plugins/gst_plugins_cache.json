@@ -6466,6 +6466,20 @@
                         "return-type": "void",
                         "when": "last"
                     },
+                    "consumer-pipeline-created": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "GstPipeline"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
                     "consumer-removed": {
                         "args": [
                             {

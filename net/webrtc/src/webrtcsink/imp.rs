@@ -1941,6 +1941,13 @@ impl BaseWebRTCSink {
         peer_id: &str,
         offer: Option<&gst_webrtc::WebRTCSessionDescription>,
     ) -> Result<(), WebRTCSinkError> {
+        let pipeline = gst::Pipeline::builder()
+            .name(format!("session-pipeline-{session_id}"))
+            .build();
+
+        self.obj()
+            .emit_by_name::<()>("consumer-pipeline-created", &[&peer_id, &pipeline]);
+
         let settings = self.settings.lock().unwrap();
         let mut state = self.state.lock().unwrap();
         let peer_id = peer_id.to_string();
@@ -1958,10 +1965,6 @@ impl BaseWebRTCSink {
             peer_id,
             session_id
         );
-
-        let pipeline = gst::Pipeline::builder()
-            .name(format!("session-pipeline-{session_id}"))
-            .build();
 
         let webrtcbin = make_element("webrtcbin", Some(&format!("webrtcbin-{session_id}")))
             .map_err(|err| WebRTCSinkError::SessionPipelineError {
@@ -3339,6 +3342,24 @@ impl ObjectImpl for BaseWebRTCSink {
                  */
                 glib::subclass::Signal::builder("consumer-added")
                     .param_types([String::static_type(), gst::Element::static_type()])
+                    .build(),
+                /**
+                 * RsBaseWebRTCSink::consumer-pipeline-created:
+                 * @consumer_id: Identifier of the consumer
+                 * @pipeline: The pipeline that was just created
+                 *
+                 * This signal is emitted right after the pipeline for a new consumer
+                 * has been created, for instance allowing handlers to connect to
+                 * #GstBin::deep-element-added and tweak properties of any element used
+                 * by the pipeline.
+                 *
+                 * This provides access to the lower level components of webrtcsink, and
+                 * no guarantee is made that its internals will remain stable, use with caution!
+                 *
+                 * This is emitted *before* #RsBaseWebRTCSink::consumer-added .
+                 */
+                glib::subclass::Signal::builder("consumer-pipeline-created")
+                    .param_types([String::static_type(), gst::Pipeline::static_type()])
                     .build(),
                 /**
                  * RsBaseWebRTCSink::consumer_removed:
