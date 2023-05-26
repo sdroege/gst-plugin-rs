@@ -464,7 +464,7 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
                 enc.set_property("bitrate", start_bitrate / 1000);
                 enc.set_property_from_str("tune", "zerolatency");
                 enc.set_property_from_str("speed-preset", "ultrafast");
-                enc.set_property("threads", 12u32);
+                enc.set_property("threads", 4u32);
                 enc.set_property("key-int-max", 2560u32);
                 enc.set_property("b-adapt", false);
                 enc.set_property("vbv-buf-capacity", 120u32);
