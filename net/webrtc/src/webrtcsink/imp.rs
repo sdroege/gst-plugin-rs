@@ -799,13 +799,15 @@ impl State {
         let (sessions, _cvar) = &*finalizing_sessions;
         sessions.lock().unwrap().insert(session_id.clone());
 
-        session.pipeline.call_async(move |pipeline| {
+        let pipeline = session.pipeline.clone();
+        RUNTIME.spawn_blocking(move || {
             if let Some(stats_collection_handle) = stats_collection_handle {
                 stats_collection_handle.abort();
                 let _ = RUNTIME.block_on(stats_collection_handle);
             }
 
             let _ = pipeline.set_state(gst::State::Null);
+            drop(pipeline);
 
             let (sessions, cvar) = &*finalizing_sessions;
             let mut sessions = sessions.lock().unwrap();
