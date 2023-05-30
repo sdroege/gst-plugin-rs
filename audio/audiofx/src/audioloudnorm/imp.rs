@@ -782,8 +782,8 @@ impl State {
             self.offset
         );
 
-        let mut outbuf = gst::Buffer::with_size(src.len() * mem::size_of::<f64>())
-            .map_err(|_| gst::FlowError::Error)?;
+        let mut outbuf =
+            gst::Buffer::with_size(mem::size_of_val(src)).map_err(|_| gst::FlowError::Error)?;
         {
             let outbuf = outbuf.get_mut().unwrap();
             let mut dst = outbuf.map_writable().map_err(|_| gst::FlowError::Error)?;
