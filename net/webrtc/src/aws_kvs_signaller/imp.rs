@@ -24,10 +24,7 @@ use aws_sdk_kinesisvideo::{
 use aws_sdk_kinesisvideosignaling::Client as SignalingClient;
 use aws_sig_auth::signer::{self, HttpSignatureType, OperationSigningConfig, RequestConfig};
 use aws_smithy_http::body::SdkBody;
-use aws_types::{
-    region::{Region, SigningRegion},
-    SigningService,
-};
+use aws_types::{region::SigningRegion, SigningService};
 use chrono::prelude::*;
 use data_encoding::BASE64;
 use http::Uri;
@@ -190,7 +187,11 @@ impl Signaller {
             None
         };
 
-        let region = Region::new(DEFAULT_AWS_REGION);
+        let region = aws_config::meta::region::RegionProviderChain::default_provider()
+            .or_else(DEFAULT_AWS_REGION)
+            .region()
+            .await
+            .unwrap();
         let access_key = settings.access_key.as_ref();
         let secret_access_key = settings.secret_access_key.as_ref();
         let session_token = settings.session_token.clone();
@@ -375,7 +376,7 @@ impl Signaller {
 
         let request_config = RequestConfig {
             request_ts: SystemTime::from(current_time),
-            region: &SigningRegion::from(region.clone()),
+            region: &SigningRegion::from(region),
             service: &SigningService::from_static("kinesisvideo"),
             payload_override: None,
         };
