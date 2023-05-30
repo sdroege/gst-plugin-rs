@@ -106,7 +106,6 @@ fn main() {
 
     let bus = pipeline.bus().unwrap();
     let terminated_count = Arc::new(AtomicU32::new(0));
-    let pipeline_clone = pipeline.clone();
     let l_clone = l.clone();
     bus.add_watch(move |_, msg| {
         use gst::MessageView;
@@ -162,11 +161,11 @@ fn main() {
 
     gst::info!(CAT, "Switching to Ready");
     let stop = Instant::now();
-    pipeline_clone.set_state(gst::State::Ready).unwrap();
+    pipeline.set_state(gst::State::Ready).unwrap();
     gst::info!(CAT, "Switching to Ready took {:.2?}", stop.elapsed());
 
     gst::info!(CAT, "Shutting down");
     let stop = Instant::now();
-    pipeline_clone.set_state(gst::State::Null).unwrap();
+    pipeline.set_state(gst::State::Null).unwrap();
     gst::info!(CAT, "Shutting down took {:.2?}", stop.elapsed());
 }
