@@ -1396,12 +1396,21 @@ impl FMP4Mux {
                         break;
                     }
 
-                    // Otherwise if this is the first stream and no full GOP is queued then we need
-                    // to wait for more data.
+                    // Otherwise if this is the first stream, no full GOP is queued and the first
+                    // GOP is starting inside this fragment then we need to wait for more data.
                     //
                     // If this is not the first stream then take an incomplete GOP.
-                    if chunk_end_pts.is_none() {
-                        gst::info!(CAT, obj: stream.sinkpad, "Don't have a full GOP at the end of a fragment");
+                    if gop.start_pts >= dequeue_end_pts
+                        || (!gop.final_earliest_pts && !all_eos && !stream.sinkpad.is_eos())
+                    {
+                        gst::trace!(
+                            CAT,
+                            obj: stream.sinkpad,
+                            "GOP starts after fragment end",
+                        );
+                        break;
+                    } else if chunk_end_pts.is_none() {
+                        gst::info!(CAT, obj: stream.sinkpad, "Don't have a full GOP at the end of a fragment for the first stream");
                         return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
                     } else {
                         gst::info!(CAT, obj: stream.sinkpad, "Including incomplete GOP");
@@ -1869,8 +1878,17 @@ impl FMP4Mux {
                     );
                 } else {
                     // If nothing was dequeued for the first stream then this is OK if we're at
-                    // EOS: we just consider the next stream as first stream then.
-                    if all_eos || stream.sinkpad.is_eos() {
+                    // EOS or this stream simply has only buffers after this chunk: we just
+                    // consider the next stream as first stream then.
+                    let stream_after_chunk = stream.queued_gops.back().map_or(false, |gop| {
+                        gop.start_pts
+                            >= if fragment_filled {
+                                fragment_start_pts + settings.fragment_duration
+                            } else {
+                                chunk_start_pts + settings.chunk_duration.unwrap()
+                            }
+                    });
+                    if all_eos || stream.sinkpad.is_eos() || stream_after_chunk {
                         // This is handled below generally if nothing was dequeued
                     } else {
                         if settings.chunk_duration.is_some() {
