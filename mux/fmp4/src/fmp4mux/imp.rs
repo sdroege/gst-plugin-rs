@@ -1007,6 +1007,24 @@ impl FMP4Mux {
             // First check if the next split should be the end of a fragment or the end of a chunk.
             // If both are the same then a fragment split has preference.
             if fragment_end_pts <= chunk_end_pts {
+                // If the first GOP already starts after the fragment end PTS then this stream is
+                // filled in the sense that it will not have any buffers for this chunk.
+                if let Some(gop) = stream.queued_gops.back() {
+                    gst::trace!(
+                        CAT,
+                        obj: stream.sinkpad,
+                        "GOP {} start PTS {}, GOP end PTS {}",
+                        stream.queued_gops.len() - 1,
+                        gop.start_pts,
+                        gop.end_pts,
+                    );
+                    if gop.start_pts > fragment_end_pts {
+                        gst::debug!(CAT, obj: stream.sinkpad, "Stream's first GOP starting after this fragment");
+                        stream.fragment_filled = true;
+                        return;
+                    }
+                }
+
                 // We can only finish a fragment if a full GOP with final end PTS is queued and it
                 // ends at or after the fragment end PTS.
                 if let Some((gop_idx, gop)) = stream
@@ -1031,6 +1049,26 @@ impl FMP4Mux {
             }
 
             if !stream.fragment_filled {
+                // If the first GOP already starts after the chunk end PTS then this stream is
+                // filled in the sense that it will not have any buffers for this chunk.
+                if let Some(gop) = stream.queued_gops.back() {
+                    gst::trace!(
+                        CAT,
+                        obj: stream.sinkpad,
+                        "GOP {} start PTS {}, GOP end PTS {}",
+                        stream.queued_gops.len() - 1,
+                        gop.start_pts,
+                        gop.end_pts,
+                    );
+                    if gop.start_pts > chunk_end_pts {
+                        gst::debug!(CAT, obj: stream.sinkpad, "Stream's first GOP starting after this chunk");
+                        stream.chunk_filled = true;
+                        return;
+                    }
+                }
+
+                // We can only finish a chunk if a full GOP with final end PTS is queued and it
+                // ends at or after the fragment end PTS.
                 let (gop_idx, gop) = match stream.queued_gops.iter().enumerate().find(
                     |(_idx, gop)| gop.final_earliest_pts || all_eos || stream.sinkpad.is_eos(),
                 ) {
@@ -1065,10 +1103,39 @@ impl FMP4Mux {
                 }
             }
         } else {
-            let gop = match stream
+            // Check if the end of the latest finalized GOP is after the fragment end
+            let fragment_end_pts = fragment_start_pts + settings.fragment_duration;
+            gst::trace!(
+                CAT,
+                obj: stream.sinkpad,
+                "Current fragment start {}, current fragment end {}",
+                fragment_start_pts,
+                fragment_start_pts + settings.fragment_duration,
+            );
+
+            // If the first GOP already starts after the fragment end PTS then this stream is
+            // filled in the sense that it will not have any buffers for this fragment.
+            if let Some(gop) = stream.queued_gops.back() {
+                gst::trace!(
+                    CAT,
+                    obj: stream.sinkpad,
+                    "GOP {} start PTS {}, GOP end PTS {}",
+                    stream.queued_gops.len() - 1,
+                    gop.start_pts,
+                    gop.end_pts,
+                );
+                if gop.start_pts > fragment_end_pts {
+                    gst::debug!(CAT, obj: stream.sinkpad, "Stream's first GOP starting after this fragment");
+                    stream.fragment_filled = true;
+                    return;
+                }
+            }
+
+            let (gop_idx, gop) = match stream
                 .queued_gops
                 .iter()
-                .find(|gop| gop.final_end_pts || all_eos || stream.sinkpad.is_eos())
+                .enumerate()
+                .find(|(_gop_idx, gop)| gop.final_end_pts || all_eos || stream.sinkpad.is_eos())
             {
                 Some(gop) => gop,
                 None => {
@@ -1080,19 +1147,9 @@ impl FMP4Mux {
             gst::trace!(
                 CAT,
                 obj: stream.sinkpad,
-                "GOP start PTS {}, GOP end PTS {}",
+                "GOP {gop_idx} start PTS {}, GOP end PTS {}",
                 gop.start_pts,
                 gop.end_pts,
-            );
-
-            // Check if the end of the latest finalized GOP is after the fragment end
-            let fragment_end_pts = fragment_start_pts + settings.fragment_duration;
-            gst::trace!(
-                CAT,
-                obj: stream.sinkpad,
-                "Current fragment start {}, current fragment end {}",
-                fragment_start_pts,
-                fragment_start_pts + settings.fragment_duration,
             );
 
             if gop.end_pts >= fragment_end_pts {
@@ -1729,19 +1786,25 @@ impl FMP4Mux {
         let mut min_start_dts_position = None;
         let mut chunk_end_pts = None;
 
+        let fragment_start_pts = state.fragment_start_pts.unwrap();
+        let chunk_start_pts = state.chunk_start_pts.unwrap();
+        let fragment_start = fragment_start_pts == chunk_start_pts;
+
         // In fragment mode, each chunk is a full fragment. Otherwise, in chunk mode,
         // this fragment is filled if it is filled for the first non-EOS stream
+        // that has a GOP inside this chunk
         let fragment_filled = settings.chunk_duration.is_none()
             || state
                 .streams
                 .iter()
-                .find(|s| !s.sinkpad.is_eos())
+                .find(|s| {
+                    !s.sinkpad.is_eos()
+                        && s.queued_gops.back().map_or(false, |gop| {
+                            gop.start_pts <= fragment_start_pts + settings.fragment_duration
+                        })
+                })
                 .map(|s| s.fragment_filled)
                 == Some(true);
-
-        let fragment_start_pts = state.fragment_start_pts.unwrap();
-        let chunk_start_pts = state.chunk_start_pts.unwrap();
-        let fragment_start = fragment_start_pts == chunk_start_pts;
 
         // The first stream decides how much can be dequeued, if anything at all.
         //
