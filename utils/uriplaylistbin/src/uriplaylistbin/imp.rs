@@ -1679,12 +1679,26 @@ impl UriPlaylistBin {
                 }
 
                 let element = self.obj();
+                let mut notify_iteration = false;
+                let mut notify_index = false;
+
                 if current_iteration != state.current_iteration {
                     state.current_iteration = current_iteration;
-                    element.notify("current-iteration");
+                    notify_iteration = true;
                 }
                 if current_uri_index != state.current_uri_index {
                     state.current_uri_index = current_uri_index;
+                    notify_index = true;
+                }
+
+                // drop mutex before notifying changes as the callback will likely try to fetch the updated values
+                // which would deadlock.
+                drop(state_guard);
+
+                if notify_iteration {
+                    element.notify("current-iteration");
+                }
+                if notify_index {
                     element.notify("current-uri-index");
                 }
             }
