@@ -143,12 +143,14 @@ impl From<TranslatedItem> for OutputItem {
 }
 
 struct State {
-    buffer_tx: Option<mpsc::Sender<gst::Buffer>>,
+    // second tuple member is running time
+    buffer_tx: Option<mpsc::Sender<(gst::Buffer, gst::ClockTime)>>,
     transcriber_loop_handle: Option<task::JoinHandle<Result<(), gst::ErrorMessage>>>,
     srcpads: BTreeSet<super::TranslateSrcPad>,
     pad_serial: u32,
     seqnum: gst::Seqnum,
     start_time: Option<gst::ClockTime>,
+    in_segment: gst::FormattedSegment<gst::ClockTime>,
 }
 
 impl Default for State {
@@ -160,6 +162,7 @@ impl Default for State {
             pad_serial: 0,
             seqnum: gst::Seqnum::next(),
             start_time: None,
+            in_segment: gst::FormattedSegment::new(),
         }
     }
 }
@@ -251,17 +254,21 @@ impl Transcriber {
                 }
             }
             Segment(e) => {
-                let format = e.segment().format();
-                if format != gst::Format::Time {
-                    gst::element_imp_error!(
-                        self,
-                        gst::StreamError::Format,
-                        ["Only Time segments supported, got {format:?}"]
-                    );
-                    return false;
+                let segment = match e.segment().clone().downcast::<gst::ClockTime>() {
+                    Err(segment) => {
+                        gst::element_imp_error!(
+                            self,
+                            gst::StreamError::Format,
+                            ["Only Time segments supported, got {:?}", segment.format(),]
+                        );
+                        return false;
+                    }
+                    Ok(segment) => segment,
                 };
 
-                self.state.lock().unwrap().seqnum = e.seqnum();
+                let mut state = self.state.lock().unwrap();
+                state.seqnum = e.seqnum();
+                state.in_segment = segment;
 
                 true
             }
@@ -297,12 +304,26 @@ impl Transcriber {
             gst::FlowError::Error
         })?;
 
+        let rtime = match self
+            .state
+            .lock()
+            .unwrap()
+            .in_segment
+            .to_running_time(buffer.pts())
+        {
+            Some(rtime) => rtime,
+            None => {
+                gst::debug!(CAT, "Buffer outside segment, clipping (buffer:?)");
+                return Ok(gst::FlowSuccess::Ok);
+            }
+        };
+
         let Some(mut buffer_tx) = self.state.lock().unwrap().buffer_tx.take() else {
             gst::log!(CAT, obj: pad, "Flushing");
             return Err(gst::FlowError::Flushing);
         };
 
-        futures::executor::block_on(buffer_tx.send(buffer)).map_err(|err| {
+        futures::executor::block_on(buffer_tx.send((buffer, rtime))).map_err(|err| {
             gst::element_imp_error!(self, gst::StreamError::Failed, ["Streaming failed: {err}"]);
             gst::FlowError::Error
         })?;
