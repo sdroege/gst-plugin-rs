@@ -9,9 +9,9 @@ edition = "2021"
 rust-version = "1.70"
 
 [dependencies]
-gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21", features = ["v1_16"] }
-gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21", features = ["v1_16"] }
-gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21", features = ["v1_16"] }
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21", features = ["v1_20"] }
+gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21", features = ["v1_20"] }
+gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21", features = ["v1_20"] }
 anyhow = "1"
 byte-slice-cast = "1.0"
 num-traits = "0.2"

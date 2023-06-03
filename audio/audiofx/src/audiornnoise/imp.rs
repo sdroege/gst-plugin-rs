@@ -129,10 +129,13 @@ impl AudioRNNoise {
             buffer.set_duration(duration);
             buffer.set_pts(pts);
 
-            let mut out_map = buffer.map_writable().map_err(|_| gst::FlowError::Error)?;
-            let out_data = out_map.as_mut_slice_of::<f32>().unwrap();
+            let (level, has_voice) = {
+                let mut out_map = buffer.map_writable().map_err(|_| gst::FlowError::Error)?;
+                let out_data = out_map.as_mut_slice_of::<f32>().unwrap();
+                self.process(state, &settings, in_data, out_data)
+            };
 
-            self.process(state, &settings, in_data, out_data);
+            gst_audio::AudioLevelMeta::add(buffer, level, has_voice);
         }
 
         self.obj().src_pad().push(buffer)
@@ -160,10 +163,13 @@ impl AudioRNNoise {
             buffer.set_duration(duration);
             buffer.set_pts(pts);
 
-            let mut out_map = buffer.map_writable().map_err(|_| gst::FlowError::Error)?;
-            let out_data = out_map.as_mut_slice_of::<f32>().unwrap();
+            let (level, has_voice) = {
+                let mut out_map = buffer.map_writable().map_err(|_| gst::FlowError::Error)?;
+                let out_data = out_map.as_mut_slice_of::<f32>().unwrap();
+                self.process(state, &settings, in_data, out_data)
+            };
 
-            self.process(state, &settings, in_data, out_data);
+            gst_audio::AudioLevelMeta::add(buffer, level, has_voice);
         }
 
         Ok(GenerateOutputSuccess::Buffer(buffer))
@@ -175,9 +181,10 @@ impl AudioRNNoise {
         settings: &Settings,
         input_plane: &[f32],
         output_plane: &mut [f32],
-    ) {
+    ) -> (u8, bool) {
         let channels = state.in_info.channels() as usize;
         let size = FRAME_SIZE * channels;
+        let mut has_voice = false;
 
         for (out_frame, in_frame) in output_plane.chunks_mut(size).zip(input_plane.chunks(size)) {
             for (index, item) in in_frame.iter().enumerate() {
@@ -207,11 +214,15 @@ impl AudioRNNoise {
                 );
             }
 
-            gst::debug!(CAT, imp: self, "Voice activity: {}", vad);
-
+            gst::trace!(CAT, imp: self, "Voice activity: {}", vad);
             if vad < settings.vad_threshold {
                 out_frame.fill(0.0);
             } else {
+                // Upon voice activity nnoiseless never really reports a 1.0
+                // VAD, so we use a hardcoded value close to 1.0 here.
+                if vad >= 0.98 {
+                    has_voice = true;
+                }
                 for (index, item) in out_frame.iter_mut().enumerate() {
                     let channel_index = index % channels;
                     let channel_denoiser = &state.denoisers[channel_index];
@@ -220,6 +231,19 @@ impl AudioRNNoise {
                 }
             }
         }
+
+        let rms = output_plane.iter().copied().map(|x| x * x).sum::<f32>();
+        let level = (20.0 * f32::log10(rms + f32::EPSILON)) as u8;
+
+        gst::trace!(
+            CAT,
+            imp: self,
+            "rms: {}, level: {}, has_voice : {} ", rms,
+            level,
+            has_voice
+        );
+
+        (level, has_voice)
     }
 }
 
