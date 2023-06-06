@@ -314,12 +314,10 @@ impl Codec {
 
     pub fn build_encoder(&self) -> Option<Result<gst::Element, Error>> {
         self.encoding_info.as_ref().map(|info| {
-            info.encoder.create().build().with_context(|| {
-                format!(
-                    "Creating payloader {}",
-                    self.encoding_info.as_ref().unwrap().encoder.name()
-                )
-            })
+            info.encoder
+                .create()
+                .build()
+                .with_context(|| format!("Creating payloader {}", info.encoder.name()))
         })
     }
 
@@ -344,7 +342,11 @@ impl Codec {
             let mut structure_builder = gst::Structure::builder("video/x-raw")
                 .field("pixel-aspect-ratio", gst::Fraction::new(1, 1));
 
-            if self.encoder_name().map(|e| e.as_str() == "nvh264enc").unwrap_or(false) {
+            if self
+                .encoder_name()
+                .map(|e| e.as_str() == "nvh264enc")
+                .unwrap_or(false)
+            {
                 // Quirk: nvh264enc can perform conversion from RGB formats, but
                 // doesn't advertise / negotiate colorimetry correctly, leading
                 // to incorrect color display in Chrome (but interestingly not in

@@ -3,7 +3,7 @@
 use gst::prelude::*;
 
 use crate::signaller::{prelude::*, Signallable, Signaller};
-use crate::utils::*;
+use crate::utils::{Codec, Codecs, AUDIO_CAPS, RTP_CAPS, VIDEO_CAPS};
 use crate::webrtcsrc::WebRTCSrcPad;
 use anyhow::{Context, Error};
 use gst::glib;
@@ -76,7 +76,7 @@ impl ObjectImpl for WebRTCSrc {
                 gst::ParamSpecArray::builder("audio-codecs")
                     .flags(glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY)
                     .blurb(&format!("Names of audio codecs to be be used during the SDP negotiation. Valid values: [{}]",
-                        Codecs::video_codec_names().into_iter().collect::<Vec<String>>().join(", ")
+                        Codecs::audio_codec_names().into_iter().collect::<Vec<String>>().join(", ")
                     ))
                     .element_spec(&glib::ParamSpecString::builder("audio-codec-name").build())
                     .build(),

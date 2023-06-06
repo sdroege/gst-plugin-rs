@@ -6094,12 +6094,12 @@
                 "klass": "Sink/Network/WebRTC",
                 "pad-templates": {
                     "audio_%%u": {
-                        "caps": "audio/x-raw:\n",
+                        "caps": "audio/x-raw:\naudio/x-opus:\n",
                         "direction": "sink",
                         "presence": "request"
                     },
                     "video_%%u": {
-                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n",
+                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\n",
                         "direction": "sink",
                         "presence": "request"
                     }
@@ -6125,12 +6125,12 @@
                 "klass": "Sink/Network/WebRTC",
                 "pad-templates": {
                     "audio_%%u": {
-                        "caps": "audio/x-raw:\n",
+                        "caps": "audio/x-raw:\naudio/x-opus:\n",
                         "direction": "sink",
                         "presence": "request"
                     },
                     "video_%%u": {
-                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n",
+                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\n",
                         "direction": "sink",
                         "presence": "request"
                     }
@@ -6156,13 +6156,13 @@
                 "long-name": "WebRTCSrc",
                 "pad-templates": {
                     "audio_%%u": {
-                        "caps": "audio/x-raw(ANY):\naudio/x-opus:\napplication/x-rtp:\n",
+                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\n",
                         "direction": "src",
                         "presence": "sometimes",
                         "type": "GstWebRTCSrcPad"
                     },
                     "video_%%u": {
-                        "caps": "video/x-raw(ANY):\napplication/x-rtp:\n",
+                        "caps": "video/x-raw(ANY):\napplication/x-rtp:\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\n",
                         "direction": "src",
                         "presence": "sometimes",
                         "type": "GstWebRTCSrcPad"
