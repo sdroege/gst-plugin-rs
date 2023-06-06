@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-uriplaylistbin"
-version = "0.10.7"
+version = "0.10.8"
 authors = ["Guillaume Desmottes <guillaume.desmottes@onestream.live>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
