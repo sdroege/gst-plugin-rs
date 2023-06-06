@@ -5,6 +5,25 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.10.8] - 2023-06-07
+### Fixed
+- fmp4mux: Use updated start PTS when checking if a stream is filled instead
+  of a stale one.
+- fmp4mux: Fix various issues with stream gaps, especially in the beginning.
+- fmp4mux: Fix waiting in live pipelines.
+- uriplaylistbin: Prevent deadlocks during property notifications.
+- webrtcsink: Fix panics during `twcc-stats` callback and related issues.
+- awstranscriber: Handle stream disconts correctly.
+- roundedcorners: Fix caps negotiation to not use I420 if a border radius is
+  configured.
+- whipsink: Use the correct pad template to request pads from the internal
+  webrtcbin.
+- fallbacksrc: Don't apply fallback audio caps to the main stream.
+- webrtcsrc: Fix caps handling during transceiver creation.
+
+### Changed
+- rtpgccbwe: Improve packet handling.
+
 ## [0.10.7] - 2023-05-09
 ### Fixed
 - ffv1dec: Drop rank until the implementation is feature-complete.
@@ -151,7 +170,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.7...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.8...HEAD
+[0.10.8]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.7...0.10.8
 [0.10.7]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.6...0.10.7
 [0.10.6]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.5...0.10.6
 [0.10.5]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.4...0.10.5
