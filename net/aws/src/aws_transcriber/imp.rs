@@ -164,6 +164,8 @@ struct State {
     partial_index: usize,
     send_events: bool,
     start_time: Option<gst::ClockTime>,
+    discont_offset: gst::ClockTime,
+    last_chained_buffer_rtime: Option<gst::ClockTime>,
 }
 
 impl Default for State {
@@ -182,6 +184,8 @@ impl Default for State {
             partial_index: 0,
             send_events: true,
             start_time: None,
+            discont_offset: gst::ClockTime::ZERO,
+            last_chained_buffer_rtime: gst::ClockTime::NONE,
         }
     }
 }
@@ -394,9 +398,12 @@ impl Transcriber {
         }
 
         for item in &alternative.items[state.partial_index..] {
-            let start_time =
-                ((item.start_time as f64 * 1_000_000_000.0) as u64).nseconds() + lateness;
-            let end_time = ((item.end_time as f64 * 1_000_000_000.0) as u64).nseconds() + lateness;
+            let start_time = ((item.start_time as f64 * 1_000_000_000.0) as u64).nseconds()
+                + lateness
+                + state.discont_offset;
+            let end_time = ((item.end_time as f64 * 1_000_000_000.0) as u64).nseconds()
+                + lateness
+                + state.discont_offset;
 
             if !item.stable {
                 break;
@@ -733,11 +740,23 @@ impl Transcriber {
         let mut delay = None;
 
         {
-            let state = self.state.lock().unwrap();
+            let mut state = self.state.lock().unwrap();
 
             if let Some(buffer) = &buffer {
                 let running_time = state.in_segment.to_running_time(buffer.pts());
                 let now = self.obj().current_running_time();
+
+                if let Some(running_time) = running_time {
+                    if buffer.flags().contains(gst::BufferFlags::DISCONT) {
+                        state.discont = true;
+                        if let Some(last_chained_buffer_rtime) = state.last_chained_buffer_rtime {
+                            state.discont_offset +=
+                                running_time.saturating_sub(last_chained_buffer_rtime);
+                        }
+                    }
+
+                    state.last_chained_buffer_rtime = Some(running_time);
+                }
 
                 delay = running_time.opt_checked_sub(now).ok().flatten();
             }
