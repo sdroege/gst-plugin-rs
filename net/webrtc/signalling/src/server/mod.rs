@@ -38,7 +38,7 @@ impl Server {
     #[instrument(level = "debug", skip(factory))]
     pub fn spawn<
         I: for<'a> Deserialize<'a>,
-        O: Serialize + std::fmt::Debug,
+        O: Serialize + std::fmt::Debug + Send + Sync,
         Factory: FnOnce(Pin<Box<dyn Stream<Item = (String, Option<I>)> + Send>>) -> St,
         St: Stream<Item = (String, O)>,
     >(
@@ -72,12 +72,19 @@ impl Server {
         let _ = task::spawn(async move {
             while let Some((peer_id, msg)) = handler.next().await {
                 match serde_json::to_string(&msg) {
-                    Ok(msg) => {
-                        if let Some(peer) = state_clone.lock().unwrap().peers.get_mut(&peer_id) {
-                            let mut sender = peer.sender.clone();
-                            task::spawn(async move {
-                                let _ = sender.send(msg).await;
-                            });
+                    Ok(msg_str) => {
+                        let sender = {
+                            let mut state = state_clone.lock().unwrap();
+                            if let Some(peer) = state.peers.get_mut(&peer_id) {
+                                Some(peer.sender.clone())
+                            } else {
+                                None
+                            }
+                        };
+
+                        if let Some(mut sender) = sender {
+                            trace!("Sending {}", msg_str);
+                            let _ = sender.send(msg_str).await;
                         }
                     }
                     Err(err) => {
