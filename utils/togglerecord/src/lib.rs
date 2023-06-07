@@ -26,7 +26,7 @@ gst::plugin_define!(
     plugin_init,
     concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),
     // FIXME: MPL-2.0 is only allowed since 1.18.3 (as unknown) and 1.20 (as known)
-    "MPL-2.0",
+    "MPL",
     env!("CARGO_PKG_NAME"),
     env!("CARGO_PKG_NAME"),
     env!("CARGO_PKG_REPOSITORY"),

@@ -5372,7 +5372,7 @@
             }
         },
         "filename": "gstrsonvif",
-        "license": "MPL",
+        "license": "MPL-2.0",
         "other-types": {},
         "package": "gst-plugin-onvif",
         "source": "gst-plugin-onvif",
@@ -5637,7 +5637,7 @@
             }
         },
         "filename": "gstrsrtp",
-        "license": "MPL",
+        "license": "MPL-2.0",
         "other-types": {},
         "package": "gst-plugin-rtp",
         "source": "gst-plugin-rtp",
@@ -8167,7 +8167,7 @@
             }
         },
         "filename": "gsttogglerecord",
-        "license": "MPL-2.0",
+        "license": "MPL",
         "other-types": {},
         "package": "gst-plugin-togglerecord",
         "source": "gst-plugin-togglerecord",
