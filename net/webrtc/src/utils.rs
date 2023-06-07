@@ -116,14 +116,12 @@ pub fn make_element(element: &str, name: Option<&str>) -> Result<gst::Element, E
 #[derive(Debug)]
 struct DecodingInfo {
     has_decoder: AtomicBool,
-    decoders: Vec<gst::ElementFactory>,
 }
 
 impl Clone for DecodingInfo {
     fn clone(&self) -> Self {
         Self {
             has_decoder: AtomicBool::new(self.has_decoder.load(Ordering::SeqCst)),
-            decoders: self.decoders.clone(),
         }
     }
 }
@@ -177,7 +175,6 @@ impl Codec {
 
             decoding_info: Some(DecodingInfo {
                 has_decoder: AtomicBool::new(has_decoder),
-                decoders: decoders.iter().cloned().collect(),
             }),
 
             encoding_info,
@@ -208,7 +205,6 @@ impl Codec {
 
             decoding_info: Some(DecodingInfo {
                 has_decoder: AtomicBool::new(has_decoder),
-                decoders: decoders.iter().cloned().collect(),
             }),
 
             encoding_info: None,
