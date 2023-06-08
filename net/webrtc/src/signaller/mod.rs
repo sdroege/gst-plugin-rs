@@ -2,6 +2,12 @@ mod iface;
 mod imp;
 use gst::glib;
 
+/**
+ * GstRSWebRTCSignallableIface:
+ * @title: Interface for WebRTC signalling protocols
+ *
+ * Interface that WebRTC elements can implement their own protocol with.
+ */
 use once_cell::sync::Lazy;
 // Expose traits and objects from the module itself so it exactly looks like
 // generated bindings

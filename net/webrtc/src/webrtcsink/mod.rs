@@ -1,11 +1,36 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::signaller::Signallable;
+
 /**
- * element-webrtcsink:
+ * SECTION:element-webrtcsink
+ * @symbols:
+ *   - GstBaseWebRTCSink
+ *   - GstRSWebRTCSignallableIface
  *
- * {{ net/webrtc/README.md[2:190] }}
+ * `webrtcsink` is an element that can be used to serve media streams
+ * to multiple consumers through WebRTC.
  *
+ * It uses a signaller that implements the protocol supported by the default
+ * signalling server we additionally provide, take a look at the subclasses of
+ * #GstBaseWebRTCSink for other supported protocols, or implement your own.
+ *
+ * See the [documentation of the plugin](plugin-rswebrtc) for more information
+ * on features and usage.
+ */
+
+/**
+ * GstBaseWebRTCSink:
+ * @title: Base class for WebRTC producers
+ *
+ * Base class for WebRTC sinks to implement and provide their own protocol for.
+ */
+
+/**
+ * GstRSWebRTCSignallableIface:
+ * @title: Interface for WebRTC signalling protocols
+ *
+ * Interface that WebRTC elements can implement their own protocol with.
  */
 use gst::glib;
 use gst::prelude::*;

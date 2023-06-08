@@ -3,8 +3,10 @@
 
 /**
  * plugin-rswebrtc:
+ * @title: Rust WebRTC elements
+ * @short_description: A collection of high level WebRTC elements wrapping webrtcbin
  *
- * This plugin implements a high level WebRTC sink and source.
+ * {{ net/webrtc/README.md[2:233] }}
  *
  * Since: plugins-rs-0.9
  */

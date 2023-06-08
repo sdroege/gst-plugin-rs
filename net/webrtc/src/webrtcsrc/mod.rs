@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * element-webrtcsrc:
+ * SECTION:element-webrtcsrc
+ * @symbols:
+ *   - GstWebRTCSrcPad
  *
  * `webrtcsrc` is the source counterpart of the #webrtcsink element and can be
  * used to receive streams from it, it can also be used to easily playback WebRTC
