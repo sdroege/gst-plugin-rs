@@ -324,14 +324,30 @@ fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error
     let (head, mut tail) = {
         if let Some(feature) = caps.features(0) {
             if feature.contains(CUDA_MEMORY_FEATURE) {
-                let cudaupload = make_element("cudaupload", None)?;
-                let cudaconvert = make_element("cudaconvert", None)?;
-                let cudascale = make_element("cudascale", None)?;
+                if let Some(convert_factory) = gst::ElementFactory::find("cudaconvert") {
+                    let cudaupload = make_element("cudaupload", None)?;
+                    let cudaconvert = convert_factory.create().build()?;
+                    let cudascale = make_element("cudascale", None)?;
 
-                ret.add_many(&[&cudaupload, &cudaconvert, &cudascale])?;
-                gst::Element::link_many(&[&cudaupload, &cudaconvert, &cudascale])?;
+                    ret.add_many(&[&cudaupload, &cudaconvert, &cudascale])?;
+                    gst::Element::link_many(&[&cudaupload, &cudaconvert, &cudascale])?;
 
-                (cudaupload, cudascale)
+                    (cudaupload, cudascale)
+                } else {
+                    let cudadownload = make_element("cudadownload", None)?;
+                    let convert = make_element("videoconvert", None)?;
+                    let scale = make_element("videoscale", None)?;
+
+                    gst::warning!(
+                        CAT,
+                        "No cudaconvert factory available, falling back to software"
+                    );
+
+                    ret.add_many(&[&cudadownload, &convert, &scale])?;
+                    gst::Element::link_many(&[&cudadownload, &convert, &scale])?;
+
+                    (cudadownload, scale)
+                }
             } else if feature.contains(GL_MEMORY_FEATURE) {
                 let glupload = make_element("glupload", None)?;
                 let glconvert = make_element("glcolorconvert", None)?;
