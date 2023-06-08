@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 import sys
+import shlex
 from argparse import ArgumentParser
 from pathlib import Path as P
 
@@ -83,14 +84,16 @@ if __name__ == "__main__":
     env['PKG_CONFIG_PATH'] = os.pathsep.join(pkg_config_path)
 
     rustc_target = None
-    if 'RUSTFLAGS' in env:
+    if 'RUSTC' in env:
+        rustc_cmdline = shlex.split(env['RUSTC'])
         # grab target from RUSTFLAGS
-        rust_flags = env['RUSTFLAGS'].split()
+        rust_flags = rustc_cmdline[1:] + shlex.split(env.get('RUSTFLAGS', ''))
         if '--target' in rust_flags:
             rustc_target_idx = rust_flags.index('--target')
             _ = rust_flags.pop(rustc_target_idx)  # drop '--target'
             rustc_target = rust_flags.pop(rustc_target_idx)
-        env['RUSTFLAGS'] = ' '.join(rust_flags)
+        env['RUSTFLAGS'] = shlex.join(rust_flags)
+        env['RUSTC'] = rustc_cmdline[0]
 
     features = opts.features
     if opts.command == 'build':
