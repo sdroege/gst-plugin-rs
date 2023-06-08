@@ -2780,6 +2780,20 @@ impl BaseWebRTCSink {
                     );
                     return Err(err.error().into());
                 }
+                gst::MessageView::StateChanged(s) => {
+                    if msg.src() == Some(pipe.0.upcast_ref()) {
+                        pipe.0.debug_to_dot_file_with_ts(
+                            gst::DebugGraphDetails::all(),
+                            format!(
+                                "webrtcsink-discovery-{}-{:?}-{:?}",
+                                pipe.0.name(),
+                                s.old(),
+                                s.current()
+                            ),
+                        );
+                    }
+                    continue;
+                }
                 gst::MessageView::Application(appmsg) => {
                     let caps = match appmsg.structure() {
                         Some(s) => {
