@@ -386,17 +386,8 @@ if pkg_config_path.length() > 0
   extra_env += {'PKG_CONFIG_PATH': pathsep.join(pkg_config_path)}
 endif
 
-# get compiler and flags for rust (if any)
-rustc_cmd = ''
-rust_flags = []
-foreach rustc_arg : rustc.cmd_array()
-  if rustc_cmd == ''
-    rustc_cmd = rustc_arg
-  else
-    rust_flags += [rustc_arg]
-  endif
-endforeach
-extra_env += {'RUSTC': rustc_cmd, 'RUSTFLAGS': ' '.join(rust_flags)}
+# get cmdline for rust
+extra_env += {'RUSTC': ' '.join(rustc.cmd_array())}
 
 rs_plugins = custom_target('gst-plugins-rs',
   build_by_default: true,
