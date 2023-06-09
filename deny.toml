@@ -120,9 +120,6 @@ version = "0.13"
 name = "windows-sys"
 version = "0.42"
 [[bans.skip]]
-name = "windows-sys"
-version = "0.45"
-[[bans.skip]]
 name = "windows_x86_64_msvc"
 version = "0.42"
 [[bans.skip]]
@@ -142,9 +139,6 @@ name = "windows_aarch64_msvc"
 version = "0.42"
 [[bans.skip]]
 name = "windows_aarch64_gnullvm"
-version = "0.42"
-[[bans.skip]]
-name = "windows-targets"
 version = "0.42"
 
 # Various crates depend on an older version of socket2
@@ -182,6 +176,23 @@ version = "0.6"
 [[bans.skip]]
 name = "regex-syntax"
 version = "0.6"
+
+# rayon/crossbeam depend on an older version of memoffset
+# https://github.com/crossbeam-rs/crossbeam/pull/981
+[[bans.skip]]
+name = "memoffset"
+version = "0.8"
+
+# publicsuffix depends on an older version of idna
+# https://github.com/rushmorem/publicsuffix/pull/39
+[[bans.skip]]
+name = "idna"
+version = "0.3"
+
+# Various crates depend on an older version of fastrand
+[[bans.skip]]
+name = "fastrand"
+version = "1.0"
 
 [sources]
 unknown-registry = "deny"
