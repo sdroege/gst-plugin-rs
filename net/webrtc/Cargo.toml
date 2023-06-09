@@ -28,7 +28,7 @@ tokio-stream = "0.1.11"
 async-tungstenite = { version = "0.22", features = ["tokio-runtime", "tokio-native-tls"] }
 serde = "1"
 serde_json = "1"
-fastrand = "1.0"
+fastrand = "2.0"
 gst_plugin_webrtc_protocol = { path="protocol", version = "0.10", package = "gst-plugin-webrtc-signalling-protocol" }
 human_bytes = "0.4"
 url = "2"
