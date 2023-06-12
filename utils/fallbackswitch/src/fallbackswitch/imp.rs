@@ -26,6 +26,7 @@ const PROP_IMMEDIATE_FALLBACK: &str = "immediate-fallback";
 const PROP_LATENCY: &str = "latency";
 const PROP_MIN_UPSTREAM_LATENCY: &str = "min-upstream-latency";
 const PROP_TIMEOUT: &str = "timeout";
+const PROP_STOP_ON_EOS: &str = "stop-on-eos";
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -50,6 +51,7 @@ struct Settings {
     min_upstream_latency: gst::ClockTime,
     immediate_fallback: bool,
     auto_switch: bool,
+    stop_on_eos: bool,
 }
 
 impl Default for Settings {
@@ -60,6 +62,7 @@ impl Default for Settings {
             min_upstream_latency: gst::ClockTime::ZERO,
             immediate_fallback: false,
             auto_switch: true,
+            stop_on_eos: false,
         }
     }
 }
@@ -200,6 +203,8 @@ struct SinkState {
     current_running_time: Option<gst::ClockTime>,
     flushing: bool,
     clock_id: Option<gst::SingleShotClockId>,
+    /// true if the sink pad has received eos
+    eos: bool,
 }
 
 impl Default for SinkState {
@@ -213,6 +218,7 @@ impl Default for SinkState {
             current_running_time: gst::ClockTime::NONE,
             flushing: false,
             clock_id: None,
+            eos: false,
         }
     }
 }
@@ -232,6 +238,7 @@ impl SinkState {
     fn reset(&mut self) {
         self.flushing = false;
         self.caps_info = CapsInfo::None;
+        self.eos = false;
     }
 
     fn clip_buffer(&self, mut buffer: gst::Buffer) -> Option<gst::Buffer> {
@@ -550,6 +557,11 @@ impl FallbackSwitch {
         let settings = self.settings.lock().clone();
         let pad = pad.downcast_ref::<super::FallbackSwitchSinkPad>().unwrap();
         let pad_imp = pad.imp();
+
+        if settings.stop_on_eos && self.has_sink_pad_eos() {
+            debug!(CAT, obj: pad, "return eos as stop-on-eos is enabled");
+            return Err(gst::FlowError::Eos);
+        }
 
         let mut buffer = {
             let pad_state = pad_imp.state.lock();
@@ -895,6 +907,12 @@ impl FallbackSwitch {
                 pad_state.reset();
                 state.first = true;
             }
+            gst::EventView::Eos(_) => {
+                pad_state.eos = true;
+            }
+            gst::EventView::StreamStart(_) => {
+                pad_state.eos = false;
+            }
             _ => {}
         }
 
@@ -1033,6 +1051,22 @@ impl FallbackSwitch {
             }
         }
     }
+
+    /// check if at least one sink pad has received eos
+    fn has_sink_pad_eos(&self) -> bool {
+        let pads = self.obj().sink_pads();
+
+        for pad in pads {
+            let pad = pad.downcast_ref::<super::FallbackSwitchSinkPad>().unwrap();
+            let pad_imp = pad.imp();
+            let pad_state = pad_imp.state.lock();
+            if pad_state.eos {
+                return true;
+            }
+        }
+
+        false
+    }
 }
 
 #[glib::object_subclass]
@@ -1104,6 +1138,12 @@ impl ObjectImpl for FallbackSwitch {
                     .nick("Automatically switch pads")
                     .blurb("Automatically switch pads (If true, use the priority pad property, otherwise manual selection via the active-pad property)")
                     .default_value(Settings::default().auto_switch)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoolean::builder(PROP_STOP_ON_EOS)
+                    .nick("stop on EOS")
+                    .blurb("Stop forwarding buffers as soon as one input pad is eos")
+                    .default_value(Settings::default().stop_on_eos)
                     .mutable_ready()
                     .build(),
             ]
@@ -1179,6 +1219,11 @@ impl ObjectImpl for FallbackSwitch {
                 let new_value = value.get().expect("type checked upstream");
                 settings.auto_switch = new_value;
             }
+            PROP_STOP_ON_EOS => {
+                let mut settings = self.settings.lock();
+                let new_value = value.get().expect("type checked upstream");
+                settings.stop_on_eos = new_value;
+            }
             _ => unimplemented!(),
         }
     }
@@ -1208,6 +1253,10 @@ impl ObjectImpl for FallbackSwitch {
             PROP_AUTO_SWITCH => {
                 let settings = self.settings.lock();
                 settings.auto_switch.to_value()
+            }
+            PROP_STOP_ON_EOS => {
+                let settings = self.settings.lock();
+                settings.stop_on_eos.to_value()
             }
             _ => unimplemented!(),
         }

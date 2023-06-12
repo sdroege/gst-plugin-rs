@@ -1475,6 +1475,18 @@
                         "type": "guint64",
                         "writable": true
                     },
+                    "stop-on-eos": {
+                        "blurb": "Stop forwarding buffers as soon as one input pad is eos",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "timeout": {
                         "blurb": "Timeout on an input before switching to a lower priority input.",
                         "conditionally-available": false,
