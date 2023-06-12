@@ -198,7 +198,6 @@ struct SinkState {
     caps_info: CapsInfo,
 
     current_running_time: Option<gst::ClockTime>,
-    eos: bool,
     flushing: bool,
     clock_id: Option<gst::SingleShotClockId>,
 }
@@ -212,7 +211,6 @@ impl Default for SinkState {
             caps_info: CapsInfo::None,
 
             current_running_time: gst::ClockTime::NONE,
-            eos: false,
             flushing: false,
             clock_id: None,
         }
@@ -233,7 +231,6 @@ impl SinkState {
     }
     fn reset(&mut self) {
         self.flushing = false;
-        self.eos = false;
         self.caps_info = CapsInfo::None;
     }
 
