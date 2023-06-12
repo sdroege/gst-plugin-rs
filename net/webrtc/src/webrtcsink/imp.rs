@@ -51,8 +51,11 @@ const DEFAULT_MIN_BITRATE: u32 = 1000;
  * my local network, possibly related to chrome's pretty low UDP
  * buffer sizes */
 const DEFAULT_MAX_BITRATE: u32 = 8192000;
-const DEFAULT_CONGESTION_CONTROL: WebRTCSinkCongestionControl =
-    WebRTCSinkCongestionControl::GoogleCongestionControl;
+const DEFAULT_CONGESTION_CONTROL: WebRTCSinkCongestionControl = if cfg!(feature = "v1_22") {
+    WebRTCSinkCongestionControl::GoogleCongestionControl
+} else {
+    WebRTCSinkCongestionControl::Disabled
+};
 const DEFAULT_DO_FEC: bool = true;
 const DEFAULT_DO_RETRANSMISSION: bool = true;
 const DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION: bool = false;
@@ -60,6 +63,7 @@ const DEFAULT_ICE_TRANSPORT_POLICY: WebRTCICETransportPolicy = WebRTCICETranspor
 const DEFAULT_START_BITRATE: u32 = 2048000;
 /* Start adding some FEC when the bitrate > 2Mbps as we found experimentally
  * that it is not worth it below that threshold */
+#[cfg(feature = "v1_22")]
 const DO_FEC_THRESHOLD: u32 = 2000000;
 
 #[derive(Debug, Clone, Copy)]
@@ -235,6 +239,7 @@ struct Session {
 
     pipeline: gst::Pipeline,
     webrtcbin: gst::Element,
+    #[cfg(feature = "v1_22")]
     rtprtxsend: Option<gst::Element>,
     webrtc_pads: HashMap<u32, WebRTCPad>,
     peer_id: String,
@@ -506,7 +511,7 @@ impl Default for Settings {
             stun_server: DEFAULT_STUN_SERVER.map(String::from),
             turn_servers: gst::Array::new(Vec::new() as Vec<glib::SendValue>),
             cc_info: CCInfo {
-                heuristic: WebRTCSinkCongestionControl::GoogleCongestionControl,
+                heuristic: DEFAULT_CONGESTION_CONTROL,
                 min_bitrate: DEFAULT_MIN_BITRATE,
                 max_bitrate: DEFAULT_MAX_BITRATE,
                 start_bitrate: DEFAULT_START_BITRATE,
@@ -1148,6 +1153,7 @@ impl Session {
             webrtcbin,
             peer_id,
             cc_info,
+            #[cfg(feature = "v1_22")]
             rtprtxsend: None,
             congestion_controller,
             rtpgccbwe,
@@ -2219,6 +2225,7 @@ impl BaseWebRTCSink {
         }
 
         let rtpgccbwe = match settings.cc_info.heuristic {
+            #[cfg(feature = "v1_22")]
             WebRTCSinkCongestionControl::GoogleCongestionControl => {
                 let rtpgccbwe = match gst::ElementFactory::make("rtpgccbwe").build() {
                     Err(err) => {
@@ -2730,6 +2737,7 @@ impl BaseWebRTCSink {
         webrtcbin.emit_by_name::<()>("get-stats", &[&None::<gst::Pad>, &promise]);
     }
 
+    #[cfg(feature = "v1_22")]
     fn set_rtptrxsend(
         &self,
         element: &super::BaseWebRTCSink,
@@ -2743,6 +2751,7 @@ impl BaseWebRTCSink {
         }
     }
 
+    #[cfg(feature = "v1_22")]
     fn set_bitrate(&self, element: &super::BaseWebRTCSink, session_id: &str, bitrate: u32) {
         let settings = element.imp().settings.lock().unwrap();
         let mut state = element.imp().state.lock().unwrap();
