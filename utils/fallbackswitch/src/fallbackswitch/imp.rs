@@ -832,6 +832,8 @@ impl FallbackSwitch {
     }
 
     fn sink_event(&self, pad: &super::FallbackSwitchSinkPad, event: gst::Event) -> bool {
+        log!(CAT, obj: pad, "Handling event {:?}", event);
+
         if let gst::EventView::Gap(ev) = event.view() {
             let mut buffer = gst::Buffer::new();
 
