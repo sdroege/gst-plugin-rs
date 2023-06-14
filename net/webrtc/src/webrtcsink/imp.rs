@@ -1401,12 +1401,14 @@ impl BaseWebRTCSink {
             handle.abort();
         });
 
+        gst::debug!(CAT, obj: element, "Waiting for codec discoveries to finish");
         let codecs_done_receiver = std::mem::take(&mut state.codecs_done_receivers);
         codecs_done_receiver.into_iter().for_each(|receiver| {
             RUNTIME.block_on(async {
                 let _ = receiver.await;
             });
         });
+        gst::debug!(CAT, obj: element, "No codec discovery is running anymore");
 
         state.codec_discovery_done = false;
         state.codecs = BTreeMap::new();
@@ -1417,13 +1419,16 @@ impl BaseWebRTCSink {
         }
 
         drop(state);
+        gst::debug!(CAT, obj: element, "Ending sessions");
         for session in sessions {
             signaller.end_session(&session.id);
         }
+        gst::debug!(CAT, obj: element, "All sessions have started finalizing");
 
         if signaller_state == SignallerState::Started {
+            gst::info!(CAT, obj: element, "Stopping signaller");
             signaller.stop();
-            gst::info!(CAT, "Stopped signaller");
+            gst::info!(CAT, obj: element, "Stopped signaller");
         }
 
         let finalizing_sessions = self.state.lock().unwrap().finalizing_sessions.clone();
@@ -1433,6 +1438,8 @@ impl BaseWebRTCSink {
         while !sessions.is_empty() {
             sessions = cvar.wait(sessions).unwrap();
         }
+
+        gst::debug!(CAT, obj: element, "All sessions are done finalizing");
 
         Ok(())
     }
@@ -2971,7 +2978,13 @@ impl BaseWebRTCSink {
                     // Nothing changed
                     return true;
                 } else {
-                    gst::error!(CAT, obj: pad, "Renegotiation is not supported");
+                    gst::error!(
+                        CAT,
+                        obj: pad,
+                        "Renegotiation is not supported (old: {}, new: {})",
+                        caps,
+                        e.caps()
+                    );
                     return false;
                 }
             } else {
