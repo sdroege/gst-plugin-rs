@@ -29,7 +29,7 @@ gst-pbutils = { package = "gstreamer-pbutils", git = "https://gitlab.freedesktop
 m3u8-rs = "5.0"
 chrono = "0.4"
 dash-mpd = { version = "0.9", default-features = false }
-quick-xml = { version = "0.28", features = ["serialize"] }
+quick-xml = { version = "0.29", features = ["serialize"] }
 serde = "1"
 
 [build-dependencies]
