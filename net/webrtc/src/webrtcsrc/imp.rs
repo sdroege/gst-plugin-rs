@@ -133,6 +133,9 @@ static CODECS: Lazy<Codecs> = Lazy::new(|| {
     ])
 });
 
+const RTP_TWCC_URI: &str =
+    "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
+
 struct Settings {
     stun_server: Option<String>,
     signaller: Signallable,
@@ -707,7 +710,7 @@ impl WebRTCSrc {
                 .formats()
                 .filter_map(|format| {
                     format.parse::<i32>().ok().and_then(|pt| {
-                        let mediacaps = media.caps_from_media(pt)?;
+                        let mut mediacaps = media.caps_from_media(pt)?;
                         let s = mediacaps.structure(0).unwrap();
                         if !codec_names.contains(s.get::<&str>("encoding-name").ok()?) {
                             return None;
@@ -720,6 +723,32 @@ impl WebRTCSrc {
                             } else {
                                 Some((key, value.to_owned()))
                             }
+                        }));
+
+                        if media
+                            .attributes_to_caps(mediacaps.get_mut().unwrap())
+                            .is_err()
+                        {
+                            gst::warning!(
+                                CAT,
+                                imp: self,
+                                "Failed to retrieve attributes from media!"
+                            );
+                            return None;
+                        }
+
+                        let s = mediacaps.structure(0).unwrap();
+
+                        filtered_s.extend(s.iter().filter_map(|(key, value)| {
+                            if key.starts_with("extmap-") {
+                                if let Ok(s) = value.get::<String>() {
+                                    if s == RTP_TWCC_URI {
+                                        return Some((key, value.to_owned()));
+                                    }
+                                }
+                            }
+
+                            None
                         }));
 
                         Some(filtered_s)
