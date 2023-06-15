@@ -60,7 +60,6 @@ struct State {
     format: Option<Format>,
     need_segment: bool,
     pending_events: Vec<gst::Event>,
-    start_position: Option<gst::ClockTime>,
     last_position: Option<gst::ClockTime>,
     last_timecode: Option<gst_video::ValidVideoTimeCode>,
     timecode_rate: Option<(u8, bool)>,
@@ -86,7 +85,6 @@ impl Default for State {
             format: None,
             need_segment: true,
             pending_events: Vec::new(),
-            start_position: None,
             last_position: None,
             last_timecode: None,
             timecode_rate: None,
@@ -204,21 +202,6 @@ impl State {
     /// not produce timestamps jumping backwards
     fn update_timestamp(&mut self, imp: &MccParse, timecode: &gst_video::ValidVideoTimeCode) {
         let nsecs = timecode.time_since_daily_jam();
-        if self.start_position.is_none() {
-            self.start_position = Some(nsecs);
-        }
-        let start_position = self.start_position.expect("checked above");
-
-        let nsecs = nsecs.checked_sub(start_position).unwrap_or_else(|| {
-            gst::fixme!(
-                CAT,
-                imp: imp,
-                "New position {} < start position {}",
-                nsecs,
-                start_position,
-            );
-            start_position
-        });
 
         if self
             .last_position
@@ -849,7 +832,6 @@ impl MccParse {
         state.segment = gst::FormattedSegment::new();
         state.need_segment = true;
         state.pending_events.clear();
-        state.start_position = Some(gst::ClockTime::ZERO);
         state.last_position = None;
         state.last_timecode = None;
         state.timecode_rate = None;
