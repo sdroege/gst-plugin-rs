@@ -765,9 +765,9 @@ impl FallbackSwitch {
                 start_running_time,
                 state.upstream_latency + settings.latency,
             )
-        } else if state.timeout_running_time.is_some()
+        } else if state.output_running_time.is_some()
             && end_running_time.map_or(false, |end_running_time| {
-                end_running_time < state.timeout_running_time.unwrap()
+                end_running_time < state.output_running_time.unwrap()
             })
         {
             if raw_pad {
