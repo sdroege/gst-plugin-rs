@@ -1502,9 +1502,9 @@ fn write_dops(v: &mut Vec<u8>, caps: &gst::Caps) -> Result<(), Error> {
         // Version number
         v.push(0);
         v.push(channels);
-        v.extend(pre_skip.to_le_bytes());
-        v.extend(rate.to_le_bytes());
-        v.extend(output_gain.to_le_bytes());
+        v.extend(pre_skip.to_be_bytes());
+        v.extend(rate.to_be_bytes());
+        v.extend(output_gain.to_be_bytes());
         v.push(channel_mapping_family);
         if channel_mapping_family > 0 {
             v.push(stream_count);
