@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.10.9] - 2023-06-19
+### Fixed
+- mp4mux/fmp4mux: Fix byte order in Opus extension box.
+- webrtcsrc: Add twcc extension to the codec-preferences when present.
+- webrtcsink: Don't try using cudaconvert if it is not present.
+- mccparse: Don't offset the first timecode to a zero PTS.
+- Correctly use MPL as license specifier instead of MPL-2 for plugins that
+  compile with GStreamer < 1.20.
+
+### Added
+- fallbackswitch: Add `stop-on-eos` property.
+
 ## [0.10.8] - 2023-06-07
 ### Fixed
 - fmp4mux: Use updated start PTS when checking if a stream is filled instead
@@ -170,7 +182,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.8...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.9...HEAD
+[0.10.9]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.8...0.10.9
 [0.10.8]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.7...0.10.8
 [0.10.7]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.6...0.10.7
 [0.10.6]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.5...0.10.6
