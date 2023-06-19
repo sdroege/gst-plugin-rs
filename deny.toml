@@ -177,12 +177,6 @@ version = "0.6"
 name = "regex-syntax"
 version = "0.6"
 
-# rayon/crossbeam depend on an older version of memoffset
-# https://github.com/crossbeam-rs/crossbeam/pull/981
-[[bans.skip]]
-name = "memoffset"
-version = "0.8"
-
 # publicsuffix depends on an older version of idna
 # https://github.com/rushmorem/publicsuffix/pull/39
 [[bans.skip]]
@@ -193,12 +187,6 @@ version = "0.3"
 [[bans.skip]]
 name = "fastrand"
 version = "1.0"
-
-# dash-mpd depends on an older version of quick-xml
-# https://github.com/emarsden/dash-mpd-rs/pull/32
-[[bans.skip]]
-name = "quick-xml"
-version = "0.28"
 
 [sources]
 unknown-registry = "deny"
