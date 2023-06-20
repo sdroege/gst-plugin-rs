@@ -15,7 +15,7 @@ use anyhow::{anyhow, Error};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::ops::Mul;
-use std::sync::Mutex;
+use std::sync::{mpsc, Mutex};
 
 use super::homegrown_cc::CongestionController;
 use super::{WebRTCSinkCongestionControl, WebRTCSinkError, WebRTCSinkMitigationMode};
@@ -1266,7 +1266,7 @@ impl WebRTCSink {
         }
 
         if let Some(receiver) = state.codecs_done_receiver.take() {
-            RUNTIME.spawn(async {
+            RUNTIME.block_on(async {
                 let _ = receiver.await;
             });
         }
@@ -2905,7 +2905,27 @@ impl ElementImpl for WebRTCSink {
 
         match transition {
             gst::StateChange::PausedToReady => {
-                if let Err(err) = self.unprepare(&element) {
+                let unprepare_res = match tokio::runtime::Handle::try_current() {
+                    Ok(_) => {
+                        gst::error!(
+                            CAT,
+                            obj: element,
+                            "Trying to set state to NULL from an async \
+                                    tokio context, working around the panic but \
+                                    you should refactor your code to make use of \
+                                    gst::Element::call_async and set the state to \
+                                    NULL from there, without blocking the runtime"
+                        );
+                        let (tx, rx) = mpsc::channel();
+                        element.call_async(move |element| {
+                            tx.send(element.imp().unprepare(element)).unwrap();
+                        });
+                        rx.recv().unwrap()
+                    }
+                    Err(_) => self.unprepare(&element),
+                };
+
+                if let Err(err) = unprepare_res {
                     gst::element_error!(
                         element,
                         gst::StreamError::Failed,
