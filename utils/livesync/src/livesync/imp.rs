@@ -1030,6 +1030,42 @@ impl LiveSync {
         }
         state.srcresult?;
 
+        if let Some(out_timestamp) = state.out_timestamp {
+            let sync_ts = out_timestamp.end;
+
+            let element = self.obj();
+
+            let base_time = element.base_time().ok_or_else(|| {
+                gst::error!(CAT, imp: self, "Missing base time");
+                gst::FlowError::Flushing
+            })?;
+
+            let clock = element.clock().ok_or_else(|| {
+                gst::error!(CAT, imp: self, "Missing clock");
+                gst::FlowError::Flushing
+            })?;
+
+            let clock_id = clock.new_single_shot_id(base_time + sync_ts);
+            state.clock_id = Some(clock_id.clone());
+
+            gst::trace!(
+                CAT,
+                imp: self,
+                "Waiting for clock to reach {}",
+                clock_id.time(),
+            );
+
+            let (res, _) = MutexGuard::unlocked(&mut state, || clock_id.wait());
+            gst::trace!(CAT, imp: self, "Clock returned {res:?}",);
+
+            if res == Err(gst::ClockError::Unscheduled) {
+                return Err(gst::FlowError::Flushing);
+            }
+
+            state.srcresult?;
+            state.clock_id = None;
+        }
+
         let in_item = state.queue.pop_front();
         gst::trace!(CAT, imp: self, "Unqueueing {:?}", in_item);
 
@@ -1184,40 +1220,6 @@ impl LiveSync {
             }
 
             state.out_segment = Some(segment);
-        }
-
-        {
-            let element = self.obj();
-
-            let base_time = element.base_time().ok_or_else(|| {
-                gst::error!(CAT, imp: self, "Missing base time");
-                gst::FlowError::Flushing
-            })?;
-
-            let clock = element.clock().ok_or_else(|| {
-                gst::error!(CAT, imp: self, "Missing clock");
-                gst::FlowError::Flushing
-            })?;
-
-            let clock_id = clock.new_single_shot_id(base_time + sync_ts);
-            state.clock_id = Some(clock_id.clone());
-
-            gst::trace!(
-                CAT,
-                imp: self,
-                "Waiting for clock to reach {}",
-                clock_id.time(),
-            );
-
-            let (res, _) = MutexGuard::unlocked(&mut state, || clock_id.wait());
-            gst::trace!(CAT, imp: self, "Clock returned {res:?}",);
-
-            if res == Err(gst::ClockError::Unscheduled) {
-                return Err(gst::FlowError::Flushing);
-            }
-
-            state.srcresult?;
-            state.clock_id = None;
         }
 
         state.num_out += 1;
