@@ -356,6 +356,14 @@ impl ToggleRecord {
         upstream_live: bool,
     ) -> Result<bool, gst::FlowError> {
         if !upstream_live {
+            let clock = self.obj().clock();
+            let mut rec_state = self.state.lock();
+            if rec_state.time_start_block.is_none() {
+                rec_state.time_start_block = clock
+                    .as_ref()
+                    .map_or(state.current_running_time, |c| c.time());
+            }
+            drop(rec_state);
             while !settings.record && !state.flushing {
                 gst::debug!(CAT, obj: pad, "Waiting for record=true");
                 self.main_stream_cond.wait(state);
@@ -374,12 +382,20 @@ impl ToggleRecord {
             }
             let mut rec_state = self.state.lock();
             if let Some(time_start_block) = rec_state.time_start_block {
-                let clock = self.obj().clock().expect("Cannot find pipeline clock");
+                // If we have a time_start_block it means the clock is there
+                let clock = clock.expect("Cannot find pipeline clock");
                 rec_state.blocked_duration += clock.time().unwrap() - time_start_block;
                 if settings.live {
                     rec_state.running_time_offset = rec_state.blocked_duration.nseconds() as i64;
                 }
                 rec_state.time_start_block = gst::ClockTime::NONE;
+            } else {
+                // How did we even get here?
+                gst::warning!(
+                    CAT,
+                    obj: pad,
+                    "Have no clock and no current running time. Will not offset buffers"
+                );
             }
             drop(rec_state);
             gst::log!(CAT, obj: pad, "Done blocking main stream");
@@ -573,6 +589,10 @@ impl ToggleRecord {
                 }
             }
             RecordingState::Stopped => {
+                if !upstream_live {
+                    rec_state.recording_state = RecordingState::Starting;
+                }
+                drop(rec_state);
                 if self.block_if_upstream_not_live(pad, settings, &mut state, upstream_live)? {
                     Ok(HandleResult::Pass(data))
                 } else {
