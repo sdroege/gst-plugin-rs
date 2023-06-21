@@ -14,6 +14,7 @@ use crate::sink::frame::Frame;
 use crate::sink::paintable::Paintable;
 
 use glib::{thread_guard::ThreadGuard, Sender};
+use gtk::prelude::GLContextExt;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
@@ -604,7 +605,7 @@ impl PaintableSink {
             #[cfg(target_os = "macos")]
             "GdkMacosGLContext" => (),
             #[cfg(target_os = "windows")]
-            "GdkWin32GLContext" => (),
+            "GdkWin32GLContextWGL" => (),
             #[cfg(all(windows, feature = "winegl"))]
             "GdkWin32GLContextEGL" => (),
             display => {
@@ -622,7 +623,6 @@ impl PaintableSink {
 
         gst::info!(CAT, imp: self, "Successfully realized GDK GL Context");
 
-        handle_wgl_makecurrent(&ctx);
         gdk_context.make_current();
 
         let res = match gdk_context.type_().name() {
@@ -635,25 +635,14 @@ impl PaintableSink {
             #[cfg(target_os = "macos")]
             "GdkMacosGLContext" => self.initialize_macosgl(gdk_display),
             #[cfg(target_os = "windows")]
-            "GdkWin32GLContext" => {
-                self.initialize_wgl(gdk_display, &gdk_ctx);
-            }
+            "GdkWin32GLContextWGL" => self.initialize_wgl(gdk_display, &gdk_context),
             #[cfg(all(target_os = "windows", feature = "winegl"))]
-            "GdkWin32GLContextEGL" => {
-                self.initialize_winegl(gdk_display);
-            }
+            "GdkWin32GLContextEGL" => self.initialize_winegl(gdk_display),
             display_type => {
                 unreachable!("Unsupported GDK display {display_type} for GL");
             }
         };
-
-        let (display, wrapped_context) = match res {
-            Some((display, wrapped_context)) => (display, wrapped_context),
-            None => {
-                return;
-            }
-        };
-
+        let (display, wrapped_context) = res.unwrap();
         match wrapped_context.activate(true) {
             Ok(_) => gst::info!(CAT, imp: self, "Successfully activated GL Context"),
             Err(_) => {
@@ -678,11 +667,6 @@ impl PaintableSink {
             }
             return;
         }
-
-        // FIXME: Is this all necessary?
-        deactivate_gdk_wgl_context(&ctx);
-        handle_wgl_makecurrent(&ctx);
-        reactivate_gdk_wgl_context(&ctx);
 
         gst::info!(CAT, imp: self, "Successfully initialized GL Context");
 
@@ -886,7 +870,7 @@ impl PaintableSink {
     #[cfg(target_os = "windows")]
     fn initialize_wgl(
         &self,
-        display: gdk::Display,
+        _display: gdk::Display,
         context: &gdk::GLContext,
     ) -> Option<(gst_gl::GLDisplay, gst_gl::GLContext)> {
         gst::info!(
@@ -910,11 +894,13 @@ impl PaintableSink {
         }
 
         unsafe {
-            let gst_gl_display = gst_gl::Display::with_type(gst_gl::DisplayType::WIN32);
-            if gst_gl_display.is_none() {
-                gst::error!(CAT, imp: self, "Failed to get GL display");
-                return None;
-            }
+            let gst_gl_display =
+                if let Some(display) = gst_gl::GLDisplay::with_type(gst_gl::GLDisplayType::WIN32) {
+                    display
+                } else {
+                    gst::error!(CAT, imp: self, "Failed to get GL display");
+                    return None;
+                };
 
             gst_gl_display.filter_gl_api(gl_api);
 
@@ -958,10 +944,10 @@ impl PaintableSink {
             use gdk_win32::prelude::*;
 
             let d = display.downcast::<gdk_win32::Win32Display>().unwrap();
-            let egl_display = display.egl_display().unwrap().as_ptr();
+            let egl_display = d.egl_display().unwrap().as_ptr();
 
-            let gst_gl_display =
-                gst_gl_egl::ffi::gst_gl_display_egl_new_with_egl_display(egl_display);
+            // TODO: On the binary distribution of GStreamer for Windows, this symbol is not there
+            let gst_gl_display = gst_gl_egl::ffi::gst_gl_display_egl_from_gl_display(egl_display);
             if gst_gl_display.is_null() {
                 gst::error!(CAT, imp: self, "Failed to get EGL display");
                 return None;
@@ -986,61 +972,3 @@ impl PaintableSink {
         }
     }
 }
-
-// Workaround for Windows specific GL context problems
-
-#[cfg(target_os = "windows")]
-fn handle_wgl_makecurrent(ctx: &gdk::GLContext) {
-    if ctx.type_().name() != "GdkWin32GLContext" {
-        return;
-    }
-
-    extern "C" {
-        fn epoxy_handle_external_wglMakeCurrent();
-    }
-
-    unsafe {
-        epoxy_handle_external_wglMakeCurrent();
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn deactivate_gdk_wgl_context(ctx: &gdk::GLContext) {
-    if ctx.type_().name() != "GdkWin32GLContext" {
-        return;
-    }
-
-    unsafe {
-        use gdk_win32::prelude::*;
-
-        let surface = context
-            .surface()
-            .unwrap()
-            .downcast::<gdk_win32::Win32Surface>()
-            .unwrap();
-        let hwnd = surface.handle();
-        let hdc = windows_sys::Win32::Graphics::Gdi::GetDC(hwnd);
-        windows_sys::Win32::Graphics::OpenGL::wglMakeCurrent(hdc, 0);
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn reactivate_gdk_wgl_context(ctx: &gdk::GLContext) {
-    if ctx.type_().name() != "GdkWin32GLContext" {
-        return;
-    }
-
-    context.make_current();
-}
-
-#[cfg(any(target_os = "macos", feature = "gst_gl"))]
-#[cfg(not(target_os = "windows"))]
-fn handle_wgl_makecurrent(_ctx: &gdk::GLContext) {}
-
-#[cfg(any(target_os = "macos", feature = "gst_gl"))]
-#[cfg(not(target_os = "windows"))]
-fn deactivate_gdk_wgl_context(_ctx: &gdk::GLContext) {}
-
-#[cfg(any(target_os = "macos", feature = "gst_gl"))]
-#[cfg(not(target_os = "windows"))]
-fn reactivate_gdk_wgl_context(_ctx: &gdk::GLContext) {}
