@@ -107,6 +107,7 @@ plugins = {
       'ts-standalone',
     ],
   },
+  'inter': {'library': 'libgstrsinter'},
 
   'mp4': {'library': 'libgstmp4'},
   'fmp4': {

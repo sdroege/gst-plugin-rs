@@ -5369,6 +5369,94 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "rsinter": {
+        "description": "GStreamer Inter Plugin",
+        "elements": {
+            "intersink": {
+                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
+                "description": "Inter Sink",
+                "hierarchy": [
+                    "GstInterSink",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
+                "klass": "Generic/Sink",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "producer-name": {
+                        "blurb": "Producer Name to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
+            "intersrc": {
+                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
+                "description": "Inter Src",
+                "hierarchy": [
+                    "GstInterSrc",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
+                "klass": "Generic/Src",
+                "pad-templates": {
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "producer-name": {
+                        "blurb": "Producer Name to consume from",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstrsinter",
+        "license": "MPL-2.0",
+        "other-types": {},
+        "package": "gst-plugin-inter",
+        "source": "gst-plugin-inter",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "rsonvif": {
         "description": "GStreamer Rust ONVIF Plugin",
         "elements": {

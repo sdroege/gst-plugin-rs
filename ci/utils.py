@@ -22,6 +22,7 @@ RS_PREFIXED = [
     'png',
     'tracers',
     'rtp',
+    'inter',
 ]
 
 OVERRIDE = {
