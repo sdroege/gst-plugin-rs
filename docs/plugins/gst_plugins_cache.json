@@ -6118,6 +6118,37 @@
                 },
                 "rank": "none"
             },
+            "livekitwebrtcsink": {
+                "author": "Olivier Crête <olivier.crete@collabora.com>",
+                "description": "WebRTC sink with LiveKit signaller",
+                "hierarchy": [
+                    "GstLiveKitWebRTCSink",
+                    "GstBaseWebRTCSink",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy",
+                    "GstNavigation"
+                ],
+                "klass": "Sink/Network/WebRTC",
+                "pad-templates": {
+                    "audio_%%u": {
+                        "caps": "audio/x-raw:\naudio/x-opus:\n",
+                        "direction": "sink",
+                        "presence": "request"
+                    },
+                    "video_%%u": {
+                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\n",
+                        "direction": "sink",
+                        "presence": "request"
+                    }
+                },
+                "rank": "none"
+            },
             "webrtcsink": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "WebRTC sink with custom protocol signaller",

@@ -22,6 +22,7 @@ use std::sync::{mpsc, Arc, Condvar, Mutex};
 use super::homegrown_cc::CongestionController;
 use super::{WebRTCSinkCongestionControl, WebRTCSinkError, WebRTCSinkMitigationMode};
 use crate::aws_kvs_signaller::AwsKvsSignaller;
+use crate::livekit_signaller::LiveKitSignaller;
 use crate::signaller::{prelude::*, Signallable, Signaller, WebRTCSignallerRole};
 use crate::whip_signaller::WhipSignaller;
 use crate::RUNTIME;
@@ -3849,5 +3850,45 @@ impl BaseWebRTCSinkImpl for WhipWebRTCSink {}
 impl ObjectSubclass for WhipWebRTCSink {
     const NAME: &'static str = "GstWhipWebRTCSink";
     type Type = super::WhipWebRTCSink;
+    type ParentType = super::BaseWebRTCSink;
+}
+
+#[derive(Default)]
+pub struct LiveKitWebRTCSink {}
+
+impl ObjectImpl for LiveKitWebRTCSink {
+    fn constructed(&self) {
+        let element = self.obj();
+        let ws = element.upcast_ref::<super::BaseWebRTCSink>().imp();
+
+        let _ = ws.set_signaller(LiveKitSignaller::default().upcast());
+    }
+}
+
+impl GstObjectImpl for LiveKitWebRTCSink {}
+
+impl ElementImpl for LiveKitWebRTCSink {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "LiveKitWebRTCSink",
+                "Sink/Network/WebRTC",
+                "WebRTC sink with LiveKit signaller",
+                "Olivier Crête <olivier.crete@collabora.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+}
+
+impl BinImpl for LiveKitWebRTCSink {}
+
+impl BaseWebRTCSinkImpl for LiveKitWebRTCSink {}
+
+#[glib::object_subclass]
+impl ObjectSubclass for LiveKitWebRTCSink {
+    const NAME: &'static str = "GstLiveKitWebRTCSink";
+    type Type = super::LiveKitWebRTCSink;
     type ParentType = super::BaseWebRTCSink;
 }

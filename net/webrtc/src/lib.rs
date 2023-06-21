@@ -15,6 +15,7 @@ use once_cell::sync::Lazy;
 use tokio::runtime;
 
 mod aws_kvs_signaller;
+mod livekit_signaller;
 pub mod signaller;
 pub mod utils;
 pub mod webrtcsink;

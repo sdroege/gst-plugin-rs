@@ -258,5 +258,28 @@ gst-launch-1.0 -e uridecodebin uri=file:///home/meh/path/to/video/file ! \
 
 You should see a second video displayed in the videoroomtest web page.
 
+## Using the LiveKit Signaller
+
+Testing the LiveKit signaller can be done by setting up [LiveKit] and creating a room.
+
+You can connect either by given the API key and secret:
+
+``` shell
+gst-launch-1.0 -e uridecodebin uri=file:///home/meh/path/to/video/file ! \
+  videoconvert ! video/x-raw ! queue ! \
+  livekitwebrtcsink signaller::ws-url=ws://127.0.0.1:7880 signaller::api-key=devkey signaller::secret-key=secret signaller::room-name=testroom
+```
+
+Or by using a separately created authentication token
+``` shell
+gst-launch-1.0 -e uridecodebin uri=file:///home/meh/path/to/video/file ! \
+  videoconvert ! video/x-raw ! queue ! \
+  livekitwebrtcsink signaller::ws-url=ws://127.0.0.1:7880 signaller::auth-token=mygeneratedtoken signaller::room-name=testroom
+```
+
+
+You should see a second video displayed in the videoroomtest web page.
+
+[LiveKit]: https://livekit.io/
 [janus]: https://github.com/meetecho/janus-gateway
 [simple whip server]: https://github.com/meetecho/simple-whip-server/

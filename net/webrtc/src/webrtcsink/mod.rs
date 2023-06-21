@@ -56,6 +56,10 @@ glib::wrapper! {
     pub struct WhipWebRTCSink(ObjectSubclass<imp::WhipWebRTCSink>) @extends BaseWebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
 }
 
+glib::wrapper! {
+    pub struct LiveKitWebRTCSink(ObjectSubclass<imp::LiveKitWebRTCSink>) @extends BaseWebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum WebRTCSinkError {
     #[error("no session with id")]
@@ -135,6 +139,12 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         "whipwebrtcsink",
         gst::Rank::None,
         WhipWebRTCSink::static_type(),
+    )?;
+    gst::Element::register(
+        Some(plugin),
+        "livekitwebrtcsink",
+        gst::Rank::None,
+        LiveKitWebRTCSink::static_type(),
     )?;
 
     Ok(())
