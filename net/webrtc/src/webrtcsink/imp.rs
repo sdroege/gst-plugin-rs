@@ -405,8 +405,8 @@ fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error
             } else if feature.contains(NVMM_MEMORY_FEATURE) {
                 let queue = make_element("queue", None)?;
                 let nvconvert = if let Ok(nvconvert) = make_element("nvvideoconvert", None) {
-                    nvconvert.set_property("compute-hw", 0);
-                    nvconvert.set_property("nvbuf-memory-type", 0);
+                    nvconvert.set_property_from_str("compute-hw", "Default");
+                    nvconvert.set_property_from_str("nvbuf-memory-type", "nvbuf-mem-default");
                     nvconvert
                 } else {
                     make_element("nvvidconv", None)?
