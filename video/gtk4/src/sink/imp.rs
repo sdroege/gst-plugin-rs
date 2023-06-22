@@ -894,7 +894,7 @@ impl PaintableSink {
         }
 
         unsafe {
-            let gst_gl_display =
+            let gst_display =
                 if let Some(display) = gst_gl::GLDisplay::with_type(gst_gl::GLDisplayType::WIN32) {
                     display
                 } else {
@@ -902,10 +902,10 @@ impl PaintableSink {
                     return None;
                 };
 
-            gst_gl_display.filter_gl_api(gl_api);
+            gst_display.filter_gl_api(gl_api);
 
             let wrapped_context =
-                gst_gl::GLContext::new_wrapped(&gst_gl_display, gl_ctx, platform, gl_api);
+                gst_gl::GLContext::new_wrapped(&gst_display, gl_ctx, platform, gl_api);
             let wrapped_context = match wrapped_context {
                 None => {
                     gst::error!(CAT, imp: self, "Failed to create wrapped GL context");
@@ -914,7 +914,7 @@ impl PaintableSink {
                 Some(wrapped_context) => wrapped_context,
             };
 
-            Some((gst_gl_display, wrapped_context))
+            Some((gst_display, wrapped_context))
         }
     }
 
@@ -947,18 +947,19 @@ impl PaintableSink {
             let egl_display = d.egl_display().unwrap().as_ptr();
 
             // TODO: On the binary distribution of GStreamer for Windows, this symbol is not there
-            let gst_gl_display = gst_gl_egl::ffi::gst_gl_display_egl_from_gl_display(egl_display);
-            if gst_gl_display.is_null() {
+            let gst_display =
+                gst_gl_egl::ffi::gst_gl_display_egl_from_gl_display(egl_display.cast());
+            if gst_display.is_null() {
                 gst::error!(CAT, imp: self, "Failed to get EGL display");
                 return None;
             }
-            let gst_gl_display: gst_gl::GLDisplay =
-                from_glib_full(gst_gl_display as *mut gst_gl::ffi::GstGLDisplay);
+            let gst_display =
+                gst_gl::GLDisplay::from_glib_full(gst_display as *mut gst_gl::ffi::GstGLDisplay);
 
-            gst_gl_display.filter_gl_api(gl_api);
+            gst_display.filter_gl_api(gl_api);
 
             let wrapped_context =
-                gst_gl::GLContext::new_wrapped(&gst_gl_display, gl_ctx, platform, gl_api);
+                gst_gl::GLContext::new_wrapped(&gst_display, gl_ctx, platform, gl_api);
 
             let wrapped_context = match wrapped_context {
                 None => {
@@ -968,7 +969,7 @@ impl PaintableSink {
                 Some(wrapped_context) => wrapped_context,
             };
 
-            Some((gst_gl_display, wrapped_context))
+            Some((gst_display, wrapped_context))
         }
     }
 }
