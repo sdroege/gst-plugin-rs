@@ -1020,7 +1020,7 @@ fn test_two_stream_close_open_nonlivein_liveout() {
         .send(SendData::Buffers(main_buffers_in_gap as usize))
         .unwrap();
     assert_eq!(
-        receiver_input_done_1.recv_timeout(Duration::from_millis(20)),
+        receiver_input_done_1.recv_timeout(Duration::from_millis(60)),
         Err(mpsc::RecvTimeoutError::Timeout)
     );
 
@@ -1029,7 +1029,7 @@ fn test_two_stream_close_open_nonlivein_liveout() {
         .send(SendData::Buffers((secondary_buffers_in_gap) as usize))
         .unwrap();
     assert_eq!(
-        receiver_input_done_2.recv_timeout(Duration::from_millis(20)),
+        receiver_input_done_2.recv_timeout(Duration::from_millis(60)),
         Err(mpsc::RecvTimeoutError::Timeout)
     );
 
