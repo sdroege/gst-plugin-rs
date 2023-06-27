@@ -568,21 +568,19 @@ impl ObjectImpl for Signaller {
         match pspec.name() {
             "whip-endpoint" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.whip_endpoint = value.get().expect("WHIP endpoint should be a string");
+                settings.whip_endpoint = value.get().unwrap();
             }
             "use-link-headers" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.use_link_headers = value
-                    .get()
-                    .expect("use-link-headers should be a boolean value");
+                settings.use_link_headers = value.get().unwrap();
             }
             "auth-token" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.auth_token = value.get().expect("Auth token should be a string");
+                settings.auth_token = value.get().unwrap();
             }
             "timeout" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.timeout = value.get().expect("type checked upstream");
+                settings.timeout = value.get().unwrap();
             }
             _ => unimplemented!(),
         }

@@ -654,28 +654,28 @@ impl ObjectImpl for Signaller {
         let mut settings = self.settings.lock().unwrap();
         match pspec.name() {
             "ws-url" => {
-                settings.wsurl = value.get().expect("WebSocket URL should be a string");
+                settings.wsurl = value.get().unwrap();
             }
             "api-key" => {
-                settings.api_key = value.get().expect("API Key should be a string");
+                settings.api_key = value.get().unwrap();
             }
             "secret-key" => {
-                settings.secret_key = value.get().expect("Secret Key should be a string");
+                settings.secret_key = value.get().unwrap();
             }
             "participant-name" => {
-                settings.participant_name = value.get().expect("Participant Name should be a string");
+                settings.participant_name = value.get().unwrap();
             }
             "identity" => {
-                settings.identity = value.get().expect("Participant Identity should be a string");
+                settings.identity = value.get().unwrap();
             }
             "room-name" => {
-                settings.room_name = value.get().expect("Room Name should be a string");
+                settings.room_name = value.get().unwrap();
             }
             "auth-token" => {
-                settings.auth_token = value.get().expect("Auth token should be a string");
+                settings.auth_token = value.get().unwrap();
             }
             "timeout" => {
-                settings.timeout = value.get().expect("type checked upstream");
+                settings.timeout = value.get().unwrap();
             }
             _ => unimplemented!(),
         }

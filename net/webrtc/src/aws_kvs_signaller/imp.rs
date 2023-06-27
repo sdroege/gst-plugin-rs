@@ -669,7 +669,7 @@ impl ObjectImpl for Signaller {
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "address" => {
-                let address: Option<_> = value.get().expect("type checked upstream");
+                let address: Option<_> = value.get().unwrap();
 
                 if let Some(address) = address {
                     gst::info!(CAT, "Signaller address set to {address}");
@@ -687,23 +687,23 @@ impl ObjectImpl for Signaller {
             }
             "access-key" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.access_key = value.get().expect("type checked upstream");
+                settings.access_key = value.get().unwrap();
             }
             "secret-access-key" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.secret_access_key = value.get().expect("type checked upstream");
+                settings.secret_access_key = value.get().unwrap();
             }
             "session-token" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.session_token = value.get().expect("type checked upstream");
+                settings.session_token = value.get().unwrap();
             }
             "channel-name" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.channel_name = value.get().expect("type checked upstream");
+                settings.channel_name = value.get().unwrap();
             }
             "ping-timeout" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.ping_timeout = value.get().expect("type checked upstream");
+                settings.ping_timeout = value.get().unwrap();
             }
             _ => unimplemented!(),
         }
