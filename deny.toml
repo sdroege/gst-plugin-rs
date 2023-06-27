@@ -196,6 +196,12 @@ version = "1.0"
 name = "hashbrown"
 version = "0.12"
 
+# av1-grain depends on an old version of itertools
+# https://github.com/rust-av/av1-grain/pull/12
+[[bans.skip]]
+name = "itertools"
+version = "0.10"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
