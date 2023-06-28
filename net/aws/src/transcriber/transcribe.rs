@@ -67,7 +67,7 @@ impl TranscriptItem {
         let end_time =
             ((item.end_time * 1_000_000_000.0) as u64).nseconds() + lateness + discont_offset;
 
-        gst::error!(CAT, "Discont offset is {discont_offset}");
+        gst::log!(CAT, "Discont offset is {discont_offset}");
 
         Some(TranscriptItem {
             pts: start_time,
