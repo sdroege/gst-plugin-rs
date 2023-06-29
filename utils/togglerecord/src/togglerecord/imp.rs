@@ -444,6 +444,17 @@ impl ToggleRecord {
 
         let current_running_time = state.in_segment.to_running_time(dts_or_pts);
         let current_running_time_end = state.in_segment.to_running_time(dts_or_pts_end);
+        let (current_running_time, current_running_time_end) = state
+            .in_segment
+            .clip(current_running_time, current_running_time_end)
+            .ok_or_else(|| {
+                gst::element_imp_error!(
+                    self,
+                    gst::StreamError::Format,
+                    ["Received a buffer in the main stream without a valid running time"]
+                );
+                gst::FlowError::Error
+            })?;
 
         state.current_running_time = current_running_time
             .opt_max(state.current_running_time)
@@ -451,9 +462,6 @@ impl ToggleRecord {
         state.current_running_time_end = current_running_time_end
             .opt_max(state.current_running_time_end)
             .or(current_running_time_end);
-
-        // FIXME we should probably return if either current_running_time or current_running_time_end
-        // are None at this point
 
         // Wake up everybody, we advanced a bit
         // Important: They will only be able to advance once we're done with this
