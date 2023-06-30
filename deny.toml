@@ -106,9 +106,15 @@ version = "0.6"
 [[bans.skip]]
 name = "hermit-abi"
 version = "0.1"
+
+# tempfile depends on an old version of rustix
+# https://github.com/Stebalien/tempfile/pull/241
 [[bans.skip]]
-name = "hermit-abi"
-version = "0.2"
+name = "rustix"
+version = "0.37"
+[[bans.skip]]
+name = "linux-raw-sys"
+version = "0.3"
 
 # Various crates depend on an older version of base64
 [[bans.skip]]
@@ -166,11 +172,6 @@ version = "0.5"
 [[bans.skip]]
 name = "redox_syscall"
 version = "0.2"
-
-# Various crates depend on an older version of miniz_oxide
-[[bans.skip]]
-name = "miniz_oxide"
-version = "0.6"
 
 # tracing-subscriber depends on an older version of regex-syntax
 [[bans.skip]]
