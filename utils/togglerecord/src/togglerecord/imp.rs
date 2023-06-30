@@ -337,6 +337,14 @@ impl ToggleRecord {
     ) -> Result<HandleResult<T>, gst::FlowError> {
         let mut state = stream.state.lock();
 
+        let data = match data.clip(&state, &state.in_segment) {
+            Some(data) => data,
+            None => {
+                gst::log!(CAT, obj: pad, "Dropping raw data outside segment");
+                return Ok(HandleResult::Drop);
+            }
+        };
+
         let mut dts_or_pts = data.dts_or_pts().ok_or_else(|| {
             gst::element_imp_error!(
                 self,
@@ -348,14 +356,6 @@ impl ToggleRecord {
 
         let mut dts_or_pts_end = dts_or_pts + data.duration(&state).unwrap_or(gst::ClockTime::ZERO);
 
-        let data = match data.clip(&state, &state.in_segment) {
-            Some(data) => data,
-            None => {
-                gst::log!(CAT, obj: pad, "Dropping raw data outside segment");
-                return Ok(HandleResult::Drop);
-            }
-        };
-
         // This will only do anything for non-raw data
         dts_or_pts = state.in_segment.start().unwrap().max(dts_or_pts);
         dts_or_pts_end = state.in_segment.start().unwrap().max(dts_or_pts_end);
@@ -366,17 +366,6 @@ impl ToggleRecord {
 
         let current_running_time = state.in_segment.to_running_time(dts_or_pts);
         let current_running_time_end = state.in_segment.to_running_time(dts_or_pts_end);
-        let (current_running_time, current_running_time_end) = state
-            .in_segment
-            .clip(current_running_time, current_running_time_end)
-            .ok_or_else(|| {
-                gst::element_imp_error!(
-                    self,
-                    gst::StreamError::Format,
-                    ["Received a buffer in the main stream without a valid running time"]
-                );
-                gst::FlowError::Error
-            })?;
 
         state.current_running_time = current_running_time
             .opt_max(state.current_running_time)
