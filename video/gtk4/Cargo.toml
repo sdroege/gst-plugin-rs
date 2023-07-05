@@ -29,9 +29,9 @@ gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", branch = "0
 gst_gl = { package = "gstreamer-gl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20", features = ["v1_16"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", features = ["v4_6"] }
-gst_gl = { package = "gstreamer-gl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_20"] }
-gdk_win32 = { package = "gdk4-win32", git = "https://github.com/gtk-rs/gtk4-rs", features = ["v4_4"]}
+gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", branch = "0.6", version = "0.6", features = ["v4_6"] }
+gst_gl = { package = "gstreamer-gl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20", features = ["v1_20"] }
+gdk_win32 = { package = "gdk4-win32", git = "https://github.com/gtk-rs/gtk4-rs", branch = "0.6", version = "0.6", features = ["v4_4"]}
 windows-sys = { version = "0.48", features = ["Win32_Graphics_OpenGL", "Win32_Foundation", "Win32_Graphics_Gdi"] }
 
 [lib]
