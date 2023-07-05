@@ -5,6 +5,21 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.10.10] - 2023-07-05
+### Fixed
+- livesync: Improve EOS handling to be in sync with `queue`'s behaviour.
+- livesync: Wait for the end timestamp of the previous buffer before looking
+  at queue to actually make use of the available latency.
+- webrtcsink: Avoid panic on unprepare from an async tokio context.
+- webrtc/signalling: Fix race condition in message ordering.
+- webrtcsink: Use the correct property types when configuring `nvvideoconvert`.
+- videofx: Minimize dependencies of the image crate.
+- togglerecord: Fix segment clipping to actually work as intended.
+
+### Added
+- gtk4paintablesink: Support for WGL/EGL on Windows.
+- gtk4paintablesink: Add Python example application to the repository.
+
 ## [0.10.9] - 2023-06-19
 ### Fixed
 - mp4mux/fmp4mux: Fix byte order in Opus extension box.
@@ -182,7 +197,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.9...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.10...HEAD
+[0.10.10]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.9...0.10.10
 [0.10.9]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.8...0.10.9
 [0.10.8]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.7...0.10.8
 [0.10.7]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.6...0.10.7
