@@ -6,7 +6,7 @@ repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
 edition = "2021"
 description = "GStreamer Rust RTP Plugin"
-rust-version = "1.63"
+rust-version = "1.64"
 
 [dependencies]
 bitstream-io = "1.3"

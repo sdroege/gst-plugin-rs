@@ -6,7 +6,7 @@ repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
 description = "GStreamer NewTek NDI Plugin"
 edition = "2021"
-rust-version = "1.63"
+rust-version = "1.64"
 
 [dependencies]
 glib = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "0.17", version = "0.17"}

@@ -6,7 +6,7 @@ authors = ["Mathieu Duponchelle <mathieu@centricular.com>", "Thibault Saunier <t
 license = "MPL-2.0"
 description = "GStreamer plugin for high level WebRTC elements and a simple signaling server"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-rust-version = "1.63"
+rust-version = "1.64"
 
 [dependencies]
 gst = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.20", version = "0.20", package = "gstreamer", features = ["v1_20", "serde"] }
