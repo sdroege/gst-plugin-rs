@@ -1082,8 +1082,8 @@ impl ObjectImpl for UdpSink {
                     .unwrap_or_else(|| "".into());
 
                 let clients = clients.split(',').filter_map(|client| {
-                    let mut splited = client.splitn(2, ':');
-                    if let Some((addr, port)) = splited.next().zip(splited.next()) {
+                    let mut split = client.splitn(2, ':');
+                    if let Some((addr, port)) = split.next().zip(split.next()) {
                         match port.parse::<i32>() {
                             Ok(port) => match self.try_into_socket_addr(addr, port) {
                                 Ok(socket_addr) => Some(socket_addr),

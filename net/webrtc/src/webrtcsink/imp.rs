@@ -2685,7 +2685,7 @@ impl BaseWebRTCSink {
                         signaller.end_session(session_id);
                     }
 
-                    gst::warning!(CAT, obj: element, "Consumer did not provide valid payload for media sesion: {session_id} media_ix: {media_idx}");
+                    gst::warning!(CAT, obj: element, "Consumer did not provide valid payload for media session: {session_id} media_ix: {media_idx}");
                     return;
                 }
             }
