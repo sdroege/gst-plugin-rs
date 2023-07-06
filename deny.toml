@@ -131,11 +131,6 @@ version = "0.4"
 name = "syn"
 version = "1.0"
 
-# Various crates depend on an older version of bitflags
-[[bans.skip]]
-name = "bitflags"
-version = "1.0"
-
 # cargo-lock depends on an old version of the toml crate
 # https://github.com/rustsec/rustsec/pull/805
 [[bans.skip]]
