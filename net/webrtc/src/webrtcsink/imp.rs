@@ -675,7 +675,7 @@ impl VideoEncoder {
     fn new(
         encoding_elements: &EncodingChain,
         video_info: gst_video::VideoInfo,
-        peer_id: &str,
+        session_id: &str,
         codec_name: &str,
         transceiver: gst_webrtc::WebRTCRTPTransceiver,
     ) -> Option<Self> {
@@ -693,7 +693,7 @@ impl VideoEncoder {
             filter: encoding_elements.raw_filter.as_ref()?.clone(),
             halved_framerate,
             video_info,
-            session_id: peer_id.to_string(),
+            session_id: session_id.to_string(),
             mitigation_mode: WebRTCSinkMitigationMode::NONE,
             transceiver,
         })
@@ -819,7 +819,7 @@ impl State {
         gst::info!(CAT, "Ending session {}", session.id);
         session.pipeline.debug_to_dot_file_with_ts(
             gst::DebugGraphDetails::all(),
-            format!("removing-session-{}-", session.peer_id,),
+            format!("removing-session-{}-", session.id),
         );
 
         for ssrc in session.webrtc_pads.keys() {
@@ -1043,7 +1043,7 @@ impl Session {
             if let Some(mut enc) = VideoEncoder::new(
                 &encoding_chain,
                 video_info,
-                &self.peer_id,
+                &self.id,
                 codec.caps.structure(0).unwrap().name(),
                 transceiver,
             ) {
@@ -1487,11 +1487,11 @@ impl BaseWebRTCSink {
                 false,
                 glib::closure!(@watch instance => move |
                         _signaler: glib::Object,
-                        peer_id: &str,
+                        session_id: &str,
                         session_description: &gst_webrtc::WebRTCSessionDescription| {
 
                         if session_description.type_() == gst_webrtc::WebRTCSDPType::Answer {
-                            instance.imp().handle_sdp_answer(instance, peer_id, session_description);
+                            instance.imp().handle_sdp_answer(instance, session_id, session_description);
                         } else {
                             gst::error!(CAT, obj: instance, "Unsupported SDP Type");
                         }
@@ -1925,8 +1925,8 @@ impl BaseWebRTCSink {
             CAT,
             obj: element,
             "Adding session: {} for peer: {}",
+            session_id,
             peer_id,
-            session_id
         );
 
         let webrtcbin = make_element("webrtcbin", Some(&format!("webrtcbin-{session_id}")))
@@ -2453,21 +2453,21 @@ impl BaseWebRTCSink {
     fn set_rtptrxsend(
         &self,
         element: &super::BaseWebRTCSink,
-        peer_id: &str,
+        session_id: &str,
         rtprtxsend: gst::Element,
     ) {
         let mut state = element.imp().state.lock().unwrap();
 
-        if let Some(session) = state.sessions.get_mut(peer_id) {
+        if let Some(session) = state.sessions.get_mut(session_id) {
             session.rtprtxsend = Some(rtprtxsend);
         }
     }
 
-    fn set_bitrate(&self, element: &super::BaseWebRTCSink, peer_id: &str, bitrate: u32) {
+    fn set_bitrate(&self, element: &super::BaseWebRTCSink, session_id: &str, bitrate: u32) {
         let settings = element.imp().settings.lock().unwrap();
         let mut state = element.imp().state.lock().unwrap();
 
-        if let Some(session) = state.sessions.get_mut(peer_id) {
+        if let Some(session) = state.sessions.get_mut(session_id) {
             let n_encoders = session.encoders.len();
 
             let fec_ratio = {
