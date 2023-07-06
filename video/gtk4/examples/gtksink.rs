@@ -77,12 +77,12 @@ fn create_ui(app: &gtk::Application) {
     let timeout_id = glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
         let pipeline = match pipeline_weak.upgrade() {
             Some(pipeline) => pipeline,
-            None => return glib::Continue(true),
+            None => return glib::ControlFlow::Continue,
         };
 
         let position = pipeline.query_position::<gst::ClockTime>();
         label.set_text(&format!("Position: {:.0}", position.display()));
-        glib::Continue(true)
+        glib::ControlFlow::Continue
     });
 
     let bus = pipeline.bus().unwrap();
@@ -98,7 +98,7 @@ fn create_ui(app: &gtk::Application) {
 
             let app = match app_weak.upgrade() {
                 Some(app) => app,
-                None => return glib::Continue(false),
+                None => return glib::ControlFlow::Break,
             };
 
             match msg.view() {
@@ -115,7 +115,7 @@ fn create_ui(app: &gtk::Application) {
                 _ => (),
             };
 
-            glib::Continue(true)
+            glib::ControlFlow::Continue
         })
         .expect("Failed to add bus watch");
 

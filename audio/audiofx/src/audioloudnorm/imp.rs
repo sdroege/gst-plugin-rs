@@ -855,15 +855,15 @@ impl State {
             smp_cnt += LIMITER_LOOKAHEAD + peak_delta - LIMITER_ATTACK_WINDOW;
 
             gst::debug!(
-                           CAT,
-                           imp: imp,
-                           "Found peak {} at sample {}, going to attack state at sample {} (gain reduction {}-{})",
-                           peak_value,
-                           smp_cnt + LIMITER_ATTACK_WINDOW,
-                           smp_cnt,
-                           self.gain_reduction[0],
-                           self.gain_reduction[1]
-                        );
+               CAT,
+               imp: imp,
+               "Found peak {} at sample {}, going to attack state at sample {} (gain reduction {}-{})",
+               peak_value,
+               smp_cnt + LIMITER_ATTACK_WINDOW,
+               smp_cnt,
+               self.gain_reduction[0],
+               self.gain_reduction[1]
+            );
         } else {
             // Process all samples, no peak found
             smp_cnt = nb_samples;
@@ -992,15 +992,15 @@ impl State {
                     self.sustain_cnt = None;
 
                     gst::debug!(
-                                    CAT,
-                                    imp: imp,
-                                    "Found new peak {} at sample {}, restarting attack state at sample {} (gain reduction {}-{})",
-                                    peak_value,
-                                    smp_cnt + LIMITER_ATTACK_WINDOW,
-                                    smp_cnt,
-                                    self.gain_reduction[0],
-                                    self.gain_reduction[1],
-                                );
+                        CAT,
+                        imp: imp,
+                        "Found new peak {} at sample {}, restarting attack state at sample {} (gain reduction {}-{})",
+                        peak_value,
+                        smp_cnt + LIMITER_ATTACK_WINDOW,
+                        smp_cnt,
+                        self.gain_reduction[0],
+                        self.gain_reduction[1],
+                    );
                 } else {
                     // If the slope is lower we can't simply reduce the slope as we would
                     // then have a lower gain reduction than needed at the previous peak.
@@ -1041,15 +1041,15 @@ impl State {
                     self.sustain_cnt = Some(self.env_cnt);
 
                     gst::debug!(
-                                    CAT,
-                                    imp: imp,
-                                    "Found new peak {} at sample {}, adjusting attack state at sample {} (gain reduction {}-{})",
-                                    peak_value,
-                                    smp_cnt + LIMITER_ATTACK_WINDOW,
-                                    smp_cnt,
-                                    self.gain_reduction[0],
-                                    self.gain_reduction[1],
-                                );
+                        CAT,
+                        imp: imp,
+                        "Found new peak {} at sample {}, adjusting attack state at sample {} (gain reduction {}-{})",
+                        peak_value,
+                        smp_cnt + LIMITER_ATTACK_WINDOW,
+                        smp_cnt,
+                        self.gain_reduction[0],
+                        self.gain_reduction[1],
+                    );
                 }
                 return smp_cnt;
             } else {
@@ -1151,25 +1151,25 @@ impl State {
                     self.gain_reduction[1] = gain_reduction;
 
                     gst::debug!(
-                                    CAT,
-                                    imp: imp,
-                                    "Found new peak {} at sample {}, going back to attack state at sample {} (gain reduction {}-{})",
-                                    peak_value,
-                                    smp_cnt + LIMITER_ATTACK_WINDOW,
-                                    smp_cnt,
-                                    self.gain_reduction[0],
-                                    self.gain_reduction[1],
-                                );
+                        CAT,
+                        imp: imp,
+                        "Found new peak {} at sample {}, going back to attack state at sample {} (gain reduction {}-{})",
+                        peak_value,
+                        smp_cnt + LIMITER_ATTACK_WINDOW,
+                        smp_cnt,
+                        self.gain_reduction[0],
+                        self.gain_reduction[1],
+                    );
                 } else {
                     gst::debug!(
-                                    CAT,
-                                    imp: imp,
-                                    "Found new peak {} at sample {}, going sustain further at sample {} (gain reduction {})",
-                                    peak_value,
-                                    smp_cnt + LIMITER_ATTACK_WINDOW,
-                                    smp_cnt,
-                                    self.gain_reduction[1],
-                                );
+                        CAT,
+                        imp: imp,
+                        "Found new peak {} at sample {}, going sustain further at sample {} (gain reduction {})",
+                        peak_value,
+                        smp_cnt + LIMITER_ATTACK_WINDOW,
+                        smp_cnt,
+                        self.gain_reduction[1],
+                    );
                     // We need to sustain until the peak at least
                     self.sustain_cnt = Some(LIMITER_LOOKAHEAD);
                 }
@@ -1259,26 +1259,26 @@ impl State {
                 self.gain_reduction[1] = gain_reduction;
 
                 gst::debug!(
-                               CAT,
-                               imp: imp,
-                               "Found new peak {} at sample {}, going back to attack state at sample {} (gain reduction {}-{})",
-                               peak_value,
-                               smp_cnt + LIMITER_ATTACK_WINDOW,
-                               smp_cnt,
-                               self.gain_reduction[0],
-                               self.gain_reduction[1],
-                            );
+                   CAT,
+                   imp: imp,
+                   "Found new peak {} at sample {}, going back to attack state at sample {} (gain reduction {}-{})",
+                   peak_value,
+                   smp_cnt + LIMITER_ATTACK_WINDOW,
+                   smp_cnt,
+                   self.gain_reduction[0],
+                   self.gain_reduction[1],
+                );
             } else {
                 self.gain_reduction[1] = current_gain_reduction;
                 gst::debug!(
-                                CAT,
-                                imp: imp,
-                                "Going from release to sustain state at sample {} because of low peak {} at sample {} (gain reduction {})",
-                                smp_cnt,
-                                peak_value,
-                                smp_cnt + LIMITER_ATTACK_WINDOW,
-                                self.gain_reduction[1]
-                            );
+                    CAT,
+                    imp: imp,
+                    "Going from release to sustain state at sample {} because of low peak {} at sample {} (gain reduction {})",
+                    smp_cnt,
+                    peak_value,
+                    smp_cnt + LIMITER_ATTACK_WINDOW,
+                    self.gain_reduction[1]
+                );
                 self.limiter_state = LimiterState::Sustain;
             }
 

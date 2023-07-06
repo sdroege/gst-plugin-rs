@@ -116,7 +116,7 @@ fn main() {
                     gst::info!(CAT, "Received eos");
                     l_clone.quit();
 
-                    glib::Continue(false)
+                    glib::ControlFlow::Break
                 }
                 MessageView::Error(msg) => {
                     if let gst::MessageView::Error(msg) = msg.message().view() {
@@ -125,9 +125,9 @@ fn main() {
                                 gst::info!(CAT, "Received all shutdown requests");
                                 l_clone.quit();
 
-                                return glib::Continue(false);
+                                return glib::ControlFlow::Break;
                             } else {
-                                return glib::Continue(true);
+                                return glib::ControlFlow::Continue;
                             }
                         }
                     }
@@ -141,9 +141,9 @@ fn main() {
                     );
                     l_clone.quit();
 
-                    glib::Continue(false)
+                    glib::ControlFlow::Break
                 }
-                _ => glib::Continue(true),
+                _ => glib::ControlFlow::Continue,
             }
         })
         .expect("Failed to add bus watch");

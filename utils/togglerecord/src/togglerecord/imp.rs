@@ -856,13 +856,13 @@ impl ToggleRecord {
                 // Otherwise if we're before the recording start but the end of the buffer is after
                 // the start and we can clip, clip the buffer and pass it onwards.
                 gst::debug!(
-                        CAT,
-                        obj: pad,
-                        "Main stream EOS and we're not EOS yet (overlapping recording start, {} < {} < {})",
-                        current_running_time.display(),
-                        last_recording_start,
-                        current_running_time_end.display(),
-                    );
+                    CAT,
+                    obj: pad,
+                    "Main stream EOS and we're not EOS yet (overlapping recording start, {} < {} < {})",
+                    current_running_time.display(),
+                    last_recording_start,
+                    current_running_time_end.display(),
+                );
 
                 let mut clip_start = state
                     .in_segment
@@ -914,13 +914,13 @@ impl ToggleRecord {
                 // Similarly if the end is after the recording stop but the start is before and we
                 // can clip, clip the buffer and pass it through.
                 gst::debug!(
-                        CAT,
-                        obj: pad,
-                        "Main stream EOS and we're not EOS yet (overlapping recording end, {} < {} < {})",
-                        current_running_time.display(),
-                        rec_state.last_recording_stop.display(),
-                        current_running_time_end.display(),
-                    );
+                    CAT,
+                    obj: pad,
+                    "Main stream EOS and we're not EOS yet (overlapping recording end, {} < {} < {})",
+                    current_running_time.display(),
+                    rec_state.last_recording_stop.display(),
+                    current_running_time_end.display(),
+                );
 
                 let mut clip_start = state
                     .in_segment

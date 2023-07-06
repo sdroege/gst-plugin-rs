@@ -134,7 +134,7 @@ fn create_window(app: &gtk::Application) {
                 _ => (),
             };
 
-            glib::Continue(true)
+            glib::ControlFlow::Continue
         })
         .unwrap()
     };

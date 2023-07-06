@@ -274,13 +274,13 @@ impl S3HlsSink {
                     match result {
                         Err(err) => {
                             gst::error!(
-                            CAT,
-                            imp: self,
-                            "Put object request for S3 key {} of data length {} failed with error {:?}",
-                            s3_key,
-                            s3_data_len,
-                            err,
-                        );
+                                CAT,
+                                imp: self,
+                                "Put object request for S3 key {} of data length {} failed with error {:?}",
+                                s3_key,
+                                s3_data_len,
+                                err,
+                            );
                             element_imp_error!(
                                 self,
                                 gst::ResourceError::Write,

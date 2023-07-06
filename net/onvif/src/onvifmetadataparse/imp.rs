@@ -219,12 +219,12 @@ impl OnvifMetadataParse {
                         Some(diff) => diff,
                         None => {
                             gst::error!(
-                            CAT,
-                            obj: pad,
-                            "Too big running time difference between initial running time {:?} and current running time {:?}",
-                            initial_running_time,
-                            running_time,
-                        );
+                                CAT,
+                                obj: pad,
+                                "Too big running time difference between initial running time {:?} and current running time {:?}",
+                                initial_running_time,
+                                running_time,
+                            );
                             return Err(gst::FlowError::Error);
                         }
                     };

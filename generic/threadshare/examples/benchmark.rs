@@ -211,7 +211,7 @@ fn main() {
                 _ => (),
             };
 
-            glib::Continue(true)
+            glib::ControlFlow::Continue
         })
         .expect("Failed to add bus watch");
 

@@ -178,7 +178,7 @@ fn run(pipeline: gst::Pipeline) {
                     gst::info!(CAT, "Received eos");
                     l_clone.quit();
 
-                    glib::Continue(false)
+                    glib::ControlFlow::Break
                 }
                 MessageView::Error(msg) => {
                     gst::error!(
@@ -190,9 +190,9 @@ fn run(pipeline: gst::Pipeline) {
                     );
                     l_clone.quit();
 
-                    glib::Continue(false)
+                    glib::ControlFlow::Break
                 }
-                _ => glib::Continue(true),
+                _ => glib::ControlFlow::Continue,
             }
         })
         .expect("Failed to add bus watch");

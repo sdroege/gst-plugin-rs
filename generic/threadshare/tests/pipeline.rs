@@ -165,7 +165,7 @@ fn multiple_contexts_queue() {
                 _ => (),
             };
 
-            glib::Continue(true)
+            glib::ControlFlow::Continue
         })
         .unwrap();
 
@@ -312,7 +312,7 @@ fn multiple_contexts_proxy() {
                 _ => (),
             };
 
-            glib::Continue(true)
+            glib::ControlFlow::Continue
         })
         .unwrap();
 
@@ -417,7 +417,7 @@ fn eos() {
                 MessageView::StateChanged(state_changed) => {
                     if let Some(source) = state_changed.src() {
                         if source.type_() != gst::Pipeline::static_type() {
-                            return glib::Continue(true);
+                            return glib::ControlFlow::Continue;
                         }
                         if state_changed.old() == gst::State::Paused
                             && state_changed.current() == gst::State::Playing
@@ -441,7 +441,7 @@ fn eos() {
                 _ => (),
             };
 
-            glib::Continue(true)
+            glib::ControlFlow::Continue
         })
         .unwrap();
 
@@ -573,7 +573,7 @@ fn premature_shutdown() {
                 MessageView::StateChanged(state_changed) => {
                     if let Some(source) = state_changed.src() {
                         if source.type_() != gst::Pipeline::static_type() {
-                            return glib::Continue(true);
+                            return glib::ControlFlow::Continue;
                         }
                         if state_changed.old() == gst::State::Paused
                             && state_changed.current() == gst::State::Playing
@@ -597,7 +597,7 @@ fn premature_shutdown() {
                 _ => (),
             };
 
-            glib::Continue(true)
+            glib::ControlFlow::Continue
         })
         .unwrap();
 
@@ -669,7 +669,7 @@ fn socket_play_null_play() {
                 MessageView::StateChanged(state_changed) => {
                     if let Some(source) = state_changed.src() {
                         if source.type_() != gst::Pipeline::static_type() {
-                            return glib::Continue(true);
+                            return glib::ControlFlow::Continue;
                         }
                         if state_changed.old() == gst::State::Paused
                             && state_changed.current() == gst::State::Playing
@@ -694,7 +694,7 @@ fn socket_play_null_play() {
                 _ => (),
             };
 
-            glib::Continue(true)
+            glib::ControlFlow::Continue
         })
         .unwrap();
 

@@ -452,11 +452,11 @@ impl PaintableSink {
         self.pending_frame.lock().unwrap().take()
     }
 
-    fn do_action(&self, action: SinkEvent) -> glib::Continue {
+    fn do_action(&self, action: SinkEvent) -> glib::ControlFlow {
         let paintable = self.paintable.lock().unwrap();
         let paintable = match &*paintable {
             Some(paintable) => paintable,
-            None => return glib::Continue(false),
+            None => return glib::ControlFlow::Break,
         };
 
         match action {
@@ -468,7 +468,7 @@ impl PaintableSink {
             }
         }
 
-        glib::Continue(true)
+        glib::ControlFlow::Continue
     }
 
     fn configure_caps(&self) {
@@ -519,7 +519,7 @@ impl PaintableSink {
             receiver.attach(
                 Some(&glib::MainContext::default()),
                 glib::clone!(
-                    @weak self_ => @default-return glib::Continue(false),
+                    @weak self_ => @default-return glib::ControlFlow::Break,
                     move |action| self_.do_action(action)
                 ),
             );

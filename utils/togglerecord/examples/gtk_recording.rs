@@ -221,12 +221,12 @@ fn create_ui(app: &gtk::Application) {
     let timeout_id = glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
         let video_sink = match video_sink_weak.upgrade() {
             Some(video_sink) => video_sink,
-            None => return glib::Continue(true),
+            None => return glib::ControlFlow::Continue,
         };
 
         let togglerecord = match togglerecord_weak.upgrade() {
             Some(togglerecord) => togglerecord,
-            None => return glib::Continue(true),
+            None => return glib::ControlFlow::Continue,
         };
 
         let position = video_sink
@@ -241,7 +241,7 @@ fn create_ui(app: &gtk::Application) {
             .unwrap_or(gst::ClockTime::ZERO);
         recorded_duration_label.set_text(&format!("Recorded: {recording_duration:.1}"));
 
-        glib::Continue(true)
+        glib::ControlFlow::Continue
     });
 
     let togglerecord_weak = togglerecord.downgrade();
@@ -290,7 +290,7 @@ fn create_ui(app: &gtk::Application) {
 
             let app = match app_weak.upgrade() {
                 Some(app) => app,
-                None => return glib::Continue(false),
+                None => return glib::ControlFlow::Break,
             };
 
             match msg.view() {
@@ -307,7 +307,7 @@ fn create_ui(app: &gtk::Application) {
                 _ => (),
             };
 
-            glib::Continue(true)
+            glib::ControlFlow::Continue
         })
         .expect("Failed to add bus watch");
 
