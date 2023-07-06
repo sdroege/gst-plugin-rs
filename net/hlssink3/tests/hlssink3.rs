@@ -7,9 +7,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use gio::prelude::*;
+use gst::glib::once_cell::sync::Lazy;
 use gst::prelude::*;
 use gsthlssink3::HlsSink3PlaylistType;
-use once_cell::sync::Lazy;
 use std::io::Write;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;

@@ -11,7 +11,7 @@ use gst::subclass::prelude::*;
 use gst::{element_imp_error, error_msg};
 use serde_derive::Deserialize;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use std::sync::Mutex;
 

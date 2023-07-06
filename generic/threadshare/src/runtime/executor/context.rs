@@ -5,7 +5,7 @@
 
 use futures::prelude::*;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use std::collections::HashMap;
 use std::io;

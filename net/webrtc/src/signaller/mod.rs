@@ -8,7 +8,7 @@ use gst::glib;
  *
  * Interface that WebRTC elements can implement their own protocol with.
  */
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 // Expose traits and objects from the module itself so it exactly looks like
 // generated bindings
 pub use imp::WebRTCSignallerRole;

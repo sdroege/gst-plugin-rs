@@ -12,7 +12,7 @@ pub const ASYNC_MUTEX_ELEMENT_NAME: &str = "ts-standalone-async-mutex-sink";
 pub const SYNC_MUTEX_ELEMENT_NAME: &str = "ts-standalone-sync-mutex-sink";
 pub const TASK_ELEMENT_NAME: &str = "ts-standalone-task-sink";
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "ts-standalone-sink",

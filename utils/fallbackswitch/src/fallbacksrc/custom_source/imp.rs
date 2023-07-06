@@ -13,8 +13,8 @@ use gst::subclass::prelude::*;
 
 use std::{mem, sync::Mutex};
 
-use once_cell::sync::Lazy;
-use once_cell::sync::OnceCell;
+use gst::glib::once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::OnceCell;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(

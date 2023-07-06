@@ -23,7 +23,7 @@ use byte_slice_cast::*;
 use rayon::prelude::*;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "hrtfrender",

@@ -10,10 +10,10 @@
 
 use atomic_refcell::AtomicRefCell;
 use gst::glib;
+use gst::glib::once_cell::sync::Lazy;
 use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
-use once_cell::sync::Lazy;
 use rav1e::color;
 use rav1e::config;
 use rav1e::data;

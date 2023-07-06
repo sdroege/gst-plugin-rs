@@ -4,7 +4,7 @@ use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use pango::prelude::*;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use std::collections::HashSet;
 use std::sync::Mutex;

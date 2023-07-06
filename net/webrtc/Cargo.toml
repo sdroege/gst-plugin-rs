@@ -19,7 +19,6 @@ gst-utils = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", packa
 gst-base = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-base" }
 uuid = { version = "1", features = ["v4"] }
 
-once_cell = "1.0"
 anyhow = "1"
 thiserror = "1"
 futures = "0.3"

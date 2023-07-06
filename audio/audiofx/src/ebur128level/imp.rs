@@ -16,7 +16,7 @@ use std::i32;
 use std::sync::atomic;
 use std::sync::Mutex;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use byte_slice_cast::*;
 

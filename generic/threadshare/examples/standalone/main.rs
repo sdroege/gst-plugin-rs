@@ -1,5 +1,5 @@
 use gst::glib;
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 mod args;
 use args::*;

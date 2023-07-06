@@ -9,7 +9,7 @@
 use std::sync::{mpsc, Arc, Mutex, MutexGuard};
 
 use futures::future::{AbortHandle, Abortable, Aborted};
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 use tokio::{runtime, task::JoinHandle};
 
 use gst::glib;

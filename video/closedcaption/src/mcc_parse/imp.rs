@@ -14,7 +14,7 @@ use gst_video::ValidVideoTimeCode;
 use std::cmp;
 use std::sync::{Mutex, MutexGuard};
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use super::parser::{MccLine, MccParser};
 use crate::line_reader::LineReader;

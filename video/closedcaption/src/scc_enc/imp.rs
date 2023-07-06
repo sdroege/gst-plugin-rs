@@ -13,7 +13,7 @@ use gst::structure;
 use gst::subclass::prelude::*;
 use gst_video::{self, ValidVideoTimeCode};
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use std::io::Write;
 use std::sync::Mutex;

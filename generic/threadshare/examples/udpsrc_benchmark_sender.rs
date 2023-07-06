@@ -20,7 +20,7 @@
 use gst::glib;
 use gst::prelude::*;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use std::net;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};

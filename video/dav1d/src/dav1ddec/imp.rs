@@ -14,7 +14,7 @@ use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use std::i32;
 use std::sync::{Mutex, MutexGuard};

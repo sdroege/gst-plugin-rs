@@ -25,7 +25,7 @@ use aws_sdk_s3::{
 };
 
 use futures::future;
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::convert::From;
 use std::sync::Mutex;

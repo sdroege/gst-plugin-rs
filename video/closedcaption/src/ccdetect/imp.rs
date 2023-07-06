@@ -12,7 +12,7 @@ use gst::subclass::prelude::*;
 use gst_base::subclass::prelude::*;
 
 use crate::ccutils::{extract_cdp, ParseError, ParseErrorCode};
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use std::sync::Mutex;
 use std::u64;

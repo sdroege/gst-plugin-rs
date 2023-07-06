@@ -37,7 +37,7 @@ use std::{i32, u32};
 use num_traits::cast::NumCast;
 use num_traits::float::Float;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(

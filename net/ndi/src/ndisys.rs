@@ -8,6 +8,8 @@
     clippy::missing_safety_doc
 )]
 
+use glib::once_cell::sync::OnceCell;
+
 #[cfg(unix)]
 use libloading::os::unix::{Library, Symbol};
 #[cfg(windows)]
@@ -322,11 +324,10 @@ pub const NDIlib_compressed_packet_flags_keyframe: u32 = 1;
 #[cfg(feature = "advanced-sdk")]
 pub const NDIlib_compressed_packet_version_0: u32 = 44;
 
-static FFI: once_cell::sync::OnceCell<FFI> = once_cell::sync::OnceCell::new();
+static FFI: OnceCell<FFI> = OnceCell::new();
 
 pub fn load() -> Result<(), glib::BoolError> {
-    static ERR: once_cell::sync::OnceCell<Result<(), glib::BoolError>> =
-        once_cell::sync::OnceCell::new();
+    static ERR: OnceCell<Result<(), glib::BoolError>> = OnceCell::new();
 
     ERR.get_or_init(|| unsafe {
         use std::env;

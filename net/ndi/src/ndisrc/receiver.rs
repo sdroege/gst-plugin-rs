@@ -14,7 +14,7 @@ use std::time;
 
 use atomic_refcell::AtomicRefCell;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use crate::ndi::*;
 use crate::ndisys;

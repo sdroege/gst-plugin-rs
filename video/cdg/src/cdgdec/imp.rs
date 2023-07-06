@@ -9,11 +9,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use gst::glib;
+use gst::glib::once_cell::sync::Lazy;
 use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 use image::GenericImageView;
-use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
 use crate::constants::{CDG_HEIGHT, CDG_WIDTH};

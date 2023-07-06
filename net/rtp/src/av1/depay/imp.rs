@@ -17,7 +17,7 @@ use std::{
 };
 
 use bitstream_io::{BitReader, BitWriter};
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use crate::av1::common::{
     err_flow, leb128_size, parse_leb128, write_leb128, AggregationHeader, ObuType, SizedObu,

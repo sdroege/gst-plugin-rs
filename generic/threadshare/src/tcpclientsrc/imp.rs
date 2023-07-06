@@ -25,7 +25,7 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use std::io;
 use std::net::{IpAddr, SocketAddr, TcpStream};

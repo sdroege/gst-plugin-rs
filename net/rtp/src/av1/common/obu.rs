@@ -232,7 +232,7 @@ impl From<ObuType> for u8 {
 mod tests {
     use super::*;
     use bitstream_io::{BigEndian, BitRead, BitReader};
-    use once_cell::sync::Lazy;
+    use gst::glib::once_cell::sync::Lazy;
     use std::io::Cursor;
 
     #[allow(clippy::type_complexity)]

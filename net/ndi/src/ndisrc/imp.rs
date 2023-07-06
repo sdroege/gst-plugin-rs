@@ -9,7 +9,7 @@ use gst_base::subclass::prelude::*;
 use std::sync::Mutex;
 use std::u32;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use crate::ndisys;
 use crate::RecvColorFormat;

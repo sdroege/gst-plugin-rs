@@ -43,7 +43,6 @@ description = "Rust Tutorial Plugin"
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-once_cell = "1.0"
 
 [lib]
 name = "gstrstutorial"
@@ -151,7 +150,7 @@ use gst_base::subclass::prelude::*;
 use std::i32;
 use std::sync::Mutex;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 ```
 
 GStreamer is based on the GLib object system ([GObject](https://developer.gnome.org/gobject/stable/)). C (just like Rust) does not have built-in support for object orientated programming, inheritance, virtual methods and related concepts, and GObject makes these features available in C as a library. Without language support this is a quite verbose endeavour in C, and the `glib` crate tries to expose all this in a (as much as possible) Rust-style API while hiding all the details that do not really matter.

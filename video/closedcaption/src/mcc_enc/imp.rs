@@ -14,7 +14,7 @@ use gst::subclass::prelude::*;
 use chrono::prelude::*;
 use uuid::Uuid;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use std::io::Write;
 use std::sync::Mutex;

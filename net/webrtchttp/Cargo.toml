@@ -15,7 +15,6 @@ gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/g
 gst-webrtc = { package = "gstreamer-webrtc", git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_18"] }
 gst-sdp = { package = "gstreamer-sdp", git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 reqwest = { version = "0.11", features = ["default-tls"] }
-once_cell = "1.0"
 parse_link_header = {version = "0.3", features = ["url"]}
 tokio = { version = "1.20.1", default-features = false, features = ["time", "rt-multi-thread"] }
 futures = "0.3.23"

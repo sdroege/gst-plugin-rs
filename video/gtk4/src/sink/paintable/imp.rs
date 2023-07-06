@@ -18,7 +18,7 @@ use crate::sink::frame::{Frame, Texture};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(

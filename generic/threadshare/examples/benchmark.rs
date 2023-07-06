@@ -18,8 +18,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 use gst::glib;
+use gst::glib::once_cell::sync::Lazy;
 use gst::prelude::*;
-use once_cell::sync::Lazy;
 
 use std::env;
 use std::sync::atomic::{AtomicU64, Ordering};

@@ -1,8 +1,8 @@
 use gst::glib;
+use gst::glib::once_cell::sync::Lazy;
 use gst::glib::subclass::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use once_cell::sync::Lazy;
 
 #[derive(Copy, Clone)]
 pub struct Signallable {

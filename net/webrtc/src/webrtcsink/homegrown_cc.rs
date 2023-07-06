@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
+use gst::glib::once_cell::sync::Lazy;
 use gst::{
     glib::{self, value::FromValue},
     prelude::*,
 };
-use once_cell::sync::Lazy;
 
 use super::imp::VideoEncoder;
 

@@ -7,12 +7,12 @@ use gst::subclass::prelude::*;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use std::mem;
 use std::sync::Mutex;
 
-static CAT: once_cell::sync::Lazy<gst::DebugCategory> = once_cell::sync::Lazy::new(|| {
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "ndisinkcombiner",
         gst::DebugColorFlags::empty(),

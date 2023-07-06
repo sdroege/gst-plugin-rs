@@ -11,7 +11,7 @@
  * Since: plugins-rs-0.9
  */
 use gst::glib;
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 use tokio::runtime;
 
 mod aws_kvs_signaller;

@@ -13,7 +13,7 @@
  * Since: plugins-rs-0.9.0
  */
 use gst::glib;
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 mod onvifmetadatacombiner;
 mod onvifmetadatadepay;

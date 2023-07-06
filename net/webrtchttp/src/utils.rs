@@ -1,7 +1,7 @@
 use futures::future;
 use futures::prelude::*;
+use gst::glib::once_cell::sync::Lazy;
 use gst::{prelude::*, ErrorMessage};
-use once_cell::sync::Lazy;
 use reqwest::header::HeaderMap;
 use reqwest::redirect::Policy;
 use std::sync::Mutex;

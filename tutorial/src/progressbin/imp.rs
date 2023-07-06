@@ -13,7 +13,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use std::sync::Mutex;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use super::ProgressBinOutput;
 

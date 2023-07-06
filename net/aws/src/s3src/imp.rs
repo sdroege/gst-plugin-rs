@@ -8,7 +8,7 @@
 
 use bytes::Bytes;
 use futures::future;
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 use std::sync::Mutex;
 use std::time::Duration;
 

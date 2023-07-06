@@ -17,7 +17,7 @@ use reqwest::{Client, Response, StatusCode};
 use tokio::runtime;
 use url::Url;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use gst::glib;
 use gst::prelude::*;

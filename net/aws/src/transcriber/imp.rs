@@ -31,7 +31,7 @@ use tokio::{runtime, sync::broadcast, task};
 use std::collections::{BTreeSet, VecDeque};
 use std::sync::{Arc, Mutex};
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use super::transcribe::{TranscriberSettings, TranscriberStream, TranscriptEvent, TranscriptItem};
 use super::translate::{TranslateLoop, TranslatedItem};

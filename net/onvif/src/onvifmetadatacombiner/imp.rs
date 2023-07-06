@@ -1,10 +1,10 @@
 use gst::glib;
+use gst::glib::once_cell::sync::Lazy;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 use gst_base::AGGREGATOR_FLOW_NEED_DATA;
-use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
 #[derive(Default)]

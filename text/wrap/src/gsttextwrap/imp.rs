@@ -16,7 +16,7 @@ use std::io;
 use std::mem;
 use std::sync::Mutex;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use hyphenation::{Load, Standard};
 

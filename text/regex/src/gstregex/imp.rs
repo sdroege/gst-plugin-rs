@@ -14,7 +14,7 @@ use regex::Regex;
 use std::default::Default;
 use std::sync::Mutex;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(

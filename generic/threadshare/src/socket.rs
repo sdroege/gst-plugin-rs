@@ -23,7 +23,7 @@ use futures::future::BoxFuture;
 use gst::glib;
 use gst::prelude::*;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use gio::prelude::*;
 

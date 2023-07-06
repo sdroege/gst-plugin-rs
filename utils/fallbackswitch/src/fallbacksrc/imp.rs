@@ -14,7 +14,7 @@ use parking_lot::Mutex;
 use std::time::Instant;
 use std::{cmp, mem};
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use super::custom_source::CustomSource;
 use super::{RetryReason, Status};

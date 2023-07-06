@@ -6,8 +6,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use gst::glib::once_cell::sync::Lazy;
 use m3u8_rs::{MediaPlaylist, MediaPlaylistType, MediaSegment};
-use once_cell::sync::Lazy;
 use regex::Regex;
 use std::io::Write;
 

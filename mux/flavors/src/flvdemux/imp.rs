@@ -21,7 +21,7 @@ use gst::subclass::prelude::*;
 
 use num_rational::Rational32;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use smallvec::SmallVec;
 

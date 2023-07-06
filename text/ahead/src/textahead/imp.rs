@@ -9,7 +9,7 @@
 use std::collections::VecDeque;
 use std::sync::{Mutex, MutexGuard};
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use gst::glib;
 use gst::prelude::*;

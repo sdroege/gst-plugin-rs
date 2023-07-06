@@ -22,7 +22,7 @@ use gst::subclass::prelude::*;
 use gst_base::subclass::prelude::*;
 use gst_video::subclass::prelude::*;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 use std::sync::{Mutex, MutexGuard};
 
 use crate::utils;

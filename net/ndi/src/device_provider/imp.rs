@@ -3,13 +3,13 @@
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use once_cell::sync::OnceCell;
+use gst::glib::once_cell::sync::OnceCell;
 
 use std::sync::atomic;
 use std::sync::Mutex;
 use std::thread;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use crate::ndi;
 

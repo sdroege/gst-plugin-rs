@@ -12,7 +12,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{debug, log, trace};
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use parking_lot::{Mutex, MutexGuard};
 use std::sync::atomic::{AtomicU32, Ordering};

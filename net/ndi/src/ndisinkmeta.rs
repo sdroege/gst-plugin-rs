@@ -53,7 +53,7 @@ impl fmt::Debug for NdiSinkAudioMeta {
 
 mod imp {
     use glib::translate::*;
-    use once_cell::sync::Lazy;
+    use gst::glib::once_cell::sync::Lazy;
     use std::mem;
     use std::ptr;
 

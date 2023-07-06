@@ -15,7 +15,7 @@ use aws_smithy_http::byte_stream::{error::Error, ByteStream};
 use bytes::{buf::BufMut, Bytes, BytesMut};
 use futures::stream::TryStreamExt;
 use futures::{future, Future};
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 use std::sync::Mutex;
 use std::time::Duration;
 use tokio::runtime;

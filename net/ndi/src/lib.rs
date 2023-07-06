@@ -28,7 +28,7 @@ mod ndisrcmeta;
 #[cfg(feature = "doc")]
 use gst::prelude::*;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]

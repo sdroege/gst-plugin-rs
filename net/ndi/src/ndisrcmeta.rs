@@ -69,7 +69,7 @@ impl fmt::Debug for NdiSrcMeta {
 mod imp {
     use super::StreamType;
     use glib::translate::*;
-    use once_cell::sync::Lazy;
+    use gst::glib::once_cell::sync::Lazy;
     use std::mem;
     use std::ptr;
 

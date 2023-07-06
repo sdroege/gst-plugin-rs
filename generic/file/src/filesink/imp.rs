@@ -54,7 +54,7 @@ pub struct FileSink {
     state: Mutex<State>,
 }
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "rsfilesink",

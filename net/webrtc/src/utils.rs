@@ -5,8 +5,8 @@ use std::{
 };
 
 use anyhow::{Context, Error};
+use gst::glib::once_cell::sync::Lazy;
 use gst::{glib, prelude::*};
-use once_cell::sync::Lazy;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(

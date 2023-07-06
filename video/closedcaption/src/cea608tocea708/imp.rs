@@ -16,7 +16,7 @@ use atomic_refcell::AtomicRefCell;
 use crate::cea608tocea708::fmt::Cea708ServiceWriter;
 use crate::cea608utils::*;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 #[derive(Debug, Copy, Clone)]
 enum Cea608Format {

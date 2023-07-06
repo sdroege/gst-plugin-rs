@@ -15,7 +15,7 @@ use gst_base::subclass::prelude::*;
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 use super::boxes;
 

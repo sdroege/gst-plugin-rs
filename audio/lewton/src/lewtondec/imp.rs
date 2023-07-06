@@ -18,7 +18,7 @@ use atomic_refcell::AtomicRefCell;
 
 use byte_slice_cast::*;
 
-use once_cell::sync::Lazy;
+use gst::glib::once_cell::sync::Lazy;
 
 struct State {
     header_bufs: (
