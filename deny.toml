@@ -121,32 +121,6 @@ version = "0.3"
 name = "base64"
 version = "0.13"
 
-# Various crates depend on an older version of windows-sys
-[[bans.skip]]
-name = "windows-sys"
-version = "0.42"
-[[bans.skip]]
-name = "windows_x86_64_msvc"
-version = "0.42"
-[[bans.skip]]
-name = "windows_x86_64_gnullvm"
-version = "0.42"
-[[bans.skip]]
-name = "windows_x86_64_gnu"
-version = "0.42"
-[[bans.skip]]
-name = "windows_i686_msvc"
-version = "0.42"
-[[bans.skip]]
-name = "windows_i686_gnu"
-version = "0.42"
-[[bans.skip]]
-name = "windows_aarch64_msvc"
-version = "0.42"
-[[bans.skip]]
-name = "windows_aarch64_gnullvm"
-version = "0.42"
-
 # Various crates depend on an older version of socket2
 [[bans.skip]]
 name = "socket2"
@@ -202,6 +176,17 @@ version = "0.12"
 [[bans.skip]]
 name = "itertools"
 version = "0.10"
+
+# rav1e depends on an old version of num-derive
+# https://github.com/xiph/rav1e/pull/3237
+[[bans.skip]]
+name = "num-derive"
+version = "0.3"
+
+# matchers depends on an old version of regex-automata
+[[bans.skip]]
+name = "regex-automata"
+version = "0.1"
 
 [sources]
 unknown-registry = "deny"
