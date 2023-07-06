@@ -9,9 +9,7 @@
 use gst::glib;
 use gst::prelude::*;
 
-use gio::prelude::*;
 use gtk::prelude::*;
-use gtk::Inhibit;
 use std::cell::RefCell;
 
 fn create_pipeline() -> (
@@ -275,11 +273,11 @@ fn create_ui(app: &gtk::Application) {
     window.connect_close_request(move |_| {
         let app = match app_weak.upgrade() {
             Some(app) => app,
-            None => return Inhibit(false),
+            None => return glib::ControlFlow::Break,
         };
 
         app.quit();
-        Inhibit(false)
+        glib::ControlFlow::Break
     });
 
     let bus = pipeline.bus().unwrap();
