@@ -549,8 +549,8 @@ fn setup_encoding(
         gst::Caps::builder("audio/x-raw").build()
     };
 
-    match codec.encoder.name().as_str() {
-        "vp8enc" | "vp9enc" => {
+    match codec.payloader.name().as_str() {
+        "rtpvp8pay" | "rtpvp9pay" => {
             pay.set_property_from_str("picture-id-mode", "15-bit");
         }
         _ => (),
