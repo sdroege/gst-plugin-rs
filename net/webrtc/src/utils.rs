@@ -586,6 +586,11 @@ impl Codec {
                 "rtpvp8pay" | "rtpvp9pay" => {
                     res = res.property_from_str("picture-id-mode", "15-bit");
                 }
+                "rtph264pay" | "rtph265pay" => {
+                    res = res
+                        .property_from_str("aggregate-mode", "zero-latency")
+                        .property("config-interval", -1i32);
+                }
                 _ => (),
             }
 
