@@ -553,6 +553,10 @@ fn setup_encoding(
         "rtpvp8pay" | "rtpvp9pay" => {
             pay.set_property_from_str("picture-id-mode", "15-bit");
         }
+        "rtph264pay" | "rtph265pay" => {
+            pay.set_property_from_str("aggregate-mode", "zero-latency");
+            pay.set_property("config-interval", -1i32);
+        }
         _ => (),
     }
 
