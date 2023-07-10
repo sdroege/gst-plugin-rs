@@ -582,8 +582,11 @@ impl Codec {
                 .property("mtu", 1200_u32)
                 .property("pt", pt);
 
-            if ["vp8enc", "vp9enc"].contains(&self.encoder_name().unwrap().as_str()) {
-                res = res.property_from_str("picture-id-mode", "15-bit");
+            match info.payloader.name().as_str() {
+                "rtpvp8pay" | "rtpvp9pay" => {
+                    res = res.property_from_str("picture-id-mode", "15-bit");
+                }
+                _ => (),
             }
 
             res.build().unwrap()
