@@ -2943,7 +2943,7 @@ impl BaseWebRTCSink {
         }
 
         let mut state = element.imp().state.lock().unwrap();
-        if let Some(mut stream) = state.streams.get_mut(&name) {
+        if let Some(stream) = state.streams.get_mut(&name) {
             stream.out_caps = Some(payloader_caps.clone());
         }
 
@@ -2997,7 +2997,7 @@ impl BaseWebRTCSink {
                     .unwrap()
                     .streams
                     .iter_mut()
-                    .for_each(|(_, mut stream)| {
+                    .for_each(|(_, stream)| {
                         if stream.sink_pad.upcast_ref::<gst::Pad>() == pad {
                             stream.in_caps = Some(e.caps().to_owned());
                         }

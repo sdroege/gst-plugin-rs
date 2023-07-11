@@ -1441,7 +1441,7 @@ impl FallbackSrc {
             None => return,
         };
 
-        let mut source = if fallback_source {
+        let source = if fallback_source {
             if let Some(ref mut source) = state.fallback_source {
                 source
             } else {

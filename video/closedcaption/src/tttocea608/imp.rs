@@ -488,7 +488,7 @@ impl TtToCea608 {
 
     fn generate(
         &self,
-        mut state: &mut State,
+        state: &mut State,
         settings: &Settings,
         pts: gst::ClockTime,
         duration: gst::ClockTime,

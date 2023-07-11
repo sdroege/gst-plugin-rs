@@ -132,7 +132,7 @@ impl AudioDecoderImpl for LewtonDec {
             reorder_map: None,
         });
 
-        let mut state = state_guard.as_mut().unwrap();
+        let state = state_guard.as_mut().unwrap();
 
         let s = caps.structure(0).unwrap();
         if let Ok(Some(streamheaders)) = s.get_optional::<gst::ArrayRef>("streamheader") {

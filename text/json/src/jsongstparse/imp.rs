@@ -507,7 +507,7 @@ impl JsonGstParse {
     fn loop_fn(&self) {
         let mut state = self.state.lock().unwrap();
         let State { ref mut pull, .. } = *state;
-        let mut pull = pull.as_mut().unwrap();
+        let pull = pull.as_mut().unwrap();
         let offset = pull.offset;
         let scan_duration = pull.duration.is_none();
 
@@ -519,7 +519,7 @@ impl JsonGstParse {
             match self.scan_duration() {
                 Ok(pts) => {
                     let mut state = self.state.lock().unwrap();
-                    let mut pull = state.pull.as_mut().unwrap();
+                    let pull = state.pull.as_mut().unwrap();
                     pull.duration = pts;
                 }
                 Err(err) => {
@@ -596,7 +596,7 @@ impl JsonGstParse {
         self.handle_buffer(Some(buffer))
     }
 
-    fn flush(&self, mut state: &mut State) {
+    fn flush(&self, state: &mut State) {
         state.reader.clear();
         if let Some(pull) = &mut state.pull {
             pull.offset = 0;

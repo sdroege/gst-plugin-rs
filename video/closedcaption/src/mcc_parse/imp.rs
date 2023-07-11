@@ -725,7 +725,7 @@ impl MccParse {
             ref mut pull,
             ..
         } = *state;
-        let mut pull = pull.as_mut().unwrap();
+        let pull = pull.as_mut().unwrap();
         let scan_tc_rate = tc_rate.is_none() && pull.duration.is_none();
         let offset = pull.offset;
 
@@ -763,12 +763,12 @@ impl MccParse {
                     match self.scan_duration() {
                         Ok(Some(tc)) => {
                             let mut state = self.state.lock().unwrap();
-                            let mut pull = state.pull.as_mut().unwrap();
+                            let pull = state.pull.as_mut().unwrap();
                             pull.duration = Some(tc.time_since_daily_jam());
                         }
                         Ok(None) => {
                             let mut state = self.state.lock().unwrap();
-                            let mut pull = state.pull.as_mut().unwrap();
+                            let pull = state.pull.as_mut().unwrap();
                             pull.duration = Some(gst::ClockTime::ZERO);
                         }
                         Err(err) => {

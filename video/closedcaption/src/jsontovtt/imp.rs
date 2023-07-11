@@ -205,7 +205,7 @@ impl State {
 
             /* Collect cues, fixing up their duration based on the next cue */
             while let Some(lines) = self.pending.front() {
-                if let Some(mut drained_line) = drained_lines.back_mut() {
+                if let Some(drained_line) = drained_lines.back_mut() {
                     drained_line.duration = lines.pts - drained_line.pts;
                 }
 
@@ -219,7 +219,7 @@ impl State {
             }
 
             /* cues that end a fragment must be clipped and cloned for the next fragment */
-            if let Some(mut drained_line) = drained_lines.back_mut() {
+            if let Some(drained_line) = drained_lines.back_mut() {
                 /* Clip to either the requested PTS, or segment stop if specified */
                 let end_pts = if running_time.is_none() {
                     self.last_pts.unwrap()
