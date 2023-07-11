@@ -1298,7 +1298,7 @@ impl ObjectSubclass for JitterBuffer {
 
     fn with_class(klass: &Self::Class) -> Self {
         let sink_pad_handler = SinkHandler::default();
-        let src_pad_handler = SrcHandler::default();
+        let src_pad_handler = SrcHandler;
 
         Self {
             sink_pad: PadSink::new(
