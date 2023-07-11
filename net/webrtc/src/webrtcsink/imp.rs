@@ -407,6 +407,40 @@ fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error
     Ok(ret.upcast())
 }
 
+/// Add a pad probe to convert force-keyunit events to the custom action signal based NVIDIA
+/// encoder API.
+fn add_nv4l2enc_force_keyunit_workaround(enc: &gst::Element) {
+    use std::sync::atomic::{self, AtomicBool};
+
+    let srcpad = enc.static_pad("src").unwrap();
+    let saw_buffer = AtomicBool::new(false);
+    srcpad
+        .add_probe(
+            gst::PadProbeType::BUFFER
+                | gst::PadProbeType::BUFFER_LIST
+                | gst::PadProbeType::EVENT_UPSTREAM,
+            move |pad, info| {
+                match info.data {
+                    Some(gst::PadProbeData::Buffer(..))
+                    | Some(gst::PadProbeData::BufferList(..)) => {
+                        saw_buffer.store(true, atomic::Ordering::SeqCst);
+                    }
+                    Some(gst::PadProbeData::Event(ref ev))
+                        if gst_video::ForceKeyUnitEvent::is(ev)
+                            && saw_buffer.load(atomic::Ordering::SeqCst) =>
+                    {
+                        let enc = pad.parent().unwrap();
+                        enc.emit_by_name::<()>("force-IDR", &[]);
+                    }
+                    _ => {}
+                }
+
+                gst::PadProbeReturn::Ok
+            },
+        )
+        .unwrap();
+}
+
 /// Default configuration for known encoders, can be disabled
 /// by returning True from an encoder-setup handler.
 fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
@@ -455,6 +489,7 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
                 enc.set_property("insert-sps-pps", true);
                 enc.set_property("insert-aud", true);
                 enc.set_property_from_str("control-rate", "constant_bitrate");
+                add_nv4l2enc_force_keyunit_workaround(enc);
             }
             "nvv4l2vp8enc" | "nvv4l2vp9enc" => {
                 enc.set_property("bitrate", start_bitrate);
@@ -462,6 +497,7 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
                 enc.set_property("maxperf-enable", true);
                 enc.set_property("idrinterval", 256u32);
                 enc.set_property_from_str("control-rate", "constant_bitrate");
+                add_nv4l2enc_force_keyunit_workaround(enc);
             }
             _ => (),
         }
