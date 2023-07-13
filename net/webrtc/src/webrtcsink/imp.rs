@@ -3035,7 +3035,18 @@ impl BaseWebRTCSink {
                     .iter_mut()
                     .for_each(|(_, stream)| {
                         if stream.sink_pad.upcast_ref::<gst::Pad>() == pad {
-                            stream.in_caps = Some(e.caps().to_owned());
+                            // We do not want VideoInfo to consider max-framerate
+                            // when computing fps, so we strip it away here
+                            let mut caps = e.caps().to_owned();
+                            {
+                                let mut_caps = caps.get_mut().unwrap();
+                                if let Some(s) = mut_caps.structure_mut(0) {
+                                    if s.has_name("video/x-raw") {
+                                        s.remove_field("max-framerate");
+                                    }
+                                }
+                            }
+                            stream.in_caps = Some(caps.to_owned());
                         }
                     });
             }
