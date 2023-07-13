@@ -2397,7 +2397,18 @@ impl WebRTCSink {
                         .iter_mut()
                         .for_each(|(_, mut stream)| {
                             if stream.sink_pad.upcast_ref::<gst::Pad>() == pad {
-                                stream.in_caps = Some(e.caps().to_owned());
+                                // We do not want VideoInfo to consider max-framerate
+                                // when computing fps, so we strip it away here
+                                let mut caps = e.caps().to_owned();
+                                {
+                                    let mut_caps = caps.get_mut().unwrap();
+                                    if let Some(s) = mut_caps.structure_mut(0) {
+                                        if s.has_name("video/x-raw") {
+                                            s.remove_field("max-framerate");
+                                        }
+                                    }
+                                }
+                                stream.in_caps = Some(caps.to_owned());
                             } else if stream.in_caps.is_none() {
                                 all_pads_have_caps = false;
                             }
