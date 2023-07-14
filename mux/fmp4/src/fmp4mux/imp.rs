@@ -1003,13 +1003,23 @@ impl FMP4Mux {
             let chunk_end_pts = chunk_start_pts + chunk_duration;
             let fragment_end_pts = fragment_start_pts + settings.fragment_duration;
 
-            gst::trace!(
-                CAT,
-                obj: stream.sinkpad,
-                "Current chunk end {}, current fragment end {}",
-                chunk_end_pts,
-                fragment_end_pts,
-            );
+            if fragment_end_pts < chunk_end_pts {
+                gst::trace!(
+                    CAT,
+                    obj: stream.sinkpad,
+                    "Current chunk end {}, current fragment end {}. Fragment end before chunk end, extending fragment",
+                    chunk_end_pts,
+                    fragment_end_pts,
+                );
+            } else {
+                gst::trace!(
+                    CAT,
+                    obj: stream.sinkpad,
+                    "Current chunk end {}, current fragment end {}",
+                    chunk_end_pts,
+                    fragment_end_pts,
+                );
+            }
 
             // First check if the next split should be the end of a fragment or the end of a chunk.
             // If both are the same then a fragment split has preference.
@@ -1025,7 +1035,18 @@ impl FMP4Mux {
                         gop.start_pts,
                         gop.end_pts,
                     );
-                    if gop.start_pts > fragment_end_pts {
+                    // If this GOP starts after the end of the current fragment, i.e. is not
+                    // included at all, then consider this stream filled as it won't contribute to
+                    // this fragment.
+                    //
+                    // However if the first buffer of the GOP is not actually a keyframe then we
+                    // previously drained a partial GOP because the GOP is ending too far after the
+                    // planned fragment end.
+                    if gop.start_pts > fragment_end_pts
+                        && !gop.buffers.first().map_or(false, |b| {
+                            b.buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
+                        })
+                    {
                         gst::debug!(CAT, obj: stream.sinkpad, "Stream's first GOP starting after this fragment");
                         stream.fragment_filled = true;
                         return;
@@ -1812,6 +1833,14 @@ impl FMP4Mux {
                     !s.sinkpad.is_eos()
                         && s.queued_gops.back().map_or(false, |gop| {
                             gop.start_pts <= fragment_start_pts + settings.fragment_duration
+                                // In chunk mode we might've drained a partial GOP as a chunk after
+                                // the fragment end if the keyframe came too late. The GOP now
+                                // starts with a non-keyframe after the fragment end but is part of
+                                // the fragment: the fragment is extended after the end. Allow this
+                                // situation here.
+                                || gop.buffers.first().map_or(false, |b| {
+                                    b.buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
+                                })
                         })
                 })
                 .map(|s| s.fragment_filled)
