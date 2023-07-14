@@ -240,7 +240,7 @@ impl GioSocketWrapper {
     }
 
     #[cfg(not(unix))]
-    pub fn set_tos(&self, qos_dscp: i32) -> Result<(), glib::Error> {
+    pub fn set_tos(&self, _qos_dscp: i32) -> Result<(), glib::Error> {
         Ok(())
     }
 
