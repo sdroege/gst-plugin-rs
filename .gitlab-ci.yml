@@ -268,7 +268,6 @@ documentation:
   variables:
     MESON_ARGS: >
       -Ddoc=enabled
-      -Domx=disabled
       -Dpython=disabled
       -Dlibav=disabled
       -Dlibnice=disabled
