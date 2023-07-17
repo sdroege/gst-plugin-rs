@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::utils::{cleanup_codec_caps, is_raw_caps, make_element, Codec, Codecs};
+use crate::utils::{cleanup_codec_caps, is_raw_caps, make_element, Codec, Codecs, NavigationEvent};
 use anyhow::Context;
 use gst::glib;
 use gst::prelude::*;
@@ -214,13 +214,6 @@ struct Session {
 enum SignallerState {
     Started,
     Stopped,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct NavigationEvent {
-    mid: Option<String>,
-    #[serde(flatten)]
-    event: gst_video::NavigationEvent,
 }
 
 // Used to ensure signal are disconnected when a new signaller is is

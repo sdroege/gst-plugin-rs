@@ -3,12 +3,14 @@
 use gst::prelude::*;
 
 use crate::signaller::{prelude::*, Signallable, Signaller};
-use crate::utils::{Codec, Codecs, AUDIO_CAPS, RTP_CAPS, VIDEO_CAPS};
+use crate::utils::{Codec, Codecs, NavigationEvent, AUDIO_CAPS, RTP_CAPS, VIDEO_CAPS};
 use crate::webrtcsrc::WebRTCSrcPad;
 use anyhow::{Context, Error};
 use gst::glib;
 use gst::glib::once_cell::sync::Lazy;
 use gst::subclass::prelude::*;
+use gst_webrtc::WebRTCDataChannel;
+use std::borrow::BorrowMut;
 use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::atomic::AtomicU16;
@@ -17,6 +19,7 @@ use std::sync::Mutex;
 use url::Url;
 
 const DEFAULT_STUN_SERVER: Option<&str> = Some("stun://stun.l.google.com:19302");
+const DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION: bool = false;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -35,6 +38,7 @@ struct Settings {
     meta: Option<gst::Structure>,
     video_codecs: Vec<Codec>,
     audio_codecs: Vec<Codec>,
+    enable_data_channel_navigation: bool,
 }
 
 #[derive(Default)]
@@ -83,6 +87,12 @@ impl ObjectImpl for WebRTCSrc {
                     ))
                     .element_spec(&glib::ParamSpecString::builder("audio-codec-name").build())
                     .build(),
+                glib::ParamSpecBoolean::builder("enable-data-channel-navigation")
+                    .nick("Enable data channel navigation")
+                    .blurb("Enable navigation events through a dedicated WebRTCDataChannel")
+                    .default_value(DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -127,6 +137,10 @@ impl ObjectImpl for WebRTCSrc {
                     .get::<Option<gst::Structure>>()
                     .expect("type checked upstream")
             }
+            "enable-data-channel-navigation" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.enable_data_channel_navigation = value.get::<bool>().unwrap();
+            }
             _ => unimplemented!(),
         }
     }
@@ -154,6 +168,10 @@ impl ObjectImpl for WebRTCSrc {
             .to_value(),
             "stun-server" => self.settings.lock().unwrap().stun_server.to_value(),
             "meta" => self.settings.lock().unwrap().meta.to_value(),
+            "enable-data-channel-navigation" => {
+                let settings = self.settings.lock().unwrap();
+                settings.enable_data_channel_navigation.to_value()
+            }
             name => panic!("{} getter not implemented", name),
         }
     }
@@ -219,6 +237,7 @@ impl Default for Settings {
                 .into_iter()
                 .filter(|codec| codec.has_decoder())
                 .collect(),
+            enable_data_channel_navigation: DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION,
         }
     }
 }
@@ -269,6 +288,24 @@ impl WebRTCSrc {
         })
     }
 
+    fn send_navigation_event(&self, evt: gst_video::NavigationEvent) {
+        if let Some(data_channel) = &self.state.lock().unwrap().data_channel.borrow_mut() {
+            let nav_event = NavigationEvent {
+                mid: None,
+                event: evt,
+            };
+            match serde_json::to_string(&nav_event).ok() {
+                Some(str) => {
+                    gst::trace!(CAT, imp: self, "Sending navigation event to peer");
+                    data_channel.send_string(Some(str.as_str()));
+                }
+                None => {
+                    gst::error!(CAT, imp: self, "Could not serialize navigation event");
+                }
+            }
+        }
+    }
+
     fn handle_webrtc_src_pad(&self, bin: &gst::Bin, pad: &gst::Pad) {
         let srcpad = self.get_src_pad_from_webrtcbin_pad(pad);
         if let Some(ref srcpad) = srcpad {
@@ -313,6 +350,19 @@ impl WebRTCSrc {
                 gst::Pad::event_default(pad, parent, event)
             }))
             .build();
+
+        if self.settings.lock().unwrap().enable_data_channel_navigation {
+            pad.add_probe(gst::PadProbeType::EVENT_UPSTREAM,
+                glib::clone!(@weak self as this => @default-panic, move |_pad, info| {
+                    if let Some(gst::PadProbeData::Event(ref ev)) = info.data {
+                        if let gst::EventView::Navigation(ev) = ev.view() {
+                            this.send_navigation_event (gst_video::NavigationEvent::parse(ev).unwrap());
+                        }
+                    }
+                    gst::PadProbeReturn::Ok
+                })
+            );
+        }
 
         bin.add_pad(&ghostpad)
             .expect("Adding ghostpad to the bin should always work");
@@ -443,6 +493,16 @@ impl WebRTCSrc {
                     sdp_m_line_index: u32,
                     candidate: String| {
                 this.unwrap().on_ice_candidate(sdp_m_line_index, candidate);
+            }),
+        );
+
+        webrtcbin.connect_closure(
+            "on-data-channel",
+            false,
+            glib::closure!(@weak-allow-none self as this => move |
+                    _webrtcbin: gst::Bin,
+                    data_channel: glib::Object| {
+                this.unwrap().on_data_channel(data_channel);
             }),
         );
 
@@ -654,7 +714,6 @@ impl WebRTCSrc {
                     .map(|codec| codec.name.clone())
                     .collect::<HashSet<String>>()
             };
-
             let caps = media
                 .formats()
                 .filter_map(|format| {
@@ -815,6 +874,12 @@ impl WebRTCSrc {
         gst::log!(CAT, imp: self, "Sending SDP, {}", answer.sdp().to_string());
         let signaller = self.signaller();
         signaller.send_sdp(&session_id, &answer);
+    }
+
+    fn on_data_channel(&self, data_channel: glib::Object) {
+        gst::info!(CAT, imp: self, "Received data channel {data_channel:?}");
+        let mut state = self.state.lock().unwrap();
+        state.data_channel = data_channel.dynamic_cast::<WebRTCDataChannel>().ok();
     }
 
     fn on_ice_candidate(&self, sdp_m_line_index: u32, candidate: String) {
@@ -978,6 +1043,16 @@ impl ElementImpl for WebRTCSrc {
 
         ret
     }
+
+    fn send_event(&self, event: gst::Event) -> bool {
+        match event.view() {
+            gst::EventView::Navigation(ev) => {
+                self.send_navigation_event(gst_video::NavigationEvent::parse(ev).unwrap());
+                true
+            }
+            _ => true,
+        }
+    }
 }
 
 impl GstObjectImpl for WebRTCSrc {}
@@ -1056,6 +1131,7 @@ struct State {
     webrtcbin: Option<gst::Element>,
     flow_combiner: gst_base::UniqueFlowCombiner,
     signaller_signals: Option<SignallerSignals>,
+    data_channel: Option<WebRTCDataChannel>,
 }
 
 impl Default for State {
@@ -1066,6 +1142,7 @@ impl Default for State {
             webrtcbin: None,
             flow_combiner: Default::default(),
             signaller_signals: Default::default(),
+            data_channel: None,
         }
     }
 }

@@ -894,3 +894,10 @@ pub fn cleanup_codec_caps(mut caps: gst::Caps) -> gst::Caps {
 
     caps
 }
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct NavigationEvent {
+    pub mid: Option<String>,
+    #[serde(flatten)]
+    pub event: gst_video::NavigationEvent,
+}
