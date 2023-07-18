@@ -360,7 +360,7 @@ impl Default for State {
     }
 }
 
-fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error> {
+fn make_converter_for_video_caps(caps: &gst::Caps, codec: &Codec) -> Result<gst::Element, Error> {
     assert!(caps.is_fixed());
 
     let video_info = gst_video::VideoInfo::from_caps(caps)?;
@@ -369,7 +369,27 @@ fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error
 
     let (head, mut tail) = {
         if let Some(feature) = caps.features(0) {
-            if feature.contains(CUDA_MEMORY_FEATURE) {
+            if feature.contains(NVMM_MEMORY_FEATURE)
+                // NVIDIA V4L2 encoders require NVMM memory as input and that requires using the
+                // corresponding converter
+                || codec
+                    .encoder_factory()
+                    .map_or(false, |factory| factory.name().starts_with("nvv4l2"))
+            {
+                let queue = make_element("queue", None)?;
+                let nvconvert = if let Ok(nvconvert) = make_element("nvvideoconvert", None) {
+                    nvconvert.set_property_from_str("compute-hw", "Default");
+                    nvconvert.set_property_from_str("nvbuf-memory-type", "nvbuf-mem-default");
+                    nvconvert
+                } else {
+                    make_element("nvvidconv", None)?
+                };
+
+                ret.add_many([&queue, &nvconvert])?;
+                gst::Element::link_many([&queue, &nvconvert])?;
+
+                (queue, nvconvert)
+            } else if feature.contains(CUDA_MEMORY_FEATURE) {
                 if let Some(convert_factory) = gst::ElementFactory::find("cudaconvert") {
                     let cudaupload = make_element("cudaupload", None)?;
                     let cudaconvert = convert_factory.create().build()?;
@@ -403,20 +423,6 @@ fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error
                 gst::Element::link_many([&glupload, &glconvert, &glscale])?;
 
                 (glupload, glscale)
-            } else if feature.contains(NVMM_MEMORY_FEATURE) {
-                let queue = make_element("queue", None)?;
-                let nvconvert = if let Ok(nvconvert) = make_element("nvvideoconvert", None) {
-                    nvconvert.set_property_from_str("compute-hw", "Default");
-                    nvconvert.set_property_from_str("nvbuf-memory-type", "nvbuf-mem-default");
-                    nvconvert
-                } else {
-                    make_element("nvvidconv", None)?
-                };
-
-                ret.add_many([&queue, &nvconvert])?;
-                gst::Element::link_many([&queue, &nvconvert])?;
-
-                (queue, nvconvert)
             } else {
                 let convert = make_element("videoconvert", None)?;
                 let scale = make_element("videoscale", None)?;
@@ -619,7 +625,7 @@ impl EncodingChainBuilder {
 
         let (raw_filter, encoder) = if needs_encoding {
             elements.push(match self.codec.is_video() {
-                true => make_converter_for_video_caps(&self.input_caps)?.upcast(),
+                true => make_converter_for_video_caps(&self.input_caps, &self.codec)?.upcast(),
                 false => {
                     gst::parse_bin_from_description("audioresample ! audioconvert", true)?.upcast()
                 }
@@ -2761,7 +2767,7 @@ impl BaseWebRTCSink {
         let src = discovery_info.create_src();
         let mut elements = vec![src.clone().upcast::<gst::Element>()];
         let encoding_chain_src = if codec.is_video() && has_raw_input {
-            elements.push(make_converter_for_video_caps(&input_caps)?);
+            elements.push(make_converter_for_video_caps(&input_caps, &codec)?);
 
             let capsfilter = make_element("capsfilter", Some("raw_capsfilter"))?;
             elements.push(capsfilter.clone());
