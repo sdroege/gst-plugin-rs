@@ -28,27 +28,27 @@ const MAX_REDIRECTS: u8 = 10;
 const DEFAULT_TIMEOUT: u32 = 15;
 
 #[derive(Debug)]
-enum State {
+enum WhipClientState {
     Stopped,
     Post { redirects: u8 },
     Running { whip_resource_url: String },
 }
 
-impl Default for State {
+impl Default for WhipClientState {
     fn default() -> Self {
         Self::Stopped
     }
 }
 
 #[derive(Clone)]
-struct Settings {
+struct WhipClientSettings {
     whip_endpoint: Option<String>,
     use_link_headers: bool,
     auth_token: Option<String>,
     timeout: u32,
 }
 
-impl Default for Settings {
+impl Default for WhipClientSettings {
     fn default() -> Self {
         Self {
             whip_endpoint: None,
@@ -60,13 +60,13 @@ impl Default for Settings {
 }
 
 #[derive(Default)]
-pub struct Signaller {
-    state: Mutex<State>,
-    settings: Mutex<Settings>,
+pub struct WhipClient {
+    state: Mutex<WhipClientState>,
+    settings: Mutex<WhipClientSettings>,
     canceller: Mutex<Option<futures::future::AbortHandle>>,
 }
 
-impl Signaller {
+impl WhipClient {
     fn raise_error(&self, msg: String) {
         self.obj()
             .emit_by_name::<()>("error", &[&format!("Error: {msg}")]);
@@ -84,7 +84,7 @@ impl Signaller {
     async fn send_offer(&self, webrtcbin: &gst::Element) {
         {
             let mut state = self.state.lock().unwrap();
-            *state = State::Post { redirects: 0 };
+            *state = WhipClientState::Post { redirects: 0 };
             drop(state);
         }
 
@@ -148,7 +148,7 @@ impl Signaller {
         {
             let state = self.state.lock().unwrap();
             redirects = match *state {
-                State::Post { redirects } => redirects,
+                WhipClientState::Post { redirects } => redirects,
                 _ => {
                     self.raise_error("Trying to do POST in unexpected state".to_string());
                     return;
@@ -268,7 +268,7 @@ impl Signaller {
                 {
                     let mut state = self.state.lock().unwrap();
                     *state = match *state {
-                        State::Post { redirects: _r } => State::Running {
+                        WhipClientState::Post { redirects: _r } => WhipClientState::Running {
                             whip_resource_url: url.to_string(),
                         },
                         _ => {
@@ -306,22 +306,24 @@ impl Signaller {
                             {
                                 let mut state = self.state.lock().unwrap();
                                 *state = match *state {
-                                    State::Post { redirects: _r } => State::Post {
-                                        redirects: redirects + 1,
-                                    },
+                                    WhipClientState::Post { redirects: _r } => {
+                                        WhipClientState::Post {
+                                            redirects: redirects + 1,
+                                        }
+                                    }
                                     /*
                                      * As per section 4.6 of the specification, redirection is
                                      * not required to be supported for the PATCH and DELETE
                                      * requests to the final WHEP resource URL. Only the initial
                                      * POST request may support redirection.
                                      */
-                                    State::Running { .. } => {
+                                    WhipClientState::Running { .. } => {
                                         self.raise_error(
                                             "Unexpected redirection in RUNNING state".to_string(),
                                         );
                                         return;
                                     }
-                                    State::Stopped => unreachable!(),
+                                    WhipClientState::Stopped => unreachable!(),
                                 };
                                 drop(state);
                             }
@@ -362,7 +364,7 @@ impl Signaller {
         let timeout = settings.timeout;
 
         let resource_url = match *state {
-            State::Running {
+            WhipClientState::Running {
                 whip_resource_url: ref resource_url,
             } => resource_url.clone(),
             _ => {
@@ -416,7 +418,7 @@ impl Signaller {
     }
 }
 
-impl SignallableImpl for Signaller {
+impl SignallableImpl for WhipClient {
     fn start(&self) {
         if self.settings.lock().unwrap().whip_endpoint.is_none() {
             self.raise_error("WHIP endpoint URL must be set".to_string());
@@ -426,7 +428,7 @@ impl SignallableImpl for Signaller {
         self.obj().connect_closure(
             "consumer-added",
             false,
-            glib::closure!(|signaller: &super::WhipSignaller,
+            glib::closure!(|signaller: &super::WhipClientSignaller,
                             _consumer_identifier: &str,
                             webrtcbin: &gst::Element| {
                 let obj_weak = signaller.downgrade();
@@ -475,7 +477,7 @@ impl SignallableImpl for Signaller {
         }
 
         let state = self.state.lock().unwrap();
-        if let State::Running { .. } = *state {
+        if let WhipClientState::Running { .. } = *state {
             // Release server-side resources
             drop(state);
         }
@@ -490,7 +492,7 @@ impl SignallableImpl for Signaller {
         }
 
         let state = self.state.lock().unwrap();
-        if let State::Running { .. } = *state {
+        if let WhipClientState::Running { .. } = *state {
             // Release server-side resources
             drop(state);
             self.terminate_session();
@@ -499,14 +501,14 @@ impl SignallableImpl for Signaller {
 }
 
 #[glib::object_subclass]
-impl ObjectSubclass for Signaller {
-    const NAME: &'static str = "GstWHIPWebRTCSinkSignaller";
-    type Type = super::WhipSignaller;
+impl ObjectSubclass for WhipClient {
+    const NAME: &'static str = "GstWhipClientSignaller";
+    type Type = super::WhipClientSignaller;
     type ParentType = glib::Object;
     type Interfaces = (Signallable,);
 }
 
-impl ObjectImpl for Signaller {
+impl ObjectImpl for WhipClient {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![glib::ParamSpecString::builder("whip-endpoint")

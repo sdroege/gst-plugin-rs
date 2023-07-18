@@ -6,13 +6,13 @@ use gst::glib;
 mod imp;
 
 glib::wrapper! {
-    pub struct WhipSignaller(ObjectSubclass<imp::Signaller>) @implements Signallable;
+    pub struct WhipClientSignaller(ObjectSubclass<imp::WhipClient>) @implements Signallable;
 }
 
-unsafe impl Send for WhipSignaller {}
-unsafe impl Sync for WhipSignaller {}
+unsafe impl Send for WhipClientSignaller {}
+unsafe impl Sync for WhipClientSignaller {}
 
-impl Default for WhipSignaller {
+impl Default for WhipClientSignaller {
     fn default() -> Self {
         glib::Object::new()
     }

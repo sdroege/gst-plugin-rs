@@ -24,7 +24,7 @@ use super::{WebRTCSinkCongestionControl, WebRTCSinkError, WebRTCSinkMitigationMo
 use crate::aws_kvs_signaller::AwsKvsSignaller;
 use crate::livekit_signaller::LiveKitSignaller;
 use crate::signaller::{prelude::*, Signallable, Signaller, WebRTCSignallerRole};
-use crate::whip_signaller::WhipSignaller;
+use crate::whip_signaller::WhipClientSignaller;
 use crate::RUNTIME;
 use std::collections::{BTreeMap, HashSet};
 
@@ -4131,7 +4131,7 @@ impl ObjectImpl for WhipWebRTCSink {
         let element = self.obj();
         let ws = element.upcast_ref::<super::BaseWebRTCSink>().imp();
 
-        let _ = ws.set_signaller(WhipSignaller::default().upcast());
+        let _ = ws.set_signaller(WhipClientSignaller::default().upcast());
     }
 }
 
