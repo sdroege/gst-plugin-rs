@@ -14,7 +14,7 @@ include:
     file: '/.gitlab-image-tags.yml'
 
 variables:
-  FDO_UPSTREAM_REPO: gstreamer/gst-plugins-rs
+  FDO_UPSTREAM_REPO: gstreamer/gstreamer-rs
 
   # We use GStreamer image to build the documentation as it is the simplest way
   # to ensure that we are testing against the same thing as GStreamer itself.
@@ -39,7 +39,6 @@ default:
 
 stages:
   - "trigger"
-  - "prep"
   - "lint"
   - "test"
   - "extras"
@@ -68,7 +67,9 @@ trigger:
 
 .debian:12:
   variables:
-    FDO_DISTRIBUTION_VERSION: 'bookworm-slim'
+    SODIUM_USE_PKG_CONFIG: "true"
+  after_script:
+    - rm -rf target
   before_script:
     - source ./ci/env.sh
     - mkdir .cargo && echo -e "[net]\ngit-fetch-with-cli = true" > .cargo/config
@@ -82,112 +83,15 @@ trigger:
 
 .debian:12-stable:
   extends: .debian:12
-  variables:
-    FDO_DISTRIBUTION_TAG: '$GST_RS_STABLE-${GST_RS_IMG_TAG}_2023-02-20.0'
-    FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bookworm-slim:$GST_RS_STABLE-$GST_RS_IMG_TAG"
+  image: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bookworm-slim:$GST_RS_STABLE-$GST_RS_IMG_TAG"
 
 .debian:12-msrv:
   extends: .debian:12
-  variables:
-    FDO_DISTRIBUTION_TAG: '$GST_RS_MSRV-${GST_RS_IMG_TAG}_2023-02-20.0'
-    FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bookworm-slim:$GST_RS_MSRV-$GST_RS_IMG_TAG"
+  image: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bookworm-slim:$GST_RS_MSRV-$GST_RS_IMG_TAG"
 
 .debian:12-nightly:
   extends: .debian:12
-  variables:
-    FDO_DISTRIBUTION_TAG: 'nightly-${GST_RS_IMG_TAG}_2023-02-20.0'
-    FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bookworm-slim:nightly-$GST_RS_IMG_TAG"
-
-.build-debian-container:
-  extends:
-  - .fdo.container-build@debian
-  stage: prep
-  variables:
-    FDO_DISTRIBUTION_PACKAGES: "libcsound64-dev llvm clang nasm libsodium-dev libwebp-dev python3-pip"
-    FDO_DISTRIBUTION_EXEC: >-
-      bash ci/install-dav1d.sh &&
-      apt clean &&
-      bash ./ci/install-rust-ext.sh &&
-      pip install tomli --break-system-packages
-  needs:
-    - "trigger"
-  rules:
-    - if: '$UPDATE_IMG == null'
-
-build-stable:
-  extends:
-    - .build-debian-container
-    - .debian:12-stable
-
-build-msrv:
-  extends:
-    - .build-debian-container
-    - .debian:12-msrv
-
-build-nightly:
-  extends:
-    - .build-debian-container
-    - .debian:12-nightly
-
-# Those jobs are triggered by gstreamer-rs when updating its images
-update-stable:
-  extends: build-stable
-  rules:
-    - if: '$UPDATE_IMG == "stable"'
-  variables:
-      FDO_FORCE_REBUILD: 1
-
-update-msrv:
-  extends: build-msrv
-  rules:
-    - if: '$UPDATE_IMG == "msrv"'
-  variables:
-      FDO_FORCE_REBUILD: 1
-
-update-nightly:
-  extends: build-nightly
-  rules:
-    - if: '$UPDATE_IMG == "nightly"'
-  variables:
-      FDO_FORCE_REBUILD: 1
-
-.dist-debian-container:
-  extends:
-  - .fdo.distribution-image@debian
-  variables:
-    SODIUM_USE_PKG_CONFIG: "true"
-  after_script:
-    - rm -rf target
-
-.img-stable:
-  extends:
-    - .dist-debian-container
-    - .debian:12-stable
-  needs:
-    - job: 'build-stable'
-      optional: true
-    - job: 'update-stable'
-      optional: true
-
-.img-msrv:
-  extends:
-    - .dist-debian-container
-    - .debian:12-msrv
-  needs:
-    - job: 'build-msrv'
-      optional: true
-    - job: 'update-msrv'
-      optional: true
-
-.img-nightly:
-  extends:
-    - .dist-debian-container
-    - .debian:12-nightly
-  needs:
-    - job: 'build-nightly'
-      optional: true
-    - job: 'update-nightly'
-      optional: true
+  image: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bookworm-slim:nightly-$GST_RS_IMG_TAG"
 
 .cargo test:
   stage: "test"
@@ -208,35 +112,31 @@ update-nightly:
 test msrv:
   extends:
     - '.cargo test'
-    - .img-msrv
-  rules:
-    - if: '$UPDATE_IMG == null || $UPDATE_IMG == "msrv"'
+    - '.debian:12-msrv'
+  needs: [ "trigger" ]
 
 test stable:
   extends:
     - '.cargo test'
-    - .img-stable
-  rules:
-    - if: '$UPDATE_IMG == null || $UPDATE_IMG == "stable"'
+    - '.debian:12-stable'
+  needs: [ "trigger" ]
 
 test nightly:
   allow_failure: true
   extends:
     - '.cargo test'
-    - .img-nightly
-  rules:
-    - if: '$UPDATE_IMG == null || $UPDATE_IMG == "nightly"'
+    - '.debian:12-nightly'
+  needs: [ "trigger" ]
 
 .meson:
-  extends: .img-stable
-  rules:
-    - if: '$UPDATE_IMG == null || $UPDATE_IMG == "stable"'
+  extends: .debian:12-stable
   variables:
     # csound-sys only looks at /usr/lib and /usr/local top levels
     CSOUND_LIB_DIR: '/usr/lib/x86_64-linux-gnu/'
 
 meson shared:
   extends: .meson
+  needs: [ "trigger" ]
   variables:
     CI_ARTIFACTS_URL: "${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/raw/"
   script:
@@ -254,6 +154,7 @@ meson shared:
 
 meson static:
   extends: .meson
+  needs: [ "trigger" ]
   script:
     - meson build --default-library=static --prefix=$(pwd)/install -Dsodium-source=built-in
     - ninja -C build install
@@ -391,63 +292,66 @@ test windows stable:
   image: "$WINDOWS_RUST_STABLE_IMAGE"
 
 rustfmt:
-  extends: .img-stable
+  extends: '.debian:12-stable'
   stage: "lint"
-  rules:
-    - when: 'always'
+  needs: []
   script:
     - cargo fmt --version
     - cargo fmt -- --color=always --check
 
 typos:
-  extends: .img-stable
+  extends: '.debian:12-stable'
   stage: "lint"
-  rules:
-    - when: 'always'
+  needs: []
   script:
     - typos
 
 gstwebrtc-api lint:
   image: node:lts
   stage: "lint"
-  rules:
-    - when: 'always'
+  needs: []
   script:
     - cd net/webrtc/gstwebrtc-api
     - npm install
     - npm run check
 
 check commits:
-  extends: .img-stable
+  extends: '.debian:12-stable'
   stage: "lint"
-  rules:
-    - when: 'always'
+  needs: []
   script:
     - ci-fairy check-commits --textwidth 0 --no-signed-off-by
     - ci/check-for-symlinks.sh
 
 clippy:
-  extends: .img-stable
+  extends: '.debian:12-stable'
+  needs:
+  - "trigger"
+  - "test stable"
   stage: 'extras'
   variables:
     # csound-sys only looks at /usr/lib and /usr/local top levels
     CSOUND_LIB_DIR: '/usr/lib/x86_64-linux-gnu/'
-  rules:
-    - when: 'always'
   script:
     - cargo clippy --locked --color=always --all --all-features --all-targets -- -D warnings -A unknown-lints
 
 deny:
-  extends: .img-stable
+  extends: .debian:12-stable
   stage: 'extras'
+  needs:
+  - "trigger"
+  - "test stable"
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
   script:
     - cargo deny check
 
 outdated:
-  extends: .img-stable
+  extends: '.debian:12-stable'
   allow_failure: true
+  needs:
+  - "trigger"
+  - "test stable"
   stage: 'extras'
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
@@ -457,10 +361,11 @@ outdated:
 coverage:
   allow_failure: true
   extends:
-    - .img-stable
+    - '.debian:12-stable'
+  needs:
+  - "trigger"
+  - "test stable"
   stage: 'extras'
-  rules:
-    - when: 'always'
   variables:
     RUSTFLAGS: "-Cinstrument-coverage"
     LLVM_PROFILE_FILE: "gst-plugins-rs-%p-%m.profraw"
