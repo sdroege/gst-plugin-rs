@@ -5,6 +5,7 @@ use gst::prelude::*;
 use crate::signaller::{prelude::*, Signallable, Signaller};
 use crate::utils::{Codec, Codecs, NavigationEvent, AUDIO_CAPS, RTP_CAPS, VIDEO_CAPS};
 use crate::webrtcsrc::WebRTCSrcPad;
+use crate::whip_signaller::WhipServerSignaller;
 use anyhow::{Context, Error};
 use gst::glib;
 use gst::glib::once_cell::sync::Lazy;
@@ -552,6 +553,9 @@ impl BaseWebRTCSrc {
             }),
         );
 
+        self.signaller()
+            .emit_by_name::<()>("webrtcbin-ready", &[&"none", &webrtcbin]);
+
         bin.add(&webrtcbin).unwrap();
         self.obj().add(&bin).context("Could not add `webrtcbin`")?;
 
@@ -995,6 +999,16 @@ impl BaseWebRTCSrc {
             gst::info!(CAT, imp: self, "Stopped signaller");
         }
     }
+
+    pub fn set_signaller(&self, signaller: Signallable) -> Result<(), Error> {
+        let sigobj = signaller.clone();
+        let mut settings = self.settings.lock().unwrap();
+
+        self.connect_signaller(&sigobj);
+        settings.signaller = signaller;
+
+        Ok(())
+    }
 }
 
 impl ElementImpl for BaseWebRTCSrc {
@@ -1224,4 +1238,58 @@ impl ObjectSubclass for WebRTCSrc {
     type Type = super::WebRTCSrc;
     type ParentType = super::BaseWebRTCSrc;
     type Interfaces = (gst::URIHandler,);
+}
+
+#[derive(Default)]
+pub struct WhipServerSrc {}
+
+impl ObjectImpl for WhipServerSrc {
+    fn constructed(&self) {
+        self.parent_constructed();
+        let element = self.obj();
+        let ws = element.upcast_ref::<super::BaseWebRTCSrc>().imp();
+
+        let _ = ws.set_signaller(WhipServerSignaller::default().upcast());
+
+        let obj = &*self.obj();
+
+        obj.set_suppressed_flags(gst::ElementFlags::SINK | gst::ElementFlags::SOURCE);
+        obj.set_element_flags(gst::ElementFlags::SOURCE);
+
+        let settings = ws.settings.lock().unwrap();
+        element
+            .bind_property("stun-server", &settings.signaller, "stun-server")
+            .build();
+        element
+            .bind_property("turn-servers", &settings.signaller, "turn-servers")
+            .build();
+    }
+}
+
+impl GstObjectImpl for WhipServerSrc {}
+
+impl BinImpl for WhipServerSrc {}
+
+impl ElementImpl for WhipServerSrc {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "WhipServerSrc",
+                "Source/Network/WebRTC",
+                "WebRTC source element using WHIP Server as the signaller",
+                "Taruntej Kanakamalla <taruntej@asymptotic.io>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+}
+
+impl BaseWebRTCSrcImpl for WhipServerSrc {}
+
+#[glib::object_subclass]
+impl ObjectSubclass for WhipServerSrc {
+    const NAME: &'static str = "GstWhipServerSrc";
+    type Type = super::WhipServerSrc;
+    type ParentType = super::BaseWebRTCSrc;
 }

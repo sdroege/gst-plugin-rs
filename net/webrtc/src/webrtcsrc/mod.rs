@@ -50,6 +50,10 @@ glib::wrapper! {
 }
 
 glib::wrapper! {
+    pub struct WhipServerSrc(ObjectSubclass<imp::WhipServerSrc>) @extends BaseWebRTCSrc, gst::Bin, gst::Element, gst::Object, @implements gst::URIHandler, gst::ChildProxy;
+}
+
+glib::wrapper! {
     pub struct WebRTCSrcPad(ObjectSubclass<pad::WebRTCSrcPad>) @extends gst::GhostPad, gst::ProxyPad, gst::Pad, gst::Object;
 }
 
@@ -63,5 +67,14 @@ pub fn register(plugin: Option<&gst::Plugin>) -> Result<(), glib::BoolError> {
         "webrtcsrc",
         gst::Rank::PRIMARY,
         WebRTCSrc::static_type(),
-    )
+    )?;
+
+    gst::Element::register(
+        plugin,
+        "whipserversrc",
+        gst::Rank::PRIMARY,
+        WhipServerSrc::static_type(),
+    )?;
+
+    Ok(())
 }

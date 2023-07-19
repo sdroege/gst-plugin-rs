@@ -245,7 +245,11 @@ AWS_ACCESS_KEY_ID="XXX" AWS_SECRET_ACCESS_KEY="XXX" gst-launch-1.0 videotestsrc 
 
 ## Using the WHIP Signaller
 
-Testing the whip signaller can be done by setting up janus and
+### WHIP Client
+
+WHIP Client Signaller uses BaseWebRTCSink
+
+Testing the whip client as the signaller can be done by setting up janus and
 <https://github.com/meetecho/simple-whip-server/>.
 
 * Set up a [janus] instance with the videoroom plugin configured
@@ -268,6 +272,53 @@ gst-launch-1.0 -e uridecodebin uri=file:///home/meh/path/to/video/file ! \
 ```
 
 You should see a second video displayed in the videoroomtest web page.
+
+### WHIP Server
+
+WHIP Server Signaller uses BaseWebRTCSrc
+
+The WHIP Server as the signaller can be tested in two ways.
+
+Note: The initial version of `whipserversrc` does not check any auth or encryption.
+Host application using `whipserversrc` behind an HTTP(s) proxy to enforce the auth and encryption between the WHIP client and server
+
+#### 1. Using  the Gstreamer element `whipwebrtcsink`
+
+a. In one tab of the terminal start the WHIP server using the below command
+
+``` shell
+RUST_BACKTRACE=full GST_DEBUG=webrtc*:6 GST_PLUGIN_PATH=target/x86_64-unknown-linux-gnu/debug:$GST_PLUGIN_PATH gst-launch-1.0 whipserversrc signaller::host-addr=http://127.0.0.1:8190 stun-server="stun://stun.l.google.com:19302" turn-servers="\<\"turns://user1:pass1@turn.serverone.com:7806\", \"turn://user2:pass2@turn.servertwo.com:7809\"\>" ! videoconvert ! autovideosink
+```
+
+b. In the second tab start the WHIP Client by sending a test video as shown in the below command
+
+``` shell
+RUST_BACKTRACE=full GST_DEBUG=webrtc*:6 GST_PLUGIN_PATH=target/x86_64-unknown-linux-gnu/debug:$GST_PLUGIN_PATH gst-launch-1.0 videotestsrc ! videoconvert ! video/x-raw ! queue ! \
+  whipwebrtcsink name=ws signaller::whip-endpoint="http://127.0.0.1:8190/whip/endpoint"
+```
+
+#### 2. Using Meetecho's `simple-whip-client`
+
+Set up the simple whip client using using the instructions present in https://github.com/meetecho/simple-whip-client#readme
+
+a. In one tab of the terminal start the WHIP server using the below command
+
+``` shell
+RUST_BACKTRACE=full GST_DEBUG=webrtc*:6 GST_PLUGIN_PATH=target/x86_64-unknown-linux-gnu/debug:$GST_PLUGIN_PATH gst-launch-1.0 whipserversrc signaller::host-addr=http://127.0.0.1:8190 stun-server="stun://stun.l.google.com:19302" turn-servers="\<\"turns://user1:pass1@turn.serverone.com:7806\", \"turn://user2:pass2@turn.servertwo.com:7809\"\>" name=ws ! videoconvert ! autovideosink ws. ! audioconvert ! autoaudiosink
+```
+
+b. In the second tab start the `simple-whip-client` as shown in the below command
+
+``` shell
+./whip-client --url http://127.0.0.1:8190/whip/endpoint \
+        -A "audiotestsrc is-live=true wave=red-noise ! audioconvert ! audioresample ! queue ! opusenc ! rtpopuspay pt=100 ssrc=1 ! queue ! application/x-rtp,media=audio,encoding-name=OPUS,payload=100" \
+        -V "videotestsrc is-live=true pattern=ball ! videoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay pt=96 ssrc=2 ! queue ! application/x-rtp,media=video,encoding-name=VP8,payload=96" \
+        -S stun://stun.l.google.com:19302 \
+        -l 7 \
+        -n true
+```
+
+Terminating the client will close the session and the client should receive 200 (OK) as the response to the DELETE request
 
 ## Using the LiveKit Signaller
 

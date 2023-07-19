@@ -357,6 +357,43 @@ pub fn set_ice_servers(
     Ok(())
 }
 
+pub fn build_link_header(url_str: &str) -> Result<String, url::ParseError> {
+    let url = url::Url::parse(url_str)?;
+
+    let mut link_str: String = "<".to_owned() + url.scheme();
+    if let Some(host) = url.host_str() {
+        link_str = link_str + ":" + host;
+    }
+
+    if let Some(port) = url.port() {
+        link_str = link_str + ":" + port.to_string().as_str();
+    }
+
+    link_str += url.path();
+
+    if let Some(query) = url.query() {
+        link_str = link_str + "?" + query;
+    }
+
+    link_str += ">";
+
+    if let Some(password) = url.password() {
+        link_str = link_str
+            + "; "
+            + "rel=\"ice-server\""
+            + "; "
+            + "username=\""
+            + url.username()
+            + "\"; "
+            + "credential:\""
+            + password
+            + "\"; "
+            + "credential-type:\"password\";";
+    }
+
+    Ok(link_str)
+}
+
 /// Wrapper around `gst::ElementFactory::make` with a better error
 /// message
 pub fn make_element(element: &str, name: Option<&str>) -> Result<gst::Element, Error> {

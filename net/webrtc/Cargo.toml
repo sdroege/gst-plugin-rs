@@ -54,6 +54,9 @@ async-recursion = "1.0.0"
 livekit-protocol = { version = "0.2" }
 livekit-api = { version = "0.2", default-features = false, features = ["signal-client", "access-token", "native-tls"] }
 
+warp = "0.3"
+crossbeam-channel = "0.5"
+
 [dev-dependencies]
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
