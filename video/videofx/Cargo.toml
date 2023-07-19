@@ -6,7 +6,7 @@ repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
 description = "GStreamer Rust Video Effects Plugin"
 edition = "2021"
-rust-version = "1.66"
+rust-version = "1.70"
 
 [dependencies]
 cairo-rs = { git = "https://github.com/gtk-rs/gtk-rs-core", features=["use_glib"] }

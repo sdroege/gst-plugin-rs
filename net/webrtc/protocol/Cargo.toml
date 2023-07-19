@@ -6,7 +6,7 @@ authors = ["Mathieu Duponchelle <mathieu@centricular.com>"]
 license = "MPL-2.0"
 description = "GStreamer WebRTC sink default protocol"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-rust-version = "1.66"
+rust-version = "1.70"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

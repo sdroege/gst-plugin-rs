@@ -6,7 +6,7 @@ repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT OR Apache-2.0"
 description = "GStreamer reqwest HTTP Source Plugin"
 edition = "2021"
-rust-version = "1.66"
+rust-version = "1.70"
 
 [dependencies]
 url = "2.1"
