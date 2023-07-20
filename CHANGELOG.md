@@ -5,6 +5,22 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.10.11] - 2023-07-20
+### Fixed
+- fallbackswitch: Fix pad health calculation and notifies.
+- fallbackswitch: Change the threshold for trailing buffers.
+- webrtcsink: Fix pipeline when input caps contain a max-framerate field.
+- webrtcsink: Set VP8/VP9 payloader properties based on payloader element
+  factory name.
+- webrtcsink: Set config-interval=-1 and aggregate-mode=zero-latency for
+  H264/5 payloaders.
+- webrtcsink: Translate force-keyunit events to custom force-IDR API of NVIDIA
+  encoders.
+- webrtcsink: Configure only 4 threads instead of 12 for x264enc for Chrome
+  compatibility.
+- fmp4mux: Fix draining in chunk mode if keyframes are after the desired
+  fragment end.
+
 ## [0.10.10] - 2023-07-05
 ### Fixed
 - livesync: Improve EOS handling to be in sync with `queue`'s behaviour.
@@ -197,7 +213,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.10...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.11...HEAD
+[0.10.11]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.9...0.10.11
 [0.10.10]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.9...0.10.10
 [0.10.9]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.8...0.10.9
 [0.10.8]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.7...0.10.8
