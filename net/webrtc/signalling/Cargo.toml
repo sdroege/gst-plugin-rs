@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-webrtc-signalling"
-version = "0.10.10"
+version = "0.10.11"
 edition = "2021"
 authors = ["Mathieu Duponchelle <mathieu@centricular.com>"]
 license = "MPL-2.0"
