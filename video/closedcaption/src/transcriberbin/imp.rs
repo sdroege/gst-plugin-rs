@@ -72,6 +72,7 @@ struct State {
     audio_queue_passthrough: gst::Element,
     video_queue: gst::Element,
     audio_tee: gst::Element,
+    transcriber_resample: gst::Element,
     transcriber_aconv: gst::Element,
     transcriber: gst::Element,
     ccmux: gst::Element,
@@ -176,6 +177,7 @@ impl TranscriberBin {
 
         state.transcription_bin.add_many([
             &aqueue_transcription,
+            &state.transcriber_resample,
             &state.transcriber_aconv,
             &state.transcriber,
             &state.ccmux,
@@ -187,6 +189,7 @@ impl TranscriberBin {
 
         gst::Element::link_many([
             &aqueue_transcription,
+            &state.transcriber_resample,
             &state.transcriber_aconv,
             &state.transcriber,
         ])?;
@@ -730,6 +733,7 @@ impl TranscriberBin {
         let cccombiner = gst::ElementFactory::make("cccombiner")
             .name("cccombiner")
             .build()?;
+        let transcriber_resample = gst::ElementFactory::make("audioresample").build()?;
         let transcriber_aconv = gst::ElementFactory::make("audioconvert").build()?;
         let transcriber = gst::ElementFactory::make("awstranscriber")
             .name("transcriber")
@@ -776,6 +780,7 @@ impl TranscriberBin {
             internal_bin,
             audio_queue_passthrough,
             video_queue,
+            transcriber_resample,
             transcriber_aconv,
             transcriber,
             ccmux,
