@@ -43,7 +43,7 @@ struct Settings {
 }
 
 #[derive(Default)]
-pub struct WebRTCSrc {
+pub struct BaseWebRTCSrc {
     settings: Mutex<Settings>,
     n_video_pads: AtomicU16,
     n_audio_pads: AtomicU16,
@@ -51,14 +51,21 @@ pub struct WebRTCSrc {
 }
 
 #[glib::object_subclass]
-impl ObjectSubclass for WebRTCSrc {
-    const NAME: &'static str = "GstWebRTCSrc";
-    type Type = super::WebRTCSrc;
+impl ObjectSubclass for BaseWebRTCSrc {
+    const NAME: &'static str = "GstBaseWebRTCSrc";
+    type Type = super::BaseWebRTCSrc;
     type ParentType = gst::Bin;
-    type Interfaces = (gst::URIHandler, gst::ChildProxy);
+    type Interfaces = (gst::ChildProxy,);
 }
 
-impl ObjectImpl for WebRTCSrc {
+unsafe impl<T: BaseWebRTCSrcImpl> IsSubclassable<T> for super::BaseWebRTCSrc {
+    fn class_init(class: &mut glib::Class<Self>) {
+        Self::parent_class_init::<T>(class);
+    }
+}
+pub(crate) trait BaseWebRTCSrcImpl: BinImpl {}
+
+impl ObjectImpl for BaseWebRTCSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPS: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
@@ -205,7 +212,7 @@ impl ObjectImpl for WebRTCSrc {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
             vec![
                 /**
-                 * WebRTCSrc::request-encoded-filter:
+                 * BaseWebRTCSrc::request-encoded-filter:
                  * @producer_id: Identifier of the producer
                  * @pad_name: The name of the output pad
                  * @allowed_caps: the allowed caps for the output pad
@@ -278,7 +285,7 @@ struct SignallerSignals {
     handle_ice: glib::SignalHandlerId,
 }
 
-impl WebRTCSrc {
+impl BaseWebRTCSrc {
     fn webrtcbin(&self) -> gst::Bin {
         let state = self.state.lock().unwrap();
         let webrtcbin = state
@@ -562,15 +569,22 @@ impl WebRTCSrc {
         let mline = transceiver.map_or(mline, |t| Some(t.mlineindex()));
 
         // Same logic as gst_pad_create_stream_id and friends, making a hash of
-        // the URI and adding `:<some-id>`, here the ID is the mline of the
+        // the URI (session id, if URI doesn't exist) and adding `:<some-id>`, here the ID is the mline of the
         // stream in the SDP.
         mline.map(|mline| {
             let mut cs = glib::Checksum::new(glib::ChecksumType::Sha256).unwrap();
-            cs.update(
-                self.uri()
-                    .expect("get_stream_id should never be called if no URI has been set")
-                    .as_bytes(),
-            );
+
+            let data: String = if self
+                .signaller()
+                .has_property("uri", Some(String::static_type()))
+            {
+                self.signaller().property::<Option<String>>("uri").unwrap()
+            } else {
+                // use the session id
+                self.state.lock().unwrap().session_id.clone().unwrap()
+            };
+
+            cs.update(data.as_bytes());
 
             format!("{}:{mline}", cs.string().unwrap())
         })
@@ -983,20 +997,7 @@ impl WebRTCSrc {
     }
 }
 
-impl ElementImpl for WebRTCSrc {
-    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
-            gst::subclass::ElementMetadata::new(
-                "WebRTCSrc",
-                "Source/Network/WebRTC",
-                "WebRTC src",
-                "Thibault Saunier <tsaunier@igalia.com>",
-            )
-        });
-
-        Some(&*ELEMENT_METADATA)
-    }
-
+impl ElementImpl for BaseWebRTCSrc {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
             let mut video_caps_builder = gst::Caps::builder_full()
@@ -1095,11 +1096,11 @@ impl ElementImpl for WebRTCSrc {
     }
 }
 
-impl GstObjectImpl for WebRTCSrc {}
+impl GstObjectImpl for BaseWebRTCSrc {}
 
-impl BinImpl for WebRTCSrc {}
+impl BinImpl for BaseWebRTCSrc {}
 
-impl ChildProxyImpl for WebRTCSrc {
+impl ChildProxyImpl for BaseWebRTCSrc {
     fn child_by_index(&self, index: u32) -> Option<glib::Object> {
         if index == 0 {
             Some(self.signaller().upcast())
@@ -1120,42 +1121,6 @@ impl ChildProxyImpl for WebRTCSrc {
             }
             _ => None,
         }
-    }
-}
-
-impl URIHandlerImpl for WebRTCSrc {
-    const URI_TYPE: gst::URIType = gst::URIType::Src;
-
-    fn protocols() -> &'static [&'static str] {
-        &["gstwebrtc", "gstwebrtcs"]
-    }
-
-    fn uri(&self) -> Option<String> {
-        self.signaller().property::<Option<String>>("uri")
-    }
-
-    fn set_uri(&self, uri: &str) -> Result<(), glib::Error> {
-        let uri = Url::from_str(uri)
-            .map_err(|err| glib::Error::new(gst::URIError::BadUri, &format!("{:?}", err)))?;
-
-        let socket_scheme = match uri.scheme() {
-            "gstwebrtc" => Ok("ws"),
-            "gstwebrtcs" => Ok("wss"),
-            _ => Err(glib::Error::new(
-                gst::URIError::BadUri,
-                &format!("Invalid protocol: {}", uri.scheme()),
-            )),
-        }?;
-
-        let mut url_str = uri.to_string();
-
-        // Not using `set_scheme()` because it doesn't work with `http`
-        // See https://github.com/servo/rust-url/pull/768 for a PR implementing that
-        url_str.replace_range(0..uri.scheme().len(), socket_scheme);
-
-        self.signaller().set_property("uri", &url_str);
-
-        Ok(())
     }
 }
 
@@ -1185,4 +1150,78 @@ impl Default for State {
             data_channel: None,
         }
     }
+}
+
+#[derive(Default)]
+pub struct WebRTCSrc {}
+
+impl ObjectImpl for WebRTCSrc {}
+
+impl GstObjectImpl for WebRTCSrc {}
+
+impl BinImpl for WebRTCSrc {}
+
+impl ElementImpl for WebRTCSrc {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "WebRTCSrc",
+                "Source/Network/WebRTC",
+                "WebRTC src",
+                "Thibault Saunier <tsaunier@igalia.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+}
+
+impl BaseWebRTCSrcImpl for WebRTCSrc {}
+
+impl URIHandlerImpl for WebRTCSrc {
+    const URI_TYPE: gst::URIType = gst::URIType::Src;
+
+    fn protocols() -> &'static [&'static str] {
+        &["gstwebrtc", "gstwebrtcs"]
+    }
+
+    fn uri(&self) -> Option<String> {
+        let obj = self.obj();
+        let base = obj.upcast_ref::<super::BaseWebRTCSrc>().imp();
+        base.signaller().property::<Option<String>>("uri")
+    }
+
+    fn set_uri(&self, uri: &str) -> Result<(), glib::Error> {
+        let uri = Url::from_str(uri)
+            .map_err(|err| glib::Error::new(gst::URIError::BadUri, &format!("{:?}", err)))?;
+
+        let socket_scheme = match uri.scheme() {
+            "gstwebrtc" => Ok("ws"),
+            "gstwebrtcs" => Ok("wss"),
+            _ => Err(glib::Error::new(
+                gst::URIError::BadUri,
+                &format!("Invalid protocol: {}", uri.scheme()),
+            )),
+        }?;
+
+        let mut url_str = uri.to_string();
+
+        // Not using `set_scheme()` because it doesn't work with `http`
+        // See https://github.com/servo/rust-url/pull/768 for a PR implementing that
+        url_str.replace_range(0..uri.scheme().len(), socket_scheme);
+
+        let obj = self.obj();
+        let base = obj.upcast_ref::<super::BaseWebRTCSrc>().imp();
+        base.signaller().set_property("uri", &url_str);
+
+        Ok(())
+    }
+}
+
+#[glib::object_subclass]
+impl ObjectSubclass for WebRTCSrc {
+    const NAME: &'static str = "GstWebRTCSrc";
+    type Type = super::WebRTCSrc;
+    type ParentType = super::BaseWebRTCSrc;
+    type Interfaces = (gst::URIHandler,);
 }

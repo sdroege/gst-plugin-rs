@@ -6440,6 +6440,7 @@
                 "description": "WebRTC src",
                 "hierarchy": [
                     "GstWebRTCSrc",
+                    "GstBaseWebRTCSrc",
                     "GstBin",
                     "GstElement",
                     "GstObject",
@@ -6466,108 +6467,7 @@
                         "type": "GstWebRTCSrcPad"
                     }
                 },
-                "properties": {
-                    "audio-codecs": {
-                        "blurb": "Names of audio codecs to be be used during the SDP negotiation. Valid values: [OPUS]",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "GstValueArray",
-                        "writable": true
-                    },
-                    "enable-data-channel-navigation": {
-                        "blurb": "Enable navigation events through a dedicated WebRTCDataChannel",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "false",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "gboolean",
-                        "writable": true
-                    },
-                    "meta": {
-                        "blurb": "Free form metadata about the consumer",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "GstStructure",
-                        "writable": true
-                    },
-                    "signaller": {
-                        "blurb": "The Signallable object to use to handle WebRTC Signalling",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": true,
-                        "controllable": false,
-                        "mutable": "null",
-                        "readable": true,
-                        "type": "GstRSWebRTCSignallableIface",
-                        "writable": true
-                    },
-                    "stun-server": {
-                        "blurb": "The STUN server of the form stun://host:port",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "stun://stun.l.google.com:19302",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "gchararray",
-                        "writable": true
-                    },
-                    "turn-servers": {
-                        "blurb": "The TURN servers of the form <\"turn(s)://username:password@host:port\", \"turn(s)://username1:password1@host1:port1\">",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "GstValueArray",
-                        "writable": true
-                    },
-                    "video-codecs": {
-                        "blurb": "Names of video codecs to be be used during the SDP negotiation. Valid values: [VP8, H264, VP9, H265]",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "GstValueArray",
-                        "writable": true
-                    }
-                },
-                "rank": "primary",
-                "signals": {
-                    "request-encoded-filter": {
-                        "args": [
-                            {
-                                "name": "arg0",
-                                "type": "gchararray"
-                            },
-                            {
-                                "name": "arg1",
-                                "type": "gchararray"
-                            },
-                            {
-                                "name": "arg2",
-                                "type": "GstCaps"
-                            }
-                        ],
-                        "return-type": "GstElement",
-                        "when": "last"
-                    }
-                }
+                "rank": "primary"
             },
             "whipclientsink": {
                 "author": "Taruntej Kanakamalla <taruntej@asymptotic.io>",
@@ -6870,6 +6770,121 @@
                         "return-type": "GStrv",
                         "when": "last"
                     },
+                    "request-encoded-filter": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg2",
+                                "type": "GstCaps"
+                            }
+                        ],
+                        "return-type": "GstElement",
+                        "when": "last"
+                    }
+                }
+            },
+            "GstBaseWebRTCSrc": {
+                "hierarchy": [
+                    "GstBaseWebRTCSrc",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
+                "kind": "object",
+                "properties": {
+                    "audio-codecs": {
+                        "blurb": "Names of audio codecs to be be used during the SDP negotiation. Valid values: [OPUS]",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": true
+                    },
+                    "enable-data-channel-navigation": {
+                        "blurb": "Enable navigation events through a dedicated WebRTCDataChannel",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "meta": {
+                        "blurb": "Free form metadata about the consumer",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": true
+                    },
+                    "signaller": {
+                        "blurb": "The Signallable object to use to handle WebRTC Signalling",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": true,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstRSWebRTCSignallableIface",
+                        "writable": true
+                    },
+                    "stun-server": {
+                        "blurb": "The STUN server of the form stun://host:port",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "stun://stun.l.google.com:19302",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "turn-servers": {
+                        "blurb": "The TURN servers of the form <\"turn(s)://username:password@host:port\", \"turn(s)://username1:password1@host1:port1\">",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": true
+                    },
+                    "video-codecs": {
+                        "blurb": "Names of video codecs to be be used during the SDP negotiation. Valid values: [VP8, H264, VP9, H265]",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": true
+                    }
+                },
+                "signals": {
                     "request-encoded-filter": {
                         "args": [
                             {

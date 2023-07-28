@@ -42,7 +42,11 @@ use gst::prelude::*;
 use gst::{glib, prelude::StaticType};
 
 glib::wrapper! {
-    pub struct WebRTCSrc(ObjectSubclass<imp::WebRTCSrc>) @extends gst::Bin, gst::Element, gst::Object, @implements gst::URIHandler, gst::ChildProxy;
+    pub struct BaseWebRTCSrc(ObjectSubclass<imp::BaseWebRTCSrc>) @extends gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy;
+}
+
+glib::wrapper! {
+    pub struct WebRTCSrc(ObjectSubclass<imp::WebRTCSrc>) @extends BaseWebRTCSrc, gst::Bin, gst::Element, gst::Object, @implements gst::URIHandler, gst::ChildProxy;
 }
 
 glib::wrapper! {
@@ -50,6 +54,7 @@ glib::wrapper! {
 }
 
 pub fn register(plugin: Option<&gst::Plugin>) -> Result<(), glib::BoolError> {
+    BaseWebRTCSrc::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     WebRTCSignallerRole::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     WebRTCSrcPad::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     Signallable::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
