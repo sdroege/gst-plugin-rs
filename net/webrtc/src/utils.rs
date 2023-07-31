@@ -494,9 +494,9 @@ impl Codec {
 
     fn get_encoder_for_caps(
         caps: &gst::Caps,
-        decoders: &glib::List<gst::ElementFactory>,
+        encoders: &glib::List<gst::ElementFactory>,
     ) -> Option<gst::ElementFactory> {
-        decoders
+        encoders
             .iter()
             .find(|factory| {
                 factory.static_pad_templates().iter().any(|template| {
@@ -570,7 +570,7 @@ impl Codec {
             info.encoder
                 .create()
                 .build()
-                .with_context(|| format!("Creating payloader {}", info.encoder.name()))
+                .with_context(|| format!("Creating encoder {}", info.encoder.name()))
         })
     }
 
