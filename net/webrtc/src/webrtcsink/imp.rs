@@ -2144,6 +2144,7 @@ impl WebRTCSink {
 
     async fn run_discovery_pipeline(
         element: &super::WebRTCSink,
+        stream_name: &str,
         codec: &Codec,
         caps: &gst::Caps,
     ) -> Result<gst::Structure, Error> {
@@ -2173,7 +2174,12 @@ impl WebRTCSink {
         gst::Element::link_many(elements_slice)
             .with_context(|| format!("Running discovery pipeline for caps {}", caps))?;
 
-        let (_, _, pay) = setup_encoding(&pipe.0, &capsfilter, caps, codec, None, true)?;
+        let (enc, _, pay) = setup_encoding(&pipe.0, &capsfilter, caps, codec, None, true)?;
+
+        element.emit_by_name::<bool>(
+            "encoder-setup",
+            &[&"discovery".to_string(), &stream_name, &enc],
+        );
 
         let sink = make_element("fakesink", None)?;
 
@@ -2260,7 +2266,9 @@ impl WebRTCSink {
         let futs = codecs
             .iter()
             .filter(|(_, codec)| codec.is_video() == is_video)
-            .map(|(_, codec)| WebRTCSink::run_discovery_pipeline(element, codec, &sink_caps));
+            .map(|(_, codec)| {
+                WebRTCSink::run_discovery_pipeline(element, &name, codec, &sink_caps)
+            });
 
         for ret in futures::future::join_all(futs).await {
             match ret {
@@ -2719,7 +2727,8 @@ impl ObjectImpl for WebRTCSink {
                     .build(),
                 /**
                  * RsWebRTCSink::encoder-setup:
-                 * @consumer_id: Identifier of the consumer
+                 * @consumer_id: Identifier of the consumer, or "discovery"
+                 *   when the encoder is used in a discovery pipeline.
                  * @pad_name: The name of the corresponding input pad
                  * @encoder: The constructed encoder
                  *
