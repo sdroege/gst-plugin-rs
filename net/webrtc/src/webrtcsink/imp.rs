@@ -2804,6 +2804,13 @@ impl BaseWebRTCSink {
         }
         let encoding_chain = encoding_chain_builder.build(&pipe.0, &encoding_chain_src)?;
 
+        if let Some(ref enc) = encoding_chain.encoder {
+            element.emit_by_name::<bool>(
+                "encoder-setup",
+                &[&"discovery".to_string(), &stream_name, &enc],
+            );
+        }
+
         let sink = gst_app::AppSink::builder()
             .callbacks(
                 gst_app::AppSinkCallbacks::builder()
@@ -3493,7 +3500,8 @@ impl ObjectImpl for BaseWebRTCSink {
                     .build(),
                 /**
                  * RsBaseWebRTCSink::encoder-setup:
-                 * @consumer_id: Identifier of the consumer
+                 * @consumer_id: Identifier of the consumer, or "discovery"
+                 *   when the encoder is used in a discovery pipeline.
                  * @pad_name: The name of the corresponding input pad
                  * @encoder: The constructed encoder
                  *
