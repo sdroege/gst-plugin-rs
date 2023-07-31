@@ -565,14 +565,12 @@ impl WhipSink {
     async fn do_post(&self, offer: gst_webrtc::WebRTCSessionDescription) {
         let auth_token;
         let endpoint;
-        let timeout;
 
         {
             let settings = self.settings.lock().unwrap();
             endpoint =
                 reqwest::Url::parse(settings.whip_endpoint.as_ref().unwrap().as_str()).unwrap();
             auth_token = settings.auth_token.clone();
-            timeout = settings.timeout;
             drop(settings);
         }
 
@@ -618,33 +616,16 @@ impl WhipSink {
             );
         }
 
-        let res = wait_async(
-            &self.canceller,
-            client
-                .request(reqwest::Method::POST, endpoint.clone())
-                .headers(headermap)
-                .body(body)
-                .send(),
-            timeout,
-        )
-        .await;
+        let res = client
+            .request(reqwest::Method::POST, endpoint.clone())
+            .headers(headermap)
+            .body(body)
+            .send()
+            .await;
 
         match res {
-            Ok(r) => match r {
-                Ok(resp) => {
-                    if let Err(e) = wait_async(
-                        &self.canceller,
-                        self.parse_endpoint_response(offer, resp, redirects),
-                        timeout,
-                    )
-                    .await
-                    {
-                        self.handle_future_error(e);
-                    }
-                }
-                Err(err) => self.raise_error(gst::ResourceError::Failed, err.to_string()),
-            },
-            Err(err) => self.handle_future_error(err),
+            Ok(resp) => self.parse_endpoint_response(offer, resp, redirects).await,
+            Err(err) => self.raise_error(gst::ResourceError::Failed, err.to_string()),
         }
     }
 
@@ -655,7 +636,6 @@ impl WhipSink {
         redirects: u8,
     ) {
         let endpoint;
-        let timeout;
         let use_link_headers;
 
         {
@@ -663,7 +643,6 @@ impl WhipSink {
             endpoint =
                 reqwest::Url::parse(settings.whip_endpoint.as_ref().unwrap().as_str()).unwrap();
             use_link_headers = settings.use_link_headers;
-            timeout = settings.timeout;
             drop(settings);
         }
 
@@ -737,29 +716,26 @@ impl WhipSink {
                     drop(state);
                 }
 
-                match wait_async(&self.canceller, resp.bytes(), timeout).await {
-                    Ok(res) => match res {
-                        Ok(ans_bytes) => match sdp_message::SDPMessage::parse_buffer(&ans_bytes) {
-                            Ok(ans_sdp) => {
-                                let answer = gst_webrtc::WebRTCSessionDescription::new(
-                                    gst_webrtc::WebRTCSDPType::Answer,
-                                    ans_sdp,
-                                );
-                                self.webrtcbin.emit_by_name::<()>(
-                                    "set-remote-description",
-                                    &[&answer, &None::<gst::Promise>],
-                                );
-                            }
-                            Err(err) => {
-                                self.raise_error(
-                                    gst::ResourceError::Failed,
-                                    format!("Could not parse answer SDP: {err}"),
-                                );
-                            }
-                        },
-                        Err(err) => self.raise_error(gst::ResourceError::Failed, err.to_string()),
+                match resp.bytes().await {
+                    Ok(ans_bytes) => match sdp_message::SDPMessage::parse_buffer(&ans_bytes) {
+                        Ok(ans_sdp) => {
+                            let answer = gst_webrtc::WebRTCSessionDescription::new(
+                                gst_webrtc::WebRTCSDPType::Answer,
+                                ans_sdp,
+                            );
+                            self.webrtcbin.emit_by_name::<()>(
+                                "set-remote-description",
+                                &[&answer, &None::<gst::Promise>],
+                            );
+                        }
+                        Err(err) => {
+                            self.raise_error(
+                                gst::ResourceError::Failed,
+                                format!("Could not parse answer SDP: {err}"),
+                            );
+                        }
                     },
-                    Err(err) => self.handle_future_error(err),
+                    Err(err) => self.raise_error(gst::ResourceError::Failed, err.to_string()),
                 }
             }
 
@@ -798,11 +774,7 @@ impl WhipSink {
                                 redirect_url.as_str()
                             );
 
-                            if let Err(err) =
-                                wait_async(&self.canceller, self.do_post(offer), timeout).await
-                            {
-                                self.handle_future_error(err);
-                            }
+                            self.do_post(offer).await
                         }
                         Err(e) => self.raise_error(gst::ResourceError::Failed, e.to_string()),
                     }
@@ -815,11 +787,9 @@ impl WhipSink {
             }
 
             s => {
-                match wait_async(&self.canceller, resp.bytes(), timeout).await {
+                match resp.bytes().await {
                     Ok(r) => {
-                        let res = r
-                            .map(|x| x.escape_ascii().to_string())
-                            .unwrap_or_else(|_| "(no further details)".to_string());
+                        let res = r.escape_ascii().to_string();
 
                         // FIXME: Check and handle 'Retry-After' header in case of server error
                         self.raise_error(
@@ -827,7 +797,7 @@ impl WhipSink {
                             format!("Unexpected response: {} - {}", s.as_str(), res),
                         );
                     }
-                    Err(err) => self.handle_future_error(err),
+                    Err(err) => self.raise_error(gst::ResourceError::Failed, err.to_string()),
                 }
             }
         }

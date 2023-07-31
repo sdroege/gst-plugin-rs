@@ -626,7 +626,6 @@ impl WhepSrc {
         redirects: u8,
     ) {
         let endpoint;
-        let timeout;
         let use_link_headers;
 
         {
@@ -634,7 +633,6 @@ impl WhepSrc {
             endpoint =
                 reqwest::Url::parse(settings.whep_endpoint.as_ref().unwrap().as_str()).unwrap();
             use_link_headers = settings.use_link_headers;
-            timeout = settings.timeout;
             drop(settings);
         }
 
@@ -692,29 +690,26 @@ impl WhepSrc {
                     }
                 };
 
-                match wait_async(&self.canceller, resp.bytes(), timeout).await {
-                    Ok(res) => match res {
-                        Ok(ans_bytes) => {
-                            let mut state = self.state.lock().unwrap();
-                            *state = match *state {
-                                State::Post { redirects: _r } => State::Running {
-                                    whep_resource: url.to_string(),
-                                },
-                                _ => {
-                                    self.raise_error(
-                                        gst::ResourceError::Failed,
-                                        "Expected to be in POST state".to_string(),
-                                    );
-                                    return;
-                                }
-                            };
-                            drop(state);
+                match resp.bytes().await {
+                    Ok(ans_bytes) => {
+                        let mut state = self.state.lock().unwrap();
+                        *state = match *state {
+                            State::Post { redirects: _r } => State::Running {
+                                whep_resource: url.to_string(),
+                            },
+                            _ => {
+                                self.raise_error(
+                                    gst::ResourceError::Failed,
+                                    "Expected to be in POST state".to_string(),
+                                );
+                                return;
+                            }
+                        };
+                        drop(state);
 
-                            self.sdp_message_parse(ans_bytes)
-                        }
-                        Err(err) => self.raise_error(gst::ResourceError::Failed, err.to_string()),
-                    },
-                    Err(err) => self.handle_future_error(err),
+                        self.sdp_message_parse(ans_bytes)
+                    }
+                    Err(err) => self.raise_error(gst::ResourceError::Failed, err.to_string()),
                 }
             }
 
@@ -753,11 +748,7 @@ impl WhepSrc {
                                 redirect_url.as_str()
                             );
 
-                            if let Err(err) =
-                                wait_async(&self.canceller, self.do_post(sess_desc), timeout).await
-                            {
-                                self.handle_future_error(err);
-                            }
+                            self.do_post(sess_desc).await
                         }
                         Err(e) => self.raise_error(gst::ResourceError::Failed, e.to_string()),
                     }
@@ -770,11 +761,9 @@ impl WhepSrc {
             }
 
             s => {
-                match wait_async(&self.canceller, resp.bytes(), timeout).await {
+                match resp.bytes().await {
                     Ok(r) => {
-                        let res = r
-                            .map(|x| x.escape_ascii().to_string())
-                            .unwrap_or_else(|_| "(no further details)".to_string());
+                        let res = r.escape_ascii().to_string();
 
                         // FIXME: Check and handle 'Retry-After' header in case of server error
                         self.raise_error(
@@ -782,7 +771,7 @@ impl WhepSrc {
                             format!("Unexpected response: {} - {}", s.as_str(), res),
                         );
                     }
-                    Err(err) => self.handle_future_error(err),
+                    Err(err) => self.raise_error(gst::ResourceError::Failed, err.to_string()),
                 }
             }
         }
@@ -944,14 +933,12 @@ impl WhepSrc {
     async fn do_post(&self, offer: WebRTCSessionDescription) {
         let auth_token;
         let endpoint;
-        let timeout;
 
         {
             let settings = self.settings.lock().unwrap();
             endpoint =
                 reqwest::Url::parse(settings.whep_endpoint.as_ref().unwrap().as_str()).unwrap();
             auth_token = settings.auth_token.clone();
-            timeout = settings.timeout;
             drop(settings);
         }
 
@@ -982,51 +969,37 @@ impl WhepSrc {
             endpoint.as_str()
         );
 
-        let res = wait_async(
-            &self.canceller,
-            self.client
-                .request(reqwest::Method::POST, endpoint.clone())
-                .headers(headermap)
-                .body(body)
-                .send(),
-            timeout,
-        )
-        .await;
+        let resp = self
+            .client
+            .request(reqwest::Method::POST, endpoint.clone())
+            .headers(headermap)
+            .body(body)
+            .send()
+            .await;
 
-        match res {
-            Ok(resp) => match resp {
-                Ok(r) => {
-                    #[allow(unused_mut)]
-                    let mut redirects;
+        match resp {
+            Ok(r) => {
+                #[allow(unused_mut)]
+                let mut redirects;
 
-                    {
-                        let state = self.state.lock().unwrap();
-                        redirects = match *state {
-                            State::Post { redirects } => redirects,
-                            _ => {
-                                self.raise_error(
-                                    gst::ResourceError::Failed,
-                                    "Trying to do POST in unexpected state".to_string(),
-                                );
-                                return;
-                            }
-                        };
-                        drop(state);
-                    }
-
-                    if let Err(e) = wait_async(
-                        &self.canceller,
-                        self.parse_endpoint_response(offer, r, redirects),
-                        timeout,
-                    )
-                    .await
-                    {
-                        self.handle_future_error(e);
-                    }
+                {
+                    let state = self.state.lock().unwrap();
+                    redirects = match *state {
+                        State::Post { redirects } => redirects,
+                        _ => {
+                            self.raise_error(
+                                gst::ResourceError::Failed,
+                                "Trying to do POST in unexpected state".to_string(),
+                            );
+                            return;
+                        }
+                    };
+                    drop(state);
                 }
-                Err(err) => self.raise_error(gst::ResourceError::Failed, err.to_string()),
-            },
-            Err(err) => self.handle_future_error(err),
+
+                self.parse_endpoint_response(offer, r, redirects).await
+            }
+            Err(err) => self.raise_error(gst::ResourceError::Failed, err.to_string()),
         }
     }
 

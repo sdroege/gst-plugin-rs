@@ -35,6 +35,12 @@ where
     let (abort_handle, abort_registration) = future::AbortHandle::new_pair();
     {
         let mut canceller_guard = canceller.lock().unwrap();
+        if canceller_guard.is_some() {
+            return Err(WaitError::FutureError(gst::error_msg!(
+                gst::ResourceError::Failed,
+                ["Old Canceller should not exist"]
+            )));
+        }
         canceller_guard.replace(abort_handle);
         drop(canceller_guard);
     }
