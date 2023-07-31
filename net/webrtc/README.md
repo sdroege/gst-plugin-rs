@@ -141,15 +141,25 @@ gst-launch-1.0 webrtcsink signaller::uri="ws://127.0.0.1:8443" ..
 with the content, for example move with your mouse, entering keys with the
 keyboard, etc... On top of that a `WebRTCDataChannel` based protocol has been
 implemented and can be activated with the `enable-data-channel-navigation=true`
-property. The [gstwebrtc-api](gstwebrtc-api) implements the protocol and you
-can easily test this feature using the [`wpesrc`] for example.
+property allowing a client to send GstNavigation events using the WebRTC data channel.
 
-As an example, the following pipeline allows you to navigate the GStreamer
-documentation inside the video running within your web browser (at
-https://127.0.0.1:9090 if you followed previous steps in that readme):
+The [gstwebrtc-api](gstwebrtc-api) and `webrtcsrc` implement the protocol as well
+and they can be used as a client to control a remote sever.
+
+You can easily test this feature using the [`wpesrc`] element with the following pipeline
+that will start a server that allows you to navigate the GStreamer documentation:
 
 ``` shell
 gst-launch-1.0 wpesrc location=https://gstreamer.freedesktop.org/documentation/ ! queue ! webrtcsink enable-data-channel-navigation=true meta="meta,name=web-stream"
+```
+
+You can control it inside the video running within your web browser (at
+https://127.0.0.1:9090 if you followed previous steps in that readme) or
+with the following GSteamer pipeline as a client:
+
+``` shell
+gst-launch-1.0 webrtcsrc signaller::producer-peer-id=<webrtcsink-peer-id> enable-data-channel-navigation=true ! videoconvert ! autovideosink
+
 ```
 
 [`GstNavigation`]: https://gstreamer.freedesktop.org/documentation/video/gstnavigation.html
