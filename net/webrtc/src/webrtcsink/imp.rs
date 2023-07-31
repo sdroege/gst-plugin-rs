@@ -2209,7 +2209,7 @@ impl WebRTCSink {
             &[&Option::<String>::None, &name, &codec.caps],
         );
 
-        let (_, _, pay) = setup_encoding(
+        let (enc, _, pay) = setup_encoding(
             &pipe.0,
             &capsfilter,
             caps,
@@ -2218,6 +2218,8 @@ impl WebRTCSink {
             None,
             true,
         )?;
+
+        element.emit_by_name::<bool>("encoder-setup", &[&"discovery".to_string(), &name, &enc]);
 
         let sink = make_element("fakesink", None)?;
 
@@ -2761,7 +2763,8 @@ impl ObjectImpl for WebRTCSink {
                     .build(),
                 /**
                  * RsWebRTCSink::encoder-setup:
-                 * @consumer_id: Identifier of the consumer
+                 * @consumer_id: Identifier of the consumer, or "discovery"
+                 *   when the encoder is used in a discovery pipeline.
                  * @pad_name: The name of the corresponding input pad
                  * @encoder: The constructed encoder
                  *
