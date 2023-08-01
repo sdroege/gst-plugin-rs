@@ -30,6 +30,12 @@ PARSER.add_argument('--depfile')
 PARSER.add_argument('--disable-doc', action="store_true", default=False)
 
 
+def shlex_join(args):
+    if hasattr(shlex, 'join'):
+        return shlex.join(args)
+    return ' '.join([shlex.quote(arg) for arg in args])
+
+
 def generate_depfile_for(fpath):
     file_stem = fpath.parent / fpath.stem
     depfile_content = ""
@@ -92,7 +98,7 @@ if __name__ == "__main__":
             rustc_target_idx = rust_flags.index('--target')
             _ = rust_flags.pop(rustc_target_idx)  # drop '--target'
             rustc_target = rust_flags.pop(rustc_target_idx)
-        env['RUSTFLAGS'] = shlex.join(rust_flags)
+        env['RUSTFLAGS'] = shlex_join(rust_flags)
         env['RUSTC'] = rustc_cmdline[0]
 
     features = opts.features
