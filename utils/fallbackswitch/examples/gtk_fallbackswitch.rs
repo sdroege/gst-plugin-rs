@@ -142,11 +142,11 @@ fn create_ui(app: &gtk::Application) {
     window.connect_close_request(move |_| {
         let app = match app_weak.upgrade() {
             Some(app) => app,
-            None => return glib::ControlFlow::Break,
+            None => return glib::Propagation::Stop,
         };
 
         app.quit();
-        glib::ControlFlow::Break
+        glib::Propagation::Stop
     });
 
     let bus = pipeline.bus().unwrap();
