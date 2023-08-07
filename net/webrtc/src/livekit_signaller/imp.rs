@@ -97,9 +97,8 @@ impl Signaller {
         loop {
             match wait_async(&self.signal_task_canceller, signal_events.recv(), 0).await {
                 Ok(Some(signal)) => match signal {
-                    signal_client::SignalEvent::Open => {}
-                    signal_client::SignalEvent::Signal(signal) => {
-                        self.on_signal_event(signal).await;
+                    signal_client::SignalEvent::Message(signal) => {
+                        self.on_signal_event(*signal).await;
                     }
                     signal_client::SignalEvent::Close => {
                         gst::debug!(CAT, imp: self, "Close");
@@ -138,21 +137,9 @@ impl Signaller {
                     .emit_by_name::<()>("session-description", &[&"unique", &answer]);
             }
             proto::signal_response::Message::Trickle(trickle) => {
-                let target = if let Some(target) = proto::SignalTarget::from_i32(trickle.target) {
-                    target
-                } else {
-                    gst::warning!(
-                        CAT,
-                        imp: self,
-                        "Received ice_candidate {:?} from invalid target, ignoring",
-                        trickle
-                    );
-                    return;
-                };
-
                 gst::debug!(CAT, imp: self, "Received ice_candidate {:?}", trickle);
 
-                if target == proto::SignalTarget::Publisher {
+                if trickle.target() == proto::SignalTarget::Publisher {
                     if let Ok(json) =
                         serde_json::from_str::<IceCandidateJson>(&trickle.candidate_init)
                     {
