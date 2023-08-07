@@ -33,14 +33,14 @@ gst_plugin_webrtc_protocol = { path="protocol", package = "gst-plugin-webrtc-sig
 human_bytes = "0.4"
 url = "2"
 
-aws-config = "0.55.0"
-aws-types = "0.55.0"
-aws-credential-types = "0.55.0"
-aws-sig-auth = "0.55.0"
-aws-smithy-http = { version = "0.55.0", features = [ "rt-tokio" ] }
-aws-smithy-types = "0.55.0"
-aws-sdk-kinesisvideo = "0.28.0"
-aws-sdk-kinesisvideosignaling = "0.28.0"
+aws-config = "0.56.0"
+aws-types = "0.56.0"
+aws-credential-types = "0.56.0"
+aws-sig-auth = "0.56.0"
+aws-smithy-http = { version = "0.56.0", features = [ "rt-tokio" ] }
+aws-smithy-types = "0.56.0"
+aws-sdk-kinesisvideo = "0.29.0"
+aws-sdk-kinesisvideosignaling = "0.29.0"
 http = "0.2.7"
 chrono = "0.4"
 data-encoding = "2.3.3"
