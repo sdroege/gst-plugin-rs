@@ -210,6 +210,10 @@ impl Signaller {
                 roles: vec![p::PeerRole::Listener],
             },
         }));
+
+        if matches!(role, super::WebRTCSignallerRole::Listener) {
+            self.send(p::IncomingMessage::List);
+        }
     }
 
     fn producer_peer_id(&self) -> Option<String> {
@@ -282,8 +286,10 @@ impl Signaller {
                                     state.producers.insert(peer_id.clone());
                                     drop(state);
 
-                                    self.obj()
-                                        .emit_by_name::<()>("producer-added", &[&peer_id, &meta]);
+                                    self.obj().emit_by_name::<()>(
+                                        "producer-added",
+                                        &[&peer_id, &meta, &true],
+                                    );
                                 }
                             } else if state.producers.remove(&peer_id) {
                                 drop(state);
@@ -366,14 +372,33 @@ impl Signaller {
                                 );
                             }
                         },
+                        p::OutgoingMessage::List { producers } => {
+                            for producer in producers {
+                                let mut state = self.state.lock().unwrap();
+                                if !state.producers.contains(&producer.id) {
+                                    state.producers.insert(producer.id.clone());
+                                    drop(state);
+
+                                    let meta = producer.meta.and_then(|m| match m {
+                                        serde_json::Value::Object(v) => Some(serialize_json_object(&v)),
+                                        _ => {
+                                            gst::error!(CAT, imp: self, "Invalid json value: {m:?}");
+                                            None
+                                        }
+                                    });
+
+                                    self.obj().emit_by_name::<()>(
+                                        "producer-added",
+                                        &[&producer.id, &meta, &false],
+                                    );
+                                }
+                            }
+                        }
                         p::OutgoingMessage::Error { details } => {
                             self.obj().emit_by_name::<()>(
                                 "error",
                                 &[&format!("Error message from server: {details}")],
                             );
-                        }
-                        _ => {
-                            gst::warning!(CAT, imp: self, "Ignoring unsupported message {:?}", msg);
                         }
                     }
                 } else {
@@ -521,6 +546,7 @@ impl SignallableImpl for Signaller {
                 }
             });
         }
+        state.producers.clear();
     }
 
     fn send_sdp(&self, session_id: &str, sdp: &gst_webrtc::WebRTCSessionDescription) {

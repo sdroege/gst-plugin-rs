@@ -6699,6 +6699,10 @@
                             {
                                 "name": "arg1",
                                 "type": "GstStructure"
+                            },
+                            {
+                                "name": "arg2",
+                                "type": "gboolean"
                             }
                         ],
                         "return-type": "void",

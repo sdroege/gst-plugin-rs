@@ -68,21 +68,29 @@ unsafe impl prelude::ObjectInterface for Signallable {
                 /**
                  * GstRSWebRTCSignallableIface::producer-added:
                  * @self: The object implementing #GstRSWebRTCSignallableIface
-                 * @producer_id: The ID of the producer that was added
+                 * @producer_id: The ID of the available producer
                  * @meta: The metadata structure of the producer
+                 * @new_connection: true if the producer has just connected to
+                 *                  the signalling server or false if it was
+                 *                  already running before starting the client
                  *
-                 * Some new producing peer is ready to produce a WebRTC stream.
+                 * Some producing peer is available to produce a WebRTC stream.
                  */
                 Signal::builder("producer-added")
-                    .param_types([str::static_type(), <Option<gst::Structure>>::static_type()])
+                    .param_types([
+                        str::static_type(),
+                        <Option<gst::Structure>>::static_type(),
+                        bool::static_type(),
+                    ])
                     .build(),
                 /**
                  * GstRSWebRTCSignallableIface::producer-removed:
                  * @self: The object implementing #GstRSWebRTCSignallableIface
-                 * @producer_id: The ID of the producer that was added
+                 * @producer_id: The ID of the producer that is not available
+                 *               anymore
                  * @meta: The metadata structure of the producer
                  *
-                 * Some new producing peer is stopped producing streams.
+                 * Some producing peer has stopped producing streams.
                  */
                 Signal::builder("producer-removed")
                     .param_types([str::static_type(), <Option<gst::Structure>>::static_type()])
