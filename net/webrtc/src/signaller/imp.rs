@@ -63,6 +63,7 @@ struct State {
     send_task_handle: Option<task::JoinHandle<Result<(), Error>>>,
     receive_task_handle: Option<task::JoinHandle<()>>,
     producers: HashSet<String>,
+    client_id: Option<String>,
 }
 
 impl Signaller {
@@ -192,6 +193,8 @@ impl Signaller {
     }
 
     fn set_status(&self, meta: &Option<serde_json::Value>, peer_id: &str) {
+        self.state.lock().unwrap().client_id = Some(peer_id.to_string());
+
         let role = self.settings.lock().unwrap().role;
         self.send(p::IncomingMessage::SetPeerStatus(match role {
             super::WebRTCSignallerRole::Consumer => p::PeerStatus {
@@ -449,6 +452,9 @@ impl ObjectImpl for Signaller {
                 glib::ParamSpecEnum::builder_with_default("role", WebRTCSignallerRole::Consumer)
                     .flags(glib::ParamFlags::READWRITE)
                     .build(),
+                glib::ParamSpecString::builder("client-id")
+                    .flags(glib::ParamFlags::READABLE)
+                    .build(),
             ]
         });
 
@@ -508,6 +514,7 @@ impl ObjectImpl for Signaller {
             }
             "cafile" => settings.cafile.to_value(),
             "role" => settings.role.to_value(),
+            "client-id" => self.state.lock().unwrap().client_id.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -547,6 +554,7 @@ impl SignallableImpl for Signaller {
             });
         }
         state.producers.clear();
+        state.client_id = None;
     }
 
     fn send_sdp(&self, session_id: &str, sdp: &gst_webrtc::WebRTCSessionDescription) {
