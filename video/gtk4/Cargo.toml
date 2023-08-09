@@ -9,28 +9,28 @@ rust-version = "1.70"
 description = "GStreamer GTK 4 Sink element and Paintable widget"
 
 [dependencies]
-gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs" }
-gdk_wayland = { package = "gdk4-wayland", git = "https://github.com/gtk-rs/gtk4-rs", features = ["v4_4"], optional = true}
-gdk_x11 = { package = "gdk4-x11", git = "https://github.com/gtk-rs/gtk4-rs", features = ["v4_4"], optional = true}
+gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", branch = "0.7", version = "0.7" }
+gdk_wayland = { package = "gdk4-wayland", git = "https://github.com/gtk-rs/gtk4-rs", branch = "0.7", version = "0.7", features = ["v4_4"], optional = true}
+gdk_x11 = { package = "gdk4-x11", git = "https://github.com/gtk-rs/gtk4-rs", branch = "0.7", version = "0.7", features = ["v4_4"], optional = true}
 
-gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"] }
-gst_base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gst_video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gst_gl = { package = "gstreamer-gl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"], optional = true }
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21", features = ["v1_16"] }
+gst_base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21" }
+gst_video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21" }
+gst_gl = { package = "gstreamer-gl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21", features = ["v1_16"], optional = true }
 
-gst_gl_wayland = { package = "gstreamer-gl-wayland", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"], optional = true }
-gst_gl_x11 = { package = "gstreamer-gl-x11", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"], optional = true }
-gst_gl_egl = { package = "gstreamer-gl-egl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"], optional = true }
+gst_gl_wayland = { package = "gstreamer-gl-wayland", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21", features = ["v1_16"], optional = true }
+gst_gl_x11 = { package = "gstreamer-gl-x11", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21", features = ["v1_16"], optional = true }
+gst_gl_egl = { package = "gstreamer-gl-egl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21", features = ["v1_16"], optional = true }
 
 
 [target.'cfg(target_os = "macos")'.dependencies]
-gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", features = ["v4_6"] }
-gst_gl = { package = "gstreamer-gl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"] }
+gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", branch = "0.7", version = "0.7", features = ["v4_6"] }
+gst_gl = { package = "gstreamer-gl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21", features = ["v1_16"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", features = ["v4_6"] }
-gst_gl = { package = "gstreamer-gl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_20"] }
-gdk_win32 = { package = "gdk4-win32", git = "https://github.com/gtk-rs/gtk4-rs", features = ["v4_4"]}
+gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", branch = "0.7", version = "0.7", features = ["v4_6"] }
+gst_gl = { package = "gstreamer-gl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21", features = ["v1_20"] }
+gdk_win32 = { package = "gdk4-win32", git = "https://github.com/gtk-rs/gtk4-rs", branch = "0.7", version = "0.7", features = ["v4_4"]}
 windows-sys = { version = "0.48", features = ["Win32_Graphics_OpenGL", "Win32_Foundation", "Win32_Graphics_Gdi"] }
 
 [lib]

@@ -13,6 +13,8 @@ regex = "1.5"
 
 [dependencies.gst]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+branch = "0.21"
+version = "0.21"
 package="gstreamer"
 
 [lib]
@@ -25,6 +27,8 @@ gst-plugin-version-helper = { path="../../version-helper" }
 
 [dev-dependencies.gst-check]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+branch = "0.21"
+version = "0.21"
 package="gstreamer-check"
 
 [features]

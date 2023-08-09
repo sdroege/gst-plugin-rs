@@ -9,17 +9,17 @@ edition = "2021"
 rust-version = "1.70"
 
 [dependencies]
-gio = { git = "https://github.com/gtk-rs/gtk-rs-core", optional = true }
-gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gio = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "0.18", version = "0.18", optional = true }
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21" }
+gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21" }
 gst-plugin-gtk4 = { path = "../../video/gtk4", optional = true }
-gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", optional = true }
+gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", branch = "0.7", version = "0.7", optional = true }
 muldiv = "1.0"
 num-rational = { version = "0.4", default-features = false, features = [] }
 parking_lot = "0.12"
 
 [dev-dependencies]
-gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21" }
 
 [lib]
 name = "gstlivesync"

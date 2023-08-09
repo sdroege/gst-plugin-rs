@@ -11,11 +11,11 @@ rust-version = "1.70"
 [dependencies]
 byte-slice-cast = "1"
 ffv1 = { git = "https://github.com/rust-av/ffv1.git", rev = "2afb025a327173ce891954c052e804d0f880368a" }
-gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_18"] }
-gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_18"] }
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21", features = ["v1_18"] }
+gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21", features = ["v1_18"] }
 
 [dev-dependencies]
-gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_18"] }
+gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21", features = ["v1_18"] }
 [lib]
 name = "gstffv1"
 crate-type = ["cdylib", "rlib"]

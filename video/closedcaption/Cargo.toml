@@ -15,9 +15,9 @@ either = "1"
 uuid = { version = "1.0", features = ["v4"] }
 chrono = "0.4.23"
 atomic_refcell = "0.1"
-cairo-rs = { git = "https://github.com/gtk-rs/gtk-rs-core", features=["use_glib"] }
-pango = { git = "https://github.com/gtk-rs/gtk-rs-core" }
-pangocairo = { git = "https://github.com/gtk-rs/gtk-rs-core" }
+cairo-rs = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "0.18", version = "0.18", features=["use_glib"] }
+pango = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "0.18", version = "0.18" }
+pangocairo = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "0.18", version = "0.18" }
 byteorder = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
@@ -25,16 +25,22 @@ cea708-types = "0.1"
 
 [dependencies.gst]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+branch = "0.21"
+version = "0.21"
 features = ["v1_16"]
 package="gstreamer"
 
 [dependencies.gst-base]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+branch = "0.21"
+version = "0.21"
 features = ["v1_16"]
 package="gstreamer-base"
 
 [dependencies.gst-video]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+branch = "0.21"
+version = "0.21"
 features = ["v1_16"]
 package="gstreamer-video"
 
@@ -44,6 +50,8 @@ rand = { version = "0.8", features = ["small_rng"] }
 
 [dev-dependencies.gst-check]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+branch = "0.21"
+version = "0.21"
 package="gstreamer-check"
 
 [lib]
