@@ -5,6 +5,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct Signallable {
     _parent: glib::gobject_ffi::GTypeInterface,
     pub start: fn(&super::Signallable),
