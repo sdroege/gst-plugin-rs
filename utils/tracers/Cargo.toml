@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-tracers"
-version = "0.11.0-alpha.1"
+version = "0.11.0"
 authors = ["Guillaume Desmottes <guillaume.desmottes@onestream.live>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
