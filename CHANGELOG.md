@@ -5,6 +5,30 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.11.0] - 2023-08-10
+### Changed
+- Updated MSRV to 1.70.
+- Compatible with gtk-rs 0.18 and gstreamer-rs 0.21.
+- awstranscriber: Move to HTTP2-based API via the aws-sdk-transcribestreaming
+  crate instead of our own implementation around the WebSocket API.
+
+### Added
+- webrtcsink: Add AWS KVS signaller and corresponding aws-kvs-webrtcsink
+  element.
+- awstranscriber / transcriberbin: Add support for translations and outputting
+  transcriptions from a single audio stream in multiple languages at once.
+- gstwebrtc-api: JavaScript API for interacting with the default signalling
+  protocol used by webrtcsink / webrtcsrc.
+- cea608to708: New element for converting CEA608 to CEA708 closed captions.
+- webrtcsink: Expose the signaller as property and allow implementing a
+  custom signaller by connecting signal handlers to the default signaller.
+- webrtcsink: Add support for pre-encoded streams.
+- togglerecord: Add support for non-live input streams.
+- webrtcsink: New whipwebrtcsink that implements WHIP around webrtcsink.
+  The existing whipsink still exists but will sooner or later be deprecated.
+- webrtcsink: Add LiveKit signaller and corresponding livekitwebrtcsink
+  element.
+
 ## [0.10.11] - 2023-07-20
 ### Fixed
 - fallbackswitch: Fix pad health calculation and notifies.
@@ -213,8 +237,9 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.11...HEAD
-[0.10.11]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.9...0.10.11
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.0...HEAD
+[0.11.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.11...0.11.0
+[0.10.11]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.10...0.10.11
 [0.10.10]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.9...0.10.10
 [0.10.9]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.8...0.10.9
 [0.10.8]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.7...0.10.8
