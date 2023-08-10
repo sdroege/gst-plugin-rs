@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-textwrap"
-version = "0.11.0-alpha.1"
+version = "0.12.0-alpha.1"
 authors = ["Mathieu Duponchelle <mathieu@centricular.com>"]
 license = "MPL-2.0"
 edition = "2021"

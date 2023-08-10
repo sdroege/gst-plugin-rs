@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-sodium"
-version = "0.11.0-alpha.1"
+version = "0.12.0-alpha.1"
 authors = ["Jordan Petridis <jordan@centricular.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 description = "GStreamer plugin for libsodium-based file encryption and decryption"
