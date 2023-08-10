@@ -12,7 +12,7 @@ rust-version = "1.70"
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21" }
 gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21" }
 gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21" }
-gst-plugin-gtk4 = { path = "../../video/gtk4", optional = true }
+gst-plugin-gtk4 = { path = "../../video/gtk4", optional = true, version = "0.11" }
 gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", branch = "0.7", version = "0.7", optional = true }
 gio = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "0.18", version = "0.18", optional = true }
 parking_lot = "0.12"
