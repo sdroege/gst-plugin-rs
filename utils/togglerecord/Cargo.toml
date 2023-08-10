@@ -32,7 +32,7 @@ path = "examples/gtk_recording.rs"
 required-features = ["gtk", "gio", "gst-plugin-gtk4"]
 
 [build-dependencies]
-gst-plugin-version-helper = { path="../../version-helper" }
+gst-plugin-version-helper = { path="../../version-helper", version = "0.7" }
 
 [features]
 static = []

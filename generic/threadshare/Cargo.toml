@@ -59,7 +59,7 @@ name = "ts-standalone"
 path = "examples/standalone/main.rs"
 
 [build-dependencies]
-gst-plugin-version-helper = { path="../../version-helper" }
+gst-plugin-version-helper = { path="../../version-helper", version = "0.7" }
 cc = "1.0.38"
 pkg-config = "0.3.15"
 

@@ -32,7 +32,7 @@ quick-xml = { version = "0.30", features = ["serialize"] }
 serde = "1"
 
 [build-dependencies]
-gst-plugin-version-helper = { path="../../version-helper" }
+gst-plugin-version-helper = { path="../../version-helper", version = "0.7" }
 
 [features]
 default = []

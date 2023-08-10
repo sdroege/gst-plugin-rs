@@ -32,7 +32,7 @@ gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org
 gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.21", version = "0.21" }
 
 [build-dependencies]
-gst-plugin-version-helper = { path="../../version-helper" }
+gst-plugin-version-helper = { path="../../version-helper", version = "0.7" }
 
 [features]
 static = []
