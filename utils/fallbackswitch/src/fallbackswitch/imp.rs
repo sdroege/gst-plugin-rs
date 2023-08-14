@@ -829,11 +829,14 @@ impl FallbackSwitch {
             is_active = self.active_sinkpad.lock().as_ref() == Some(pad);
         }
 
-        let mut pad_state = pad_imp.state.lock();
+        let pad_state = pad_imp.state.lock();
         if pad_state.flushing {
             debug!(CAT, imp: self, "Flushing");
             return Err(gst::FlowError::Flushing);
         }
+        // calling schedule_timeout() may result in handle_timeout() being called right away,
+        // which will need pad state locks, so drop it now to prevent deadlocks.
+        drop(pad_state);
 
         if is_active {
             if start_running_time
@@ -878,6 +881,8 @@ impl FallbackSwitch {
                 state.cancel_timeout();
             }
         }
+
+        let mut pad_state = pad_imp.state.lock();
 
         if let Some(running_time) = end_running_time {
             pad_state.current_running_time = Some(running_time);
