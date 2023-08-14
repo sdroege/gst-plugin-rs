@@ -426,7 +426,7 @@ impl SignallableImpl for WhipClient {
         }
 
         self.obj().connect_closure(
-            "consumer-added",
+            "webrtcbin-ready",
             false,
             glib::closure!(|signaller: &super::WhipClientSignaller,
                             _consumer_identifier: &str,

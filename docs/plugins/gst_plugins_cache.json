@@ -7131,6 +7131,20 @@
                         "args": [],
                         "return-type": "gboolean",
                         "when": "last"
+                    },
+                    "webrtcbin-ready": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "GstElement"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
                     }
                 }
             },

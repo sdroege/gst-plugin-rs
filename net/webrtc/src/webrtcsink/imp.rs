@@ -2613,6 +2613,7 @@ impl BaseWebRTCSink {
                 // moment.
                 element.emit_by_name::<()>("consumer-added", &[&peer_id, &webrtcbin]);
                 signaller.emit_by_name::<()>("consumer-added", &[&peer_id, &webrtcbin]);
+                signaller.emit_by_name::<()>("webrtcbin-ready", &[&peer_id, &webrtcbin]);
 
                 // We don't connect to on-negotiation-needed, this in order to call the above
                 // signal without holding the state lock:

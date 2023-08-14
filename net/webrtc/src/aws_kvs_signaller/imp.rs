@@ -345,7 +345,7 @@ impl Signaller {
 
         gst::info!(CAT, "Ice servers: {:?}", ice_servers);
         self.obj().connect_closure(
-            "consumer-added",
+            "webrtcbin-ready",
             false,
             glib::closure!(|_signaller: &super::AwsKvsSignaller,
                             _consumer_identifier: &str,

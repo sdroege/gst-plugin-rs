@@ -269,7 +269,7 @@ impl SignallableImpl for Signaller {
 
             let weak_imp = imp.downgrade();
             imp.obj().connect_closure(
-                "consumer-added",
+                "webrtcbin-ready",
                 false,
                 glib::closure!(|_signaler: &super::LiveKitSignaller,
                                 _consumer_identifier: &str,

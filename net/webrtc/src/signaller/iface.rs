@@ -284,9 +284,12 @@ unsafe impl prelude::ObjectInterface for Signallable {
                  *
                  * This signal can be used to tweak @webrtcbin, creating a data
                  * channel for example.
+                 *
+                 * Deprecated: 1.24: Use `webrtcbin-ready` instead
                  */
                 Signal::builder("consumer-added")
                     .param_types([String::static_type(), gst::Element::static_type()])
+                    .deprecated()
                     .build(),
                 /**
                  * GstRSWebRTCSignallableIface::consumer-removed:
@@ -385,6 +388,18 @@ unsafe impl prelude::ObjectInterface for Signallable {
                         *output = input.clone();
                         false
                     })
+                    .build(),
+                /**
+                 * GstRSWebRTCSignallableIface::webrtcbin-ready:
+                 * @self: The object implementing #GstRSWebRTCSignallableIface
+                 * @peer_id: Id of the consumer/producer
+                 * @webrtcbin: The internal WebRTCBin element
+                 *
+                 * This signal can be used to tweak @webrtcbin, creating a data
+                 * channel for example.
+                 */
+                Signal::builder("webrtcbin-ready")
+                    .param_types([String::static_type(), gst::Element::static_type()])
                     .build(),
             ]
         });
