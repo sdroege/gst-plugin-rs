@@ -36,6 +36,14 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
+/* Mutex locking ordering:
+    - self.settings
+    - self.state
+    - self.active_sinkpad
+    - pad.settings
+    - pad.state
+*/
+
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 enum CapsInfo {
@@ -473,8 +481,8 @@ impl FallbackSwitch {
             if active_sinkpad.as_ref() == Some(pad) {
                 continue;
             }
-            let pad_state = pad_imp.state.lock();
             let pad_settings = pad_imp.settings.lock().clone();
+            let pad_state = pad_imp.state.lock();
             #[allow(clippy::collapsible_if)]
             /* If this pad has data that arrived within the 'timeout' window
              * before the timeout fired, we can switch to it */
@@ -638,8 +646,8 @@ impl FallbackSwitch {
         buffer: gst::Buffer,
         from_gap: Option<&gst::event::Gap>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let mut state = self.state.lock();
         let settings = self.settings.lock().clone();
+        let mut state = self.state.lock();
         let pad = pad.downcast_ref::<super::FallbackSwitchSinkPad>().unwrap();
         let pad_imp = pad.imp();
 
@@ -1176,8 +1184,8 @@ impl FallbackSwitch {
                     }
                 }
 
-                let mut state = self.state.lock();
                 let settings = self.settings.lock().clone();
+                let mut state = self.state.lock();
                 min_latency = min_latency.max(settings.min_upstream_latency);
                 state.upstream_latency = min_latency;
                 log!(CAT, obj: pad, "Upstream latency {}", min_latency);
