@@ -6,7 +6,7 @@ In this first part we’re going to write a plugin that contains a video filter 
 
 This will show the basics of how to write a GStreamer plugin and element in Rust: the basic setup for registering a type and implementing it in Rust, and how to use the various GStreamer API and APIs from the Rust standard library to do the processing.
 
-The final code for this plugin can be found [here](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/tree/main/gst-plugin-tutorial), and it is based on latest git version of the [gstreamer](https://gitlab.freedesktop.org/gstreamer/gstreamer-rs). At least Rust 1.32 is required for all this. You also need to have GStreamer (at least version 1.8) installed for your platform, see e.g. the GStreamer bindings [installation instructions](https://gitlab.freedesktop.org/gstreamer/gstreamer-rs/blob/main/README.md).
+The final code for this plugin can be found [here](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/tree/main/tutorial), and it is based on latest git version of the [gstreamer](https://gitlab.freedesktop.org/gstreamer/gstreamer-rs). At least Rust 1.32 is required for all this. You also need to have GStreamer (at least version 1.8) installed for your platform, see e.g. the GStreamer bindings [installation instructions](https://gitlab.freedesktop.org/gstreamer/gstreamer-rs/blob/main/README.md).
 
 # Table of contents
 
@@ -53,7 +53,7 @@ path = "src/lib.rs"
 gst-plugin-version-helper = {  git = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs" }
 ```
 
-We depend on the `gstreamer`, `gstreamer-base` and `gstreamer-video` crates for various GStreamer APIs that will be used later, and the `glib` crate to be able to use some GLib API that we’ll need. GStreamer is building upon GLib, and this leaks through in various places. We also have one build dependency on the `gst-plugin-version-helper` crate, which helps to get some information about the plugin for the `gst::plugin_define!` macro automatically, and the `once_cell` crate, which allows to declare lazily initialized global variables.
+We depend on the `gstreamer`, `gstreamer-base` and `gstreamer-video` crates for various GStreamer APIs that will be used later. GStreamer is building upon GLib, and this leaks through in various places. We also have one build dependency on the `gst-plugin-version-helper` crate, which helps to get some information about the plugin for the `gst::plugin_define!` macro automatically.
 
 With the basic project structure being set-up, we should be able to compile the project with `cargo build` now, which will download and build all dependencies and then creates a file called `target/debug/libgstrstutorial.so` (or .dll on Windows, .dylib on macOS). This is going to be our GStreamer plugin.
 
@@ -145,9 +145,9 @@ With that our `src/lib.rs` is complete, and all following code is only in `src/r
 
 ```rust
 use gst::glib;
-use gst_base::subclass::prelude::*;
+use gst::prelude::*;
+use gst_video::subclass::prelude::*;
 
-use std::i32;
 use std::sync::Mutex;
 
 use gst::glib::once_cell::sync::Lazy;
@@ -169,13 +169,23 @@ impl Rgb2Gray {}
 impl ObjectSubclass for Rgb2Gray {
     const NAME: &'static str = "GstRsRgb2Gray";
     type Type = super::Rgb2Gray;
-    type ParentType = gst_base::BaseTransform;
+    type ParentType = gst_video::VideoFilter;
 }
 ```
 
 This defines a struct `Rgb2Gray` which is empty for now and an empty implementation of the struct which will later be used. The `ObjectSubclass` trait is implemented on the struct `Rgb2Gray` for providing static information about the type to the type system. By implementing `ObjectSubclass` we allow registering our struct with the GObject object system.
 
-`ObjectSubclass` has an associated constant which contains the name of the type, some associated types, and functions for initializing/returning a new instance of our element (`new`) and for initializing the class metadata (`class_init`, more on that later). We simply let those functions proxy to associated functions on the `Rgb2Gray` struct that we’re going to define at a later time.
+`ObjectSubclass` has an associated constant which contains the name of the type and some associated types.
+
+Additionally we need to implement various traits on the Rgb2Gray struct, which will later be used to override virtual methods of the various parent classes of our element. For now we can keep the trait implementations empty. There is one trait implementation required per parent class.
+
+```rust
+impl ObjectImpl for Rgb2Gray {}
+impl GstObjectImpl for Rgb2Gray {}
+impl ElementImpl for Rgb2Gray {}
+impl BaseTransformImpl for Rgb2Gray {}
+impl VideoFilterImpl for Rgb2Gray {}
+```
 
 We also add the following code is in `src/rgb2gray/mod.rs`:
 
@@ -209,7 +219,7 @@ In addition, we also define a `register` function (the one that is already calle
 
 ## Type Class & Instance Initialization
 
-As a next step we implement the `new` function and `class_init` functions. In the first version, this struct is empty for now but we will later use it to store all state of our element.
+As the next step we implement the `metadata` function and configure the `BaseTransform` class.
 
 ```rust
 use gst::glib;
@@ -222,36 +232,38 @@ impl Rgb2Gray {}
 #[glib::object_subclass]
 impl ObjectSubclass for Rgb2Gray {
     [...]
+}
 
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "RGB-GRAY Converter",
-            "Filter/Effect/Converter/Video",
-            "Converts RGB to GRAY or grayscale RGB",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
+impl ObjectImpl for Rgb2Gray {}
 
-        klass.configure(
-            gst_base::subclass::BaseTransformMode::NeverInPlace,
-            false,
-            false,
-        );
+impl GstObjectImpl for Rgb2Gray {}
+
+impl ElementImpl for Rgb2Gray {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "RGB-GRAY Converter",
+                "Filter/Effect/Converter/Video",
+                "Converts RGB to GRAY or grayscale RGB",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
     }
+}
+
+impl BaseTransformImpl for Rgb2Gray {
+    const MODE: gst_base::subclass::BaseTransformMode =
+        gst_base::subclass::BaseTransformMode::NeverInPlace;
+    const PASSTHROUGH_ON_SAME_CAPS: bool = false;
+    const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
 }
 ```
 
+In the `metadata` function we set up `ElementMetadata` structure for our new element. In this case it contains a description, a classification of our element, a longer description and the author. The metadata can later be retrieved and made use of via the [`Registry`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/gstreamer/struct.Registry.html) and [`PluginFeature`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/gstreamer/struct.PluginFeature.html)/[`ElementFactory`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/gstreamer/struct.ElementFactory.html) API. We employ the `once_cell::sync::Lazy` type from the `once_cell` crate here. This type allows to declare lazily initialized global variables, i.e. on the very first use the provided code will be executed and the result will be stored for all later uses.
 
-In the `new` function we return our empty struct.
-
-In the `class_init` function we, again, set up some metadata for our new element. In this case these are a description, a classification of our element, a longer description and the author. The metadata can later be retrieved and made use of via the [`Registry`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/gstreamer/struct.Registry.html) and [`PluginFeature`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/gstreamer/struct.PluginFeature.html)/[`ElementFactory`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/gstreamer/struct.ElementFactory.html) API. We also configure the `BaseTransform` class and define that we will never operate in-place (producing our output in the input buffer), and that we don’t want to work in passthrough mode if the input/output formats are the same.
-
-Additionally we need to implement various traits on the Rgb2Gray struct, which will later be used to override virtual methods of the various parent classes of our element. For now we can keep the trait implementations empty. There is one trait implementation required per parent class.
-
-```rust
-impl ObjectImpl for Rgb2Gray {}
-impl ElementImpl for Rgb2Gray {}
-impl BaseTransformImpl for Rgb2Gray {}
-```
+We also implement the required `BaseTransformImpl` trait items, which define that we will never operate in-place (producing our output in the input buffer), and that we don’t want to work in passthrough mode if the input/output formats are the same.
 
 With all this defined, `gst-inspect-1.0` should be able to show some more information about our element already but will still complain that it’s not complete yet.
 
@@ -269,14 +281,23 @@ impl Rgb2Gray {}
 impl ObjectSubclass for Rgb2Gray {
     const NAME: &'static str = "GstRsRgb2Gray";
     type Type = super::Rgb2Gray;
-    type ParentType = gst_base::BaseTransform;
+    type ParentType = gst_base::VideoFilter;
 }
 
 impl ObjectImpl for Rgb2Gray {}
 
+impl GstObjectImpl for Rgb2Gray {}
+
 impl ElementImpl for Rgb2Gray {}
 
-impl BaseTransformImpl for Rgb2Gray {}
+impl BaseTransformImpl for Rgb2Gray {
+    const MODE: gst_base::subclass::BaseTransformMode =
+        gst_base::subclass::BaseTransformMode::NeverInPlace;
+    const PASSTHROUGH_ON_SAME_CAPS: bool = false;
+    const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
+}
+
+impl VideoFilterImpl for Rgb2Gray {}
 ```
 
 ```rust
@@ -303,10 +324,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 ## Debug Category
 
 To be able to later have a debug category available for our new element that
-can be used for logging, we make use of the `once_cell::sync::Lazy` type from the
-`once_cell` crate. This type allows to declare lazily initialized
-global variables, i.e. on the very first use the provided code will be
-executed and the result will be stored for all later uses.
+can be used for logging, we again make use of the `once_cell::sync::Lazy` type.
 
 ```rust
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -325,131 +343,55 @@ the convention with GStreamer elements.
 
 Data flow of GStreamer elements is happening via pads, which are the input(s) and output(s) (or sinks and sources in GStreamer terminology) of an element. Via the pads, buffers containing actual media data, events or queries are transferred. An element can have any number of sink and source pads, but our new element will only have one of each.
 
-To be able to declare what kinds of pads an element can create (they are not necessarily all static but could be created at runtime by the element or the application), it is necessary to install so-called pad templates during the class initialization (in the `class_init` function). These pad templates contain the name (or rather “name template”, it could be something like `src_%u` for e.g. pad templates that declare multiple possible pads), the direction of the pad (sink or source), the availability of the pad (is it always there, sometimes added/removed by the element or to be requested by the application) and all the possible media types (called caps) that the pad can consume (sink pads) or produce (src pads).
+To be able to declare what kinds of pads an element can create (they are not necessarily all static but could be created at runtime by the element or the application), it is necessary to install so-called pad templates during the class initialization. These pad templates contain the name (or rather “name template”, it could be something like `src_%u` for e.g. pad templates that declare multiple possible pads), the direction of the pad (sink or source), the availability of the pad (is it always there, sometimes added/removed by the element or to be requested by the application) and all the possible media types (called caps) that the pad can consume (sink pads) or produce (src pads).
 
-In our case we only have always pads, one sink pad called “sink”, on which we can only accept RGB (BGRx to be exact) data with any width/height/framerate and one source pad called “src”, on which we will produce either RGB (BGRx) data or GRAY8 (8-bit grayscale) data. We do this by adding the following code to the class_init function.
+In our case we only have always pads, one sink pad called “sink”, on which we can only accept RGB (BGRx to be exact) data with any width/height/framerate and one source pad called “src”, on which we will produce either RGB (BGRx) data or GRAY8 (8-bit grayscale) data. We do this by implementing `pad_templates` method from `ElementImpl` trait.
 
 ```rust
-        let caps = gst_video::VideoCapsBuilder::new()
-            .format_list([gst_video::VideoFormat::Bgrx.to_str(),
-                    gst_video::VideoFormat::Gray8.to_str(),
-            ])
-            .build();
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
+    impl ElementImpl for Rgb2Gray {
+        [...]
 
+        fn pad_templates() -> &'static [gst::PadTemplate] {
+            static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+                let caps = gst_video::VideoCapsBuilder::new()
+                .format_list([gst_video::VideoFormat::Bgrx, gst_video::VideoFormat::Gray8])
+                .build();
+                let src_pad_template = gst::PadTemplate::new(
+                    "src",
+                    gst::PadDirection::Src,
+                    gst::PadPresence::Always,
+                    &caps,
+                )
+                .unwrap();
 
-        let caps = gst_video::VideoCapsBuilder::new()
-            .format(gst_video::VideoFormat::Bgrx)
-            .build();
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
+                let caps = gst_video::VideoCapsBuilder::new()
+                    .format(gst_video::VideoFormat::Bgrx)
+                    .build();
+                let sink_pad_template = gst::PadTemplate::new(
+                    "sink",
+                    gst::PadDirection::Sink,
+                    gst::PadPresence::Always,
+                    &caps,
+                )
+                .unwrap();
+
+                vec![src_pad_template, sink_pad_template]
+            });
+
+            PAD_TEMPLATES.as_ref()
+        }
+    }
 ```
 
 The names “src” and “sink” are pre-defined by the `BaseTransform` class and this base-class will also create the actual pads with those names from the templates for us whenever a new element instance is created. Otherwise we would have to do that in our `new` function but here this is not needed.
 
 If you now run gst-inspect-1.0 on the rsrgb2gray element, these pad templates with their caps should also show up.
 
-## Caps Handling Part 1
+## Caps Handling
 
-As a next step we will add caps handling to our new element. This involves overriding 4 virtual methods from the BaseTransformImpl trait, and actually storing the configured input and output caps inside our element struct. Let’s start with the latter
+As the next step we will add caps handling to our new element. It is required that we implement a function that is converting caps into the corresponding caps in the other direction. That is, we should convert BGRx to BGRx or GRAY8. Similarly, if the element downstream of ours can accept GRAY8 with a specific width/height from our source pad, we have to convert this to BGRx with that very same width/height. For example, if we receive BGRx caps with some width/height on the sinkpad, we should convert this into new caps with the same width/height but BGRx or GRAY8.
 
-```rust
-struct State {
-    in_info: gst_video::VideoInfo,
-    out_info: gst_video::VideoInfo,
-}
-
-#[derive(Default)]
-pub struct Rgb2Gray {
-    state: Mutex<Option<State>>
-}
-
-impl Rgb2Gray{}
-
-#[glib::object_subclass]
-impl ObjectSubclass for Rgb2Gray {
-    [...]
-}
-```
-
-We define a new struct State that contains the input and output caps, stored in a [`VideoInfo`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/gstreamer_video/struct.VideoInfo.html). `VideoInfo` is a struct that contains various fields like width/height, framerate and the video format and allows to conveniently with the properties of (raw) video formats. We have to store it inside a [`Mutex`](https://doc.rust-lang.org/std/sync/struct.Mutex.html) in our `Rgb2Gray` struct as this can (in theory) be accessed from multiple threads at the same time.
-
-Whenever input/output caps are configured on our element, the `set_caps` virtual method of `BaseTransform` is called with both caps (i.e. in the very beginning before the data flow and whenever it changes), and all following video frames that pass through our element should be according to those caps. Once the element is shut down, the `stop` virtual method is called and it would make sense to release the `State` as it only contains stream-specific information. We’re doing this by adding the following to the `BaseTransformImpl` trait implementation
-
-```rust
-impl BaseTransformImpl for Rgb2Gray {
-    fn set_caps(
-        &self,
-        incaps: &gst::Caps,
-        outcaps: &gst::Caps,
-    ) -> Result<(), gst::LoggableError> {
-        let in_info = match gst_video::VideoInfo::from_caps(incaps) {
-            None => return Err(gst::loggable_error!(CAT, "Failed to parse input caps")),
-            Some(info) => info,
-        };
-        let out_info = match gst_video::VideoInfo::from_caps(outcaps) {
-            None => return Err(gst::loggable_error!(CAT, "Failed to parse output caps")),
-            Some(info) => info,
-        };
-
-        gst::debug!(
-            CAT,
-            imp: self,
-            "Configured for caps {} to {}",
-            incaps,
-            outcaps
-        );
-
-        *self.state.lock().unwrap() = Some(State { in_info, out_info });
-
-        Ok(())
-    }
-
-    fn stop(&self) -> Result<(), gst::ErrorMessage> {
-        // Drop state
-        let _ = self.state.lock().unwrap().take();
-
-        gst::info!(CAT, imp: self, "Stopped");
-
-        Ok(())
-    }
-}
-```
-
-This code should be relatively self-explanatory. In `set_caps` we’re parsing the two caps into a `VideoInfo` and then store this in our `State`, in `stop` we drop the `State` and replace it with `None`. In addition we make use of our debug category here and use the `gst::info!` and `gst::debug!` macros to output the current caps configuration to the GStreamer debug logging system. This information can later be useful for debugging any problems once the element is running.
-
-Next we have to provide information to the `BaseTransform` base class about the size in bytes of a video frame with specific caps. This is needed so that the base class can allocate an appropriately sized output buffer for us, that we can then fill later. This is done with the `get_unit_size` virtual method, which is required to return the size of one processing unit in specific caps. In our case, one processing unit is one video frame. In the case of raw audio it would be the size of one sample multiplied by the number of channels.
-
-```rust
-impl BaseTransformImpl for Rgb2Gray {
-    fn get_unit_size(&self, caps: &gst::Caps) -> Option<usize> {
-        gst_video::VideoInfo::from_caps(caps).map(|info| info.size())
-    }
-}
-```
-
-We simply make use of the `VideoInfo` API here again, which conveniently gives us the size of one video frame already.
-
-Instead of `get_unit_size` it would also be possible to implement the `transform_size` virtual method, which is getting passed one size and the corresponding caps, another caps and is supposed to return the size converted to the second caps. Depending on how your element works, one or the other can be easier to implement.
-
-## Caps Handling Part 2
-
-We’re not done yet with caps handling though. As a very last step it is required that we implement a function that is converting caps into the corresponding caps in the other direction. That is, we should convert BGRx to BGRx or GRAY8. Similarly, if the element downstream of ours can accept GRAY8 with a specific width/height from our source pad, we have to convert this to BGRx with that very same width/height. For example, if we receive BGRx caps with some width/height on the sinkpad, we should convert this into new caps with the same width/height but BGRx or GRAY8.
-
-This has to be implemented in the `transform_caps` virtual method, and looks as follows
+This has to be implemented in the `transform_caps` virtual method from the `BaseTransformImpl` trait, and looks as follows
 
 ```rust
 impl BaseTransformImpl for Rgb2Gray {
@@ -538,43 +480,15 @@ This function works by extracting the blue, green and red components from each p
 
 Note: This is only doing the actual conversion from linear RGB to grayscale (and in [BT.601](https://en.wikipedia.org/wiki/YUV#SDTV_with_BT.601) colorspace). To do this conversion correctly you need to know your colorspaces and use the correct coefficients for conversion, and also do [gamma correction](https://en.wikipedia.org/wiki/Gamma_correction). See [this](https://web.archive.org/web/20161024090830/http://www.4p8.com/eric.brasseur/gamma.html) about why it is important.
 
-Afterwards we have to actually call this function on every pixel. For this the transform virtual method is implemented, which gets a input and output buffer passed and we’re supposed to read the input buffer and fill the output buffer. The implementation looks as follows, and is going to be our biggest function for this element
+Afterwards we have to actually call this function on every pixel. For this the `transform_frame` virtual method from the `VideoFilterImpl` trait is implemented, which gets a input and output video frame passed and we’re supposed to read the input frame and fill the output frame. The implementation looks as follows, and is going to be our biggest function for this element
 
 ```rust
-impl BaseTransformImpl for Rgb2Gray {
-    fn transform(
+impl VideoFilterImpl for Rgb2Gray {
+    fn transform_frame(
         &self,
-        inbuf: &gst::Buffer,
-        outbuf: &mut gst::BufferRef,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let mut state_guard = self.state.lock().unwrap();
-        let state = state_guard.as_mut().ok_or_else(|| {
-            gst::element_imp_error!(self, gst::CoreError::Negotiation, ["Have no state yet"]);
-            gst::FlowError::NotNegotiated
-        })?;
-
-        let in_frame =
-            gst_video::VideoFrameRef::from_buffer_ref_readable(inbuf.as_ref(), &state.in_info)
-                .ok_or_else(|| {
-                    gst::element_imp_error!(
-                        self,
-                        gst::CoreError::Failed,
-                        ["Failed to map input buffer readable"]
-                    );
-                    gst::FlowError::Error
-                })?;
-
-        let mut out_frame =
-            gst_video::VideoFrameRef::from_buffer_ref_writable(outbuf, &state.out_info)
-                .ok_or_else(|| {
-                    gst::element_imp_error!(
-                        self,
-                        gst::CoreError::Failed,
-                        ["Failed to map output buffer writable"]
-                    );
-                    gst::FlowError::Error
-                })?;
-
+        in_frame: &gst_video::VideoFrameRef<&gst::BufferRef>,
+        out_frame: &mut gst_video::VideoFrameRef<&mut gst::BufferRef>,
+    ) -> Result <gst::FlowSuccess, gst::FlowError> {
         let width = in_frame.width() as usize;
         let in_stride = in_frame.plane_stride()[0] as usize;
         let in_data = in_frame.plane_data(0).unwrap();
@@ -640,11 +554,7 @@ impl BaseTransformImpl for Rgb2Gray {
 }
 ```
 
-What happens here is that we first of all lock our state (the input/output `VideoInfo`) and error out if we don’t have any yet (which can’t really happen unless other elements have a bug, but better safe than sorry). After that we map the input buffer readable and the output buffer writable with the [`VideoFrameRef`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/gstreamer_video/video_frame/struct.VideoFrameRef.html) API. By mapping the buffers we get access to the underlying bytes of them, and the mapping operation could for example make GPU memory available or just do nothing and give us access to a normally allocated memory area. We have access to the bytes of the buffer until the `VideoFrameRef` goes out of scope.
-
-Instead of `VideoFrameRef` we could’ve also used the [`gst::Buffer::map_readable()`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/gstreamer/buffer/struct.BufferRef.html#method.map_readable) and [`gst::Buffer::map_writable()`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/gstreamer/buffer/struct.BufferRef.html#method.map_writable) API, but different to those the `VideoFrameRef` API also extracts various metadata from the raw video buffers and makes them available. For example we can directly access the different planes as slices without having to calculate the offsets ourselves, or we get directly access to the width and height of the video frame.
-
-After mapping the buffers, we store various information we’re going to need later in local variables to save some typing later. This is the width (same for input and output as we never changed the width in `transform_caps`), the input and out (row-) stride (the number of bytes per row/line, which possibly includes some padding at the end of each line for alignment reasons), the output format (which can be BGRx or GRAY8 because of how we implemented `transform_caps`) and the pointers to the first plane of the input and output (which in this case also is the only plane, BGRx and GRAY8 both have only a single plane containing all the RGB/gray components).
+First we store various information we’re going to need later in local variables to save some typing later. This is the width (same for input and output as we never changed the width in `transform_caps`), the input and out (row-) stride (the number of bytes per row/line, which possibly includes some padding at the end of each line for alignment reasons), the output format (which can be BGRx or GRAY8 because of how we implemented `transform_caps`) and the pointers to the first plane of the input and output (which in this case also is the only plane, BGRx and GRAY8 both have only a single plane containing all the RGB/gray components).
 
 Then based on whether the output suppose to be BGRx or GRAY8, we iterate over all pixels. The code is basically the same in both cases, so we're only going to go through the case where BGRx is output.
 
@@ -736,10 +646,10 @@ impl ObjectImpl for Rgb2Gray {
     [...]
 
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
-        match pspec.get_name() {
+        match pspec.name() {
             "invert" => {
                 let mut settings = self.settings.lock().unwrap();
-                let invert = value.get_some().expect("type checked upstream");
+                let invert = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
                     imp: self,
@@ -751,7 +661,7 @@ impl ObjectImpl for Rgb2Gray {
             }
             "shift" => {
                 let mut settings = self.settings.lock().unwrap();
-                let shift = value.get_some().expect("type checked upstream");
+                let shift = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
                     imp: self,
@@ -765,8 +675,8 @@ impl ObjectImpl for Rgb2Gray {
         }
     }
 
-    fn get_property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.name() {
             "invert" => {
                 let settings = self.settings.lock().unwrap();
                 settings.invert.to_value()
