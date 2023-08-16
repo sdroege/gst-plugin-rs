@@ -368,6 +368,7 @@ pub fn set_ice_servers(
     Ok(())
 }
 
+#[cfg(any(feature = "whip", feature = "whep"))]
 pub fn build_link_header(url_str: &str) -> Result<String, url::ParseError> {
     let url = url::Url::parse(url_str)?;
 

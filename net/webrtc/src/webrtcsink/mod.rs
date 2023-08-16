@@ -70,6 +70,10 @@ glib::wrapper! {
 glib::wrapper! {
     pub struct JanusVRWebRTCSink(ObjectSubclass<imp::janus::JanusVRWebRTCSink>) @extends BaseWebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
 }
+#[cfg(feature = "whep")]
+glib::wrapper! {
+    pub struct WhepWebRTCSink(ObjectSubclass<imp::whep::WhepWebRTCSink>) @extends BaseWebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum WebRTCSinkError {
@@ -247,6 +251,13 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         "janusvrwebrtcsink",
         gst::Rank::NONE,
         JanusVRWebRTCSink::static_type(),
+    )?;
+    #[cfg(feature = "whep")]
+    gst::Element::register(
+        Some(plugin),
+        "whepserversink",
+        gst::Rank::NONE,
+        WhepWebRTCSink::static_type(),
     )?;
 
     #[cfg(feature = "janus")]

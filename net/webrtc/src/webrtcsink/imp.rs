@@ -6549,3 +6549,51 @@ pub(super) mod janus {
         type ParentType = crate::webrtcsink::BaseWebRTCSink;
     }
 }
+
+#[cfg(feature = "whep")]
+pub(super) mod whep {
+    use super::*;
+    use crate::whep_signaller::WhepServerSignaller;
+    #[derive(Default)]
+    pub struct WhepWebRTCSink {}
+
+    impl ObjectImpl for WhepWebRTCSink {
+        fn constructed(&self) {
+            let element = self.obj();
+            let ws = element
+                .upcast_ref::<crate::webrtcsink::BaseWebRTCSink>()
+                .imp();
+
+            let _ = ws.set_signaller(WhepServerSignaller::default().upcast());
+        }
+    }
+
+    impl GstObjectImpl for WhepWebRTCSink {}
+
+    impl ElementImpl for WhepWebRTCSink {
+        fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+            static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> =
+                LazyLock::new(|| {
+                    gst::subclass::ElementMetadata::new(
+                        "WhepWebRTCSink",
+                        "Sink/Network/WebRTC",
+                        "WebRTC sink with WHEP server signaller",
+                        "Taruntej Kanakamalla <taruntej@asymptotic.io>",
+                    )
+                });
+
+            Some(&*ELEMENT_METADATA)
+        }
+    }
+
+    impl BinImpl for WhepWebRTCSink {}
+
+    impl BaseWebRTCSinkImpl for WhepWebRTCSink {}
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for WhepWebRTCSink {
+        const NAME: &'static str = "GstWhepWebRTCSink";
+        type Type = crate::webrtcsink::WhepWebRTCSink;
+        type ParentType = crate::webrtcsink::BaseWebRTCSink;
+    }
+}
