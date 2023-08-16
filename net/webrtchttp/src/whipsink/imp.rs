@@ -104,7 +104,7 @@ impl ElementImpl for WhipSink {
             gst::subclass::ElementMetadata::new(
                 "WHIP Sink Bin",
                 "Sink/Network/WebRTC",
-                "A bin to stream media using the WebRTC HTTP Ingestion Protocol (WHIP)",
+                "A bin to stream RTP media using the WebRTC HTTP Ingestion Protocol (WHIP)",
                 "Taruntej Kanakamalla <taruntej@asymptotic.io>",
             )
         });
@@ -342,6 +342,9 @@ impl ObjectImpl for WhipSink {
         let obj = self.obj();
         obj.set_suppressed_flags(gst::ElementFlags::SINK | gst::ElementFlags::SOURCE);
         obj.set_element_flags(gst::ElementFlags::SINK);
+
+        gst::warning!(CAT, imp: self, "whipsink will be deprecated in the future, \
+            it is recommended that whipclientsink be used instead");
 
         // The spec requires all m= lines to be bundled (section 4.2)
         self.webrtcbin

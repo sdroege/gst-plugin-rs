@@ -136,7 +136,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     )?;
     gst::Element::register(
         Some(plugin),
-        "whipwebrtcsink",
+        "whipclientsink",
         gst::Rank::None,
         WhipWebRTCSink::static_type(),
     )?;

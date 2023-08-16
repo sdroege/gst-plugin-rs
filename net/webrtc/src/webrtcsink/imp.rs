@@ -3887,7 +3887,7 @@ impl ElementImpl for WhipWebRTCSink {
             gst::subclass::ElementMetadata::new(
                 "WhipWebRTCSink",
                 "Sink/Network/WebRTC",
-                "WebRTC sink with WHIP signaller",
+                "WebRTC sink with WHIP client signaller",
                 "Taruntej Kanakamalla <taruntej@asymptotic.io>",
             )
         });

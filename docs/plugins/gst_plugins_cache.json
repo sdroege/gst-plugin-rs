@@ -6391,9 +6391,9 @@
                     }
                 }
             },
-            "whipwebrtcsink": {
+            "whipclientsink": {
                 "author": "Taruntej Kanakamalla <taruntej@asymptotic.io>",
-                "description": "WebRTC sink with WHIP signaller",
+                "description": "WebRTC sink with WHIP client signaller",
                 "hierarchy": [
                     "GstWhipWebRTCSink",
                     "GstBaseWebRTCSink",
@@ -8977,7 +8977,7 @@
             },
             "whipsink": {
                 "author": "Taruntej Kanakamalla <taruntej@asymptotic.io>",
-                "description": "A bin to stream media using the WebRTC HTTP Ingestion Protocol (WHIP)",
+                "description": "A bin to stream RTP media using the WebRTC HTTP Ingestion Protocol (WHIP)",
                 "hierarchy": [
                     "GstWhipSink",
                     "GstBin",
