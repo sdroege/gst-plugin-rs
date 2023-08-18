@@ -339,7 +339,7 @@ foreach plugin_name, details: plugins
     plugin_features = details.get('features', [])
     if plugin_deps_found
       # Validate gst-plugin features
-      foreach feature: features
+      foreach feature: plugin_features
         if feature.startswith('gst-plugin') and not packages.contains(feature)
           plugin_deps_found = false
           break
