@@ -142,21 +142,6 @@ plugins = {
   'regex': {'library': 'libgstregex'},
   'textwrap': {'library': 'libgsttextwrap'},
 
-  'fallbackswitch': {
-    'library': 'libgstfallbackswitch',
-    'examples': ['gtk-fallbackswitch'],
-    'features': ['gtk', 'gio', 'gst-plugin-gtk4'],
-  },
-  'livesync': {
-    'library': 'libgstlivesync',
-    'examples': ['gtk-livesync'],
-    'features': ['gtk', 'gio', 'gst-plugin-gtk4'],
-  },
-  'togglerecord': {
-    'library': 'libgsttogglerecord',
-    'examples': ['gtk-recording'],
-    'features': ['gtk', 'gio', 'gst-plugin-gtk4'],
-  },
   'tracers': {'library': 'libgstrstracers'},
   'uriplaylistbin': {
     'library': 'libgsturiplaylistbin',
@@ -263,12 +248,29 @@ if get_option('gtk4').allowed()
       gtk4_features += 'x11glx'
     endif
   endif
-  plugins += {'gtk4': {
-    'library': 'libgstgtk4',
-    'examples': ['gtksink'],
-    'extra-deps': {'gtk4': '>=4.6'},
-    'features': gtk4_features,
-  }}
+  plugins += {
+    'gtk4': {
+      'library': 'libgstgtk4',
+      'examples': ['gtksink'],
+      'extra-deps': {'gtk4': '>=4.6'},
+      'features': gtk4_features,
+    },
+    'fallbackswitch': {
+      'library': 'libgstfallbackswitch',
+      'examples': ['gtk-fallbackswitch'],
+      'features': ['gtk', 'gio', 'gst-plugin-gtk4'],
+    },
+    'livesync': {
+      'library': 'libgstlivesync',
+      'examples': ['gtk-livesync'],
+      'features': ['gtk', 'gio', 'gst-plugin-gtk4'],
+    },
+    'togglerecord': {
+      'library': 'libgsttogglerecord',
+      'examples': ['gtk-recording'],
+      'features': ['gtk', 'gio', 'gst-plugin-gtk4'],
+    },
+  }
 endif
 
 # Process plugins list
@@ -331,11 +333,22 @@ foreach plugin_name, details: plugins
       deps_cache += {dep_name: dep}
       if not dep.found()
         plugin_deps_found = false
+        break
       endif
     endforeach
+    plugin_features = details.get('features', [])
+    if plugin_deps_found
+      # Validate gst-plugin features
+      foreach feature: features
+        if feature.startswith('gst-plugin') and not packages.contains(feature)
+          plugin_deps_found = false
+          break
+        endif
+      endforeach
+    endif
     if plugin_deps_found
       packages += f'gst-plugin-@plugin_name@'
-      features += details.get('features', [])
+      features += plugin_features
       extra_features = run_command('dependencies.py', meson.current_source_dir(), plugin_name,
         '--feature', '--gst-version', gst_dep.version(), capture: true, check: true).stdout().strip()
       if extra_features != ''
@@ -385,29 +398,31 @@ endif
 # get cmdline for rust
 extra_env += {'RUSTC': ' '.join(rustc.cmd_array())}
 
-rs_plugins = custom_target('gst-plugins-rs',
-  build_by_default: true,
-  output: output,
-  console: true,
-  install: true,
-  install_dir: plugins_install_dir,
-  depends: depends,
-  depfile: 'gst-plugins-rs.dep',
-  env: extra_env,
-  command: [cargo_wrapper,
-    'build',
-    meson.current_build_dir(),
-    meson.current_source_dir(),
-    meson.global_build_root(),
-    target,
-    get_option('prefix'),
-    get_option('libdir'),
-    '--packages', packages,
-    '--depfile', '@DEPFILE@',
-    '--lib-suffixes', library_suffixes,
-  ] + feature_args + extra_args)
-
-plugins = rs_plugins.to_list()
+plugins = []
+if output.length() > 0
+  rs_plugins = custom_target('gst-plugins-rs',
+    build_by_default: true,
+    output: output,
+    console: true,
+    install: true,
+    install_dir: plugins_install_dir,
+    depends: depends,
+    depfile: 'gst-plugins-rs.dep',
+    env: extra_env,
+    command: [cargo_wrapper,
+      'build',
+      meson.current_build_dir(),
+      meson.current_source_dir(),
+      meson.global_build_root(),
+      target,
+      get_option('prefix'),
+      get_option('libdir'),
+      '--packages', packages,
+      '--depfile', '@DEPFILE@',
+      '--lib-suffixes', library_suffixes,
+    ] + feature_args + extra_args)
+  plugins = rs_plugins.to_list()
+endif
 
 # This is used by GStreamer to static link Rust plugins into gst-full
 gst_plugins = []
@@ -476,14 +491,16 @@ subdir('docs')
 # We don't need to pass a command as we depends on the target above
 # but it is currently mandatory ( https://github.com/mesonbuild/meson/issues/8059 )
 # so use python as it's guaranteed to be present on any setup
-custom_target('gst-plugins-rs-pc-files',
-  build_by_default: true,
-  output: pc_files,
-  console: true,
-  install: true,
-  install_dir: pkgconfig_install_dir,
-  depends: rs_plugins,
-  command: [python, '-c', '""'])
+if pc_files.length() > 0
+  custom_target('gst-plugins-rs-pc-files',
+    build_by_default: true,
+    output: pc_files,
+    console: true,
+    install: true,
+    install_dir: pkgconfig_install_dir,
+    depends: rs_plugins,
+    command: [python, '-c', '""'])
+endif
 
 if get_option('webrtc').allowed()
   custom_target('gst-webrtc-signalling-server',
