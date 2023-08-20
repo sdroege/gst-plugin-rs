@@ -63,3 +63,5 @@ option('doc', type: 'feature', value: 'auto', yield: true,
        description: 'Enable documentation')
 option('examples', type: 'feature', value: 'disabled', yield: true,
        description: 'Build examples')
+option('tests', type : 'feature', value : 'auto', yield : true,
+       description : 'Build and enable unit tests')
