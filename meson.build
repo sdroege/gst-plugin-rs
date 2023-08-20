@@ -62,14 +62,30 @@ deps = [
   ['gstreamer-app-1.0', 'gst-plugins-base', 'app_dep', 'gstapp'],
   ['gstreamer-audio-1.0', 'gst-plugins-base', 'audio_dep', 'gstaudio'],
   ['gstreamer-base-1.0', 'gstreamer', 'gst_base_dep', 'gst_base'],
-  ['gstreamer-check-1.0', 'gstreamer', 'gst_check_dep', 'gst_check'],
-  ['gstreamer-gl-1.0', 'gst-plugins-base', 'gst_gl_dep', 'gstgl'],
-  ['gstreamer-net-1.0', 'gstreamer', 'gst_net_dep', 'gst_net'],
-  ['gstreamer-rtp-1.0', 'gst-plugins-base', 'rtp_dep', 'gst_rtp'],
-  ['gstreamer-video-1.0', 'gst-plugins-base', 'video_dep', 'gstvideo'],
-  ['gstreamer-sdp-1.0', 'gst-plugins-base', 'sdp_dep', 'gstsdp'],
-  ['gstreamer-webrtc-1.0', 'gst-plugins-bad', 'gstwebrtc_dep', 'gstwebrtc'],
+  ['gstreamer-video-1.0', 'gst-plugins-base', 'video_dep', 'gstvideo']  
 ]
+
+if get_option('threadshare').allowed() \
+  or get_option('onvif').allowed() \
+  or get_option('raptorq').allowed() \
+  or get_option('rtp').allowed() \
+  or get_option('webrtc').allowed()
+  deps += [['gstreamer-rtp-1.0', 'gst-plugins-base', 'rtp_dep', 'gst_rtp']]
+endif
+if get_option('webrtc').allowed() \
+  or get_option('webrtchttp').allowed()
+  deps += [['gstreamer-webrtc-1.0', 'gst-plugins-bad', 'gstwebrtc_dep', 'gstwebrtc']]
+  deps += [['gstreamer-sdp-1.0', 'gst-plugins-base', 'sdp_dep', 'gstsdp']]
+endif
+if get_option('tests').allowed()
+  deps += [['gstreamer-check-1.0', 'gstreamer', 'gst_check_dep', 'gst_check']]
+endif
+if get_option('gtk4').allowed()
+  deps += [['gstreamer-gl-1.0', 'gst-plugins-base', 'gst_gl_dep', 'gstgl']]
+endif
+if get_option('threadshare').allowed()
+  deps += [['gstreamer-net-1.0', 'gstreamer', 'gst_net_dep', 'gst_net']]
+endif
 
 glib_dep = dependency('glib-2.0', version: glib_req)
 deps_cache += {'glib-2.0': glib_dep}
@@ -561,18 +577,20 @@ if get_option('examples').allowed() and examples.length() > 0
     ] + feature_args)
 endif
 
-test('tests',
-  cargo_wrapper,
-  env: extra_env,
-  args: ['test',
-    meson.current_build_dir(),
-    meson.current_source_dir(),
-    meson.global_build_root(),
-    target,
-    get_option('prefix'),
-    get_option('libdir'),
-    '--packages', packages],
-  timeout: 600)
+if get_option('tests').allowed()
+  test('tests',
+    cargo_wrapper,
+    env: extra_env,
+    args: ['test',
+      meson.current_build_dir(),
+      meson.current_source_dir(),
+      meson.global_build_root(),
+      target,
+      get_option('prefix'),
+      get_option('libdir'),
+      '--packages', packages],
+    timeout: 600)
+endif
 
 summary({
     'Plugins': plugin_names,
