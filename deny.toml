@@ -158,12 +158,6 @@ version = "0.3"
 name = "regex-automata"
 version = "0.1"
 
-# old livekit-api depends on an old version of tokio-tungstenite/tungstenite
-# https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/merge_requests/1293
-[[bans.skip]]
-name = "tungstenite"
-version = "0.19"
-
 # tempfile depends on an old version of redox_syscall
 # https://github.com/Stebalien/tempfile/pull/256
 [[bans.skip]]
