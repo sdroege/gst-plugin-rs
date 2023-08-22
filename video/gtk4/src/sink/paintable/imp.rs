@@ -177,7 +177,6 @@ impl PaintableImpl for Paintable {
             );
 
             snapshot.translate(&graphene::Point::new(trans_x as f32, trans_y as f32));
-            snapshot.scale(scale_x as f32, scale_y as f32);
 
             for Texture {
                 texture,
@@ -191,7 +190,9 @@ impl PaintableImpl for Paintable {
             {
                 snapshot.push_opacity(*global_alpha as f64);
 
-                let bounds = graphene::Rect::new(*x, *y, *paintable_width, *paintable_height);
+                let texture_width = *paintable_width * scale_x as f32;
+                let texture_height = *paintable_height * scale_y as f32;
+                let bounds = graphene::Rect::new(*x, *y, texture_width, texture_height);
 
                 // Only premultiply GL textures that expect to be in premultiplied RGBA format.
                 //
