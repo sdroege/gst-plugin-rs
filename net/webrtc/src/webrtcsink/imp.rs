@@ -2234,8 +2234,12 @@ impl BaseWebRTCSink {
 
         RUNTIME.spawn(async move {
             while let Some(msg) = bus_stream.next().await {
-                let Some(element) = element_clone.upgrade() else { break; };
-                let Some(pipeline) = pipeline_clone.upgrade() else { break; };
+                let Some(element) = element_clone.upgrade() else {
+                    break;
+                };
+                let Some(pipeline) = pipeline_clone.upgrade() else {
+                    break;
+                };
                 let this = element.imp();
                 match msg.view() {
                     gst::MessageView::Error(err) => {
@@ -2543,7 +2547,9 @@ impl BaseWebRTCSink {
                     .pad
                     .property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
 
-                let Some(ref stream_name) = webrtc_pad.stream_name else { continue; };
+                let Some(ref stream_name) = webrtc_pad.stream_name else {
+                    continue;
+                };
 
                 if let Some(mid) = transceiver.mid() {
                     state.mids.insert(mid.to_string(), stream_name.clone());

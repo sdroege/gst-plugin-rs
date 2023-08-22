@@ -261,7 +261,9 @@ impl TranscriberStream {
 
             let discont_offset = self.discont_offset_tracker.lock().unwrap().discont_offset;
 
-            let Some(item) = TranscriptItem::from(item, self.lateness, discont_offset) else { continue };
+            let Some(item) = TranscriptItem::from(item, self.lateness, discont_offset) else {
+                continue;
+            };
             gst::debug!(
                 CAT,
                 imp: self.imp,
