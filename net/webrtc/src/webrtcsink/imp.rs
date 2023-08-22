@@ -613,9 +613,12 @@ fn setup_encoding(
      * provide feedback for audio packets.
      */
     if twcc {
-        let twcc_extension = gst_rtp::RTPHeaderExtension::create_from_uri(RTP_TWCC_URI).unwrap();
-        twcc_extension.set_id(1);
-        pay.emit_by_name::<()>("add-extension", &[&twcc_extension]);
+        if let Some(twcc_extension) = gst_rtp::RTPHeaderExtension::create_from_uri(RTP_TWCC_URI) {
+            twcc_extension.set_id(1);
+            pay.emit_by_name::<()>("add-extension", &[&twcc_extension]);
+        } else {
+            anyhow::bail!("Failed to add TWCC extension, make sure 'gst-plugins-good:rtpmanager' is installed");
+        }
     }
 
     conv_filter.set_property("caps", conv_caps);
