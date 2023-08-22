@@ -677,10 +677,13 @@ impl EncodingChainBuilder {
          * provide feedback for audio packets.
          */
         if let Some(idx) = self.twcc {
-            let twcc_extension =
-                gst_rtp::RTPHeaderExtension::create_from_uri(RTP_TWCC_URI).unwrap();
-            twcc_extension.set_id(idx);
-            pay.emit_by_name::<()>("add-extension", &[&twcc_extension]);
+            if let Some(twcc_extension) = gst_rtp::RTPHeaderExtension::create_from_uri(RTP_TWCC_URI)
+            {
+                twcc_extension.set_id(idx);
+                pay.emit_by_name::<()>("add-extension", &[&twcc_extension]);
+            } else {
+                anyhow::bail!("Failed to add TWCC extension, make sure 'gst-plugins-good:rtpmanager' is installed");
+            }
         }
         elements.push(pay);
 
