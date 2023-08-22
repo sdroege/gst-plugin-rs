@@ -320,6 +320,15 @@ if get_option('rav1e').allowed() and find_program('nasm', required: false).found
   features += 'gst-plugin-rav1e/asm'
 endif
 
+if get_option('default_library') == 'static'
+  extra_env += {
+    # Tell the pkg-config crate to think of all libraries as static
+    'PKG_CONFIG_ALL_STATIC': '1',
+    # Tell the system-deps crate to process linker flag for static deps
+    'SYSTEM_DEPS_LINK': 'static'
+  }
+endif
+
 foreach plugin_name, details: plugins
   plugin_opt = get_option(plugin_name)
   if plugin_opt.allowed()
