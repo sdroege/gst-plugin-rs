@@ -1671,8 +1671,9 @@ impl Receiver {
             });
         }
 
-        #[cfg(feature = "advanced-sdk")]
-        if [NDIlib_FourCC_audio_type_Opus].contains(&fourcc) {}
+        // FIXME: Needs testing with an actual stream to understand how it works
+        // #[cfg(feature = "advanced-sdk")]
+        // if [NDIlib_FourCC_audio_type_Opus].contains(&fourcc) {}
 
         gst::element_error!(
             element,
