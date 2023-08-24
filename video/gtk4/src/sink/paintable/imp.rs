@@ -11,7 +11,7 @@
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gdk, glib, graphene};
+use gtk::{gdk, glib, graphene, gsk};
 
 use crate::sink::frame::{Frame, Texture};
 
@@ -28,11 +28,25 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct Paintable {
     paintables: RefCell<Vec<Texture>>,
     cached_textures: RefCell<HashMap<usize, gdk::Texture>>,
     gl_context: RefCell<Option<gdk::GLContext>>,
+    premult_shader: gsk::GLShader,
+}
+
+impl Default for Paintable {
+    fn default() -> Self {
+        Self {
+            paintables: Default::default(),
+            cached_textures: Default::default(),
+            gl_context: Default::default(),
+            premult_shader: gsk::GLShader::from_bytes(&glib::Bytes::from_static(include_bytes!(
+                "premult.glsl"
+            ))),
+        }
+    }
 }
 
 #[glib::object_subclass]
@@ -145,14 +159,31 @@ impl PaintableImpl for Paintable {
                 width: paintable_width,
                 height: paintable_height,
                 global_alpha,
+                has_alpha,
             } in &*paintables
             {
                 snapshot.push_opacity(*global_alpha as f64);
-                snapshot.append_texture(
-                    texture,
-                    &graphene::Rect::new(*x, *y, *paintable_width, *paintable_height),
-                );
-                snapshot.pop();
+
+                let bounds = graphene::Rect::new(*x, *y, *paintable_width, *paintable_height);
+
+                // Only premultiply GL textures that expect to be in premultiplied RGBA format.
+                let do_premult = texture.is::<gdk::GLTexture>() && *has_alpha;
+                if do_premult {
+                    snapshot.push_gl_shader(
+                        &self.premult_shader,
+                        &bounds,
+                        &gsk::ShaderArgsBuilder::new(&self.premult_shader, None).to_args(),
+                    );
+                }
+
+                snapshot.append_texture(texture, &bounds);
+
+                if do_premult {
+                    snapshot.gl_shader_pop_texture(); // pop texture appended above from the shader
+                    snapshot.pop(); // pop shader
+                }
+
+                snapshot.pop(); // pop opacity
             }
         } else {
             gst::trace!(CAT, imp: self, "Snapshotting black frame");

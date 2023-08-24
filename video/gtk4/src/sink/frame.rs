@@ -42,6 +42,7 @@ pub(crate) struct Texture {
     pub width: f32,
     pub height: f32,
     pub global_alpha: f32,
+    pub has_alpha: bool,
 }
 
 struct FrameWrapper(gst_video::VideoFrame<gst_video::video_frame::Readable>);
@@ -149,6 +150,7 @@ impl Frame {
 
         let width = self.frame.width();
         let height = self.frame.height();
+        let has_alpha = self.frame.format_info().has_alpha();
         let (texture, pixel_aspect_ratio) = {
             #[cfg(not(any(target_os = "macos", feature = "gst_gl")))]
             {
@@ -183,9 +185,11 @@ impl Frame {
             width: width as f32 * pixel_aspect_ratio as f32,
             height: height as f32,
             global_alpha: 1.0,
+            has_alpha,
         });
 
         for overlay in self.overlays {
+            let has_alpha = overlay.frame.format_info().has_alpha();
             let (texture, _pixel_aspect_ratio) =
                 video_frame_to_memory_texture(overlay.frame, cached_textures, &mut used_textures);
 
@@ -196,6 +200,7 @@ impl Frame {
                 width: overlay.width as f32,
                 height: overlay.height as f32,
                 global_alpha: overlay.global_alpha,
+                has_alpha,
             });
         }
 
