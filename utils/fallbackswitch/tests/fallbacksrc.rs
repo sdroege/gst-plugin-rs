@@ -358,3 +358,38 @@ fn test_main_with_drops_with_fallback() {
 
     stop_pipeline(pipeline);
 }
+
+#[test]
+fn test_last_error_statistics() {
+    init();
+
+    let main = gst::Bin::default();
+    let fallback = gst::Bin::default();
+    let element = gst::ElementFactory::make("fallbacksrc")
+        .property("source", &main)
+        .property("fallback-source", &fallback)
+        .build()
+        .unwrap();
+    element.set_state(gst::State::Ready).unwrap();
+
+    let stats = element.property::<gst::Structure>("statistics");
+    for field in ["last-error-message", "last-fallback-error-message"] {
+        assert!(!stats.has_field(field));
+    }
+
+    for (field, source) in [
+        ("last-error-message", &main),
+        ("last-fallback-error-message", &fallback),
+    ] {
+        let message = gst::message::Error::builder(gst::ResourceError::Failed, "test error")
+            .src(source)
+            .build();
+        let seqnum = message.seqnum();
+        source.post_message(message).unwrap();
+
+        let stats = element.property::<gst::Structure>("statistics");
+        assert_eq!(stats.get::<gst::Message>(field).unwrap().seqnum(), seqnum);
+    }
+
+    element.set_state(gst::State::Null).unwrap();
+}
