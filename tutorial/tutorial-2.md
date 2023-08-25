@@ -1,6 +1,6 @@
 # How to write GStreamer Elements in Rust Part 2: A raw audio sine wave source
 
-In this part, a raw audio sine wave source element is going to be written. The final code can be found [here](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/blob/main/gst-plugin-tutorial/src/sinesrc.rs).
+In this part, a raw audio sine wave source element is going to be written. The final code can be found [here](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/tree/main/tutorial/src/sinesrc).
 
 ### Table of Contents
 
@@ -15,9 +15,9 @@ In this part, a raw audio sine wave source element is going to be written. The f
 
 The first part here will be all the boilerplate required to set up the element. You can safely [skip](#caps-negotiation) this if you remember all this from the [previous tutorial](tutorial-1.md).
 
-Our sine wave element is going to produce raw audio, with a number of channels and any possible sample rate with both 32 bit and 64 bit floating point samples. It will produce a simple sine wave with a configurable frequency, volume/mute and number of samples per audio buffer. In addition it will be possible to configure the element in (pseudo) live mode, meaning that it will only produce data in real-time according to the pipeline clock. And it will be possible to seek to any time/sample position on our source element. It will basically be a more simply version of the [`audiotestsrc`](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/gst-plugins-base-plugins-audiotestsrc.html) element from gst-plugins-base.
+Our sine wave element is going to produce raw audio, with a number of channels and any possible sample rate with both 32 bit and 64 bit floating point samples. It will produce a simple sine wave with a configurable frequency, volume/mute and number of samples per audio buffer. In addition it will be possible to configure the element in (pseudo) live mode, meaning that it will only produce data in real-time according to the pipeline clock. And it will be possible to seek to any time/sample position on our source element. It will basically be a more simple version of the [`audiotestsrc`](https://gstreamer.freedesktop.org/documentation/audiotestsrc/index.html) element from gst-plugins-base.
 
-So let's get started with all the boilerplate. This time our element will be based on the [`PushSrc`](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstPushSrc.html) base class instead of [`BaseTransform`](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstBaseTransform.html). `PushSrc` is a subclass of the [`BaseSrc`](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstBaseSrc.html) base class that only works in push mode, i.e. creates buffers as they arrive instead of allowing downstream elements to explicitly pull them.
+So let's get started with all the boilerplate. This time our element will be based on the [`PushSrc`](https://gstreamer.freedesktop.org/documentation/base/gstpushsrc.html#GstPushSrc) base class instead of [`VideoFilter`](https://gstreamer.freedesktop.org/documentation/video/gstvideofilter.html#GstVideoFilter). `PushSrc` is a subclass of the [`BaseSrc`](https://gstreamer.freedesktop.org/documentation/base/gstbasesrc.html#GstBaseSrc) base class that only works in push mode, i.e. creates buffers as they arrive instead of allowing downstream elements to explicitly pull them.
 
 In `src/sinesrc/imp.rs`:
 
@@ -26,6 +26,7 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_base::prelude::*;
+use gst_base::subclass::base_src::CreateSuccess;
 use gst_base::subclass::prelude::*;
 
 use byte_slice_cast::*;
@@ -108,53 +109,6 @@ impl ObjectSubclass for SineSrc {
     const NAME: &'static str = "GstRsSineSrc";
     type Type = super::SineSrc;
     type ParentType = gst_base::PushSrc;
-
-    // Called exactly once when registering the type. Used for
-    // setting up metadata for all instances, e.g. the name and
-    // classification and the pad templates with their caps.
-    //
-    // Actual instances can create pads based on those pad templates
-    // with a subset of the caps given here. In case of basesrc,
-    // a "src" and "sink" pad template are required here and the base class
-    // will automatically instantiate pads for them.
-    //
-    // Our element here can output f32 and f64
-    fn class_init(klass: &mut Self::Class) {
-        // Set the element specific metadata. This information is what
-        // is visible from gst-inspect-1.0 and can also be programmatically
-        // retrieved from the gst::Registry after initial registration
-        // without having to load the plugin in memory.
-        klass.set_metadata(
-            "Sine Wave Source",
-            "Source/Audio",
-            "Creates a sine wave",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        // Create and add pad templates for our sink and source pad. These
-        // are later used for actually creating the pads and beforehand
-        // already provide information to GStreamer about all possible
-        // pads that could exist for this type.
-
-        // On the src pad, we can produce F32/F64 with any sample rate
-        // and any number of channels (default)
-        let caps = gst_audio::AudioCapsBuilder::new_interleaved()
-        .format_list([
-                gst_audio::AUDIO_FORMAT_F32,
-                gst_audio::AUDIO_FORMAT_F64,
-            ])
-            .build();
-        // The src pad template must be named "src" for basesrc
-        // and specific a pad that is always there
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-    }
 }
 
 impl ObjectImpl for SineSrc {
@@ -208,7 +162,7 @@ impl ObjectImpl for SineSrc {
 
         // Initialize live-ness and notify the base class that
         // we'd like to operate in Time format
-        let obj = self.instance();
+        let obj = self.obj();
         obj.set_live(DEFAULT_IS_LIVE);
         obj.set_format(gst::Format::Time);
     }
@@ -221,10 +175,10 @@ impl ObjectImpl for SineSrc {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "samples-per-buffer" => {
                 let mut settings = self.settings.lock().unwrap();
-                let samples_per_buffer = value.get_some().expect("type checked upstream");
+                let samples_per_buffer = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
                     imp: self,
@@ -235,11 +189,11 @@ impl ObjectImpl for SineSrc {
                 settings.samples_per_buffer = samples_per_buffer;
                 drop(settings);
 
-                let _ = self.instance().post_message(gst::message::Latency::builder().src(&*self.instance()).build());
+                let _ = self.obj().post_message(gst::message::Latency::builder().src(&*self.obj()).build());
             }
             "freq" => {
                 let mut settings = self.settings.lock().unwrap();
-                let freq = value.get_some().expect("type checked upstream");
+                let freq = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
                     imp: self,
@@ -251,7 +205,7 @@ impl ObjectImpl for SineSrc {
             }
             "volume" => {
                 let mut settings = self.settings.lock().unwrap();
-                let volume = value.get_some().expect("type checked upstream");
+                let volume = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
                     imp: self,
@@ -263,7 +217,7 @@ impl ObjectImpl for SineSrc {
             }
             "mute" => {
                 let mut settings = self.settings.lock().unwrap();
-                let mute = value.get_some().expect("type checked upstream");
+                let mute = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
                     imp: self,
@@ -275,7 +229,7 @@ impl ObjectImpl for SineSrc {
             }
             "is-live" => {
                 let mut settings = self.settings.lock().unwrap();
-                let is_live = value.get_some().expect("type checked upstream");
+                let is_live = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
                     imp: self,
@@ -292,7 +246,7 @@ impl ObjectImpl for SineSrc {
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
     fn get_property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "samples-per-buffer" => {
                 let settings = self.settings.lock().unwrap();
                 settings.samples_per_buffer.to_value()
@@ -318,18 +272,62 @@ impl ObjectImpl for SineSrc {
     }
 }
 
-// Virtual methods of gst::Element. We override none
-impl ElementImpl for SineSrc { }
+// Virtual methods of gst::Element.
+impl ElementImpl for SineSrc {
+    // Set the element specific metadata. This information is what
+    // is visible from gst-inspect-1.0 and can also be programmatically
+    // retrieved from the gst::Registry after initial registration
+    // without having to load the plugin in memory.
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Sine Wave Source",
+                "Source/Audio",
+                "Creates a sine wave",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+    
+    // Create and add pad templates for our sink and source pad. These
+    // are later used for actually creating the pads and beforehand
+    // already provide information to GStreamer about all possible
+    // pads that could exist for this type.
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            // On the src pad, we can produce F32/F64 with any sample rate
+            // and any number of channels
+            let caps = gst_audio::AudioCapsBuilder::new_interleaved()
+                .format_list([gst_audio::AUDIO_FORMAT_F32, gst_audio::AUDIO_FORMAT_F64])
+                .build();
+            // The src pad template must be named "src" for basesrc
+            // and specific a pad that is always there
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 impl BaseSrcImpl for SineSrc {
     // Called when starting, so we can initialize all stream-related state to its defaults
-    fn start(&self) -> bool {
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
         // Reset state
         *self.state.lock().unwrap() = Default::default();
 
         gst::info!(CAT, imp: self, "Started");
 
-        true
+        Ok(())
     }
 
     // Called when shutting down the element so we can release all stream-related state
@@ -360,7 +358,7 @@ glib::wrapper! {
 // Registers the type for our element, and then registers in GStreamer under
 // the name "rssinesrc" for being able to instantiate it via e.g.
 // gst::ElementFactory::make().
-pub fn register(plugin: &gst::Plugin) {
+pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rssinesrc",
@@ -378,20 +376,20 @@ With all of the above and a small addition to `src/lib.rs` this should compile
 mod sinesrc;
 [...]
 
-fn plugin_init(plugin: &gst::Plugin) -> bool {
+fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     [...]
     sinesrc::register(plugin);
-    true
+    Ok(())
 }
 ```
 
-Also a couple of new crates have to be added to `Cargo.toml` and `src/lib.rs`, but you best check the code in the [repository](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/tree/main/gst-plugin-tutorial) for details.
+Also a couple of new crates have to be added to `Cargo.toml` and `src/lib.rs`, but you best check the code in the [repository](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/tree/main/tutorial) for details.
 
 ### Caps Negotiation
 
-The first part that we have to implement, just like last time, is caps negotiation. We already notified the base class about any caps that we can potentially handle via the caps in the pad template in `class_init` but there are still two more steps of behaviour left that we have to implement.
+The first part that we have to implement, just like last time, is caps negotiation. We already notified the base class about any caps that we can potentially handle via the caps in the pad template returned from `pad_templates` function, but there are still two more steps of behaviour left that we have to implement.
 
-First of all, we need to get notified whenever the caps that our source is configured for are changing. This will happen once in the very beginning and then whenever the pipeline topology or state changes and new caps would be more optimal for the new situation. This notification happens via the `BaseTransform::set_caps` virtual method.
+First of all, we need to get notified whenever the caps that our source is configured for are changing. This will happen once in the very beginning and then whenever the pipeline topology or state changes and new caps would be more optimal for the new situation. This notification happens via the `BaseSrcImpl::set_caps` virtual method.
 
 ```rust
     fn set_caps(&self, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
@@ -403,7 +401,7 @@ First of all, we need to get notified whenever the caps that our source is confi
 
         gst::debug!(CAT, imp: self, "Configuring for caps {}", caps);
 
-        self.instance().set_blocksize(info.bpf() * (*self.settings.lock().unwrap()).samples_per_buffer);
+        self.obj().set_blocksize(info.bpf() * (*self.settings.lock().unwrap()).samples_per_buffer);
 
         let settings = *self.settings.lock().unwrap();
         let mut state = self.state.lock().unwrap();
@@ -412,7 +410,7 @@ First of all, we need to get notified whenever the caps that our source is confi
         // in nanoseconds
         let old_rate = match state.info {
             Some(ref info) => info.rate() as u64,
-            None => gst::ClockTime::SECOND,
+            None => *gst::ClockTime::SECOND,
         };
 
         // Update sample offset and accumulator based on the previous values and the
@@ -438,15 +436,15 @@ First of all, we need to get notified whenever the caps that our source is confi
 
         drop(state);
 
-        let _ = self.instance().post_message(&gst::Message::new_latency().src(Some(&*self.instance())).build());
+        let _ = self.obj().post_message(gst::message::Latency::builder().src(&*self.obj()).build());
 
         Ok(())
     }
 ```
 
-In here we parse the caps into a [`AudioInfo`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/gstreamer_audio/struct.AudioInfo.html) and then store that in our internal state, while updating various fields. We tell the base class about the number of bytes each buffer is usually going to hold, and update our current sample position, the stop sample position (when a seek with stop position happens, we need to know when to stop) and our accumulator. This happens by scaling both positions by the old and new sample rate. If we don't have an old sample rate, we assume nanoseconds (this will make more sense once seeking is implemented). The scaling is done with the help of the [`muldiv`](https://crates.io/crates/muldiv) crate, which implements scaling of integer types by a fraction with protection against overflows by doing up to 128 bit integer arithmetic for intermediate values.
+In here we parse the caps into a [`AudioInfo`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/stable/latest/docs/gstreamer_audio/struct.AudioInfo.html) and then store that in our internal state, while updating various fields. We tell the base class about the number of bytes each buffer is usually going to hold, and update our current sample position, the stop sample position (when a seek with stop position happens, we need to know when to stop) and our accumulator. This happens by scaling both positions by the old and new sample rate. If we don't have an old sample rate, we assume nanoseconds (this will make more sense once seeking is implemented). The scaling is done with the help of the [`muldiv`](https://crates.io/crates/muldiv) crate, which implements scaling of integer types by a fraction with protection against overflows by doing up to 128 bit integer arithmetic for intermediate values.
 
-The accumulator is the updated based on the current phase of the sine wave at the current sample position.
+The accumulator is then updated based on the current phase of the sine wave at the current sample position.
 
 As a last step we post a new `LATENCY` message on the bus whenever the sample rate has changed. Our latency (in live mode) is going to be the duration of a single buffer, but more about that later.
 
@@ -464,7 +462,7 @@ As a last step we post a new `LATENCY` message on the bus whenever the sample 
         caps.truncate();
         {
             let caps = caps.make_mut();
-            let s = caps.get_mut_structure(0).unwrap();
+            let s = caps.structure_mut(0).unwrap();
             s.fixate_field_nearest_int("rate", 48_000);
             s.fixate_field_nearest_int("channels", 1);
         }
@@ -475,7 +473,7 @@ As a last step we post a new `LATENCY` message on the bus whenever the sample 
     }
 ```
 
-Here we take the caps that are passed in, truncate them (i.e. remove all but the very first [`Structure`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/gstreamer/structure/struct.Structure.html)) and then manually fixate the sample rate to the closest value to 48kHz. By default, caps fixation would result in the lowest possible sample rate but this is usually not desired.
+Here we take the caps that are passed in, truncate them (i.e. remove all but the very first [`Structure`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/stable/latest/docs/gstreamer/structure/struct.Structure.html)) and then manually fixate the sample rate to the closest value to 48kHz. By default, caps fixation would result in the lowest possible sample rate but this is usually not desired.
 
 For good measure, we also fixate the number of channels to the closest value to 1, but this would already be the default behaviour anyway. And then chain up to the parent class' implementation of `fixate`, which for now basically does the same as `caps.fixate()`. After this, the caps are fixated, i.e. there is only a single `Structure` left and all fields have concrete values (no ranges or sets).
 
@@ -545,7 +543,8 @@ Now that this is done, we need to implement the `PushSrc::create` virtual meth
 ```rust
     fn create(
         &self,
-    ) -> Result<gst::Buffer, gst::FlowReturn> {
+        _buffer: Option<&mut gst::BufferRef>,
+    ) -> Result<CreateSuccess, gst::FlowError> {
         // Keep a local copy of the values of all our properties at this very moment. This
         // ensures that the mutex is never locked for long and the application wouldn't
         // have to block until this function returns when getting/setting property values
@@ -556,7 +555,7 @@ Now that this is done, we need to implement the `PushSrc::create` virtual meth
         let info = match state.info {
             None => {
                 gst::element_imp_error!(self, gst::CoreError::Negotiation, ["Have no caps yet"]);
-                return Err(gst::FlowReturn::NotNegotiated);
+                return Err(gst::FlowError::NotNegotiated);
             }
             Some(ref info) => info.clone(),
         };
@@ -566,7 +565,7 @@ Now that this is done, we need to implement the `PushSrc::create` virtual meth
         let n_samples = if let Some(sample_stop) = state.sample_stop {
             if sample_stop <= state.sample_offset {
                 gst::log!(CAT, imp: self, "At EOS");
-                return Err(gst::FlowReturn::Eos);
+                return Err(gst::FlowError::Eos);
             }
 
             sample_stop - state.sample_offset
@@ -626,7 +625,7 @@ Now that this is done, we need to implement the `PushSrc::create` virtual meth
 
         gst::debug!(CAT, imp: self, "Produced buffer {:?}", buffer);
 
-        Ok(buffer)
+        Ok(CreateSuccess::NewBuffer(buffer))
     }
 ```
 
@@ -668,14 +667,14 @@ For working in live mode, we have to add a few different parts in various places
         // Waiting happens based on the pipeline clock, which means that a real live source
         // with its own clock would require various translations between the two clocks.
         // This is out of scope for the tutorial though.
-        if element.is_live() {
-            let clock = match element.get_clock() {
-                None => return Ok(buffer),
+        if self.obj().is_live() {
+            let clock = match self.obj().clock() {
+                None => return Ok(CreateSuccess::NewBuffer(buffer)),
                 Some(clock) => clock,
             };
 
-            let segment = element.segment().downcast::<gst::format::Time>().unwrap();
-            let base_time = element.base_time();
+            let segment = self.obj().segment().downcast::<gst::format::Time>().unwrap();
+            let base_time = self.obj().base_time();
             let running_time = segment.to_running_time(
                 buffer
                     .pts()
@@ -686,7 +685,7 @@ For working in live mode, we have to add a few different parts in various places
             // running time of the last sample
             let wait_until = match running_time.opt_add(base_time) {
                 Some(wait_until) => wait_until,
-                None => return Ok(buffer),
+                None => return Ok(CreateSuccess::NewBuffer(buffer)),
             };
 
             let id = clock.new_single_shot_id(wait_until);
@@ -696,7 +695,7 @@ For working in live mode, we have to add a few different parts in various places
                 imp: self,
                 "Waiting until {}, now {}",
                 wait_until,
-                clock.get_time().display(),
+                clock.time().display(),
             );
             let (res, jitter) = id.wait();
             gst::log!(
@@ -710,7 +709,7 @@ For working in live mode, we have to add a few different parts in various places
 
         gst::debug!(CAT, imp: self, "Produced buffer {:?}", buffer);
 
-        Ok(buffer)
+        Ok(CreateSuccess::NewBuffer(buffer))
     }
 ```
 
@@ -727,11 +726,11 @@ impl ElementImpl for SineSrc {
     fn change_state(
         &self,
         transition: gst::StateChange,
-    ) -> gst::StateChangeReturn {
+    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         // Configure live'ness once here just before starting the source
         match transition {
             gst::StateChange::ReadyToPaused => {
-                element.set_live(self.settings.lock().unwrap().is_live);
+                self.obj().set_live(self.settings.lock().unwrap().is_live);
             }
             _ => (),
         }
@@ -780,7 +779,7 @@ Inside the latency query we also signal that we are indeed a live source, and ad
 
 You can test this again with e.g. `gst-launch-1.0` by setting the `is-live`property to true. It should write in the output now that the pipeline is live.
 
-`audiotestsrc` element also does it via `get_times` virtual method. But as this is only really useful for pseudo live sources like this one, we decided to explain how waiting on the clock can be achieved correctly and even more important how that relates to the next section.
+`audiotestsrc` element also does it via [`get_times`](https://gstreamer.freedesktop.org/documentation/base/gstbasesink.html?gi-language=c#GstBaseSinkClass::get_times) virtual method. But as this is only really useful for pseudo live sources like this one, we decided to explain how waiting on the clock can be achieved correctly and even more important how that relates to the next section.
 
 ### Unlocking
 
@@ -812,7 +811,7 @@ struct SineSrc {
 
 [...]
 
-    fn unlock(&self) -> bool {
+    fn unlock(&self) -> Result<(), gst::ErrorMessage> {
         // This should unblock the create() function ASAP, so we
         // just unschedule the clock it here, if any.
         gst::debug!(CAT, imp: self, "Unlocking");
@@ -822,7 +821,7 @@ struct SineSrc {
         }
         clock_wait.flushing = true;
 
-        true
+        Ok(())
     }
 ```
 
@@ -831,14 +830,14 @@ We store the clock ID in our struct, together with a boolean to signal whether w
 Once everything is unlocked, we need to reset things again so that data flow can happen in the future. This is done in the `unlock_stop` virtual method.
 
 ```rust
-    fn unlock_stop(&self) -> bool {
+    fn unlock_stop(&self) -> Result<(), gst::ErrorMessage> {
         // This signals that unlocking is done, so we can reset
         // all values again.
         gst::debug!(CAT, imp: self, "Unlock stop");
         let mut clock_wait = self.clock_wait.lock().unwrap();
         clock_wait.flushing = false;
 
-        true
+        Ok(())
     }
 ```
 
@@ -853,7 +852,7 @@ Now as a last step, we need to actually make use of the new struct we added arou
             let mut clock_wait = self.clock_wait.lock().unwrap();
             if clock_wait.flushing {
                 gst::debug!(CAT, imp: self, "Flushing");
-                return Err(gst::FlowReturn::Flushing);
+                return Err(gst::FlowError::Flushing);
             }
 
             let id = clock.new_single_shot_id(wait_until);
@@ -865,7 +864,7 @@ Now as a last step, we need to actually make use of the new struct we added arou
                 imp: self,
                 "Waiting until {}, now {}",
                 wait_until,
-                clock.get_time().display(),
+                clock.time().display(),
             );
             let (res, jitter) = id.wait();
             gst::log!(
@@ -879,19 +878,19 @@ Now as a last step, we need to actually make use of the new struct we added arou
 
             // If the clock ID was unscheduled, unlock() was called
             // and we should return Flushing immediately.
-            if res == gst::ClockReturn::Unscheduled {
+            if res == Err(gst::ClockError::Unscheduled) {
                 gst::debug!(CAT, imp: self, "Flushing");
-                return Err(gst::FlowReturn::Flushing);
+                return Err(gst::FlowError::Flushing);
             }
 ```
 
-The important part in this code is that we first have to check if we are already supposed to unlock, before even starting to wait. Otherwise we would start waiting without anybody ever being able to unlock. Then we need to store the clock id in the struct and make sure to drop the mutex guard so that the `unlock` function can take it again for unscheduling the clock ID. And once waiting is done, we need to remove the clock id from the struct again and in case of `ClockReturn::Unscheduled` we directly return `FlowReturn::Flushing` instead of the error.
+The important part in this code is that we first have to check if we are already supposed to unlock, before even starting to wait. Otherwise we would start waiting without anybody ever being able to unlock. Then we need to store the clock id in the struct and make sure to drop the mutex guard so that the `unlock` function can take it again for unscheduling the clock ID. And once waiting is done, we need to remove the clock id from the struct again and in case of `ClockError::Unscheduled` we directly return `Err(gst::FlowError::Flushing)` instead.
 
 Similarly when using other blocking APIs it is important that they are woken up in a similar way when `unlock` is called. Otherwise the application developer's and thus user experience will be far from ideal.
 
 ### Seeking
 
-As a last feature we implement seeking on our source element. In our case that only means that we have to update the `sample_offset` and `sample_stop` fields accordingly, other sources might have to do more work than that.
+As the last feature we implement seeking on our source element. In our case that only means that we have to update the `sample_offset` and `sample_stop` fields accordingly, other sources might have to do more work than that.
 
 Seeking is implemented in the `BaseSrc::do_seek` virtual method, and signalling whether we can actually seek in the `is_seekable` virtual method.
 
@@ -908,7 +907,7 @@ Seeking is implemented in the `BaseSrc::do_seek` virtual method, and signallin
         // reverse playback is requested. These values will all be used during buffer creation
         // and for calculating the timestamps, etc.
 
-        if segment.get_rate() < 0.0 {
+        if segment.rate() < 0.0 {
             gst::error!(CAT, imp: self, "Reverse playback not supported");
             return false;
         }
@@ -928,14 +927,15 @@ Seeking is implemented in the `BaseSrc::do_seek` virtual method, and signallin
             use std::f64::consts::PI;
 
             let sample_offset = segment
-                .get_start()
+                .start()
                 .unwrap()
+                .nseconds()
                 .mul_div_floor(rate, *gst::ClockTime::SECOND)
                 .unwrap();
 
             let sample_stop = segment
-                .get_stop()
-                .map(|v| v.mul_div_floor(rate, *gst::ClockTime::SECOND).unwrap());
+                .stop()
+                .map(|v| v.nseconds().mul_div_floor(rate, *gst::ClockTime::SECOND).unwrap());
 
             let accumulator =
                 (sample_offset as f64).rem(2.0 * PI * (settings.freq as f64) / (rate as f64));
@@ -952,9 +952,9 @@ Seeking is implemented in the `BaseSrc::do_seek` virtual method, and signallin
 
             *state = State {
                 info: state.info.clone(),
-                sample_offset: sample_offset,
-                sample_stop: sample_stop,
-                accumulator: accumulator,
+                sample_offset,
+                sample_stop,
+                accumulator,
             };
 
             true
@@ -988,9 +988,9 @@ Seeking is implemented in the `BaseSrc::do_seek` virtual method, and signallin
 
             *state = State {
                 info: state.info.clone(),
-                sample_offset: sample_offset,
-                sample_stop: sample_stop,
-                accumulator: accumulator,
+                sample_offset,
+                sample_stop,
+                accumulator,
             };
 
             true
@@ -999,7 +999,7 @@ Seeking is implemented in the `BaseSrc::do_seek` virtual method, and signallin
                 CAT,
                 imp: self,
                 "Can't seek in format {:?}",
-                segment.get_format()
+                segment.format()
             );
 
             false
