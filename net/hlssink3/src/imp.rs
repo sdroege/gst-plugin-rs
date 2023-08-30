@@ -9,7 +9,7 @@
 use crate::playlist::Playlist;
 use crate::HlsSink3PlaylistType;
 use gio::prelude::*;
-use glib::subclass::prelude::*;
+use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use m3u8_rs::MediaPlaylistType;

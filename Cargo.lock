@@ -2219,11 +2219,9 @@ name = "gst-plugin-hlssink3"
 version = "0.9.11"
 dependencies = [
  "gio",
- "glib",
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-audio",
- "gstreamer-base",
  "gstreamer-check",
  "m3u8-rs",
  "once_cell",
