@@ -10,7 +10,7 @@ use crate::playlist::Playlist;
 use crate::HlsSink3PlaylistType;
 use chrono::{DateTime, Duration, Utc};
 use gio::prelude::*;
-use glib::subclass::prelude::*;
+use gst::glib;
 use gst::glib::once_cell::sync::Lazy;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
