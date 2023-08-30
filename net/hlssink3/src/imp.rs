@@ -374,13 +374,18 @@ impl HlsSink3 {
 
     fn segment_filename(&self, state: &mut StartedState) -> String {
         assert!(state.current_segment_location.is_some());
-        let segment_filename = path_basename(state.current_segment_location.take().unwrap());
+        let name = state.current_segment_location.take().unwrap();
+        let segment_filename = path::Path::new(&name)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap();
 
         let settings = self.settings.lock().unwrap();
         if let Some(playlist_root) = &settings.playlist_root {
             format!("{playlist_root}/{segment_filename}")
         } else {
-            segment_filename
+            segment_filename.to_string()
         }
     }
 
@@ -1003,29 +1008,6 @@ impl ElementImpl for HlsSink3 {
             settings.audio_sink = false;
         } else {
             settings.video_sink = false;
-        }
-    }
-}
-
-/// The content of the last item of a path separated by `/` character.
-fn path_basename(name: impl AsRef<str>) -> String {
-    name.as_ref().split('/').last().unwrap().to_string()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn can_extract_basenames() {
-        for (input, output) in [
-            ("", ""),
-            ("value", "value"),
-            ("/my/nice/path.ts", "path.ts"),
-            ("file.ts", "file.ts"),
-            ("https://localhost/output/file.vtt", "file.vtt"),
-        ] {
-            assert_eq!(path_basename(input), output);
         }
     }
 }
