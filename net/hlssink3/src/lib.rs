@@ -12,8 +12,7 @@
  *
  * Since: plugins-rs-0.8.0
  */
-use glib::prelude::*;
-#[cfg(feature = "doc")]
+use gst::glib;
 use gst::prelude::*;
 
 mod imp;
