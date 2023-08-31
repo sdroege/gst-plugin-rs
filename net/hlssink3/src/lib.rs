@@ -43,12 +43,19 @@ pub enum HlsSink3PlaylistType {
 }
 
 glib::wrapper! {
-    pub struct HlsSink3(ObjectSubclass<imp::HlsSink3>) @extends gst::Bin, gst::Element, gst::Object;
+    pub struct HlsBaseSink(ObjectSubclass<imp::HlsBaseSink>) @extends gst::Bin, gst::Element, gst::Object;
+}
+
+glib::wrapper! {
+    pub struct HlsSink3(ObjectSubclass<imp::HlsSink3>) @extends HlsBaseSink, gst::Bin, gst::Element, gst::Object;
 }
 
 pub fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "doc")]
-    HlsSink3PlaylistType::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    {
+        HlsSink3PlaylistType::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        HlsBaseSink::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    }
 
     gst::Element::register(
         Some(plugin),

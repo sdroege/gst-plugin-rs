@@ -6,12 +6,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use chrono::{DateTime, Utc};
 use m3u8_rs::{MediaPlaylist, MediaPlaylistType, MediaSegment};
 use std::io::Write;
-
-const GST_M3U8_PLAYLIST_V3: usize = 3;
-const GST_M3U8_PLAYLIST_V4: usize = 4;
 
 /// An HLS playlist.
 ///
@@ -27,37 +23,9 @@ pub struct Playlist {
 }
 
 impl Playlist {
-    pub fn new(
-        target_duration: f32,
-        playlist_type: Option<MediaPlaylistType>,
-        i_frames_only: bool,
-    ) -> Self {
-        let mut turn_vod = false;
-        let playlist_type = if playlist_type == Some(MediaPlaylistType::Vod) {
-            turn_vod = true;
-            Some(MediaPlaylistType::Event)
-        } else {
-            playlist_type
-        };
-        let m3u8_version = if i_frames_only {
-            GST_M3U8_PLAYLIST_V4
-        } else {
-            GST_M3U8_PLAYLIST_V3
-        };
+    pub fn new(playlist: MediaPlaylist, turn_vod: bool) -> Self {
         Self {
-            inner: MediaPlaylist {
-                version: Some(m3u8_version),
-                target_duration,
-                media_sequence: 0,
-                segments: vec![],
-                discontinuity_sequence: 0,
-                end_list: false,
-                playlist_type,
-                i_frames_only,
-                start: None,
-                independent_segments: false,
-                unknown_tags: vec![],
-            },
+            inner: playlist,
             playlist_index: 0,
             status: PlaylistRenderState::Init,
             turn_vod,
@@ -65,23 +33,9 @@ impl Playlist {
     }
 
     /// Adds a new segment to the playlist.
-    pub fn add_segment(&mut self, uri: String, duration: f32, date_time: Option<DateTime<Utc>>) {
+    pub fn add_segment(&mut self, segment: MediaSegment) {
         self.start();
-        // We are adding date-time to each segment.Putting date-time-tag only for the first segment in the playlist
-        // is also valid. But it is better to put program-date-time tag for every segment to take care of any drift.
-        // FFMPEG also put PDT tag for each segment.
-        self.inner.segments.push(MediaSegment {
-            uri,
-            duration,
-            title: None,
-            byte_range: None,
-            discontinuity: false,
-            key: None,
-            map: None,
-            program_date_time: date_time.map(|d| d.into()),
-            daterange: None,
-            unknown_tags: vec![],
-        });
+        self.inner.segments.push(segment);
     }
 
     /// Updates the playlist based on current state.
