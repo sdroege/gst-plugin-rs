@@ -50,6 +50,10 @@ glib::wrapper! {
     pub struct HlsSink3(ObjectSubclass<imp::HlsSink3>) @extends HlsBaseSink, gst::Bin, gst::Element, gst::Object;
 }
 
+glib::wrapper! {
+    pub struct HlsCmafSink(ObjectSubclass<imp::HlsCmafSink>) @extends HlsBaseSink, gst::Bin, gst::Element, gst::Object;
+}
+
 pub fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "doc")]
     {
@@ -62,6 +66,13 @@ pub fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         "hlssink3",
         gst::Rank::None,
         HlsSink3::static_type(),
+    )?;
+
+    gst::Element::register(
+        Some(plugin),
+        "hlscmafsink",
+        gst::Rank::None,
+        HlsCmafSink::static_type(),
     )?;
 
     Ok(())

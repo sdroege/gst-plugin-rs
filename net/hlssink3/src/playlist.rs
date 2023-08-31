@@ -20,15 +20,17 @@ pub struct Playlist {
     playlist_index: u64,
     status: PlaylistRenderState,
     turn_vod: bool,
+    is_cmaf: bool,
 }
 
 impl Playlist {
-    pub fn new(playlist: MediaPlaylist, turn_vod: bool) -> Self {
+    pub fn new(playlist: MediaPlaylist, turn_vod: bool, is_cmaf: bool) -> Self {
         Self {
             inner: playlist,
             playlist_index: 0,
             status: PlaylistRenderState::Init,
             turn_vod,
+            is_cmaf,
         }
     }
 
@@ -50,9 +52,20 @@ impl Playlist {
         }
 
         // Remove oldest segments if playlist is at maximum expected capacity
-        if max_playlist_length > 0 && self.inner.segments.len() > max_playlist_length {
-            let remove_len = self.inner.segments.len() - max_playlist_length;
-            self.inner.segments.drain(0..remove_len);
+        if max_playlist_length > 0 {
+            if self.is_cmaf {
+                // init segment uri will be specified only if it's updated
+                // or in case of the very first segment.
+                while self.inner.segments.len() > max_playlist_length {
+                    let to_remove = self.inner.segments.remove(0);
+                    if self.inner.segments[0].map.is_none() {
+                        self.inner.segments[0].map = to_remove.map.clone()
+                    }
+                }
+            } else if self.inner.segments.len() > max_playlist_length {
+                let remove_len = self.inner.segments.len() - max_playlist_length;
+                self.inner.segments.drain(0..remove_len);
+            }
         }
 
         self.playlist_index += 1;
