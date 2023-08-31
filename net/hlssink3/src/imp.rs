@@ -334,7 +334,7 @@ impl HlsSink3 {
             gst::StateChangeError
         })?;
 
-        if state.playlist.is_type_undefined() {
+        if state.playlist.is_type_undefined() && max_num_segments > 0 {
             // Cleanup old segments from filesystem
             if state.old_segment_locations.len() > max_num_segments {
                 for _ in 0..state.old_segment_locations.len() - max_num_segments {
