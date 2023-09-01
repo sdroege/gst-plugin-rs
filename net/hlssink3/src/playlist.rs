@@ -96,10 +96,9 @@ impl Playlist {
         }
 
         // Remove oldest segments if playlist is at maximum expected capacity
-        if self.inner.segments.len() > max_playlist_length {
-            for _ in 0..self.inner.segments.len() - max_playlist_length {
-                let _ = self.inner.segments.remove(0);
-            }
+        if max_playlist_length > 0 && self.inner.segments.len() > max_playlist_length {
+            let remove_len = self.inner.segments.len() - max_playlist_length;
+            self.inner.segments.drain(0..remove_len);
         }
 
         self.playlist_index += 1;
