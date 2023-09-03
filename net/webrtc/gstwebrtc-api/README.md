@@ -21,12 +21,6 @@ https://github.com/webrtcHacks/adapter/blob/master/LICENSE.md
 Webrtc-adapter is Copyright (c) 2014, The WebRTC project authors, All rights reserved.<br>
 Copyright (c) 2018, The adapter.js project authors, All rights reserved.
 
-It also includes Keyboard.js source code from the Apache [guacamole-client](https://github.com/apache/guacamole-client)
-that is embedded with the API to enable remote control of the webrtcsink producer.
-
-Keyboard.js is released under the Apache 2.0 license available at:
-https://github.com/apache/guacamole-client/blob/master/LICENSE
-
 ## Building the API
 
 The GstWebRTC API uses [Webpack](https://webpack.js.org/) to bundle all source files and dependencies together.

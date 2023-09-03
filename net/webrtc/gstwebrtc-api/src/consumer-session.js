@@ -9,9 +9,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-import WebRTCSession from "./webrtc-session";
-import SessionState from "./session-state";
-import RemoteController from "./remote-controller";
+import WebRTCSession from "./webrtc-session.js";
+import SessionState from "./session-state.js";
+import RemoteController from "./remote-controller.js";
 
 /**
  * Event name: "streamsChanged".<br>

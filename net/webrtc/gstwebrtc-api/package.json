@@ -1,6 +1,6 @@
 {
   "name": "gstwebrtc-api",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Javascript API to integrate GStreamer WebRTC streams (webrtcsrc/webrtcsink) in a web browser",
   "keywords": [
     "webrtc",
@@ -25,27 +25,31 @@
     "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs.git",
     "directory": "net/webrtc/gstwebrtc-api"
   },
+  "type": "module",
   "browser": "dist/gstwebrtc-api-${npm_package_version}.min.js",
   "files": [
     "dist/",
     "docs/",
     "src/",
-    "third-party/",
+    "test/",
     "index.html",
-    "webpack.config.js"
+    "LICENSE-MPL-2.0",
+    "webpack.config.cjs"
   ],
   "devDependencies": {
-    "eslint": "8.37.0",
-    "html-webpack-plugin": "5.5.0",
+    "chai": "4.3.8",
+    "eslint": "8.49.0",
+    "html-webpack-plugin": "5.5.3",
     "jsdoc": "4.0.2",
-    "rimraf": "4.4.1",
-    "terser-webpack-plugin": "5.3.7",
-    "webpack": "5.77.0",
-    "webpack-cli": "5.0.1",
-    "webpack-dev-server": "4.13.1"
+    "mocha": "10.2.0",
+    "rimraf": "5.0.1",
+    "terser-webpack-plugin": "5.3.9",
+    "webpack": "5.88.2",
+    "webpack-cli": "5.1.4",
+    "webpack-dev-server": "4.15.1"
   },
   "dependencies": {
-    "webrtc-adapter": "8.2.2"
+    "webrtc-adapter": "8.2.3"
   },
   "scripts": {
     "check": "eslint src",
@@ -53,7 +57,8 @@
     "build": "rimraf dist && webpack",
     "docs": "rimraf docs && jsdoc src/*.js -d docs/ -p package.json -R README.md",
     "make": "npm run check && npm run build && npm run docs",
-    "prepack": "npm run make",
+    "test": "mocha --node-env=test --exit",
+    "prepack": "npm run test && npm run make",
     "start": "webpack serve"
   }
 }

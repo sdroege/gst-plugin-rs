@@ -9,8 +9,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-import Guacamole from "../third-party/Keyboard";
-import getKeysymString from "./keysyms";
+import getKeysymString from "./keysyms.js";
 
 const eventsNames = Object.freeze([
   "wheel",
@@ -21,7 +20,9 @@ const eventsNames = Object.freeze([
   "touchstart",
   "touchend",
   "touchmove",
-  "touchcancel"
+  "touchcancel",
+  "keyup",
+  "keydown"
 ]);
 
 const mouseEventsNames = Object.freeze({
@@ -37,10 +38,15 @@ const touchEventsNames = Object.freeze({
   touchcancel: "TouchUp"
 });
 
+const keyboardEventsNames = Object.freeze({
+  keydown: "KeyPress",
+  keyup: "KeyRelease"
+});
+
 function getModifiers(event) {
   const modifiers = [];
   if (event.altKey) {
-    modifiers.push("alt-mask");
+    modifiers.push("mod1-mask");
   }
 
   if (event.ctrlKey) {
@@ -153,22 +159,6 @@ export default class RemoteController extends EventTarget {
       this._videoElement = element;
       this._videoElementComputedStyle = window.getComputedStyle(element);
 
-      this._videoElementKeyboard = new Guacamole.Keyboard(element);
-      this._videoElementKeyboard.onkeydown = (keysym, modifierState) => {
-        this._sendGstNavigationEvent({
-          event: "KeyPress",
-          key: getKeysymString(keysym),
-          modifier_state: modifierState // eslint-disable-line camelcase
-        });
-      };
-      this._videoElementKeyboard.onkeyup = (keysym, modifierState) => {
-        this._sendGstNavigationEvent({
-          event: "KeyRelease",
-          key: getKeysymString(keysym),
-          modifier_state: modifierState // eslint-disable-line camelcase
-        });
-      };
-
       for (const eventName of eventsNames) {
         element.addEventListener(eventName, this);
       }
@@ -180,11 +170,6 @@ export default class RemoteController extends EventTarget {
 
       this._videoElement = null;
       this._videoElementComputedStyle = null;
-
-      this._videoElementKeyboard.onkeydown = null;
-      this._videoElementKeyboard.onkeyup = null;
-      this._videoElementKeyboard.reset();
-      this._videoElementKeyboard = null;
 
       this._lastTouchEventTimestamp = 0;
 
@@ -353,6 +338,18 @@ export default class RemoteController extends EventTarget {
           event: "TouchFrame",
           modifier_state: getModifiers(event) // eslint-disable-line camelcase
         });
+      }
+      break;
+    case "keyup":
+    case "keydown":
+      event.preventDefault();
+      {
+        const data = {
+          event: keyboardEventsNames[event.type],
+          key: getKeysymString(event.key, event.code),
+          modifier_state: getModifiers(event) // eslint-disable-line camelcase
+        };
+        this._sendGstNavigationEvent(data);
       }
       break;
     }

@@ -14,7 +14,7 @@ const config = {
   mode: isDevServer ? "development" : "production",
   devtool: isDevServer ? "eval" : "source-map",
 
-  entry: { "gstwebrtc-api": "./src" },
+  entry: { "gstwebrtc-api": "./src/index.js" },
   output: { filename: isDevServer ? "[name]-[contenthash].min.js" : `[name]-${packageVersion}.min.js` },
 
   devServer: {
@@ -40,8 +40,7 @@ const config = {
           output: {
             comments: false,
             preamble: "/*! gstwebrtc-api (https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/tree/main/net/webrtc/gstwebrtc-api), MPL-2.0 License, Copyright (C) 2022 Igalia S.L. <info@igalia.com>, Author: Loïc Le Page <llepage@igalia.com> */\n" +
-                      "/*! Contains embedded adapter from webrtc-adapter (https://github.com/webrtcHacks/adapter), BSD 3-Clause License, Copyright (c) 2014, The WebRTC project authors. All rights reserved. Copyright (c) 2018, The adapter.js project authors. All rights reserved. */\n" +
-                      "/*! Contains embedded Keyboard.js from guacamole-client (https://github.com/apache/guacamole-client), Apache 2.0 License */"
+                      "/*! Contains embedded adapter from webrtc-adapter (https://github.com/webrtcHacks/adapter), BSD 3-Clause License, Copyright (c) 2014, The WebRTC project authors. All rights reserved. Copyright (c) 2018, The adapter.js project authors. All rights reserved. */\n"
           }
         }
       })

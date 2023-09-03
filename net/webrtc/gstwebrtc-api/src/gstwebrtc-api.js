@@ -9,9 +9,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-import defaultConfig from "./config";
-import ComChannel from "./com-channel";
-import SessionState from "./session-state";
+import defaultConfig from "./config.js";
+import ComChannel from "./com-channel.js";
+import SessionState from "./session-state.js";
 
 const apiState = {
   config: null,

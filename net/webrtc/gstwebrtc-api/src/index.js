@@ -10,7 +10,7 @@
  */
 
 import "webrtc-adapter";
-import { gstWebRTCAPI, start } from "./gstwebrtc-api";
+import { gstWebRTCAPI, start } from "./gstwebrtc-api.js";
 
 /**
  * @external MediaStream

@@ -9,8 +9,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-import ConsumerSession from "./consumer-session";
-import ProducerSession from "./producer-session";
+import ConsumerSession from "./consumer-session.js";
+import ProducerSession from "./producer-session.js";
 
 const SignallingServerMessageType = Object.freeze({
   welcome: "welcome",

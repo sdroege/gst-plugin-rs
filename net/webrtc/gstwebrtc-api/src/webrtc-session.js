@@ -9,7 +9,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-import SessionState from "./session-state";
+import SessionState from "./session-state.js";
 
 /**
  * Event name: "error".<br>
