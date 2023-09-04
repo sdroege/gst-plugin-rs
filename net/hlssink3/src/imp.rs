@@ -36,6 +36,7 @@ const DEFAULT_SEND_KEYFRAME_REQUESTS: bool = true;
 const DEFAULT_SYNC: bool = true;
 const DEFAULT_LATENCY: gst::ClockTime =
     gst::ClockTime::from_mseconds((DEFAULT_TARGET_DURATION * 500) as u64);
+const DEFAULT_ENDLIST: bool = true;
 
 const SIGNAL_GET_PLAYLIST_STREAM: &str = "get-playlist-stream";
 const SIGNAL_GET_INIT_STREAM: &str = "get-init-stream";
@@ -81,6 +82,7 @@ struct Settings {
     max_num_segment_files: usize,
     enable_program_date_time: bool,
     pdt_follows_pipeline_clock: bool,
+    enable_endlist: bool,
 }
 
 impl Default for Settings {
@@ -92,6 +94,7 @@ impl Default for Settings {
             max_num_segment_files: DEFAULT_MAX_NUM_SEGMENT_FILES as usize,
             enable_program_date_time: DEFAULT_PROGRAM_DATE_TIME_TAG,
             pdt_follows_pipeline_clock: DEFAULT_CLOCK_TRACKING_FOR_PDT,
+            enable_endlist: DEFAULT_ENDLIST,
         }
     }
 }
@@ -169,6 +172,11 @@ impl ObjectImpl for HlsBaseSink {
                     .blurb("As there might be drift between the wallclock and pipeline clock, this controls whether the Program-Date-Time markers should follow the pipeline clock rate (true), or be skewed to match the wallclock rate (false).")
                     .default_value(DEFAULT_CLOCK_TRACKING_FOR_PDT)
                     .build(),
+                glib::ParamSpecBoolean::builder("enable-endlist")
+                    .nick("Enable Endlist")
+                    .blurb("Write \"EXT-X-ENDLIST\" tag to manifest at the end of stream")
+                    .default_value(DEFAULT_ENDLIST)
+                    .build(),
             ]
         });
 
@@ -202,6 +210,9 @@ impl ObjectImpl for HlsBaseSink {
             "pdt-follows-pipeline-clock" => {
                 settings.pdt_follows_pipeline_clock = value.get().expect("type checked upstream");
             }
+            "enable-endlist" => {
+                settings.enable_endlist = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         };
     }
@@ -218,6 +229,7 @@ impl ObjectImpl for HlsBaseSink {
             "playlist-length" => settings.playlist_length.to_value(),
             "enable-program-date-time" => settings.enable_program_date_time.to_value(),
             "pdt-follows-pipeline-clock" => settings.pdt_follows_pipeline_clock.to_value(),
+            "enable-endlist" => settings.enable_endlist.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -335,7 +347,9 @@ impl HlsBaseSink {
         let mut state = self.state.lock().unwrap();
         if let Some(mut context) = state.context.take() {
             if context.playlist.is_rendering() {
-                context.playlist.stop();
+                context
+                    .playlist
+                    .stop(self.settings.lock().unwrap().enable_endlist);
                 let _ = self.write_playlist(&mut context);
             }
         }

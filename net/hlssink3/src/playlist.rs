@@ -79,19 +79,10 @@ impl Playlist {
     }
 
     /// Sets the playlist to stopped state.
-    pub fn stop(&mut self) {
-        match &self.inner.playlist_type {
-            None => self.inner.end_list = false,
-            Some(defined) => match defined {
-                MediaPlaylistType::Other(_) => unreachable!(),
-                MediaPlaylistType::Event => {
-                    if self.turn_vod {
-                        self.inner.playlist_type = Some(MediaPlaylistType::Vod);
-                    }
-                    self.inner.end_list = true
-                }
-                MediaPlaylistType::Vod => self.inner.end_list = false,
-            },
+    pub fn stop(&mut self, write_endlist: bool) {
+        self.inner.end_list = write_endlist;
+        if self.turn_vod {
+            self.inner.playlist_type = Some(MediaPlaylistType::Vod);
         }
     }
 

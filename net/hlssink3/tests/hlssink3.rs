@@ -240,6 +240,7 @@ fn test_hlssink3_element_with_video_content() -> Result<(), ()> {
 segment00003.ts
 #EXTINF:0.3,
 segment00004.ts
+#EXT-X-ENDLIST
 "###,
         contents.to_string()
     );
@@ -432,6 +433,7 @@ fn test_hlssink3_write_correct_playlist_content() -> Result<(), ()> {
 #EXT-X-MEDIA-SEQUENCE:1
 #EXTINF:1.633,
 segments/my-own-filename-000.ts
+#EXT-X-ENDLIST
 "###,
         contents.to_string()
     );
