@@ -19,7 +19,11 @@ sprintf = "0.1.3"
 
 [dev-dependencies]
 gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-pbutils = { package = "gstreamer-pbutils", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_20"] }
+m3u8-rs = "5.0"
+anyhow = "1"
 
 [build-dependencies]
 gst-plugin-version-helper = { path = "../../version-helper" }
