@@ -17,6 +17,7 @@ use atomic_refcell::AtomicRefCell;
 use gst::glib::once_cell::sync::Lazy;
 
 use crate::ndi::*;
+use crate::ndi_cc_meta;
 use crate::ndisys;
 use crate::ndisys::*;
 use crate::TimestampMode;
@@ -744,6 +745,7 @@ impl Receiver {
         let mut first_audio_frame = true;
         let mut first_frame = true;
         let mut timer = time::Instant::now();
+        let mut pending_ndi_cc = VecDeque::<ndi_cc_meta::NDIClosedCaption>::new();
 
         // Capture until error or shutdown
         loop {
@@ -812,6 +814,16 @@ impl Receiver {
                             first_video_frame = false;
                         }
                     }
+
+                    if !pending_ndi_cc.is_empty() {
+                        if let Ok(Buffer::Video(ref mut buffer, _)) = buffer {
+                            let buf = buffer.get_mut().unwrap();
+                            for ndi_cc in pending_ndi_cc.drain(..) {
+                                gst_video::VideoCaptionMeta::add(buf, ndi_cc.cc_type, &ndi_cc.data);
+                            }
+                        }
+                    }
+
                     buffer
                 }
                 Ok(Some(Frame::Audio(frame))) => {
@@ -837,6 +849,13 @@ impl Receiver {
                             (frame.timecode() as u64 * 100).nseconds(),
                             metadata,
                         );
+
+                        match ndi_cc_meta::parse_ndi_cc_meta(metadata) {
+                            Ok(mut ndi_cc_list) => pending_ndi_cc.extend(ndi_cc_list.drain(..)),
+                            Err(err) => {
+                                gst::error!(CAT, obj: element, "Error parsing closed caption: {err}");
+                            }
+                        }
                     }
 
                     continue;

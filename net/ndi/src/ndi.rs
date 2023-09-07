@@ -403,6 +403,10 @@ impl SendInstance {
             NDIlib_send_send_audio_v3(self.0.as_ptr(), frame.as_ptr());
         }
     }
+
+    pub fn send_metadata(&self, metadata: &MetadataFrame) {
+        unsafe { NDIlib_send_send_metadata(self.0.as_ptr(), metadata.as_ptr()) }
+    }
 }
 
 impl Drop for SendInstance {

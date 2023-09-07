@@ -11,6 +11,7 @@ use std::sync::Mutex;
 use gst::glib::once_cell::sync::Lazy;
 
 use crate::ndi::SendInstance;
+use crate::ndi_cc_meta;
 
 static DEFAULT_SENDER_NDI_NAME: Lazy<String> = Lazy::new(|| {
     format!(
@@ -302,6 +303,24 @@ impl BaseSinkImpl for NdiSink {
                     .and_then(|(running_time, base_time)| running_time.checked_add(base_time))
                     .map(|time| (time.nseconds() / 100) as i64)
                     .unwrap_or(crate::ndisys::NDIlib_send_timecode_synthesize);
+
+                match ndi_cc_meta::encode_video_caption_meta(buffer) {
+                    Ok(None) => (),
+                    Ok(Some(cc_data)) => {
+                        gst::trace!(CAT, "Sending cc meta with timecode {timecode}");
+                        let metadata_frame =
+                            crate::ndi::MetadataFrame::new(timecode, Some(cc_data.as_str()));
+                        state.send.send_metadata(&metadata_frame);
+                    }
+                    Err(err) => match err.downcast_ref::<ndi_cc_meta::NDIClosedCaptionError>() {
+                        Some(err) if err.is_unsupported_cc() => {
+                            gst::info!(CAT, "{err}");
+                        }
+                        _ => {
+                            gst::error!(CAT, "Failed to encode Video Caption meta: {err}");
+                        }
+                    },
+                }
 
                 let frame = gst_video::VideoFrameRef::from_buffer_ref_readable(buffer, info)
                     .map_err(|_| {

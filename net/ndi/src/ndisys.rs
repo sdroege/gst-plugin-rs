@@ -73,6 +73,8 @@ struct FFI {
     send_send_audio_v3: Symbol<
         fn(p_instance: NDIlib_send_instance_t, p_audio_data: *const NDIlib_audio_frame_v3_t),
     >,
+    send_send_metadata:
+        Symbol<fn(p_instance: NDIlib_send_instance_t, p_metadata: *const NDIlib_metadata_frame_t)>,
 }
 
 pub type NDIlib_find_instance_t = *mut ::std::os::raw::c_void;
@@ -398,6 +400,7 @@ pub fn load() -> Result<(), glib::BoolError> {
             send_destroy: load_symbol!(NDIlib_send_destroy),
             send_send_video_v2: load_symbol!(NDIlib_send_send_video_v2),
             send_send_audio_v3: load_symbol!(NDIlib_send_send_audio_v3),
+            send_send_metadata: load_symbol!(NDIlib_send_send_metadata),
             _library: library,
         };
 
@@ -531,4 +534,11 @@ pub unsafe fn NDIlib_send_send_audio_v3(
     p_audio_data: *const NDIlib_audio_frame_v3_t,
 ) {
     (FFI.get_unchecked().send_send_audio_v3)(p_instance, p_audio_data)
+}
+
+pub unsafe fn NDIlib_send_send_metadata(
+    p_instance: NDIlib_send_instance_t,
+    p_metadata: *const NDIlib_metadata_frame_t,
+) {
+    (FFI.get_unchecked().send_send_metadata)(p_instance, p_metadata)
 }
