@@ -21,12 +21,12 @@ const C708_TAG_BYTES: &[u8] = C708_TAG.as_bytes();
 const LINE_ATTR: &str = "line";
 const DEFAULT_LINE_VALUE: &str = "21";
 
-/// Video anc AFD content padded to 32bit alignment encoded in base64
-const NDI_CC_CONTENT_MAX_LEN: usize = (video_anc::VIDEO_ANC_AFD_MAX_LEN + 3) * 3 / 2;
+/// Video anc AFD content padded to 32bit alignment encoded in base64 + padding
+const NDI_CC_CONTENT_CAPACITY: usize = (video_anc::VIDEO_ANC_AFD_CAPACITY + 3) * 3 / 2 + 2;
 
 /// Video anc AFD padded to 32bit alignment encoded in base64
-/// + XML tags with brackets and end '/'
-const NDI_CC_MAX_LEN: usize = NDI_CC_CONTENT_MAX_LEN + 13;
+/// + XML tags with brackets and end '/' + attr
+const NDI_CC_CAPACITY: usize = NDI_CC_CONTENT_CAPACITY + 13 + 10;
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 /// NDI Video Caption related Errors.
@@ -50,7 +50,7 @@ where
     use quick_xml::events::{BytesText, Event};
     use std::borrow::Cow;
 
-    let mut buf = String::with_capacity(NDI_CC_CONTENT_MAX_LEN);
+    let mut buf = String::with_capacity(NDI_CC_CONTENT_CAPACITY);
     let mut input = Cow::from(data);
 
     let alignment_rem = input.len() % 4;
@@ -83,7 +83,7 @@ pub fn encode_video_caption_meta(video_buf: &gst::BufferRef) -> Result<Option<St
     }
 
     // Start with an initial capacity suitable to store one ndi cc metadata
-    let mut writer = Writer::new(Vec::<u8>::with_capacity(NDI_CC_MAX_LEN));
+    let mut writer = Writer::new(Vec::<u8>::with_capacity(NDI_CC_CAPACITY));
 
     let cc_meta_iter = video_buf.iter_meta::<gst_video::VideoCaptionMeta>();
     for cc_meta in cc_meta_iter {
@@ -164,15 +164,20 @@ pub fn parse_ndi_cc_meta(input: &str) -> Result<Vec<NDIClosedCaption>> {
     let mut ndi_cc = Vec::new();
 
     let mut reader = Reader::from_str(input);
-    reader.trim_text(true);
 
-    let mut content = SmallVec::<[u8; NDI_CC_CONTENT_MAX_LEN]>::new();
-    let mut buf = Vec::with_capacity(NDI_CC_MAX_LEN);
+    let mut content = SmallVec::<[u8; NDI_CC_CONTENT_CAPACITY]>::new();
+    let mut buf = Vec::with_capacity(NDI_CC_CAPACITY);
     loop {
         match reader.read_event_into(&mut buf)? {
             Event::Eof => break,
             Event::Start(_) => content.clear(),
-            Event::Text(e) => content.extend(e.iter().copied()),
+            Event::Text(e) => {
+                content.extend(
+                    e.iter()
+                        .copied()
+                        .filter(|&b| (b != b' ') && (b != b'\t') && (b != b'\n') && (b != b'\r')),
+                );
+            }
             Event::End(e) => match e.name().as_ref() {
                 C608_TAG_BYTES => {
                     let adf_packet = BASE64.decode(content.as_slice()).context(C608_TAG)?;
@@ -364,6 +369,49 @@ mod tests {
                 0x1b,
             ]
         );
+
+        assert!(ndi_cc_list.is_empty());
+    }
+
+    #[test]
+    fn parse_ndi_meta_c708_newlines_and_indent() {
+        let mut ndi_cc_list = parse_ndi_cc_meta(
+            r#"<C708>
+    AD///WFAZVpaaZVj9Q4AgCcn4vxlEsvmAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIA
+    vqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAnSAIA
+    hutwA=
+</C708>"#,
+        )
+        .unwrap();
+
+        let ndi_cc = ndi_cc_list.pop().unwrap();
+        assert_eq!(ndi_cc.cc_type, VideoCaptionType::Cea708Cdp);
+        assert_eq!(
+            ndi_cc.data.as_slice(),
+            [
+                0x96, 0x69, 0x55, 0x3f, 0x43, 0x00, 0x00, 0x72, 0xf8, 0xfc, 0x94, 0x2c, 0xf9, 0x00,
+                0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
+                0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
+                0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00,
+                0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
+                0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x74, 0x00, 0x00,
+                0x1b,
+            ]
+        );
+
+        assert!(ndi_cc_list.is_empty());
+    }
+
+    #[test]
+    fn parse_ndi_meta_c608_newlines_spaces_inline() {
+        let mut ndi_cc_list = parse_ndi_cc_meta(
+            "<C608 line=\"128\">\n\tAD///WFAo\n\n\r DYBlEsq\r\n\tYAAAAA==  \n</C608>",
+        )
+        .unwrap();
+
+        let ndi_cc = ndi_cc_list.pop().unwrap();
+        assert_eq!(ndi_cc.cc_type, VideoCaptionType::Cea608S3341a);
+        assert_eq!(ndi_cc.data.as_slice(), [0x80, 0x94, 0x2c]);
 
         assert!(ndi_cc_list.is_empty());
     }

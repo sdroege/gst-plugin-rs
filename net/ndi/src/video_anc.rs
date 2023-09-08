@@ -31,9 +31,9 @@ const EIA_608_ANCILLARY_DID_16: u16 = 0x6102;
 // ADF + DID/SDID + DATA COUNT + PAYLOAD + checksum:
 // 3 + 2 + 1 + 256 max + 1 = 263
 // Those are 10bit words, so we need 329 bytes max.
-pub const VIDEO_ANC_AFD_MAX_LEN: usize = 329;
+pub const VIDEO_ANC_AFD_CAPACITY: usize = 329;
 
-pub type VideoAncillaryAFD = SmallVec<[u8; VIDEO_ANC_AFD_MAX_LEN]>;
+pub type VideoAncillaryAFD = SmallVec<[u8; VIDEO_ANC_AFD_CAPACITY]>;
 
 fn with_afd_parity(val: u8) -> u16 {
     let p = (val.count_ones() % 2) as u16;
