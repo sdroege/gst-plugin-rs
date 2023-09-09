@@ -5937,7 +5937,7 @@
                         "presence": "request"
                     },
                     "video_%%u": {
-                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n",
+                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n\nvideo/x-raw(memory:D3D11Memory):\n",
                         "direction": "sink",
                         "presence": "request"
                     }

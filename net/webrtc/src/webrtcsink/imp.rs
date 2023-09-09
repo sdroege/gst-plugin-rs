@@ -34,6 +34,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 const CUDA_MEMORY_FEATURE: &str = "memory:CUDAMemory";
 const GL_MEMORY_FEATURE: &str = "memory:GLMemory";
 const NVMM_MEMORY_FEATURE: &str = "memory:NVMM";
+const D3D11_MEMORY_FEATURE: &str = "memory:D3D11Memory";
 
 const RTP_TWCC_URI: &str =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
@@ -340,6 +341,14 @@ fn make_converter_for_video_caps(caps: &gst::Caps, codec: &Codec) -> Result<gst:
                 gst::Element::link_many(&[&queue, &nvconvert])?;
 
                 (queue, nvconvert)
+            } else if feature.contains(D3D11_MEMORY_FEATURE) {
+                let d3d11upload = make_element("d3d11upload", None)?;
+                let d3d11convert = make_element("d3d11convert", None)?;
+
+                ret.add_many(&[&d3d11upload, &d3d11convert])?;
+                d3d11upload.link(&d3d11convert)?;
+
+                (d3d11upload, d3d11convert)
             } else if feature.contains(CUDA_MEMORY_FEATURE) {
                 if let Some(convert_factory) = gst::ElementFactory::find("cudaconvert") {
                     let cudaupload = make_element("cudaupload", None)?;
@@ -509,6 +518,13 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
                 enc.set_property_from_str("control-rate", "constant_bitrate");
                 add_nv4l2enc_force_keyunit_workaround(enc);
             }
+            "qsvh264enc" => {
+                enc.set_property("bitrate", start_bitrate / 1000);
+                enc.set_property("gop-size", 2560u32);
+                enc.set_property("low-latency", true);
+                enc.set_property("disable-hrd-conformance", true);
+                enc.set_property_from_str("rate-control", "cbr");
+            }
             _ => (),
         }
     }
@@ -670,7 +686,7 @@ impl VideoEncoder {
     pub fn bitrate(&self) -> i32 {
         match self.factory_name.as_str() {
             "vp8enc" | "vp9enc" => self.element.property::<i32>("target-bitrate"),
-            "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" => {
+            "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" | "qsvh264enc" => {
                 (self.element.property::<u32>("bitrate") * 1000) as i32
             }
             "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" => {
@@ -697,7 +713,7 @@ impl VideoEncoder {
     pub fn set_bitrate(&mut self, element: &super::WebRTCSink, bitrate: i32) {
         match self.factory_name.as_str() {
             "vp8enc" | "vp9enc" => self.element.set_property("target-bitrate", bitrate),
-            "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" => self
+            "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" | "qsvh264enc" => self
                 .element
                 .set_property("bitrate", (bitrate / 1000) as u32),
             "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" => {
@@ -2814,7 +2830,12 @@ impl ElementImpl for WebRTCSink {
                     gst::Structure::builder("video/x-raw").build(),
                     gst::CapsFeatures::new(&[NVMM_MEMORY_FEATURE]),
                 )
+                .structure_with_features(
+                    gst::Structure::builder("video/x-raw").build(),
+                    gst::CapsFeatures::new(&[D3D11_MEMORY_FEATURE]),
+                )
                 .build();
+
             let video_pad_template = gst::PadTemplate::new(
                 "video_%u",
                 gst::PadDirection::Sink,
