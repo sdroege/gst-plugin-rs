@@ -161,15 +161,27 @@ impl ElementImpl for PaintableSink {
                     Some(&["memory:SystemMemory", "meta:GstVideoOverlayComposition"][..]),
                     Some(&["meta:GstVideoOverlayComposition"][..]),
                 ] {
-                    let mut c = gst_video::video_make_raw_caps(&[
+                    const GL_FORMATS: &[gst_video::VideoFormat] =
+                        &[gst_video::VideoFormat::Rgba, gst_video::VideoFormat::Rgb];
+                    const NON_GL_FORMATS: &[gst_video::VideoFormat] = &[
                         gst_video::VideoFormat::Bgra,
                         gst_video::VideoFormat::Argb,
                         gst_video::VideoFormat::Rgba,
                         gst_video::VideoFormat::Abgr,
                         gst_video::VideoFormat::Rgb,
                         gst_video::VideoFormat::Bgr,
-                    ])
-                    .build();
+                    ];
+
+                    let formats = if features
+                        .as_ref()
+                        .map_or(false, |features| features.contains(&"memory:GLMemory"))
+                    {
+                        GL_FORMATS
+                    } else {
+                        NON_GL_FORMATS
+                    };
+
+                    let mut c = gst_video::video_make_raw_caps(formats).build();
 
                     if let Some(features) = features {
                         c.get_mut()
