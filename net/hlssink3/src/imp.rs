@@ -114,7 +114,7 @@ impl Default for Settings {
 }
 
 pub(crate) struct StartedState {
-    base_date_time: Option<DateTime<Utc>>,
+    pdt_base_utc: Option<DateTime<Utc>>,
     pdt_base_running_time: Option<gst::ClockTime>,
     playlist: Playlist,
     fragment_opened_at: Option<gst::ClockTime>,
@@ -130,7 +130,7 @@ impl StartedState {
         i_frames_only: bool,
     ) -> Self {
         Self {
-            base_date_time: None,
+            pdt_base_utc: None,
             pdt_base_running_time: None,
             playlist: Playlist::new(target_duration, playlist_type, i_frames_only),
             current_segment_location: None,
@@ -455,10 +455,10 @@ impl BinImpl for HlsSink3 {
                             state.pdt_base_running_time = state.fragment_running_time;
                         }
                         // Calculate the mapping from running time to UTC
-                        // calculate base_date_time for each segment for !pdt_follows_pipeline_clock
+                        // calculate pdt_base_utc for each segment for !pdt_follows_pipeline_clock
                         // when pdt_follows_pipeline_clock is set, we calculate the base time every time
                         // this avoids the drift between pdt tag and external clock (if gst clock has skew w.r.t external clock)
-                        if state.base_date_time.is_none() || !settings.pdt_follows_pipeline_clock {
+                        if state.pdt_base_utc.is_none() || !settings.pdt_follows_pipeline_clock {
                             let now_utc = Utc::now();
                             let now_gst = settings.giostreamsink.clock().unwrap().time().unwrap();
                             let pts_clock_time =
@@ -469,7 +469,7 @@ impl BinImpl for HlsSink3 {
                                 .checked_sub_signed(Duration::nanoseconds(diff.nseconds() as i64))
                                 .expect("offsetting the utc with gstreamer clock-diff overflow");
 
-                            state.base_date_time = Some(pts_utc);
+                            state.pdt_base_utc = Some(pts_utc);
                         }
 
                         let fragment_date_time = if settings.enable_program_date_time
@@ -478,7 +478,7 @@ impl BinImpl for HlsSink3 {
                             // Add the diff of running time to UTC time
                             // date_time = first_segment_utc + (current_seg_running_time - first_seg_running_time)
                             state
-                                .base_date_time
+                                .pdt_base_utc
                                 .unwrap()
                                 .checked_add_signed(Duration::nanoseconds(
                                     state
@@ -879,7 +879,7 @@ impl ElementImpl for HlsSink3 {
                         // rt is stopped but utc keep moving so need to
                         // calculate the mapping again
                         state.pdt_base_running_time = None;
-                        state.base_date_time = None
+                        state.pdt_base_utc = None
                     }
                 }
             }
