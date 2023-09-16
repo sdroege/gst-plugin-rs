@@ -359,8 +359,19 @@ impl OnvifMetadataParse {
                     gst::FlowError::Error
                 })?;
 
-                let dt_unix_ns =
-                    (dt.timestamp_nanos() as u64).nseconds() + crate::PRIME_EPOCH_OFFSET;
+                let dt_unix_ns = dt
+                    .timestamp_nanos_opt()
+                    .and_then(|ns| u64::try_from(ns).ok())
+                    .and_then(|ns| ns.nseconds().checked_add(crate::PRIME_EPOCH_OFFSET));
+
+                let Some(dt_unix_ns) = dt_unix_ns else {
+                    gst::warning!(CAT,
+                        imp: self,
+                        "Frame with unrepresentable UTC time {}",
+                        dt,
+                    );
+                    continue;
+                };
 
                 gst::trace!(
                     CAT,
