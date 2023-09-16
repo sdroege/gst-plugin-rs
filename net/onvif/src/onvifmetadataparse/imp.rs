@@ -219,12 +219,12 @@ impl OnvifMetadataParse {
                         Some(diff) => diff,
                         None => {
                             gst::error!(
-                            CAT,
-                            obj: pad,
-                            "Too big running time difference between initial running time {:?} and current running time {:?}",
-                            initial_running_time,
-                            running_time,
-                        );
+                                CAT,
+                                obj: pad,
+                                "Too big running time difference between initial running time {:?} and current running time {:?}",
+                                initial_running_time,
+                                running_time,
+                            );
                             return Err(gst::FlowError::Error);
                         }
                     };
@@ -359,8 +359,17 @@ impl OnvifMetadataParse {
                     gst::FlowError::Error
                 })?;
 
-                let dt_unix_ns =
-                    (dt.timestamp_nanos() as u64).nseconds() + crate::PRIME_EPOCH_OFFSET;
+                let dt_unix_ns = dt
+                    .timestamp_nanos_opt()
+                    .and_then(|ns| u64::try_from(ns).ok())
+                    .and_then(|ns| ns.nseconds().checked_add(crate::PRIME_EPOCH_OFFSET));
+
+                let dt_unix_ns = if let Some(dt_unix_ns) = dt_unix_ns {
+                    dt_unix_ns
+                } else {
+                    gst::warning!(CAT, imp: self, "Frame with unrepresentable UTC time {}", dt,);
+                    continue;
+                };
 
                 gst::trace!(
                     CAT,
