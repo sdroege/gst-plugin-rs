@@ -14,7 +14,7 @@ gst-rtp = { package = "gstreamer-rtp", git = "https://gitlab.freedesktop.org/gst
 gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_20"] }
 gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_20"] }
 xmlparser = "0.13"
-chrono = { version = "0.4", default-features = false }
+chrono = { version = "0.4.31", default-features = false }
 cairo-rs = { git = "https://github.com/gtk-rs/gtk-rs-core", features=["use_glib"] }
 pango = { git = "https://github.com/gtk-rs/gtk-rs-core" }
 pangocairo = { git = "https://github.com/gtk-rs/gtk-rs-core" }
