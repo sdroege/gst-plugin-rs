@@ -1846,12 +1846,13 @@ impl BaseWebRTCSink {
                     .and_then(|format| format.parse::<i32>().ok());
             }
 
-            // FIXME I think the intention was to drop(state) and re-acquire the lock after the call
+            drop(state);
 
             session
                 .webrtcbin
                 .emit_by_name::<()>("set-local-description", &[&answer, &None::<gst::Promise>]);
 
+            let mut state = self.state.lock().unwrap();
             let session_id = session.id.clone();
 
             if let Some(session_wrapper) = state.sessions.get_mut(&session_id) {
