@@ -2238,7 +2238,7 @@ impl WebRTCSink {
         let mut elements = vec![src.clone()];
 
         if codec.is_video() {
-            elements.push(make_converter_for_video_caps(caps, &codec)?);
+            elements.push(make_converter_for_video_caps(caps, codec)?);
         }
 
         gst::debug!(
