@@ -116,12 +116,13 @@ struct Settings {
 
 impl Settings {
     fn to_uri(&self) -> String {
-        format!(
-            "s3://{}/{}/{}",
-            self.region,
-            self.bucket.as_ref().unwrap(),
-            self.key.as_ref().unwrap()
-        )
+        GstS3Url {
+            region: self.region.clone(),
+            bucket: self.bucket.clone().unwrap(),
+            object: self.key.clone().unwrap(),
+            version: None,
+        }
+        .to_string()
     }
 
     fn to_metadata(&self, imp: &S3Sink) -> Option<HashMap<String, String>> {
