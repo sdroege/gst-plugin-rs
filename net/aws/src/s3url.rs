@@ -83,15 +83,21 @@ pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
         .next()
         .ok_or_else(|| format!("Invalid empty object/bucket '{}'", url))?;
 
-    let mut object = percent_decode(o.as_bytes())
-        .decode_utf8()
-        .unwrap()
-        .to_string();
     if o.is_empty() {
         return Err(format!("Invalid empty object/bucket '{}'", url));
     }
 
-    object = path.fold(object, |o, p| format!("{}/{}", o, p));
+    let mut object = percent_decode(o.as_bytes())
+        .decode_utf8()
+        .unwrap()
+        .to_string();
+
+    object = path.fold(object, |o, p| {
+        format!(
+            "{o}/{}",
+            percent_decode(p.as_bytes()).decode_utf8().unwrap()
+        )
+    });
 
     let mut q = url.query_pairs();
     let v = q.next();
