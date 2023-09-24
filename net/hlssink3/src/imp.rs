@@ -6,7 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::playlist::{Playlist, SegmentFormatter};
+use crate::playlist::Playlist;
 use crate::HlsSink3PlaylistType;
 use gio::prelude::*;
 use glib::subclass::prelude::*;
@@ -60,7 +60,6 @@ impl From<Option<&MediaPlaylistType>> for HlsSink3PlaylistType {
 
 struct Settings {
     location: String,
-    segment_formatter: SegmentFormatter,
     playlist_location: String,
     playlist_root: Option<String>,
     playlist_length: u32,
@@ -88,7 +87,6 @@ impl Default for Settings {
             .expect("Could not make element giostreamsink");
         Self {
             location: String::from(DEFAULT_LOCATION),
-            segment_formatter: SegmentFormatter::new(DEFAULT_LOCATION).unwrap(),
             playlist_location: String::from(DEFAULT_PLAYLIST_LOCATION),
             playlist_root: None,
             playlist_length: DEFAULT_PLAYLIST_LENGTH,
@@ -190,7 +188,14 @@ impl HlsSink3 {
         };
 
         let settings = self.settings.lock().unwrap();
-        let segment_file_location = settings.segment_formatter.segment(fragment_id);
+        let segment_file_location = match sprintf::sprintf!(&settings.location, fragment_id) {
+            Ok(file_name) => file_name,
+            Err(err) => {
+                gst::error!(CAT, imp: self, "Couldn't build file name, err: {:?}", err,);
+                return Err(String::from("Invalid init segment file pattern"));
+            }
+        };
+
         gst::trace!(
             CAT,
             imp: self,
@@ -493,9 +498,6 @@ impl ObjectImpl for HlsSink3 {
                     .get::<Option<String>>()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| DEFAULT_LOCATION.into());
-                settings.segment_formatter = SegmentFormatter::new(&settings.location).expect(
-                    "A string containing `%03d` pattern must be used (can be any number from 0-9)",
-                );
                 settings
                     .splitmuxsink
                     .set_property("location", &settings.location);
