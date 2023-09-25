@@ -10,8 +10,6 @@ ignore = [
     "RUSTSEC-2021-0060",
     "RUSTSEC-2021-0061",
     "RUSTSEC-2021-0145",
-    # https://github.com/chronotope/chrono/issues/499
-    "RUSTSEC-2020-0071",
     # sodiumoxide is deprecated
     "RUSTSEC-2021-0137",
 ]
@@ -45,17 +43,6 @@ multiple-versions = "deny"
 highlight = "all"
 wildcards = "allow"
 
-# ignore duplicated deps because of chrono, cookie, cookie_store, hyper,
-# hyperx, reqwest depending on old time
-# https://github.com/chronotope/chrono/issues/400
-# https://github.com/pfernie/cookie_store/issues/11
-# https://github.com/hyperium/hyper/pull/2139
-# https://github.com/dekellum/hyperx/issues/21
-# https://github.com/seanmonstar/reqwest/issues/934
-[[bans.skip]]
-name = "time"
-version = "0.1"
-
 # ignore duplicated crc dependency because ffv1 depends on an old version
 # https://github.com/rust-av/ffv1/issues/21
 [[bans.skip]]
@@ -78,11 +65,6 @@ version = "0.9"
 [[bans.skip]]
 name = "hmac"
 version = "0.11"
-
-# ignore duplicated wasi dependency because various crates depends on an old version
-[[bans.skip]]
-name = "wasi"
-version = "0.10"
 
 # ignore duplicated spin dependency because various crates depend on an old version
 [[bans.skip]]
