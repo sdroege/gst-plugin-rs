@@ -550,26 +550,29 @@ impl WhipSink {
         );
 
         let timeout;
+        let endpoint;
+
         {
             let settings = self.settings.lock().unwrap();
             timeout = settings.timeout;
+            endpoint =
+                reqwest::Url::parse(settings.whip_endpoint.as_ref().unwrap().as_str()).unwrap();
             drop(settings);
         }
 
-        if let Err(e) = wait_async(&self.canceller, self.do_post(offer_sdp), timeout).await {
+        if let Err(e) =
+            wait_async(&self.canceller, self.do_post(offer_sdp, endpoint), timeout).await
+        {
             self.handle_future_error(e);
         }
     }
 
     #[async_recursion]
-    async fn do_post(&self, offer: gst_webrtc::WebRTCSessionDescription) {
+    async fn do_post(&self, offer: gst_webrtc::WebRTCSessionDescription, endpoint: reqwest::Url) {
         let auth_token;
-        let endpoint;
 
         {
             let settings = self.settings.lock().unwrap();
-            endpoint =
-                reqwest::Url::parse(settings.whip_endpoint.as_ref().unwrap().as_str()).unwrap();
             auth_token = settings.auth_token.clone();
             drop(settings);
         }
@@ -774,7 +777,7 @@ impl WhipSink {
                                 redirect_url.as_str()
                             );
 
-                            self.do_post(offer).await
+                            self.do_post(offer, redirect_url).await
                         }
                         Err(e) => self.raise_error(gst::ResourceError::Failed, e.to_string()),
                     }
