@@ -1,4 +1,6 @@
 // Copyright (C) 2019 Amazon.com, Inc. or its affiliates <mkolny@amazon.com>
+// Copyright (C) 2023 Asymptotic Inc
+//      Author: Arun Raghavan <arun@asymptotic.io>
 //
 // This Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at
@@ -9,7 +11,8 @@
 use gst::glib;
 use gst::prelude::*;
 
-mod imp;
+mod multipartsink;
+mod putobjectsink;
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]
@@ -27,7 +30,11 @@ pub(crate) enum OnError {
 }
 
 glib::wrapper! {
-    pub struct S3Sink(ObjectSubclass<imp::S3Sink>) @extends gst_base::BaseSink, gst::Element, gst::Object;
+    pub struct S3Sink(ObjectSubclass<multipartsink::S3Sink>) @extends gst_base::BaseSink, gst::Element, gst::Object;
+}
+
+glib::wrapper! {
+    pub struct S3PutObjectSink(ObjectSubclass<putobjectsink::S3PutObjectSink>) @extends gst_base::BaseSink, gst::Element, gst::Object;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
@@ -43,5 +50,12 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         "awss3sink",
         gst::Rank::PRIMARY,
         S3Sink::static_type(),
+    )?;
+    gst::Element::register(
+        Some(plugin),
+        "awss3putobjectsink",
+        // This element should not be autoplugged as it is only useful for specific use cases
+        gst::Rank::NONE,
+        S3PutObjectSink::static_type(),
     )
 }

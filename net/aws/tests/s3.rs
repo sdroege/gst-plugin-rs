@@ -10,8 +10,6 @@
 
 // The test times out on Windows for some reason, skip until we figure out why
 #[cfg(not(target_os = "windows"))]
-#[test_with::env(AWS_ACCESS_KEY_ID)]
-#[test_with::env(AWS_SECRET_ACCESS_KEY)]
 #[cfg(test)]
 mod tests {
     use gst::prelude::*;
@@ -30,41 +28,9 @@ mod tests {
         });
     }
 
-    // Common helper
-    async fn do_s3_test(key_prefix: &str) {
-        init();
-
-        let region = std::env::var("AWS_REGION").unwrap_or_else(|_| DEFAULT_S3_REGION.to_string());
-        let bucket =
-            std::env::var("AWS_S3_BUCKET").unwrap_or_else(|_| "gst-plugins-rs-tests".to_string());
-        let key = format!("{key_prefix}-{:?}.txt", chrono::Utc::now());
-        let uri = format!("s3://{region}/{bucket}/{key}");
-        let content = "Hello, world!\n".as_bytes();
-
-        // Manually add the element so we can configure it before it goes to PLAYING
-        let mut h1 = gst_check::Harness::new_empty();
-        // Need to add_parse() because the Harness API / Rust bindings aren't conducive to creating and
-        // adding an element manually
-        h1.add_parse(format!("awss3sink uri=\"{uri}\"").as_str());
-
-        h1.set_src_caps(gst::Caps::builder("text/plain").build());
-        h1.play();
-
-        h1.push(gst::Buffer::from_slice(content)).unwrap();
-        h1.push_event(gst::event::Eos::new());
-
-        let mut h2 = gst_check::Harness::new("awss3src");
-        h2.element().unwrap().set_property("uri", uri.clone());
-        h2.play();
-
-        let buf = h2.pull_until_eos().unwrap().unwrap();
-        assert_eq!(
-            content,
-            buf.into_mapped_buffer_readable().unwrap().as_slice()
-        );
-
+    async fn delete_object(region: String, bucket: &str, key: &str) {
         let region_provider = aws_config::meta::region::RegionProviderChain::first_try(
-            aws_sdk_s3::config::Region::new(region.clone()),
+            aws_sdk_s3::config::Region::new(region),
         )
         .or_default_provider();
 
@@ -83,18 +49,118 @@ mod tests {
             .unwrap();
     }
 
-    #[tokio::test]
-    async fn test_s3_simple() {
-        do_s3_test("s3-test").await;
+    // Common helper
+    async fn do_s3_multipart_test(key_prefix: &str) {
+        init();
+
+        let region = std::env::var("AWS_REGION").unwrap_or_else(|_| DEFAULT_S3_REGION.to_string());
+        let bucket =
+            std::env::var("AWS_S3_BUCKET").unwrap_or_else(|_| "gst-plugins-rs-tests".to_string());
+        let key = format!("{key_prefix}-{:?}.txt", chrono::Utc::now());
+        let uri = format!("s3://{region}/{bucket}/{key}");
+        let content = "Hello, world!\n".as_bytes();
+
+        // Manually add the element so we can configure it before it goes to PLAYING
+        let mut h1 = gst_check::Harness::new_empty();
+        // Need to add_parse() because the Harness API / Rust bindings aren't conducive to creating and
+        // adding an element manually
+
+        h1.add_parse(format!("awss3sink uri=\"{uri}\"").as_str());
+
+        h1.set_src_caps(gst::Caps::builder("text/plain").build());
+        h1.play();
+
+        h1.push(gst::Buffer::from_slice(content)).unwrap();
+        h1.push(gst::Buffer::from_slice(content)).unwrap();
+        h1.push(gst::Buffer::from_slice(content)).unwrap();
+        h1.push(gst::Buffer::from_slice(content)).unwrap();
+        h1.push(gst::Buffer::from_slice(content)).unwrap();
+        h1.push_event(gst::event::Eos::new());
+
+        let mut h2 = gst_check::Harness::new("awss3src");
+        h2.element().unwrap().set_property("uri", uri.clone());
+        h2.play();
+
+        let buf = h2.pull_until_eos().unwrap().unwrap();
+        assert_eq!(
+            content.repeat(5),
+            buf.into_mapped_buffer_readable().unwrap().as_slice()
+        );
+
+        delete_object(region.clone(), &bucket, &key).await;
+    }
+
+    // Common helper
+    async fn do_s3_putobject_test(key_prefix: &str) {
+        init();
+
+        let region = std::env::var("AWS_REGION").unwrap_or_else(|_| DEFAULT_S3_REGION.to_string());
+        let bucket =
+            std::env::var("AWS_S3_BUCKET").unwrap_or_else(|_| "gst-plugins-rs-tests".to_string());
+        let key = format!("{key_prefix}-{:?}.txt", chrono::Utc::now());
+        let uri = format!("s3://{region}/{bucket}/{key}");
+        let content = "Hello, world!\n".as_bytes();
+
+        // Manually add the element so we can configure it before it goes to PLAYING
+        let mut h1 = gst_check::Harness::new_empty();
+        // Need to add_parse() because the Harness API / Rust bindings aren't conducive to creating and
+        // adding an element manually
+
+        h1.add_parse(
+            format!("awss3putobjectsink key=\"{key}\" region=\"{region}\" bucket=\"{bucket}\"")
+                .as_str(),
+        );
+
+        h1.set_src_caps(gst::Caps::builder("text/plain").build());
+        h1.play();
+
+        h1.push(gst::Buffer::from_slice(content)).unwrap();
+        h1.push(gst::Buffer::from_slice(content)).unwrap();
+        h1.push(gst::Buffer::from_slice(content)).unwrap();
+        h1.push(gst::Buffer::from_slice(content)).unwrap();
+        h1.push(gst::Buffer::from_slice(content)).unwrap();
+        h1.push_event(gst::event::Eos::new());
+
+        let mut h2 = gst_check::Harness::new("awss3src");
+        h2.element().unwrap().set_property("uri", uri.clone());
+        h2.play();
+
+        let buf = h2.pull_until_eos().unwrap().unwrap();
+        assert_eq!(
+            content.repeat(5),
+            buf.into_mapped_buffer_readable().unwrap().as_slice()
+        );
+
+        delete_object(region.clone(), &bucket, &key).await;
     }
 
     #[tokio::test]
-    async fn test_s3_whitespace() {
-        do_s3_test("s3 test").await;
+    async fn test_s3_multipart_simple() {
+        do_s3_multipart_test("s3-test").await;
     }
 
     #[tokio::test]
-    async fn test_s3_unicode() {
-        do_s3_test("s3 🧪 😱").await;
+    async fn test_s3_multipart_whitespace() {
+        do_s3_multipart_test("s3 test").await;
+    }
+
+    #[tokio::test]
+    async fn test_s3_multipart_unicode() {
+        do_s3_multipart_test("s3 🧪 😱").await;
+    }
+
+    #[tokio::test]
+    async fn test_s3_put_object_simple() {
+        do_s3_putobject_test("s3-put-object-test").await;
+    }
+
+    #[tokio::test]
+    async fn test_s3_put_object_whitespace() {
+        do_s3_putobject_test("s3 put object test").await;
+    }
+
+    #[tokio::test]
+    async fn test_s3_put_object_unicode() {
+        do_s3_putobject_test("s3 put object 🧪 😱").await;
     }
 }
