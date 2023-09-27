@@ -25,8 +25,6 @@ use gst::prelude::*;
 
 use gst::glib::once_cell::sync::Lazy;
 
-use gio::prelude::*;
-
 use std::error;
 use std::fmt;
 use std::io;
@@ -222,31 +220,57 @@ impl GioSocketWrapper {
         }
     }
 
-    #[cfg(unix)]
-    pub fn set_tos(&self, qos_dscp: i32) -> Result<(), glib::Error> {
-        use libc::{IPPROTO_IP, IPPROTO_IPV6, IPV6_TCLASS, IP_TOS};
+    #[cfg(any(
+        bsd,
+        linux_like,
+        target_os = "aix",
+        target_os = "fuchsia",
+        target_os = "haiku",
+        target_env = "newlib"
+    ))]
+    pub fn set_tos(&self, qos_dscp: i32) -> rustix::io::Result<()> {
+        use gio::prelude::*;
+        use rustix::net::sockopt;
 
         let tos = (qos_dscp & 0x3f) << 2;
 
         let socket = self.as_socket();
 
-        socket.set_option(IPPROTO_IP, IP_TOS, tos)?;
+        sockopt::set_ip_tos(socket, tos)?;
 
         if socket.family() == gio::SocketFamily::Ipv6 {
-            socket.set_option(IPPROTO_IPV6, IPV6_TCLASS, tos)?;
+            sockopt::set_ipv6_tclass(socket, tos)?;
         }
 
         Ok(())
     }
 
-    #[cfg(not(unix))]
-    pub fn set_tos(&self, _qos_dscp: i32) -> Result<(), glib::Error> {
+    #[cfg(not(any(
+        bsd,
+        linux_like,
+        target_os = "aix",
+        target_os = "fuchsia",
+        target_os = "haiku",
+        target_env = "newlib"
+    )))]
+    pub fn set_tos(&self, _qos_dscp: i32) -> rustix::io::Result<()> {
         Ok(())
     }
 
-    #[cfg(unix)]
+    #[cfg(not(windows))]
     pub fn get<T: FromRawFd>(&self) -> T {
-        unsafe { FromRawFd::from_raw_fd(libc::dup(gio::ffi::g_socket_get_fd(self.socket))) }
+        unsafe {
+            let borrowed =
+                rustix::fd::BorrowedFd::borrow_raw(gio::ffi::g_socket_get_fd(self.socket));
+
+            let dupped = rustix::io::dup(borrowed).unwrap();
+            let res = FromRawFd::from_raw_fd(dupped.as_raw_fd());
+
+            // We transferred ownership to T so don't drop dupped
+            std::mem::forget(dupped);
+
+            res
+        }
     }
 
     #[cfg(windows)]
@@ -308,7 +332,7 @@ unsafe fn dup_socket(socket: usize) -> usize {
 pub fn wrap_socket(socket: &Async<UdpSocket>) -> Result<GioSocketWrapper, gst::ErrorMessage> {
     #[cfg(unix)]
     unsafe {
-        let fd = libc::dup(socket.as_raw_fd());
+        let dupped = rustix::io::dup(socket).unwrap();
 
         // This is unsafe because it allows us to share the fd between the socket and the
         // GIO socket below, but safety of this is the job of the application
@@ -319,14 +343,18 @@ pub fn wrap_socket(socket: &Async<UdpSocket>) -> Result<GioSocketWrapper, gst::E
             }
         }
 
-        let fd = FdConverter(fd);
+        let fd = FdConverter(dupped.as_raw_fd());
 
-        let gio_socket = gio::Socket::from_fd(fd).map_err(|err| {
+        let gio_socket = gio::Socket::from_fd(fd);
+        // We transferred ownership to gio_socket so don't drop dupped
+        std::mem::forget(dupped);
+        let gio_socket = gio_socket.map_err(|err| {
             gst::error_msg!(
                 gst::ResourceError::OpenWrite,
                 ["Failed to create wrapped GIO socket: {}", err]
             )
         })?;
+
         Ok(GioSocketWrapper::new(&gio_socket))
     }
     #[cfg(windows)]

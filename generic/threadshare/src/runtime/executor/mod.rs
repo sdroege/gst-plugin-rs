@@ -30,7 +30,7 @@ mod join;
 pub use join::JoinHandle;
 
 pub mod reactor;
-use reactor::{Reactor, Readable, ReadableOwned, Source, Writable, WritableOwned};
+use reactor::{Reactor, Readable, ReadableOwned, Registration, Source, Writable, WritableOwned};
 
 // We need the `Mutex<bool>` to work in pair with `Condvar`.
 #[allow(clippy::mutex_atomic)]
