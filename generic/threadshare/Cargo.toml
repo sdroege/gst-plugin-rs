@@ -10,10 +10,10 @@ rust-version = "1.70"
 
 [dependencies]
 async-task = "4.3.0"
-concurrent-queue = "2"
+cfg-if = "1"
+concurrent-queue = "2.2.0"
 flume = "0.11"
-futures = "0.3.21"
-libc = "0.2"
+futures = "0.3.28"
 gio = { git = "https://github.com/gtk-rs/gtk-rs-core" }
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
@@ -21,8 +21,9 @@ gst-net = { package = "gstreamer-net", git = "https://gitlab.freedesktop.org/gst
 gst-rtp = { package = "gstreamer-rtp", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 once_cell = "1"
 pin-project-lite = "0.2.0"
-polling = "2.2.0"
+polling = "3.1.0"
 rand = "0.8"
+rustix = { version = "0.38.2", default-features = false, features = ["std", "fs", "net"] }
 slab = "0.4.7"
 socket2 = {features = ["all"], version = "0.5"}
 waker-fn = "1.1"

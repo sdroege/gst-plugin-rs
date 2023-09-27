@@ -18,20 +18,20 @@ use std::task::{Context, Poll};
 
 #[cfg(unix)]
 use std::{
-    os::unix::io::{AsRawFd, RawFd},
+    os::unix::io::{AsFd, AsRawFd, BorrowedFd, OwnedFd, RawFd},
     os::unix::net::{SocketAddr as UnixSocketAddr, UnixDatagram, UnixListener, UnixStream},
     path::Path,
 };
 
 #[cfg(windows)]
-use std::os::windows::io::{AsRawSocket, RawSocket};
+use std::os::windows::io::{AsRawSocket, AsSocket, BorrowedSocket, OwnedSocket, RawSocket};
 
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 
 use crate::runtime::RUNTIME_CAT;
 
 use super::scheduler::{self, Scheduler};
-use super::{Reactor, Readable, ReadableOwned, Source, Writable, WritableOwned};
+use super::{Reactor, Readable, ReadableOwned, Registration, Source, Writable, WritableOwned};
 
 /// Async adapter for I/O types.
 ///
@@ -103,11 +103,11 @@ pub struct Async<T: Send + 'static> {
 impl<T: Send + 'static> Unpin for Async<T> {}
 
 #[cfg(unix)]
-impl<T: AsRawFd + Send + 'static> Async<T> {
+impl<T: AsFd + Send + 'static> Async<T> {
     /// Creates an async I/O handle.
     ///
     /// This method will put the handle in non-blocking mode and register it in
-    /// [epoll]/[kqueue]/[event ports]/[wepoll].
+    /// [epoll]/[kqueue]/[event ports]/[IOCP].
     ///
     /// On Unix systems, the handle must implement `AsRawFd`, while on Windows it must implement
     /// `AsRawSocket`.
@@ -115,22 +115,33 @@ impl<T: AsRawFd + Send + 'static> Async<T> {
     /// [epoll]: https://en.wikipedia.org/wiki/Epoll
     /// [kqueue]: https://en.wikipedia.org/wiki/Kqueue
     /// [event ports]: https://illumos.org/man/port_create
-    /// [wepoll]: https://github.com/piscisaureus/wepoll
+    /// [IOCP]: https://learn.microsoft.com/en-us/windows/win32/fileio/i-o-completion-ports
     pub fn new(io: T) -> io::Result<Async<T>> {
-        let fd = io.as_raw_fd();
-
         // Put the file descriptor in non-blocking mode.
-        unsafe {
-            let mut res = libc::fcntl(fd, libc::F_GETFL);
-            if res != -1 {
-                res = libc::fcntl(fd, libc::F_SETFL, res | libc::O_NONBLOCK);
-            }
-            if res == -1 {
-                return Err(io::Error::last_os_error());
+        let fd = io.as_fd();
+        cfg_if::cfg_if! {
+            // ioctl(FIONBIO) sets the flag atomically, but we use this only on Linux
+            // for now, as with the standard library, because it seems to behave
+            // differently depending on the platform.
+            // https://github.com/rust-lang/rust/commit/efeb42be2837842d1beb47b51bb693c7474aba3d
+            // https://github.com/libuv/libuv/blob/e9d91fccfc3e5ff772d5da90e1c4a24061198ca0/src/unix/poll.c#L78-L80
+            // https://github.com/tokio-rs/mio/commit/0db49f6d5caf54b12176821363d154384357e70a
+            if #[cfg(target_os = "linux")] {
+                rustix::io::ioctl_fionbio(fd, true)?;
+            } else {
+                let previous = rustix::fs::fcntl_getfl(fd)?;
+                let new = previous | rustix::fs::OFlags::NONBLOCK;
+                if new != previous {
+                    rustix::fs::fcntl_setfl(fd, new)?;
+                }
             }
         }
 
-        let source = Reactor::with_mut(|reactor| reactor.insert_io(fd))?;
+        // SAFETY: It is impossible to drop the I/O source while it is registered through
+        // this type.
+        let registration = unsafe { Registration::new(fd) };
+
+        let source = Reactor::with_mut(|reactor| reactor.insert_io(registration))?;
         Ok(Async {
             source,
             io: Some(io),
@@ -144,16 +155,41 @@ impl<T: AsRawFd + Send + 'static> Async<T> {
 #[cfg(unix)]
 impl<T: AsRawFd + Send + 'static> AsRawFd for Async<T> {
     fn as_raw_fd(&self) -> RawFd {
-        self.source.raw
+        self.get_ref().as_raw_fd()
+    }
+}
+
+#[cfg(unix)]
+impl<T: AsFd + Send + 'static> AsFd for Async<T> {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.get_ref().as_fd()
+    }
+}
+
+#[cfg(unix)]
+impl<T: AsFd + From<OwnedFd> + Send + 'static> TryFrom<OwnedFd> for Async<T> {
+    type Error = io::Error;
+
+    fn try_from(value: OwnedFd) -> Result<Self, Self::Error> {
+        Async::new(value.into())
+    }
+}
+
+#[cfg(unix)]
+impl<T: Into<OwnedFd> + Send + 'static> TryFrom<Async<T>> for OwnedFd {
+    type Error = io::Error;
+
+    fn try_from(value: Async<T>) -> Result<Self, Self::Error> {
+        value.into_inner().map(Into::into)
     }
 }
 
 #[cfg(windows)]
-impl<T: AsRawSocket + Send + 'static> Async<T> {
+impl<T: AsSocket + Send + 'static> Async<T> {
     /// Creates an async I/O handle.
     ///
     /// This method will put the handle in non-blocking mode and register it in
-    /// [epoll]/[kqueue]/[event ports]/[wepoll].
+    /// [epoll]/[kqueue]/[event ports]/[IOCP].
     ///
     /// On Unix systems, the handle must implement `AsRawFd`, while on Windows it must implement
     /// `AsRawSocket`.
@@ -161,27 +197,24 @@ impl<T: AsRawSocket + Send + 'static> Async<T> {
     /// [epoll]: https://en.wikipedia.org/wiki/Epoll
     /// [kqueue]: https://en.wikipedia.org/wiki/Kqueue
     /// [event ports]: https://illumos.org/man/port_create
-    /// [wepoll]: https://github.com/piscisaureus/wepoll
+    /// [IOCP]: https://learn.microsoft.com/en-us/windows/win32/fileio/i-o-completion-ports
     pub fn new(io: T) -> io::Result<Async<T>> {
-        let sock = io.as_raw_socket();
+        let borrowed = io.as_socket();
 
         // Put the socket in non-blocking mode.
-        unsafe {
-            use winapi::ctypes;
-            use winapi::um::winsock2;
+        //
+        // Safety: We assume `as_raw_socket()` returns a valid fd. When we can
+        // depend on Rust >= 1.63, where `AsFd` is stabilized, and when
+        // `TimerFd` implements it, we can remove this unsafe and simplify this.
+        rustix::io::ioctl_fionbio(borrowed, true)?;
 
-            let mut nonblocking = true as ctypes::c_ulong;
-            let res = winsock2::ioctlsocket(
-                sock as winsock2::SOCKET,
-                winsock2::FIONBIO,
-                &mut nonblocking,
-            );
-            if res != 0 {
-                return Err(io::Error::last_os_error());
-            }
-        }
+        // Create the registration.
+        //
+        // SAFETY: It is impossible to drop the I/O source while it is registered through
+        // this type.
+        let registration = unsafe { Registration::new(borrowed) };
 
-        let source = Reactor::with_mut(|reactor| reactor.insert_io(sock))?;
+        let source = Reactor::with_mut(|reactor| reactor.insert_io(registration))?;
         Ok(Async {
             source,
             io: Some(io),
@@ -195,7 +228,32 @@ impl<T: AsRawSocket + Send + 'static> Async<T> {
 #[cfg(windows)]
 impl<T: AsRawSocket + Send + 'static> AsRawSocket for Async<T> {
     fn as_raw_socket(&self) -> RawSocket {
-        self.source.raw
+        self.get_ref().as_raw_socket()
+    }
+}
+
+#[cfg(windows)]
+impl<T: AsSocket + Send + 'static> AsSocket for Async<T> {
+    fn as_socket(&self) -> BorrowedSocket<'_> {
+        self.get_ref().as_socket()
+    }
+}
+
+#[cfg(windows)]
+impl<T: AsSocket + From<OwnedSocket> + Send + 'static> TryFrom<OwnedSocket> for Async<T> {
+    type Error = io::Error;
+
+    fn try_from(value: OwnedSocket) -> Result<Self, Self::Error> {
+        Async::new(value.into())
+    }
+}
+
+#[cfg(windows)]
+impl<T: Into<OwnedSocket> + Send + 'static> TryFrom<Async<T>> for OwnedSocket {
+    type Error = io::Error;
+
+    fn try_from(value: Async<T>) -> Result<Self, Self::Error> {
+        value.into_inner().map(Into::into)
     }
 }
 
@@ -380,7 +438,12 @@ impl<T: Send + 'static> Drop for Async<T> {
                 sched.spawn_and_unpark(async move {
                     Reactor::with_mut(|reactor| {
                         if let Err(err) = reactor.remove_io(&source) {
-                            gst::error!(RUNTIME_CAT, "Failed to remove fd {}: {}", source.raw, err);
+                            gst::error!(
+                                RUNTIME_CAT,
+                                "Failed to remove fd {:?}: {}",
+                                source.registration,
+                                err
+                            );
                         }
                     });
                     drop(io);
@@ -391,6 +454,94 @@ impl<T: Send + 'static> Drop for Async<T> {
         }
     }
 }
+
+/// Types whose I/O trait implementations do not drop the underlying I/O source.
+///
+/// The resource contained inside of the [`Async`] cannot be invalidated. This invalidation can
+/// happen if the inner resource (the [`TcpStream`], [`UnixListener`] or other `T`) is moved out
+/// and dropped before the [`Async`]. Because of this, functions that grant mutable access to
+/// the inner type are unsafe, as there is no way to guarantee that the source won't be dropped
+/// and a dangling handle won't be left behind.
+///
+/// Unfortunately this extends to implementations of [`Read`] and [`Write`]. Since methods on those
+/// traits take `&mut`, there is no guarantee that the implementor of those traits won't move the
+/// source out while the method is being run.
+///
+/// This trait is an antidote to this predicament. By implementing this trait, the user pledges
+/// that using any I/O traits won't destroy the source. This way, [`Async`] can implement the
+/// `async` version of these I/O traits, like [`AsyncRead`] and [`AsyncWrite`].
+///
+/// # Safety
+///
+/// Any I/O trait implementations for this type must not drop the underlying I/O source. Traits
+/// affected by this trait include [`Read`], [`Write`], [`Seek`] and [`BufRead`].
+///
+/// This trait is implemented by default on top of `libstd` types. In addition, it is implemented
+/// for immutable reference types, as it is impossible to invalidate any outstanding references
+/// while holding an immutable reference, even with interior mutability. As Rust's current pinning
+/// system relies on similar guarantees, I believe that this approach is robust.
+///
+/// [`BufRead`]: https://doc.rust-lang.org/std/io/trait.BufRead.html
+/// [`Read`]: https://doc.rust-lang.org/std/io/trait.Read.html
+/// [`Seek`]: https://doc.rust-lang.org/std/io/trait.Seek.html
+/// [`Write`]: https://doc.rust-lang.org/std/io/trait.Write.html
+///
+/// [`AsyncRead`]: https://docs.rs/futures-io/latest/futures_io/trait.AsyncRead.html
+/// [`AsyncWrite`]: https://docs.rs/futures-io/latest/futures_io/trait.AsyncWrite.html
+pub unsafe trait IoSafe {}
+
+/// Reference types can't be mutated.
+///
+/// The worst thing that can happen is that external state is used to change what kind of pointer
+/// `as_fd()` returns. For instance:
+///
+/// ```
+/// # #[cfg(unix)] {
+/// use std::cell::Cell;
+/// use std::net::TcpStream;
+/// use std::os::unix::io::{AsFd, BorrowedFd};
+///
+/// struct Bar {
+///     flag: Cell<bool>,
+///     a: TcpStream,
+///     b: TcpStream
+/// }
+///
+/// impl AsFd for Bar {
+///     fn as_fd(&self) -> BorrowedFd<'_> {
+///         if self.flag.replace(!self.flag.get()) {
+///             self.a.as_fd()
+///         } else {
+///             self.b.as_fd()
+///         }
+///     }
+/// }
+/// # }
+/// ```
+///
+/// We solve this problem by only calling `as_fd()` once to get the original source. Implementations
+/// like this are considered buggy (but not unsound) and are thus not really supported by `async-io`.
+unsafe impl<T: ?Sized> IoSafe for &T {}
+
+// Can be implemented on top of libstd types.
+unsafe impl IoSafe for std::fs::File {}
+unsafe impl IoSafe for std::io::Stderr {}
+unsafe impl IoSafe for std::io::Stdin {}
+unsafe impl IoSafe for std::io::Stdout {}
+unsafe impl IoSafe for std::io::StderrLock<'_> {}
+unsafe impl IoSafe for std::io::StdinLock<'_> {}
+unsafe impl IoSafe for std::io::StdoutLock<'_> {}
+unsafe impl IoSafe for std::net::TcpStream {}
+
+#[cfg(unix)]
+unsafe impl IoSafe for std::os::unix::net::UnixStream {}
+
+unsafe impl<T: IoSafe + Read> IoSafe for std::io::BufReader<T> {}
+unsafe impl<T: IoSafe + Write> IoSafe for std::io::BufWriter<T> {}
+unsafe impl<T: IoSafe + Write> IoSafe for std::io::LineWriter<T> {}
+unsafe impl<T: IoSafe + ?Sized> IoSafe for &mut T {}
+unsafe impl<T: IoSafe + ?Sized> IoSafe for Box<T> {}
+unsafe impl<T: Clone + IoSafe + ?Sized> IoSafe for std::borrow::Cow<'_, T> {}
 
 impl<T: Read + Send + 'static> AsyncRead for Async<T> {
     fn poll_read(
@@ -422,6 +573,8 @@ impl<T: Read + Send + 'static> AsyncRead for Async<T> {
     }
 }
 
+// Since this is through a reference, we can't mutate the inner I/O source.
+// Therefore this is safe!
 impl<T: Send + 'static> AsyncRead for &Async<T>
 where
     for<'a> &'a T: Read,
@@ -886,7 +1039,7 @@ fn connect(addr: SockAddr, domain: Domain, protocol: Option<Protocol>) -> io::Re
     match socket.connect(&addr) {
         Ok(_) => {}
         #[cfg(unix)]
-        Err(err) if err.raw_os_error() == Some(libc::EINPROGRESS) => {}
+        Err(err) if err.raw_os_error() == Some(rustix::io::Errno::INPROGRESS.raw_os_error()) => {}
         Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
         Err(err) => return Err(err),
     }
