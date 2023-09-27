@@ -62,7 +62,7 @@ impl ObjectImpl for WebRTCSrc {
                     .default_value(DEFAULT_STUN_SERVER)
                     .build(),
                 glib::ParamSpecObject::builder::<Signallable>("signaller")
-                    .flags(glib::ParamFlags::READWRITE  | gst::PARAM_FLAG_MUTABLE_READY)
+                    .flags(glib::ParamFlags::READWRITE | glib::ParamFlags::CONSTRUCT_ONLY)
                     .blurb("The Signallable object to use to handle WebRTC Signalling")
                     .build(),
                 glib::ParamSpecBoxed::builder::<gst::Structure>("meta")
@@ -92,8 +92,14 @@ impl ObjectImpl for WebRTCSrc {
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "signaller" => {
-                self.settings.lock().unwrap().signaller =
-                    value.get::<Signallable>().expect("type checked upstream");
+                let signaller = value
+                    .get::<Option<Signallable>>()
+                    .expect("type checked upstream");
+                if let Some(signaller) = signaller {
+                    self.settings.lock().unwrap().signaller = signaller;
+                }
+                // else: signaller not set as a construct property
+                //       => use default Signaller
             }
             "video-codecs" => {
                 self.settings.lock().unwrap().video_codecs = value
