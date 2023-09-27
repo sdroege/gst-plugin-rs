@@ -6505,9 +6505,9 @@
                         "blurb": "The Signallable object to use to handle WebRTC Signalling",
                         "conditionally-available": false,
                         "construct": false,
-                        "construct-only": false,
+                        "construct-only": true,
                         "controllable": false,
-                        "mutable": "ready",
+                        "mutable": "null",
                         "readable": true,
                         "type": "GstRSWebRTCSignallableIface",
                         "writable": true
