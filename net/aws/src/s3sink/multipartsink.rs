@@ -182,7 +182,7 @@ pub struct S3Sink {
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "aws3sink",
+        "awss3sink",
         gst::DebugColorFlags::empty(),
         Some("Amazon S3 Sink"),
     )
