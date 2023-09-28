@@ -50,7 +50,12 @@ use std::{env, fs, path};
 ///   commit.
 ///
 /// - If not, `COMMIT_ID` will be set to the string `RELEASE` and the
-///   `BUILD_REL_DATE` variable will be set to the mtime of `Cargo.toml`.
+///   `BUILD_REL_DATE` variable will be set to the `package.metadata.gstreamer.release_date` key of
+///   `Cargo.toml`, if it exists.
+///
+/// - If not, `COMMIT_ID` will be set to the string `RELEASE` and the `BUILD_REL_DATE` variable
+///   will be set to the mtime of `Cargo.toml`. Note that the crates created by `cargo package` and
+///   `cargo publish` have bogus mtimes for all files and won't be used.
 ///
 /// - If neither is possible, `COMMIT_ID` is set to the string `UNKNOWN` and `BUILD_REL_DATE` to the
 ///   current date.
@@ -70,7 +75,9 @@ pub fn info() {
     // If there is a git repository, extract the version information from there.
     // Otherwise assume this is a release and use Cargo.toml mtime as date.
     let (commit_id, commit_date) = git_info.unwrap_or_else(|| {
-        let date = cargo_mtime_date(crate_dir).unwrap_or_else(chrono::Utc::now);
+        let date = cargo_metadata_release_date(&crate_dir)
+            .or_else(|| cargo_mtime_date(&crate_dir))
+            .unwrap_or_else(chrono::Utc::now);
         ("RELEASE".into(), date.format("%Y-%m-%d").to_string())
     });
 
@@ -78,8 +85,36 @@ pub fn info() {
     println!("cargo:rustc-env=BUILD_REL_DATE={commit_date}");
 }
 
-fn cargo_mtime_date(crate_dir: path::PathBuf) -> Option<chrono::DateTime<chrono::Utc>> {
-    let mut cargo_toml = crate_dir;
+fn cargo_metadata_release_date(crate_dir: &path::Path) -> Option<chrono::DateTime<chrono::Utc>> {
+    use std::io::prelude::*;
+
+    let mut cargo_toml = path::PathBuf::from(crate_dir);
+    cargo_toml.push("Cargo.toml");
+
+    let mut file = fs::File::open(&cargo_toml).ok()?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).ok()?;
+
+    let doc = contents.parse::<toml_edit::Document>().ok()?;
+    let release_date = doc
+        .get("package")
+        .and_then(|package| package.as_table_like())
+        .and_then(|package| package.get("metadata"))
+        .and_then(|metadata| metadata.as_table_like())
+        .and_then(|metadata| metadata.get("gstreamer"))
+        .and_then(|gstreamer| gstreamer.as_table_like())
+        .and_then(|gstreamer| gstreamer.get("release_date"))
+        .and_then(|release_date| release_date.as_str())?;
+
+    let release_date = release_date.parse::<chrono::NaiveDate>().ok()?;
+    Some(chrono::DateTime::from_naive_utc_and_offset(
+        release_date.and_hms_opt(0, 0, 0)?,
+        chrono::Utc,
+    ))
+}
+
+fn cargo_mtime_date(crate_dir: &path::Path) -> Option<chrono::DateTime<chrono::Utc>> {
+    let mut cargo_toml = path::PathBuf::from(crate_dir);
     cargo_toml.push("Cargo.toml");
 
     let metadata = fs::metadata(&cargo_toml).ok()?;
