@@ -93,3 +93,6 @@ name = "webrtcsink-stats-server"
 
 [[example]]
 name = "webrtcsink-high-quality-tune"
+
+[[example]]
+name = "webrtcsink-custom-signaller"
