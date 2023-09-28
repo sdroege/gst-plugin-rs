@@ -1,6 +1,6 @@
 # webrtcsink examples
 
-Collection (1-sized for now) of webrtcsink examples
+Collection of webrtcsink examples
 
 ## webrtcsink-stats-server
 
@@ -16,3 +16,8 @@ cargo run --example webrtcsink-stats-server
 
 Once it is running, follow the instruction in the webrtcsink-stats folder to
 run an example client.
+
+## webrtcsink-custom-signaller
+
+An example of custom signaller implementation, see the corresponding
+[README](webrtcsink-custom-signaller/README.md) for more details on code and usage. 
