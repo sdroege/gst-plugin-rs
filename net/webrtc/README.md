@@ -28,10 +28,10 @@ set of streams to any number of consumers, `webrtcsink` (which wraps
 * Application-provided signalling: `webrtcsink` can be instantiated by an
   application with a custom signaller. That signaller must be a GObject, and
   must implement the `Signallable` interface as defined
-  [here](src/webrtcsink/mod.rs). The [default signaller](src/signaller/mod.rs)
+  [here](src/signaller/mod.rs). The [default signaller](src/signaller/imp.rs)
   can be used as an example.
 
-  An [example project] is also available to use as a boilerplate for
+  An [example](examples/webrtcsink-custom-signaller/README.md) is also available to use as a boilerplate for
   implementing and using a custom signaller.
 
 * Sandboxed consumers: when a consumer is added, its encoder / payloader /
