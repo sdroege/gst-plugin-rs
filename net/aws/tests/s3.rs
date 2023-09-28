@@ -102,6 +102,7 @@ mod tests {
         buffers: Option<u64>,
         bytes: Option<u64>,
         time: Option<gst::ClockTime>,
+        do_eos: bool,
     ) {
         init();
 
@@ -139,6 +140,9 @@ mod tests {
         if time.is_some() {
             h1el.set_property("flush-interval-time", time)
         };
+        if !do_eos {
+            h1el.set_property("flush-on-error", true)
+        }
 
         h1.set_src_caps(gst::Caps::builder("text/plain").build());
         h1.play();
@@ -148,7 +152,13 @@ mod tests {
         h1.push(make_buffer(content)).unwrap();
         h1.push(make_buffer(content)).unwrap();
         h1.push(make_buffer(content)).unwrap();
-        h1.push_event(gst::event::Eos::new());
+
+        if do_eos {
+            h1.push_event(gst::event::Eos::new());
+        } else {
+            // teardown to trigger end
+            drop(h1);
+        }
 
         let mut h2 = gst_check::Harness::new("awss3src");
         h2.element().unwrap().set_property("uri", uri.clone());
@@ -180,29 +190,29 @@ mod tests {
 
     #[tokio::test]
     async fn test_s3_put_object_simple() {
-        do_s3_putobject_test("s3-put-object-test", None, None, None).await;
+        do_s3_putobject_test("s3-put-object-test", None, None, None, true).await;
     }
 
     #[tokio::test]
     async fn test_s3_put_object_whitespace() {
-        do_s3_putobject_test("s3 put object test", None, None, None).await;
+        do_s3_putobject_test("s3 put object test", None, None, None, true).await;
     }
 
     #[tokio::test]
     async fn test_s3_put_object_unicode() {
-        do_s3_putobject_test("s3 put object 🧪 😱", None, None, None).await;
+        do_s3_putobject_test("s3 put object 🧪 😱", None, None, None, true).await;
     }
 
     #[tokio::test]
     async fn test_s3_put_object_flush_buffers() {
         // Awkward threshold as we push 5 buffers
-        do_s3_putobject_test("s3-put-object-test fbuf", Some(2), None, None).await;
+        do_s3_putobject_test("s3-put-object-test fbuf", Some(2), None, None, true).await;
     }
 
     #[tokio::test]
     async fn test_s3_put_object_flush_bytes() {
         // Awkward threshold as we push 14 bytes per buffer
-        do_s3_putobject_test("s3-put-object-test fbytes", None, Some(30), None).await;
+        do_s3_putobject_test("s3-put-object-test fbytes", None, Some(30), None, true).await;
     }
 
     #[tokio::test]
@@ -213,6 +223,33 @@ mod tests {
             None,
             // Awkward threshold as we push each buffer with 200ms
             Some(gst::ClockTime::from_mseconds(300)),
+            true,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_s3_put_object_on_eos() {
+        // Disable all flush thresholds, so only EOS causes a flush
+        do_s3_putobject_test(
+            "s3-put-object-test eos",
+            Some(0),
+            Some(0),
+            Some(gst::ClockTime::from_nseconds(0)),
+            true,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_s3_put_object_without_eos() {
+        // Disable all flush thresholds, skip EOS, and cause a flush on error
+        do_s3_putobject_test(
+            "s3-put-object-test !eos",
+            Some(0),
+            Some(0),
+            Some(gst::ClockTime::from_nseconds(0)),
+            false,
         )
         .await;
     }

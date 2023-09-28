@@ -34,6 +34,7 @@ const DEFAULT_RETRY_ATTEMPTS: u32 = 5;
 const DEFAULT_FLUSH_INTERVAL_BUFFERS: u64 = 1;
 const DEFAULT_FLUSH_INTERVAL_BYTES: u64 = 0;
 const DEFAULT_FLUSH_INTERVAL_TIME: gst::ClockTime = gst::ClockTime::from_nseconds(0);
+const DEFAULT_FLUSH_ON_ERROR: bool = false;
 
 // General setting for create / abort requests
 const DEFAULT_REQUEST_TIMEOUT_MSEC: u64 = 15_000;
@@ -43,6 +44,7 @@ struct Started {
     buffer: Vec<u8>,
     start_pts: Option<gst::ClockTime>,
     num_buffers: u64,
+    need_flush: bool,
 }
 
 impl Started {
@@ -52,6 +54,7 @@ impl Started {
             buffer,
             start_pts: gst::ClockTime::NONE,
             num_buffers: 0,
+            need_flush: false,
         }
     }
 }
@@ -79,6 +82,7 @@ struct Settings {
     flush_interval_buffers: u64,
     flush_interval_bytes: u64,
     flush_interval_time: Option<gst::ClockTime>,
+    flush_on_error: bool,
 }
 
 impl Settings {
@@ -134,6 +138,7 @@ impl Default for Settings {
             flush_interval_buffers: DEFAULT_FLUSH_INTERVAL_BUFFERS,
             flush_interval_bytes: DEFAULT_FLUSH_INTERVAL_BYTES,
             flush_interval_time: Some(DEFAULT_FLUSH_INTERVAL_TIME),
+            flush_on_error: DEFAULT_FLUSH_ON_ERROR,
         }
     }
 }
@@ -435,6 +440,11 @@ impl ObjectImpl for S3PutObjectSink {
                     .blurb("Total duration of buffers to accumulate before doing a write (0 => disable)")
                     .default_value(DEFAULT_FLUSH_INTERVAL_TIME.nseconds())
                     .build(),
+                glib::ParamSpecBoolean::builder("flush-on-error")
+                    .nick("Flush on error")
+                    .blurb("Whether to write out the data on error (like stopping without an EOS)")
+                    .default_value(DEFAULT_FLUSH_ON_ERROR)
+                    .build(),
             ]
         });
 
@@ -528,6 +538,9 @@ impl ObjectImpl for S3PutObjectSink {
                     .get::<Option<gst::ClockTime>>()
                     .expect("type checked upstream");
             }
+            "flush-on-error" => {
+                settings.flush_on_error = value.get::<bool>().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -560,6 +573,7 @@ impl ObjectImpl for S3PutObjectSink {
             "flush-interval-buffers" => settings.flush_interval_buffers.to_value(),
             "flush-interval-bytes" => settings.flush_interval_bytes.to_value(),
             "flush-interval-time" => settings.flush_interval_time.to_value(),
+            "flush-on-error" => settings.flush_on_error.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -606,6 +620,26 @@ impl BaseSinkImpl for S3PutObjectSink {
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
+        let settings = self.settings.lock().unwrap();
+
+        if let State::Started(ref started_state) = *state {
+            if settings.flush_on_error && started_state.need_flush {
+                drop(settings);
+                drop(state);
+
+                gst::warning!(CAT, imp: self, "Stopped without EOS, but flushing");
+                if let Err(error_message) = self.flush_buffer() {
+                    gst::error!(
+                        CAT,
+                        imp: self,
+                        "Failed to finalize the upload: {:?}",
+                        error_message
+                    );
+                }
+
+                state = self.state.lock().unwrap();
+            }
+        }
 
         *state = State::Stopped;
         gst::info!(CAT, imp: self, "Stopped");
@@ -629,6 +663,7 @@ impl BaseSinkImpl for S3PutObjectSink {
         }
 
         started_state.num_buffers += 1;
+        started_state.need_flush = true;
 
         gst::trace!(CAT, imp: self, "Rendering {:?}", buffer);
         let map = buffer.map_readable().map_err(|_| {
@@ -668,6 +703,14 @@ impl BaseSinkImpl for S3PutObjectSink {
 
     fn event(&self, event: gst::Event) -> bool {
         if let gst::EventView::Eos(_) = event.view() {
+            let mut state = self.state.lock().unwrap();
+
+            if let State::Started(ref mut started_state) = *state {
+                started_state.need_flush = false;
+            }
+
+            drop(state);
+
             if let Err(error_message) = self.flush_buffer() {
                 gst::error!(
                     CAT,
