@@ -85,6 +85,7 @@ cargo build
 Open three terminals. In the first one, run the signalling server:
 
 ``` shell
+cd signalling
 WEBRTCSINK_SIGNALLING_SERVER_LOG=debug cargo run --bin gst-webrtc-signalling-server
 ```
 
@@ -99,7 +100,7 @@ npm start
 In the third one, run a webrtcsink producer from a GStreamer pipeline:
 
 ``` shell
-export GST_PLUGIN_PATH=$PWD/target/debug:$GST_PLUGIN_PATH
+export GST_PLUGIN_PATH=<path-to-gst-plugins-rs>/target/debug:$GST_PLUGIN_PATH
 gst-launch-1.0 webrtcsink name=ws meta="meta,name=gst-stream" videotestsrc ! ws. audiotestsrc ! ws.
 ```
 
@@ -114,7 +115,7 @@ a GStreamer pipeline. Click on the "Start Capture" button and copy the
 Then open a new terminal and run:
 
 ``` shell
-export GST_PLUGIN_PATH=$PWD/target/debug:$GST_PLUGIN_PATH
+export GST_PLUGIN_PATH=<path-to-gst-plugins-rs>/target/debug:$GST_PLUGIN_PATH
 gst-launch-1.0 playbin uri=gstwebrtc://127.0.0.1:8443?peer-id=[Client ID]
 ```
 
