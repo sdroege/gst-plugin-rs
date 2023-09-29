@@ -77,6 +77,7 @@ cargo build
 Open three terminals. In the first, run:
 
 ``` shell
+cd signalling
 WEBRTCSINK_SIGNALLING_SERVER_LOG=debug cargo run --bin gst-webrtc-signalling-server
 ```
 
@@ -89,7 +90,7 @@ python3 -m http.server -d www/
 In the third, run:
 
 ``` shell
-export GST_PLUGIN_PATH=$PWD/target/debug:$GST_PLUGIN_PATH
+export GST_PLUGIN_PATH=<path-to-gst-plugins-rs>/target/debug:$GST_PLUGIN_PATH
 gst-launch-1.0 webrtcsink name=ws videotestsrc ! ws. audiotestsrc ! ws.
 ```
 
