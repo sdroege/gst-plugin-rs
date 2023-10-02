@@ -5,6 +5,8 @@ vulnerability = "deny"
 unmaintained = "warn"
 notice = "warn"
 ignore = [
+    # Waiting for https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/merge_requests/1293
+    "RUSTSEC-2023-0065",
     # Waiting for https://github.com/librespot-org/librespot/issues/937
     "RUSTSEC-2021-0059",
     "RUSTSEC-2021-0060",
@@ -37,6 +39,12 @@ expression = "OpenSSL"
 license-files = [
     { path = "LICENSE", hash = 0xbd0eed23 }
 ]
+
+# Allow AGPL3 from dssim-core, which is optionally used in gst-plugin-videofx
+[[licenses.exceptions]]
+allow = ["AGPL-3.0"]
+name = "dssim-core"
+version = "3.2"
 
 [bans]
 multiple-versions = "deny"
@@ -160,6 +168,12 @@ version = "0.1"
 # https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/merge_requests/1293
 [[bans.skip]]
 name = "tungstenite"
+version = "0.19"
+
+# proc-macro-crate depends on an old version of toml_edit
+# https://github.com/bkchr/proc-macro-crate/pull/38
+[[bans.skip]]
+name = "toml_edit"
 version = "0.19"
 
 [sources]
