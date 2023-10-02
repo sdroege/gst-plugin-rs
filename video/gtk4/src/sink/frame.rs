@@ -17,11 +17,53 @@ use gtk::{gdk, glib};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
-pub(crate) struct Frame {
-    frame: gst_video::VideoFrame<gst_video::video_frame::Readable>,
-    overlays: Vec<Overlay>,
+enum MappedFrame {
+    SysMem(gst_video::VideoFrame<gst_video::video_frame::Readable>),
     #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
-    wrapped_context: Option<gst_gl::GLContext>,
+    GL {
+        frame: gst_gl::GLVideoFrame<gst_gl::gl_video_frame::Readable>,
+        wrapped_context: gst_gl::GLContext,
+    },
+}
+
+impl MappedFrame {
+    fn buffer(&self) -> &gst::BufferRef {
+        match self {
+            MappedFrame::SysMem(frame) => frame.buffer(),
+            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
+            MappedFrame::GL { frame, .. } => frame.buffer(),
+        }
+    }
+
+    fn width(&self) -> u32 {
+        match self {
+            MappedFrame::SysMem(frame) => frame.width(),
+            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
+            MappedFrame::GL { frame, .. } => frame.width(),
+        }
+    }
+
+    fn height(&self) -> u32 {
+        match self {
+            MappedFrame::SysMem(frame) => frame.height(),
+            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
+            MappedFrame::GL { frame, .. } => frame.height(),
+        }
+    }
+
+    fn format_info(&self) -> gst_video::VideoFormatInfo {
+        match self {
+            MappedFrame::SysMem(frame) => frame.format_info(),
+            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
+            MappedFrame::GL { frame, .. } => frame.format_info(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct Frame {
+    frame: MappedFrame,
+    overlays: Vec<Overlay>,
 }
 
 #[derive(Debug)]
@@ -97,7 +139,7 @@ fn video_frame_to_memory_texture(
 
 #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
 fn video_frame_to_gl_texture(
-    frame: gst_video::VideoFrame<gst_video::video_frame::Readable>,
+    frame: gst_gl::GLVideoFrame<gst_gl::gl_video_frame::Readable>,
     cached_textures: &mut HashMap<usize, gdk::Texture>,
     used_textures: &mut HashSet<usize>,
     gdk_context: &gdk::GLContext,
@@ -151,30 +193,28 @@ impl Frame {
         let width = self.frame.width();
         let height = self.frame.height();
         let has_alpha = self.frame.format_info().has_alpha();
-        let (texture, pixel_aspect_ratio) = {
-            #[cfg(not(any(target_os = "macos", target_os = "windows", feature = "gst_gl")))]
-            {
-                video_frame_to_memory_texture(self.frame, cached_textures, &mut used_textures)
+        let (texture, pixel_aspect_ratio) = match self.frame {
+            MappedFrame::SysMem(frame) => {
+                video_frame_to_memory_texture(frame, cached_textures, &mut used_textures)
             }
             #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
-            {
-                if let (Some(gdk_ctx), Some(wrapped_ctx)) =
-                    (gdk_context, self.wrapped_context.as_ref())
-                {
-                    video_frame_to_gl_texture(
-                        self.frame,
-                        cached_textures,
-                        &mut used_textures,
-                        gdk_ctx,
-                        wrapped_ctx,
-                    )
-                } else {
+            MappedFrame::GL {
+                frame,
+                wrapped_context,
+            } => {
+                let Some(gdk_context) = gdk_context else {
                     // This will fail badly if the video frame was actually mapped as GL texture
                     // but this case can't really happen as we only do that if we actually have a
                     // GDK GL context.
-                    assert!(self.wrapped_context.is_none());
-                    video_frame_to_memory_texture(self.frame, cached_textures, &mut used_textures)
-                }
+                    unreachable!();
+                };
+                video_frame_to_gl_texture(
+                    frame,
+                    cached_textures,
+                    &mut used_textures,
+                    gdk_context,
+                    &wrapped_context,
+                )
             }
         };
 
@@ -230,8 +270,10 @@ impl Frame {
         #[cfg(not(any(target_os = "macos", target_os = "windows", feature = "gst_gl")))]
         {
             frame = Self {
-                frame: gst_video::VideoFrame::from_buffer_readable(buffer.clone(), info)
-                    .map_err(|_| gst::FlowError::Error)?,
+                frame: MappedFrame::SysMem(
+                    gst_video::VideoFrame::from_buffer_readable(buffer.clone(), info)
+                        .map_err(|_| gst::FlowError::Error)?,
+                ),
                 overlays: vec![],
             };
         }
@@ -259,7 +301,7 @@ impl Frame {
                 // If there is no GLSyncMeta yet then we need to add one here now, which requires
                 // obtaining a writable buffer.
                 let mapped_frame = if buffer.meta::<gst_gl::GLSyncMeta>().is_some() {
-                    gst_video::VideoFrame::from_buffer_readable_gl(buffer.clone(), info)
+                    gst_gl::GLVideoFrame::from_buffer_readable(buffer.clone(), info)
                         .map_err(|_| gst::FlowError::Error)?
                 } else {
                     let mut buffer = buffer.clone();
@@ -267,7 +309,7 @@ impl Frame {
                         let buffer = buffer.make_mut();
                         gst_gl::GLSyncMeta::add(buffer, memory_ctx);
                     }
-                    gst_video::VideoFrame::from_buffer_readable_gl(buffer, info)
+                    gst_gl::GLVideoFrame::from_buffer_readable(buffer, info)
                         .map_err(|_| gst::FlowError::Error)?
                 };
 
@@ -278,16 +320,19 @@ impl Frame {
                 meta.set_sync_point(memory_ctx);
 
                 frame = Self {
-                    frame: mapped_frame,
+                    frame: MappedFrame::GL {
+                        frame: mapped_frame,
+                        wrapped_context: wrapped_context.unwrap().clone(),
+                    },
                     overlays: vec![],
-                    wrapped_context: Some(wrapped_context.unwrap().clone()),
                 };
             } else {
                 frame = Self {
-                    frame: gst_video::VideoFrame::from_buffer_readable(buffer.clone(), info)
-                        .map_err(|_| gst::FlowError::Error)?,
+                    frame: MappedFrame::SysMem(
+                        gst_video::VideoFrame::from_buffer_readable(buffer.clone(), info)
+                            .map_err(|_| gst::FlowError::Error)?,
+                    ),
                     overlays: vec![],
-                    wrapped_context: None,
                 };
             }
         }

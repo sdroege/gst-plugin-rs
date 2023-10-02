@@ -14,7 +14,7 @@ use gst::subclass::prelude::*;
 use gst::{glib, glib::prelude::*, prelude::*};
 use gst_base::prelude::*;
 use gst_base::AggregatorPad;
-use gst_video::prelude::VideoAggregatorPadExtManual;
+use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 use gst_video::subclass::AggregateFramesToken;
 use gst_video::VideoFormat;

@@ -14,7 +14,6 @@ use crate::sink::frame::Frame;
 use crate::sink::paintable::Paintable;
 
 use glib::{thread_guard::ThreadGuard, Sender};
-use gtk::prelude::GLContextExt;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 

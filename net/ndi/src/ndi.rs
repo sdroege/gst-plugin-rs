@@ -9,6 +9,8 @@ use std::ptr;
 
 use byte_slice_cast::*;
 
+use gst_video::prelude::*;
+
 pub fn load() -> Result<(), glib::BoolError> {
     ndisys::load()
 }
