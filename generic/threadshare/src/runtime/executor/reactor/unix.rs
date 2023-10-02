@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
+// This is based on https://github.com/smol-rs/async-io
 
 use polling::{Event, Poller};
 
