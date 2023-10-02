@@ -94,10 +94,10 @@ pub struct Async<T: Send + 'static> {
     pub(super) source: Arc<Source>,
 
     /// The inner I/O handle.
-    io: Option<T>,
+    pub(super) io: Option<T>,
 
     // The [`Handle`] on the [`Scheduler`] on which this Async wrapper is registered.
-    sched: scheduler::HandleWeak,
+    pub(super) sched: scheduler::HandleWeak,
 }
 
 impl<T: Send + 'static> Unpin for Async<T> {}

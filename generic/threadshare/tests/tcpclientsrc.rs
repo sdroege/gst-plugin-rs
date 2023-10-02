@@ -43,7 +43,7 @@ fn test_push() {
     let handler = thread::spawn(move || {
         use std::net;
 
-        let listener = net::TcpListener::bind("0.0.0.0:5000").unwrap();
+        let listener = net::TcpListener::bind("0.0.0.0:5010").unwrap();
         listening_tx.send(()).unwrap();
         let stream = listener.incoming().next().unwrap();
         let buffer = [0; 160];
@@ -59,7 +59,7 @@ fn test_push() {
     let caps = gst::Caps::builder("foo/bar").build();
     let tcpclientsrc = gst::ElementFactory::make("ts-tcpclientsrc")
         .property("caps", &caps)
-        .property("port", 5000i32)
+        .property("port", 5010i32)
         .build()
         .unwrap();
     let appsink = gst_app::AppSink::builder()
