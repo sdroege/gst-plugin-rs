@@ -477,7 +477,7 @@ impl RaptorqDec {
         state
             .repair_packets
             .entry(this_seq)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(RepairPacketItem {
                 payload_id: id,
                 payload: payload[7..].to_vec(), // without PayloadId

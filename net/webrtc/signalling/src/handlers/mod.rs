@@ -292,11 +292,11 @@ impl Handler {
         );
         self.consumer_sessions
             .entry(consumer_id.to_string())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(session_id.clone());
         self.producer_sessions
             .entry(producer_id.to_string())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(session_id.clone());
         self.items.push_back((
             consumer_id.to_string(),
