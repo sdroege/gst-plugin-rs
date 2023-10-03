@@ -53,7 +53,7 @@ fn initialize_logging(envvar_name: &str) -> Result<(), Error> {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     let args = Args::parse();
-    let server = Server::spawn(|stream| Handler::new(stream));
+    let server = Server::spawn(Handler::new);
 
     initialize_logging("WEBRTCSINK_SIGNALLING_SERVER_LOG")?;
 
