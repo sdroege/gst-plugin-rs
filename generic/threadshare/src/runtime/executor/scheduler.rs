@@ -394,7 +394,7 @@ impl Handle {
 
     /// Executes the provided function relatively to this [`Scheduler`]'s [`Reactor`].
     ///
-    /// Usefull to initialize i/o sources and timers from outside
+    /// Useful to initialize i/o sources and timers from outside
     /// of a [`Scheduler`].
     ///
     /// # Panic

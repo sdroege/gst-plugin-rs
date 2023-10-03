@@ -215,7 +215,7 @@ impl Context {
 
     /// Executes the provided function relatively to this [`Context`].
     ///
-    /// Usefull to initialize i/o sources and timers from outside
+    /// Useful to initialize i/o sources and timers from outside
     /// of a [`Context`].
     ///
     /// # Panic
