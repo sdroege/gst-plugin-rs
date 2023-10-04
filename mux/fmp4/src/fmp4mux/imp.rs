@@ -2835,7 +2835,7 @@ impl ObjectImpl for FMP4Mux {
             vec![
                 glib::ParamSpecUInt64::builder("fragment-duration")
                     .nick("Fragment Duration")
-                    .blurb("Duration for each FMP4 fragment")
+                    .blurb("Duration for each FMP4 fragment in nanoseconds")
                     .default_value(DEFAULT_FRAGMENT_DURATION.nseconds())
                     .mutable_ready()
                     .build(),

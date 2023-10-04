@@ -1779,7 +1779,7 @@
                         "writable": true
                     },
                     "fragment-duration": {
-                        "blurb": "Duration for each FMP4 fragment",
+                        "blurb": "Duration for each FMP4 fragment in nanoseconds",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
