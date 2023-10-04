@@ -5,6 +5,21 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.11.1] - 2023-10-04
+### Fixed
+- fallbackswitch: Fix various deadlocks.
+- webrtcsink: Gracefully fail if adding the TWCC RTP header extension fails.
+- webrtcsink: Fix codec selection discovery.
+- webrtcsink: Add support for D3D11 memory and qsvh264enc.
+- onvifmetadataparse: Skip metadata frames with unrepresentable UTC times.
+- gtk4paintablesink: Pre-multiply alpha when creating GL textures with alpha.
+- gtk4paintablesink: Only support RGBA/RGB in the GL code path.
+- webrtchttp: Respect HTTP redirects.
+- fmp4mux: Specify unit of fragment-duration property.
+
+### Changed
+- threadshare: Port to polling 3.1.
+
 ## [0.11.0] - 2023-08-10
 ### Changed
 - Updated MSRV to 1.70.
@@ -237,7 +252,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.0...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.1...HEAD
+[0.11.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.0...0.11.1
 [0.11.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.11...0.11.0
 [0.10.11]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.10...0.10.11
 [0.10.10]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.9...0.10.10
