@@ -1719,7 +1719,9 @@ impl TranslateSrcPad {
                             .to_stream_time(state.out_segment.position())
                     };
 
-                    let Some(stream_time) = stream_time else { return false };
+                    let Some(stream_time) = stream_time else {
+                        return false;
+                    };
                     q.set(stream_time);
 
                     true

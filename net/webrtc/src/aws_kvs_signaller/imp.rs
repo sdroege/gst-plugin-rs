@@ -228,7 +228,9 @@ impl Signaller {
             Ok(credentials) => credentials,
         };
 
-        let Some(channel_name) = settings.channel_name else { anyhow::bail!("Channel name cannot be None!"); };
+        let Some(channel_name) = settings.channel_name else {
+            anyhow::bail!("Channel name cannot be None!");
+        };
 
         let client = Client::new(
             &aws_config::from_env()
@@ -243,11 +245,15 @@ impl Signaller {
             .send()
             .await?;
 
-        let Some(cinfo) = resp.channel_info() else { anyhow::bail!("No description found for {channel_name}"); };
+        let Some(cinfo) = resp.channel_info() else {
+            anyhow::bail!("No description found for {channel_name}");
+        };
 
         gst::debug!(CAT, "Channel description: {cinfo:?}");
 
-        let Some(channel_arn) = cinfo.channel_arn() else { anyhow::bail!("No channel ARN found for {channel_name}"); };
+        let Some(channel_arn) = cinfo.channel_arn() else {
+            anyhow::bail!("No channel ARN found for {channel_name}");
+        };
 
         let config = SingleMasterChannelEndpointConfiguration::builder()
             .set_protocols(Some(vec![ChannelProtocol::Wss, ChannelProtocol::Https]))
