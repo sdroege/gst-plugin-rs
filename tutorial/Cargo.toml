@@ -23,3 +23,6 @@ path = "src/lib.rs"
 
 [build-dependencies]
 gst-plugin-version-helper = { path="../version-helper", version = "0.8" }
+
+[package.metadata.gstreamer]
+release_date = "2023-10-04"
