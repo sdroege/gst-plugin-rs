@@ -344,7 +344,7 @@ deny:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
   script:
-    - cargo deny check
+    - cargo deny --color=always --workspace --all-features check all
 
 outdated:
   extends: '.debian:12-stable'
