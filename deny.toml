@@ -19,16 +19,10 @@ ignore = [
 [licenses]
 unlicensed = "deny"
 allow = [
-  "Apache-2.0",
+  "MPL-2.0",
 ]
-deny = [
-  "GPL-1.0",
-  "GPL-2.0",
-  "GPL-3.0",
-  "AGPL-1.0",
-  "AGPL-3.0",
-]
-copyleft = "allow"
+default = "deny"
+copyleft = "deny"
 allow-osi-fsf-free = "either"
 confidence-threshold = 0.8
 
@@ -45,6 +39,11 @@ license-files = [
 allow = ["AGPL-3.0"]
 name = "dssim-core"
 version = "3.2"
+
+# Allow LGPL 2.1 for the threadshare plugin as it includes some LGPL code
+[[licenses.exceptions]]
+allow = ["LGPL-2.1"]
+name = "gst-plugin-threadshare"
 
 [bans]
 multiple-versions = "deny"
