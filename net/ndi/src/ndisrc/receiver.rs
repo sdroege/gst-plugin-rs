@@ -1615,10 +1615,12 @@ impl Receiver {
         if [NDIlib_FourCC_audio_type_FLTp].contains(&fourcc) {
             let channels = audio_frame.no_channels() as u32;
             let mut positions = [gst_audio::AudioChannelPosition::None; 64];
-            let _ = gst_audio::AudioChannelPosition::positions_from_mask(
-                gst_audio::AudioChannelPosition::fallback_mask(channels),
-                &mut positions[..channels as usize],
-            );
+            if channels <= 8 {
+                let _ = gst_audio::AudioChannelPosition::positions_from_mask(
+                    gst_audio::AudioChannelPosition::fallback_mask(channels),
+                    &mut positions[..channels as usize],
+                );
+            }
 
             let builder = gst_audio::AudioInfo::builder(
                 gst_audio::AUDIO_FORMAT_F32,
