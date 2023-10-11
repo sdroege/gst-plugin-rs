@@ -26,7 +26,6 @@ mod ndisrcdemux;
 mod ndisrcmeta;
 
 mod ndi_cc_meta;
-mod video_anc;
 
 #[cfg(feature = "doc")]
 use gst::prelude::*;

@@ -11,7 +11,7 @@ use std::sync::Mutex;
 use gst::glib::once_cell::sync::Lazy;
 
 use crate::ndi::SendInstance;
-use crate::ndi_cc_meta;
+use crate::ndi_cc_meta::NDICCMetaEncoder;
 
 static DEFAULT_SENDER_NDI_NAME: Lazy<String> = Lazy::new(|| {
     format!(
@@ -37,6 +37,7 @@ impl Default for Settings {
 struct State {
     send: SendInstance,
     video_info: Option<gst_video::VideoInfo>,
+    ndi_cc_encoder: Option<NDICCMetaEncoder>,
     audio_info: Option<gst_audio::AudioInfo>,
 }
 
@@ -204,6 +205,7 @@ impl BaseSinkImpl for NdiSink {
         let state = State {
             send,
             video_info: None,
+            ndi_cc_encoder: None,
             audio_info: None,
         };
         *state_storage = Some(state);
@@ -243,6 +245,7 @@ impl BaseSinkImpl for NdiSink {
             let info = gst_video::VideoInfo::from_caps(caps)
                 .map_err(|_| gst::loggable_error!(CAT, "Couldn't parse caps {}", caps))?;
 
+            state.ndi_cc_encoder = Some(NDICCMetaEncoder::new(info.width()));
             state.video_info = Some(info);
             state.audio_info = None;
         } else {
@@ -251,6 +254,7 @@ impl BaseSinkImpl for NdiSink {
 
             state.audio_info = Some(info);
             state.video_info = None;
+            state.ndi_cc_encoder = None;
         }
 
         Ok(())
@@ -304,22 +308,11 @@ impl BaseSinkImpl for NdiSink {
                     .map(|time| (time.nseconds() / 100) as i64)
                     .unwrap_or(crate::ndisys::NDIlib_send_timecode_synthesize);
 
-                match ndi_cc_meta::encode_video_caption_meta(buffer) {
-                    Ok(None) => (),
-                    Ok(Some(cc_data)) => {
-                        gst::trace!(CAT, "Sending cc meta with timecode {timecode}");
-                        let metadata_frame =
-                            crate::ndi::MetadataFrame::new(timecode, Some(cc_data.as_str()));
-                        state.send.send_metadata(&metadata_frame);
-                    }
-                    Err(err) => match err.downcast_ref::<ndi_cc_meta::NDIClosedCaptionError>() {
-                        Some(err) if err.is_unsupported_cc() => {
-                            gst::info!(CAT, "{err}");
-                        }
-                        _ => {
-                            gst::error!(CAT, "Failed to encode Video Caption meta: {err}");
-                        }
-                    },
+                let mut ndi_meta = None;
+                if let Some(ref mut ndi_cc_encoder) = state.ndi_cc_encoder {
+                    // handle potential width change
+                    ndi_cc_encoder.set_width(info.width());
+                    ndi_meta = ndi_cc_encoder.encode(buffer);
                 }
 
                 let frame = gst_video::VideoFrameRef::from_buffer_ref_readable(buffer, info)
@@ -328,11 +321,15 @@ impl BaseSinkImpl for NdiSink {
                         gst::FlowError::Error
                     })?;
 
-                let frame = crate::ndi::VideoFrame::try_from_video_frame(&frame, timecode)
-                    .map_err(|_| {
-                        gst::error!(CAT, imp: self, "Unsupported video frame");
-                        gst::FlowError::NotNegotiated
-                    })?;
+                let frame = crate::ndi::VideoFrame::try_from_video_frame(
+                    &frame,
+                    ndi_meta.as_deref(),
+                    timecode,
+                )
+                .map_err(|_| {
+                    gst::error!(CAT, imp: self, "Unsupported video frame");
+                    gst::FlowError::NotNegotiated
+                })?;
 
                 gst::trace!(
                     CAT,

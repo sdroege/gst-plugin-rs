@@ -17,7 +17,7 @@ use atomic_refcell::AtomicRefCell;
 use gst::glib::once_cell::sync::Lazy;
 
 use crate::ndi::*;
-use crate::ndi_cc_meta;
+use crate::ndi_cc_meta::NDICCMetaDecoder;
 use crate::ndisys;
 use crate::ndisys::*;
 use crate::TimestampMode;
@@ -177,6 +177,16 @@ impl VideoInfo {
                 .build()),
         }
     }
+
+    pub fn width(&self) -> u32 {
+        match self {
+            VideoInfo::Video(ref info) => info.width(),
+            #[cfg(feature = "advanced-sdk")]
+            VideoInfo::SpeedHQInfo { xres, .. }
+            | VideoInfo::H264 { xres, .. }
+            | VideoInfo::H265 { xres, .. } => *xres as u32,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -209,6 +219,7 @@ pub struct ReceiverInner {
     timeout: u32,
     connect_timeout: u32,
 
+    ndi_cc_decoder: AtomicRefCell<Option<NDICCMetaDecoder>>,
     thread: Mutex<Option<std::thread::JoinHandle<()>>>,
 }
 
@@ -600,6 +611,7 @@ impl Receiver {
             timestamp_mode,
             timeout,
             connect_timeout,
+            ndi_cc_decoder: AtomicRefCell::new(None),
             thread: Mutex::new(None),
         }));
 
@@ -745,7 +757,7 @@ impl Receiver {
         let mut first_audio_frame = true;
         let mut first_frame = true;
         let mut timer = time::Instant::now();
-        let mut pending_ndi_cc = VecDeque::<ndi_cc_meta::NDIClosedCaption>::new();
+        let mut pending_metas = VecDeque::<String>::new();
 
         // Capture until error or shutdown
         loop {
@@ -815,11 +827,14 @@ impl Receiver {
                         }
                     }
 
-                    if !pending_ndi_cc.is_empty() {
+                    if !pending_metas.is_empty() {
                         if let Ok(Buffer::Video(ref mut buffer, _)) = buffer {
-                            let buf = buffer.get_mut().unwrap();
-                            for ndi_cc in pending_ndi_cc.drain(..) {
-                                gst_video::VideoCaptionMeta::add(buf, ndi_cc.cc_type, &ndi_cc.data);
+                            let mut ndi_cc_decoder = receiver.0.ndi_cc_decoder.borrow_mut();
+                            for meta in pending_metas.drain(..) {
+                                let res = ndi_cc_decoder.as_mut().unwrap().decode(&meta, buffer);
+                                if let Err(err) = res {
+                                    gst::debug!(CAT, obj: element, "Failed to parse NDI metadata: {err}");
+                                }
                             }
                         }
                     }
@@ -850,12 +865,7 @@ impl Receiver {
                             metadata,
                         );
 
-                        match ndi_cc_meta::parse_ndi_cc_meta(metadata) {
-                            Ok(mut ndi_cc_list) => pending_ndi_cc.extend(ndi_cc_list.drain(..)),
-                            Err(err) => {
-                                gst::error!(CAT, obj: element, "Error parsing closed caption: {err}");
-                            }
-                        }
+                        pending_metas.push_back(metadata.to_string());
                     }
 
                     continue;
@@ -1024,6 +1034,24 @@ impl Receiver {
                 .get_mut()
                 .unwrap()
                 .set_flags(gst::BufferFlags::RESYNC);
+        }
+
+        let mut ndi_cc_decoder = self.0.ndi_cc_decoder.borrow_mut();
+        if ndi_cc_decoder.is_none() {
+            *ndi_cc_decoder = Some(NDICCMetaDecoder::new(info.width()));
+        }
+
+        {
+            let ndi_cc_decoder = ndi_cc_decoder.as_mut().unwrap();
+            // handle potential width change (also needed for standalone metadata)
+            ndi_cc_decoder.set_width(info.width());
+
+            if let Some(metadata) = video_frame.metadata() {
+                let res = ndi_cc_decoder.decode(metadata, &mut buffer);
+                if let Err(err) = res {
+                    gst::debug!(CAT, obj: element, "Failed to parse NDI video frame metadata: {err}");
+                }
+            }
         }
 
         gst::log!(CAT, obj: element, "Produced video buffer {:?}", buffer);

@@ -5,12 +5,23 @@
 //! * http://www.sienna-tv.com/ndi/ndiclosedcaptions.html
 //! * http://www.sienna-tv.com/ndi/ndiclosedcaptions608.html
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use data_encoding::BASE64;
 use smallvec::SmallVec;
 
-use crate::video_anc;
-use crate::video_anc::VideoAncillaryAFD;
+use gst::glib::once_cell::sync::Lazy;
+use gst::glib::translate::IntoGlib;
+use gst_video::{VideoAncillary, VideoAncillaryDID16, VideoVBIEncoder, VideoVBIParser};
+
+use std::ffi::CString;
+
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
+        "ndiccmeta",
+        gst::DebugColorFlags::empty(),
+        Some("NewTek NDI CC Meta"),
+    )
+});
 
 const C608_TAG: &str = "C608";
 const C608_TAG_BYTES: &[u8] = C608_TAG.as_bytes();
@@ -19,197 +30,362 @@ const C708_TAG: &str = "C708";
 const C708_TAG_BYTES: &[u8] = C708_TAG.as_bytes();
 
 const LINE_ATTR: &str = "line";
-const DEFAULT_LINE_VALUE: &str = "21";
+const DEFAULT_LINE: u8 = 21;
+const DEFAULT_LINE_STR: &str = "21";
+const DEFAULT_LINE_C708_STR: &str = "10";
+
+// Video anc AFD content:
+// ADF + DID/SDID + DATA COUNT + PAYLOAD + checksum:
+// 3 + 2 + 1 + 256 max + 1 = 263
+// Those are 10bit words, so we need 329 bytes max.
+pub const VIDEO_ANC_AFD_CAPACITY: usize = 329;
 
 /// Video anc AFD content padded to 32bit alignment encoded in base64 + padding
-const NDI_CC_CONTENT_CAPACITY: usize = (video_anc::VIDEO_ANC_AFD_CAPACITY + 3) * 3 / 2 + 2;
+const NDI_CC_CONTENT_CAPACITY: usize = (VIDEO_ANC_AFD_CAPACITY + 3) * 3 / 2 + 2;
 
 /// Video anc AFD padded to 32bit alignment encoded in base64
 /// + XML tags with brackets and end '/' + attr
 const NDI_CC_CAPACITY: usize = NDI_CC_CONTENT_CAPACITY + 13 + 10;
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
-/// NDI Video Caption related Errors.
-pub enum NDIClosedCaptionError {
+/// NDI Video Captions related Errors.
+pub enum NDICCError {
     #[error("Unsupported closed caption type {cc_type:?}")]
     UnsupportedCC {
         cc_type: gst_video::VideoCaptionType,
     },
+
+    #[error("Unexpected AFD data count {found}. Expected: {expected}")]
+    UnexpectedAfdDataCount { found: u8, expected: u8 },
+
+    #[error("Unexpected AFD did {found}. Expected: {expected}")]
+    UnexpectedAfdDid { found: i32, expected: i32 },
 }
 
-impl NDIClosedCaptionError {
-    pub fn is_unsupported_cc(&self) -> bool {
-        matches!(self, Self::UnsupportedCC { .. })
+impl NDICCError {
+    fn new_unexpected_afd_did(found: VideoAncillaryDID16, expected: VideoAncillaryDID16) -> Self {
+        NDICCError::UnexpectedAfdDid {
+            found: found.into_glib(),
+            expected: expected.into_glib(),
+        }
     }
 }
 
-fn write_32bit_padded_base64<W>(writer: &mut quick_xml::writer::Writer<W>, data: &[u8])
-where
-    W: std::io::Write,
-{
-    use quick_xml::events::{BytesText, Event};
-    use std::borrow::Cow;
+/// NDI Closed Captions Meta encoder.
+pub struct NDICCMetaEncoder {
+    v210_encoder: VideoVBIEncoder,
+    width: u32,
+    line_buf: Vec<u8>,
+}
 
-    let mut buf = String::with_capacity(NDI_CC_CONTENT_CAPACITY);
-    let mut input = Cow::from(data);
+impl NDICCMetaEncoder {
+    pub fn new(width: u32) -> Self {
+        let v210_encoder = VideoVBIEncoder::try_new(gst_video::VideoFormat::V210, width).unwrap();
 
-    let alignment_rem = input.len() % 4;
-    if alignment_rem != 0 {
-        let owned = input.to_mut();
-        let mut padding = 4 - alignment_rem;
-        while padding != 0 {
-            owned.push(0);
-            padding -= 1;
+        NDICCMetaEncoder {
+            line_buf: vec![0; v210_encoder.line_buffer_len()],
+            v210_encoder,
+            width,
         }
     }
 
-    debug_assert_eq!(input.len() % 4, 0);
-
-    buf.clear();
-    BASE64.encode_append(&input, &mut buf);
-    writer
-        .write_event(Event::Text(BytesText::from_escaped(buf)))
-        .unwrap();
-}
-
-/// Encodes the provided VideoCaptionMeta in an NDI closed caption metadata.
-pub fn encode_video_caption_meta(video_buf: &gst::BufferRef) -> Result<Option<String>> {
-    use crate::video_anc::VideoAncillaryAFDEncoder;
-    use quick_xml::events::{BytesEnd, BytesStart, Event};
-    use quick_xml::writer::Writer;
-
-    if video_buf.meta::<gst_video::VideoCaptionMeta>().is_none() {
-        return Ok(None);
+    pub fn set_width(&mut self, width: u32) {
+        if width != self.width {
+            *self = Self::new(width);
+        }
     }
 
-    // Start with an initial capacity suitable to store one ndi cc metadata
-    let mut writer = Writer::new(Vec::<u8>::with_capacity(NDI_CC_CAPACITY));
+    /// Encodes the VideoCaptionMeta of the provided `gst::Buffer`
+    /// in an NDI closed caption metadata suitable to be attached to an NDI video frame.
+    pub fn encode(&mut self, video_buf: &gst::BufferRef) -> Option<CString> {
+        use quick_xml::events::{BytesEnd, BytesStart, Event};
+        use quick_xml::writer::Writer;
 
-    let cc_meta_iter = video_buf.iter_meta::<gst_video::VideoCaptionMeta>();
-    for cc_meta in cc_meta_iter {
-        if cc_meta.data().is_empty() {
+        video_buf.meta::<gst_video::VideoCaptionMeta>()?;
+
+        // Start with an initial capacity suitable to store one ndi cc metadata
+        let mut xml_writer = Writer::new(Vec::with_capacity(NDI_CC_CAPACITY));
+
+        let cc_meta_iter = video_buf.iter_meta::<gst_video::VideoCaptionMeta>();
+        for cc_meta in cc_meta_iter {
+            let cc_data = cc_meta.data();
+            if cc_data.is_empty() {
+                continue;
+            }
+
+            use gst_video::VideoCaptionType::*;
+            match cc_meta.caption_type() {
+                Cea608Raw => {
+                    if cc_data.len() != 2 {
+                        let err = NDICCError::UnexpectedAfdDataCount {
+                            found: cc_data.len() as u8,
+                            expected: 2,
+                        };
+                        gst::error!(CAT, "Failed to encode Cea608Raw metadata: {err}");
+                        continue;
+                    }
+
+                    let res = self.add_did16_ancillary(
+                        VideoAncillaryDID16::S334Eia608,
+                        &[DEFAULT_LINE, cc_data[0], cc_data[1]],
+                    );
+                    if let Err(err) = res {
+                        gst::error!(CAT, "Failed to add Cea608Raw metadata: {err}");
+                        continue;
+                    }
+
+                    let mut elem = BytesStart::new(C608_TAG);
+                    elem.push_attribute((LINE_ATTR, DEFAULT_LINE_STR));
+                    xml_writer.write_event(Event::Start(elem)).unwrap();
+
+                    self.write_v210_base64(&mut xml_writer);
+
+                    xml_writer
+                        .write_event(Event::End(BytesEnd::new(C608_TAG)))
+                        .unwrap();
+                }
+                Cea608S3341a => {
+                    if cc_data.len() != 3 {
+                        let err = NDICCError::UnexpectedAfdDataCount {
+                            found: cc_data.len() as u8,
+                            expected: 3,
+                        };
+                        gst::error!(CAT, "Failed to encode Cea608Raw metadata: {err}");
+                        continue;
+                    }
+
+                    let res = self.add_did16_ancillary(VideoAncillaryDID16::S334Eia608, cc_data);
+                    if let Err(err) = res {
+                        gst::error!(CAT, "Failed to add Cea608S3341a metadata: {err}");
+                        continue;
+                    }
+
+                    let mut elem = BytesStart::new(C608_TAG);
+                    elem.push_attribute((LINE_ATTR, format!("{}", cc_meta.data()[0]).as_str()));
+                    xml_writer.write_event(Event::Start(elem)).unwrap();
+
+                    self.write_v210_base64(&mut xml_writer);
+
+                    xml_writer
+                        .write_event(Event::End(BytesEnd::new(C608_TAG)))
+                        .unwrap();
+                }
+                Cea708Cdp => {
+                    let res = self.add_did16_ancillary(VideoAncillaryDID16::S334Eia708, cc_data);
+                    if let Err(err) = res {
+                        gst::error!(CAT, "Failed to add Cea708Cdp metadata: {err}");
+                        continue;
+                    }
+
+                    let mut elem = BytesStart::new(C708_TAG);
+                    elem.push_attribute((LINE_ATTR, DEFAULT_LINE_C708_STR));
+                    xml_writer.write_event(Event::Start(elem)).unwrap();
+
+                    self.write_v210_base64(&mut xml_writer);
+
+                    xml_writer
+                        .write_event(Event::End(BytesEnd::new(C708_TAG)))
+                        .unwrap();
+                }
+                other => {
+                    gst::info!(CAT, "{}", NDICCError::UnsupportedCC { cc_type: other });
+                }
+            }
+        }
+
+        // # Safety
+        // `writer` content is guaranteed to be a C compatible String without interior 0 since:
+        // * It contains ASCII XML tags, ASCII XML attributes and base64 encoded content
+        // * ASCII & base64 are subsets of UTF-8.
+        unsafe {
+            let cc_meta = xml_writer.into_inner();
+            if cc_meta.is_empty() {
+                return None;
+            }
+
+            Some(CString::from_vec_unchecked(cc_meta))
+        }
+    }
+
+    fn add_did16_ancillary(&mut self, did16: VideoAncillaryDID16, data: &[u8]) -> Result<()> {
+        self.v210_encoder.add_did16_ancillary(
+            gst_video::VideoAFDDescriptionMode::Component,
+            did16,
+            data,
+        )?;
+
+        Ok(())
+    }
+
+    /// Encodes previously added data as v210 in base64 and writes it with the XML writer.
+    fn write_v210_base64<W>(&mut self, writer: &mut quick_xml::writer::Writer<W>)
+    where
+        W: std::io::Write,
+    {
+        use quick_xml::events::{BytesText, Event};
+
+        let anc_len = self.v210_encoder.write_line(&mut self.line_buf).unwrap();
+        assert_eq!(anc_len % 4, 0);
+
+        let mut xml_buf = String::with_capacity(NDI_CC_CONTENT_CAPACITY);
+        BASE64.encode_append(&self.line_buf[..anc_len], &mut xml_buf);
+        writer
+            .write_event(Event::Text(BytesText::from_escaped(xml_buf)))
+            .unwrap();
+    }
+}
+
+/// NDI Closed Captions Meta decoder.
+pub struct NDICCMetaDecoder {
+    v210_parser: VideoVBIParser,
+    width: u32,
+    line_buf: Vec<u8>,
+    xml_content: SmallVec<[u8; NDI_CC_CONTENT_CAPACITY]>,
+    xml_buf: Vec<u8>,
+}
+
+impl NDICCMetaDecoder {
+    pub fn new(width: u32) -> Self {
+        let v210_parser = VideoVBIParser::try_new(gst_video::VideoFormat::V210, width).unwrap();
+
+        NDICCMetaDecoder {
+            line_buf: vec![0; v210_parser.line_buffer_len()],
+            v210_parser,
+            width,
+            xml_content: SmallVec::<[u8; NDI_CC_CONTENT_CAPACITY]>::new(),
+            xml_buf: Vec::with_capacity(NDI_CC_CAPACITY),
+        }
+    }
+
+    pub fn set_width(&mut self, width: u32) {
+        if width != self.width {
+            self.v210_parser =
+                VideoVBIParser::try_new(gst_video::VideoFormat::V210, width).unwrap();
+            self.line_buf = vec![0; self.v210_parser.line_buffer_len()];
+            self.width = width;
+        }
+    }
+
+    /// Decodes the provided NDI metadata string, searching for NDI closed captions
+    /// and add them as `VideoCaptionMeta` to the provided `gst::Buffer`.
+    pub fn decode(&mut self, input: &str, buffer: &mut gst::Buffer) -> Result<()> {
+        use quick_xml::events::Event;
+        use quick_xml::reader::Reader;
+
+        let buffer = buffer.get_mut().unwrap();
+
+        let mut reader = Reader::from_str(input);
+
+        self.xml_buf.clear();
+        loop {
+            match reader.read_event_into(&mut self.xml_buf)? {
+                Event::Eof => break,
+                Event::Start(_) => self.xml_content.clear(),
+                Event::Text(e) => {
+                    self.xml_content.extend(
+                        e.iter().copied().filter(|&b| {
+                            (b != b' ') && (b != b'\t') && (b != b'\n') && (b != b'\r')
+                        }),
+                    );
+                }
+                Event::End(e) => match e.name().as_ref() {
+                    C608_TAG_BYTES => match BASE64.decode(self.xml_content.as_slice()) {
+                        Ok(v210_buf) => match self.parse_for_cea608(&v210_buf) {
+                            Ok(None) => (),
+                            Ok(Some(anc)) => {
+                                gst_video::VideoCaptionMeta::add(
+                                    buffer,
+                                    gst_video::VideoCaptionType::Cea608S3341a,
+                                    anc.data(),
+                                );
+                            }
+                            Err(err) => {
+                                gst::error!(CAT, "Failed to parse NDI C608 metadata: {err}");
+                            }
+                        },
+                        Err(err) => {
+                            gst::error!(CAT, "Failed to decode NDI C608 metadata: {err}");
+                        }
+                    },
+                    C708_TAG_BYTES => match BASE64.decode(self.xml_content.as_slice()) {
+                        Ok(v210_buf) => match self.parse_for_cea708(&v210_buf) {
+                            Ok(None) => (),
+                            Ok(Some(anc)) => {
+                                gst_video::VideoCaptionMeta::add(
+                                    buffer,
+                                    gst_video::VideoCaptionType::Cea708Cdp,
+                                    anc.data(),
+                                );
+                            }
+                            Err(err) => {
+                                gst::error!(CAT, "Failed to parse NDI C708 metadata: {err}");
+                            }
+                        },
+                        Err(err) => {
+                            gst::error!(CAT, "Failed to decode NDI C708 metadata: {err}");
+                        }
+                    },
+                    _ => (),
+                },
+                _ => {}
+            }
+
+            self.xml_buf.clear();
+        }
+
+        Ok(())
+    }
+
+    fn parse_for_cea608(&mut self, input: &[u8]) -> Result<Option<VideoAncillary>> {
+        let Some(anc) = self.parse(input)? else {
+            return Ok(None);
+        };
+
+        if anc.did16() != VideoAncillaryDID16::S334Eia608 {
+            bail!(NDICCError::new_unexpected_afd_did(
+                anc.did16(),
+                VideoAncillaryDID16::S334Eia608,
+            ));
+        }
+
+        if anc.len() != 3 {
+            bail!(NDICCError::UnexpectedAfdDataCount {
+                found: anc.len() as u8,
+                expected: 3,
+            });
+        }
+
+        Ok(Some(anc))
+    }
+
+    fn parse_for_cea708(&mut self, input: &[u8]) -> Result<Option<VideoAncillary>> {
+        let Some(anc) = self.parse(input)? else {
+            return Ok(None);
+        };
+
+        if anc.did16() != VideoAncillaryDID16::S334Eia708 {
+            bail!(NDICCError::new_unexpected_afd_did(
+                anc.did16(),
+                VideoAncillaryDID16::S334Eia708,
+            ));
+        }
+
+        Ok(Some(anc))
+    }
+
+    fn parse(&mut self, data: &[u8]) -> Result<Option<VideoAncillary>> {
+        if data.is_empty() {
             return Ok(None);
         }
 
-        use gst_video::VideoCaptionType::*;
-        match cc_meta.caption_type() {
-            Cea608Raw => {
-                let mut anc_afd = VideoAncillaryAFDEncoder::for_cea608_raw(21);
-                anc_afd.push_data(cc_meta.data()).context("Cea608Raw")?;
+        self.line_buf[0..data.len()].copy_from_slice(data);
+        self.line_buf[data.len()..].fill(0);
+        self.v210_parser.add_line(self.line_buf.as_slice())?;
 
-                let mut elem = BytesStart::new(C608_TAG);
-                elem.push_attribute((LINE_ATTR, DEFAULT_LINE_VALUE));
-                writer.write_event(Event::Start(elem)).unwrap();
+        let opt = self.v210_parser.next_ancillary().transpose()?;
 
-                write_32bit_padded_base64(&mut writer, anc_afd.terminate().as_slice());
-
-                writer
-                    .write_event(Event::End(BytesEnd::new(C608_TAG)))
-                    .unwrap();
-            }
-            Cea608S3341a => {
-                let mut anc_afd = VideoAncillaryAFDEncoder::for_cea608_s334_1a();
-                anc_afd.push_data(cc_meta.data()).context("Cea608S3341a")?;
-
-                let mut elem = BytesStart::new(C608_TAG);
-                elem.push_attribute((LINE_ATTR, format!("{}", cc_meta.data()[0]).as_str()));
-                writer.write_event(Event::Start(elem)).unwrap();
-
-                write_32bit_padded_base64(&mut writer, anc_afd.terminate().as_slice());
-                writer
-                    .write_event(Event::End(BytesEnd::new(C608_TAG)))
-                    .unwrap();
-            }
-            Cea708Cdp => {
-                let mut anc_afd = VideoAncillaryAFDEncoder::for_cea708_cdp();
-                anc_afd.push_data(cc_meta.data()).context("Cea708Cdp")?;
-
-                writer
-                    .write_event(Event::Start(BytesStart::new(C708_TAG)))
-                    .unwrap();
-                write_32bit_padded_base64(&mut writer, anc_afd.terminate().as_slice());
-                writer
-                    .write_event(Event::End(BytesEnd::new(C708_TAG)))
-                    .unwrap();
-            }
-            other => bail!(NDIClosedCaptionError::UnsupportedCC { cc_type: other }),
-        }
+        Ok(opt)
     }
-
-    // # Safety
-    // `writer` content is guaranteed to be a valid UTF-8 string since:
-    // * It contains ASCII XML tags, ASCII XML attributes and base64 encoded content
-    // * ASCII & base64 are subsets of UTF-8.
-    unsafe {
-        let ndi_cc_meta_b = writer.into_inner();
-        let ndi_cc_meta = std::str::from_utf8_unchecked(&ndi_cc_meta_b);
-
-        Ok(Some(ndi_cc_meta.into()))
-    }
-}
-
-#[derive(Debug)]
-pub struct NDIClosedCaption {
-    pub cc_type: gst_video::VideoCaptionType,
-    pub data: VideoAncillaryAFD,
-}
-
-/// Parses the provided NDI metadata string, searching for
-/// an NDI closed caption metadata.
-pub fn parse_ndi_cc_meta(input: &str) -> Result<Vec<NDIClosedCaption>> {
-    use crate::video_anc::VideoAncillaryAFDParser;
-    use quick_xml::events::Event;
-    use quick_xml::reader::Reader;
-
-    let mut ndi_cc = Vec::new();
-
-    let mut reader = Reader::from_str(input);
-
-    let mut content = SmallVec::<[u8; NDI_CC_CONTENT_CAPACITY]>::new();
-    let mut buf = Vec::with_capacity(NDI_CC_CAPACITY);
-    loop {
-        match reader.read_event_into(&mut buf)? {
-            Event::Eof => break,
-            Event::Start(_) => content.clear(),
-            Event::Text(e) => {
-                content.extend(
-                    e.iter()
-                        .copied()
-                        .filter(|&b| (b != b' ') && (b != b'\t') && (b != b'\n') && (b != b'\r')),
-                );
-            }
-            Event::End(e) => match e.name().as_ref() {
-                C608_TAG_BYTES => {
-                    let adf_packet = BASE64.decode(content.as_slice()).context(C608_TAG)?;
-
-                    let data =
-                        VideoAncillaryAFDParser::parse_for_cea608(&adf_packet).context(C608_TAG)?;
-
-                    ndi_cc.push(NDIClosedCaption {
-                        cc_type: gst_video::VideoCaptionType::Cea608S3341a,
-                        data,
-                    });
-                }
-                C708_TAG_BYTES => {
-                    let adf_packet = BASE64.decode(content.as_slice()).context(C708_TAG)?;
-
-                    let data =
-                        VideoAncillaryAFDParser::parse_for_cea708(&adf_packet).context(C708_TAG)?;
-
-                    ndi_cc.push(NDIClosedCaption {
-                        cc_type: gst_video::VideoCaptionType::Cea708Cdp,
-                        data,
-                    });
-                }
-                _ => (),
-            },
-            _ => {}
-        }
-
-        buf.clear();
-    }
-
-    Ok(ndi_cc)
 }
 
 #[cfg(test)]
@@ -232,9 +408,10 @@ mod tests {
             );
         }
 
+        let mut ndi_cc_encoder = NDICCMetaEncoder::new(1920);
         assert_eq!(
-            encode_video_caption_meta(&buf).unwrap().unwrap(),
-            "<C608 line=\"128\">AD///WFAoDYBlEsqYAAAAA==</C608>",
+            ndi_cc_encoder.encode(&buf).unwrap().as_bytes(),
+            b"<C608 line=\"128\">AAAAAP8D8D8AhAUAAgEwIAAABgCUAcASAJgKAAAAAAA=</C608>",
         );
     }
 
@@ -260,9 +437,10 @@ mod tests {
             );
         }
 
+        let mut ndi_cc_encoder = NDICCMetaEncoder::new(1920);
         assert_eq!(
-            encode_video_caption_meta(&buf).unwrap().unwrap(),
-            "<C708>AD///WFAZVpaaZVj9Q4AgCcn4vxlEsvmAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAnSAIAhutwA=</C708>",
+            ndi_cc_encoder.encode(&buf).unwrap().as_bytes(),
+            b"<C708 line=\"10\">AAAAAP8D8D8AhAUAAQFQJQBYCgBpAlAlAPwIAEMBACAAAAgAcgKAHwDwCwCUAcASAOQLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADQCQAAAgAgAGwIALcCAAAAAAAAAAAAAA==</C708>",
         );
     }
 
@@ -293,9 +471,10 @@ mod tests {
             );
         }
 
+        let mut ndi_cc_encoder = NDICCMetaEncoder::new(1920);
         assert_eq!(
-            encode_video_caption_meta(&buf).unwrap().unwrap(),
-            "<C608 line=\"128\">AD///WFAoDYBlEsqYAAAAA==</C608><C708>AD///WFAZVpaaZVj9Q4AgCcn4vxlEsvmAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAnSAIAhutwA=</C708>",
+            ndi_cc_encoder.encode(&buf).unwrap().as_bytes(),
+            b"<C608 line=\"128\">AAAAAP8D8D8AhAUAAgEwIAAABgCUAcASAJgKAAAAAAA=</C608><C708 line=\"10\">AAAAAP8D8D8AhAUAAQFQJQBYCgBpAlAlAPwIAEMBACAAAAgAcgKAHwDwCwCUAcASAOQLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADQCQAAAgAgAGwIALcCAAAAAAAAAAAAAA==</C708>",
         );
     }
 
@@ -314,18 +493,8 @@ mod tests {
             );
         }
 
-        let err = encode_video_caption_meta(&buf)
-            .unwrap_err()
-            .downcast::<NDIClosedCaptionError>()
-            .unwrap();
-        assert_eq!(
-            err,
-            NDIClosedCaptionError::UnsupportedCC {
-                cc_type: VideoCaptionType::Cea708Raw
-            }
-        );
-
-        assert!(err.is_unsupported_cc());
+        let mut ndi_cc_encoder = NDICCMetaEncoder::new(1920);
+        assert!(ndi_cc_encoder.encode(&buf).is_none());
     }
 
     #[test]
@@ -333,32 +502,47 @@ mod tests {
         gst::init().unwrap();
 
         let buf = gst::Buffer::new();
-        assert!(encode_video_caption_meta(&buf).unwrap().is_none());
+        let mut ndi_cc_encoder = NDICCMetaEncoder::new(1920);
+        assert!(ndi_cc_encoder.encode(&buf).is_none());
     }
 
     #[test]
-    fn parse_ndi_meta_c608() {
-        let mut ndi_cc_list =
-            parse_ndi_cc_meta("<C608 line=\"128\">AD///WFAoDYBlEsqYAAAAA==</C608>").unwrap();
+    fn decode_ndi_meta_c608() {
+        gst::init().unwrap();
 
-        let ndi_cc = ndi_cc_list.pop().unwrap();
-        assert_eq!(ndi_cc.cc_type, VideoCaptionType::Cea608S3341a);
-        assert_eq!(ndi_cc.data.as_slice(), [0x80, 0x94, 0x2c]);
-
-        assert!(ndi_cc_list.is_empty());
-    }
-
-    #[test]
-    fn parse_ndi_meta_c708() {
-        let mut ndi_cc_list = parse_ndi_cc_meta(
-                "<C708>AD///WFAZVpaaZVj9Q4AgCcn4vxlEsvmAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAnSAIAhutwA=</C708>",
+        let mut buf = gst::Buffer::new();
+        let mut ndi_cc_decoder = NDICCMetaDecoder::new(1920);
+        ndi_cc_decoder
+            .decode(
+                "<C608 line=\"128\">AAAAAP8D8D8AhAUAAgEwIAAABgCUAcASAJgKAAAAAAA=</C608>",
+                &mut buf,
             )
             .unwrap();
 
-        let ndi_cc = ndi_cc_list.pop().unwrap();
-        assert_eq!(ndi_cc.cc_type, VideoCaptionType::Cea708Cdp);
+        let mut cc_meta_iter = buf.iter_meta::<gst_video::VideoCaptionMeta>();
+        let cc_meta = cc_meta_iter.next().unwrap();
+        assert_eq!(cc_meta.caption_type(), VideoCaptionType::Cea608S3341a);
+        assert_eq!(cc_meta.data(), [0x80, 0x94, 0x2c]);
+        assert!(cc_meta_iter.next().is_none());
+    }
+
+    #[test]
+    fn decode_ndi_meta_c708() {
+        gst::init().unwrap();
+
+        let mut buf = gst::Buffer::new();
+        let mut ndi_cc_decoder = NDICCMetaDecoder::new(1920);
+        ndi_cc_decoder.decode(
+            "<C708 line=\"10\">AAAAAP8D8D8AhAUAAQFQJQBYCgBpAlAlAPwIAEMBACAAAAgAcgKAHwDwCwCUAcASAOQLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADQCQAAAgAgAGwIALcCAAAAAAAAAAAAAA==</C708>",
+            &mut buf,
+        )
+        .unwrap();
+
+        let mut cc_meta_iter = buf.iter_meta::<gst_video::VideoCaptionMeta>();
+        let cc_meta = cc_meta_iter.next().unwrap();
+        assert_eq!(cc_meta.caption_type(), VideoCaptionType::Cea708Cdp);
         assert_eq!(
-            ndi_cc.data.as_slice(),
+            cc_meta.data(),
             [
                 0x96, 0x69, 0x55, 0x3f, 0x43, 0x00, 0x00, 0x72, 0xf8, 0xfc, 0x94, 0x2c, 0xf9, 0x00,
                 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
@@ -369,70 +553,89 @@ mod tests {
                 0x1b,
             ]
         );
-
-        assert!(ndi_cc_list.is_empty());
+        assert!(cc_meta_iter.next().is_none());
     }
 
     #[test]
-    fn parse_ndi_meta_c708_newlines_and_indent() {
-        let mut ndi_cc_list = parse_ndi_cc_meta(
-            r#"<C708>
-    AD///WFAZVpaaZVj9Q4AgCcn4vxlEsvmAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIA
-    vqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAnSAIA
-    hutwA=
+    fn decode_ndi_meta_c708_newlines_and_indent() {
+        gst::init().unwrap();
+
+        let mut buf = gst::Buffer::new();
+        let mut ndi_cc_decoder = NDICCMetaDecoder::new(1920);
+        ndi_cc_decoder
+            .decode(
+                r#"<C708 line=\"10\">
+    AAAAAP8D8D8AhAUAAQFQJQBYCgBpAlAlAPwIAEMBACAAAAgAcgKAHwDwCwCUAcASAOQ
+    LAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAA
+    ACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACA
+    CAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA
+    6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADQCQAAAgAgAGwIALcCAAAAAAA
+    AAAAAAA==
 </C708>"#,
-        )
-        .unwrap();
-
-        let ndi_cc = ndi_cc_list.pop().unwrap();
-        assert_eq!(ndi_cc.cc_type, VideoCaptionType::Cea708Cdp);
-        assert_eq!(
-            ndi_cc.data.as_slice(),
-            [
-                0x96, 0x69, 0x55, 0x3f, 0x43, 0x00, 0x00, 0x72, 0xf8, 0xfc, 0x94, 0x2c, 0xf9, 0x00,
-                0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
-                0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00,
-                0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
-                0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x74, 0x00, 0x00,
-                0x1b,
-            ]
-        );
-
-        assert!(ndi_cc_list.is_empty());
-    }
-
-    #[test]
-    fn parse_ndi_meta_c608_newlines_spaces_inline() {
-        let mut ndi_cc_list = parse_ndi_cc_meta(
-            "<C608 line=\"128\">\n\tAD///WFAo\n\n\r DYBlEsq\r\n\tYAAAAA==  \n</C608>",
-        )
-        .unwrap();
-
-        let ndi_cc = ndi_cc_list.pop().unwrap();
-        assert_eq!(ndi_cc.cc_type, VideoCaptionType::Cea608S3341a);
-        assert_eq!(ndi_cc.data.as_slice(), [0x80, 0x94, 0x2c]);
-
-        assert!(ndi_cc_list.is_empty());
-    }
-
-    #[test]
-    fn parse_ndi_meta_c608_and_c708() {
-        let ndi_cc_list = parse_ndi_cc_meta(
-                "<C608 line=\"128\">AD///WFAoDYBlEsqYAAAAA==</C608><C708>AD///WFAZVpaaZVj9Q4AgCcn4vxlEsvmAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAvqAIAnSAIAhutwA=</C708>",
+                &mut buf,
             )
             .unwrap();
 
-        let mut ndi_cc_iter = ndi_cc_list.iter();
-
-        let ndi_cc = ndi_cc_iter.next().unwrap();
-        assert_eq!(ndi_cc.cc_type, VideoCaptionType::Cea608S3341a);
-        assert_eq!(ndi_cc.data.as_slice(), [0x80, 0x94, 0x2c]);
-
-        let ndi_cc = ndi_cc_iter.next().unwrap();
-        assert_eq!(ndi_cc.cc_type, VideoCaptionType::Cea708Cdp);
+        let mut cc_meta_iter = buf.iter_meta::<gst_video::VideoCaptionMeta>();
+        let cc_meta = cc_meta_iter.next().unwrap();
+        assert_eq!(cc_meta.caption_type(), VideoCaptionType::Cea708Cdp);
         assert_eq!(
-            ndi_cc.data.as_slice(),
+            cc_meta.data(),
+            [
+                0x96, 0x69, 0x55, 0x3f, 0x43, 0x00, 0x00, 0x72, 0xf8, 0xfc, 0x94, 0x2c, 0xf9, 0x00,
+                0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
+                0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
+                0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00,
+                0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
+                0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x74, 0x00, 0x00,
+                0x1b,
+            ]
+        );
+        assert!(cc_meta_iter.next().is_none());
+    }
+
+    #[test]
+    fn decode_ndi_meta_c608_newlines_spaces_inline() {
+        gst::init().unwrap();
+
+        let mut buf = gst::Buffer::new();
+        let mut ndi_cc_decoder = NDICCMetaDecoder::new(1920);
+        ndi_cc_decoder.decode(
+            "<C608 line=\"128\">\n\tAAAAAP8D8\n\n\r D8AhAUA\r\n\tAgEwIAAABgCUAcASAJgKAAAAAAA=  \n</C608>",
+            &mut buf,
+        )
+        .unwrap();
+
+        let mut cc_meta_iter = buf.iter_meta::<gst_video::VideoCaptionMeta>();
+        let cc_meta = cc_meta_iter.next().unwrap();
+        assert_eq!(cc_meta.caption_type(), VideoCaptionType::Cea608S3341a);
+        assert_eq!(cc_meta.data(), [0x80, 0x94, 0x2c]);
+
+        assert!(cc_meta_iter.next().is_none());
+    }
+
+    #[test]
+    fn decode_ndi_meta_c608_and_c708() {
+        gst::init().unwrap();
+
+        let mut buf = gst::Buffer::new();
+        let mut ndi_cc_decoder = NDICCMetaDecoder::new(1920);
+        ndi_cc_decoder.decode(
+            "<C608 line=\"128\">AAAAAP8D8D8AhAUAAgEwIAAABgCUAcASAJgKAAAAAAA=</C608><C708 line=\"10\">AAAAAP8D8D8AhAUAAQFQJQBYCgBpAlAlAPwIAEMBACAAAAgAcgKAHwDwCwCUAcASAOQLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADoCwAAAgAgAOgLAAACACAA6AsAAAIAIADQCQAAAgAgAGwIALcCAAAAAAAAAAAAAA==</C708>",
+            &mut buf,
+        )
+        .unwrap();
+
+        let mut cc_meta_iter = buf.iter_meta::<gst_video::VideoCaptionMeta>();
+
+        let cc_meta = cc_meta_iter.next().unwrap();
+        assert_eq!(cc_meta.caption_type(), VideoCaptionType::Cea608S3341a);
+        assert_eq!(cc_meta.data(), [0x80, 0x94, 0x2c]);
+
+        let cc_meta = cc_meta_iter.next().unwrap();
+        assert_eq!(cc_meta.caption_type(), VideoCaptionType::Cea708Cdp);
+        assert_eq!(
+            cc_meta.data(),
             [
                 0x96, 0x69, 0x55, 0x3f, 0x43, 0x00, 0x00, 0x72, 0xf8, 0xfc, 0x94, 0x2c, 0xf9, 0x00,
                 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
@@ -444,21 +647,21 @@ mod tests {
             ]
         );
 
-        assert!(ndi_cc_iter.next().is_none());
+        assert!(cc_meta_iter.next().is_none());
     }
 
     #[test]
-    fn parse_ndi_meta_tag_mismatch() {
+    fn decode_ndi_meta_tag_mismatch() {
+        gst::init().unwrap();
+
         // Expecting </C608> found </C708>'
-        let _ =
-            parse_ndi_cc_meta("<C608 line=\"128\">AD///WFAoDYBlEsqYAAAAA==</C708>").unwrap_err();
-    }
-
-    #[test]
-    fn parse_ndi_meta_c608_deeper_failure() {
-        // Caused by:
-        // 0: Parsing anc data flags
-        // 1: Not enough data'
-        let _ = parse_ndi_cc_meta("<C608 line=\"128\">AAA=</C608>").unwrap_err();
+        let mut buf = gst::Buffer::new();
+        let mut ndi_cc_decoder = NDICCMetaDecoder::new(1920);
+        ndi_cc_decoder
+            .decode(
+                "<C608 line=\"128\">AAAAAP8D8D8AhAUAAgEwIAAABgCUAcASAJgKAAAAAAA=</C708>",
+                &mut buf,
+            )
+            .unwrap_err();
     }
 }

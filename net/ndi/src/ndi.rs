@@ -461,6 +461,7 @@ pub enum VideoFrame<'a> {
     BorrowedGst(
         NDIlib_video_frame_v2_t,
         &'a gst_video::VideoFrameRef<&'a gst::BufferRef>,
+        Option<&'a std::ffi::CStr>,
     ),
 }
 
@@ -478,7 +479,7 @@ impl std::error::Error for TryFromVideoFrameError {}
 impl<'a> VideoFrame<'a> {
     pub fn xres(&self) -> i32 {
         match self {
-            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, _) => {
+            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, ..) => {
                 frame.xres
             }
         }
@@ -486,7 +487,7 @@ impl<'a> VideoFrame<'a> {
 
     pub fn yres(&self) -> i32 {
         match self {
-            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, _) => {
+            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, ..) => {
                 frame.yres
             }
         }
@@ -494,7 +495,7 @@ impl<'a> VideoFrame<'a> {
 
     pub fn fourcc(&self) -> NDIlib_FourCC_video_type_e {
         match self {
-            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, _) => {
+            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, ..) => {
                 frame.FourCC
             }
         }
@@ -502,7 +503,7 @@ impl<'a> VideoFrame<'a> {
 
     pub fn frame_rate(&self) -> (i32, i32) {
         match self {
-            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, _) => {
+            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, ..) => {
                 (frame.frame_rate_N, frame.frame_rate_D)
             }
         }
@@ -510,7 +511,7 @@ impl<'a> VideoFrame<'a> {
 
     pub fn picture_aspect_ratio(&self) -> f32 {
         match self {
-            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, _) => {
+            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, ..) => {
                 frame.picture_aspect_ratio
             }
         }
@@ -518,7 +519,7 @@ impl<'a> VideoFrame<'a> {
 
     pub fn frame_format_type(&self) -> NDIlib_frame_format_type_e {
         match self {
-            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, _) => {
+            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, ..) => {
                 frame.frame_format_type
             }
         }
@@ -526,7 +527,7 @@ impl<'a> VideoFrame<'a> {
 
     pub fn timecode(&self) -> i64 {
         match self {
-            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, _) => {
+            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, ..) => {
                 frame.timecode
             }
         }
@@ -565,8 +566,8 @@ impl<'a> VideoFrame<'a> {
             return unsafe {
                 use std::slice;
                 match self {
-                    VideoFrame::BorrowedRecv(ref frame, _)
-                    | VideoFrame::BorrowedGst(ref frame, _) => Some(slice::from_raw_parts(
+                    VideoFrame::BorrowedRecv(ref frame, ..)
+                    | VideoFrame::BorrowedGst(ref frame, ..) => Some(slice::from_raw_parts(
                         frame.p_data as *const u8,
                         frame_size as usize,
                     )),
@@ -588,8 +589,8 @@ impl<'a> VideoFrame<'a> {
             return unsafe {
                 use std::slice;
                 match self {
-                    VideoFrame::BorrowedRecv(ref frame, _)
-                    | VideoFrame::BorrowedGst(ref frame, _) => Some(slice::from_raw_parts(
+                    VideoFrame::BorrowedRecv(ref frame, ..)
+                    | VideoFrame::BorrowedGst(ref frame, ..) => Some(slice::from_raw_parts(
                         frame.p_data as *const u8,
                         frame.line_stride_or_data_size_in_bytes as usize,
                     )),
@@ -625,12 +626,11 @@ impl<'a> VideoFrame<'a> {
             }
 
             let data = match self {
-                VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, _) => {
-                    slice::from_raw_parts(
-                        frame.p_data as *const u8,
-                        frame.line_stride_or_data_size_in_bytes as usize,
-                    )
-                }
+                VideoFrame::BorrowedRecv(ref frame, ..)
+                | VideoFrame::BorrowedGst(ref frame, ..) => slice::from_raw_parts(
+                    frame.p_data as *const u8,
+                    frame.line_stride_or_data_size_in_bytes as usize,
+                ),
             };
 
             let mut cursor = Cursor::new(data);
@@ -675,7 +675,7 @@ impl<'a> VideoFrame<'a> {
 
     pub fn line_stride_or_data_size_in_bytes(&self) -> i32 {
         match self {
-            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, _) => {
+            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, ..) => {
                 let stride = frame.line_stride_or_data_size_in_bytes;
 
                 if stride != 0 {
@@ -705,7 +705,7 @@ impl<'a> VideoFrame<'a> {
     pub fn metadata(&self) -> Option<&str> {
         unsafe {
             match self {
-                VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, _) => {
+                VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, ..) => {
                     if frame.p_metadata.is_null() {
                         None
                     } else {
@@ -718,7 +718,7 @@ impl<'a> VideoFrame<'a> {
 
     pub fn timestamp(&self) -> i64 {
         match self {
-            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, _) => {
+            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, ..) => {
                 frame.timestamp
             }
         }
@@ -726,12 +726,15 @@ impl<'a> VideoFrame<'a> {
 
     pub fn as_ptr(&self) -> *const NDIlib_video_frame_v2_t {
         match self {
-            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, _) => frame,
+            VideoFrame::BorrowedRecv(ref frame, _) | VideoFrame::BorrowedGst(ref frame, ..) => {
+                frame
+            }
         }
     }
 
     pub fn try_from_video_frame(
         frame: &'a gst_video::VideoFrameRef<&'a gst::BufferRef>,
+        metadata: Option<&'a std::ffi::CStr>,
         timecode: i64,
     ) -> Result<Self, TryFromVideoFrameError> {
         // Planar formats must be in contiguous memory
@@ -837,11 +840,11 @@ impl<'a> VideoFrame<'a> {
             timecode,
             p_data: frame.plane_data(0).unwrap().as_ptr() as *const ::std::os::raw::c_char,
             line_stride_or_data_size_in_bytes: frame.plane_stride()[0],
-            p_metadata: ptr::null(),
+            p_metadata: metadata.map_or(ptr::null(), |meta| meta.as_ptr()),
             timestamp: 0,
         };
 
-        Ok(VideoFrame::BorrowedGst(ndi_frame, frame))
+        Ok(VideoFrame::BorrowedGst(ndi_frame, frame, metadata))
     }
 }
 
