@@ -546,6 +546,8 @@ impl WebRTCSrc {
     }
 
     fn connect_signaller(&self, signaller: &Signallable) {
+        let instance = &*self.obj();
+
         let _ = self
             .state
             .lock()
@@ -555,10 +557,10 @@ impl WebRTCSrc {
             error: signaller.connect_closure(
                 "error",
                 false,
-                glib::closure!(@to-owned self as this => move |
+                glib::closure!(@watch instance => move |
                 _signaller: glib::Object, error: String| {
                     gst::element_error!(
-                        this.obj(),
+                        instance,
                         gst::StreamError::Failed,
                         ["Signalling error: {}", error]
                     );
@@ -568,12 +570,13 @@ impl WebRTCSrc {
             session_started: signaller.connect_closure(
                 "session-started",
                 false,
-                glib::closure!(@to-owned self as this => move |
+                glib::closure!(@watch instance => move |
                         _signaller: glib::Object,
                         session_id: &str,
                         _peer_id: &str| {
-                    gst::info!(CAT, imp: this, "Session started: {session_id}");
-                    this.state.lock().unwrap().session_id =
+                    let imp = instance.imp();
+                    gst::info!(CAT, imp: imp, "Session started: {session_id}");
+                    imp.state.lock().unwrap().session_id =
                         Some(session_id.to_string());
                 }),
             ),
@@ -581,12 +584,12 @@ impl WebRTCSrc {
             session_ended: signaller.connect_closure(
                 "session-ended",
                 false,
-                glib::closure!(@to-owned self as this => move |
+                glib::closure!(@watch instance => move |
                     _signaller: glib::Object, _peer_id: &str| {
-                    gst::debug!(CAT, imp: this, "Session ended.");
+                    gst::debug!(CAT, obj: instance, "Session ended.");
 
-                    this.state.lock().unwrap().session_id = None;
-                    this.obj().iterate_src_pads().into_iter().for_each(|pad|
+                    instance.imp().state.lock().unwrap().session_id = None;
+                    instance.iterate_src_pads().into_iter().for_each(|pad|
                         { if let Err(e) = pad.map(|pad| pad.push_event(gst::event::Eos::new())) {
                             gst::error!(CAT, "Could not send EOS: {e:?}");
                         }}
@@ -597,24 +600,22 @@ impl WebRTCSrc {
             request_meta: signaller.connect_closure(
                 "request-meta",
                 false,
-                glib::closure!(@to-owned self as this => move |
+                glib::closure!(@watch instance => move |
                     _signaller: glib::Object| -> Option<gst::Structure> {
-                    let meta = this.settings.lock().unwrap().meta.clone();
-
-                    meta
+                    instance.imp().settings.lock().unwrap().meta.clone()
                 }),
             ),
 
             session_description: signaller.connect_closure(
                 "session-description",
                 false,
-                glib::closure!(@to-owned self as this => move |
+                glib::closure!(@watch instance => move |
                         _signaller: glib::Object,
                         _peer_id: &str,
                         desc: &gst_webrtc::WebRTCSessionDescription| {
                     assert_eq!(desc.type_(), gst_webrtc::WebRTCSDPType::Offer);
 
-                    this.handle_offer(desc);
+                    instance.imp().handle_offer(desc);
                 }),
             ),
 
@@ -624,13 +625,13 @@ impl WebRTCSrc {
             handle_ice: signaller.connect_closure(
                 "handle-ice",
                 false,
-                glib::closure!(@to-owned self as this => move |
+                glib::closure!(@watch instance => move |
                         _signaller: glib::Object,
                         peer_id: &str,
                         sdp_m_line_index: u32,
                         _sdp_mid: Option<String>,
                         candidate: &str| {
-                    this.handle_ice(peer_id, Some(sdp_m_line_index), None, candidate);
+                    instance.imp().handle_ice(peer_id, Some(sdp_m_line_index), None, candidate);
                 }),
             ),
         });
