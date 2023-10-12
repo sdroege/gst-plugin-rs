@@ -14,12 +14,17 @@
  *
  * Since: plugins-rs-0.9.0
  */
+
+#[macro_use]
+extern crate log;
+
 use gst::glib;
 
 #[macro_use]
 mod utils;
 
 mod gcc;
+mod rtpbin2;
 
 mod audio_discont;
 mod baseaudiopay;
@@ -42,6 +47,7 @@ mod tests;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gcc::register(plugin)?;
+    rtpbin2::register(plugin)?;
 
     #[cfg(feature = "doc")]
     {

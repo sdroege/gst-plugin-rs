@@ -7191,6 +7191,92 @@
                 },
                 "rank": "marginal"
             },
+            "rtpbin2": {
+                "author": "Matthew Waters <matthew@centricular.com>",
+                "description": "RTP sessions management",
+                "hierarchy": [
+                    "GstRtpBin2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Network/RTP/Filter",
+                "pad-templates": {
+                    "rtcp_recv_sink_%%u": {
+                        "caps": "application/x-rtcp:\n",
+                        "direction": "sink",
+                        "presence": "request"
+                    },
+                    "rtcp_send_src_%%u": {
+                        "caps": "application/x-rtcp:\n",
+                        "direction": "src",
+                        "presence": "request"
+                    },
+                    "rtp_recv_sink_%%u": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "sink",
+                        "presence": "request"
+                    },
+                    "rtp_recv_src_%%u_%%u_%%u": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    },
+                    "rtp_send_sink_%%u": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "sink",
+                        "presence": "request"
+                    },
+                    "rtp_send_src_%%u": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    }
+                },
+                "properties": {
+                    "latency": {
+                        "blurb": "Amount of ms to buffer",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "min-rtcp-interval": {
+                        "blurb": "Minimum time (in ms) between RTCP reports",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "5000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "stats": {
+                        "blurb": "Statistics about the session",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": false
+                    }
+                },
+                "rank": "none"
+            },
             "rtpgccbwe": {
                 "author": "Thibault Saunier <tsaunier@igalia.com>",
                 "description": "Estimates current network bandwidth using the Google Congestion Control algorithm notifying about it through the 'bitrate' property",

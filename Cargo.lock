@@ -2754,21 +2754,28 @@ dependencies = [
  "bitstream-io",
  "byte-slice-cast",
  "chrono",
+ "futures",
+ "gio",
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-app",
  "gstreamer-audio",
+ "gstreamer-base",
  "gstreamer-check",
+ "gstreamer-net",
  "gstreamer-rtp",
  "gstreamer-video",
  "hex",
+ "log",
  "once_cell",
  "rand",
+ "rtcp-types",
  "rtp-types",
  "slab",
  "smallvec",
  "thiserror",
  "time",
+ "tokio",
 ]
 
 [[package]]
@@ -5819,6 +5826,14 @@ dependencies = [
  "serde",
  "serde_json",
  "winapi",
+]
+
+[[package]]
+name = "rtcp-types"
+version = "0.0.1"
+source = "git+https://github.com/ystreet/rtcp-types#f7fddfb87e9d7f4fed0b967fedc34995dd81ca86"
+dependencies = [
+ "thiserror",
 ]
 
 [[package]]
