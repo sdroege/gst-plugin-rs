@@ -627,6 +627,19 @@ impl Default for HlsSink3Settings {
             .property("sink", &giostreamsink)
             .build()
             .expect("Could not make element splitmuxsink");
+
+        // giostreamsink doesn't let go of its stream until the element is finalized, which might
+        // be too late for the calling application. Let's try to force it to close while tearing
+        // down the pipeline.
+        if giostreamsink.has_property("close-on-stop", Some(bool::static_type())) {
+            giostreamsink.set_property("close-on-stop", true);
+        } else {
+            gst::warning!(
+                CAT,
+                "hlssink3 may sometimes fail to write out the final playlist update. This can be fixed by using giostreamsink from GStreamer 1.24 or later."
+            )
+        }
+
         Self {
             location: String::from(DEFAULT_TS_LOCATION),
             target_duration: DEFAULT_TARGET_DURATION,
