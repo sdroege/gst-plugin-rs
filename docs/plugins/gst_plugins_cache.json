@@ -6311,11 +6311,548 @@
                     }
                 },
                 "rank": "none"
+            },
+            "rtppcmadepay2": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Depayload A-law from RTP packets (RFC 3551)",
+                "hierarchy": [
+                    "GstRtpPcmaDepay2",
+                    "GstRtpPcmauDepay2",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: audio\n        payload: 8\n     clock-rate: 8000\napplication/x-rtp:\n          media: audio\n     clock-rate: [ 1, 2147483647 ]\n  encoding-name: PCMA\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "audio/x-alaw:\n       channels: 1\n           rate: [ 1, 2147483647 ]\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
+            "rtppcmapay2": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Payload A-law Audio into RTP packets (RFC 3551)",
+                "hierarchy": [
+                    "GstRtpPcmaPay2",
+                    "GstRtpPcmauPay2",
+                    "GstRtpBaseAudioPay2",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Payloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/x-alaw:\n       channels: 1\n           rate: [ 1, 2147483647 ]\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n          media: audio\n        payload: 8\n     clock-rate: 8000\napplication/x-rtp:\n          media: audio\n        payload: [ 96, 127 ]\n  encoding-name: PCMA\n     clock-rate: [ 1, 2147483647 ]\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
+            "rtppcmudepay2": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Depayload µ-law from RTP packets (RFC 3551)",
+                "hierarchy": [
+                    "GstRtpPcmuDepay2",
+                    "GstRtpPcmauDepay2",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: audio\n        payload: 0\n     clock-rate: 8000\napplication/x-rtp:\n          media: audio\n     clock-rate: [ 1, 2147483647 ]\n  encoding-name: PCMU\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "audio/x-mulaw:\n       channels: 1\n           rate: [ 1, 2147483647 ]\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
+            "rtppcmupay2": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Payload µ-law Audio into RTP packets (RFC 3551)",
+                "hierarchy": [
+                    "GstRtpPcmuPay2",
+                    "GstRtpPcmauPay2",
+                    "GstRtpBaseAudioPay2",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Payloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/x-mulaw:\n       channels: 1\n           rate: [ 1, 2147483647 ]\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n          media: audio\n        payload: 0\n     clock-rate: 8000\napplication/x-rtp:\n          media: audio\n        payload: [ 96, 127 ]\n  encoding-name: PCMU\n     clock-rate: [ 1, 2147483647 ]\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
             }
         },
         "filename": "gstrsrtp",
         "license": "MPL-2.0",
-        "other-types": {},
+        "other-types": {
+            "GstRtpBaseAudioPay2": {
+                "hierarchy": [
+                    "GstRtpBaseAudioPay2",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "alignment-threshold": {
+                        "blurb": "Timestamp alignment threshold in nanoseconds",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "40000000",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "discont-wait": {
+                        "blurb": "Window of time in nanoseconds to wait before creating a discontinuity",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1000000000",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "max-ptime": {
+                        "blurb": "Maximum duration of the packet data in ns (-1 = unlimited up to MTU)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "18446744073709551615",
+                        "max": "9223372036854775807",
+                        "min": "-1",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gint64",
+                        "writable": true
+                    },
+                    "min-ptime": {
+                        "blurb": "Minimum duration of the packet data in ns (can't go above MTU)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "9223372036854775807",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gint64",
+                        "writable": true
+                    },
+                    "ptime-multiple": {
+                        "blurb": "Force buffers to be multiples of this duration in ns (0 disables)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "9223372036854775807",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gint64",
+                        "writable": true
+                    }
+                }
+            },
+            "GstRtpBaseDepay2": {
+                "hierarchy": [
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "auto-header-extensions": {
+                        "blurb": "Whether RTP header extensions should be automatically enabled, if an implementation is available",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "extensions": {
+                        "blurb": "List of enabled RTP header extensions",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": false
+                    },
+                    "max-reorder": {
+                        "blurb": "Maximum seqnum reorder before assuming sender has restarted",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "100",
+                        "max": "32767",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "source-info": {
+                        "blurb": "Add RTP source information as buffer metadata",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "stats": {
+                        "blurb": "Various statistics",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "application/x-rtp-depayload-stats;",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": false
+                    }
+                },
+                "signals": {
+                    "add-extension": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "GstRTPHeaderExtension"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "clear-extensions": {
+                        "action": true,
+                        "args": [],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "request-extension": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "guint"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "GstRTPHeaderExtension",
+                        "when": "last"
+                    }
+                }
+            },
+            "GstRtpBasePay2": {
+                "hierarchy": [
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "auto-header-extensions": {
+                        "blurb": "Whether RTP header extensions should be automatically enabled, if an implementation is available",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "extensions": {
+                        "blurb": "List of enabled RTP header extensions",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": false
+                    },
+                    "mtu": {
+                        "blurb": "Maximum size of one RTP packet",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1400",
+                        "max": "-1",
+                        "min": "28",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "onvif-no-rate-control": {
+                        "blurb": "Enable ONVIF Rate-Control=no timestamping mode",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "pt": {
+                        "blurb": "Payload type of the packets",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "8",
+                        "max": "127",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "scale-rtptime": {
+                        "blurb": "Whether the RTP timestamp should be scaled with the rate (speed)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "seqnum": {
+                        "blurb": "RTP sequence number of the last packet",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "65535",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": false
+                    },
+                    "seqnum-offset": {
+                        "blurb": "Offset that is added to all RTP sequence numbers (-1 == random)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-1",
+                        "max": "65535",
+                        "min": "-1",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": true
+                    },
+                    "source-info": {
+                        "blurb": "Add RTP source information as buffer metadata",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "ssrc": {
+                        "blurb": "SSRC of the packets (-1 == random)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "18446744073709551615",
+                        "max": "4294967295",
+                        "min": "-1",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gint64",
+                        "writable": true
+                    },
+                    "stats": {
+                        "blurb": "Various statistics",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "application/x-rtp-payload-stats;",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": false
+                    },
+                    "timestamp": {
+                        "blurb": "RTP timestamp of the last packet",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "65535",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": false
+                    },
+                    "timestamp-offset": {
+                        "blurb": "Offset that is added to all RTP timestamps (-1 == random)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "18446744073709551615",
+                        "max": "4294967295",
+                        "min": "-1",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gint64",
+                        "writable": true
+                    }
+                },
+                "signals": {
+                    "add-extension": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "GstRTPHeaderExtension"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "clear-extensions": {
+                        "action": true,
+                        "args": [],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "request-extension": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "guint"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "GstRTPHeaderExtension",
+                        "when": "last"
+                    }
+                }
+            },
+            "GstRtpPcmauDepay2": {
+                "hierarchy": [
+                    "GstRtpPcmauDepay2",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object"
+            },
+            "GstRtpPcmauPay2": {
+                "hierarchy": [
+                    "GstRtpPcmauPay2",
+                    "GstRtpBaseAudioPay2",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object"
+            }
+        },
         "package": "gst-plugin-rtp",
         "source": "gst-plugin-rtp",
         "tracers": {},

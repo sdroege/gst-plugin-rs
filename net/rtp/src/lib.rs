@@ -1,5 +1,6 @@
 //
 // Copyright (C) 2022 Vivienne Watermeier <vwatermeier@igalia.com>
+// Copyright (C) 2022-24 Sebastian Dröge <sebastian@centricular.com>
 //
 // This Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at
@@ -18,10 +19,35 @@ use gst::glib;
 mod av1;
 mod gcc;
 
+mod audio_discont;
+mod baseaudiopay;
+mod basedepay;
+mod basepay;
+
+mod pcmau;
+
+#[cfg(test)]
+mod tests;
+
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     av1::depay::register(plugin)?;
     av1::pay::register(plugin)?;
     gcc::register(plugin)?;
+
+    #[cfg(feature = "doc")]
+    {
+        use gst::prelude::*;
+
+        crate::basepay::RtpBasePay2::static_type() // make base classes available in docs
+            .mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        crate::basedepay::RtpBaseDepay2::static_type()
+            .mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        crate::baseaudiopay::RtpBaseAudioPay2::static_type()
+            .mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    }
+
+    pcmau::depay::register(plugin)?;
+    pcmau::pay::register(plugin)?;
 
     Ok(())
 }
