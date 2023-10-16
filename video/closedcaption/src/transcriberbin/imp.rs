@@ -300,7 +300,7 @@ impl TranscriberBin {
                 return gst::PadProbeReturn::Pass;
             }
 
-            if let Some(gst::PadProbeData::Buffer(buffer)) = &mut probe_info.data {
+            if let Some(buffer) = probe_info.buffer_mut() {
                 let buffer = buffer.make_mut();
                 while let Some(meta) = buffer.meta_mut::<gst_video::VideoCaptionMeta>() {
                     meta.remove().unwrap();

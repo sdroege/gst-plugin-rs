@@ -1286,35 +1286,36 @@ impl UriPlaylistBin {
                     let src_pad_name = sync_sink.name().to_string().replace("sink", "src");
                     let sync_src = state.streamsynchronizer.static_pad(&src_pad_name).unwrap();
                     sync_src.add_probe(gst::PadProbeType::EVENT_DOWNSTREAM, move |_pad, info| {
-                        match info.data {
-                            Some(gst::PadProbeData::Event(ref ev))
-                                if ev.type_() == gst::EventType::Eos =>
-                            {
-                                let element = match element_weak.upgrade() {
-                                    Some(element) => element,
-                                    None => return gst::PadProbeReturn::Remove,
-                                };
-                                let imp = element.imp();
+                        let Some(ev) = info.event() else {
+                            return gst::PadProbeReturn::Pass;
+                        };
 
-                                let item = {
-                                    let mut state_guard = imp.state.lock().unwrap();
-                                    let state = state_guard.as_mut().unwrap();
-                                    state.waiting_for_ss_eos.as_ref().cloned()
-                                };
+                        if ev.type_() != gst::EventType::Eos {
+                            return gst::PadProbeReturn::Pass;
+                        }
 
-                                if let Some(item) = item {
-                                    if item.dec_waiting_eos_ss() {
-                                        gst::debug!(CAT, imp: imp, "streamsynchronizer has been flushed, reorganize pipeline to fit new streams topology and unblock item");
-                                        imp.handle_topology_change();
-                                        gst::PadProbeReturn::Drop
-                                    } else {
-                                        gst::PadProbeReturn::Drop
-                                    }
-                                } else {
-                                    gst::PadProbeReturn::Pass
-                                }
+                        let element = match element_weak.upgrade() {
+                            Some(element) => element,
+                            None => return gst::PadProbeReturn::Remove,
+                        };
+                        let imp = element.imp();
+
+                        let item = {
+                            let mut state_guard = imp.state.lock().unwrap();
+                            let state = state_guard.as_mut().unwrap();
+                            state.waiting_for_ss_eos.as_ref().cloned()
+                        };
+
+                        if let Some(item) = item {
+                            if item.dec_waiting_eos_ss() {
+                                gst::debug!(CAT, imp: imp, "streamsynchronizer has been flushed, reorganize pipeline to fit new streams topology and unblock item");
+                                imp.handle_topology_change();
+                                gst::PadProbeReturn::Drop
+                            } else {
+                                gst::PadProbeReturn::Drop
                             }
-                            _ => gst::PadProbeReturn::Pass,
+                        } else {
+                            gst::PadProbeReturn::Pass
                         }
                     });
 
@@ -1434,47 +1435,48 @@ impl UriPlaylistBin {
 
                     gst::PadProbeReturn::Pass
                 } else {
-                    match info.data {
-                        Some(gst::PadProbeData::Event(ref ev))
-                            if ev.type_() == gst::EventType::Eos =>
-                        {
-                            if item.dec_waiting_eos() {
-                                // all the streams are eos, item is now done
-                                gst::log!(
-                                    CAT,
-                                    obj: element,
-                                    "all streams of item #{} are eos",
-                                    item.index()
-                                );
+                    let Some(ev) = info.event() else {
+                        return gst::PadProbeReturn::Pass;
+                    };
 
-                                let imp = element.imp();
-                                {
-                                    let mut state_guard = imp.state.lock().unwrap();
-                                    let state = state_guard.as_mut().unwrap();
-
-                                    let index = item.index();
-
-                                    let removed = state
-                                        .streaming
-                                        .iter()
-                                        .position(|i| i.index() == index)
-                                        .map(|e| state.streaming.remove(e));
-
-                                    if let Some(item) = removed {
-                                        item.set_done();
-                                        state.done.push(item);
-                                    }
-                                }
-
-                                if let Err(e) = imp.start_next_item() {
-                                    imp.failed(e);
-                                }
-                            }
-
-                            gst::PadProbeReturn::Remove
-                        }
-                        _ => gst::PadProbeReturn::Pass,
+                    if ev.type_() != gst::EventType::Eos {
+                        return gst::PadProbeReturn::Pass;
                     }
+
+                    if item.dec_waiting_eos() {
+                        // all the streams are eos, item is now done
+                        gst::log!(
+                            CAT,
+                            obj: element,
+                            "all streams of item #{} are eos",
+                            item.index()
+                        );
+
+                        let imp = element.imp();
+                        {
+                            let mut state_guard = imp.state.lock().unwrap();
+                            let state = state_guard.as_mut().unwrap();
+
+                            let index = item.index();
+
+                            let removed = state
+                                .streaming
+                                .iter()
+                                .position(|i| i.index() == index)
+                                .map(|e| state.streaming.remove(e));
+
+                            if let Some(item) = removed {
+                                item.set_done();
+                                state.done.push(item);
+                            }
+                        }
+
+                        if let Err(e) = imp.start_next_item() {
+                            imp.failed(e);
+                        }
+                    }
+
+                    gst::PadProbeReturn::Remove
                 }
             });
 

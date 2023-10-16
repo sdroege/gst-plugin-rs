@@ -1911,77 +1911,79 @@ impl FallbackSrc {
 
             let imp = element.imp();
 
-            match info.data {
-                Some(gst::PadProbeData::Event(ref ev)) if ev.type_() == gst::EventType::Eos => {
-                    gst::debug!(
-                        CAT,
-                        obj: element,
-                        "Received EOS from {}source on pad {}",
-                        if fallback_source { "fallback " } else { "" },
-                        pad.name()
-                    );
+            let Some(ev) = info.event() else {
+                return gst::PadProbeReturn::Ok;
+            };
 
-                    let mut state_guard = imp.state.lock();
-                    let state = match &mut *state_guard {
-                        None => {
-                            return gst::PadProbeReturn::Ok;
-                        }
-                        Some(state) => state,
-                    };
+            if ev.type_() != gst::EventType::Eos {
+                return gst::PadProbeReturn::Ok;
+            }
 
-                    if is_image {
-                        gst::PadProbeReturn::Ok
-                    } else if state.settings.restart_on_eos || fallback_source {
-                        imp.handle_source_error(state, RetryReason::Eos, fallback_source);
-                        drop(state_guard);
-                        element.notify("statistics");
+            gst::debug!(
+                CAT,
+                obj: element,
+                "Received EOS from {}source on pad {}",
+                if fallback_source { "fallback " } else { "" },
+                pad.name()
+            );
 
-                        gst::PadProbeReturn::Drop
+            let mut state_guard = imp.state.lock();
+            let state = match &mut *state_guard {
+                None => {
+                    return gst::PadProbeReturn::Ok;
+                }
+                Some(state) => state,
+            };
+
+            if is_image {
+                gst::PadProbeReturn::Ok
+            } else if state.settings.restart_on_eos || fallback_source {
+                imp.handle_source_error(state, RetryReason::Eos, fallback_source);
+                drop(state_guard);
+                element.notify("statistics");
+
+                gst::PadProbeReturn::Drop
+            } else {
+                // Send EOS to all sinkpads of the fallbackswitch and also to the other
+                // stream's fallbackswitch if it doesn't have a main branch.
+                let mut sinkpads = vec![];
+
+                if let Some(stream) = {
+                    if is_video {
+                        state.video_stream.as_ref()
                     } else {
-                        // Send EOS to all sinkpads of the fallbackswitch and also to the other
-                        // stream's fallbackswitch if it doesn't have a main branch.
-                        let mut sinkpads = vec![];
+                        state.audio_stream.as_ref()
+                    }
+                } {
+                    sinkpads.extend(stream.switch.sink_pads().into_iter().filter(|p| p != pad));
+                }
 
-                        if let Some(stream) = {
-                            if is_video {
-                                state.video_stream.as_ref()
-                            } else {
-                                state.audio_stream.as_ref()
-                            }
-                        } {
-                            sinkpads
-                                .extend(stream.switch.sink_pads().into_iter().filter(|p| p != pad));
-                        }
-
-                        if let Some(other_stream) = {
-                            if is_video {
-                                state.audio_stream.as_ref()
-                            } else {
-                                state.video_stream.as_ref()
-                            }
-                        } {
-                            if other_stream.main_branch.is_none() {
-                                sinkpads.extend(
-                                    other_stream
-                                        .switch
-                                        .sink_pads()
-                                        .into_iter()
-                                        .filter(|p| p != pad),
-                                );
-                            }
-                        }
-
-                        let event = ev.clone();
-                        element.call_async(move |_| {
-                            for sinkpad in sinkpads {
-                                sinkpad.send_event(event.clone());
-                            }
-                        });
-
-                        gst::PadProbeReturn::Ok
+                if let Some(other_stream) = {
+                    if is_video {
+                        state.audio_stream.as_ref()
+                    } else {
+                        state.video_stream.as_ref()
+                    }
+                } {
+                    if other_stream.main_branch.is_none() {
+                        sinkpads.extend(
+                            other_stream
+                                .switch
+                                .sink_pads()
+                                .into_iter()
+                                .filter(|p| p != pad),
+                        );
                     }
                 }
-                _ => gst::PadProbeReturn::Ok,
+
+                let event = ev.clone();
+                element.call_async(move |_| {
+                    for sinkpad in sinkpads {
+                        sinkpad.send_event(event.clone());
+                    }
+                });
+
+                gst::PadProbeReturn::Ok
             }
         });
 
@@ -2056,13 +2058,15 @@ impl FallbackSrc {
 
         let qos_probe_id = block_pad
             .add_probe(gst::PadProbeType::EVENT_UPSTREAM, |_pad, info| {
-                if let Some(gst::PadProbeData::Event(ref ev)) = info.data {
-                    if let gst::EventView::Qos(_) = ev.view() {
-                        return gst::PadProbeReturn::Drop;
-                    }
+                let Some(ev) = info.event() else {
+                    return gst::PadProbeReturn::Ok;
+                };
+
+                if ev.type_() != gst::EventType::Qos {
+                    return gst::PadProbeReturn::Ok;
                 }
 
-                gst::PadProbeReturn::Ok
+                gst::PadProbeReturn::Drop
             })
             .unwrap();
 
@@ -2871,19 +2875,17 @@ impl FallbackSrc {
         // error. We don't need to remove these pad probes because restarting the source will also
         // remove/add the pads again.
         for pad in source.source.src_pads() {
-            pad.add_probe(
-                gst::PadProbeType::EVENT_DOWNSTREAM,
-                |_pad, info| match info.data {
-                    Some(gst::PadProbeData::Event(ref event)) => {
-                        if event.type_() == gst::EventType::Eos {
-                            gst::PadProbeReturn::Drop
-                        } else {
-                            gst::PadProbeReturn::Ok
-                        }
-                    }
-                    _ => unreachable!(),
-                },
-            )
+            pad.add_probe(gst::PadProbeType::EVENT_DOWNSTREAM, |_pad, info| {
+                let Some(ev) = info.event() else {
+                    return gst::PadProbeReturn::Pass;
+                };
+
+                if ev.type_() != gst::EventType::Eos {
+                    return gst::PadProbeReturn::Pass;
+                }
+
+                gst::PadProbeReturn::Drop
+            })
             .unwrap();
         }
 
