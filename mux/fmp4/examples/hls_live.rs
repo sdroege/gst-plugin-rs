@@ -365,19 +365,21 @@ fn setup_appsink(appsink: &gst_app::AppSink, name: &str, path: &Path, is_video: 
 fn probe_encoder(state: Arc<Mutex<State>>, enc: gst::Element) {
     enc.static_pad("src").unwrap().add_probe(
         gst::PadProbeType::EVENT_DOWNSTREAM,
-        move |_pad, info| match info.data {
-            Some(gst::PadProbeData::Event(ref ev)) => match ev.view() {
-                gst::EventView::Caps(e) => {
-                    let mime = gst_pbutils::codec_utils_caps_get_mime_codec(e.caps());
+        move |_pad, info| {
+            let Some(ev) = info.event() else {
+                return gst::PadProbeReturn::Ok;
+            };
+            let gst::EventView::Caps(ev) = ev.view() else {
+                return gst::PadProbeReturn::Ok;
+            };
 
-                    let mut state = state.lock().unwrap();
-                    state.all_mimes.push(mime.unwrap().into());
-                    state.maybe_write_manifest();
-                    gst::PadProbeReturn::Remove
-                }
-                _ => gst::PadProbeReturn::Ok,
-            },
-            _ => gst::PadProbeReturn::Ok,
+            let mime = gst_pbutils::codec_utils_caps_get_mime_codec(ev.caps());
+
+            let mut state = state.lock().unwrap();
+            state.all_mimes.push(mime.unwrap().into());
+            state.maybe_write_manifest();
+
+            gst::PadProbeReturn::Remove
         },
     );
 }

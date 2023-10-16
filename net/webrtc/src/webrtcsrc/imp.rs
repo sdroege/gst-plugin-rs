@@ -358,15 +358,20 @@ impl WebRTCSrc {
             .build();
 
         if self.settings.lock().unwrap().enable_data_channel_navigation {
-            pad.add_probe(gst::PadProbeType::EVENT_UPSTREAM,
+            pad.add_probe(
+                gst::PadProbeType::EVENT_UPSTREAM,
                 glib::clone!(@weak self as this => @default-panic, move |_pad, info| {
-                    if let Some(gst::PadProbeData::Event(ref ev)) = info.data {
-                        if let gst::EventView::Navigation(ev) = ev.view() {
-                            this.send_navigation_event (gst_video::NavigationEvent::parse(ev).unwrap());
-                        }
-                    }
+                    let Some(ev) = info.event() else {
+                        return gst::PadProbeReturn::Ok;
+                    };
+                    if ev.type_() != gst::EventType::Navigation {
+                        return gst::PadProbeReturn::Ok;
+                    };
+
+                    this.send_navigation_event (gst_video::NavigationEvent::parse(ev).unwrap());
+
                     gst::PadProbeReturn::Ok
-                })
+                }),
             );
         }
 

@@ -66,14 +66,12 @@ fn setup_sender_receiver(
     sinkpad.add_probe(
         gst::PadProbeType::QUERY_UPSTREAM,
         move |_pad, probe_info| {
-            let query = match &mut probe_info.data {
-                Some(gst::PadProbeData::Query(q)) => q,
-                _ => unreachable!(),
+            let Some(query) = probe_info.query_mut() else {
+                unreachable!();
             };
 
-            use gst::QueryViewMut::*;
             match query.view_mut() {
-                Latency(q) => {
+                gst::QueryViewMut::Latency(q) => {
                     q.set(live, gst::ClockTime::ZERO, None);
                     gst::PadProbeReturn::Handled
                 }
