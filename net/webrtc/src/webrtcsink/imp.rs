@@ -22,6 +22,7 @@ use std::sync::{mpsc, Arc, Condvar, Mutex};
 use super::homegrown_cc::CongestionController;
 use super::{WebRTCSinkCongestionControl, WebRTCSinkError, WebRTCSinkMitigationMode};
 use crate::aws_kvs_signaller::AwsKvsSignaller;
+use crate::janusvr_signaller::JanusVRSignaller;
 use crate::livekit_signaller::LiveKitSignaller;
 use crate::signaller::{prelude::*, Signallable, Signaller, WebRTCSignallerRole};
 use crate::whip_signaller::WhipClientSignaller;
@@ -4412,5 +4413,45 @@ impl BaseWebRTCSinkImpl for LiveKitWebRTCSink {}
 impl ObjectSubclass for LiveKitWebRTCSink {
     const NAME: &'static str = "GstLiveKitWebRTCSink";
     type Type = super::LiveKitWebRTCSink;
+    type ParentType = super::BaseWebRTCSink;
+}
+
+#[derive(Default)]
+pub struct JanusVRWebRTCSink {}
+
+impl ObjectImpl for JanusVRWebRTCSink {
+    fn constructed(&self) {
+        let element = self.obj();
+        let ws = element.upcast_ref::<super::BaseWebRTCSink>().imp();
+
+        let _ = ws.set_signaller(JanusVRSignaller::default().upcast());
+    }
+}
+
+impl GstObjectImpl for JanusVRWebRTCSink {}
+
+impl ElementImpl for JanusVRWebRTCSink {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "JanusVRWebRTCSink",
+                "Sink/Network/WebRTC",
+                "WebRTC sink with Janus Video Room signaller",
+                "Eva Pace <epace@igalia.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+}
+
+impl BinImpl for JanusVRWebRTCSink {}
+
+impl BaseWebRTCSinkImpl for JanusVRWebRTCSink {}
+
+#[glib::object_subclass]
+impl ObjectSubclass for JanusVRWebRTCSink {
+    const NAME: &'static str = "GstJanusVRWebRTCSink";
+    type Type = super::JanusVRWebRTCSink;
     type ParentType = super::BaseWebRTCSink;
 }

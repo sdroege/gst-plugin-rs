@@ -547,9 +547,7 @@ impl SignallableImpl for Signaller {
                 }
 
                 if let Some(handle) = receive_task_handle {
-                    if let Err(err) = handle.await {
-                        gst::warning!(CAT, imp: self, "Error while joining receive task: {}", err);
-                    }
+                    handle.abort();
                 }
             });
         }

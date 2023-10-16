@@ -60,6 +60,10 @@ glib::wrapper! {
     pub struct LiveKitWebRTCSink(ObjectSubclass<imp::LiveKitWebRTCSink>) @extends BaseWebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
 }
 
+glib::wrapper! {
+    pub struct JanusVRWebRTCSink(ObjectSubclass<imp::JanusVRWebRTCSink>) @extends BaseWebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum WebRTCSinkError {
     #[error("no session with id")]
@@ -145,6 +149,61 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         "livekitwebrtcsink",
         gst::Rank::NONE,
         LiveKitWebRTCSink::static_type(),
+    )?;
+    /**
+     * element-janusvrwebrtcsink:
+     *
+     * The `JanusVRWebRTCSink` is a plugin that integrates with the [Video Room plugin](https://janus.conf.meetecho.com/docs/videoroom) of the [Janus Gateway](https://github.com/meetecho/janus-gateway). It basically streams whatever data you pipe to it (video, audio) into WebRTC using Janus as the signaller.
+     *
+     * ## How to use it
+     *
+     * You'll need to have:
+     *
+     * - A Janus server endpoint;
+     * - Any WebRTC browser application that uses Janus as the signaller, eg: the `html` folder of [janus-gateway repository](https://github.com/meetecho/janus-gateway).
+     *
+     * You can pipe the video like this (if you don't happen to run Janus locally, you can set the endpoint
+     * like this: `signaller::janus-endpoint=ws://127.0.0.1:8188`):
+     *
+     * ```bash
+     * $ gst-launch-1.0 videotestsrc ! janusvrwebrtcsink signaller::room-id=1234
+     * ```
+     *
+     * And for audio (yes you can do both at the same time, you just need to pipe it properly).
+     *
+     * ```bash
+     * $ gst-launch-1.0 audiotestsrc ! janusvrwebrtcsink signaller::room-id=1234
+     * ```
+     *
+     * And you can set the display name via `signaller::display-name`, eg:
+     *
+     * ```bash
+     * $ gst-launch-1.0 videotestsrc ! janusvrwebrtcsink signaller::room-id=1234 signaller::display-name=ana
+     * ```
+     *
+     * You should see the GStreamer `videotestsrc`/`audiotestsrc` output in your browser now!
+     *
+     * If for some reason you can't run Janus locally, you can use their open [demo webpage](https://janus.conf.meetecho.com/demos/videoroom.html), and point to its WebSocket server:
+     *
+     * ```bash
+     * $ gst-launch-1.0 videotestsrc ! janusvrwebrtcsink signaller::room-id=1234 signaller::janus-endpoint=wss://janus.conf.meetecho.com/ws
+     * ```
+     *
+     * ## Reference links
+     *
+     * - [Janus REST/WebSockets docs](https://janus.conf.meetecho.com/docs/rest.html)
+     * - [Example implementation in GStreamer](https://gitlab.freedesktop.org/gstreamer/gstreamer/-/blob/269ab858813e670d521cc4b6a71cc0ec4a6e70ed/subprojects/gst-examples/webrtc/janus/rust/src/janus.rs)
+     *
+     * ## Notes
+     *
+     * - This plugin supports both the legacy Video Room plugin as well as the `multistream` one;
+     * - If you see a warning in the logs related to `rtpgccbwe`, you're probably missing the `gst-plugin-rtp` in your system.
+     */
+    gst::Element::register(
+        Some(plugin),
+        "janusvrwebrtcsink",
+        gst::Rank::NONE,
+        JanusVRWebRTCSink::static_type(),
     )?;
 
     Ok(())
