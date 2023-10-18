@@ -140,7 +140,7 @@ meson shared:
   variables:
     CI_ARTIFACTS_URL: "${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/raw/"
   script:
-    - meson build --default-library=shared --prefix=$(pwd)/install
+    - meson build --default-library=shared --prefix=$(pwd)/install --fatal-meson-warnings
     - ninja -C build install
     - ./ci/check-installed.py install
     - ninja -C build docs/gst_plugins_cache.json
