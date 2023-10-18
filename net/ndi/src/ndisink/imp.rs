@@ -315,21 +315,17 @@ impl BaseSinkImpl for NdiSink {
                     ndi_meta = ndi_cc_encoder.encode(buffer);
                 }
 
-                let frame = gst_video::VideoFrameRef::from_buffer_ref_readable(buffer, info)
+                let frame = gst_video::VideoFrame::from_buffer_readable(buffer.clone(), info)
                     .map_err(|_| {
                         gst::error!(CAT, imp: self, "Failed to map buffer");
                         gst::FlowError::Error
                     })?;
 
-                let frame = crate::ndi::VideoFrame::try_from_video_frame(
-                    &frame,
-                    ndi_meta.as_deref(),
-                    timecode,
-                )
-                .map_err(|_| {
-                    gst::error!(CAT, imp: self, "Unsupported video frame");
-                    gst::FlowError::NotNegotiated
-                })?;
+                let frame = crate::ndi::VideoFrame::try_from_video_frame(frame, ndi_meta, timecode)
+                    .map_err(|_| {
+                        gst::error!(CAT, imp: self, "Unsupported video frame");
+                        gst::FlowError::NotNegotiated
+                    })?;
 
                 gst::trace!(
                     CAT,
