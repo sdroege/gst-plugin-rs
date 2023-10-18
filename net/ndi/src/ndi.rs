@@ -257,7 +257,7 @@ impl<'a> RecvBuilder<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct RecvInstancePtr(ptr::NonNull<::std::os::raw::c_void>);
 
 impl Drop for RecvInstancePtr {
@@ -836,13 +836,11 @@ impl VideoFrame {
                 NDIlib_frame_format_type_e::NDIlib_frame_format_type_interleaved
             }
             // FIXME: Is this correct?
-            #[cfg(feature = "interlaced-fields")]
             gst_video::VideoInterlaceMode::Alternate
                 if frame.flags().contains(gst_video::VideoFrameFlags::TFF) =>
             {
                 NDIlib_frame_format_type_e::NDIlib_frame_format_type_field_0
             }
-            #[cfg(feature = "interlaced-fields")]
             gst_video::VideoInterlaceMode::Alternate
                 if !frame.flags().contains(gst_video::VideoFrameFlags::TFF) =>
             {

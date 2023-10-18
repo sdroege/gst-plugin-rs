@@ -32,10 +32,11 @@ use gst::prelude::*;
 
 use gst::glib::once_cell::sync::Lazy;
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum, Default)]
 #[repr(u32)]
 #[enum_type(name = "GstNdiTimestampMode")]
 pub enum TimestampMode {
+    #[default]
     #[enum_value(name = "Auto", nick = "auto")]
     Auto = 0,
     #[enum_value(name = "Receive Time / Timecode", nick = "receive-time-vs-timecode")]

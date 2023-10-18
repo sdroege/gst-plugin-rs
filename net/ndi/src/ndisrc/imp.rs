@@ -11,12 +11,13 @@ use std::u32;
 
 use gst::glib::once_cell::sync::Lazy;
 
+use crate::ndisrcmeta::NdiSrcMeta;
 use crate::ndisys;
 use crate::RecvColorFormat;
 use crate::TimestampMode;
 
-use super::receiver::{self, Buffer, Receiver, ReceiverControlHandle, ReceiverItem};
-use crate::ndisrcmeta;
+use super::receiver::{Receiver, ReceiverControlHandle, ReceiverItem};
+use crate::ndisrcmeta::Buffer;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -63,26 +64,11 @@ impl Default for Settings {
     }
 }
 
+#[derive(Default)]
 struct State {
-    video_info: Option<receiver::VideoInfo>,
-    video_caps: Option<gst::Caps>,
-    audio_info: Option<receiver::AudioInfo>,
-    audio_caps: Option<gst::Caps>,
-    current_latency: Option<gst::ClockTime>,
     receiver: Option<Receiver>,
-}
-
-impl Default for State {
-    fn default() -> State {
-        State {
-            video_info: None,
-            video_caps: None,
-            audio_info: None,
-            audio_caps: None,
-            current_latency: gst::ClockTime::NONE,
-            receiver: None,
-        }
-    }
+    timestamp_mode: TimestampMode,
+    current_latency: Option<gst::ClockTime>,
 }
 
 pub struct NdiSrc {
@@ -447,7 +433,6 @@ impl BaseSrcImpl for NdiSrc {
             settings.connect_timeout,
             settings.bandwidth,
             settings.color_format.into(),
-            settings.timestamp_mode,
             settings.timeout,
             settings.max_queue_length as usize,
         );
@@ -462,6 +447,7 @@ impl BaseSrcImpl for NdiSrc {
                     Some(receiver.receiver_control_handle());
                 let mut state = self.state.lock().unwrap();
                 state.receiver = Some(receiver);
+                state.timestamp_mode = settings.timestamp_mode;
 
                 Ok(())
             }
@@ -537,72 +523,32 @@ impl BaseSrcImpl for NdiSrc {
         state.receiver = Some(recv);
 
         match res {
-            ReceiverItem::Buffer(buffer) => {
-                let buffer = match buffer {
-                    Buffer::Audio(mut buffer, info) => {
-                        if state.audio_info.as_ref() != Some(&info) {
-                            let caps = info.to_caps().map_err(|_| {
-                                gst::element_imp_error!(
-                                    self,
-                                    gst::ResourceError::Settings,
-                                    ["Invalid audio info received: {:?}", info]
-                                );
-                                gst::FlowError::NotNegotiated
-                            })?;
-                            state.audio_info = Some(info);
-                            state.audio_caps = Some(caps);
-                        }
+            ReceiverItem::Buffer(ndi_buffer) => {
+                let mut latency_changed = false;
 
-                        {
-                            let buffer = buffer.get_mut().unwrap();
-                            ndisrcmeta::NdiSrcMeta::add(
-                                buffer,
-                                ndisrcmeta::StreamType::Audio,
-                                state.audio_caps.as_ref().unwrap(),
-                            );
-                        }
+                if let Buffer::Video { ref frame, .. } = ndi_buffer {
+                    let duration = gst::ClockTime::SECOND
+                        .mul_div_floor(frame.frame_rate().1 as u64, frame.frame_rate().0 as u64);
 
-                        buffer
-                    }
-                    Buffer::Video(mut buffer, info) => {
-                        let mut latency_changed = false;
+                    latency_changed = state.current_latency != duration;
+                    state.current_latency = duration;
+                }
 
-                        if state.video_info.as_ref() != Some(&info) {
-                            let caps = info.to_caps().map_err(|_| {
-                                gst::element_imp_error!(
-                                    self,
-                                    gst::ResourceError::Settings,
-                                    ["Invalid video info received: {:?}", info]
-                                );
-                                gst::FlowError::NotNegotiated
-                            })?;
-                            state.video_info = Some(info);
-                            state.video_caps = Some(caps);
-                            latency_changed = state.current_latency != buffer.duration();
-                            state.current_latency = buffer.duration();
-                        }
+                let mut gst_buffer = gst::Buffer::new();
+                {
+                    let buffer_ref = gst_buffer.get_mut().unwrap();
+                    NdiSrcMeta::add(buffer_ref, ndi_buffer, state.timestamp_mode);
+                }
 
-                        {
-                            let buffer = buffer.get_mut().unwrap();
-                            ndisrcmeta::NdiSrcMeta::add(
-                                buffer,
-                                ndisrcmeta::StreamType::Video,
-                                state.video_caps.as_ref().unwrap(),
-                            );
-                        }
+                drop(state);
 
-                        drop(state);
-                        if latency_changed {
-                            let _ = self.obj().post_message(
-                                gst::message::Latency::builder().src(&*self.obj()).build(),
-                            );
-                        }
+                if latency_changed {
+                    let _ = self
+                        .obj()
+                        .post_message(gst::message::Latency::builder().src(&*self.obj()).build());
+                }
 
-                        buffer
-                    }
-                };
-
-                Ok(CreateSuccess::NewBuffer(buffer))
+                Ok(CreateSuccess::NewBuffer(gst_buffer))
             }
             ReceiverItem::Timeout => Err(gst::FlowError::Eos),
             ReceiverItem::Flushing => Err(gst::FlowError::Flushing),
