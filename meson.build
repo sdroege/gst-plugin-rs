@@ -65,11 +65,14 @@ deps = [
   ['gstreamer-video-1.0', 'gst-plugins-base', 'video_dep', 'gstvideo']  
 ]
 
+webrtc_option = get_option('webrtc')
+rtp_option = get_option('rtp').enable_if(webrtc_option.enabled(), error_message: 'webrtc option is enabled')
+
 if get_option('threadshare').allowed() \
   or get_option('onvif').allowed() \
   or get_option('raptorq').allowed() \
-  or get_option('rtp').allowed() \
-  or get_option('webrtc').allowed()
+  or rtp_option.allowed() \
+  or webrtc_option.allowed()
   deps += [['gstreamer-rtp-1.0', 'gst-plugins-base', 'rtp_dep', 'gst_rtp']]
 endif
 if get_option('webrtc').allowed() \
@@ -350,7 +353,7 @@ if get_option('default_library') == 'static'
 endif
 
 foreach plugin_name, details: plugins
-  plugin_opt = get_option(plugin_name)
+  plugin_opt = get_variable(f'@plugin_name@_option', get_option(plugin_name))
   if plugin_opt.allowed()
     plugin_deps_found = true
     foreach dep_name, dep_ver: details.get('extra-deps', {})
