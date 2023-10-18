@@ -2,7 +2,7 @@ project('gst-plugins-rs',
         'rust',
         'c',
         version: '0.12.0-alpha.1',
-        meson_version : '>= 0.60')
+        meson_version : '>= 1.1')
 
 # dependencies.py needs a toml parsing module
 python = import('python').find_installation(modules: ['tomllib'], required: false)
