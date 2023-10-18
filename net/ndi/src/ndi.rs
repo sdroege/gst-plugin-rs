@@ -76,6 +76,7 @@ impl<'a> FindBuilder<'a> {
 
 #[derive(Debug)]
 pub struct FindInstance(ptr::NonNull<::std::os::raw::c_void>);
+
 unsafe impl Send for FindInstance {}
 
 impl FindInstance {
@@ -250,7 +251,7 @@ impl<'a> RecvBuilder<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RecvInstance(ptr::NonNull<::std::os::raw::c_void>);
 
 unsafe impl Send for RecvInstance {}
