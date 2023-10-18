@@ -122,11 +122,6 @@ version = "1.0"
 name = "toml"
 version = "0.5"
 
-# Various crates depend on an older version of redox_syscall
-[[bans.skip]]
-name = "redox_syscall"
-version = "0.2"
-
 # tracing-subscriber depends on an older version of regex-syntax
 [[bans.skip]]
 name = "regex-syntax"
@@ -168,6 +163,12 @@ version = "0.1"
 [[bans.skip]]
 name = "tungstenite"
 version = "0.19"
+
+# tempfile depends on an old version of redox_syscall
+# https://github.com/Stebalien/tempfile/pull/256
+[[bans.skip]]
+name = "redox_syscall"
+version = "0.3"
 
 [sources]
 unknown-registry = "deny"
