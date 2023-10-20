@@ -65,6 +65,10 @@ You will find the following plugins in this repository:
 
     - `hlssink3`: An element for generating MPEG-TS HLS streams.
 
+    - `icecast`:
+
+      - `icecastsink`: shout2send-like element to send audio to an Icecast server
+
     - `mpegtslive`:
 
       - `mpegtslivesrc`: Wraps MPEG-TS sources such as `udpsrc` or `srtsrc` and provides a live clock based on the stream's PCR.

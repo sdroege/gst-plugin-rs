@@ -1,0 +1,46 @@
+[package]
+name = "gst-plugin-icecast"
+version.workspace = true
+authors = ["Tim-Philipp Müller <tim centricular com>"]
+repository.workspace = true
+license = "MPL-2.0"
+description = "GStreamer Icecast Sink Plugin"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+atomic_refcell = "0.1"
+data-encoding = "2.4"
+futures = "0.3"
+gst     = { workspace = true, features = ["v1_22"] }
+gst-base = { workspace = true }
+httparse = "1.8"
+tokio = { version = "1.0", default-features = false, features = ["io-util", "net", "time", "rt-multi-thread", "sync"] }
+url = "2"
+
+[lib]
+name = "gsticecast"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[build-dependencies]
+gst-plugin-version-helper.workspace = true
+
+[features]
+static = []
+capi = []
+doc = []
+
+[package.metadata.capi]
+min_version = "0.9.21"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+import_library = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-base-1.0, gobject-2.0, glib-2.0, gmodule-2.0"

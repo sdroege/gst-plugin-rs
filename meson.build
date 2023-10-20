@@ -111,6 +111,7 @@ plugins = {
   'mpegtslive': {'library': 'libgstmpegtslive'},
   'hlsmultivariantsink': {'library': 'libgsthlsmultivariantsink'},
   'hlssink3': {'library': 'libgsthlssink3'},
+  'icecast': {'library': 'libgsticecast'},
   'ndi': {'library': 'libgstndi'},
   'onvif': {
     'library': 'libgstrsonvif',

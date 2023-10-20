@@ -4873,6 +4873,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "gst-plugin-icecast"
+version = "0.15.0-alpha.1"
+dependencies = [
+ "atomic_refcell",
+ "data-encoding",
+ "futures",
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "gstreamer-base",
+ "httparse",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "gst-plugin-inter"
 version = "0.15.0-alpha.1"
 dependencies = [
