@@ -6374,6 +6374,48 @@
                 },
                 "rank": "none"
             },
+            "rtpmp2tdepay2": {
+                "author": "Tim-Philipp Müller <tim centricular com>",
+                "description": "Depayload an MPEG Transport Stream from RTP packets (RFC 2250)",
+                "hierarchy": [
+                    "GstRtpMP2TDepay2",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: video\n     clock-rate: 90000\n  encoding-name: MP2T\napplication/x-rtp:\n          media: video\n        payload: 33\n     clock-rate: 90000\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/mpegts:\n     packetsize: { (int)188, (int)192, (int)204, (int)208 }\n   systemstream: true\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "skip-first-bytes": {
+                        "blurb": "Number of bytes to skip at the beginning of the payload",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                },
+                "rank": "marginal"
+            },
             "rtppcmadepay2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Depayload A-law from RTP packets (RFC 3551)",
