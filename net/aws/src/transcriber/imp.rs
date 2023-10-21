@@ -1581,7 +1581,7 @@ impl TranslateSrcPad {
         let elem = self.parent();
         let _enter = RUNTIME.enter();
         let mut pad_task = futures::executor::block_on(TranslationPadTask::try_new(self, elem))
-            .map_err(|err| gst::loggable_error!(CAT, format!("Failed to start pad task {err}")))?;
+            .map_err(|err| gst::loggable_error!(CAT, "Failed to start pad task {err}"))?;
 
         let imp = self.ref_counted();
         let res = self.obj().start_task(move || {
