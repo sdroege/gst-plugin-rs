@@ -353,7 +353,7 @@ impl RTPAv1Depay {
         }
 
         // now push all the complete OBUs
-        let buffer = if !ready_obus.is_empty() {
+        let buffer = if !ready_obus.is_empty() && ready_obus != TEMPORAL_DELIMITER {
             gst::log!(
                 CAT,
                 imp: self,
