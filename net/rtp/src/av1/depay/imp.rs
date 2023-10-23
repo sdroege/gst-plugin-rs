@@ -33,6 +33,8 @@ struct State {
     marked_packet: bool,
     /// if the next output buffer needs the DISCONT flag set
     needs_discont: bool,
+    /// if we saw a valid OBU since the last reset
+    found_valid_obu: bool,
     /// holds data for a fragment
     obu_fragment: Option<(UnsizedObu, Vec<u8>)>,
 }
@@ -43,6 +45,7 @@ impl Default for State {
             last_timestamp: None,
             marked_packet: false,
             needs_discont: true,
+            found_valid_obu: false,
             obu_fragment: None,
         }
     }
@@ -291,6 +294,21 @@ impl RTPAv1Depay {
             let (element_size, is_last_obu) =
                 self.find_element_info(rtp, &mut reader, &aggr_header, idx)?;
 
+            if idx == 0 && aggr_header.leading_fragment {
+                if state.found_valid_obu {
+                    gst::error!(
+                        CAT,
+                        imp: self,
+                        "invalid packet: unexpected leading OBU fragment"
+                    );
+                }
+                reader
+                    .seek(SeekFrom::Current(element_size as i64))
+                    .map_err(err_flow!(self, buf_read))?;
+                idx += 1;
+                continue;
+            }
+
             let header_pos = reader.position();
             let mut bitreader = BitReader::endian(&mut reader, ENDIANNESS);
             let obu = UnsizedObu::parse(&mut bitreader).map_err(err_flow!(self, obu_read))?;
@@ -298,6 +316,8 @@ impl RTPAv1Depay {
             reader
                 .seek(SeekFrom::Start(header_pos))
                 .map_err(err_flow!(self, buf_read))?;
+
+            state.found_valid_obu = true;
 
             // ignore these OBU types
             if matches!(obu.obu_type, ObuType::TemporalDelimiter | ObuType::TileList) {
