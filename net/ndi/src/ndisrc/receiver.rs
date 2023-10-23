@@ -194,7 +194,7 @@ pub enum ReceiverItem {
     Error(gst::FlowError),
 }
 
-pub struct ReceiverInner {
+struct ReceiverInner {
     queue: ReceiverQueue,
     max_queue_length: usize,
 
