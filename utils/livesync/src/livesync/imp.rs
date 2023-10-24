@@ -1128,54 +1128,58 @@ impl LiveSync {
         let duplicate;
         let mut caps = None;
         let mut segment = None;
-        if let Some((buffer, lateness)) = in_buffer {
-            state.out_buffer = Some(buffer);
-            state.out_timestamp = state.in_timestamp;
 
-            caps = state.pending_caps.take();
-            segment = state.pending_segment.take();
+        match in_buffer {
+            Some((buffer, lateness)) => {
+                state.out_buffer = Some(buffer);
+                state.out_timestamp = state.in_timestamp;
 
-            duplicate = lateness != BufferLateness::OnTime;
-            self.cond.notify_all();
-        } else {
-            // Work around borrow checker
-            let State {
-                fallback_duration,
-                out_buffer: ref mut buffer,
-                out_audio_info: ref audio_info,
-                ..
-            } = *state;
-            gst::debug!(CAT, imp: self, "Repeating {:?}", buffer);
+                caps = state.pending_caps.take();
+                segment = state.pending_segment.take();
 
-            let buffer = buffer.as_mut().unwrap().make_mut();
-            let prev_duration = buffer.duration().unwrap();
-
-            if let Some(audio_info) = audio_info {
-                if !buffer.flags().contains(gst::BufferFlags::GAP) {
-                    let mut map_info = buffer.map_writable().map_err(|e| {
-                        gst::error!(CAT, imp: self, "Failed to map buffer: {}", e);
-                        gst::FlowError::Error
-                    })?;
-
-                    audio_info
-                        .format_info()
-                        .fill_silence(map_info.as_mut_slice());
-                }
-            } else {
-                buffer.set_duration(Some(fallback_duration));
+                duplicate = lateness != BufferLateness::OnTime;
+                self.cond.notify_all();
             }
+            None => {
+                // Work around borrow checker
+                let State {
+                    fallback_duration,
+                    out_buffer: ref mut buffer,
+                    out_audio_info: ref audio_info,
+                    ..
+                } = *state;
+                gst::debug!(CAT, imp: self, "Repeating {:?}", buffer);
 
-            buffer.set_dts(buffer.dts().map(|t| t + prev_duration));
-            buffer.set_pts(buffer.pts().map(|t| t + prev_duration));
-            buffer.set_flags(gst::BufferFlags::GAP);
-            buffer.unset_flags(gst::BufferFlags::DISCONT);
+                let buffer = buffer.as_mut().unwrap().make_mut();
+                let prev_duration = buffer.duration().unwrap();
 
-            state.out_timestamp = state.ts_range(
-                state.out_buffer.as_ref().unwrap(),
-                state.out_segment.as_ref().unwrap(),
-            );
-            duplicate = true;
-        };
+                if let Some(audio_info) = audio_info {
+                    if !buffer.flags().contains(gst::BufferFlags::GAP) {
+                        let mut map_info = buffer.map_writable().map_err(|e| {
+                            gst::error!(CAT, imp: self, "Failed to map buffer: {}", e);
+                            gst::FlowError::Error
+                        })?;
+
+                        audio_info
+                            .format_info()
+                            .fill_silence(map_info.as_mut_slice());
+                    }
+                } else {
+                    buffer.set_duration(Some(fallback_duration));
+                }
+
+                buffer.set_dts(buffer.dts().map(|t| t + prev_duration));
+                buffer.set_pts(buffer.pts().map(|t| t + prev_duration));
+                buffer.set_flags(gst::BufferFlags::GAP);
+                buffer.unset_flags(gst::BufferFlags::DISCONT);
+
+                state.out_timestamp = state.ts_range(
+                    state.out_buffer.as_ref().unwrap(),
+                    state.out_segment.as_ref().unwrap(),
+                );
+                duplicate = true;
+            }
+        }
 
         let buffer = state.out_buffer.clone().unwrap();
         let sync_ts = state
