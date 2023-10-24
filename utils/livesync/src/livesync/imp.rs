@@ -127,6 +127,9 @@ struct State {
     /// Current buffer of our srcpad
     out_buffer: Option<gst::Buffer>,
 
+    /// Whether our last output buffer was a duplicate
+    out_buffer_duplicate: bool,
+
     /// Running timestamp of our sinkpad
     in_timestamp: Option<Timestamps>,
 
@@ -182,6 +185,7 @@ impl Default for State {
             queue: VecDeque::with_capacity(32),
             buffer_queued: false,
             out_buffer: None,
+            out_buffer_duplicate: false,
             in_timestamp: None,
             out_timestamp: None,
             num_in: 0,
@@ -506,6 +510,9 @@ impl State {
             .filter(|&dur| dur > gst::ClockTime::ZERO)
             // Safe default
             .unwrap_or(DEFAULT_DURATION);
+
+        // Change the duration of the next duplicate buffer
+        self.out_buffer_duplicate = false;
     }
 
     fn pending_events(&self) -> bool {
@@ -588,6 +595,7 @@ impl LiveSync {
         state.pending_caps = None;
         state.out_audio_info = None;
         state.out_buffer = None;
+        state.out_buffer_duplicate = false;
         state.out_timestamp = None;
     }
 
@@ -1061,6 +1069,7 @@ impl LiveSync {
 
                     gst::EventView::Eos(_) => {
                         state.out_buffer = None;
+                        state.out_buffer_duplicate = false;
                         state.out_timestamp = None;
                         state.srcresult = Err(gst::FlowError::Eos);
                     }
@@ -1103,18 +1112,13 @@ impl LiveSync {
             Some((mut buffer, BufferLateness::OnTime)) => {
                 state.num_in += 1;
 
-                if state
-                    .out_buffer
-                    .as_ref()
-                    .map_or(false, |b| b.flags().contains(gst::BufferFlags::GAP))
-                {
-                    // We are done bridging a gap, so mark it as DISCONT instead
-                    let buf_mut = buffer.make_mut();
-                    buf_mut.unset_flags(gst::BufferFlags::GAP);
-                    buf_mut.set_flags(gst::BufferFlags::DISCONT);
+                if state.out_buffer.is_none() || state.out_buffer_duplicate {
+                    // We are just starting or done bridging a gap
+                    buffer.make_mut().set_flags(gst::BufferFlags::DISCONT);
                 }
 
                 state.out_buffer = Some(buffer);
+                state.out_buffer_duplicate = false;
                 state.out_timestamp = state.in_timestamp;
 
                 caps = state.pending_caps.take();
@@ -1281,13 +1285,15 @@ impl LiveSync {
         );
     }
 
-    /// Patches the output buffer for repeating, setting out_buffer and out_timestamp
+    /// Patches the output buffer for repeating, setting out_buffer, out_buffer_duplicate and
+    /// out_timestamp
     fn patch_output_buffer(
         &self,
         state: &mut State,
         source: Option<gst::Buffer>,
     ) -> Result<(), gst::FlowError> {
         let out_buffer = state.out_buffer.as_mut().unwrap();
+        let mut duplicate = state.out_buffer_duplicate;
 
         let duration = out_buffer.duration().unwrap();
         let dts = out_buffer.dts().map(|t| t + duration);
@@ -1302,14 +1308,15 @@ impl LiveSync {
                 source
             );
             *out_buffer = source;
+            duplicate = false;
         } else {
             gst::debug!(CAT, imp: self, "Repeating {:?}", out_buffer);
         }
 
         let buffer = out_buffer.make_mut();
 
-        if let Some(audio_info) = &state.out_audio_info {
-            if !buffer.flags().contains(gst::BufferFlags::GAP) {
+        if !duplicate {
+            if let Some(audio_info) = &state.out_audio_info {
                 let mut map_info = buffer.map_writable().map_err(|e| {
                     gst::error!(CAT, imp: self, "Failed to map buffer: {}", e);
                     gst::FlowError::Error
@@ -1317,9 +1324,11 @@ impl LiveSync {
                 audio_info
                     .format_info()
                     .fill_silence(map_info.as_mut_slice());
+            } else {
+                let duration = state.fallback_duration;
+                buffer.set_duration(duration);
+                gst::debug!(CAT, imp: self, "Patched output buffer duration to {duration}");
             }
-        } else {
-            buffer.set_duration(state.fallback_duration);
         }
 
         buffer.set_dts(dts);
@@ -1327,6 +1336,7 @@ impl LiveSync {
         buffer.set_flags(gst::BufferFlags::GAP);
         buffer.unset_flags(gst::BufferFlags::DISCONT);
 
+        state.out_buffer_duplicate = true;
         state.out_timestamp = state.ts_range(
             state.out_buffer.as_ref().unwrap(),
             state.out_segment.as_ref().unwrap(),
