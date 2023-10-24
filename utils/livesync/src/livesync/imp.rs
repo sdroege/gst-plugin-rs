@@ -203,8 +203,8 @@ impl ObjectSubclass for LiveSync {
             .activatemode_function(|pad, parent, mode, active| {
                 Self::catch_panic_pad_function(
                     parent,
-                    || Err(gst::loggable_error!(CAT, "sink_activate_mode panicked")),
-                    |livesync| livesync.sink_activate_mode(pad, mode, active),
+                    || Err(gst::loggable_error!(CAT, "sink_activatemode panicked")),
+                    |livesync| livesync.sink_activatemode(pad, mode, active),
                 )
             })
             .event_function(|pad, parent, event| {
@@ -239,8 +239,8 @@ impl ObjectSubclass for LiveSync {
             .activatemode_function(|pad, parent, mode, active| {
                 Self::catch_panic_pad_function(
                     parent,
-                    || Err(gst::loggable_error!(CAT, "src_activate_mode panicked")),
-                    |livesync| livesync.src_activate_mode(pad, mode, active),
+                    || Err(gst::loggable_error!(CAT, "src_activatemode panicked")),
+                    |livesync| livesync.src_activatemode(pad, mode, active),
                 )
             })
             .event_function(|pad, parent, event| {
@@ -496,7 +496,7 @@ impl State {
 }
 
 impl LiveSync {
-    fn sink_activate_mode(
+    fn sink_activatemode(
         &self,
         pad: &gst::Pad,
         mode: gst::PadMode,
@@ -542,7 +542,7 @@ impl LiveSync {
         Ok(())
     }
 
-    fn src_activate_mode(
+    fn src_activatemode(
         &self,
         pad: &gst::Pad,
         mode: gst::PadMode,
