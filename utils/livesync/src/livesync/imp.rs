@@ -970,31 +970,17 @@ impl LiveSync {
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn start_src_task(&self) -> Result<(), glib::BoolError> {
-        self.srcpad.start_task({
-            let pad = self.srcpad.downgrade();
-            move || {
-                let pad = pad.upgrade().unwrap();
-                let parent = pad.parent_element().unwrap();
-                let livesync = parent.downcast_ref::<super::LiveSync>().unwrap();
-                let ret = livesync.imp().src_loop(&pad);
-
-                if !ret {
-                    gst::log!(CAT, obj: &parent, "Loop stopping");
-                    let _ = pad.pause_task();
-                }
-            }
-        })
+    fn start_src_task(&self, state: &mut State) -> Result<(), glib::BoolError> {
+        let imp = self.ref_counted();
+        self.srcpad.start_task(move || imp.src_loop())
     }
 
-    fn src_loop(&self, pad: &gst::Pad) -> bool {
-        let mut err = match self.src_loop_inner() {
-            Ok(_) => return true,
-            Err(e) => e,
+    fn src_loop(&self) {
+        let Err(mut err) = self.src_loop_inner() else {
+            return;
         };
-        let eos;
 
-        {
+        let eos = {
             let mut state = self.state.lock();
 
             match state.srcresult {
@@ -1004,21 +990,22 @@ impl LiveSync {
                 // Communicate our flow return
                 Ok(_) => state.srcresult = Err(err),
             }
-            eos = state.eos;
             state.clock_id = None;
-
             self.cond.notify_all();
-        }
+
+            state.eos
+        };
 
         // Following GstQueue's behavior:
         // > let app know about us giving up if upstream is not expected to do so
         // > EOS is already taken care of elsewhere
         if eos && !matches!(err, gst::FlowError::Flushing | gst::FlowError::Eos) {
             self.flow_error(err);
-            pad.push_event(gst::event::Eos::new());
+            self.srcpad.push_event(gst::event::Eos::new());
         }
 
-        false
+        gst::log!(CAT, imp: self, "Loop stopping");
+        let _ = self.srcpad.pause_task();
     }
 
     fn src_loop_inner(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
