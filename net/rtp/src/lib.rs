@@ -35,6 +35,7 @@ mod amr;
 mod av1;
 mod jpeg;
 mod klv;
+mod linear_audio;
 mod mp2t;
 mod mp4a;
 mod mp4g;
@@ -76,6 +77,9 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
     klv::depay::register(plugin)?;
     klv::pay::register(plugin)?;
+
+    linear_audio::depay::register(plugin)?;
+    linear_audio::pay::register(plugin)?;
 
     mp2t::depay::register(plugin)?;
     mp2t::pay::register(plugin)?;
