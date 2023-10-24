@@ -894,7 +894,10 @@ impl LiveSync {
         }
 
         // At this stage we should really really have a segment
-        let segment = state.in_segment.as_ref().ok_or(gst::FlowError::Error)?;
+        let segment = state.in_segment.as_ref().ok_or_else(|| {
+            gst::error!(CAT, imp: self, "Missing segment");
+            gst::FlowError::Error
+        })?;
 
         if state.single_segment {
             let dts = segment
