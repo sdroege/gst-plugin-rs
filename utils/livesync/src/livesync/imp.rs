@@ -1078,6 +1078,7 @@ impl LiveSync {
                     None
                 } else {
                     state.buffer_queued = false;
+                    self.cond.notify_all();
                     Some((buffer, lateness))
                 }
             }
@@ -1142,7 +1143,6 @@ impl LiveSync {
                 segment = state.pending_segment.take();
 
                 duplicate = lateness != BufferLateness::OnTime;
-                self.cond.notify_all();
             }
             None => {
                 // Work around borrow checker
