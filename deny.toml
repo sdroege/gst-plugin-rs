@@ -5,8 +5,6 @@ vulnerability = "deny"
 unmaintained = "warn"
 notice = "warn"
 ignore = [
-    # Waiting for https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/merge_requests/1293
-    "RUSTSEC-2023-0065",
     # Waiting for https://github.com/librespot-org/librespot/issues/937
     "RUSTSEC-2021-0059",
     "RUSTSEC-2021-0060",
