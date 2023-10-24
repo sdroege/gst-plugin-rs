@@ -964,7 +964,6 @@ impl LiveSync {
         state.queue.push_back(Item::Buffer(buffer, lateness));
         state.buffer_queued = true;
         state.in_timestamp = timestamp;
-        state.num_in += 1;
         self.cond.notify_all();
 
         Ok(gst::FlowSuccess::Ok)
@@ -1132,6 +1131,8 @@ impl LiveSync {
 
         match in_buffer {
             Some((buffer, lateness)) => {
+                state.num_in += 1;
+
                 state.out_buffer = Some(buffer);
                 state.out_timestamp = state.in_timestamp;
 
