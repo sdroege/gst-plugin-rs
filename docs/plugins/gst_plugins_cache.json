@@ -10981,6 +10981,226 @@
     "rsrtp": {
         "description": "GStreamer Rust RTP Plugin",
         "elements": {
+            "rtpL16depay2": {
+                "author": "Tim-Philipp Müller <tim centricular com>",
+                "description": "Depayload 16-bit raw audio (L16) from RTP packets",
+                "hierarchy": [
+                    "GstRtpL16Depay2",
+                    "GstRtpLinearAudioDepay",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: audio\n     clock-rate: [ 1, 2147483647 ]\n  encoding-name: L16\napplication/x-rtp:\n          media: audio\n     clock-rate: [ 1, 2147483647 ]\n        payload: { (int)10, (int)11 }\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: S16BE\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
+            "rtpL16pay2": {
+                "author": "Tim-Philipp Müller <tim centricular com>",
+                "description": "Payload 16-bit raw audio (L16) into RTP packets (RFC 3551)",
+                "hierarchy": [
+                    "GstRtpL16Pay2",
+                    "GstRtpLinearAudioPay",
+                    "GstRtpBaseAudioPay2",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Payloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: S16BE\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n          media: audio\n     clock-rate: [ 1, 2147483647 ]\n  encoding-name: L16\napplication/x-rtp:\n          media: audio\n     clock-rate: 44100\n        payload: { (int)10, (int)11 }\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
+            "rtpL20depay": {
+                "author": "Tim-Philipp Müller <tim centricular com>",
+                "description": "Depayload 20-bit raw audio (L20) from RTP packets",
+                "hierarchy": [
+                    "GstRtpL20Depay2",
+                    "GstRtpLinearAudioDepay",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: audio\n     clock-rate: [ 1, 2147483647 ]\n  encoding-name: L20\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: S20BE\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
+            "rtpL20pay": {
+                "author": "Tim-Philipp Müller <tim centricular com>",
+                "description": "Payload 20-bit raw audio (L20) into RTP packets (RFC 3551)",
+                "hierarchy": [
+                    "GstRtpL20Pay",
+                    "GstRtpLinearAudioPay",
+                    "GstRtpBaseAudioPay2",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Payloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: S20BE\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n          media: audio\n     clock-rate: [ 1, 2147483647 ]\n  encoding-name: L20\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
+            "rtpL24depay2": {
+                "author": "Tim-Philipp Müller <tim centricular com>",
+                "description": "Depayload 24-bit raw audio (L24) from RTP packets",
+                "hierarchy": [
+                    "GstRtpL24Depay2",
+                    "GstRtpLinearAudioDepay",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: audio\n     clock-rate: [ 1, 2147483647 ]\n  encoding-name: L24\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: S24BE\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
+            "rtpL24pay2": {
+                "author": "Tim-Philipp Müller <tim centricular com>",
+                "description": "Payload 24-bit raw audio (L24) into RTP packets (RFC 3551)",
+                "hierarchy": [
+                    "GstRtpL24Pay2",
+                    "GstRtpLinearAudioPay",
+                    "GstRtpBaseAudioPay2",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Payloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: S24BE\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n          media: audio\n     clock-rate: [ 1, 2147483647 ]\n  encoding-name: L24\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
+            "rtpL8depay2": {
+                "author": "Tim-Philipp Müller <tim centricular com>",
+                "description": "Depayload 8-bit raw audio (L8) from RTP packets",
+                "hierarchy": [
+                    "GstRtpL8Depay2",
+                    "GstRtpLinearAudioDepay",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: audio\n     clock-rate: [ 1, 2147483647 ]\n  encoding-name: L8\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: U8\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
+            "rtpL8pay2": {
+                "author": "Tim-Philipp Müller <tim centricular com>",
+                "description": "Payload 8-bit raw audio (L8) into RTP packets (RFC 3551)",
+                "hierarchy": [
+                    "GstRtpL8Pay2",
+                    "GstRtpLinearAudioPay",
+                    "GstRtpBaseAudioPay2",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Payloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: U8\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n          media: audio\n  encoding-name: L8\n     clock-rate: [ 1, 2147483647 ]\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
             "rtpac3depay2": {
                 "author": "Tim-Philipp Müller <tim centricular com>",
                 "description": "Depayload an AC-3 Audio Stream from RTP packets (RFC 4184)",
@@ -12789,6 +13009,29 @@
                         "value": "1"
                     }
                 ]
+            },
+            "GstRtpLinearAudioDepay": {
+                "hierarchy": [
+                    "GstRtpLinearAudioDepay",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object"
+            },
+            "GstRtpLinearAudioPay": {
+                "hierarchy": [
+                    "GstRtpLinearAudioPay",
+                    "GstRtpBaseAudioPay2",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object"
             },
             "GstRtpMpeg4GenericPayAggregateMode": {
                 "kind": "enum",
