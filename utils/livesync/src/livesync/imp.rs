@@ -852,20 +852,33 @@ impl LiveSync {
         }
 
         if let Some(audio_info) = &state.in_audio_info {
-            let buf_duration = buf_mut.duration().unwrap_or_default();
-            if let Some(calc_duration) = audio_info
-                .convert::<Option<gst::ClockTime>>(Some(gst::format::Bytes::from_usize(
-                    buf_mut.size(),
-                )))
+            let calc_duration = if let Some(calc_duration) = audio_info
+                .convert::<Option<gst::ClockTime>>(gst::format::Bytes::from_usize(buf_mut.size()))
                 .flatten()
             {
+                calc_duration
+            } else {
+                gst::error!(
+                    CAT,
+                    imp: self,
+                    "Failed to calculate duration of {:?}",
+                    buf_mut,
+                );
+                return Err(gst::FlowError::Error);
+            };
+
+            if let Some(buf_duration) = buf_mut.duration() {
                 let diff = if buf_duration < calc_duration {
                     calc_duration - buf_duration
                 } else {
                     buf_duration - calc_duration
                 };
 
-                if diff.nseconds() > 1 {
+                let sample_duration = gst::ClockTime::SECOND
+                    .mul_div_round(1, audio_info.rate().into())
+                    .unwrap();
+
+                if diff > sample_duration {
                     gst::warning!(
                         CAT,
                         imp: self,
@@ -873,16 +886,15 @@ impl LiveSync {
                         buf_duration,
                         calc_duration,
                     );
-                    buf_mut.set_duration(calc_duration);
                 }
             } else {
-                gst::debug!(
-                    CAT,
-                    imp: self,
-                    "Failed to calculate duration of {:?}",
-                    buf_mut,
-                );
+                gst::debug!(CAT, imp: self, "Incoming buffer without duration");
             }
+
+            buf_mut.set_duration(calc_duration);
+        } else if buf_mut.duration().is_none() {
+            gst::debug!(CAT, imp: self, "Incoming buffer without duration");
+            buf_mut.set_duration(state.fallback_duration);
         }
 
         // At this stage we should really really have a segment
@@ -905,11 +917,6 @@ impl LiveSync {
 
             buf_mut.set_dts(dts.map(|t| t + state.latency));
             buf_mut.set_pts(pts.map(|t| t + state.latency));
-        }
-
-        if buf_mut.duration().is_none() {
-            gst::debug!(CAT, imp: self, "Incoming buffer without duration");
-            buf_mut.set_duration(Some(state.fallback_duration));
         }
 
         if state
