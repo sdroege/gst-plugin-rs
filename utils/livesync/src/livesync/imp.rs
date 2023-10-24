@@ -987,7 +987,9 @@ impl LiveSync {
     }
 
     fn src_loop(&self) {
-        let Err(mut err) = self.src_loop_inner() else {
+        let mut err = if let Err(err) = self.src_loop_inner() {
+            err
+        } else {
             return;
         };
 
@@ -1129,7 +1131,6 @@ impl LiveSync {
             }
         };
 
-        let duplicate;
         let mut caps = None;
         let mut segment = None;
 
@@ -1143,7 +1144,9 @@ impl LiveSync {
                 caps = state.pending_caps.take();
                 segment = state.pending_segment.take();
 
-                duplicate = lateness != BufferLateness::OnTime;
+                if lateness != BufferLateness::OnTime {
+                    state.num_duplicate += 1;
+                }
             }
             None => {
                 // Work around borrow checker
@@ -1182,7 +1185,7 @@ impl LiveSync {
                     state.out_buffer.as_ref().unwrap(),
                     state.out_segment.as_ref().unwrap(),
                 );
-                duplicate = true;
+                state.num_duplicate += 1;
             }
         }
 
@@ -1227,9 +1230,6 @@ impl LiveSync {
         }
 
         state.num_out += 1;
-        if duplicate {
-            state.num_duplicate += 1;
-        }
 
         drop(state);
 
