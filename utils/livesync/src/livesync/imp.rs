@@ -1171,8 +1171,18 @@ impl LiveSync {
             state.out_duration = duration_from_caps(&caps);
         }
 
-        if let Some(segment) = segment {
+        if let Some(mut segment) = segment {
             if !state.single_segment {
+                if let Some(stop) = segment.stop() {
+                    gst::debug!(
+                        CAT,
+                        imp: self,
+                        "Removing stop {} from outgoing segment",
+                        stop
+                    );
+                    segment.set_stop(gst::ClockTime::NONE);
+                }
+
                 gst::debug!(CAT, imp: self, "Forwarding segment: {:?}", segment);
 
                 let event = gst::event::Segment::new(&segment);
