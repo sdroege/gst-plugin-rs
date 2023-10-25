@@ -1028,8 +1028,8 @@ impl LiveSync {
                 clock_id.time(),
             );
 
-            let (res, _) = MutexGuard::unlocked(&mut state, || clock_id.wait());
-            gst::trace!(CAT, imp: self, "Clock returned {res:?}",);
+            let (res, jitter) = MutexGuard::unlocked(&mut state, || clock_id.wait());
+            gst::trace!(CAT, imp: self, "Clock returned {res:?} {jitter}",);
 
             if res == Err(gst::ClockError::Unscheduled) {
                 return Err(gst::FlowError::Flushing);
