@@ -1063,6 +1063,7 @@ impl LiveSync {
                 match event.view() {
                     gst::EventView::Segment(e) => {
                         let segment = e.segment().downcast_ref().unwrap();
+                        gst::debug!(CAT, imp: self, "pending {segment:?}");
                         state.pending_segment = Some(segment.clone());
                         push = false;
                     }
