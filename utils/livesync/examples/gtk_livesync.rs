@@ -35,6 +35,7 @@ fn create_pipeline() -> gst::Pipeline {
     gst::parse_launch(
         r#"videotestsrc name=vsrc is-live=1
             ! video/x-raw,framerate=60/1,width=800,height=600
+            ! identity single-segment=1
             ! timeoverlay text="Pre:"
             ! queue
             ! livesync latency=50000000
@@ -44,6 +45,7 @@ fn create_pipeline() -> gst::Pipeline {
             ! gtk4paintablesink name=vsink
           audiotestsrc name=asrc is-live=1
             ! audio/x-raw,channels=2
+            ! identity single-segment=1
             ! queue
             ! livesync latency=50000000
             ! audiorate
