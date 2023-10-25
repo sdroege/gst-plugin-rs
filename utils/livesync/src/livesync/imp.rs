@@ -1304,19 +1304,34 @@ impl LiveSync {
         let buffer = out_buffer.make_mut();
 
         if !duplicate {
+            let duration = state.fallback_duration;
+
             if let Some(audio_info) = &state.out_audio_info {
-                let mut map_info = buffer.map_writable().map_err(|e| {
-                    gst::error!(CAT, imp: self, "Failed to map buffer: {}", e);
-                    gst::FlowError::Error
-                })?;
+                let Some(size) = audio_info
+                    .convert::<Option<gst::format::Bytes>>(duration)
+                    .flatten()
+                    .and_then(|bytes| usize::try_from(bytes).ok())
+                else {
+                    gst::error!(CAT, imp: self, "Failed to calculate size of repeat buffer");
+                    return Err(gst::FlowError::Error);
+                };
+
+                let mut mapped_memory = gst::Memory::with_size(size)
+                    .into_mapped_memory_writable()
+                    .map_err(|_| {
+                        gst::error!(CAT, imp: self, "Failed to map memory");
+                        gst::FlowError::Error
+                    })?;
+
                 audio_info
                     .format_info()
-                    .fill_silence(map_info.as_mut_slice());
-            } else {
-                let duration = state.fallback_duration;
-                buffer.set_duration(duration);
-                gst::debug!(CAT, imp: self, "Patched output buffer duration to {duration}");
+                    .fill_silence(mapped_memory.as_mut_slice());
+
+                buffer.replace_all_memory(mapped_memory.into_memory());
             }
+
+            buffer.set_duration(duration);
+            gst::debug!(CAT, imp: self, "Patched output buffer duration to {duration}");
         }
 
         buffer.set_dts(dts);
