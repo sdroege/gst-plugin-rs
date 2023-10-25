@@ -36,6 +36,16 @@ fn audio_info_from_caps(
         .transpose()
 }
 
+fn duration_from_caps(caps: &gst::CapsRef) -> Option<gst::ClockTime> {
+    caps.structure(0)
+        .filter(|s| s.name().starts_with("video/"))
+        .and_then(|s| s.get::<gst::Fraction>("framerate").ok())
+        .filter(|framerate| framerate.denom() > 0 && framerate.numer() > 0)
+        .and_then(|framerate| {
+            gst::ClockTime::SECOND.mul_div_round(framerate.denom() as u64, framerate.numer() as u64)
+        })
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BufferLateness {
     OnTime,
@@ -82,9 +92,6 @@ struct State {
     /// Latency reported by upstream
     upstream_latency: Option<gst::ClockTime>,
 
-    /// Duration we assume for buffers without one
-    fallback_duration: gst::ClockTime,
-
     /// Whether we're in PLAYING state
     playing: bool,
 
@@ -117,6 +124,12 @@ struct State {
 
     /// Audio format of our srcpad
     out_audio_info: Option<gst_audio::AudioInfo>,
+
+    /// Duration from caps on our sinkpad
+    in_duration: Option<gst::ClockTime>,
+
+    /// Duration from caps on our srcpad
+    out_duration: Option<gst::ClockTime>,
 
     /// Queue between sinkpad and srcpad
     queue: VecDeque<Item>,
@@ -159,7 +172,9 @@ const PROP_OUT: &str = "out";
 const PROP_DUPLICATE: &str = "duplicate";
 
 const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::ZERO;
+const MINIMUM_DURATION: gst::ClockTime = gst::ClockTime::from_mseconds(8);
 const DEFAULT_DURATION: gst::ClockTime = gst::ClockTime::from_mseconds(100);
+const MAXIMUM_DURATION: gst::ClockTime = gst::ClockTime::from_seconds(10);
 const MINIMUM_LATE_THRESHOLD: gst::ClockTime = gst::ClockTime::ZERO;
 const DEFAULT_LATE_THRESHOLD: Option<gst::ClockTime> = Some(gst::ClockTime::from_seconds(2));
 
@@ -170,7 +185,6 @@ impl Default for State {
             late_threshold: DEFAULT_LATE_THRESHOLD,
             single_segment: false,
             upstream_latency: None,
-            fallback_duration: DEFAULT_DURATION,
             playing: false,
             eos: false,
             srcresult: Err(gst::FlowError::Flushing),
@@ -180,6 +194,8 @@ impl Default for State {
             out_segment: None,
             in_caps: None,
             pending_caps: None,
+            in_duration: None,
+            out_duration: None,
             in_audio_info: None,
             out_audio_info: None,
             queue: VecDeque::with_capacity(32),
@@ -346,7 +362,6 @@ impl ObjectImpl for LiveSync {
         match pspec.name() {
             PROP_LATENCY => {
                 state.latency = value.get().unwrap();
-                state.update_fallback_duration();
                 let _ = self.obj().post_message(gst::message::Latency::new());
             }
 
@@ -488,31 +503,6 @@ impl State {
         })
     }
 
-    fn update_fallback_duration(&mut self) {
-        self.fallback_duration = self
-            // First, try 1/framerate from the caps
-            .in_caps
-            .as_ref()
-            .and_then(|c| c.structure(0))
-            .filter(|s| s.name().starts_with("video/"))
-            .and_then(|s| s.get::<gst::Fraction>("framerate").ok())
-            .filter(|framerate| framerate.denom() > 0 && framerate.numer() > 0)
-            .and_then(|framerate| {
-                gst::ClockTime::SECOND
-                    .mul_div_round(framerate.denom() as u64, framerate.numer() as u64)
-            })
-            .filter(|&dur| dur > 8.mseconds() && dur < 10.seconds())
-            // Otherwise, half the configured latency
-            .or_else(|| Some(self.latency / 2))
-            // In any case, don't allow a zero duration
-            .filter(|&dur| dur > gst::ClockTime::ZERO)
-            // Safe default
-            .unwrap_or(DEFAULT_DURATION);
-
-        // Change the duration of the next duplicate buffer
-        self.out_buffer_duplicate = false;
-    }
-
     fn pending_events(&self) -> bool {
         self.pending_caps.is_some() || self.pending_segment.is_some()
     }
@@ -583,8 +573,8 @@ impl LiveSync {
         state.in_segment = None;
         state.in_caps = None;
         state.in_audio_info = None;
+        state.in_duration = None;
         state.in_timestamp = None;
-        state.update_fallback_duration();
     }
 
     fn src_reset(&self, state: &mut State) {
@@ -592,6 +582,7 @@ impl LiveSync {
         state.out_segment = None;
         state.pending_caps = None;
         state.out_audio_info = None;
+        state.out_duration = None;
         state.out_buffer = None;
         state.out_buffer_duplicate = false;
         state.out_timestamp = None;
@@ -669,10 +660,12 @@ impl LiveSync {
                     }
                 };
 
+                let duration = duration_from_caps(&caps);
+
                 let mut state = self.state.lock();
                 state.in_caps = Some(caps);
                 state.in_audio_info = audio_info;
-                state.update_fallback_duration();
+                state.in_duration = duration;
             }
 
             gst::EventView::Gap(_) => {
@@ -890,13 +883,17 @@ impl LiveSync {
                     );
                 }
             } else {
-                gst::debug!(CAT, imp: self, "Incoming buffer without duration");
+                gst::debug!(CAT, imp: self, "Patching incoming buffer with duration {calc_duration}");
             }
 
             buf_mut.set_duration(calc_duration);
         } else if buf_mut.duration().is_none() {
-            gst::debug!(CAT, imp: self, "Incoming buffer without duration");
-            buf_mut.set_duration(state.fallback_duration);
+            let duration = state.in_duration.map_or(DEFAULT_DURATION, |dur| {
+                dur.clamp(MINIMUM_DURATION, MAXIMUM_DURATION)
+            });
+
+            gst::debug!(CAT, imp: self, "Patching incoming buffer with duration {duration}");
+            buf_mut.set_duration(duration);
         }
 
         // At this stage we should really really have a segment
@@ -1071,7 +1068,6 @@ impl LiveSync {
 
                     gst::EventView::Caps(e) => {
                         state.pending_caps = Some(e.caps_owned());
-                        state.update_fallback_duration();
                         push = false;
                     }
 
@@ -1158,6 +1154,7 @@ impl LiveSync {
             state.srcresult?;
 
             state.out_audio_info = audio_info_from_caps(&caps).unwrap();
+            state.out_duration = duration_from_caps(&caps);
         }
 
         if let Some(segment) = segment {
@@ -1305,7 +1302,9 @@ impl LiveSync {
         let buffer = out_buffer.make_mut();
 
         if !duplicate {
-            let duration = state.fallback_duration;
+            let duration = state.out_duration.map_or(DEFAULT_DURATION, |dur| {
+                dur.clamp(MINIMUM_DURATION, MAXIMUM_DURATION)
+            });
 
             if let Some(audio_info) = &state.out_audio_info {
                 let Some(size) = audio_info
