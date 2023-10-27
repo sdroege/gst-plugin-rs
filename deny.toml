@@ -156,11 +156,18 @@ version = "0.3"
 name = "regex-automata"
 version = "0.1"
 
-# tempfile depends on an old version of redox_syscall
-# https://github.com/Stebalien/tempfile/pull/256
+# aws-config and jsonwebtoken depend on an old version of ring
 [[bans.skip]]
-name = "redox_syscall"
-version = "0.3"
+name = "ring"
+version = "0.16"
+[[bans.skip]]
+name = "untrusted"
+version = "0.7"
+
+# tracing-subscriber depends on an old version of tracing-log
+[[bans.skip]]
+name = "tracing-log"
+version = "0.1"
 
 [sources]
 unknown-registry = "deny"
