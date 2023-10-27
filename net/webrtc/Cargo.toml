@@ -39,8 +39,8 @@ aws-credential-types = "0.56.0"
 aws-sig-auth = "0.56.0"
 aws-smithy-http = { version = "0.56.0", features = [ "rt-tokio" ] }
 aws-smithy-types = "0.56.0"
-aws-sdk-kinesisvideo = "0.33.0"
-aws-sdk-kinesisvideosignaling = "0.33.0"
+aws-sdk-kinesisvideo = "0.34.0"
+aws-sdk-kinesisvideosignaling = "0.34.0"
 http = "0.2.7"
 chrono = "0.4"
 data-encoding = "2.3.3"
@@ -57,7 +57,7 @@ livekit-api = { version = "0.2", default-features = false, features = ["signal-c
 [dev-dependencies]
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
-tracing-log = "0.1"
+tracing-log = "0.2"
 clap = { version = "4", features = ["derive"] }
 
 [lib]
