@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::signaller::Signallable;
+use crate::signaller::{Signallable, WebRTCSignallerRole};
 use gst::{glib, glib::prelude::*, glib::subclass::prelude::*};
 
 mod imp;
@@ -58,9 +58,9 @@ glib::wrapper! {
     pub struct JanusVRSignallerU64(ObjectSubclass<imp::signaller_u64::SignallerU64>) @extends JanusVRSignaller, @implements Signallable;
 }
 
-impl Default for JanusVRSignallerU64 {
-    fn default() -> Self {
-        glib::Object::new()
+impl JanusVRSignallerU64 {
+    pub fn new(role: WebRTCSignallerRole) -> Self {
+        glib::Object::builder().property("role", role).build()
     }
 }
 
@@ -69,8 +69,8 @@ glib::wrapper! {
     pub struct JanusVRSignallerStr(ObjectSubclass<imp::signaller_str::SignallerStr>) @extends JanusVRSignaller, @implements Signallable;
 }
 
-impl Default for JanusVRSignallerStr {
-    fn default() -> Self {
-        glib::Object::new()
+impl JanusVRSignallerStr {
+    pub fn new(role: WebRTCSignallerRole) -> Self {
+        glib::Object::builder().property("role", role).build()
     }
 }

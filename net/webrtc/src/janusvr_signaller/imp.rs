@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::{
-    signaller::{Signallable, SignallableImpl},
+    signaller::{Signallable, SignallableImpl, WebRTCSignallerRole},
     webrtcsink::JanusVRSignallerState,
     RUNTIME,
 };
@@ -143,6 +143,12 @@ enum MessageBody {
     Join(Join),
     Publish,
     Leave,
+    Start,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+struct SubscribeStream {
+    feed: JanusId,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -155,6 +161,13 @@ enum Join {
         id: Option<JanusId>,
         #[serde(skip_serializing_if = "Option::is_none")]
         display: Option<String>,
+    },
+    Subscriber {
+        room: JanusId,
+        streams: Vec<SubscribeStream>,
+        use_msid: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        private_id: Option<u64>,
     },
 }
 
@@ -190,6 +203,10 @@ enum VideoRoomData {
         #[serde(rename = "current-bitrate")]
         current_bitrate: u32,
     },
+    #[serde(rename = "attached")]
+    Attached {
+        streams: Vec<ConsumerStream>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -197,6 +214,11 @@ enum VideoRoomData {
 enum PluginData {
     #[serde(rename = "janus.plugin.videoroom")]
     VideoRoom { data: VideoRoomData },
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+struct ConsumerStream {
+    feed_id: JanusId,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -258,23 +280,29 @@ struct State {
 // - self.state
 // - self.settings
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Settings {
     janus_endpoint: String,
     room_id: Option<JanusId>,
     feed_id: Option<JanusId>,
-    display_name: Option<String>,
     secret_key: Option<String>,
+    role: WebRTCSignallerRole,
+    // Producer only
+    display_name: Option<String>,
+    // Consumer only
+    producer_peer_id: Option<JanusId>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
             janus_endpoint: "ws://127.0.0.1:8188".to_string(),
-            display_name: None,
             room_id: None,
             feed_id: None,
             secret_key: None,
+            role: WebRTCSignallerRole::default(),
+            display_name: None,
+            producer_peer_id: None,
         }
     }
 }
@@ -285,8 +313,10 @@ pub struct Signaller {
     state: Mutex<State>,
     #[property(name="manual-sdp-munging", default = false, get = |_| false, type = bool, blurb = "Whether the signaller manages SDP munging itself")]
     #[property(name="janus-endpoint", get, set, type = String, member = janus_endpoint, blurb = "The Janus server endpoint to POST SDP offer to")]
-    #[property(name="display-name", get, set, type = String, member = display_name, blurb = "The name of the publisher in the Janus Video Room")]
     #[property(name="secret-key", get, set, type = String, member = secret_key, blurb = "The secret API key to communicate with Janus server")]
+    #[property(name="role", get, set, type = WebRTCSignallerRole, member = role, blurb = "Whether this signaller acts as either a Consumer or Producer. Listener is not currently supported.", builder(WebRTCSignallerRole::default()))]
+    // Producer only
+    #[property(name="display-name", get, set, type = String, member = display_name, blurb = "When in Producer role, the name of the publisher in the Janus Video Room.")]
     // Properties whose type depends of the Janus ID format (u64 or string) are implemented in Signaller subclasses
     settings: Mutex<Settings>,
 }
@@ -341,11 +371,16 @@ impl Signaller {
                         _ = tokio::time::sleep(Duration::from_secs(10)) => {
                                 let (session_id, apisecret) = {
                                     let state = this.state.lock().unwrap();
-                                    let settings = this.settings.lock().unwrap();
-                                    (
-                                        state.session_id.unwrap(),
-                                        settings.secret_key.clone(),
-                                    )
+
+                                    let session_id = if let Some(s) = state.session_id {
+                                        s
+                                    } else {
+                                        // session_id is set to None when the plugin is dying
+                                        break
+                                    };
+
+                                    (session_id,
+                                    settings.secret_key.clone())
                                 };
                                 let msg = OutgoingMessage::KeepAlive{
                                     transaction: transaction_id(),
@@ -422,6 +457,11 @@ impl Signaller {
     }
 
     fn handle_reply(&self, reply: JsonReply) {
+        let role = {
+            let settings = self.settings.lock().unwrap();
+            settings.role
+        };
+
         match reply {
             JsonReply::WebRTCUp => {
                 gst::trace!(CAT, imp = self, "WebRTC streaming is working!");
@@ -449,8 +489,18 @@ impl Signaller {
                             "Attached to Janus Video Room plugin successfully, handle: {}",
                             data.id
                         );
+
                         self.set_handle_id(data.id);
-                        self.join_room();
+
+                        match role {
+                            WebRTCSignallerRole::Consumer => {
+                                self.join_room_subscriber();
+                            }
+                            WebRTCSignallerRole::Producer => {
+                                self.join_room_publisher();
+                            }
+                            WebRTCSignallerRole::Listener => unreachable!(),
+                        }
                     }
                 }
             }
@@ -459,51 +509,74 @@ impl Signaller {
             } => {
                 if let Some(PluginData::VideoRoom { data: plugindata }) = plugindata {
                     match plugindata {
-                        VideoRoomData::Joined { room, id } => {
-                            let feed_id_changed = {
-                                let mut feed_id_changed = false;
-                                let mut state = self.state.lock().unwrap();
-                                {
-                                    let mut settings = self.settings.lock().unwrap();
-                                    if settings.feed_id.as_ref() != Some(&id) {
-                                        settings.feed_id = Some(id.clone());
-                                        feed_id_changed = true;
+                        VideoRoomData::Joined { room, id } => match role {
+                            WebRTCSignallerRole::Consumer => {}
+                            WebRTCSignallerRole::Producer => {
+                                gst::info!(
+                                    CAT,
+                                    imp = self,
+                                    "Joined room {room}, publisher id: {id}",
+                                );
+
+                                let feed_id_changed = {
+                                    let mut feed_id_changed = false;
+                                    let mut state = self.state.lock().unwrap();
+                                    {
+                                        let mut settings = self.settings.lock().unwrap();
+                                        if settings.feed_id.as_ref() != Some(&id) {
+                                            settings.feed_id = Some(id.clone());
+                                            feed_id_changed = true;
+                                        }
                                     }
+
+                                    state.feed_id = Some(id);
+
+                                    feed_id_changed
+                                };
+
+                                if feed_id_changed {
+                                    self.obj().notify("feed-id");
                                 }
 
-                                state.feed_id = Some(id);
+                                self.obj().emit_by_name::<()>(
+                                    "state-updated",
+                                    &[&JanusVRSignallerState::RoomJoined],
+                                );
 
-                                feed_id_changed
-                            };
-
-                            if feed_id_changed {
-                                self.obj().notify("feed-id");
+                                self.session_requested();
                             }
-
-                            gst::trace!(CAT, imp = self, "Joined room {room:?} successfully",);
-
-                            self.obj().emit_by_name::<()>(
-                                "state-updated",
-                                &[&JanusVRSignallerState::RoomJoined],
-                            );
-
-                            self.session_requested();
-                        }
+                            WebRTCSignallerRole::Listener => unimplemented!(),
+                        },
                         VideoRoomData::Event {
                             error, error_code, ..
                         } => {
-                            if error_code.is_some() && error.is_some() {
-                                self.raise_error(format!(
-                                    "code: {}, reason: {}",
-                                    error_code.unwrap(),
-                                    error.unwrap(),
-                                ));
+                            if let (Some(error_code), Some(error)) = (error_code, error) {
+                                self.raise_error(format!("code: {error_code}, reason: {error}",));
                                 return;
                             }
 
-                            if let Some(Jsep::Answer { sdp, .. }) = jsep {
-                                gst::trace!(CAT, imp = self, "Session requested successfully");
-                                self.handle_answer(sdp);
+                            match role {
+                                WebRTCSignallerRole::Consumer => {}
+                                WebRTCSignallerRole::Producer => {
+                                    // publish stream and handle answer
+                                    if let Some(Jsep::Answer { sdp, .. }) = jsep {
+                                        gst::trace!(
+                                            CAT,
+                                            imp = self,
+                                            "Session requested successfully"
+                                        );
+                                        self.handle_answer(&sdp);
+                                    }
+                                }
+                                WebRTCSignallerRole::Listener => unimplemented!(),
+                            }
+                        }
+                        VideoRoomData::Attached { .. } => {
+                            assert_eq!(role, WebRTCSignallerRole::Consumer);
+
+                            if let Some(Jsep::Offer { sdp, .. }) = jsep {
+                                gst::trace!(CAT, imp = self, "Offer received!");
+                                self.handle_offer(sdp);
                             }
                         }
                         VideoRoomData::Destroyed { room } => {
@@ -598,7 +671,7 @@ impl Signaller {
         });
     }
 
-    fn join_room(&self) {
+    fn join_room_publisher(&self) {
         let (session_id, handle_id, room, feed_id, display, apisecret) = {
             let mut state = self.state.lock().unwrap();
             let settings = self.settings.lock().unwrap();
@@ -631,6 +704,49 @@ impl Signaller {
             }),
             jsep: None,
         });
+    }
+
+    fn join_room_subscriber(&self) {
+        let (session_id, handle_id, room, producer_peer_id, apisecret) = {
+            let state = self.state.lock().unwrap();
+            let settings = self.settings.lock().unwrap();
+
+            if settings.room_id.is_none() {
+                self.raise_error("Janus Room ID must be set".to_string());
+                return;
+            }
+
+            (
+                state.session_id.unwrap(),
+                state.handle_id.unwrap(),
+                settings.room_id.as_ref().unwrap().clone(),
+                settings.producer_peer_id.as_ref().unwrap().clone(),
+                settings.secret_key.clone(),
+            )
+        };
+
+        gst::debug!(CAT, imp = self, "subscribing to feed {producer_peer_id}");
+
+        let producer_peer_id_str = producer_peer_id.to_string();
+
+        self.send(OutgoingMessage::Message {
+            transaction: transaction_id(),
+            session_id,
+            handle_id,
+            apisecret,
+            body: MessageBody::Join(Join::Subscriber {
+                room,
+                streams: vec![SubscribeStream {
+                    feed: producer_peer_id,
+                }],
+                use_msid: false,
+                private_id: None,
+            }),
+            jsep: None,
+        });
+
+        self.obj()
+            .emit_by_name::<()>("session-started", &[&"unique", &producer_peer_id_str]);
     }
 
     fn leave_room(&self) {
@@ -745,7 +861,7 @@ impl Signaller {
         );
     }
 
-    fn handle_answer(&self, sdp: String) {
+    fn handle_answer(&self, sdp: &str) {
         match gst_sdp::SDPMessage::parse_buffer(sdp.as_bytes()) {
             Ok(ans_sdp) => {
                 let answer = gst_webrtc::WebRTCSessionDescription::new(
@@ -761,6 +877,48 @@ impl Signaller {
         }
     }
 
+    fn handle_offer(&self, sdp: String) {
+        match gst_sdp::SDPMessage::parse_buffer(sdp.as_bytes()) {
+            Ok(offer_sdp) => {
+                let offer = gst_webrtc::WebRTCSessionDescription::new(
+                    gst_webrtc::WebRTCSDPType::Offer,
+                    offer_sdp,
+                );
+                self.obj()
+                    .emit_by_name::<()>("session-description", &[&"unique", &offer]);
+            }
+            Err(err) => {
+                self.raise_error(format!("Could not parse answer SDP: {err}"));
+            }
+        }
+
+        self.obj()
+            .emit_by_name::<()>("state-updated", &[&JanusVRSignallerState::Negotiating]);
+    }
+
+    fn send_start(&self, sdp: &gst_webrtc::WebRTCSessionDescription) {
+        let (session_id, handle_id, apisecret) = {
+            let state = self.state.lock().unwrap();
+
+            let settings = self.settings.lock().unwrap();
+            (
+                state.session_id.unwrap(),
+                state.handle_id.unwrap(),
+                settings.secret_key.clone(),
+            )
+        };
+
+        let sdp = sdp.sdp().as_text().unwrap();
+        self.send(OutgoingMessage::Message {
+            transaction: transaction_id(),
+            session_id,
+            handle_id,
+            apisecret,
+            jsep: Some(Jsep::Answer { sdp, trickle: None }),
+            body: MessageBody::Start,
+        });
+    }
+
     fn emit_talking(&self, talking: bool, id: JanusId, audio_level: f32) {
         let obj = self.obj();
         (obj.class().as_ref().emit_talking)(&obj, talking, id, audio_level)
@@ -769,6 +927,16 @@ impl Signaller {
 
 impl SignallableImpl for Signaller {
     fn start(&self) {
+        {
+            let settings = self.settings.lock().unwrap();
+
+            if let (WebRTCSignallerRole::Consumer, None) =
+                (&settings.role, &settings.producer_peer_id)
+            {
+                panic!("producer-peer-id should be set in Consumer role");
+            }
+        }
+
         let this = self.obj().clone();
         let imp = self.downgrade();
         RUNTIME.spawn(async move {
@@ -789,8 +957,32 @@ impl SignallableImpl for Signaller {
             "sending SDP offer to peer: {:?}",
             offer.sdp().as_text()
         );
+        let role = {
+            let settings = self.settings.lock().unwrap();
+            settings.role
+        };
 
-        self.publish(offer);
+        match role {
+            WebRTCSignallerRole::Producer => {
+                gst::log!(
+                    CAT,
+                    imp = self,
+                    "sending SDP offer to peer: {:?}",
+                    offer.sdp().as_text()
+                );
+                self.publish(offer)
+            }
+            WebRTCSignallerRole::Consumer => {
+                gst::log!(
+                    CAT,
+                    imp = self,
+                    "sending SDP answer to peer: {:?}",
+                    offer.sdp().as_text()
+                );
+                self.send_start(offer)
+            }
+            WebRTCSignallerRole::Listener => { /*nothing yet*/ }
+        }
     }
 
     fn add_ice(
@@ -886,6 +1078,8 @@ pub mod signaller_u64 {
     pub struct SignallerU64 {
         #[property(name="room-id", get, set, type = u64, get = Self::get_room_id, set = Self::set_room_id, blurb = "The Janus Room ID that will be joined to")]
         #[property(name="feed-id", get, set, type = u64, get = Self::get_feed_id, set = Self::set_feed_id, blurb = "The Janus Feed ID to identify where the track is coming from")]
+        // Consumer only
+        #[property(name="producer-peer-id", get, set, type = u64, get = Self::get_producer_peer_id, set = Self::set_producer_peer_id, blurb = "The producer feed ID the signaller should subscribe to. Only used in Consumer mode.")]
         /// Properties macro does not work with empty struct: https://github.com/gtk-rs/gtk-rs-core/issues/1110
         _unused: bool,
     }
@@ -966,6 +1160,26 @@ pub mod signaller_u64 {
 
             settings.feed_id = Some(JanusId::Num(id));
         }
+
+        fn get_producer_peer_id(&self) -> u64 {
+            let obj = self.obj();
+            let signaller = obj.upcast_ref::<super::super::JanusVRSignaller>().imp();
+            let settings = signaller.settings.lock().unwrap();
+
+            settings
+                .producer_peer_id
+                .as_ref()
+                .map(|id| id.as_num())
+                .unwrap_or_default()
+        }
+
+        fn set_producer_peer_id(&self, id: u64) {
+            let obj = self.obj();
+            let signaller = obj.upcast_ref::<super::super::JanusVRSignaller>().imp();
+            let mut settings = signaller.settings.lock().unwrap();
+
+            settings.producer_peer_id = Some(JanusId::Num(id));
+        }
     }
 }
 
@@ -977,6 +1191,8 @@ pub mod signaller_str {
     pub struct SignallerStr {
         #[property(name="room-id", get, set, type = String, get = Self::get_room_id, set = Self::set_room_id, blurb = "The Janus Room ID that will be joined to")]
         #[property(name="feed-id", get, set, type = String, get = Self::get_feed_id, set = Self::set_feed_id, blurb = "The Janus Feed ID to identify where the track is coming from")]
+        // Consumer only
+        #[property(name="producer-peer-id", get, set, type = String, get = Self::get_producer_peer_id, set = Self::set_producer_peer_id, blurb = "The producer feed ID the signaller should subscribe to. Only used in Consumer mode.")]
         /// Properties macro does not work with empty struct: https://github.com/gtk-rs/gtk-rs-core/issues/1110
         _unused: bool,
     }
@@ -1056,6 +1272,26 @@ pub mod signaller_str {
             let mut settings = signaller.settings.lock().unwrap();
 
             settings.feed_id = Some(JanusId::Str(id));
+        }
+
+        fn get_producer_peer_id(&self) -> String {
+            let obj = self.obj();
+            let signaller = obj.upcast_ref::<super::super::JanusVRSignaller>().imp();
+            let settings = signaller.settings.lock().unwrap();
+
+            settings
+                .producer_peer_id
+                .as_ref()
+                .map(|id| id.as_string())
+                .unwrap_or_default()
+        }
+
+        fn set_producer_peer_id(&self, id: String) {
+            let obj = self.obj();
+            let signaller = obj.upcast_ref::<super::super::JanusVRSignaller>().imp();
+            let mut settings = signaller.settings.lock().unwrap();
+
+            settings.producer_peer_id = Some(JanusId::Str(id));
         }
     }
 }

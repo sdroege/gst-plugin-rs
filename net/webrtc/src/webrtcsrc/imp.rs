@@ -2174,3 +2174,244 @@ pub(super) mod livekit {
     impl GhostPadImpl for LiveKitWebRTCSrcPad {}
     impl WebRTCSrcPadImpl for LiveKitWebRTCSrcPad {}
 }
+
+#[cfg(feature = "janus")]
+pub(super) mod janus {
+    use super::*;
+    use crate::{
+        janusvr_signaller::{JanusVRSignallerStr, JanusVRSignallerU64},
+        webrtcsink::JanusVRSignallerState,
+        webrtcsrc::WebRTCSignallerRole,
+    };
+
+    static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
+        gst::DebugCategory::new(
+            "janusvrwebrtcsrc",
+            gst::DebugColorFlags::empty(),
+            Some("WebRTC Janus Video Room src"),
+        )
+    });
+
+    #[derive(Debug, Clone, Default)]
+    struct JanusSettings {
+        use_string_ids: bool,
+    }
+
+    #[derive(Debug, Default)]
+    struct JanusState {
+        janus_state: JanusVRSignallerState,
+    }
+
+    #[derive(Default, glib::Properties)]
+    #[properties(wrapper_type = crate::webrtcsrc::JanusVRWebRTCSrc)]
+    pub struct JanusVRWebRTCSrc {
+        /**
+         * GstJanusVRWebRTCSrc:use-string-ids:
+         *
+         * By default Janus uses `u64` ids to identify the room, the feed, etc.
+         * But it can be changed to strings using the `strings_ids` option in `janus.plugin.videoroom.jcfg`.
+         * In such case, `janusvrwebrtcsrc` has to be created using `use-string-ids=true` so its signaller
+         * uses the right types for such ids and properties.
+         *
+         * Since: plugins-rs-0.14.0
+         */
+        #[property(name="use-string-ids", get, construct_only, type = bool, member = use_string_ids, blurb = "Use strings instead of u64 for Janus IDs, see strings_ids config option in janus.plugin.videoroom.jcfg")]
+        settings: Mutex<JanusSettings>,
+        /**
+         * GstJanusVRWebRTCSrc:janus-state:
+         *
+         * The current state of the signaller.
+         * Since: plugins-rs-0.14.0
+         */
+        #[property(
+        name = "janus-state",
+        get,
+        member = janus_state,
+        type = JanusVRSignallerState,
+        blurb = "The current state of the signaller",
+        builder(JanusVRSignallerState::Initialized)
+    )]
+        state: Mutex<JanusState>,
+    }
+
+    #[glib::derived_properties]
+    impl ObjectImpl for JanusVRWebRTCSrc {
+        fn constructed(&self) {
+            self.parent_constructed();
+
+            let settings = self.settings.lock().unwrap();
+            let element = self.obj();
+            let ws = element
+                .upcast_ref::<crate::webrtcsrc::BaseWebRTCSrc>()
+                .imp();
+
+            let signaller: Signallable = if settings.use_string_ids {
+                JanusVRSignallerStr::new(WebRTCSignallerRole::Consumer).upcast()
+            } else {
+                JanusVRSignallerU64::new(WebRTCSignallerRole::Consumer).upcast()
+            };
+
+            let self_weak = self.downgrade();
+            signaller.connect("state-updated", false, move |args| {
+                let self_ = self_weak.upgrade()?;
+                let janus_state = args[1].get::<JanusVRSignallerState>().unwrap();
+
+                {
+                    let mut state = self_.state.lock().unwrap();
+                    state.janus_state = janus_state;
+                }
+
+                gst::debug!(
+                    CAT,
+                    imp = self_,
+                    "signaller state updated: {:?}",
+                    janus_state
+                );
+
+                self_.obj().notify("janus-state");
+
+                None
+            });
+
+            let _ = ws.set_signaller(signaller);
+        }
+    }
+
+    impl GstObjectImpl for JanusVRWebRTCSrc {}
+
+    impl ElementImpl for JanusVRWebRTCSrc {
+        fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+            static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> =
+                LazyLock::new(|| {
+                    gst::subclass::ElementMetadata::new(
+                        "JanusVRWebRTCSrc",
+                        "Source/Network/WebRTC",
+                        "WebRTC source with Janus Video Room signaller",
+                        "Eva Pace <epace@igalia.com>",
+                    )
+                });
+
+            Some(&*ELEMENT_METADATA)
+        }
+    }
+
+    impl BinImpl for JanusVRWebRTCSrc {}
+
+    impl BaseWebRTCSrcImpl for JanusVRWebRTCSrc {}
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for JanusVRWebRTCSrc {
+        const NAME: &'static str = "GstJanusVRWebRTCSrc";
+        type Type = crate::webrtcsrc::JanusVRWebRTCSrc;
+        type ParentType = crate::webrtcsrc::BaseWebRTCSrc;
+        type Interfaces = (gst::URIHandler,);
+    }
+
+    impl URIHandlerImpl for JanusVRWebRTCSrc {
+        const URI_TYPE: gst::URIType = gst::URIType::Src;
+
+        fn protocols() -> &'static [&'static str] {
+            &["gstjanusvr", "gstjanusvrs"]
+        }
+
+        fn uri(&self) -> Option<String> {
+            {
+                let settings = self.settings.lock().unwrap();
+                if settings.use_string_ids {
+                    // URI not supported for string ids
+                    return None;
+                }
+            }
+
+            let obj = self.obj();
+            let base = obj.upcast_ref::<crate::webrtcsrc::BaseWebRTCSrc>().imp();
+            let signaller = base.signaller();
+
+            let janus_endpoint = signaller.property::<String>("janus-endpoint");
+            let uri = janus_endpoint
+                .replace("wss://", "gstjansvrs://")
+                .replace("ws://", "gstjanusvr://");
+            let room_id = signaller.property::<u64>("room-id");
+            let producer_peer_id = signaller.property::<u64>("producer-peer-id");
+
+            Some(format!(
+                "{uri}?use-string-ids=false&room-id={room_id}&producer-peer-id={producer_peer_id}"
+            ))
+        }
+
+        fn set_uri(&self, uri: &str) -> Result<(), glib::Error> {
+            gst::debug!(CAT, imp = self, "parsing URI {uri}");
+
+            let uri = Url::from_str(uri)
+                .map_err(|err| glib::Error::new(gst::URIError::BadUri, &format!("{:?}", err)))?;
+
+            let socket_scheme = match uri.scheme() {
+                "gstjanusvr" => Ok("ws"),
+                "gstjanusvrs" => Ok("wss"),
+                _ => Err(glib::Error::new(
+                    gst::URIError::BadUri,
+                    &format!("Invalid protocol: {}", uri.scheme()),
+                )),
+            }?;
+
+            let port = uri
+                .port()
+                .map(|port| format!(":{port}"))
+                .unwrap_or_default();
+
+            let janus_endpoint = format!(
+                "{socket_scheme}://{}{port}{}",
+                uri.host_str().unwrap_or("127.0.0.1"),
+                uri.path()
+            );
+
+            let use_strings_ids = uri
+                .query_pairs()
+                .find(|(k, _v)| k == "use-string-ids")
+                .map(|(_k, v)| v.to_lowercase() == "true")
+                .unwrap_or_default();
+            if use_strings_ids {
+                // TODO: we'd have to instantiate a JanusVRSignallerStr and set it on the src element
+                // but "signaller" is a construct-only property.
+                return Err(glib::Error::new(
+                    gst::URIError::BadUri,
+                    "use-string-ids=true not yet supported in URI",
+                ));
+            }
+
+            let room_id = uri
+                .query_pairs()
+                .find(|(k, _v)| k == "room-id")
+                .map(|(_k, v)| v)
+                .ok_or(glib::Error::new(gst::URIError::BadUri, "room-id missing"))?;
+            let producer_peer_id = uri
+                .query_pairs()
+                .find(|(k, _v)| k == "producer-peer-id")
+                .map(|(_k, v)| v)
+                .ok_or(glib::Error::new(
+                    gst::URIError::BadUri,
+                    "producer-peer-id missing",
+                ))?;
+
+            let obj = self.obj();
+            let base = obj.upcast_ref::<crate::webrtcsrc::BaseWebRTCSrc>().imp();
+            let signaller = base.signaller();
+
+            let room_id = room_id.parse::<u64>().map_err(|err| {
+                glib::Error::new(gst::URIError::BadUri, &format!("Invalid room-id: {err}"))
+            })?;
+            let producer_peer_id = producer_peer_id.parse::<u64>().map_err(|err| {
+                glib::Error::new(
+                    gst::URIError::BadUri,
+                    &format!("Invalid producer-peer-id: {err}"),
+                )
+            })?;
+
+            signaller.set_property("janus-endpoint", &janus_endpoint);
+            signaller.set_property("room-id", room_id);
+            signaller.set_property("producer-peer-id", producer_peer_id);
+
+            Ok(())
+        }
+    }
+}

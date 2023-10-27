@@ -59,6 +59,11 @@ glib::wrapper! {
     pub struct LiveKitWebRTCSrc(ObjectSubclass<imp::livekit::LiveKitWebRTCSrc>) @extends BaseWebRTCSrc, gst::Bin, gst::Element, gst::Object, gst::ChildProxy;
 }
 
+#[cfg(feature = "janus")]
+glib::wrapper! {
+    pub struct JanusVRWebRTCSrc(ObjectSubclass<imp::janus::JanusVRWebRTCSrc>) @extends BaseWebRTCSrc, gst::Bin, gst::Element, gst::Object, @implements gst::URIHandler, gst::ChildProxy;
+}
+
 glib::wrapper! {
     pub struct WebRTCSrcPad(ObjectSubclass<pad::WebRTCSrcPad>) @extends gst::GhostPad, gst::ProxyPad, gst::Pad, gst::Object;
 }
@@ -144,6 +149,46 @@ pub fn register(plugin: Option<&gst::Plugin>) -> Result<(), glib::BoolError> {
         "livekitwebrtcsrc",
         gst::Rank::NONE,
         LiveKitWebRTCSrc::static_type(),
+    )?;
+    #[cfg(feature = "janus")]
+    /**
+     * element-janusvrwebrtcsrc:
+     *
+     * `JanusVRWebRTCSrc` is an element that integrates with the [Video Room plugin](https://janus.conf.meetecho.com/docs/videoroom) of the [Janus Gateway](https://github.com/meetecho/janus-gateway).
+     *  It receives audio and/or video streams from WebRTC using Janus as the signaller.
+     *
+     * ## Examples
+     *
+     * First start sending a video stream to a janus room:
+     *
+     * ```bash
+     * $ gst-launch-1.0 videotestsrc ! janusvrwebrtcsink signaller::room-id=1234 signaller::feed-id=777 signaller::janus-endpoint=wss://janus.conf.meetecho.com/ws
+     * ```
+     *
+     * You can then retrieve this stream using:
+     *
+     * ```bash
+     * $ gst-launch-1.0 janusvrwebrtcsrc signaller::room-id=1234 signaller::producer-peer-id=777 signaller::janus-endpoint=wss://janus.conf.meetecho.com/ws ! videoconvert ! autovideosink
+     * ```
+     *
+     * You can also retrieve it using an URI:
+     *
+     * ```bash
+     * $ gst-play-1.0 "gstjanusvrs://janus.conf.meetecho.com/ws?room-id=1234&producer-peer-id=777"
+     * ```
+     *
+     * ## See also
+     *
+     *  The [documentation of the `janusvrwebrtcsink` element](https://gstreamer.freedesktop.org/documentation//rswebrtc/janusvrwebrtcsink.html).
+     *
+     * Since: plugins-rs-0.14.0
+     *
+     */
+    gst::Element::register(
+        plugin,
+        "janusvrwebrtcsrc",
+        gst::Rank::NONE,
+        JanusVRWebRTCSrc::static_type(),
     )?;
 
     Ok(())

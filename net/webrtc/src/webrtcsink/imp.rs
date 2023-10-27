@@ -6030,9 +6030,9 @@ pub(super) mod janus {
                 .imp();
 
             let signaller: Signallable = if settings.use_string_ids {
-                JanusVRSignallerStr::default().upcast()
+                JanusVRSignallerStr::new(WebRTCSignallerRole::Producer).upcast()
             } else {
-                JanusVRSignallerU64::default().upcast()
+                JanusVRSignallerU64::new(WebRTCSignallerRole::Producer).upcast()
             };
 
             let self_weak = self.downgrade();
