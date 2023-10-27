@@ -472,11 +472,24 @@ impl Session {
         }
 
         if let Some(srcpad) = srcpad {
-            let producer_id = element
-                .imp()
-                .signaller()
-                .property::<Option<String>>("producer-peer-id")
-                .or_else(|| webrtcbin_pad.property("msid"));
+            let signaller = element.imp().signaller();
+
+            // Signalers like WhipServer do not need a peer producer id as they run as a server
+            // waiting for a peer connection so they don't have that property. In that case use
+            // the session id as producer id
+
+            // In order to avoid breaking any existing signallers that depend on peer-producer-id,
+            // continue to use that or fallback to webrtcbin pad's msid if the
+            // peer-producer-id is None.
+            let producer_id = if signaller
+                .has_property("producer-peer-id", Some(Option::<String>::static_type()))
+            {
+                signaller
+                    .property::<Option<String>>("producer-peer-id")
+                    .or_else(|| webrtcbin_pad.property("msid"))
+            } else {
+                Some(self.id.clone())
+            };
 
             let encoded_filter = element.emit_by_name::<Option<gst::Element>>(
                 "request-encoded-filter",

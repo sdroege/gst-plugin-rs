@@ -18,9 +18,8 @@ use reqwest::header::HeaderValue;
 use reqwest::StatusCode;
 use std::sync::Mutex;
 
-use core::time::Duration;
-use crossbeam_channel::unbounded;
 use std::net::SocketAddr;
+use tokio::sync::mpsc;
 use url::Url;
 use warp::{
     http,
@@ -47,7 +46,6 @@ const ENDPOINT_PATH: &str = "endpoint";
 const RESOURCE_PATH: &str = "resource";
 const DEFAULT_HOST_ADDR: &str = "http://127.0.0.1:8080";
 const DEFAULT_STUN_SERVER: Option<&str> = Some("stun://stun.l.google.com:19303");
-const DEFAULT_PRODUCER_PEER_ID: Option<&str> = Some("whip-client");
 const CONTENT_SDP: &str = "application/sdp";
 const CONTENT_TRICKLE_ICE: &str = "application/trickle-ice-sdpfrag";
 
@@ -193,7 +191,7 @@ impl WhipClient {
         let mut headermap = HeaderMap::new();
         headermap.insert(
             reqwest::header::CONTENT_TYPE,
-            HeaderValue::from_static("application/sdp"),
+            HeaderValue::from_static(CONTENT_SDP),
         );
 
         if let Some(token) = auth_token.as_ref() {
@@ -616,27 +614,14 @@ impl ObjectImpl for WhipClient {
 // WHIP server implementation
 
 #[derive(Debug)]
-enum WhipServerState {
-    Idle,
-    Negotiating,
-    Ready,
-}
-
-impl Default for WhipServerState {
-    fn default() -> Self {
-        Self::Idle
-    }
-}
-
 struct WhipServerSettings {
     stun_server: Option<String>,
     turn_servers: gst::Array,
     host_addr: Url,
-    producer_peer_id: Option<String>,
     timeout: u32,
     shutdown_signal: Option<tokio::sync::oneshot::Sender<()>>,
     server_handle: Option<tokio::task::JoinHandle<()>>,
-    sdp_answer: Option<crossbeam_channel::Sender<Option<SDPMessage>>>,
+    sdp_answer: Option<mpsc::Sender<Option<SDPMessage>>>,
 }
 
 impl Default for WhipServerSettings {
@@ -645,7 +630,6 @@ impl Default for WhipServerSettings {
             host_addr: Url::parse(DEFAULT_HOST_ADDR).unwrap(),
             stun_server: DEFAULT_STUN_SERVER.map(String::from),
             turn_servers: gst::Array::new(Vec::new() as Vec<glib::SendValue>),
-            producer_peer_id: DEFAULT_PRODUCER_PEER_ID.map(String::from),
             timeout: DEFAULT_TIMEOUT,
             shutdown_signal: None,
             server_handle: None,
@@ -654,18 +638,10 @@ impl Default for WhipServerSettings {
     }
 }
 
+#[derive(Default)]
 pub struct WhipServer {
-    state: Mutex<WhipServerState>,
     settings: Mutex<WhipServerSettings>,
-}
-
-impl Default for WhipServer {
-    fn default() -> Self {
-        Self {
-            settings: Mutex::new(WhipServerSettings::default()),
-            state: Mutex::new(WhipServerState::default()),
-        }
-    }
+    canceller: Mutex<Option<futures::future::AbortHandle>>,
 }
 
 impl WhipServer {
@@ -689,7 +665,7 @@ impl WhipServer {
                     WebRTCICEGatheringState::Complete => {
                         gst::info!(CAT, obj: obj, "ICE gathering complete");
                         let ans: Option<gst_sdp::SDPMessage>;
-                        let settings = obj.imp().settings.lock().unwrap();
+                        let mut settings = obj.imp().settings.lock().unwrap();
                         if let Some(answer_desc) = webrtcbin
                             .property::<Option<WebRTCSessionDescription>>("local-description")
                         {
@@ -697,9 +673,22 @@ impl WhipServer {
                         } else {
                             ans = None;
                         }
-                        if let Some(tx) = &settings.sdp_answer {
-                            tx.send(ans).unwrap()
-                        }
+                        let tx = settings
+                            .sdp_answer
+                            .take()
+                            .expect("SDP answer Sender needs to be valid");
+
+                        let obj_weak = obj.downgrade();
+                        RUNTIME.spawn(async move {
+                            let obj = match obj_weak.upgrade() {
+                                Some(obj) => obj,
+                                None => return,
+                            };
+
+                            if let Err(e) = tx.send(ans).await {
+                                gst::error!(CAT, obj: obj, "Failed to send SDP {e}");
+                            }
+                        });
                     }
                     _ => (),
                 }
@@ -717,56 +706,22 @@ impl WhipServer {
         //FIXME: add state checking once ICE trickle is implemented
     }
 
-    async fn delete_handler(&self, _id: String) -> Result<impl warp::Reply, warp::Rejection> {
-        let mut state = self.state.lock().unwrap();
-        match *state {
-            WhipServerState::Ready => {
-                // FIXME: session-ended will make webrtcsrc send EOS
-                // and producer-removed is not handled
-                // Need to address the usecase where when the client terminates
-                // the webrtcsrc should be running without sending EOS and reset
-                // for next client connection like a usual server
-
-                self.obj().emit_by_name::<bool>("session-ended", &[&ROOT]);
-
-                gst::info!(CAT, imp:self, "Ending session");
-                *state = WhipServerState::Idle;
-                Ok(warp::reply::reply().into_response())
-            }
-            _ => {
-                gst::error!(CAT, imp: self, "DELETE requested in {state:?} state. Can't Proceed");
-                let res = http::Response::builder()
-                    .status(http::StatusCode::CONFLICT)
-                    .body(Body::from(String::from("Session not Ready")))
-                    .unwrap();
-                Ok(res)
-            }
+    async fn delete_handler(&self, id: String) -> Result<impl warp::Reply, warp::Rejection> {
+        if self
+            .obj()
+            .emit_by_name::<bool>("session-ended", &[&id.as_str()])
+        {
+            gst::info!(CAT, imp:self, "Ended session {id}");
+        } else {
+            gst::info!(CAT, imp:self, "Failed to End session {id}");
+            // FIXME: Do we send a different response
         }
+        Ok(warp::reply::reply().into_response())
     }
 
     async fn options_handler(&self) -> Result<impl warp::Reply, warp::Rejection> {
         let settings = self.settings.lock().unwrap();
-        let peer_id = settings.producer_peer_id.clone().unwrap();
         drop(settings);
-
-        let mut state = self.state.lock().unwrap();
-        match *state {
-            WhipServerState::Idle => {
-                self.obj()
-                    .emit_by_name::<()>("session-started", &[&ROOT, &peer_id]);
-                *state = WhipServerState::Negotiating
-            }
-            WhipServerState::Ready => {
-                gst::error!(CAT, imp: self, "OPTIONS requested in {state:?} state. Can't proceed");
-                let res = http::Response::builder()
-                    .status(http::StatusCode::CONFLICT)
-                    .body(Body::from(String::from("Session active already")))
-                    .unwrap();
-                return Ok(res);
-            }
-            _ => {}
-        };
-        drop(state);
 
         let mut links = HeaderMap::new();
         let settings = self.settings.lock().unwrap();
@@ -801,7 +756,7 @@ impl WhipServer {
         }
 
         let mut res = http::Response::builder()
-            .header("Access-Post", "application/sdp")
+            .header("Access-Post", CONTENT_SDP)
             .body(Body::empty())
             .unwrap();
 
@@ -815,31 +770,15 @@ impl WhipServer {
         &self,
         body: warp::hyper::body::Bytes,
     ) -> Result<http::Response<warp::hyper::Body>, warp::Rejection> {
-        let mut settings = self.settings.lock().unwrap();
-        let peer_id = settings.producer_peer_id.clone().unwrap();
-        let wait_timeout = settings.timeout;
-        let (tx, rx) = unbounded::<Option<SDPMessage>>();
-        settings.sdp_answer = Some(tx);
-        drop(settings);
-
-        let mut state = self.state.lock().unwrap();
-        match *state {
-            WhipServerState::Idle => {
-                self.obj()
-                    .emit_by_name::<()>("session-started", &[&ROOT, &peer_id]);
-                *state = WhipServerState::Negotiating
-            }
-            WhipServerState::Ready => {
-                gst::error!(CAT, imp: self, "POST requested in {state:?} state. Can't Proceed");
-                let res = http::Response::builder()
-                    .status(http::StatusCode::CONFLICT)
-                    .body(Body::from(String::from("Session active already")))
-                    .unwrap();
-                return Ok(res);
-            }
-            _ => {}
+        let session_id = uuid::Uuid::new_v4().to_string();
+        let (tx, mut rx) = mpsc::channel::<Option<SDPMessage>>(1);
+        let wait_timeout = {
+            let mut settings = self.settings.lock().unwrap();
+            let wait_timeout = settings.timeout;
+            settings.sdp_answer = Some(tx);
+            drop(settings);
+            wait_timeout
         };
-        drop(state);
 
         match gst_sdp::SDPMessage::parse_buffer(body.as_ref()) {
             Ok(offer_sdp) => {
@@ -849,7 +788,9 @@ impl WhipServer {
                 );
 
                 self.obj()
-                    .emit_by_name::<()>("session-description", &[&"unique", &offer]);
+                    .emit_by_name::<()>("session-started", &[&session_id, &session_id]);
+                self.obj()
+                    .emit_by_name::<()>("session-description", &[&session_id, &offer]);
             }
             Err(err) => {
                 gst::error!(CAT, imp: self, "Could not parse offer SDP: {err}");
@@ -859,20 +800,32 @@ impl WhipServer {
             }
         }
 
-        // We don't want to wait infinitely for the ice gathering to complete.
-        let answer = match rx.recv_timeout(Duration::from_secs(wait_timeout as u64)) {
-            Ok(a) => a,
-            Err(e) => {
-                let reply = warp::reply::reply();
-                let res;
-                if e.is_timeout() {
-                    res = warp::reply::with_status(reply, http::StatusCode::REQUEST_TIMEOUT);
-                    gst::error!(CAT, imp: self, "Timedout waiting for SDP answer");
-                } else {
-                    res = warp::reply::with_status(reply, http::StatusCode::INTERNAL_SERVER_ERROR);
-                    gst::error!(CAT, imp: self, "Channel got disconnected");
+        let result = wait_async(&self.canceller, rx.recv(), wait_timeout).await;
+
+        let answer = match result {
+            Ok(ans) => match ans {
+                Some(a) => a,
+                None => {
+                    let err = "Channel closed, can't receive SDP".to_owned();
+                    let res = http::Response::builder()
+                        .status(http::StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(Body::from(err))
+                        .unwrap();
+
+                    return Ok(res);
                 }
-                return Ok(res.into_response());
+            },
+            Err(e) => {
+                let err = match e {
+                    WaitError::FutureAborted => "Aborted".to_owned(),
+                    WaitError::FutureError(err) => err.to_string(),
+                };
+                let res = http::Response::builder()
+                    .status(http::StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(Body::from(err))
+                    .unwrap();
+
+                return Ok(res);
             }
         };
 
@@ -942,20 +895,16 @@ impl WhipServer {
         drop(settings);
 
         // Got SDP answer, send answer in the response
-        let resource_url = "/".to_owned() + ROOT + "/" + RESOURCE_PATH + "/" + &peer_id;
+        let resource_url = "/".to_owned() + ROOT + "/" + RESOURCE_PATH + "/" + &session_id;
         let mut res = http::Response::builder()
             .status(StatusCode::CREATED)
-            .header(CONTENT_TYPE, "application/sdp")
+            .header(CONTENT_TYPE, CONTENT_SDP)
             .header("location", resource_url)
             .body(Body::from(ans_text.unwrap()))
             .unwrap();
 
         let headers = res.headers_mut();
         headers.extend(links);
-
-        let mut state = self.state.lock().unwrap();
-        *state = WhipServerState::Ready;
-        drop(state);
 
         Ok(res)
     }
@@ -1112,7 +1061,8 @@ impl SignallableImpl for WhipServer {
         gst::info!(CAT, imp: self, "stopped the WHIP server");
     }
 
-    fn end_session(&self, _session_id: &str) {
+    fn end_session(&self, session_id: &str) {
+        gst::info!(CAT, imp: self, "Session {session_id} ended");
         //FIXME: send any events to the client
     }
 }
@@ -1134,11 +1084,6 @@ impl ObjectImpl for WhipServer {
                     .blurb("The the host address of the WHIP endpoint e.g., http://127.0.0.1:8080")
                     .default_value(DEFAULT_HOST_ADDR)
                     .flags(glib::ParamFlags::READWRITE)
-                    .build(),
-                // needed by webrtcsrc in handle_webrtc_src_pad
-                glib::ParamSpecString::builder("producer-peer-id")
-                    .default_value(DEFAULT_PRODUCER_PEER_ID)
-                    .flags(glib::ParamFlags::READABLE)
                     .build(),
                 glib::ParamSpecString::builder("stun-server")
                     .nick("STUN Server")
@@ -1199,7 +1144,6 @@ impl ObjectImpl for WhipServer {
             "host-addr" => settings.host_addr.to_string().to_value(),
             "stun-server" => settings.stun_server.to_value(),
             "turn-servers" => settings.turn_servers.to_value(),
-            "producer-peer-id" => settings.producer_peer_id.to_value(),
             "timeout" => settings.timeout.to_value(),
             _ => unimplemented!(),
         }
