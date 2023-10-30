@@ -13,7 +13,7 @@ use super::SinkEvent;
 use crate::sink::frame::Frame;
 use crate::sink::paintable::Paintable;
 
-use glib::{thread_guard::ThreadGuard, Sender};
+use glib::thread_guard::ThreadGuard;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
@@ -60,7 +60,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 pub struct PaintableSink {
     paintable: Mutex<Option<ThreadGuard<Paintable>>>,
     info: Mutex<Option<gst_video::VideoInfo>>,
-    sender: Mutex<Option<Sender<SinkEvent>>>,
+    sender: Mutex<Option<async_channel::Sender<SinkEvent>>>,
     pending_frame: Mutex<Option<Frame>>,
     cached_caps: Mutex<Option<gst::Caps>>,
 }
@@ -449,10 +449,16 @@ impl VideoSinkImpl for PaintableSink {
             gst::FlowError::Flushing
         })?;
 
-        sender.send(SinkEvent::FrameChanged).map_err(|_| {
-            gst::error!(CAT, imp: self, "Have main thread receiver shut down");
-            gst::FlowError::Flushing
-        })?;
+        match sender.try_send(SinkEvent::FrameChanged) {
+            Ok(_) => (),
+            Err(async_channel::TrySendError::Full(_)) => {
+                gst::warning!(CAT, imp: self, "Have too many pending frames");
+            }
+            Err(async_channel::TrySendError::Closed(_)) => {
+                gst::error!(CAT, imp: self, "Have main thread receiver shut down");
+                return Err(gst::FlowError::Flushing);
+            }
+        }
 
         Ok(gst::FlowSuccess::Ok)
     }
@@ -521,20 +527,24 @@ impl PaintableSink {
         gst::debug!(CAT, imp: self, "Initializing paintable");
 
         // The channel for the SinkEvents
-        let (sender, receiver) = glib::MainContext::channel(glib::Priority::DEFAULT);
-        let self_ = self.to_owned();
+        let (sender, receiver) = async_channel::bounded(3);
 
+        // Spawn an async task on the main context to handle the channel messages
+        let main_context = glib::MainContext::default();
+
+        let self_ = self.downgrade();
+        main_context.spawn(async move {
+            while let Ok(action) = receiver.recv().await {
+                let Some(self_) = self_.upgrade() else {
+                    break;
+                };
+
+                self_.do_action(action);
+            }
+        });
+
+        // Create the paintable from the main thread
         let paintable = utils::invoke_on_main_thread(move || {
-            // Attach the receiver from the main thread to make sure it is called
-            // from a place where it can acquire the default main context.
-            receiver.attach(
-                Some(&glib::MainContext::default()),
-                glib::clone!(
-                    @weak self_ => @default-return glib::ControlFlow::Break,
-                    move |action| self_.do_action(action)
-                ),
-            );
-
             #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
             {
                 let gdk_context = if let GLContext::Initialized { gdk_context, .. } =
