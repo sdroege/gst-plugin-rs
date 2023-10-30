@@ -426,9 +426,8 @@ impl WhepSrc {
         let self_weak = self.downgrade();
         self.webrtcbin
             .connect_notify(Some("ice-gathering-state"), move |webrtcbin, _pspec| {
-                let self_ = match self_weak.upgrade() {
-                    Some(self_) => self_,
-                    None => return,
+                let Some(self_) = self_weak.upgrade() else {
+                    return;
                 };
 
                 let state = webrtcbin.property::<WebRTCICEGatheringState>("ice-gathering-state");
@@ -458,9 +457,8 @@ impl WhepSrc {
         let self_weak = self.downgrade();
         self.webrtcbin
             .connect_notify(Some("ice-connection-state"), move |webrtcbin, _pspec| {
-                let self_ = match self_weak.upgrade() {
-                    Some(self_) => self_,
-                    None => return,
+                let Some(self_) = self_weak.upgrade() else {
+                    return;
                 };
 
                 let state = webrtcbin.property::<WebRTCICEConnectionState>("ice-connection-state");
@@ -489,9 +487,8 @@ impl WhepSrc {
         let self_weak = self.downgrade();
         self.webrtcbin
             .connect_notify(Some("connection-state"), move |webrtcbin, _pspec| {
-                let self_ = match self_weak.upgrade() {
-                    Some(self_) => self_,
-                    None => return,
+                let Some(self_) = self_weak.upgrade() else {
+                    return;
                 };
 
                 let state = webrtcbin.property::<WebRTCPeerConnectionState>("connection-state");
@@ -520,9 +517,8 @@ impl WhepSrc {
 
         let self_weak = self.downgrade();
         self.webrtcbin.connect_pad_added(move |_, pad| {
-            let self_ = match self_weak.upgrade() {
-                Some(self_) => self_,
-                None => return,
+            let Some(self_) = self_weak.upgrade() else {
+                return;
             };
 
             gst::debug!(
@@ -547,9 +543,8 @@ impl WhepSrc {
         let self_weak = self.downgrade();
         self.webrtcbin.connect("on-negotiation-needed", false, {
             move |_| {
-                let self_ = match self_weak.upgrade() {
-                    Some(self_) => self_,
-                    None => return None,
+                let Some(self_) = self_weak.upgrade() else {
+                    return None;
                 };
 
                 let settings = self_.settings.lock().unwrap();
@@ -780,9 +775,8 @@ impl WhepSrc {
     fn generate_offer(&self) {
         let self_weak = self.downgrade();
         let promise = gst::Promise::with_change_func(move |reply| {
-            let self_ = match self_weak.upgrade() {
-                Some(self_) => self_,
-                None => return,
+            let Some(self_) = self_weak.upgrade() else {
+                return;
             };
 
             let reply = match reply {

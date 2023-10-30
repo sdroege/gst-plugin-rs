@@ -75,9 +75,8 @@ fn create_ui(app: &gtk::Application) {
 
     let pipeline_weak = pipeline.downgrade();
     let timeout_id = glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
-        let pipeline = match pipeline_weak.upgrade() {
-            Some(pipeline) => pipeline,
-            None => return glib::ControlFlow::Continue,
+        let Some(pipeline) = pipeline_weak.upgrade() else {
+            return glib::ControlFlow::Break;
         };
 
         let position = pipeline.query_position::<gst::ClockTime>();
@@ -96,9 +95,8 @@ fn create_ui(app: &gtk::Application) {
         .add_watch_local(move |_, msg| {
             use gst::MessageView;
 
-            let app = match app_weak.upgrade() {
-                Some(app) => app,
-                None => return glib::ControlFlow::Break,
+            let Some(app) = app_weak.upgrade() else {
+                return glib::ControlFlow::Break;
             };
 
             match msg.view() {

@@ -782,9 +782,8 @@ impl ObjectImpl for HlsSink3 {
             .connect("format-location-full", false, {
                 let imp_weak = self.downgrade();
                 move |args| {
-                    let imp = match imp_weak.upgrade() {
-                        Some(imp) => imp,
-                        None => return Some(None::<String>.to_value()),
+                    let Some(imp) = imp_weak.upgrade() else {
+                        return Some(None::<String>.to_value());
                     };
                     let fragment_id = args[1].get::<u32>().unwrap();
                     gst::info!(CAT, imp: imp, "Got fragment-id: {}", fragment_id);
@@ -1322,9 +1321,8 @@ impl ObjectImpl for HlsCmafSink {
         settings.appsink.set_callbacks(
             gst_app::AppSinkCallbacks::builder()
                 .new_sample(move |sink| {
-                    let imp = match self_weak.upgrade() {
-                        Some(imp) => imp,
-                        _ => return Err(gst::FlowError::Eos),
+                    let Some(imp) = self_weak.upgrade() else {
+                        return Err(gst::FlowError::Eos);
                     };
 
                     let sample = sink.pull_sample().map_err(|_| gst::FlowError::Eos)?;

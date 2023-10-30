@@ -37,9 +37,8 @@ fn create_pipeline(uris: Vec<String>, iterations: u32) -> anyhow::Result<gst::Pi
 
     let pipeline_weak = pipeline.downgrade();
     playlist.connect_pad_added(move |_playlist, src_pad| {
-        let pipeline = match pipeline_weak.upgrade() {
-            None => return,
-            Some(pipeline) => pipeline,
+        let Some(pipeline) = pipeline_weak.upgrade() else {
+            return;
         };
         let pad_name = src_pad.name();
 
@@ -66,9 +65,8 @@ fn create_pipeline(uris: Vec<String>, iterations: u32) -> anyhow::Result<gst::Pi
 
     let pipeline_weak = pipeline.downgrade();
     playlist.connect_pad_removed(move |_playlist, pad| {
-        let pipeline = match pipeline_weak.upgrade() {
-            None => return,
-            Some(pipeline) => pipeline,
+        let Some(pipeline) = pipeline_weak.upgrade() else {
+            return;
         };
 
         // remove sink bin that was handling the pad

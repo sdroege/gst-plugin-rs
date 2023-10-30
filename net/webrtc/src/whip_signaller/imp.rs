@@ -431,9 +431,8 @@ impl SignallableImpl for Signaller {
                             webrtcbin: &gst::Element| {
                 let obj_weak = signaller.downgrade();
                 webrtcbin.connect_notify(Some("ice-gathering-state"), move |webrtcbin, _pspec| {
-                    let obj = match obj_weak.upgrade() {
-                        Some(obj) => obj,
-                        None => return,
+                    let Some(obj) = obj_weak.upgrade() else {
+                        return;
                     };
 
                     let state =

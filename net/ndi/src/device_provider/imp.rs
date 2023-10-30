@@ -87,9 +87,8 @@ impl DeviceProviderImpl for DeviceProvider {
         let mut first = true;
         *thread_guard = Some(thread::spawn(move || {
             {
-                let imp = match imp_weak.upgrade() {
-                    None => return,
-                    Some(imp) => imp,
+                let Some(imp) = imp_weak.upgrade() else {
+                    return;
                 };
 
                 let mut find_guard = imp.find.lock().unwrap();
@@ -109,9 +108,8 @@ impl DeviceProviderImpl for DeviceProvider {
             }
 
             loop {
-                let imp = match imp_weak.upgrade() {
-                    None => return,
-                    Some(imp) => imp,
+                let Some(imp) = imp_weak.upgrade() else {
+                    return;
                 };
 
                 if !imp.is_running.load(atomic::Ordering::SeqCst) {

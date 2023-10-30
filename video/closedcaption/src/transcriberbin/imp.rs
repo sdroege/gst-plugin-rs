@@ -290,9 +290,8 @@ impl TranscriberBin {
         let comp_sinkpad = &state.cccombiner.static_pad("sink").unwrap();
         // Drop caption meta from video buffer if user preference is transcription
         comp_sinkpad.add_probe(gst::PadProbeType::BUFFER, move |_, probe_info| {
-            let imp = match imp_weak.upgrade() {
-                None => return gst::PadProbeReturn::Remove,
-                Some(imp) => imp,
+            let Some(imp) = imp_weak.upgrade() else {
+                return gst::PadProbeReturn::Remove;
             };
 
             let settings = imp.settings.lock().unwrap();
@@ -431,9 +430,8 @@ impl TranscriberBin {
                         | gst::PadProbeType::BUFFER
                         | gst::PadProbeType::EVENT_DOWNSTREAM,
                     move |_pad, _info| {
-                        let imp = match imp_weak.upgrade() {
-                            None => return gst::PadProbeReturn::Pass,
-                            Some(imp) => imp,
+                        let Some(imp) = imp_weak.upgrade() else {
+                            return gst::PadProbeReturn::Remove;
                         };
 
                         imp.disable_transcription_bin();
@@ -645,9 +643,8 @@ impl TranscriberBin {
                     | gst::PadProbeType::BUFFER
                     | gst::PadProbeType::EVENT_DOWNSTREAM,
                 move |_pad, _info| {
-                    let imp = match imp_weak.upgrade() {
-                        None => return gst::PadProbeReturn::Remove,
-                        Some(imp) => imp,
+                    let Some(imp) = imp_weak.upgrade() else {
+                        return gst::PadProbeReturn::Remove;
                     };
 
                     if imp.reconfigure_transcription_bin(lang_code_only).is_err() {

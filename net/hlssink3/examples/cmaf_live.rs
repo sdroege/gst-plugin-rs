@@ -269,9 +269,8 @@ fn main() -> Result<(), Error> {
 
         match msg.view() {
             MessageView::StateChanged(state_changed) => {
-                let pipeline = match pipeline_weak.upgrade() {
-                    Some(pipeline) => pipeline,
-                    None => break,
+                let Some(pipeline) = pipeline_weak.upgrade() else {
+                    break;
                 };
 
                 let mut need_write = write_playlist.lock().unwrap();

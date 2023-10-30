@@ -1078,9 +1078,8 @@ impl UriPlaylistBin {
                 );
 
                 src_pad.add_probe(gst::PadProbeType::BLOCK_DOWNSTREAM, move |pad, _info| {
-                    let imp = match imp_weak.upgrade() {
-                        Some(imp) => imp,
-                        None => return gst::PadProbeReturn::Remove,
+                    let Some(imp) = imp_weak.upgrade() else {
+                        return gst::PadProbeReturn::Remove;
                     };
 
                     if let Some(parent) = pad.parent() {
@@ -1294,9 +1293,8 @@ impl UriPlaylistBin {
                             return gst::PadProbeReturn::Pass;
                         }
 
-                        let element = match element_weak.upgrade() {
-                            Some(element) => element,
-                            None => return gst::PadProbeReturn::Remove,
+                        let Some(element) = element_weak.upgrade() else {
+                            return gst::PadProbeReturn::Remove;
                         };
                         let imp = element.imp();
 
@@ -1396,14 +1394,12 @@ impl UriPlaylistBin {
             let item_weak = item.downgrade();
 
             sink_pad.add_probe(gst::PadProbeType::BLOCK_DOWNSTREAM, move |pad, info| {
-                let element = match element_weak.upgrade() {
-                    Some(element) => element,
-                    None => return gst::PadProbeReturn::Remove,
+                let Some(element) = element_weak.upgrade() else {
+                    return gst::PadProbeReturn::Remove;
                 };
                 let parent = pad.parent().unwrap();
-                let item = match Item::upgrade(&item_weak) {
-                    Some(item) => item,
-                    None => return gst::PadProbeReturn::Remove,
+                let Some(item) = Item::upgrade(&item_weak) else {
+                    return gst::PadProbeReturn::Remove;
                 };
 
                 if !item.is_streaming() {

@@ -105,9 +105,8 @@ fn create_ui(app: &gtk::Application) {
 
     let video_sink_weak = video_sink.downgrade();
     let timeout_id = glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
-        let video_sink = match video_sink_weak.upgrade() {
-            Some(video_sink) => video_sink,
-            None => return glib::ControlFlow::Continue,
+        let Some(video_sink) = video_sink_weak.upgrade() else {
+            return glib::ControlFlow::Break;
         };
 
         let position = video_sink
@@ -121,9 +120,8 @@ fn create_ui(app: &gtk::Application) {
     let video_src_pad_weak = video_src_pad.downgrade();
     let drop_id = RefCell::new(None);
     drop_button.connect_toggled(move |drop_button| {
-        let video_src_pad = match video_src_pad_weak.upgrade() {
-            Some(video_src_pad) => video_src_pad,
-            None => return,
+        let Some(video_src_pad) = video_src_pad_weak.upgrade() else {
+            return;
         };
 
         let drop = drop_button.is_active();
@@ -140,9 +138,8 @@ fn create_ui(app: &gtk::Application) {
 
     let app_weak = app.downgrade();
     window.connect_close_request(move |_| {
-        let app = match app_weak.upgrade() {
-            Some(app) => app,
-            None => return glib::Propagation::Stop,
+        let Some(app) = app_weak.upgrade() else {
+            return glib::Propagation::Stop;
         };
 
         app.quit();
@@ -155,9 +152,8 @@ fn create_ui(app: &gtk::Application) {
         .add_watch_local(move |_, msg| {
             use gst::MessageView;
 
-            let app = match app_weak.upgrade() {
-                Some(app) => app,
-                None => return glib::ControlFlow::Break,
+            let Some(app) = app_weak.upgrade() else {
+                return glib::ControlFlow::Break;
             };
 
             match msg.view() {
