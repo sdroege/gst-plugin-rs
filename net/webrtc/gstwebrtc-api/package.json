@@ -49,6 +49,7 @@
     "webpack-dev-server": "4.15.1"
   },
   "dependencies": {
+    "patch-package": "8.0.0",
     "webrtc-adapter": "8.2.3"
   },
   "scripts": {
@@ -59,6 +60,7 @@
     "make": "npm run check && npm run build && npm run docs",
     "test": "mocha --node-env=test --exit",
     "prepack": "npm run test && npm run make",
-    "start": "webpack serve"
+    "start": "webpack serve",
+    "postinstall": "patch-package"
   }
 }
