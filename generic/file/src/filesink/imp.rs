@@ -13,6 +13,7 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
 use std::fs::File;
@@ -111,6 +112,12 @@ impl ObjectSubclass for FileSink {
 }
 
 impl ObjectImpl for FileSink {
+    fn constructed(&self) {
+        self.parent_constructed();
+
+        self.obj().set_sync(false);
+    }
+
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![glib::ParamSpecString::builder("location")

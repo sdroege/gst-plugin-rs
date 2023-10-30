@@ -9,6 +9,7 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
 use aws_sdk_s3::{
@@ -655,6 +656,12 @@ impl ObjectSubclass for S3Sink {
 }
 
 impl ObjectImpl for S3Sink {
+    fn constructed(&self) {
+        self.parent_constructed();
+
+        self.obj().set_sync(false);
+    }
+
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
