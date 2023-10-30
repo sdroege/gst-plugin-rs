@@ -583,9 +583,8 @@ impl FallbackSwitch {
         let imp_weak = self.downgrade();
         timeout_id
             .wait_async(move |_clock, _time, clock_id| {
-                let imp = match imp_weak.upgrade() {
-                    None => return,
-                    Some(imp) => imp,
+                let Some(imp) = imp_weak.upgrade() else {
+                    return;
                 };
                 imp.on_timeout(clock_id);
             })

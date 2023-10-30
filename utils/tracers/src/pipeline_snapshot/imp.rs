@@ -192,9 +192,8 @@ impl PipelineSnapshot {
             for signal in &mut signals {
                 match signal {
                     SIGUSR1 => {
-                        let tracer = match tracer_weak.upgrade() {
-                            Some(tracer) => tracer,
-                            None => break,
+                        let Some(tracer) = tracer_weak.upgrade() else {
+                            break;
                         };
 
                         let pipelines = {

@@ -350,9 +350,8 @@ impl ObjectImpl for WhipSink {
         let self_weak = self.downgrade();
         self.webrtcbin
             .connect_notify(Some("ice-gathering-state"), move |webrtcbin, _pspec| {
-                let self_ = match self_weak.upgrade() {
-                    Some(self_) => self_,
-                    None => return,
+                let Some(self_) = self_weak.upgrade() else {
+                    return;
                 };
 
                 let state = webrtcbin.property::<WebRTCICEGatheringState>("ice-gathering-state");

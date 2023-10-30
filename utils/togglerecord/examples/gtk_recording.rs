@@ -217,14 +217,12 @@ fn create_ui(app: &gtk::Application) {
     let video_sink_weak = video_sink.downgrade();
     let togglerecord_weak = togglerecord.downgrade();
     let timeout_id = glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
-        let video_sink = match video_sink_weak.upgrade() {
-            Some(video_sink) => video_sink,
-            None => return glib::ControlFlow::Continue,
+        let Some(video_sink) = video_sink_weak.upgrade() else {
+            return glib::ControlFlow::Break;
         };
 
-        let togglerecord = match togglerecord_weak.upgrade() {
-            Some(togglerecord) => togglerecord,
-            None => return glib::ControlFlow::Continue,
+        let Some(togglerecord) = togglerecord_weak.upgrade() else {
+            return glib::ControlFlow::Break;
         };
 
         let position = video_sink
@@ -244,9 +242,8 @@ fn create_ui(app: &gtk::Application) {
 
     let togglerecord_weak = togglerecord.downgrade();
     record_button.connect_clicked(move |button| {
-        let togglerecord = match togglerecord_weak.upgrade() {
-            Some(togglerecord) => togglerecord,
-            None => return,
+        let Some(togglerecord) = togglerecord_weak.upgrade() else {
+            return;
         };
 
         let recording = !togglerecord.property::<bool>("record");
@@ -257,9 +254,8 @@ fn create_ui(app: &gtk::Application) {
 
     let record_button_weak = record_button.downgrade();
     finish_button.connect_clicked(move |button| {
-        let record_button = match record_button_weak.upgrade() {
-            Some(record_button) => record_button,
-            None => return,
+        let Some(record_button) = record_button_weak.upgrade() else {
+            return;
         };
 
         record_button.set_sensitive(false);
@@ -271,9 +267,8 @@ fn create_ui(app: &gtk::Application) {
 
     let app_weak = app.downgrade();
     window.connect_close_request(move |_| {
-        let app = match app_weak.upgrade() {
-            Some(app) => app,
-            None => return glib::Propagation::Stop,
+        let Some(app) = app_weak.upgrade() else {
+            return glib::Propagation::Stop;
         };
 
         app.quit();
@@ -286,9 +281,8 @@ fn create_ui(app: &gtk::Application) {
         .add_watch_local(move |_, msg| {
             use gst::MessageView;
 
-            let app = match app_weak.upgrade() {
-                Some(app) => app,
-                None => return glib::ControlFlow::Break,
+            let Some(app) = app_weak.upgrade() else {
+                return glib::ControlFlow::Break;
             };
 
             match msg.view() {

@@ -2893,9 +2893,8 @@ impl FallbackSrc {
         self.obj().call_async(move |element| {
             let imp = element.imp();
 
-            let source = match source_weak.upgrade() {
-                None => return,
-                Some(source) => source,
+            let Some(source) = source_weak.upgrade() else {
+                return;
             };
 
             // Remove blocking pad probes if they are still there as otherwise shutting down the
@@ -3081,9 +3080,8 @@ impl FallbackSrc {
             let element_weak = element.downgrade();
             timeout
                 .wait_async(move |_clock, _time, _id| {
-                    let element = match element_weak.upgrade() {
-                        None => return,
-                        Some(element) => element,
+                    let Some(element) = element_weak.upgrade() else {
+                        return;
                     };
 
                     gst::debug!(CAT, obj: element, "Woke up, retrying");
@@ -3305,9 +3303,8 @@ impl FallbackSrc {
         let element_weak = self.obj().downgrade();
         timeout
             .wait_async(move |_clock, _time, _id| {
-                let element = match element_weak.upgrade() {
-                    None => return,
-                    Some(element) => element,
+                let Some(element) = element_weak.upgrade() else {
+                    return;
                 };
 
                 element.call_async(move |element| {

@@ -765,9 +765,8 @@ impl ObjectImpl for HlsSink3 {
             .connect("format-location-full", false, {
                 let imp_weak = self.downgrade();
                 move |args| {
-                    let imp = match imp_weak.upgrade() {
-                        Some(imp) => imp,
-                        None => return Some(None::<String>.to_value()),
+                    let Some(imp) = imp_weak.upgrade() else {
+                        return Some(None::<String>.to_value());
                     };
                     let fragment_id = args[1].get::<u32>().unwrap();
                     gst::info!(CAT, imp: imp, "Got fragment-id: {}", fragment_id);

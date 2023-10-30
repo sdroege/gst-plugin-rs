@@ -110,9 +110,8 @@ fn test(
             return;
         }
 
-        let pipeline = match pipeline_weak.upgrade() {
-            Some(pipeline) => pipeline,
-            None => return,
+        let Some(pipeline) = pipeline_weak.upgrade() else {
+            return;
         };
 
         let sink = gst::ElementFactory::make("fakesink").build().unwrap();

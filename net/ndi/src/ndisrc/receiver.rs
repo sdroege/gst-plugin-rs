@@ -747,14 +747,12 @@ impl Receiver {
 
         // Capture until error or shutdown
         loop {
-            let receiver = match receiver.upgrade().map(Receiver) {
-                None => break,
-                Some(receiver) => receiver,
+            let Some(receiver) = receiver.upgrade().map(Receiver) else {
+                break;
             };
 
-            let element = match receiver.0.element.upgrade() {
-                None => return,
-                Some(element) => element,
+            let Some(element) = receiver.0.element.upgrade() else {
+                break;
             };
 
             let flushing = {
