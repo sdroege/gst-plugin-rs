@@ -7453,6 +7453,72 @@
                 },
                 "rank": "marginal"
             },
+            "rtpopusdepay2": {
+                "author": "Tim-Philipp Müller <tim centricular com>",
+                "description": "Depayload an Opus audio stream from RTP packets (RFC 7587)",
+                "hierarchy": [
+                    "GstRtpOpusDepay2",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: audio\n  encoding-name: { (string)OPUS, (string)MULTIOPUS }\n     clock-rate: 48000\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "audio/x-opus:\nchannel-mapping-family: [ 0, 1 ]\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
+            "rtpopuspay2": {
+                "author": "Tim-Philipp Müller <tim centricular com>",
+                "description": "Payload an Opus audio stream into RTP packets (RFC 7587)",
+                "hierarchy": [
+                    "GstRtpOpusPay2",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Payloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/x-opus:\nchannel-mapping-family: 0\naudio/x-opus:\nchannel-mapping-family: 0\n       channels: [ 1, 2 ]\naudio/x-opus:\nchannel-mapping-family: 1\n       channels: [ 3, 255 ]\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n          media: audio\n  encoding-name: { (string)OPUS, (string)MULTIOPUS }\n     clock-rate: 48000\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "dtx": {
+                        "blurb": "Do not send out empty packets for transmission (requires opusenc dtx=true)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                },
+                "rank": "marginal"
+            },
             "rtppcmadepay2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Depayload A-law from RTP packets (RFC 3551)",
