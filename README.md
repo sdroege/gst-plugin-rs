@@ -300,6 +300,8 @@ You will find the following plugins in this repository:
       - `rtpsend`: RTP session management (sender).
       - `rtpsmpte291depay`: Depayload an SMPTE ST291-1 ANC stream from RTP packets (RFC 8331).
       - `rtpsmpte291pay`: Payload an SMPTE ST291-1 ANC stream into RTP packets (RFC 8331).
+      - `rtpvorbisdepay2`: Depayload a Vorbis audio stream from RTP packets (RFC 5215).
+      - `rtpvorbispay2`: Payload a Vorbis audio stream into RTP packets (RFC 5215).
       - `rtpvp8depay2`: Depayload VP8 from RTP packets.
       - `rtpvp8pay2`: Payload VP8 as RTP packets.
       - `rtpvp9depay2`: Depayload VP9 from RTP packets.

@@ -48,6 +48,7 @@ mod opus;
 mod pcmau;
 mod raw_video;
 mod smpte291;
+mod vorbis;
 mod vp8;
 mod vp9;
 
@@ -122,6 +123,9 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
     raw_video::depay::register(plugin)?;
     raw_video::pay::register(plugin)?;
+
+    vorbis::depay::register(plugin)?;
+    vorbis::pay::register(plugin)?;
 
     vp8::depay::register(plugin)?;
     vp8::pay::register(plugin)?;
