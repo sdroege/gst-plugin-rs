@@ -111,6 +111,7 @@ fn scc_payload(s: &[u8]) -> IResult<&[u8], Vec<u8>> {
 /// Parser for a SCC caption line in the form `timecode\tpayload`.
 fn caption(s: &[u8]) -> IResult<&[u8], SccLine> {
     use nom::bytes::complete::tag;
+    use nom::character::complete::multispace0;
     use nom::combinator::map;
     use nom::error::context;
     use nom::sequence::tuple;
@@ -118,8 +119,8 @@ fn caption(s: &[u8]) -> IResult<&[u8], SccLine> {
     context(
         "invalid SCC caption line",
         map(
-            tuple((timecode, tag("\t"), scc_payload, end_of_line)),
-            |(tc, _, value, _)| SccLine::Caption(tc, value),
+            tuple((timecode, tag("\t"), multispace0, scc_payload, end_of_line)),
+            |(tc, _, _, value, _)| SccLine::Caption(tc, value),
         ),
     )(s)
 }
