@@ -34,13 +34,13 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "ts-proxysink",
-        gst::Rank::None,
+        gst::Rank::NONE,
         ProxySink::static_type(),
     )?;
     gst::Element::register(
         Some(plugin),
         "ts-proxysrc",
-        gst::Rank::None,
+        gst::Rank::NONE,
         ProxySrc::static_type(),
     )
 }

@@ -31,7 +31,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "transcriberbin",
-        gst::Rank::None,
+        gst::Rank::NONE,
         TranscriberBin::static_type(),
     )
 }

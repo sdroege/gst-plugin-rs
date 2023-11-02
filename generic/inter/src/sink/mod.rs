@@ -29,7 +29,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "intersink",
-        gst::Rank::None,
+        gst::Rank::NONE,
         InterSink::static_type(),
     )
 }

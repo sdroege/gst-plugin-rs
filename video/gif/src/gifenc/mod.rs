@@ -21,7 +21,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "gifenc",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         GifEnc::static_type(),
     )
 }

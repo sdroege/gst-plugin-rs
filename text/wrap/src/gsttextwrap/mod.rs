@@ -19,7 +19,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "textwrap",
-        gst::Rank::None,
+        gst::Rank::NONE,
         TextWrap::static_type(),
     )
 }

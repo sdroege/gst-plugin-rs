@@ -41,7 +41,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "fallbacksrc",
-        gst::Rank::None,
+        gst::Rank::NONE,
         FallbackSrc::static_type(),
     )
 }

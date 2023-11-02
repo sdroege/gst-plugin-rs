@@ -21,9 +21,9 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     let rank = if gst::version() >= (1, 21, 2, 1) {
         // AOM av1dec rank was demoted in 1.22 dev cycle
         // https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/3287
-        gst::Rank::Primary
+        gst::Rank::PRIMARY
     } else {
-        gst::Rank::Primary + 1
+        gst::Rank::PRIMARY + 1
     };
 
     gst::Element::register(Some(plugin), "dav1ddec", rank, Dav1dDec::static_type())

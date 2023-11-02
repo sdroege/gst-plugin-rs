@@ -21,7 +21,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rsflvdemux",
-        gst::Rank::None,
+        gst::Rank::NONE,
         FlvDemux::static_type(),
     )
 }

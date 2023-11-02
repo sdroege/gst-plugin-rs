@@ -64,14 +64,14 @@ pub fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "hlssink3",
-        gst::Rank::None,
+        gst::Rank::NONE,
         HlsSink3::static_type(),
     )?;
 
     gst::Element::register(
         Some(plugin),
         "hlscmafsink",
-        gst::Rank::None,
+        gst::Rank::NONE,
         HlsCmafSink::static_type(),
     )?;
 

@@ -19,7 +19,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "jsongstparse",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         JsonGstParse::static_type(),
     )
 }

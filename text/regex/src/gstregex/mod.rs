@@ -16,5 +16,5 @@ glib::wrapper! {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "regex", gst::Rank::None, RegEx::static_type())
+    gst::Element::register(Some(plugin), "regex", gst::Rank::NONE, RegEx::static_type())
 }

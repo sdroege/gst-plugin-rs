@@ -19,7 +19,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "tttojson",
-        gst::Rank::None,
+        gst::Rank::NONE,
         TtToJson::static_type(),
     )
 }

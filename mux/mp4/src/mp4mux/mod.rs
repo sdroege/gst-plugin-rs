@@ -37,13 +37,13 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "isomp4mux",
-        gst::Rank::Marginal,
+        gst::Rank::MARGINAL,
         ISOMP4Mux::static_type(),
     )?;
     gst::Element::register(
         Some(plugin),
         "onvifmp4mux",
-        gst::Rank::Marginal,
+        gst::Rank::MARGINAL,
         ONVIFMP4Mux::static_type(),
     )?;
 

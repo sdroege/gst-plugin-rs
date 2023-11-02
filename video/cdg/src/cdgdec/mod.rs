@@ -21,7 +21,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "cdgdec",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         CdgDec::static_type(),
     )
 }

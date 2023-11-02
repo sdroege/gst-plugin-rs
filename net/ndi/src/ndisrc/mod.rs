@@ -13,7 +13,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "ndisrc",
-        gst::Rank::None,
+        gst::Rank::NONE,
         NdiSrc::static_type(),
     )
 }

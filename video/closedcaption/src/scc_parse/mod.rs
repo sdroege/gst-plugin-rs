@@ -21,7 +21,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "sccparse",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         SccParse::static_type(),
     )
 }

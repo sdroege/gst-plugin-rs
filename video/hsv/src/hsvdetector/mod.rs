@@ -21,7 +21,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "hsvdetector",
-        gst::Rank::None,
+        gst::Rank::NONE,
         HsvDetector::static_type(),
     )
 }

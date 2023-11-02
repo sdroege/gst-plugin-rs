@@ -20,7 +20,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "cea608tocea708",
-        gst::Rank::None,
+        gst::Rank::NONE,
         Cea608ToCea708::static_type(),
     )
 }

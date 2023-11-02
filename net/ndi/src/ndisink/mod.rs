@@ -12,7 +12,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "ndisink",
-        gst::Rank::None,
+        gst::Rank::NONE,
         NdiSink::static_type(),
     )
 }

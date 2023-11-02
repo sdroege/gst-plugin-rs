@@ -25,7 +25,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rsrgb2gray",
-        gst::Rank::None,
+        gst::Rank::NONE,
         Rgb2Gray::static_type(),
     )
 }

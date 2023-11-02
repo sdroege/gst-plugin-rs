@@ -31,7 +31,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "ts-appsrc",
-        gst::Rank::None,
+        gst::Rank::NONE,
         AppSrc::static_type(),
     )
 }

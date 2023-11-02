@@ -37,7 +37,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "whipsink",
-        gst::Rank::Marginal,
+        gst::Rank::MARGINAL,
         WhipSink::static_type(),
     )
 }

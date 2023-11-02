@@ -50,7 +50,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "spotifyaudiosrc",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         SpotifyAudioSrc::static_type(),
     )
 }

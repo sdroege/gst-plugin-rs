@@ -21,7 +21,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "cdgparse",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         CdgParse::static_type(),
     )
 }

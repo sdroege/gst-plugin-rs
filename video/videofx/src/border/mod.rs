@@ -20,7 +20,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "roundedcorners",
-        gst::Rank::None,
+        gst::Rank::NONE,
         RoundedCorners::static_type(),
     )
 }

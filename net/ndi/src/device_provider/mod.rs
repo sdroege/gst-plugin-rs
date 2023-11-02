@@ -16,7 +16,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::DeviceProvider::register(
         Some(plugin),
         "ndideviceprovider",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         DeviceProvider::static_type(),
     )
 }

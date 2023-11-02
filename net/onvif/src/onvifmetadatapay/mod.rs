@@ -11,7 +11,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rtponvifmetadatapay",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         OnvifMetadataPay::static_type(),
     )
 }

@@ -21,7 +21,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "awss3hlssink",
-        gst::Rank::None,
+        gst::Rank::NONE,
         S3HlsSink::static_type(),
     )
 }

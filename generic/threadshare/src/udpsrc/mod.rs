@@ -30,7 +30,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "ts-udpsrc",
-        gst::Rank::None,
+        gst::Rank::NONE,
         UdpSrc::static_type(),
     )
 }

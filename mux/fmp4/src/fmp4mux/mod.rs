@@ -46,25 +46,25 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "isofmp4mux",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         ISOFMP4Mux::static_type(),
     )?;
     gst::Element::register(
         Some(plugin),
         "cmafmux",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         CMAFMux::static_type(),
     )?;
     gst::Element::register(
         Some(plugin),
         "dashmp4mux",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         DASHMP4Mux::static_type(),
     )?;
     gst::Element::register(
         Some(plugin),
         "onviffmp4mux",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         ONVIFFMP4Mux::static_type(),
     )?;
 

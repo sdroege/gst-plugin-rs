@@ -19,7 +19,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "csoundfilter",
-        gst::Rank::None,
+        gst::Rank::NONE,
         CsoundFilter::static_type(),
     )
 }

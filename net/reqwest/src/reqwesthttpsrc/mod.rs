@@ -21,7 +21,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "reqwesthttpsrc",
-        gst::Rank::Marginal,
+        gst::Rank::MARGINAL,
         ReqwestHttpSrc::static_type(),
     )
 }

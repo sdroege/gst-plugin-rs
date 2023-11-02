@@ -35,13 +35,13 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rusotos3sink",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         S3Sink::static_type(),
     )?;
     gst::Element::register(
         Some(plugin),
         "awss3sink",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         S3Sink::static_type(),
     )
 }

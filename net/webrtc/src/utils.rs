@@ -481,7 +481,7 @@ impl Codec {
             // Replicating decodebin logic
             &gst::ElementFactory::factories_with_type(
                 gst::ElementFactoryType::DECODER,
-                gst::Rank::Marginal,
+                gst::Rank::MARGINAL,
             ),
         ) {
             // Check if new decoders have been installed meanwhile
@@ -736,17 +736,17 @@ impl Codecs {
 static CODECS: Lazy<Codecs> = Lazy::new(|| {
     let decoders = gst::ElementFactory::factories_with_type(
         gst::ElementFactoryType::DECODER,
-        gst::Rank::Marginal,
+        gst::Rank::MARGINAL,
     );
 
     let encoders = gst::ElementFactory::factories_with_type(
         gst::ElementFactoryType::ENCODER,
-        gst::Rank::Marginal,
+        gst::Rank::MARGINAL,
     );
 
     let payloaders = gst::ElementFactory::factories_with_type(
         gst::ElementFactoryType::PAYLOADER,
-        gst::Rank::Marginal,
+        gst::Rank::MARGINAL,
     );
 
     Codecs(vec![

@@ -17,7 +17,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "raptorqenc",
-        gst::Rank::Marginal,
+        gst::Rank::MARGINAL,
         RaptorqEnc::static_type(),
     )
 }

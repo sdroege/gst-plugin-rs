@@ -20,7 +20,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "jsontovtt",
-        gst::Rank::None,
+        gst::Rank::NONE,
         JsonToVtt::static_type(),
     )
 }

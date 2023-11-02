@@ -125,25 +125,25 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "webrtcsink",
-        gst::Rank::None,
+        gst::Rank::NONE,
         WebRTCSink::static_type(),
     )?;
     gst::Element::register(
         Some(plugin),
         "awskvswebrtcsink",
-        gst::Rank::None,
+        gst::Rank::NONE,
         AwsKvsWebRTCSink::static_type(),
     )?;
     gst::Element::register(
         Some(plugin),
         "whipclientsink",
-        gst::Rank::None,
+        gst::Rank::NONE,
         WhipWebRTCSink::static_type(),
     )?;
     gst::Element::register(
         Some(plugin),
         "livekitwebrtcsink",
-        gst::Rank::None,
+        gst::Rank::NONE,
         LiveKitWebRTCSink::static_type(),
     )?;
 

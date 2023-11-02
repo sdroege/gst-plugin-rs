@@ -19,7 +19,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "textahead",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         TextAhead::static_type(),
     )
 }

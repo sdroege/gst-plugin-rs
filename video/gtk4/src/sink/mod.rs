@@ -35,7 +35,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "gtk4paintablesink",
-        gst::Rank::None,
+        gst::Rank::NONE,
         PaintableSink::static_type(),
     )
 }

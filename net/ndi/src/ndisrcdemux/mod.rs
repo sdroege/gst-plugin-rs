@@ -12,7 +12,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "ndisrcdemux",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         NdiSrcDemux::static_type(),
     )
 }

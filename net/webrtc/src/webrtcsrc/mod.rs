@@ -56,7 +56,7 @@ pub fn register(plugin: Option<&gst::Plugin>) -> Result<(), glib::BoolError> {
     gst::Element::register(
         plugin,
         "webrtcsrc",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         WebRTCSrc::static_type(),
     )
 }

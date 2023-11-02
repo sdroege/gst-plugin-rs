@@ -25,7 +25,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rssinesrc",
-        gst::Rank::None,
+        gst::Rank::NONE,
         SineSrc::static_type(),
     )
 }

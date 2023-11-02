@@ -116,7 +116,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "awstranscriber",
-        gst::Rank::None,
+        gst::Rank::NONE,
         Transcriber::static_type(),
     )
 }

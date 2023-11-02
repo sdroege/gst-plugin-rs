@@ -28,7 +28,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "intersrc",
-        gst::Rank::None,
+        gst::Rank::NONE,
         InterSrc::static_type(),
     )
 }

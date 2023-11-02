@@ -19,7 +19,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "togglerecord",
-        gst::Rank::None,
+        gst::Rank::NONE,
         ToggleRecord::static_type(),
     )
 }

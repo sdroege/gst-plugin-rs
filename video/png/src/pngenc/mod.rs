@@ -95,7 +95,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rspngenc",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         PngEncoder::static_type(),
     )
 }

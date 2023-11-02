@@ -23,7 +23,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rswebpdec",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         WebPDec::static_type(),
     )
 }

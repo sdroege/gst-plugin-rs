@@ -30,7 +30,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "ts-queue",
-        gst::Rank::None,
+        gst::Rank::NONE,
         Queue::static_type(),
     )
 }

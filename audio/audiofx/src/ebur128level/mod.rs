@@ -22,7 +22,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "ebur128level",
-        gst::Rank::None,
+        gst::Rank::NONE,
         EbuR128Level::static_type(),
     )
 }

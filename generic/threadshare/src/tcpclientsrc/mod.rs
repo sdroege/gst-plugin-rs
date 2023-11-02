@@ -31,7 +31,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "ts-tcpclientsrc",
-        gst::Rank::None,
+        gst::Rank::NONE,
         TcpClientSrc::static_type(),
     )
 }

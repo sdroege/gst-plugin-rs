@@ -77,7 +77,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     TypeFind::register(
         Some(plugin),
         "cdg_typefind",
-        gst::Rank::None,
+        gst::Rank::NONE,
         Some("cdg"),
         Some(&Caps::builder("video/x-cdg").build()),
         |typefind| {

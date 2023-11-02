@@ -11,7 +11,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         super::TASK_ELEMENT_NAME,
-        gst::Rank::None,
+        gst::Rank::NONE,
         TaskSink::static_type(),
     )
 }

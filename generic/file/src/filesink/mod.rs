@@ -23,7 +23,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rsfilesink",
-        gst::Rank::None,
+        gst::Rank::NONE,
         FileSink::static_type(),
     )
 }

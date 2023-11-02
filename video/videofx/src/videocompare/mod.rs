@@ -49,7 +49,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "videocompare",
-        gst::Rank::None,
+        gst::Rank::NONE,
         VideoCompare::static_type(),
     )
 }

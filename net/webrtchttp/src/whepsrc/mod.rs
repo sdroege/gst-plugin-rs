@@ -20,7 +20,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "whepsrc",
-        gst::Rank::Marginal,
+        gst::Rank::MARGINAL,
         WhepSrc::static_type(),
     )
 }

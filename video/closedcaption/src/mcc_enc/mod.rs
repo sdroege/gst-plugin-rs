@@ -20,7 +20,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "mccenc",
-        gst::Rank::Primary,
+        gst::Rank::PRIMARY,
         MccEnc::static_type(),
     )
 }

@@ -11,7 +11,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         super::ASYNC_MUTEX_ELEMENT_NAME,
-        gst::Rank::None,
+        gst::Rank::NONE,
         AsyncMutexSink::static_type(),
     )
 }

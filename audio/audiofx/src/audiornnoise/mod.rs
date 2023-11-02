@@ -20,7 +20,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "audiornnoise",
-        gst::Rank::None,
+        gst::Rank::NONE,
         AudioRNNoise::static_type(),
     )
 }

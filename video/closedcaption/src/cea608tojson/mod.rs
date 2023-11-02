@@ -19,7 +19,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "cea608tojson",
-        gst::Rank::None,
+        gst::Rank::NONE,
         Cea608ToJson::static_type(),
     )
 }
