@@ -138,6 +138,7 @@ const RTP_TWCC_URI: &str =
 
 struct Settings {
     stun_server: Option<String>,
+    turn_servers: gst::Array,
     signaller: Signallable,
     meta: Option<gst::Structure>,
     video_codecs: Vec<Codec>,
@@ -165,8 +166,21 @@ impl ObjectImpl for WebRTCSrc {
         static PROPS: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
                 glib::ParamSpecString::builder("stun-server")
+                    .nick("The STUN server to use")
+                    .blurb("The STUN server of the form stun://host:port")
                     .flags(glib::ParamFlags::READWRITE)
                     .default_value(DEFAULT_STUN_SERVER)
+                    .mutable_ready()
+                    .build(),
+                gst::ParamSpecArray::builder("turn-servers")
+                    .nick("List of TURN servers to use")
+                    .blurb("The TURN servers of the form <\"turn(s)://username:password@host:port\", \"turn(s)://username1:password1@host1:port1\">")
+                    .element_spec(&glib::ParamSpecString::builder("turn-server")
+                        .nick("TURN Server")
+                        .blurb("The TURN server of the form turn(s)://username:password@host:port.")
+                        .build()
+                    )
+                    .mutable_ready()
                     .build(),
                 glib::ParamSpecObject::builder::<Signallable>("signaller")
                     .flags(glib::ParamFlags::READWRITE  | gst::PARAM_FLAG_MUTABLE_READY)
@@ -215,7 +229,7 @@ impl ObjectImpl for WebRTCSrc {
             "video-codecs" => {
                 self.settings.lock().unwrap().video_codecs = value
                     .get::<gst::ArrayRef>()
-                    .expect("Type checked upstream")
+                    .expect("type checked upstream")
                     .as_slice()
                     .iter()
                     .filter_map(|codec_name| {
@@ -224,7 +238,7 @@ impl ObjectImpl for WebRTCSrc {
                             .find(|codec| {
                                 codec.stream_type == gst::StreamType::VIDEO
                                     && codec.name
-                                        == codec_name.get::<&str>().expect("Type checked upstream")
+                                        == codec_name.get::<&str>().expect("type checked upstream")
                             })
                             .cloned()
                     })
@@ -233,7 +247,7 @@ impl ObjectImpl for WebRTCSrc {
             "audio-codecs" => {
                 self.settings.lock().unwrap().audio_codecs = value
                     .get::<gst::ArrayRef>()
-                    .expect("Type checked upstream")
+                    .expect("type checked upstream")
                     .as_slice()
                     .iter()
                     .filter_map(|codec_name| {
@@ -242,7 +256,7 @@ impl ObjectImpl for WebRTCSrc {
                             .find(|codec| {
                                 codec.stream_type == gst::StreamType::AUDIO
                                     && codec.name
-                                        == codec_name.get::<&str>().expect("Type checked upstream")
+                                        == codec_name.get::<&str>().expect("type checked upstream")
                             })
                             .cloned()
                     })
@@ -251,7 +265,11 @@ impl ObjectImpl for WebRTCSrc {
             "stun-server" => {
                 self.settings.lock().unwrap().stun_server = value
                     .get::<Option<String>>()
-                    .expect("type checked upstream")
+                    .expect("type checked upstream");
+            }
+            "turn-servers" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.turn_servers = value.get::<gst::Array>().expect("type checked upstream");
             }
             "meta" => {
                 self.settings.lock().unwrap().meta = value
@@ -284,6 +302,7 @@ impl ObjectImpl for WebRTCSrc {
             )
             .to_value(),
             "stun-server" => self.settings.lock().unwrap().stun_server.to_value(),
+            "turn-servers" => self.settings.lock().unwrap().turn_servers.to_value(),
             "meta" => self.settings.lock().unwrap().meta.to_value(),
             name => panic!("{} getter not implemented", name),
         }
@@ -308,6 +327,7 @@ impl Default for Settings {
 
         Self {
             stun_server: DEFAULT_STUN_SERVER.map(|v| v.to_string()),
+            turn_servers: gst::Array::from_values([]),
             signaller: signaller.upcast(),
             meta: Default::default(),
             audio_codecs: CODECS
@@ -468,6 +488,18 @@ impl WebRTCSrc {
             )
             .build()
             .with_context(|| "Failed to make element webrtcbin".to_string())?;
+
+        {
+            let settings = self.settings.lock().unwrap();
+
+            if let Some(stun_server) = settings.stun_server.as_ref() {
+                webrtcbin.set_property("stun-server", stun_server);
+            }
+
+            for turn_server in settings.turn_servers.iter() {
+                webrtcbin.emit_by_name::<bool>("add-turn-server", &[&turn_server]);
+            }
+        }
 
         let bin = gst::Bin::new(None);
         bin.connect_pad_removed(glib::clone!(@weak self as this => move |_, pad|
