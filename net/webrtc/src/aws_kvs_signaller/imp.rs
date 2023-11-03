@@ -22,10 +22,10 @@ use aws_sdk_kinesisvideo::{
     Client,
 };
 use aws_sdk_kinesisvideosignaling::Client as SignalingClient;
-use aws_sig_auth::signer::{self, HttpSignatureType, OperationSigningConfig, RequestConfig};
-use aws_smithy_http::body::SdkBody;
-use aws_types::{region::SigningRegion, SigningService};
-use chrono::prelude::*;
+use aws_sigv4::http_request::{
+    sign, SignableBody, SignableRequest, SignatureLocation, SigningSettings,
+};
+use aws_sigv4::sign::v4;
 use data_encoding::BASE64;
 use http::Uri;
 use std::time::{Duration, SystemTime};
@@ -269,41 +269,31 @@ impl Signaller {
 
         gst::debug!(CAT, "Endpoints: {:?}", resp.resource_endpoint_list());
 
-        let endpoint_wss_uri =
-            match resp
-                .resource_endpoint_list()
-                .unwrap()
-                .iter()
-                .find_map(|endpoint| {
-                    if endpoint.protocol == Some(ChannelProtocol::Wss) {
-                        Some(endpoint.resource_endpoint().unwrap().to_owned())
-                    } else {
-                        None
-                    }
-                }) {
-                Some(endpoint_uri_str) => Uri::from_maybe_shared(endpoint_uri_str).unwrap(),
-                None => {
-                    anyhow::bail!("No WSS endpoint found for {channel_name}");
-                }
-            };
+        let endpoint_wss_uri = match resp.resource_endpoint_list().iter().find_map(|endpoint| {
+            if endpoint.protocol == Some(ChannelProtocol::Wss) {
+                Some(endpoint.resource_endpoint().unwrap().to_owned())
+            } else {
+                None
+            }
+        }) {
+            Some(endpoint_uri_str) => Uri::from_maybe_shared(endpoint_uri_str).unwrap(),
+            None => {
+                anyhow::bail!("No WSS endpoint found for {channel_name}");
+            }
+        };
 
-        let endpoint_https_uri =
-            match resp
-                .resource_endpoint_list()
-                .unwrap()
-                .iter()
-                .find_map(|endpoint| {
-                    if endpoint.protocol == Some(ChannelProtocol::Https) {
-                        Some(endpoint.resource_endpoint().unwrap().to_owned())
-                    } else {
-                        None
-                    }
-                }) {
-                Some(endpoint_uri_str) => endpoint_uri_str,
-                None => {
-                    anyhow::bail!("No HTTPS endpoint found for {channel_name}");
-                }
-            };
+        let endpoint_https_uri = match resp.resource_endpoint_list().iter().find_map(|endpoint| {
+            if endpoint.protocol == Some(ChannelProtocol::Https) {
+                Some(endpoint.resource_endpoint().unwrap().to_owned())
+            } else {
+                None
+            }
+        }) {
+            Some(endpoint_uri_str) => endpoint_uri_str,
+            None => {
+                anyhow::bail!("No HTTPS endpoint found for {channel_name}");
+            }
+        };
 
         gst::debug!(
             CAT,
@@ -331,7 +321,6 @@ impl Signaller {
 
         let ice_servers: Vec<String> = resp
             .ice_server_list()
-            .unwrap()
             .iter()
             .filter_map(|server| {
                 Option::zip(server.username(), server.password())
@@ -340,7 +329,6 @@ impl Signaller {
             .flat_map(|(username, password, server)| {
                 server
                     .uris()
-                    .unwrap()
                     .iter()
                     .filter_map(move |uri| {
                         uri.split_once(':').map(|(protocol, host)| {
@@ -373,20 +361,20 @@ impl Signaller {
             }),
         );
 
-        let current_time = Utc::now();
-
-        let signer = signer::SigV4Signer::new();
-        let mut operation_config = OperationSigningConfig::default_config();
-        operation_config.signature_type = HttpSignatureType::HttpRequestQueryParams;
-        operation_config.expires_in = Some(Duration::from_secs(5 * 60)); // See commit a3db85d.
-
-        let request_config = RequestConfig {
-            request_ts: SystemTime::from(current_time),
-            region: &SigningRegion::from(region),
-            service: &SigningService::from_static("kinesisvideo"),
-            payload_override: None,
-        };
-
+        let mut signing_settings = SigningSettings::default();
+        signing_settings.signature_location = SignatureLocation::QueryParams;
+        signing_settings.expires_in = Some(Duration::from_secs(5 * 60));
+        let identity = credentials.clone().into();
+        let region_string = region.to_string();
+        let signing_params = v4::SigningParams::builder()
+            .identity(&identity)
+            .region(&region_string)
+            .name("kinesisvideo")
+            .time(SystemTime::now())
+            .settings(signing_settings)
+            .build()
+            .unwrap()
+            .into();
         let transcribe_uri = Uri::builder()
             .scheme("wss")
             .authority(endpoint_wss_uri.authority().unwrap().to_owned())
@@ -399,22 +387,23 @@ impl Signaller {
                 gst::error!(CAT, imp: self, "Failed to build HTTP request URI: {err}");
                 anyhow!("Failed to build HTTP request URI: {err}")
             })?;
+
+        // Convert the HTTP request into a signable request
+        let signable_request = SignableRequest::new(
+            "GET",
+            transcribe_uri.to_string(),
+            std::iter::empty(),
+            SignableBody::Bytes(&[]),
+        )
+        .expect("signable request");
+
         let mut request = http::Request::builder()
             .uri(transcribe_uri)
-            .body(SdkBody::empty())
+            .body(aws_smithy_types::body::SdkBody::empty())
             .expect("Failed to build valid request");
-
-        let _signature = signer
-            .sign(
-                &operation_config,
-                &request_config,
-                &credentials,
-                &mut request,
-            )
-            .map_err(|err| {
-                gst::error!(CAT, imp: self, "Failed to sign HTTP request: {err}");
-                anyhow!("Failed to sign HTTP request: {err}")
-            })?;
+        let (signing_instructions, _signature) =
+            sign(signable_request, &signing_params)?.into_parts();
+        signing_instructions.apply_to_request(&mut request);
 
         let url = request.uri().to_string();
 
