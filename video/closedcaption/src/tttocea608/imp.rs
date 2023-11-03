@@ -15,23 +15,11 @@ use gst::glib::once_cell::sync::Lazy;
 use crate::ffi;
 use std::sync::Mutex;
 
-use crate::cea608utils::{Cea608Mode, TextStyle};
+use crate::cea608utils::{is_basicna, is_specialna, is_westeu, Cea608Mode, TextStyle};
 use crate::ttutils::{Chunk, Line, Lines};
 
 fn is_punctuation(word: &str) -> bool {
     word == "." || word == "," || word == "?" || word == "!" || word == ";" || word == ":"
-}
-
-fn is_basicna(cc_data: u16) -> bool {
-    0x0000 != (0x6000 & cc_data)
-}
-
-fn is_westeu(cc_data: u16) -> bool {
-    0x1220 == (0x7660 & cc_data)
-}
-
-fn is_specialna(cc_data: u16) -> bool {
-    0x1130 == (0x7770 & cc_data)
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)]
