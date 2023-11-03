@@ -8,6 +8,16 @@
 
 use cea708_types::{tables::*, Service};
 
+use gst::glib::once_cell::sync::Lazy;
+
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
+        "cea708utils",
+        gst::DebugColorFlags::empty(),
+        Some("CEA-708 Utilities"),
+    )
+});
+
 #[derive(Debug)]
 pub enum WriteError {
     // returns the number of characters/bytes written
@@ -42,7 +52,7 @@ impl Cea708ServiceWriter {
     }
 
     pub fn popon_preamble(&mut self) -> Result<usize, WriteError> {
-        gst::trace!(super::imp::CAT, "popon_preamble");
+        gst::trace!(CAT, "popon_preamble");
         let window = match self.hidden_window {
             // switch up the newly defined window
             WindowBits::ZERO => 0,
@@ -64,7 +74,7 @@ impl Cea708ServiceWriter {
             1,
             1,
         );
-        gst::trace!(super::imp::CAT, "active window {:?}", self.active_window);
+        gst::trace!(CAT, "active window {:?}", self.active_window);
         let codes = [
             Code::DeleteWindows(!self.active_window),
             Code::DefineWindow(args),
@@ -73,30 +83,26 @@ impl Cea708ServiceWriter {
     }
 
     pub fn clear_current_window(&mut self) -> Result<usize, WriteError> {
-        gst::trace!(
-            super::imp::CAT,
-            "clear_current_window {:?}",
-            self.active_window
-        );
+        gst::trace!(CAT, "clear_current_window {:?}", self.active_window);
         self.push_codes(&[Code::ClearWindows(self.active_window)])
     }
 
     pub fn clear_hidden_window(&mut self) -> Result<usize, WriteError> {
-        gst::trace!(super::imp::CAT, "clear_hidden_window");
+        gst::trace!(CAT, "clear_hidden_window");
         self.push_codes(&[Code::ClearWindows(self.hidden_window)])
     }
 
     pub fn end_of_caption(&mut self) -> Result<usize, WriteError> {
-        gst::trace!(super::imp::CAT, "end_of_caption");
+        gst::trace!(CAT, "end_of_caption");
         let ret =
             self.push_codes(&[Code::ToggleWindows(self.active_window | self.hidden_window)])?;
         std::mem::swap(&mut self.active_window, &mut self.hidden_window);
-        gst::trace!(super::imp::CAT, "active window {:?}", self.active_window);
+        gst::trace!(CAT, "active window {:?}", self.active_window);
         Ok(ret)
     }
 
     pub fn paint_on_preamble(&mut self) -> Result<usize, WriteError> {
-        gst::trace!(super::imp::CAT, "paint_on_preamble");
+        gst::trace!(CAT, "paint_on_preamble");
         let window = match self.active_window {
             WindowBits::ZERO => 0,
             WindowBits::ONE => 1,
@@ -126,7 +132,7 @@ impl Cea708ServiceWriter {
         let base_row = std::cmp::max(rollup_count, base_row);
         let anchor_vertical = (base_row as u32 * 100 / 15) as u8;
         gst::trace!(
-            super::imp::CAT,
+            CAT,
             "rollup_preamble base {base_row} count {rollup_count}, anchor-v {anchor_vertical}"
         );
         let codes = [
@@ -170,7 +176,7 @@ impl Cea708ServiceWriter {
         }
         for code in codes.iter() {
             gst::trace!(
-                super::imp::CAT,
+                CAT,
                 "pushing for service:{} code: {code:?}",
                 service.number()
             );

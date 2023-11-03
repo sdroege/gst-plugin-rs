@@ -13,8 +13,8 @@ use gst::subclass::prelude::*;
 
 use atomic_refcell::AtomicRefCell;
 
-use crate::cea608tocea708::fmt::Cea708ServiceWriter;
 use crate::cea608utils::*;
+use crate::cea708utils::Cea708ServiceWriter;
 
 use gst::glib::once_cell::sync::Lazy;
 
@@ -545,7 +545,7 @@ pub struct Cea608ToCea708 {
     state: AtomicRefCell<State>,
 }
 
-pub(crate) static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "cea608tocea708",
         gst::DebugColorFlags::empty(),

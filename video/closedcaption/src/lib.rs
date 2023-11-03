@@ -30,6 +30,7 @@ mod cea608tocea708;
 mod cea608tojson;
 mod cea608tott;
 mod cea608utils;
+mod cea708utils;
 mod jsontovtt;
 mod line_reader;
 mod mcc_enc;

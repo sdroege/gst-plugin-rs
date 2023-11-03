@@ -9,7 +9,6 @@
 use gst::glib;
 use gst::prelude::*;
 
-mod fmt;
 mod imp;
 
 glib::wrapper! {
