@@ -85,12 +85,8 @@ impl TranslateLoop {
 
         let found_output_lang = language_list
             .languages()
-            .and_then(|langs| {
-                langs
-                    .iter()
-                    .find(|lang| lang.language_code() == Some(&self.output_lang))
-            })
-            .is_some();
+            .iter()
+            .any(|lang| lang.language_code() == self.output_lang);
 
         if !found_output_lang {
             let err = format!("Unknown output languages: {}", self.output_lang);
@@ -151,8 +147,7 @@ impl TranslateLoop {
                     gst::info!(CAT, imp: self.pad, "{err}");
                     gst::error_msg!(gst::LibraryError::Failed, ["{err}"])
                 })?
-                .translated_text
-                .unwrap_or_default();
+                .translated_text;
 
             gst::debug!(CAT, imp: self.pad, "Got translation {translated_text}");
 
