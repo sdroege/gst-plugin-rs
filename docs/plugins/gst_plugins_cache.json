@@ -6270,15 +6270,26 @@
                         "writable": true
                     },
                     "stun-server": {
-                        "blurb": "NULL",
+                        "blurb": "The STUN server of the form stun://host:port",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
                         "default": "stun://stun.l.google.com:19302",
-                        "mutable": "null",
+                        "mutable": "ready",
                         "readable": true,
                         "type": "gchararray",
+                        "writable": true
+                    },
+                    "turn-servers": {
+                        "blurb": "The TURN servers of the form <\"turn(s)://username:password@host:port\", \"turn(s)://username1:password1@host1:port1\">",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstValueArray",
                         "writable": true
                     },
                     "video-codecs": {
