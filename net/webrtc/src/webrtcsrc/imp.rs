@@ -30,9 +30,6 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-const RTP_TWCC_URI: &str =
-    "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
-
 struct Settings {
     stun_server: Option<String>,
     turn_servers: gst::Array,
@@ -807,11 +804,7 @@ impl BaseWebRTCSrc {
 
                         filtered_s.extend(s.iter().filter_map(|(key, value)| {
                             if key.starts_with("extmap-") {
-                                if let Ok(s) = value.get::<String>() {
-                                    if s == RTP_TWCC_URI {
-                                        return Some((key, value.to_owned()));
-                                    }
-                                }
+                                return Some((key, value.to_owned()));
                             }
 
                             None
