@@ -8,7 +8,11 @@
 
 use cea708_types::{tables::*, Service};
 
+use gst::glib;
 use gst::glib::once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
+
+use crate::cea608utils::TextStyle;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -17,6 +21,72 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
         Some("CEA-708 Utilities"),
     )
 });
+
+#[derive(
+    Serialize, Deserialize, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum,
+)]
+#[repr(u32)]
+#[enum_type(name = "GstTtToCea708Mode")]
+pub enum Cea708Mode {
+    PopOn,
+    PaintOn,
+    RollUp,
+}
+
+pub fn textstyle_foreground_color(style: TextStyle) -> Color {
+    match style {
+        TextStyle::Red => Color {
+            r: ColorValue::Full,
+            g: ColorValue::None,
+            b: ColorValue::None,
+        },
+        TextStyle::Green => Color {
+            r: ColorValue::None,
+            g: ColorValue::Full,
+            b: ColorValue::None,
+        },
+        TextStyle::Blue => Color {
+            r: ColorValue::None,
+            g: ColorValue::None,
+            b: ColorValue::Full,
+        },
+        TextStyle::Cyan => Color {
+            r: ColorValue::None,
+            g: ColorValue::Full,
+            b: ColorValue::Full,
+        },
+        TextStyle::Yellow => Color {
+            r: ColorValue::Full,
+            g: ColorValue::Full,
+            b: ColorValue::None,
+        },
+        TextStyle::Magenta => Color {
+            r: ColorValue::Full,
+            g: ColorValue::None,
+            b: ColorValue::Full,
+        },
+        TextStyle::White | TextStyle::ItalicWhite => Color {
+            r: ColorValue::Full,
+            g: ColorValue::Full,
+            b: ColorValue::Full,
+        },
+    }
+}
+
+pub fn textstyle_to_pen_color(style: TextStyle) -> SetPenColorArgs {
+    let black = Color {
+        r: ColorValue::None,
+        g: ColorValue::None,
+        b: ColorValue::None,
+    };
+    SetPenColorArgs {
+        foreground_color: textstyle_foreground_color(style),
+        foreground_opacity: Opacity::Solid,
+        background_color: black,
+        background_opacity: Opacity::Solid,
+        edge_color: black,
+    }
+}
 
 #[derive(Debug)]
 pub enum WriteError {

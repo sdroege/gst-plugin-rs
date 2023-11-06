@@ -45,6 +45,12 @@ pub enum TextStyle {
     ItalicWhite,
 }
 
+impl TextStyle {
+    pub fn is_italics(&self) -> bool {
+        *self == TextStyle::ItalicWhite
+    }
+}
+
 impl From<u32> for TextStyle {
     fn from(val: u32) -> Self {
         match val {

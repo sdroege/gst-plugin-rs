@@ -14,7 +14,7 @@ use gst::subclass::prelude::*;
 use atomic_refcell::AtomicRefCell;
 
 use crate::cea608utils::*;
-use crate::cea708utils::Cea708ServiceWriter;
+use crate::cea708utils::{Cea708ServiceWriter, textstyle_foreground_color, textstyle_to_pen_color, Cea708ServiceWriter};
 
 use gst::glib::once_cell::sync::Lazy;
 
@@ -65,65 +65,6 @@ struct Cea708ServiceState {
     pen_location: SetPenLocationArgs,
     pen_color: SetPenColorArgs,
     pen_attributes: SetPenAttributesArgs,
-}
-
-fn textstyle_foreground_color(style: TextStyle) -> Color {
-    match style {
-        TextStyle::Red => Color {
-            r: ColorValue::Full,
-            g: ColorValue::None,
-            b: ColorValue::None,
-        },
-        TextStyle::Green => Color {
-            r: ColorValue::None,
-            g: ColorValue::Full,
-            b: ColorValue::None,
-        },
-        TextStyle::Blue => Color {
-            r: ColorValue::None,
-            g: ColorValue::None,
-            b: ColorValue::Full,
-        },
-        TextStyle::Cyan => Color {
-            r: ColorValue::None,
-            g: ColorValue::Full,
-            b: ColorValue::Full,
-        },
-        TextStyle::Yellow => Color {
-            r: ColorValue::Full,
-            g: ColorValue::Full,
-            b: ColorValue::None,
-        },
-        TextStyle::Magenta => Color {
-            r: ColorValue::Full,
-            g: ColorValue::None,
-            b: ColorValue::Full,
-        },
-        TextStyle::White | TextStyle::ItalicWhite => Color {
-            r: ColorValue::Full,
-            g: ColorValue::Full,
-            b: ColorValue::Full,
-        },
-    }
-}
-
-fn textstyle_to_pen_color(style: TextStyle) -> SetPenColorArgs {
-    let black = Color {
-        r: ColorValue::None,
-        g: ColorValue::None,
-        b: ColorValue::None,
-    };
-    SetPenColorArgs {
-        foreground_color: textstyle_foreground_color(style),
-        foreground_opacity: Opacity::Solid,
-        background_color: black,
-        background_opacity: Opacity::Solid,
-        edge_color: black,
-    }
-}
-
-fn textstyle_is_italics(style: TextStyle) -> bool {
-    style == TextStyle::ItalicWhite
 }
 
 fn cea608_mode_visible_rows(mode: Cea608Mode) -> u8 {
@@ -213,9 +154,9 @@ impl Cea708ServiceState {
         }
 
         let mut need_pen_attributes = false;
-        if self.pen_attributes.italics != textstyle_is_italics(preamble.style) {
+        if self.pen_attributes.italics != preamble.style.is_italics() {
             need_pen_attributes = true;
-            self.pen_attributes.italics = textstyle_is_italics(preamble.style);
+            self.pen_attributes.italics = preamble.style.is_italics();
         }
 
         if self.pen_attributes.underline != (preamble.underline > 0) {
@@ -241,9 +182,9 @@ impl Cea708ServiceState {
         }
 
         let mut need_pen_attributes = false;
-        if self.pen_attributes.italics != textstyle_is_italics(midrowchange.style) {
+        if self.pen_attributes.italics != midrowchange.style.is_italics() {
             need_pen_attributes = true;
-            self.pen_attributes.italics = textstyle_is_italics(midrowchange.style);
+            self.pen_attributes.italics = midrowchange.style.is_italics();
         }
 
         if self.pen_attributes.underline != midrowchange.underline {
