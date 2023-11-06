@@ -88,14 +88,8 @@ pub fn textstyle_to_pen_color(style: TextStyle) -> SetPenColorArgs {
     }
 }
 
-#[derive(Debug)]
-pub enum WriteError {
-    // returns the number of characters/bytes written
-    WouldOverflow(usize),
-}
-
 pub(crate) struct Cea708ServiceWriter {
-    service: Option<Service>,
+    codes: Vec<Code>,
     service_no: u8,
     active_window: WindowBits,
     hidden_window: WindowBits,
@@ -104,24 +98,44 @@ pub(crate) struct Cea708ServiceWriter {
 impl Cea708ServiceWriter {
     pub fn new(service_no: u8) -> Self {
         Self {
-            service: None,
+            codes: vec![],
             service_no,
             active_window: WindowBits::ZERO,
             hidden_window: WindowBits::ONE,
         }
     }
 
-    fn ensure_service(&mut self) {
-        if self.service.is_none() {
-            self.service = Some(Service::new(self.service_no));
+    pub fn take_service(&mut self, available_bytes: usize) -> Option<Service> {
+        if self.codes.is_empty() {
+            return None;
         }
+
+        gst::trace!(CAT, "New service block {}", self.service_no);
+        let mut service = Service::new(self.service_no);
+        let mut i = 0;
+        for code in self.codes.iter() {
+            if code.byte_len() > service.free_space() {
+                gst::trace!(CAT, "service is full");
+                break;
+            }
+            if service.len() + code.byte_len() > available_bytes {
+                gst::trace!(CAT, "packet is full");
+                break;
+            }
+            gst::trace!(CAT, "Adding code {code:?} to service");
+            match service.push_code(code) {
+                Ok(_) => i += 1,
+                Err(_) => break,
+            }
+        }
+        if i == 0 {
+            return None;
+        }
+        self.codes = self.codes.split_off(i);
+        Some(service)
     }
 
-    pub fn take_service(&mut self) -> Option<Service> {
-        self.service.take()
-    }
-
-    pub fn popon_preamble(&mut self) -> Result<usize, WriteError> {
+    pub fn popon_preamble(&mut self) {
         gst::trace!(CAT, "popon_preamble");
         let window = match self.hidden_window {
             // switch up the newly defined window
@@ -152,26 +166,24 @@ impl Cea708ServiceWriter {
         self.push_codes(&codes)
     }
 
-    pub fn clear_current_window(&mut self) -> Result<usize, WriteError> {
+    pub fn clear_current_window(&mut self) {
         gst::trace!(CAT, "clear_current_window {:?}", self.active_window);
         self.push_codes(&[Code::ClearWindows(self.active_window)])
     }
 
-    pub fn clear_hidden_window(&mut self) -> Result<usize, WriteError> {
+    pub fn clear_hidden_window(&mut self) {
         gst::trace!(CAT, "clear_hidden_window");
         self.push_codes(&[Code::ClearWindows(self.hidden_window)])
     }
 
-    pub fn end_of_caption(&mut self) -> Result<usize, WriteError> {
+    pub fn end_of_caption(&mut self) {
         gst::trace!(CAT, "end_of_caption");
-        let ret =
-            self.push_codes(&[Code::ToggleWindows(self.active_window | self.hidden_window)])?;
+        self.push_codes(&[Code::ToggleWindows(self.active_window | self.hidden_window)]);
         std::mem::swap(&mut self.active_window, &mut self.hidden_window);
         gst::trace!(CAT, "active window {:?}", self.active_window);
-        Ok(ret)
     }
 
-    pub fn paint_on_preamble(&mut self) -> Result<usize, WriteError> {
+    pub fn paint_on_preamble(&mut self) {
         gst::trace!(CAT, "paint_on_preamble");
         let window = match self.active_window {
             WindowBits::ZERO => 0,
@@ -198,7 +210,7 @@ impl Cea708ServiceWriter {
         ])
     }
 
-    pub fn rollup_preamble(&mut self, rollup_count: u8, base_row: u8) -> Result<usize, WriteError> {
+    pub fn rollup_preamble(&mut self, rollup_count: u8, base_row: u8) {
         let base_row = std::cmp::max(rollup_count, base_row);
         let anchor_vertical = (base_row as u32 * 100 / 15) as u8;
         gst::trace!(
@@ -229,49 +241,34 @@ impl Cea708ServiceWriter {
         self.push_codes(&codes)
     }
 
-    pub fn write_char(&mut self, c: char) -> Result<usize, WriteError> {
+    pub fn write_char(&mut self, c: char) {
         if let Some(code) = Code::from_char(c) {
             self.push_codes(&[code])
-        } else {
-            Ok(0)
         }
     }
 
-    pub fn push_codes(&mut self, codes: &[Code]) -> Result<usize, WriteError> {
-        self.ensure_service();
-        let service = self.service.as_mut().unwrap();
-        let start_len = service.len();
-        if service.free_space() < codes.iter().map(|c| c.byte_len()).sum::<usize>() {
-            return Err(WriteError::WouldOverflow(0));
-        }
-        for code in codes.iter() {
-            gst::trace!(
-                CAT,
-                "pushing for service:{} code: {code:?}",
-                service.number()
-            );
-            service.push_code(code).unwrap();
-        }
-        Ok(service.len() - start_len)
+    pub fn push_codes(&mut self, codes: &[Code]) {
+        gst::log!(CAT, "pushing codes: {codes:?}");
+        self.codes.extend(codes.iter().cloned());
     }
 
-    pub fn etx(&mut self) -> Result<usize, WriteError> {
+    pub fn etx(&mut self) {
         self.push_codes(&[Code::ETX])
     }
 
-    pub fn carriage_return(&mut self) -> Result<usize, WriteError> {
+    pub fn carriage_return(&mut self) {
         self.push_codes(&[Code::CR])
     }
 
-    pub fn set_pen_attributes(&mut self, args: SetPenAttributesArgs) -> Result<usize, WriteError> {
+    pub fn set_pen_attributes(&mut self, args: SetPenAttributesArgs) {
         self.push_codes(&[Code::SetPenAttributes(args)])
     }
 
-    pub fn set_pen_location(&mut self, args: SetPenLocationArgs) -> Result<usize, WriteError> {
+    pub fn set_pen_location(&mut self, args: SetPenLocationArgs) {
         self.push_codes(&[Code::SetPenLocation(args)])
     }
 
-    pub fn set_pen_color(&mut self, args: SetPenColorArgs) -> Result<usize, WriteError> {
+    pub fn set_pen_color(&mut self, args: SetPenColorArgs) {
         self.push_codes(&[Code::SetPenColor(args)])
     }
 }

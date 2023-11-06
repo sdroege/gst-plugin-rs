@@ -101,11 +101,11 @@ impl Cea708ServiceState {
             0
         };
         match cea608_mode {
-            Cea608Mode::PopOn => self.writer.popon_preamble().unwrap(),
-            Cea608Mode::PaintOn => self.writer.paint_on_preamble().unwrap(),
-            Cea608Mode::RollUp2 => self.writer.rollup_preamble(2, base_row).unwrap(),
-            Cea608Mode::RollUp3 => self.writer.rollup_preamble(3, base_row).unwrap(),
-            Cea608Mode::RollUp4 => self.writer.rollup_preamble(4, base_row).unwrap(),
+            Cea608Mode::PopOn => self.writer.popon_preamble(),
+            Cea608Mode::PaintOn => self.writer.paint_on_preamble(),
+            Cea608Mode::RollUp2 => self.writer.rollup_preamble(2, base_row),
+            Cea608Mode::RollUp3 => self.writer.rollup_preamble(3, base_row),
+            Cea608Mode::RollUp4 => self.writer.rollup_preamble(4, base_row),
         };
         // we have redefined then window so all the attributes have been reset
         self.pen_location.row = new_row;
@@ -117,20 +117,20 @@ impl Cea708ServiceState {
 
     fn handle_text(&mut self, text: Cea608Text) {
         if text.code_space == CodeSpace::WestEU {
-            self.writer.push_codes(&[Code::BS]).unwrap();
+            self.writer.push_codes(&[Code::BS]);
         }
         if let Some(c) = text.char1 {
             if self.pen_location.column > 31 {
-                self.writer.push_codes(&[Code::BS]).unwrap();
+                self.writer.push_codes(&[Code::BS]);
             }
-            self.writer.write_char(c).unwrap();
+            self.writer.write_char(c);
             self.pen_location.column = std::cmp::min(self.pen_location.column + 1, 32);
         }
         if let Some(c) = text.char2 {
             if self.pen_location.column > 31 {
-                self.writer.push_codes(&[Code::BS]).unwrap();
+                self.writer.push_codes(&[Code::BS]);
             }
-            self.writer.write_char(c).unwrap();
+            self.writer.write_char(c);
             self.pen_location.column = std::cmp::min(self.pen_location.column + 1, 32);
         }
     }
@@ -150,7 +150,7 @@ impl Cea708ServiceState {
         }
 
         if need_pen_location {
-            self.writer.set_pen_location(self.pen_location).unwrap();
+            self.writer.set_pen_location(self.pen_location);
         }
 
         let mut need_pen_attributes = false;
@@ -165,20 +165,20 @@ impl Cea708ServiceState {
         }
 
         if need_pen_attributes {
-            self.writer.set_pen_attributes(self.pen_attributes).unwrap();
+            self.writer.set_pen_attributes(self.pen_attributes);
         }
 
         if self.pen_color.foreground_color != textstyle_foreground_color(preamble.style) {
             self.pen_color.foreground_color = textstyle_foreground_color(preamble.style);
-            self.writer.set_pen_color(self.pen_color).unwrap();
+            self.writer.set_pen_color(self.pen_color);
         }
     }
 
     fn handle_midrowchange(&mut self, midrowchange: MidRowChange) {
-        self.writer.write_char(' ').unwrap();
+        self.writer.write_char(' ');
         if self.pen_color.foreground_color != textstyle_foreground_color(midrowchange.style) {
             self.pen_color.foreground_color = textstyle_foreground_color(midrowchange.style);
-            self.writer.set_pen_color(self.pen_color).unwrap();
+            self.writer.set_pen_color(self.pen_color);
         }
 
         let mut need_pen_attributes = false;
@@ -214,7 +214,7 @@ impl Cea708State {
         self.packet_counter &= 0x3;
 
         for state in self.service_state.iter_mut() {
-            if let Some(service) = state.writer.take_service() {
+            while let Some(service) = state.writer.take_service(packet.free_space()) {
                 if let Err(e) = packet.push_service(service.clone()) {
                     gst::warning!(
                         CAT,
@@ -307,14 +307,8 @@ impl State {
             {
                 // https://www.law.cornell.edu/cfr/text/47/79.101 (f)(1)(x)
                 gst::trace!(CAT, "change to rollup from pop/paint-on");
-                self.cea708.service_state[idx]
-                    .writer
-                    .clear_hidden_window()
-                    .unwrap();
-                self.cea708.service_state[idx]
-                    .writer
-                    .clear_current_window()
-                    .unwrap();
+                self.cea708.service_state[idx].writer.clear_hidden_window();
+                self.cea708.service_state[idx].writer.clear_current_window();
                 self.cea608.service[idx].base_row = 15;
             }
             if old_mode.is_rollup() && cea608_mode.is_rollup() {
@@ -331,8 +325,7 @@ impl State {
                     for _ in new_count..old_count {
                         self.cea708.service_state[idx]
                             .writer
-                            .push_codes(&[Code::CR])
-                            .unwrap();
+                            .push_codes(&[Code::CR]);
                     }
                 }
             }
@@ -371,8 +364,8 @@ impl State {
                 }
                 Cea608::EndOfCaption(chan) => {
                     let state = self.service_state_from_608_field_channel(field, chan);
-                    state.writer.end_of_caption().unwrap();
-                    state.writer.etx().unwrap();
+                    state.writer.end_of_caption();
+                    state.writer.etx();
                 }
                 Cea608::Preamble(mut preamble) => {
                     let idx = self.field_channel_to_index(field, preamble.chan);
@@ -394,8 +387,7 @@ impl State {
                         if old_base_row != preamble.row as u8 {
                             state
                                 .writer
-                                .rollup_preamble(rollup_count, preamble.row as u8)
-                                .unwrap();
+                                .rollup_preamble(rollup_count, preamble.row as u8);
                         }
                         state.pen_location.row = rollup_count - 1;
                         preamble.row = rollup_count as i32 - 1;
@@ -411,10 +403,7 @@ impl State {
                     let state = self.service_state_from_608_field_channel(field, chan);
                     // TODO: handle removing a midrowchange
                     state.pen_location.column = std::cmp::max(state.pen_location.column - 1, 0);
-                    state
-                        .writer
-                        .push_codes(&[cea708_types::tables::Code::BS])
-                        .unwrap();
+                    state.writer.push_codes(&[cea708_types::tables::Code::BS]);
                 }
                 Cea608::CarriageReturn(chan) => {
                     if let Some(mode) =
@@ -428,11 +417,11 @@ impl State {
                 }
                 Cea608::EraseDisplay(chan) => {
                     let state = self.service_state_from_608_field_channel(field, chan);
-                    state.writer.clear_current_window().unwrap();
+                    state.writer.clear_current_window();
                 }
                 Cea608::EraseNonDisplay(chan) => {
                     let state = self.service_state_from_608_field_channel(field, chan);
-                    state.writer.clear_hidden_window().unwrap();
+                    state.writer.clear_hidden_window();
                 }
                 Cea608::TabOffset(chan, count) => {
                     let state = self.service_state_from_608_field_channel(field, chan);
@@ -453,8 +442,7 @@ impl State {
                     // and we need to send ETX
                     self.cea708.service_state[idx]
                         .writer
-                        .push_codes(&[cea708_types::tables::Code::ETX])
-                        .unwrap();
+                        .push_codes(&[cea708_types::tables::Code::ETX]);
                 }
             }
         }
