@@ -992,13 +992,14 @@ dependencies = [
 
 [[package]]
 name = "cea708-types"
-version = "0.1.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a23ec736ab2aafb861ef6f22c662cbc18c85e73945f86bd9e936a20be7cc958"
+checksum = "ab4d26b125a97b4fdd73c45b64ec8d1c7e0d0dd12a25acec5ca98a38c400b66b"
 dependencies = [
+ "env_logger 0.10.1",
+ "log",
+ "muldiv",
  "once_cell",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use cea708_types::{tables::*, DTVCCPacket};
+use cea708_types::{CCDataWriter, Framerate};
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -14,7 +15,7 @@ use gst::subclass::prelude::*;
 use atomic_refcell::AtomicRefCell;
 
 use crate::cea608utils::*;
-use crate::cea708utils::{Cea708ServiceWriter, textstyle_foreground_color, textstyle_to_pen_color, Cea708ServiceWriter};
+use crate::cea708utils::{textstyle_foreground_color, textstyle_to_pen_color, Cea708ServiceWriter};
 
 use gst::glib::once_cell::sync::Lazy;
 
@@ -193,17 +194,19 @@ impl Cea708ServiceState {
         }
 
         if need_pen_attributes {
-            self.writer.set_pen_attributes(self.pen_attributes).unwrap();
+            self.writer.set_pen_attributes(self.pen_attributes);
         }
     }
 
     fn carriage_return(&mut self) {
-        self.writer.carriage_return().unwrap();
+        self.writer.carriage_return();
     }
 }
 
 struct Cea708State {
     packet_counter: u8,
+    writer: CCDataWriter,
+    framerate: Framerate,
     service_state: [Cea708ServiceState; 4],
 }
 
@@ -225,31 +228,32 @@ impl Cea708State {
                 }
             }
         }
+        self.writer.push_packet(packet);
 
-        let mut cc_data = Vec::with_capacity(64);
         assert!(s334_1a_data.len() % 3 == 0);
         for triple in s334_1a_data.chunks(3) {
             if (triple[0] & 0x80) > 0 {
-                cc_data.push(0xfd);
+                self.writer
+                    .push_cea608(cea708_types::Cea608::Field1(triple[1], triple[2]))
             } else {
-                cc_data.push(0xfc);
+                self.writer
+                    .push_cea608(cea708_types::Cea608::Field2(triple[1], triple[2]))
             }
-            cc_data.extend(&triple[1..]);
         }
-        let mut ccp_data = Vec::with_capacity(128);
-        packet.write_cc_data(&mut ccp_data).ok()?;
+        let mut cc_data = Vec::with_capacity(128);
+        self.writer.write(self.framerate, &mut cc_data).unwrap();
         gst::trace!(
             CAT,
             "take_buffer produced cc_data_len:{} cc_data:{cc_data:?}",
             cc_data.len()
         );
-        // ignore the 2 byte cc_data header that is unused in GStreamer
-        if ccp_data.len() > 2 {
-            cc_data.extend(&ccp_data[2..]);
-        } else if cc_data.is_empty() {
-            return None;
+        if cc_data.len() > 2 {
+            // ignore the 2 byte cc_data header that is unused in GStreamer
+            let cc_data = cc_data.split_off(2);
+            Some(gst::Buffer::from_slice(cc_data))
+        } else {
+            None
         }
-        Some(gst::Buffer::from_slice(cc_data))
     }
 }
 
@@ -264,6 +268,8 @@ impl Default for State {
             cea608: Cea608State::default(),
             cea708: Cea708State {
                 packet_counter: 0,
+                writer: CCDataWriter::default(),
+                framerate: Framerate::new(30, 1),
                 service_state: [
                     Cea708ServiceState::new(1),
                     Cea708ServiceState::new(2),
@@ -618,14 +624,16 @@ impl Cea608ToCea708 {
                         return false;
                     }
                 };
+                let framerate = framerate.unwrap_or(gst::Fraction::new(30, 1));
+                state.cea708.framerate =
+                    Framerate::new(framerate.numer() as u32, framerate.denom() as u32);
                 drop(state);
 
-                let mut caps_builder =
-                    gst::Caps::builder("closedcaption/x-cea-708").field("format", "cc_data");
-                if let Some(framerate) = framerate {
-                    caps_builder = caps_builder.field("framerate", framerate);
-                }
-                let new_event = gst::event::Caps::new(&caps_builder.build());
+                let caps = gst::Caps::builder("closedcaption/x-cea-708")
+                    .field("format", "cc_data")
+                    .field("framerate", framerate)
+                    .build();
+                let new_event = gst::event::Caps::new(&caps);
 
                 return self.srcpad.push_event(new_event);
             }

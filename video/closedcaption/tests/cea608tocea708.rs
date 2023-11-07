@@ -31,7 +31,7 @@ struct TestState {
 impl TestState {
     fn new() -> Self {
         let mut h = gst_check::Harness::new_parse("cea608tocea708");
-        h.set_src_caps_str("closedcaption/x-cea-608,format=raw,field=0");
+        h.set_src_caps_str("closedcaption/x-cea-608,format=raw,field=0,framerate=25/1");
         h.set_sink_caps_str("closedcaption/x-cea-708,format=cc_data");
 
         Self {
@@ -98,6 +98,7 @@ fn test_single_char() {
         caps,
         gst::Caps::builder("closedcaption/x-cea-708")
             .field("format", "cc_data")
+            .field("framerate", gst::Fraction::new(25, 1))
             .build()
     );
 }
