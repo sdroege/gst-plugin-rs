@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     ops::Deref,
     sync::atomic::{AtomicBool, Ordering},
 };
@@ -611,28 +611,10 @@ impl Codec {
         })
     }
 
-    pub fn build_payloader(&self, pt: u32) -> Option<gst::Element> {
-        self.encoding_info.as_ref().map(|info| {
-            let mut res = info
-                .payloader
-                .create()
-                .property("mtu", 1200_u32)
-                .property("pt", pt);
-
-            match info.payloader.name().as_str() {
-                "rtpvp8pay" | "rtpvp9pay" => {
-                    res = res.property_from_str("picture-id-mode", "15-bit");
-                }
-                "rtph264pay" | "rtph265pay" => {
-                    res = res
-                        .property_from_str("aggregate-mode", "zero-latency")
-                        .property("config-interval", -1i32);
-                }
-                _ => (),
-            }
-
-            res.build().unwrap()
-        })
+    pub fn create_payloader(&self) -> Option<gst::Element> {
+        self.encoding_info
+            .as_ref()
+            .map(|info| info.payloader.create().build().unwrap())
     }
 
     pub fn raw_converter_filter(&self) -> Result<gst::Element, Error> {
@@ -937,4 +919,40 @@ pub struct NavigationEvent {
     pub mid: Option<String>,
     #[serde(flatten)]
     pub event: gst_video::NavigationEvent,
+}
+
+pub fn find_smallest_available_ext_id(ids: impl IntoIterator<Item = u32>) -> u32 {
+    let used_numbers: HashSet<_> = ids.into_iter().collect();
+    (1..).find(|&num| !used_numbers.contains(&num)).unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_find_smallest_available_ext_id_case(
+        ids: impl IntoIterator<Item = u32>,
+        expected: u32,
+    ) -> Result<(), String> {
+        let actual = find_smallest_available_ext_id(ids);
+
+        if actual != expected {
+            return Err(format!("Expected {}, got {}", expected, actual));
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_find_smallest_available_ext_id() -> Result<(), String> {
+        [
+            (vec![], 1u32),
+            (vec![2u32, 3u32, 4u32], 1u32),
+            (vec![1u32, 3u32, 4u32], 2u32),
+            (vec![4u32, 1u32, 3u32], 2u32),
+            (vec![1u32, 2u32, 3u32], 4u32),
+        ]
+        .into_iter()
+        .try_for_each(|(input, expected)| test_find_smallest_available_ext_id_case(input, expected))
+    }
 }

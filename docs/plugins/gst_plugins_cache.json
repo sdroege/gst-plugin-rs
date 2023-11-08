@@ -7038,6 +7038,24 @@
                         "return-type": "GStrv",
                         "when": "last"
                     },
+                    "payloader-setup": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg2",
+                                "type": "GstElement"
+                            }
+                        ],
+                        "return-type": "gboolean",
+                        "when": "last"
+                    },
                     "request-encoded-filter": {
                         "args": [
                             {
