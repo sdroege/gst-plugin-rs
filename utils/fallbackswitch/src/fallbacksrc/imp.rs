@@ -3206,20 +3206,23 @@ impl FallbackSrc {
                         } else {
                             let mut state_guard = imp.state.lock();
                             let state = state_guard.as_mut().expect("no state");
-                            if fallback_source {
-                                assert!(state
-                                    .fallback_source
-                                    .as_ref()
-                                    .map(|s| s.restart_timeout.is_none())
-                                    .unwrap_or(true));
+                            let source = if fallback_source {
+                                if let Some(source) = &state.fallback_source {
+                                    source
+                                } else {
+                                    return;
+                                }
                             } else {
-                                assert!(state.source.restart_timeout.is_none());
+                                &state.source
+                            };
+
+                            if source.restart_timeout.is_none() {
+                                imp.schedule_source_restart_timeout(
+                                    state,
+                                    gst::ClockTime::ZERO,
+                                    fallback_source,
+                                );
                             }
-                            imp.schedule_source_restart_timeout(
-                                state,
-                                gst::ClockTime::ZERO,
-                                fallback_source,
-                            );
                         }
                     });
                 })
