@@ -89,4 +89,9 @@ mod tests {
     async fn test_s3_whitespace() {
         do_s3_test("s3 test").await;
     }
+
+    #[tokio::test]
+    async fn test_s3_unicode() {
+        do_s3_test("s3 🧪 😱").await;
+    }
 }
