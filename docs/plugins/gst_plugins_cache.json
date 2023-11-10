@@ -7253,6 +7253,58 @@
                 },
                 "rank": "marginal"
             },
+            "rtpklvdepay2": {
+                "author": "Tim-Philipp Müller <tim centricular com>",
+                "description": "Depayload an SMPTE ST 336 KLV metadata stream from RTP packets (RFC 6597)",
+                "hierarchy": [
+                    "GstRtpKlvDepay2",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: application\n     clock-rate: [ 1, 2147483647 ]\n  encoding-name: SMPTE336M\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "meta/x-klv:\n         parsed: true\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
+            "rtpklvpay2": {
+                "author": "Tim-Philipp Müller <tim centricular com>",
+                "description": "Payload an SMPTE ST 336 KLV metadata stream into RTP packets (RFC 6597)",
+                "hierarchy": [
+                    "GstRtpKlvPay2",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Payloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "meta/x-klv:\n         parsed: true\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n          media: application\n  encoding-name: SMPTE336M\n     clock-rate: 90000\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
             "rtpmp2tdepay2": {
                 "author": "Tim-Philipp Müller <tim centricular com>",
                 "description": "Depayload an MPEG Transport Stream from RTP packets (RFC 2250)",

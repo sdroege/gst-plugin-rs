@@ -28,6 +28,7 @@ mod basepay;
 
 mod av1;
 mod jpeg;
+mod klv;
 mod mp2t;
 mod mp4a;
 mod mp4g;
@@ -59,6 +60,9 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
     jpeg::depay::register(plugin)?;
     jpeg::pay::register(plugin)?;
+
+    klv::depay::register(plugin)?;
+    klv::pay::register(plugin)?;
 
     mp2t::depay::register(plugin)?;
     mp2t::pay::register(plugin)?;
