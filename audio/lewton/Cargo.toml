@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-lewton"
-version = "0.9.11"
+version = "0.9.12"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT OR Apache-2.0"

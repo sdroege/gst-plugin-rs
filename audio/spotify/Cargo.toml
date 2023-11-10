@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-spotify"
-version = "0.9.11"
+version = "0.9.12"
 authors = ["Guillaume Desmottes <guillaume@desmottes.be>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
