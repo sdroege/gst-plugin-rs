@@ -9307,8 +9307,20 @@
                 ],
                 "klass": "Source/Network/WebRTC",
                 "pad-templates": {
+                    "audio_%%s_%%u": {
+                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\n",
+                        "direction": "src",
+                        "presence": "sometimes",
+                        "type": "GstWebRTCSrcPad"
+                    },
                     "audio_%%u": {
                         "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\n",
+                        "direction": "src",
+                        "presence": "sometimes",
+                        "type": "GstWebRTCSrcPad"
+                    },
+                    "video_%%s_%%u": {
+                        "caps": "video/x-raw(ANY):\napplication/x-rtp:\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\nvideo/x-av1:\n",
                         "direction": "src",
                         "presence": "sometimes",
                         "type": "GstWebRTCSrcPad"
@@ -9374,8 +9386,20 @@
                 "klass": "Source/Network/WebRTC",
                 "long-name": "WebRTCSrc",
                 "pad-templates": {
+                    "audio_%%s_%%u": {
+                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\n",
+                        "direction": "src",
+                        "presence": "sometimes",
+                        "type": "GstWebRTCSrcPad"
+                    },
                     "audio_%%u": {
                         "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\n",
+                        "direction": "src",
+                        "presence": "sometimes",
+                        "type": "GstWebRTCSrcPad"
+                    },
+                    "video_%%s_%%u": {
+                        "caps": "video/x-raw(ANY):\napplication/x-rtp:\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\nvideo/x-av1:\n",
                         "direction": "src",
                         "presence": "sometimes",
                         "type": "GstWebRTCSrcPad"
@@ -9439,8 +9463,20 @@
                 ],
                 "klass": "Source/Network/WebRTC",
                 "pad-templates": {
+                    "audio_%%s_%%u": {
+                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\n",
+                        "direction": "src",
+                        "presence": "sometimes",
+                        "type": "GstWebRTCSrcPad"
+                    },
                     "audio_%%u": {
                         "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\n",
+                        "direction": "src",
+                        "presence": "sometimes",
+                        "type": "GstWebRTCSrcPad"
+                    },
+                    "video_%%s_%%u": {
+                        "caps": "video/x-raw(ANY):\napplication/x-rtp:\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\nvideo/x-av1:\n",
                         "direction": "src",
                         "presence": "sometimes",
                         "type": "GstWebRTCSrcPad"
