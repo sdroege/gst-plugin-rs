@@ -5,6 +5,37 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.11.2] - 2023-11-11
+### Fixed
+- filesink / s3sink: Set `sync=false` to allow processing faster than
+  real-time.
+- hlssink3: Various minor bugfixes and cleanups.
+- livesync: Various minor bugfixes and cleanups that should make the element
+  work more reliable.
+- s3sink: Fix handling of non-ASCII characters in URIs and keys.
+- sccparse: Parse SCC files that are incorrectly created by CCExtractor.
+- ndisrc: Assume > 8 channels are unpositioned.
+- rtpav1depay: Skip unexpected leading fragments instead of repeatedly warning
+  about the stream possibly being corrupted.
+- rtpav1depay: Don't push stale temporal delimiters downstream but wait until
+  a complete OBU is collected.
+- whipwebrtcsink: Use correct URL during redirects.
+- webrtcsink: Make sure to not miss any ICE candidates.
+- webrtcsink: Fix deadlock when calling `set-local-description`.
+- webrtcsrc: Fix reference cycles that prevented the element from being freed.
+- webrtcsrc: Define signaller property as `CONSTRUCT_ONLY` to make it actually
+  possible to set different signallers.
+- webrtc: Update livekit signaller to livekit 0.2.
+- meson: Various fixes to the meson-based build system.
+
+### Added
+- audiornnoise: Attach audio level meta to output buffers.
+- hlssink3: Allow adding `EXT-X-PROGRAM-DATE-TIME` tag to the manifest.
+- webrtcsrc: Add `turn-servers` property.
+
+### Changed
+- aws/webrtc: Update to AWS SDK 0.57/0.35.
+
 ## [0.11.1] - 2023-10-04
 ### Fixed
 - fallbackswitch: Fix various deadlocks.
@@ -252,7 +283,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.1...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.2...HEAD
+[0.11.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.1...0.11.2
 [0.11.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.0...0.11.1
 [0.11.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.11...0.11.0
 [0.10.11]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.10...0.10.11
