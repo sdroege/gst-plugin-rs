@@ -92,6 +92,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_s3_unicode() {
-        do_s3_test("s3 🧪 😱").await;
+        do_s3_test("s3 \u{1F9EA} \u{1F631}").await;
     }
 }
