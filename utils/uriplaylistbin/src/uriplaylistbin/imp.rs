@@ -1687,8 +1687,7 @@ impl UriPlaylistBin {
     fn stop(&self) {
         // remove all children and pads
         let children = self.obj().children();
-        let children_ref = children.iter().collect::<Vec<_>>();
-        self.obj().remove_many(&children_ref).unwrap();
+        self.obj().remove_many(children).unwrap();
 
         for pad in self.obj().src_pads() {
             self.obj().remove_pad(&pad).unwrap();
