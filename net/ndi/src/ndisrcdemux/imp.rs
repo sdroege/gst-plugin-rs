@@ -534,7 +534,11 @@ impl NdiSrcDemux {
                 gst::log!(CAT, imp: self, "Produced video buffer {:?}", buffer);
             }
             Buffer::Metadata { frame, .. } => {
-                state.pending_metadata.push(frame);
+                // Only closed caption meta are supported,
+                // once parsed, they will be attached to the next video buffer
+                if state.video_info.is_some() {
+                    state.pending_metadata.push(frame);
+                }
                 return Ok(gst::FlowSuccess::Ok);
             }
         };
