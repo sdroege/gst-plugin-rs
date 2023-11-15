@@ -164,16 +164,16 @@ version = "0.16"
 name = "untrusted"
 version = "0.7"
 
-# tracing-subscriber depends on an old version of tracing-log
-[[bans.skip]]
-name = "tracing-log"
-version = "0.1"
-
 # proc-macro-crate depends on an older version of toml_edit
 # https://github.com/bkchr/proc-macro-crate/pull/41
 [[bans.skip]]
 name = "toml_edit"
 version = "0.20"
+
+# dssim-core depends on an older version of itertools
+[[bans.skip]]
+name = "itertools"
+version = "0.11"
 
 [sources]
 unknown-registry = "deny"
