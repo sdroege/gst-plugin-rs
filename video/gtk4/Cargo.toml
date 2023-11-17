@@ -32,7 +32,7 @@ gst_gl = { package = "gstreamer-gl", git = "https://gitlab.freedesktop.org/gstre
 gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", features = ["v4_6"] }
 gst_gl = { package = "gstreamer-gl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_20"] }
 gdk_win32 = { package = "gdk4-win32", git = "https://github.com/gtk-rs/gtk4-rs", features = ["v4_4"]}
-windows-sys = { version = "0.48", features = ["Win32_Graphics_OpenGL", "Win32_Foundation", "Win32_Graphics_Gdi"] }
+windows-sys = { version = "0.52", features = ["Win32_Graphics_OpenGL", "Win32_Foundation", "Win32_Graphics_Gdi"] }
 
 [lib]
 name = "gstgtk4"
