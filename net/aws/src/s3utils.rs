@@ -7,10 +7,11 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use aws_config::meta::region::RegionProviderChain;
-use aws_sdk_s3::config::{timeout::TimeoutConfig, Credentials, Region};
+use aws_sdk_s3::{
+    config::{timeout::TimeoutConfig, Credentials, Region},
+    primitives::{ByteStream, ByteStreamError},
+};
 use aws_types::sdk_config::SdkConfig;
-
-use aws_smithy_types::byte_stream::{error::Error, ByteStream};
 
 use bytes::{buf::BufMut, Bytes, BytesMut};
 use futures::{future, Future};
@@ -80,7 +81,7 @@ where
 pub fn wait_stream(
     canceller: &Mutex<Option<future::AbortHandle>>,
     stream: &mut ByteStream,
-) -> Result<Bytes, WaitError<Error>> {
+) -> Result<Bytes, WaitError<ByteStreamError>> {
     wait(canceller, async move {
         let mut collect = BytesMut::new();
 
@@ -89,7 +90,7 @@ pub fn wait_stream(
             collect.put(item)
         }
 
-        Ok::<Bytes, Error>(collect.freeze())
+        Ok::<Bytes, ByteStreamError>(collect.freeze())
     })
 }
 
@@ -105,17 +106,17 @@ pub fn wait_config(
     region: Region,
     timeout_config: TimeoutConfig,
     credentials: Option<Credentials>,
-) -> Result<SdkConfig, WaitError<Error>> {
+) -> Result<SdkConfig, WaitError<ByteStreamError>> {
     let region_provider = RegionProviderChain::first_try(region)
         .or_default_provider()
         .or_else(Region::new(DEFAULT_S3_REGION));
     let config_future = match credentials {
-        Some(cred) => aws_config::from_env()
+        Some(cred) => aws_config::defaults(aws_config::BehaviorVersion::latest())
             .timeout_config(timeout_config)
             .region(region_provider)
             .credentials_provider(cred)
             .load(),
-        None => aws_config::from_env()
+        None => aws_config::defaults(aws_config::BehaviorVersion::latest())
             .timeout_config(timeout_config)
             .region(region_provider)
             .load(),

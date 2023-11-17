@@ -557,7 +557,7 @@ impl Transcriber {
             }
             _ => {
                 gst::debug!(CAT, imp: self, "Attempting to get credentials from env...");
-                aws_config::from_env()
+                aws_config::defaults(aws_config::BehaviorVersion::latest())
             }
         };
 
