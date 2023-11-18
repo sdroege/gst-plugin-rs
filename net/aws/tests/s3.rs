@@ -68,7 +68,10 @@ mod tests {
         )
         .or_default_provider();
 
-        let config = aws_config::from_env().region(region_provider).load().await;
+        let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+            .region(region_provider)
+            .load()
+            .await;
         let client = aws_sdk_s3::Client::new(&config);
 
         client
