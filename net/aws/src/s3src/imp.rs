@@ -40,7 +40,7 @@ enum StreamingState {
     Started {
         url: GstS3Url,
         client: Client,
-        size: u64,
+        size: Option<u64>,
     },
 }
 
@@ -168,7 +168,11 @@ impl S3Src {
         }
     }
 
-    fn head(self: &S3Src, client: &Client, url: &GstS3Url) -> Result<u64, gst::ErrorMessage> {
+    fn head(
+        self: &S3Src,
+        client: &Client,
+        url: &GstS3Url,
+    ) -> Result<Option<u64>, gst::ErrorMessage> {
         let head_object = client
             .head_object()
             .set_bucket(Some(url.bucket.clone()))
@@ -193,11 +197,11 @@ impl S3Src {
         gst::info!(
             CAT,
             imp: self,
-            "HEAD success, content length = {}",
+            "HEAD success, content length = {:?}",
             output.content_length
         );
 
-        Ok(output.content_length as u64)
+        Ok(output.content_length.map(|size| size as u64))
     }
 
     /* Returns the bytes, Some(error) if one occurred, or a None error if interrupted */
@@ -244,7 +248,7 @@ impl S3Src {
                 WaitError::Cancelled => None,
             })?;
 
-        gst::debug!(CAT, imp: self, "Read {} bytes", output.content_length);
+        gst::debug!(CAT, imp: self, "Read {:?} bytes", output.content_length);
 
         s3utils::wait_stream(&self.canceller, &mut output.body).map_err(|err| match err {
             WaitError::FutureError(err) => Some(gst::error_msg!(
@@ -461,7 +465,7 @@ impl BaseSrcImpl for S3Src {
         let state = self.state.lock().unwrap();
         match *state {
             StreamingState::Stopped => None,
-            StreamingState::Started { size, .. } => Some(size),
+            StreamingState::Started { size, .. } => size,
         }
     }
 
