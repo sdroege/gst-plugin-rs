@@ -204,6 +204,11 @@ version = "0.48"
 name = "windows-sys"
 version = "0.48"
 
+# Various crates depend on an older version of crypto-bigint
+[[bans.skip]]
+name = "crypto-bigint"
+version = "0.4"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
