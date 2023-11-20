@@ -7,20 +7,19 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use atomic_refcell::AtomicRefCell;
 use gst::{glib, subclass::prelude::*};
-use gst_rtp::{prelude::*, subclass::prelude::*};
 use std::{
-    cmp,
     collections::VecDeque,
     io::{Cursor, Read, Seek, SeekFrom, Write},
-    sync::Mutex,
 };
 
 use bitstream_io::{BitReader, BitWriter};
 use once_cell::sync::Lazy;
 
-use crate::av1::common::{
-    err_flow, leb128_size, write_leb128, ObuType, SizedObu, CLOCK_RATE, ENDIANNESS,
+use crate::{
+    av1::common::{err_flow, leb128_size, write_leb128, ObuType, SizedObu, CLOCK_RATE, ENDIANNESS},
+    basepay::{PacketToBufferRelation, RtpBasePay2Ext},
 };
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -30,8 +29,6 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
         Some("RTP AV1 Payloader"),
     )
 });
-
-// TODO: properly handle `max_ptime` and `min_ptime`
 
 /// Information about the OBUs intended to be grouped into one packet
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -60,8 +57,7 @@ struct ObuData {
     info: SizedObu,
     bytes: Vec<u8>,
     offset: usize,
-    dts: Option<gst::ClockTime>,
-    pts: Option<gst::ClockTime>,
+    id: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -78,18 +74,13 @@ struct State {
     /// (Corresponds to `N` field in the aggregation header)
     first_packet_in_seq: bool,
 
-    /// The last observed DTS if upstream does not provide DTS for each OBU
-    last_dts: Option<gst::ClockTime>,
-    /// The last observed PTS if upstream does not provide PTS for each OBU
-    last_pts: Option<gst::ClockTime>,
-
     /// If the input is TU or frame aligned.
     framed: bool,
 }
 
 #[derive(Debug, Default)]
 pub struct RTPAv1Pay {
-    state: Mutex<State>,
+    state: AtomicRefCell<State>,
 }
 
 impl Default for State {
@@ -98,8 +89,6 @@ impl Default for State {
             obus: VecDeque::new(),
             open_obu_fragment: false,
             first_packet_in_seq: true,
-            last_dts: None,
-            last_pts: None,
             framed: false,
         }
     }
@@ -124,11 +113,10 @@ impl RTPAv1Pay {
     fn handle_new_obus(
         &self,
         state: &mut State,
+        id: u64,
         data: &[u8],
         marker: bool,
-        dts: Option<gst::ClockTime>,
-        pts: Option<gst::ClockTime>,
-    ) -> Result<gst::BufferList, gst::FlowError> {
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut reader = Cursor::new(data);
 
         while reader.position() < data.len() as u64 {
@@ -163,8 +151,7 @@ impl RTPAv1Pay {
                         info: obu,
                         bytes: Vec::new(),
                         offset: 0,
-                        dts,
-                        pts,
+                        id,
                     });
                 }
 
@@ -195,23 +182,17 @@ impl RTPAv1Pay {
                         info: obu,
                         bytes,
                         offset: 0,
-                        dts,
-                        pts,
+                        id,
                     });
                 }
             }
         }
 
-        let mut list = gst::BufferList::new();
-        {
-            let list = list.get_mut().unwrap();
-            while let Some(packet_data) = self.consider_new_packet(state, false, marker) {
-                let buffer = self.generate_new_packet(state, packet_data)?;
-                list.add(buffer);
-            }
+        while let Some(packet_data) = self.consider_new_packet(state, false, marker) {
+            self.generate_new_packet(state, packet_data)?;
         }
 
-        Ok(list)
+        Ok(gst::FlowSuccess::Ok)
     }
 
     /// Look at the size the currently stored OBUs would require,
@@ -237,7 +218,7 @@ impl RTPAv1Pay {
             marker,
         );
 
-        let payload_limit = gst_rtp::calc_payload_len(self.obj().mtu(), 0, 0);
+        let payload_limit = self.obj().max_payload_size();
 
         // Create information about the packet that can be created now while iterating over the
         // OBUs and return this if a full packet can indeed be created now.
@@ -361,7 +342,7 @@ impl RTPAv1Pay {
         &self,
         state: &mut State,
         packet: PacketOBUData,
-    ) -> Result<gst::Buffer, gst::FlowError> {
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::log!(
             CAT,
             imp: self,
@@ -370,186 +351,134 @@ impl RTPAv1Pay {
         );
 
         // prepare the outgoing buffer
-        let mut outbuf =
-            gst::Buffer::new_rtp_with_sizes(packet.payload_size, 0, 0).map_err(|err| {
-                gst::element_imp_error!(
-                    self,
-                    gst::ResourceError::Write,
-                    ["Failed to allocate output buffer: {}", err]
-                );
-
-                gst::FlowError::Error
-            })?;
+        let mut payload = Vec::with_capacity(packet.payload_size as usize);
+        let mut writer = Cursor::new(&mut payload);
 
         {
-            // this block enforces that outbuf_mut is dropped before pushing outbuf
-            let first_obu = state.obus.front().unwrap();
-            if let Some(dts) = first_obu.dts {
-                state.last_dts = Some(
-                    state
-                        .last_dts
-                        .map_or(dts, |last_dts| cmp::max(last_dts, dts)),
-                );
-            }
-            if let Some(pts) = first_obu.pts {
-                state.last_pts = Some(
-                    state
-                        .last_pts
-                        .map_or(pts, |last_pts| cmp::max(last_pts, pts)),
-                );
-            }
+            // construct aggregation header
+            let w = if packet.omit_last_size_field && packet.obu_count < 4 {
+                packet.obu_count
+            } else {
+                0
+            };
 
-            let outbuf_mut = outbuf
-                .get_mut()
-                .expect("Failed to get mutable reference to outbuf");
-            outbuf_mut.set_dts(state.last_dts);
-            outbuf_mut.set_pts(state.last_pts);
-
-            let mut rtp = gst_rtp::RTPBuffer::from_buffer_writable(outbuf_mut)
-                .expect("Failed to create RTPBuffer");
-            rtp.set_marker(packet.ends_temporal_unit);
-
-            let payload = rtp
-                .payload_mut()
-                .expect("Failed to get mutable reference to RTP payload");
-            let mut writer = Cursor::new(payload);
-
-            {
-                // construct aggregation header
-                let w = if packet.omit_last_size_field && packet.obu_count < 4 {
-                    packet.obu_count
-                } else {
-                    0
-                };
-
-                let aggr_header: [u8; 1] = [
+            let aggr_header: [u8; 1] = [
                     (state.open_obu_fragment as u8) << 7 |                  // Z
                     ((packet.last_obu_fragment_size.is_some()) as u8) << 6 |  // Y
                     (w as u8) << 4 |                                        // W
                     (state.first_packet_in_seq as u8) << 3                  // N
                 ; 1];
 
-                writer
-                    .write(&aggr_header)
-                    .map_err(err_flow!(self, aggr_header_write))?;
+            writer
+                .write(&aggr_header)
+                .map_err(err_flow!(self, aggr_header_write))?;
 
-                state.first_packet_in_seq = false;
+            state.first_packet_in_seq = false;
+        }
+
+        let mut start_id = None;
+        let end_id;
+
+        // append OBUs to the buffer
+        for _ in 1..packet.obu_count {
+            let obu = loop {
+                let obu = state.obus.pop_front().unwrap();
+
+                // Drop temporal delimiter from here
+                if obu.info.obu_type != ObuType::TemporalDelimiter {
+                    break obu;
+                }
+            };
+
+            if start_id.is_none() {
+                start_id = Some(obu.id);
             }
 
-            // append OBUs to the buffer
-            for _ in 1..packet.obu_count {
-                let obu = loop {
-                    let obu = state.obus.pop_front().unwrap();
+            write_leb128(
+                &mut BitWriter::endian(&mut writer, ENDIANNESS),
+                obu.info.size + obu.info.header_len,
+            )
+            .map_err(err_flow!(self, leb_write))?;
+            writer
+                .write(&obu.bytes[obu.offset..])
+                .map_err(err_flow!(self, obu_write))?;
+        }
+        state.open_obu_fragment = false;
 
-                    if let Some(dts) = obu.dts {
-                        state.last_dts = Some(
-                            state
-                                .last_dts
-                                .map_or(dts, |last_dts| cmp::max(last_dts, dts)),
-                        );
-                    }
-                    if let Some(pts) = obu.pts {
-                        state.last_pts = Some(
-                            state
-                                .last_pts
-                                .map_or(pts, |last_pts| cmp::max(last_pts, pts)),
-                        );
-                    }
+        {
+            let last_obu = loop {
+                let obu = state.obus.front_mut().unwrap();
 
-                    // Drop temporal delimiter from here
-                    if obu.info.obu_type != ObuType::TemporalDelimiter {
-                        break obu;
-                    }
-                };
+                // Drop temporal delimiter from here
+                if obu.info.obu_type != ObuType::TemporalDelimiter {
+                    break obu;
+                }
+                let _ = state.obus.pop_front().unwrap();
+            };
 
-                write_leb128(
-                    &mut BitWriter::endian(&mut writer, ENDIANNESS),
-                    obu.info.size + obu.info.header_len,
-                )
-                .map_err(err_flow!(self, leb_write))?;
+            if start_id.is_none() {
+                start_id = Some(last_obu.id);
+            }
+            end_id = last_obu.id;
+
+            // do the last OBU separately
+            // in this instance `obu_size` includes the header length
+            let obu_size = if let Some(size) = packet.last_obu_fragment_size {
+                state.open_obu_fragment = true;
+                size
+            } else {
+                last_obu.bytes.len() as u32 - last_obu.offset as u32
+            };
+
+            if !packet.omit_last_size_field {
+                write_leb128(&mut BitWriter::endian(&mut writer, ENDIANNESS), obu_size)
+                    .map_err(err_flow!(self, leb_write))?;
+            }
+
+            // if this OBU is not a fragment, handle it as usual
+            if packet.last_obu_fragment_size.is_none() {
                 writer
-                    .write(&obu.bytes[obu.offset..])
+                    .write(&last_obu.bytes[last_obu.offset..])
                     .map_err(err_flow!(self, obu_write))?;
+                let _ = state.obus.pop_front().unwrap();
             }
-            state.open_obu_fragment = false;
+            // otherwise write only a slice, and update the element
+            // to only contain the unwritten bytes
+            else {
+                writer
+                    .write(&last_obu.bytes[last_obu.offset..last_obu.offset + obu_size as usize])
+                    .map_err(err_flow!(self, obu_write))?;
 
-            {
-                let last_obu = loop {
-                    let obu = state.obus.front_mut().unwrap();
-
-                    if let Some(dts) = obu.dts {
-                        state.last_dts = Some(
-                            state
-                                .last_dts
-                                .map_or(dts, |last_dts| cmp::max(last_dts, dts)),
-                        );
-                    }
-                    if let Some(pts) = obu.pts {
-                        state.last_pts = Some(
-                            state
-                                .last_pts
-                                .map_or(pts, |last_pts| cmp::max(last_pts, pts)),
-                        );
-                    }
-
-                    // Drop temporal delimiter from here
-                    if obu.info.obu_type != ObuType::TemporalDelimiter {
-                        break obu;
-                    }
-                    let _ = state.obus.pop_front().unwrap();
+                let new_size = last_obu.bytes.len() as u32 - last_obu.offset as u32 - obu_size;
+                last_obu.info = SizedObu {
+                    size: new_size,
+                    header_len: 0,
+                    leb_size: leb128_size(new_size) as u32,
+                    is_fragment: true,
+                    ..last_obu.info
                 };
-
-                // do the last OBU separately
-                // in this instance `obu_size` includes the header length
-                let obu_size = if let Some(size) = packet.last_obu_fragment_size {
-                    state.open_obu_fragment = true;
-                    size
-                } else {
-                    last_obu.bytes.len() as u32 - last_obu.offset as u32
-                };
-
-                if !packet.omit_last_size_field {
-                    write_leb128(&mut BitWriter::endian(&mut writer, ENDIANNESS), obu_size)
-                        .map_err(err_flow!(self, leb_write))?;
-                }
-
-                // if this OBU is not a fragment, handle it as usual
-                if packet.last_obu_fragment_size.is_none() {
-                    writer
-                        .write(&last_obu.bytes[last_obu.offset..])
-                        .map_err(err_flow!(self, obu_write))?;
-                    let _ = state.obus.pop_front().unwrap();
-                }
-                // otherwise write only a slice, and update the element
-                // to only contain the unwritten bytes
-                else {
-                    writer
-                        .write(
-                            &last_obu.bytes[last_obu.offset..last_obu.offset + obu_size as usize],
-                        )
-                        .map_err(err_flow!(self, obu_write))?;
-
-                    let new_size = last_obu.bytes.len() as u32 - last_obu.offset as u32 - obu_size;
-                    last_obu.info = SizedObu {
-                        size: new_size,
-                        header_len: 0,
-                        leb_size: leb128_size(new_size) as u32,
-                        is_fragment: true,
-                        ..last_obu.info
-                    };
-                    last_obu.offset += obu_size as usize;
-                }
+                last_obu.offset += obu_size as usize;
             }
         }
+
+        // OBUs were consumed above so start_id will be set now
+        let start_id = start_id.unwrap();
 
         gst::log!(
             CAT,
             imp: self,
             "generated RTP packet of size {}",
-            outbuf.size()
+            payload.len()
         );
 
-        Ok(outbuf)
+        self.obj().queue_packet(
+            PacketToBufferRelation::Ids(start_id..=end_id),
+            rtp_types::RtpPacketBuilder::new()
+                .marker_bit(packet.ends_temporal_unit)
+                .payload(&payload),
+        )?;
+
+        Ok(gst::FlowSuccess::Ok)
     }
 }
 
@@ -557,7 +486,7 @@ impl RTPAv1Pay {
 impl ObjectSubclass for RTPAv1Pay {
     const NAME: &'static str = "GstRtpAv1Pay";
     type Type = super::RTPAv1Pay;
-    type ParentType = gst_rtp::RTPBasePayload;
+    type ParentType = crate::basepay::RtpBasePay2;
 }
 
 impl ObjectImpl for RTPAv1Pay {}
@@ -610,64 +539,58 @@ impl ElementImpl for RTPAv1Pay {
 
         PAD_TEMPLATES.as_ref()
     }
-
-    fn change_state(
-        &self,
-        transition: gst::StateChange,
-    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::debug!(CAT, imp: self, "changing state: {}", transition);
-
-        if matches!(transition, gst::StateChange::ReadyToPaused) {
-            let mut state = self.state.lock().unwrap();
-            self.reset(&mut state, true);
-        }
-
-        let ret = self.parent_change_state(transition);
-
-        if matches!(transition, gst::StateChange::PausedToReady) {
-            let mut state = self.state.lock().unwrap();
-            self.reset(&mut state, true);
-        }
-
-        ret
-    }
 }
 
-impl RTPBasePayloadImpl for RTPAv1Pay {
-    fn set_caps(&self, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        gst::debug!(CAT, imp: self, "received caps {caps:?}");
+impl crate::basepay::RtpBasePay2Impl for RTPAv1Pay {
+    const ALLOWED_META_TAGS: &'static [&'static str] = &["video"];
 
-        {
-            let mut state = self.state.lock().unwrap();
-            let s = caps.structure(0).unwrap();
-            match s.get::<&str>("alignment").unwrap() {
-                "tu" | "frame" => {
-                    state.framed = true;
-                }
-                _ => {
-                    state.framed = false;
-                }
-            }
-        }
-
-        self.obj().set_options("video", true, "AV1", CLOCK_RATE);
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
+        let mut state = self.state.borrow_mut();
+        self.reset(&mut state, true);
 
         Ok(())
     }
 
-    fn handle_buffer(&self, buffer: gst::Buffer) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::trace!(CAT, imp: self, "received buffer of size {}", buffer.size());
+    fn stop(&self) -> Result<(), gst::ErrorMessage> {
+        let mut state = self.state.borrow_mut();
+        self.reset(&mut state, true);
 
-        let mut state = self.state.lock().unwrap();
+        Ok(())
+    }
 
-        if buffer.flags().contains(gst::BufferFlags::DISCONT) {
-            gst::debug!(CAT, imp: self, "buffer discontinuity");
-            self.reset(&mut state, false);
+    fn set_sink_caps(&self, caps: &gst::Caps) -> bool {
+        gst::debug!(CAT, imp: self, "received caps {caps:?}");
+
+        self.obj().set_src_caps(
+            &gst::Caps::builder("application/x-rtp")
+                .field("media", "video")
+                .field("clock-rate", CLOCK_RATE as i32)
+                .field("encoding-name", "AV1")
+                .build(),
+        );
+
+        let mut state = self.state.borrow_mut();
+        let s = caps.structure(0).unwrap();
+        match s.get::<&str>("alignment").unwrap() {
+            "tu" | "frame" => {
+                state.framed = true;
+            }
+            _ => {
+                state.framed = false;
+            }
         }
 
-        let dts = buffer.dts();
-        let pts = buffer.pts();
+        true
+    }
 
+    fn handle_buffer(
+        &self,
+        buffer: &gst::Buffer,
+        id: u64,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        gst::trace!(CAT, imp: self, "received buffer of size {}", buffer.size());
+
+        let mut state = self.state.borrow_mut();
         let map = buffer.map_readable().map_err(|_| {
             gst::element_imp_error!(
                 self,
@@ -680,49 +603,31 @@ impl RTPBasePayloadImpl for RTPAv1Pay {
 
         // Does the buffer finished a full TU?
         let marker = buffer.flags().contains(gst::BufferFlags::MARKER) || state.framed;
-        let list = self.handle_new_obus(&mut state, map.as_slice(), marker, dts, pts)?;
+        let res = self.handle_new_obus(&mut state, id, map.as_slice(), marker)?;
         drop(map);
         drop(state);
 
-        if !list.is_empty() {
-            self.obj().push_list(list)
-        } else {
-            Ok(gst::FlowSuccess::Ok)
-        }
+        Ok(res)
     }
 
-    fn sink_event(&self, event: gst::Event) -> bool {
-        gst::log!(CAT, imp: self, "sink event: {}", event.type_());
+    fn drain(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
+        // flush all remaining OBUs
+        let mut res = Ok(gst::FlowSuccess::Ok);
 
-        match event.view() {
-            gst::EventView::Eos(_) => {
-                // flush all remaining OBUs
-                let mut list = gst::BufferList::new();
-                {
-                    let mut state = self.state.lock().unwrap();
-                    let list = list.get_mut().unwrap();
-
-                    while let Some(packet_data) = self.consider_new_packet(&mut state, true, true) {
-                        match self.generate_new_packet(&mut state, packet_data) {
-                            Ok(buffer) => list.add(buffer),
-                            Err(_) => break,
-                        }
-                    }
-
-                    self.reset(&mut state, false);
-                }
-                if !list.is_empty() {
-                    let _ = self.obj().push_list(list);
-                }
+        let mut state = self.state.borrow_mut();
+        while let Some(packet_data) = self.consider_new_packet(&mut state, true, true) {
+            res = self.generate_new_packet(&mut state, packet_data);
+            if res.is_err() {
+                break;
             }
-            gst::EventView::FlushStop(_) => {
-                let mut state = self.state.lock().unwrap();
-                self.reset(&mut state, false);
-            }
-            _ => (),
         }
 
-        self.parent_sink_event(event)
+        res
+    }
+
+    fn flush(&self) {
+        let mut state = self.state.borrow_mut();
+        self.reset(&mut state, false);
     }
 }
 
@@ -927,12 +832,14 @@ mod tests {
             ),
         ];
 
-        let element = <RTPAv1Pay as ObjectSubclass>::Type::new();
+        // Element exists just for logging purposes
+        let element = glib::Object::new::<crate::av1::pay::RTPAv1Pay>();
+
         let pay = element.imp();
         for idx in 0..input_data.len() {
             println!("running test {idx}...");
 
-            let mut state = pay.state.lock().unwrap();
+            let mut state = pay.state.borrow_mut();
             *state = input_data[idx].1.clone();
 
             assert_eq!(

@@ -6193,7 +6193,7 @@
                 "description": "Depayload AV1 from RTP packets",
                 "hierarchy": [
                     "GstRtpAv1Depay",
-                    "GstRTPBaseDepayload",
+                    "GstRtpBaseDepay2",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -6203,7 +6203,7 @@
                 "long-name": "RTP AV1 Depayloader",
                 "pad-templates": {
                     "sink": {
-                        "caps": "application/x-rtp:\n          media: video\n        payload: [ 96, 127 ]\n     clock-rate: 90000\n  encoding-name: AV1\n",
+                        "caps": "application/x-rtp:\n          media: video\n     clock-rate: 90000\n  encoding-name: AV1\n",
                         "direction": "sink",
                         "presence": "always"
                     },
@@ -6220,7 +6220,7 @@
                 "description": "Payload AV1 as RTP packets",
                 "hierarchy": [
                     "GstRtpAv1Pay",
-                    "GstRTPBasePayload",
+                    "GstRtpBasePay2",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -6680,7 +6680,7 @@
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
-                        "default": "8",
+                        "default": "96",
                         "max": "127",
                         "min": "0",
                         "mutable": "ready",

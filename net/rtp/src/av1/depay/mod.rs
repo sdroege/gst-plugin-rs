@@ -6,22 +6,18 @@
 // <https://mozilla.org/MPL/2.0/>.
 //
 // SPDX-License-Identifier: MPL-2.0
-#![allow(clippy::new_without_default)]
 
 use gst::glib;
 use gst::prelude::*;
 
 pub mod imp;
 
+#[cfg(test)]
+mod tests;
+
 glib::wrapper! {
     pub struct RTPAv1Depay(ObjectSubclass<imp::RTPAv1Depay>)
-        @extends gst_rtp::RTPBaseDepayload, gst::Element, gst::Object;
-}
-
-impl RTPAv1Depay {
-    pub fn new() -> Self {
-        glib::Object::new()
-    }
+        @extends crate::basedepay::RtpBaseDepay2, gst::Element, gst::Object;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {

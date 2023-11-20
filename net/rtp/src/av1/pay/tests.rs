@@ -9,7 +9,6 @@
 
 use gst::{event::Eos, prelude::*, Buffer, Caps, ClockTime};
 use gst_check::Harness;
-use gst_rtp::{rtp_buffer::RTPBufferExt, RTPBuffer};
 
 fn init() {
     use std::sync::Once;
@@ -17,101 +16,13 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
-        gstrsrtp::plugin_register_static().expect("rtpav1 test");
+        crate::plugin_register_static().expect("rtpav1 test");
     });
 }
 
 #[test]
-#[rustfmt::skip]
-fn test_depayloader() {
-    let test_packets: [(Vec<u8>, bool, u32); 4] = [
-        ( // simple packet, complete TU
-            vec![       // RTP payload
-                0b0001_1000,
-                0b0011_0000, 1, 2, 3, 4, 5, 6,
-            ],
-            true,       // marker bit
-            100_000,    // timestamp
-        ), ( // 2 OBUs, last is fragmented
-            vec![
-                0b0110_0000,
-                0b0000_0110, 0b0111_1000, 1, 2, 3, 4, 5,
-                             0b0011_0000, 1, 2, 3,
-            ],
-            false,
-            190_000,
-        ), ( // continuation of the last OBU
-            vec![
-                0b1100_0000,
-                0b0000_0100, 4, 5, 6, 7,
-            ],
-            false,
-            190_000,
-        ), ( // finishing the OBU fragment
-            vec![
-                0b1001_0000,
-                8, 9, 10,
-            ],
-            true,
-            190_000,
-        )
-    ];
-
-    let expected: [Vec<u8>; 3] = [
-        vec![
-            0b0001_0010, 0,
-            0b0011_0010, 0b0000_0110, 1, 2, 3, 4, 5, 6,
-        ],
-        vec![
-            0b0001_0010, 0,
-            0b0111_1010, 0b0000_0101, 1, 2, 3, 4, 5,
-        ],
-        vec![
-            0b0011_0010, 0b0000_1010, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        ],
-    ];
-
-    init();
-
-    let mut h = Harness::new("rtpav1depay");
-    h.play();
-
-    let caps = Caps::builder("application/x-rtp")
-        .field("media", "video")
-        .field("payload", 96)
-        .field("clock-rate", 90000)
-        .field("encoding-name", "AV1")
-        .build();
-    h.set_src_caps(caps);
-
-    for (idx, (bytes, marker, timestamp)) in test_packets.iter().enumerate() {
-        let mut buf = Buffer::new_rtp_with_sizes(bytes.len() as u32, 0, 0).unwrap();
-        {
-            let buf_mut = buf.get_mut().unwrap();
-            let mut rtp_mut = RTPBuffer::from_buffer_writable(buf_mut).unwrap();
-            rtp_mut.set_marker(*marker);
-            rtp_mut.set_timestamp(*timestamp);
-            rtp_mut.set_payload_type(96);
-            rtp_mut.set_seq(idx as u16);
-            rtp_mut.payload_mut().unwrap().copy_from_slice(bytes);
-        }
-
-        h.push(buf).unwrap();
-    }
-    h.push_event(Eos::new());
-
-    for (idx, ex) in expected.iter().enumerate() {
-        println!("checking buffer {idx}...");
-
-        let buffer = h.pull().unwrap();
-        let actual = buffer.into_mapped_buffer_readable().unwrap();
-        assert_eq!(actual.as_slice(), ex.as_slice());
-    }
-}
-
-#[test]
-#[rustfmt::skip]
 fn test_payloader() {
+    #[rustfmt::skip]
     let test_buffers: [(u64, Vec<u8>); 3] = [
         (
             0,
@@ -136,6 +47,7 @@ fn test_payloader() {
         )
     ];
 
+    #[rustfmt::skip]
     let expected = [
         (
             false,  // marker bit
@@ -183,7 +95,7 @@ fn test_payloader() {
         let pay = h.element().unwrap();
         pay.set_property(
             "mtu",
-            gst_rtp::calc_packet_len(25, 0, 0)
+            25u32 + rtp_types::RtpPacket::MIN_RTP_PACKET_LEN as u32,
         );
     }
     h.play();
@@ -203,7 +115,10 @@ fn test_payloader() {
         buffer.copy_from_slice(bytes);
 
         let mut buffer = buffer.into_buffer();
-        buffer.get_mut().unwrap().set_pts(ClockTime::try_from(*pts).unwrap());
+        buffer
+            .get_mut()
+            .unwrap()
+            .set_pts(ClockTime::from_nseconds(*pts));
 
         h.push(buffer).unwrap();
     }
@@ -214,13 +129,14 @@ fn test_payloader() {
         println!("checking packet {idx}...");
 
         let buffer = h.pull().unwrap();
-        let packet = RTPBuffer::from_buffer_readable(&buffer).unwrap();
+        let map = buffer.map_readable().unwrap();
+        let packet = rtp_types::RtpPacket::parse(&map).unwrap();
         if base_ts.is_none() {
             base_ts = Some(packet.timestamp());
         }
 
-        assert_eq!(packet.payload().unwrap(), payload.as_slice());
-        assert_eq!(packet.is_marker(), *marker);
+        assert_eq!(packet.payload(), payload.as_slice());
+        assert_eq!(packet.marker_bit(), *marker);
         assert_eq!(packet.timestamp(), base_ts.unwrap() + ts_offset);
     }
 }

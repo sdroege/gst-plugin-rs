@@ -16,7 +16,6 @@
  */
 use gst::glib;
 
-mod av1;
 mod gcc;
 
 mod audio_discont;
@@ -24,14 +23,13 @@ mod baseaudiopay;
 mod basedepay;
 mod basepay;
 
+mod av1;
 mod pcmau;
 
 #[cfg(test)]
 mod tests;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    av1::depay::register(plugin)?;
-    av1::pay::register(plugin)?;
     gcc::register(plugin)?;
 
     #[cfg(feature = "doc")]
@@ -45,6 +43,9 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         crate::baseaudiopay::RtpBaseAudioPay2::static_type()
             .mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }
+
+    av1::depay::register(plugin)?;
+    av1::pay::register(plugin)?;
 
     pcmau::depay::register(plugin)?;
     pcmau::pay::register(plugin)?;
