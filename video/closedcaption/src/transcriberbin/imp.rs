@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::cea608utils::Cea608Mode;
+use crate::cea708utils::Cea708Mode;
 use anyhow::{anyhow, Error};
 use gst::glib;
 use gst::prelude::*;
@@ -33,15 +34,26 @@ const DEFAULT_ACCUMULATE: gst::ClockTime = gst::ClockTime::ZERO;
 const DEFAULT_MODE: Cea608Mode = Cea608Mode::RollUp2;
 const DEFAULT_CAPTION_SOURCE: CaptionSource = CaptionSource::Both;
 const DEFAULT_INPUT_LANG_CODE: &str = "en-US";
+const DEFAULT_MUX_METHOD: MuxMethod = MuxMethod::Cea608;
 
-const CEA608MUX_LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(100);
+const CEAX08MUX_LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(100);
+
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, glib::Enum)]
+#[repr(u32)]
+#[enum_type(name = "GstTranscriberBinMuxMethod")]
+enum MuxMethod {
+    #[default]
+    Cea608,
+    Cea708,
+}
 
 /* One per language, including original */
 struct TranscriptionChannel {
     bin: gst::Bin,
     textwrap: gst::Element,
-    tttocea608: gst::Element,
+    tttoceax08: gst::Element,
     language: String,
+    ccmux_pad_name: String,
 }
 
 impl TranscriptionChannel {
@@ -66,6 +78,7 @@ impl TranscriptionChannel {
 }
 
 struct State {
+    mux_method: MuxMethod,
     framerate: Option<gst::Fraction>,
     tearing_down: bool,
     internal_bin: gst::Bin,
@@ -94,6 +107,7 @@ struct Settings {
     caption_source: CaptionSource,
     translation_languages: Option<gst::Structure>,
     language_code: String,
+    mux_method: MuxMethod,
 }
 
 impl Default for Settings {
@@ -110,6 +124,7 @@ impl Default for Settings {
             caption_source: DEFAULT_CAPTION_SOURCE,
             translation_languages: None,
             language_code: String::from(DEFAULT_INPUT_LANG_CODE),
+            mux_method: DEFAULT_MUX_METHOD,
         }
     }
 }
@@ -126,29 +141,88 @@ pub struct TranscriberBin {
 }
 
 impl TranscriberBin {
-    fn construct_channel_bin(&self, lang: &str) -> Result<TranscriptionChannel, Error> {
+    fn construct_channel_bin(
+        &self,
+        lang: &str,
+        mux_method: MuxMethod,
+        caption_streams: Vec<String>,
+    ) -> Result<TranscriptionChannel, Error> {
         let bin = gst::Bin::new();
         let queue = gst::ElementFactory::make("queue").build()?;
         let textwrap = gst::ElementFactory::make("textwrap").build()?;
-        let tttocea608 = gst::ElementFactory::make("tttocea608").build()?;
+        let (tttoceax08, ccmux_pad_name) = match mux_method {
+            MuxMethod::Cea608 => {
+                if caption_streams.len() != 1 {
+                    anyhow::bail!("Muxing zero/multiple cea608 streams for the same language is not supported");
+                }
+                (
+                    gst::ElementFactory::make("tttocea608").build()?,
+                    caption_streams[0].clone(),
+                )
+            }
+            MuxMethod::Cea708 => {
+                if !(1..=2).contains(&caption_streams.len()) {
+                    anyhow::bail!(
+                        "Incorrect number of caption stream names {} for muxing 608/708",
+                        caption_streams.len()
+                    );
+                }
+                let mut service_no = None;
+                let mut cea608_channel = None;
+                for cc in caption_streams.iter() {
+                    if let Some(cea608) = cc.to_lowercase().strip_prefix("cc") {
+                        if cea608_channel.is_some() {
+                            anyhow::bail!(
+                                "Multiple CEA-608 streams for a language are not supported"
+                            );
+                        }
+                        cea608_channel = Some(cea608.parse::<u32>()?);
+                    } else if let Some(cea708_service) = cc.strip_prefix("708_") {
+                        if service_no.is_some() {
+                            anyhow::bail!(
+                                "Multiple CEA-708 streams for a language are not supported"
+                            );
+                        }
+                        service_no = Some(cea708_service.parse::<u32>()?);
+                    } else {
+                        anyhow::bail!(
+                            "caption service name does not match \'708_%u\', or cc1, or cc3"
+                        );
+                    }
+                }
+                let service_no = service_no.ok_or(anyhow!("No 708 caption service provided"))?;
+                // TODO: handle cea608
+                (
+                    gst::ElementFactory::make("tttocea708")
+                        .property("service-number", service_no)
+                        .build()?,
+                    format!("sink_{}", service_no),
+                )
+            }
+        };
         let capsfilter = gst::ElementFactory::make("capsfilter").build()?;
         let converter = gst::ElementFactory::make("ccconverter").build()?;
 
-        bin.add_many([&queue, &textwrap, &tttocea608, &capsfilter, &converter])?;
-        gst::Element::link_many([&queue, &textwrap, &tttocea608, &capsfilter, &converter])?;
+        bin.add_many([&queue, &textwrap, &tttoceax08, &capsfilter, &converter])?;
+        gst::Element::link_many([&queue, &textwrap, &tttoceax08, &capsfilter, &converter])?;
 
         queue.set_property("max-size-buffers", 0u32);
         queue.set_property("max-size-time", 0u64);
 
         textwrap.set_property("lines", 2u32);
 
-        capsfilter.set_property(
-            "caps",
-            gst::Caps::builder("closedcaption/x-cea-608")
+        let caps = match mux_method {
+            MuxMethod::Cea608 => gst::Caps::builder("closedcaption/x-cea-608")
                 .field("format", "raw")
                 .field("framerate", gst::Fraction::new(30000, 1001))
                 .build(),
-        );
+            MuxMethod::Cea708 => gst::Caps::builder("closedcaption/x-cea-708")
+                .field("format", "cc_data")
+                .field("framerate", gst::Fraction::new(30000, 1001))
+                .build(),
+        };
+
+        capsfilter.set_property("caps", caps);
 
         let sinkpad = gst::GhostPad::with_target(&queue.static_pad("sink").unwrap()).unwrap();
         let srcpad = gst::GhostPad::with_target(&converter.static_pad("src").unwrap()).unwrap();
@@ -158,8 +232,9 @@ impl TranscriberBin {
         Ok(TranscriptionChannel {
             bin,
             textwrap,
-            tttocea608,
+            tttoceax08,
             language: String::from(lang),
+            ccmux_pad_name,
         })
     }
 
@@ -202,19 +277,19 @@ impl TranscriberBin {
             &state.transcription_valve,
         ])?;
 
-        for (padname, channel) in &state.transcription_channels {
+        for channel in state.transcription_channels.values() {
             state.transcription_bin.add(&channel.bin)?;
 
             channel.link_transcriber(&state.transcriber)?;
 
             let ccmux_pad = state
                 .ccmux
-                .request_pad_simple(padname)
+                .request_pad_simple(&channel.ccmux_pad_name)
                 .ok_or(anyhow!("Failed to request ccmux sink pad"))?;
             channel.bin.static_pad("src").unwrap().link(&ccmux_pad)?;
         }
 
-        state.ccmux.set_property("latency", CEA608MUX_LATENCY);
+        state.ccmux.set_property("latency", CEAX08MUX_LATENCY);
 
         let transcription_audio_sinkpad =
             gst::GhostPad::with_target(&aqueue_transcription.static_pad("sink").unwrap()).unwrap();
@@ -338,16 +413,22 @@ impl TranscriberBin {
 
         state.cccapsfilter.set_property("caps", &cc_caps);
 
-        let ccmux_caps = gst::Caps::builder("closedcaption/x-cea-608")
-            .field("framerate", state.framerate.unwrap())
-            .build();
+        let ccmux_caps = match state.mux_method {
+            MuxMethod::Cea608 => gst::Caps::builder("closedcaption/x-cea-608")
+                .field("framerate", state.framerate.unwrap())
+                .build(),
+            MuxMethod::Cea708 => gst::Caps::builder("closedcaption/x-cea-708")
+                .field("format", "cc_data")
+                .field("framerate", state.framerate.unwrap())
+                .build(),
+        };
 
         state.ccmux_filter.set_property("caps", ccmux_caps);
 
         let max_size_time = settings.latency
             + settings.translate_latency
             + settings.accumulate_time
-            + CEA608MUX_LATENCY;
+            + CEAX08MUX_LATENCY;
 
         for queue in [&state.audio_queue_passthrough, &state.video_queue] {
             queue.set_property("max-size-bytes", 0u32);
@@ -463,7 +544,18 @@ impl TranscriberBin {
         gst::debug!(CAT, imp: self, "setting CC mode {:?}", mode);
 
         for channel in state.transcription_channels.values() {
-            channel.tttocea608.set_property("mode", mode);
+            match state.mux_method {
+                MuxMethod::Cea608 => channel.tttoceax08.set_property("mode", mode),
+                MuxMethod::Cea708 => match mode {
+                    Cea608Mode::PopOn => channel.tttoceax08.set_property("mode", Cea708Mode::PopOn),
+                    Cea608Mode::PaintOn => {
+                        channel.tttoceax08.set_property("mode", Cea708Mode::PaintOn)
+                    }
+                    Cea608Mode::RollUp2 | Cea608Mode::RollUp3 | Cea608Mode::RollUp4 => {
+                        channel.tttoceax08.set_property("mode", Cea708Mode::RollUp)
+                    }
+                },
+            }
 
             if mode.is_rollup() {
                 channel.textwrap.set_property("accumulate-time", 0u64);
@@ -508,6 +600,73 @@ impl TranscriberBin {
             channel.link_transcriber(&state.transcriber)?;
         }
 
+        Ok(())
+    }
+
+    fn construct_transcription_channels(
+        &self,
+        settings: &Settings,
+        mux_method: MuxMethod,
+        transcription_channels: &mut HashMap<String, TranscriptionChannel>,
+    ) -> Result<(), Error> {
+        if let Some(ref map) = settings.translation_languages {
+            for (key, value) in map.iter() {
+                let key = key.to_lowercase();
+                let (language_code, caption_streams) = match mux_method {
+                    MuxMethod::Cea608 => {
+                        if ["cc1", "cc3"].contains(&key.as_str()) {
+                            (value.get::<String>()?, vec![key.to_string()])
+                        } else if let Ok(caption_stream) = value.get::<String>() {
+                            if !["cc1", "cc3"].contains(&caption_stream.as_str()) {
+                                anyhow::bail!(
+                                    "Unknown 608 channel {}, valid values are cc1, cc3",
+                                    caption_stream
+                                );
+                            }
+                            (key, vec![caption_stream])
+                        } else {
+                            anyhow::bail!("Unknown 608 channel/language {}", key);
+                        }
+                    }
+                    MuxMethod::Cea708 => {
+                        if let Ok(caption_stream) = value.get::<String>() {
+                            (key, vec![caption_stream])
+                        } else if let Ok(caption_streams) = value.get::<gst::List>() {
+                            let mut streams = vec![];
+                            for s in caption_streams.iter() {
+                                let service = s.get::<String>()?;
+                                if ["cc1", "cc3"].contains(&service.as_str())
+                                    || service.starts_with("708_")
+                                {
+                                    streams.push(service);
+                                } else {
+                                    anyhow::bail!("Unknown 708 service {}, valid values are cc1, cc3 or 708_*", key);
+                                }
+                            }
+                            (key, streams)
+                        } else {
+                            anyhow::bail!("Unknown 708 translation language field {}", key);
+                        }
+                    }
+                };
+
+                transcription_channels.insert(
+                    language_code.to_owned(),
+                    self.construct_channel_bin(&language_code, mux_method, caption_streams)
+                        .unwrap(),
+                );
+            }
+        } else {
+            let caption_streams = match mux_method {
+                MuxMethod::Cea608 => vec!["cc1".to_string()],
+                MuxMethod::Cea708 => vec!["cc1".to_string(), "708_1".to_string()],
+            };
+            transcription_channels.insert(
+                "transcript".to_string(),
+                self.construct_channel_bin("transcript", mux_method, caption_streams)
+                    .unwrap(),
+            );
+        }
         Ok(())
     }
 
@@ -575,34 +734,20 @@ impl TranscriberBin {
 
             state.transcription_channels.clear();
 
-            if let Some(ref map) = settings.translation_languages {
-                for (key, value) in map.iter() {
-                    let channel = key.to_lowercase();
-                    if !["cc1", "cc3"].contains(&channel.as_str()) {
-                        anyhow::bail!("Unknown 608 channel {}, valid values are cc1, cc3", channel);
-                    }
-                    let language_code = value.get::<String>()?;
+            self.construct_transcription_channels(
+                &settings,
+                state.mux_method,
+                &mut state.transcription_channels,
+            )?;
 
-                    state.transcription_channels.insert(
-                        channel.to_owned(),
-                        self.construct_channel_bin(&language_code).unwrap(),
-                    );
-                }
-            } else {
-                state.transcription_channels.insert(
-                    "cc1".to_string(),
-                    self.construct_channel_bin("transcript").unwrap(),
-                );
-            }
-
-            for (padname, channel) in &state.transcription_channels {
+            for channel in state.transcription_channels.values() {
                 state.transcription_bin.add(&channel.bin)?;
 
                 channel.link_transcriber(&state.transcriber)?;
 
                 let ccmux_pad = state
                     .ccmux
-                    .request_pad_simple(padname)
+                    .request_pad_simple(&channel.ccmux_pad_name)
                     .ok_or(anyhow!("Failed to request ccmux sink pad"))?;
                 channel.bin.static_pad("src").unwrap().link(&ccmux_pad)?;
             }
@@ -694,13 +839,13 @@ impl TranscriberBin {
 
                     let settings = self.settings.lock().unwrap();
                     if settings.passthrough || received_framerate.is_none() {
-                        min += settings.latency + settings.accumulate_time + CEA608MUX_LATENCY;
+                        min += settings.latency + settings.accumulate_time + CEAX08MUX_LATENCY;
 
                         if translating {
                             min += settings.translate_latency;
                         }
 
-                        /* The sub latency introduced by cea608mux */
+                        /* The sub latency introduced by ceax08mux */
                         if let Some(framerate) = received_framerate {
                             min += gst::ClockTime::SECOND
                                 .mul_div_floor(framerate.denom() as u64, framerate.numer() as u64)
@@ -745,34 +890,31 @@ impl TranscriberBin {
         let transcription_valve = gst::ElementFactory::make("valve")
             .property_from_str("drop-mode", "transform-to-gap")
             .build()?;
-        let ccmux = gst::ElementFactory::make("cea608mux")
-            .property_from_str("start-time-selection", "first")
-            .build()?;
+
+        let settings = self.settings.lock().unwrap();
+        let mux_method = settings.mux_method;
+
+        let ccmux = match mux_method {
+            MuxMethod::Cea608 => gst::ElementFactory::make("cea608mux")
+                .property_from_str("start-time-selection", "first")
+                .build()?,
+            MuxMethod::Cea708 => gst::ElementFactory::make("cea708mux")
+                .property_from_str("start-time-selection", "first")
+                .build()?,
+        };
         let ccmux_filter = gst::ElementFactory::make("capsfilter").build()?;
 
         let mut transcription_channels = HashMap::new();
 
-        if let Some(ref map) = self.settings.lock().unwrap().translation_languages {
-            for (key, value) in map.iter() {
-                let channel = key.to_lowercase();
-                if !["cc1", "cc3"].contains(&channel.as_str()) {
-                    anyhow::bail!("Unknown 608 channel {}, valid values are cc1, cc3", channel);
-                }
-                let language_code = value.get::<String>()?;
-
-                transcription_channels.insert(
-                    channel.to_owned(),
-                    self.construct_channel_bin(&language_code).unwrap(),
-                );
-            }
-        } else {
-            transcription_channels.insert(
-                "cc1".to_string(),
-                self.construct_channel_bin("transcript").unwrap(),
-            );
-        }
+        self.construct_transcription_channels(
+            &settings,
+            settings.mux_method,
+            &mut transcription_channels,
+        )?;
+        drop(settings);
 
         Ok(State {
+            mux_method,
             framerate: None,
             internal_bin,
             audio_queue_passthrough,
@@ -929,7 +1071,7 @@ impl ObjectImpl for TranscriberBin {
                     .build(),
                 glib::ParamSpecBoxed::builder::<gst::Structure>("translation-languages")
                     .nick("Translation languages")
-                    .blurb("A map of CEA 608 channels to language codes, eg translation-languages=\"languages, CC1=fr, CC3=transcript\" will map the French translation to CC1 and the original transcript to CC3")
+                    .blurb("A map of language codes to caption channels, e.g. translation-languages=\"languages, transcript={CC1, 708_1}, fr={708_2, CC3}\" will map the French translation to CC1/service 1 and the original transcript to CC3/service 2")
                     .mutable_playing()
                     .build(),
                 glib::ParamSpecUInt::builder("translate-latency")
@@ -943,6 +1085,12 @@ impl ObjectImpl for TranscriberBin {
                     .blurb("The language of the input stream")
                     .default_value(Some(DEFAULT_INPUT_LANG_CODE))
                     .mutable_playing()
+                    .build(),
+                glib::ParamSpecEnum::builder("mux-method")
+                    .nick("Mux Method")
+                    .blurb("The method for muxing multiple transcription streams")
+                    .default_value(DEFAULT_MUX_METHOD)
+                    .construct()
                     .build(),
             ]
         });
@@ -1066,6 +1214,10 @@ impl ObjectImpl for TranscriberBin {
                     self.update_languages(true)
                 }
             }
+            "mux-method" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.mux_method = value.get().expect("type checked upstream")
+            }
             _ => unimplemented!(),
         }
     }
@@ -1116,6 +1268,10 @@ impl ObjectImpl for TranscriberBin {
             "language-code" => {
                 let settings = self.settings.lock().unwrap();
                 settings.language_code.to_value()
+            }
+            "mux-method" => {
+                let settings = self.settings.lock().unwrap();
+                settings.mux_method.to_value()
             }
             _ => unimplemented!(),
         }

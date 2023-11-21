@@ -5563,6 +5563,18 @@
                         "type": "GstTtToCea608Mode",
                         "writable": true
                     },
+                    "mux-method": {
+                        "blurb": "The method for muxing multiple transcription streams",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "cea608 (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstTranscriberBinMuxMethod",
+                        "writable": true
+                    },
                     "passthrough": {
                         "blurb": "Whether transcription should occur",
                         "conditionally-available": false,
@@ -5601,7 +5613,7 @@
                         "writable": true
                     },
                     "translation-languages": {
-                        "blurb": "A map of CEA 608 channels to language codes, eg translation-languages=\"languages, CC1=fr, CC3=transcript\" will map the French translation to CC1 and the original transcript to CC3",
+                        "blurb": "A map of language codes to caption channels, e.g. translation-languages=\"languages, transcript={CC1, 708_1}, fr={708_2, CC3}\" will map the French translation to CC1/service 1 and the original transcript to CC3/service 2",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
