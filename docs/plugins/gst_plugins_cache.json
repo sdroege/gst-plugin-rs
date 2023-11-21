@@ -5235,6 +5235,34 @@
                 },
                 "rank": "none"
             },
+            "cea708mux": {
+                "author": "Matthew Waters <matthew@centricular.com>",
+                "description": "Combines multiple CEA-708 streams",
+                "hierarchy": [
+                    "GstCea708Mux",
+                    "GstAggregator",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Muxer",
+                "pad-templates": {
+                    "sink_%%u": {
+                        "caps": "closedcaption/x-cea-708:\n         format: cc_data\n      framerate: { (fraction)60/1, (fraction)60000/1001, (fraction)50/1, (fraction)30/1, (fraction)30000/1001, (fraction)25/1, (fraction)24/1, (fraction)24000/1001 }\n",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "GstCea708MuxSinkPad"
+                    },
+                    "src": {
+                        "caps": "closedcaption/x-cea-708:\n         format: cc_data\n      framerate: { (fraction)60/1, (fraction)60000/1001, (fraction)50/1, (fraction)30/1, (fraction)30000/1001, (fraction)25/1, (fraction)24/1, (fraction)24000/1001 }\n",
+                        "direction": "src",
+                        "presence": "always",
+                        "type": "GstAggregatorPad"
+                    }
+                },
+                "rank": "none"
+            },
             "jsontovtt": {
                 "author": "Jan Schmidt <jan@centricular.com>",
                 "description": "Converts JSON to WebVTT",
@@ -5807,6 +5835,17 @@
         "filename": "gstrsclosedcaption",
         "license": "MPL",
         "other-types": {
+            "GstCea708MuxSinkPad": {
+                "hierarchy": [
+                    "GstCea708MuxSinkPad",
+                    "GstAggregatorPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object"
+            },
             "GstTranscriberBinCaptionSource": {
                 "kind": "enum",
                 "values": [
