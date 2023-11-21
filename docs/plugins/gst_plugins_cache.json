@@ -5668,6 +5668,101 @@
                 },
                 "rank": "none"
             },
+            "tttocea708": {
+                "author": "Matthew Waters <matthew@centricular.com>",
+                "description": "Converts timed text to CEA-708 Closed Captions",
+                "hierarchy": [
+                    "GstTtToCea708",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Generic",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "text/x-raw:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "closedcaption/x-cea-708:\n         format: cc_data\n      framerate: [ 1/2147483647, 2147483647/1 ]\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "mode": {
+                        "blurb": "Which mode to operate in",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "roll-up (2)",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "GstTtToCea708Mode",
+                        "writable": true
+                    },
+                    "origin-column": {
+                        "blurb": "Origin column",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "31",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "origin-row": {
+                        "blurb": "Origin row, (-1=automatic)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-1",
+                        "max": "14",
+                        "min": "-1",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": true
+                    },
+                    "roll-up-timeout": {
+                        "blurb": "Duration after which to erase display memory in roll-up mode",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "18446744073709551615",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "service-number": {
+                        "blurb": "Write DTVCC packets using this service",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1",
+                        "max": "63",
+                        "min": "1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
             "tttojson": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Encodes Timed Text to JSON",
@@ -5759,6 +5854,26 @@
                         "desc": "RollUp4",
                         "name": "roll-up4",
                         "value": "4"
+                    }
+                ]
+            },
+            "GstTtToCea708Mode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "PopOn",
+                        "name": "pop-on",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "PaintOn",
+                        "name": "paint-on",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "RollUp",
+                        "name": "roll-up",
+                        "value": "2"
                     }
                 ]
             }

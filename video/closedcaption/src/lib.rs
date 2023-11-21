@@ -40,6 +40,7 @@ mod scc_enc;
 mod scc_parse;
 mod transcriberbin;
 mod tttocea608;
+mod tttocea708;
 mod tttojson;
 mod ttutils;
 
@@ -59,6 +60,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     jsontovtt::register(plugin)?;
     transcriberbin::register(plugin)?;
     cea608tocea708::register(plugin)?;
+    tttocea708::register(plugin)?;
     Ok(())
 }
 
