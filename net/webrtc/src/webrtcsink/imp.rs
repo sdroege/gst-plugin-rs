@@ -1142,10 +1142,20 @@ impl Session {
             payloader_caps
         );
 
-        let pad = self
+        let pad = if let Some(pad) = self
             .webrtcbin
             .request_pad_simple(&format!("sink_{}", media_idx))
-            .unwrap();
+        {
+            pad
+        } else {
+            gst::error!(CAT, obj: element, "Failed to request pad from webrtcbin");
+            gst::element_error!(
+                element,
+                gst::StreamError::Failed,
+                ["Failed to request pad from webrtcbin"]
+            );
+            return;
+        };
 
         let transceiver = pad.property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
 
