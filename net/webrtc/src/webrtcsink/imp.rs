@@ -1472,9 +1472,15 @@ impl BaseWebRTCSink {
         let ssrc = BaseWebRTCSink::generate_ssrc(element, webrtc_pads);
         let media_idx = webrtc_pads.len() as i32;
 
-        let pad = webrtcbin
-            .request_pad_simple(&format!("sink_{}", media_idx))
-            .unwrap();
+        let Some(pad) = webrtcbin.request_pad_simple(&format!("sink_{}", media_idx)) else {
+            gst::error!(CAT, obj: element, "Failed to request pad from webrtcbin");
+            gst::element_error!(
+                element,
+                gst::StreamError::Failed,
+                ["Failed to request pad from webrtcbin"]
+            );
+            return;
+        };
 
         let transceiver = pad.property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
 
@@ -1567,9 +1573,15 @@ impl BaseWebRTCSink {
                 payloader_caps
             );
 
-            let pad = webrtcbin
-                .request_pad_simple(&format!("sink_{}", media_idx))
-                .unwrap();
+            let Some(pad) = webrtcbin.request_pad_simple(&format!("sink_{}", media_idx)) else {
+                gst::error!(CAT, obj: element, "Failed to request pad from webrtcbin");
+                gst::element_error!(
+                    element,
+                    gst::StreamError::Failed,
+                    ["Failed to request pad from webrtcbin"]
+                );
+                return;
+            };
 
             let transceiver = pad.property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
 
