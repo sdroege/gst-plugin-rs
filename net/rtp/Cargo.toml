@@ -33,7 +33,7 @@ smallvec = { version = "1.11", features = ["union", "write", "const_generics", "
 thiserror = "1"
 time = { version = "0.3", default-features = false, features = ["std"] }
 # TODO: experiment with other async executors (mio, async-std, etc)
-tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "time"] }
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "time", "sync"] }
 
 [dev-dependencies]
 gst-check = { workspace = true, features = ["v1_20"] }

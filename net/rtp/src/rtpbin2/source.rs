@@ -653,6 +653,19 @@ impl RemoteSendSource {
             SourceRecvReply::Passthrough
         } else if diff < -(DEFAULT_MAX_MISORDER as i32) || diff >= DEFAULT_MAX_DROPOUT as i32 {
             debug!("non-consecutive packet outside of configured limits, dropping");
+
+            // TODO: we will want to perform a few tasks here that the C jitterbuffer
+            // used to be taking care of:
+            //
+            // - We probably want to operate in the time domain rather than the sequence domain,
+            //   that means implementing a utility similar to RTPPacketRateCtx
+            // - We should update our late / lost stats when a packet does get ignored
+            // - We should perform the equivalent of the big gap handling in the C jitterbuffer,
+            //   possibly holding gap packets for a while before deciding that we indeed have an
+            //   actual gap, then propagating a new "resync" receive reply before releasing the
+            //   gap packets in order to let other components (eg jitterbuffer) reset themselves
+            //   when needed.
+
             // FIXME: should be a harder error?
             return SourceRecvReply::Ignore;
         } else {

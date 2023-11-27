@@ -70,6 +70,7 @@ fn test_send() {
     assert_eq!(rtp.sequence_number(), 501);
 
     let stats = h.element().unwrap().property::<gst::Structure>("stats");
+
     let session_stats = stats.get::<gst::Structure>("0").unwrap();
     let source_stats = session_stats
         .get::<gst::Structure>(TEST_SSRC.to_string())
@@ -143,9 +144,19 @@ fn test_receive() {
     assert_eq!(rtp.sequence_number(), 501);
 
     let stats = inner.element().unwrap().property::<gst::Structure>("stats");
+
     let session_stats = stats.get::<gst::Structure>("0").unwrap();
     let source_stats = session_stats
         .get::<gst::Structure>(TEST_SSRC.to_string())
+        .unwrap();
+    let jitterbuffers_stats = session_stats
+        .get::<gst::List>("jitterbuffer-stats")
+        .unwrap();
+    assert_eq!(jitterbuffers_stats.len(), 1);
+    let jitterbuffer_stats = jitterbuffers_stats
+        .first()
+        .unwrap()
+        .get::<gst::Structure>()
         .unwrap();
     assert_eq!(source_stats.get::<u32>("ssrc").unwrap(), TEST_SSRC);
     assert_eq!(
@@ -156,4 +167,13 @@ fn test_receive() {
     assert!(!source_stats.get::<bool>("local").unwrap());
     assert_eq!(source_stats.get::<u64>("packets-received").unwrap(), 2);
     assert_eq!(source_stats.get::<u64>("octets-received").unwrap(), 20);
+    assert_eq!(jitterbuffer_stats.get::<u64>("num-late").unwrap(), 0);
+    assert_eq!(jitterbuffer_stats.get::<u64>("num-lost").unwrap(), 0);
+    assert_eq!(jitterbuffer_stats.get::<u64>("num-duplicates").unwrap(), 0);
+    assert_eq!(jitterbuffer_stats.get::<u64>("num-pushed").unwrap(), 2);
+    assert_eq!(jitterbuffer_stats.get::<i32>("pt").unwrap(), TEST_PT as i32);
+    assert_eq!(
+        jitterbuffer_stats.get::<i32>("ssrc").unwrap(),
+        TEST_SSRC as i32
+    );
 }

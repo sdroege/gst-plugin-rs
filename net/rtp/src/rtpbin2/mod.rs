@@ -4,6 +4,7 @@ use gst::glib;
 use gst::prelude::*;
 use once_cell::sync::Lazy;
 mod imp;
+mod jitterbuffer;
 mod session;
 mod source;
 mod time;

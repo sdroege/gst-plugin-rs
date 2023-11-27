@@ -306,6 +306,55 @@ macro_rules! define_wrapping_comparable_u32_with_display {
     };
 }
 
+/// Stores information necessary to compute a series of extended seqnums
+#[derive(Default, Debug)]
+pub(crate) struct ExtendedSeqnum {
+    last_ext: Option<u64>,
+}
+
+impl ExtendedSeqnum {
+    /// Produces the next extended timestamp from a new RTP timestamp
+    pub(crate) fn next(&mut self, rtp_seqnum: u16) -> u64 {
+        let ext = match self.last_ext {
+            None => (1u64 << 16) + rtp_seqnum as u64,
+            Some(last_ext) => {
+                // pick wraparound counter from previous timestamp and add to new timestamp
+                let mut ext = rtp_seqnum as u64 + (last_ext & !0xffff);
+
+                // check for timestamp wraparound
+                if ext < last_ext {
+                    let diff = last_ext - ext;
+
+                    if diff > std::i16::MAX as u64 {
+                        // timestamp went backwards more than allowed, we wrap around and get
+                        // updated extended timestamp.
+                        ext += 1u64 << 16;
+                    }
+                } else {
+                    let diff = ext - last_ext;
+
+                    if diff > std::i16::MAX as u64 {
+                        if ext < 1u64 << 16 {
+                            // We can't ever get to such a case as our counter is opaque
+                            unreachable!()
+                        } else {
+                            ext -= 1u64 << 16;
+                            // We don't want the extended timestamp storage to go back, ever
+                            return ext;
+                        }
+                    }
+                }
+
+                ext
+            }
+        };
+
+        self.last_ext = Some(ext);
+
+        ext
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -535,5 +584,76 @@ mod tests {
         assert!(cmp(0, 0x8000_0000).is_none());
         assert_eq!(try_cmp(0x8000_0000, 0), Err(ComparisonLimit));
         assert_eq!(try_cmp(0, 0x8000_0000), Err(ComparisonLimit));
+    }
+
+    #[test]
+    fn extended_seqnum_basic() {
+        let mut ext_seq = ExtendedSeqnum::default();
+
+        // No wraparound when seqnums are increasing
+        assert_eq!(ext_seq.next(0), (1 << 16));
+        assert_eq!(ext_seq.next(10), (1 << 16) + 10);
+        assert_eq!(ext_seq.next(10), (1 << 16) + 10);
+        assert_eq!(
+            ext_seq.next(1 + std::i16::MAX as u16),
+            (1 << 16) + 1 + std::i16::MAX as u64
+        );
+
+        // Even big bumps under MAXINT16 don't result in wrap-around
+        ext_seq = ExtendedSeqnum::default();
+
+        assert_eq!(ext_seq.next(27500), (1 << 16) + 27500);
+        assert_eq!(ext_seq.next(24), (1 << 16) + 24);
+    }
+
+    #[test]
+    fn extended_seqnum_wraparound() {
+        let mut ext_seq = ExtendedSeqnum::default();
+        assert_eq!(
+            ext_seq.next(std::u16::MAX - 9000 + 1),
+            (1 << 16) + std::u16::MAX as u64 - 9000 + 1
+        );
+        assert_eq!(ext_seq.next(0), (1 << 16) + std::u16::MAX as u64 + 1);
+        assert_eq!(
+            ext_seq.next(9000),
+            (1 << 16) + std::u16::MAX as u64 + 1 + 9000
+        );
+    }
+
+    #[test]
+    fn extended_seqnum_wraparound_disordered() {
+        let mut ext_seq = ExtendedSeqnum::default();
+
+        assert_eq!(
+            ext_seq.next(std::u16::MAX - 9000 + 1),
+            (1 << 16) + std::u16::MAX as u64 - 9000 + 1
+        );
+        assert_eq!(ext_seq.next(0), (1 << 16) + std::u16::MAX as u64 + 1);
+
+        // Unwrapping around
+        assert_eq!(
+            ext_seq.next(std::u16::MAX - 9000 + 1),
+            (1 << 16) + std::u16::MAX as u64 - 9000 + 1
+        );
+        assert_eq!(
+            ext_seq.next(9000),
+            (1 << 16) + std::u16::MAX as u64 + 1 + 9000
+        );
+    }
+
+    #[test]
+    fn extended_seqnum_wraparound_disordered_backwards() {
+        let mut ext_seq = ExtendedSeqnum::default();
+
+        assert_eq!(ext_seq.next(9000), (1 << 16) + 9000);
+
+        // Wraps backwards
+        assert_eq!(
+            ext_seq.next(std::u16::MAX - 9000 + 1),
+            std::u16::MAX as u64 - 9000 + 1
+        );
+
+        // Wraps again forwards
+        assert_eq!(ext_seq.next(9000), (1 << 16) + 9000);
     }
 }

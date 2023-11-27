@@ -1630,7 +1630,7 @@ pub(crate) mod tests {
         }
     }
 
-    fn generate_rtp_packet(ssrc: u32, seq_no: u16, rtp_ts: u32, payload_len: usize) -> Vec<u8> {
+    pub fn generate_rtp_packet(ssrc: u32, seq_no: u16, rtp_ts: u32, payload_len: usize) -> Vec<u8> {
         init_logs();
         let mut rtp_data = [0; 1200];
         let payload = vec![1; payload_len];
