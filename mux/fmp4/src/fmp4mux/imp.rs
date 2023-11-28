@@ -205,6 +205,8 @@ struct Stream {
     caps: gst::Caps,
     /// Whether this stream is intra-only and has frame reordering.
     delta_frames: DeltaFrames,
+    /// Whether this stream might have header frames without timestamps that should be ignored.
+    discard_header_buffers: bool,
 
     /// Currently queued GOPs, including incomplete ones.
     queued_gops: VecDeque<Gop>,
@@ -271,11 +273,17 @@ pub(crate) struct FMP4Mux {
 
 impl FMP4Mux {
     /// Checks if a buffer is valid according to the stream configuration.
-    fn check_buffer(
-        buffer: &gst::BufferRef,
-        sinkpad: &super::FMP4MuxPad,
-        delta_frames: super::DeltaFrames,
-    ) -> Result<(), gst::FlowError> {
+    fn check_buffer(buffer: &gst::BufferRef, stream: &Stream) -> Result<(), gst::FlowError> {
+        let Stream {
+            sinkpad,
+            delta_frames,
+            discard_header_buffers,
+            ..
+        } = stream;
+        if *discard_header_buffers && buffer.flags().contains(gst::BufferFlags::HEADER) {
+            return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
+        }
+
         if delta_frames.requires_dts() && buffer.dts().is_none() {
             gst::error!(CAT, obj: sinkpad, "Require DTS for video streams");
             return Err(gst::FlowError::Error);
@@ -314,12 +322,10 @@ impl FMP4Mux {
         }
 
         // Pop buffer here, it will be stored in the pre-queue after calculating its timestamps
-        let mut buffer = match stream.sinkpad.pop_buffer() {
-            None => return Ok(None),
-            Some(buffer) => buffer,
+        let Some(mut buffer) = stream.sinkpad.pop_buffer() else {
+            return Ok(None);
         };
-
-        Self::check_buffer(&buffer, &stream.sinkpad, stream.delta_frames)?;
+        Self::check_buffer(&buffer, stream)?;
 
         let segment = match stream.sinkpad.segment().downcast::<gst::ClockTime>().ok() {
             Some(segment) => segment,
@@ -2555,6 +2561,7 @@ impl FMP4Mux {
             let s = caps.structure(0).unwrap();
 
             let mut delta_frames = DeltaFrames::IntraOnly;
+            let mut discard_header_buffers = false;
             match s.name().as_str() {
                 "video/x-h264" | "video/x-h265" => {
                     if !s.has_field_with_type("codec_data", gst::Buffer::static_type()) {
@@ -2598,6 +2605,13 @@ impl FMP4Mux {
                         return Err(gst::FlowError::NotNegotiated);
                     }
                 }
+                "audio/x-flac" => {
+                    discard_header_buffers = true;
+                    if let Err(e) = s.get::<gst::ArrayRef>("streamheader") {
+                        gst::error!(CAT, obj: pad, "Muxing FLAC into MP4 needs streamheader: {}", e);
+                        return Err(gst::FlowError::NotNegotiated);
+                    };
+                }
                 "audio/x-alaw" | "audio/x-mulaw" => (),
                 "audio/x-adpcm" => (),
                 "application/x-onvif-metadata" => (),
@@ -2608,6 +2622,7 @@ impl FMP4Mux {
                 sinkpad: pad,
                 caps,
                 delta_frames,
+                discard_header_buffers,
                 pre_queue: VecDeque::new(),
                 queued_gops: VecDeque::new(),
                 fragment_filled: false,
@@ -3464,6 +3479,11 @@ impl ElementImpl for ISOFMP4Mux {
                         .field("channel-mapping-family", gst::IntRange::new(0i32, 255))
                         .field("channels", gst::IntRange::new(1i32, 8))
                         .field("rate", gst::IntRange::new(1, i32::MAX))
+                        .build(),
+                    gst::Structure::builder("audio/x-flac")
+                        .field("framed", true)
+                        .field("channels", gst::IntRange::<i32>::new(1, 8))
+                        .field("rate", gst::IntRange::<i32>::new(1, 10 * u16::MAX as i32))
                         .build(),
                 ]
                 .into_iter()

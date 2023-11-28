@@ -108,6 +108,8 @@ struct Stream {
     caps: gst::Caps,
     /// Whether this stream is intra-only and has frame reordering.
     delta_frames: super::DeltaFrames,
+    /// Whether this stream might have header frames without timestamps that should be ignored.
+    discard_header_buffers: bool,
 
     /// Already written out chunks with their samples for this stream
     chunks: Vec<super::Chunk>,
@@ -165,7 +167,12 @@ impl MP4Mux {
         buffer: &gst::BufferRef,
         sinkpad: &super::MP4MuxPad,
         delta_frames: super::DeltaFrames,
+        discard_headers: bool,
     ) -> Result<(), gst::FlowError> {
+        if discard_headers && buffer.flags().contains(gst::BufferFlags::HEADER) {
+            return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
+        }
+
         if delta_frames.requires_dts() && buffer.dts().is_none() {
             gst::error!(CAT, obj: sinkpad, "Require DTS for video streams");
             return Err(gst::FlowError::Error);
@@ -188,6 +195,7 @@ impl MP4Mux {
         &self,
         sinkpad: &super::MP4MuxPad,
         delta_frames: super::DeltaFrames,
+        discard_headers: bool,
         pre_queue: &mut VecDeque<(gst::FormattedSegment<gst::ClockTime>, gst::Buffer)>,
         running_time_utc_time_mapping: &Option<(gst::Signed<gst::ClockTime>, gst::ClockTime)>,
     ) -> Result<Option<(gst::FormattedSegment<gst::ClockTime>, gst::Buffer)>, gst::FlowError> {
@@ -195,13 +203,10 @@ impl MP4Mux {
             return Ok(Some((segment.clone(), buffer.clone())));
         }
 
-        let mut buffer = match sinkpad.peek_buffer() {
-            None => return Ok(None),
-            Some(buffer) => buffer,
+        let Some(mut buffer) = sinkpad.peek_buffer() else {
+            return Ok(None);
         };
-
-        Self::check_buffer(&buffer, sinkpad, delta_frames)?;
-
+        Self::check_buffer(&buffer, sinkpad, delta_frames, discard_headers)?;
         let mut segment = match sinkpad.segment().downcast::<gst::ClockTime>().ok() {
             Some(segment) => segment,
             None => {
@@ -276,19 +281,20 @@ impl MP4Mux {
 
     fn pop_buffer(
         &self,
-        sinkpad: &super::MP4MuxPad,
-        delta_frames: super::DeltaFrames,
-        pre_queue: &mut VecDeque<(gst::FormattedSegment<gst::ClockTime>, gst::Buffer)>,
-        running_time_utc_time_mapping: &mut Option<(gst::Signed<gst::ClockTime>, gst::ClockTime)>,
+        stream: &mut Stream,
     ) -> Result<Option<(gst::FormattedSegment<gst::ClockTime>, gst::Buffer)>, gst::FlowError> {
+        let Stream {
+            sinkpad, pre_queue, ..
+        } = stream;
+
         // In ONVIF mode we need to get UTC times for each buffer and synchronize based on that.
         // Queue up to 6s of data to get the first UTC time and then backdate.
         if self.obj().class().as_ref().variant == super::Variant::ONVIF
-            && running_time_utc_time_mapping.is_none()
+            && stream.running_time_utc_time_mapping.is_none()
         {
             if let Some((last, first)) = Option::zip(pre_queue.back(), pre_queue.front()) {
                 // Existence of PTS/DTS checked below
-                let (last, first) = if delta_frames.requires_dts() {
+                let (last, first) = if stream.delta_frames.requires_dts() {
                     (
                         last.0.to_running_time_full(last.1.dts()).unwrap(),
                         first.0.to_running_time_full(first.1.dts()).unwrap(),
@@ -312,19 +318,20 @@ impl MP4Mux {
                 }
             }
 
-            let buffer = match sinkpad.pop_buffer() {
-                None => {
-                    if sinkpad.is_eos() {
-                        gst::error!(CAT, obj: sinkpad, "Got no UTC time before EOS");
-                        return Err(gst::FlowError::Error);
-                    } else {
-                        return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
-                    }
+            let Some(buffer) = sinkpad.pop_buffer() else {
+                if sinkpad.is_eos() {
+                    gst::error!(CAT, obj: sinkpad, "Got no UTC time before EOS");
+                    return Err(gst::FlowError::Error);
+                } else {
+                    return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
                 }
-                Some(buffer) => buffer,
             };
-
-            Self::check_buffer(&buffer, sinkpad, delta_frames)?;
+            Self::check_buffer(
+                &buffer,
+                sinkpad,
+                stream.delta_frames,
+                stream.discard_header_buffers,
+            )?;
 
             let segment = match sinkpad.segment().downcast::<gst::ClockTime>().ok() {
                 Some(segment) => segment,
@@ -350,7 +357,7 @@ impl MP4Mux {
             );
 
             let mapping = (running_time, utc_time);
-            *running_time_utc_time_mapping = Some(mapping);
+            stream.running_time_utc_time_mapping = Some(mapping);
 
             // Push the buffer onto the pre-queue and re-timestamp it and all other buffers
             // based on the mapping above.
@@ -391,7 +398,7 @@ impl MP4Mux {
             // Fall through below and pop the first buffer finally
         }
 
-        if let Some((segment, buffer)) = pre_queue.pop_front() {
+        if let Some((segment, buffer)) = stream.pre_queue.pop_front() {
             return Ok(Some((segment, buffer)));
         }
 
@@ -400,23 +407,26 @@ impl MP4Mux {
         //   for calculating the duration to the previous buffer, and then put into the pre-queue
         // - or this is the very first buffer and we just put it into the queue overselves above
         if self.obj().class().as_ref().variant == super::Variant::ONVIF {
-            if sinkpad.is_eos() {
+            if stream.sinkpad.is_eos() {
                 return Ok(None);
             }
             unreachable!();
         }
 
-        let buffer = match sinkpad.pop_buffer() {
-            None => return Ok(None),
-            Some(buffer) => buffer,
+        let Some(buffer) = stream.sinkpad.pop_buffer() else {
+            return Ok(None);
         };
+        Self::check_buffer(
+            &buffer,
+            &stream.sinkpad,
+            stream.delta_frames,
+            stream.discard_header_buffers,
+        )?;
 
-        Self::check_buffer(&buffer, sinkpad, delta_frames)?;
-
-        let segment = match sinkpad.segment().downcast::<gst::ClockTime>().ok() {
+        let segment = match stream.sinkpad.segment().downcast::<gst::ClockTime>().ok() {
             Some(segment) => segment,
             None => {
-                gst::error!(CAT, obj: sinkpad, "Got buffer before segment");
+                gst::error!(CAT, obj: stream.sinkpad, "Got buffer before segment");
                 return Err(gst::FlowError::Error);
             }
         };
@@ -442,6 +452,12 @@ impl MP4Mux {
                 Some(PendingBuffer {
                     duration: Some(_), ..
                 }) => return Ok(()),
+                Some(PendingBuffer { ref buffer, .. })
+                    if stream.discard_header_buffers
+                        && buffer.flags().contains(gst::BufferFlags::HEADER) =>
+                {
+                    return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
+                }
                 Some(PendingBuffer {
                     timestamp,
                     pts,
@@ -449,13 +465,15 @@ impl MP4Mux {
                     ref mut duration,
                     ..
                 }) => {
-                    // Already have a pending buffer but no duration, so try to get that now
-                    let (segment, buffer) = match self.peek_buffer(
+                    let peek_outcome = self.peek_buffer(
                         &stream.sinkpad,
                         stream.delta_frames,
+                        stream.discard_header_buffers,
                         &mut stream.pre_queue,
                         &stream.running_time_utc_time_mapping,
-                    )? {
+                    )?;
+                    // Already have a pending buffer but no duration, so try to get that now
+                    let (segment, buffer) = match peek_outcome {
                         Some(res) => res,
                         None => {
                             if stream.sinkpad.is_eos() {
@@ -532,12 +550,7 @@ impl MP4Mux {
                 None => {
                     // Have no buffer queued at all yet
 
-                    let (segment, buffer) = match self.pop_buffer(
-                        &stream.sinkpad,
-                        stream.delta_frames,
-                        &mut stream.pre_queue,
-                        &mut stream.running_time_utc_time_mapping,
-                    )? {
+                    let (segment, buffer) = match self.pop_buffer(stream)? {
                         Some(res) => res,
                         None => {
                             if stream.sinkpad.is_eos() {
@@ -870,6 +883,7 @@ impl MP4Mux {
             let s = caps.structure(0).unwrap();
 
             let mut delta_frames = super::DeltaFrames::IntraOnly;
+            let mut discard_header_buffers = false;
             match s.name().as_str() {
                 "video/x-h264" | "video/x-h265" => {
                     if !s.has_field_with_type("codec_data", gst::Buffer::static_type()) {
@@ -913,6 +927,13 @@ impl MP4Mux {
                         return Err(gst::FlowError::NotNegotiated);
                     }
                 }
+                "audio/x-flac" => {
+                    discard_header_buffers = true;
+                    if let Err(e) = s.get::<gst::ArrayRef>("streamheader") {
+                        gst::error!(CAT, obj: pad, "Muxing FLAC into MP4 needs streamheader: {}", e);
+                        return Err(gst::FlowError::NotNegotiated);
+                    };
+                }
                 "audio/x-alaw" | "audio/x-mulaw" => (),
                 "audio/x-adpcm" => (),
                 "application/x-onvif-metadata" => (),
@@ -924,6 +945,7 @@ impl MP4Mux {
                 pre_queue: VecDeque::new(),
                 caps,
                 delta_frames,
+                discard_header_buffers,
                 chunks: Vec::new(),
                 pending_buffer: None,
                 queued_chunk_time: gst::ClockTime::ZERO,
@@ -1522,6 +1544,11 @@ impl ElementImpl for ISOMP4Mux {
                         .field("channel-mapping-family", gst::IntRange::new(0i32, 255))
                         .field("channels", gst::IntRange::new(1i32, 8))
                         .field("rate", gst::IntRange::new(1, i32::MAX))
+                        .build(),
+                    gst::Structure::builder("audio/x-flac")
+                        .field("framed", true)
+                        .field("channels", gst::IntRange::<i32>::new(1, 8))
+                        .field("rate", gst::IntRange::<i32>::new(1, 10 * u16::MAX as i32))
                         .build(),
                 ]
                 .into_iter()
