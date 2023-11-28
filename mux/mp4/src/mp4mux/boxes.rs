@@ -9,7 +9,7 @@
 use gst::prelude::*;
 
 use anyhow::{anyhow, bail, Context, Error};
-
+use std::convert::TryFrom;
 use std::str::FromStr;
 
 fn write_box<T, F: FnOnce(&mut Vec<u8>) -> Result<T, Error>>(
@@ -382,9 +382,8 @@ fn write_tkhd(
     // Volume
     let s = stream.caps.structure(0).unwrap();
     match s.name().as_str() {
-        "audio/mpeg" | "audio/x-opus" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
-            v.extend((1u16 << 8).to_be_bytes())
-        }
+        "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
+        | "audio/x-adpcm" => v.extend((1u16 << 8).to_be_bytes()),
         _ => v.extend(0u16.to_be_bytes()),
     }
 
@@ -514,9 +513,8 @@ fn write_hdlr(
     let (handler_type, name) = match s.name().as_str() {
         "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
         | "image/jpeg" => (b"vide", b"VideoHandler\0".as_slice()),
-        "audio/mpeg" | "audio/x-opus" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
-            (b"soun", b"SoundHandler\0".as_slice())
-        }
+        "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
+        | "audio/x-adpcm" => (b"soun", b"SoundHandler\0".as_slice()),
         "application/x-onvif-metadata" => (b"meta", b"MetadataHandler\0".as_slice()),
         _ => unreachable!(),
     };
@@ -546,7 +544,8 @@ fn write_minf(
             // Flags are always 1 for unspecified reasons
             write_full_box(v, b"vmhd", FULL_BOX_VERSION_0, 1, |v| write_vmhd(v, header))?
         }
-        "audio/mpeg" | "audio/x-opus" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
+        "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
+        | "audio/x-adpcm" => {
             write_full_box(v, b"smhd", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
                 write_smhd(v, header)
             })?
@@ -703,9 +702,8 @@ fn write_stsd(
     match s.name().as_str() {
         "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
         | "image/jpeg" => write_visual_sample_entry(v, header, stream)?,
-        "audio/mpeg" | "audio/x-opus" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
-            write_audio_sample_entry(v, header, stream)?
-        }
+        "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
+        | "audio/x-adpcm" => write_audio_sample_entry(v, header, stream)?,
         "application/x-onvif-metadata" => write_xml_meta_data_sample_entry(v, header, stream)?,
         _ => unreachable!(),
     }
@@ -1079,6 +1077,7 @@ fn write_audio_sample_entry(
     let fourcc = match s.name().as_str() {
         "audio/mpeg" => b"mp4a",
         "audio/x-opus" => b"Opus",
+        "audio/x-flac" => b"fLaC",
         "audio/x-alaw" => b"alaw",
         "audio/x-mulaw" => b"ulaw",
         "audio/x-adpcm" => {
@@ -1097,6 +1096,10 @@ fn write_audio_sample_entry(
             let bitrate = s.get::<i32>("bitrate").context("no ADPCM bitrate field")?;
             (bitrate / 8000) as u16
         }
+        "audio/x-flac" => with_flac_metadata(&stream.caps, |streaminfo, _| {
+            1 + (u16::from_be_bytes([streaminfo[16], streaminfo[17]]) >> 4 & 0b11111)
+        })
+        .context("FLAC metadata error")?,
         _ => 16u16,
     };
 
@@ -1138,6 +1141,9 @@ fn write_audio_sample_entry(
             }
             "audio/x-opus" => {
                 write_dops(v, &stream.caps)?;
+            }
+            "audio/x-flac" => {
+                write_dfla(v, &stream.caps)?;
             }
             "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
                 // Nothing to do here
@@ -1330,6 +1336,35 @@ fn write_dops(v: &mut Vec<u8>, caps: &gst::Caps) -> Result<(), Error> {
         }
 
         Ok(())
+    })
+}
+
+fn with_flac_metadata<R>(
+    caps: &gst::Caps,
+    cb: impl FnOnce(&[u8], &[gst::glib::SendValue]) -> R,
+) -> Result<R, Error> {
+    let caps = caps.structure(0).unwrap();
+    let header = caps.get::<gst::ArrayRef>("streamheader").unwrap();
+    let (streaminfo, remainder) = header.as_ref().split_first().unwrap();
+    let streaminfo = streaminfo.get::<&gst::BufferRef>().unwrap();
+    let streaminfo = streaminfo.map_readable().unwrap();
+    // 13 bytes for the Ogg/FLAC prefix and 38 for the streaminfo itself.
+    match <&[_; 13 + 38]>::try_from(streaminfo.as_slice()) {
+        Ok(i) if i.starts_with(b"\x7FFLAC\x01\x00") => Ok(cb(&i[13..], remainder)),
+        Ok(_) | Err(_) => bail!("Unknown streamheader format"),
+    }
+}
+
+fn write_dfla(v: &mut Vec<u8>, caps: &gst::Caps) -> Result<(), Error> {
+    write_full_box(v, b"dfLa", 0, 0, move |v| {
+        with_flac_metadata(caps, |streaminfo, remainder| {
+            v.extend(streaminfo);
+            for metadata in remainder {
+                let metadata = metadata.get::<&gst::BufferRef>().unwrap();
+                let metadata = metadata.map_readable().unwrap();
+                v.extend(&metadata[..]);
+            }
+        })
     })
 }
 

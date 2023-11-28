@@ -19,6 +19,33 @@ fn init() {
     });
 }
 
+fn to_completion(pipeline: &gst::Pipeline) {
+    pipeline
+        .set_state(gst::State::Playing)
+        .expect("Unable to set the pipeline to the `Playing` state");
+
+    for msg in pipeline.bus().unwrap().iter_timed(gst::ClockTime::NONE) {
+        use gst::MessageView;
+
+        match msg.view() {
+            MessageView::Eos(..) => break,
+            MessageView::Error(err) => {
+                panic!(
+                    "Error from {:?}: {} ({:?})",
+                    err.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
+                );
+            }
+            _ => (),
+        }
+    }
+
+    pipeline
+        .set_state(gst::State::Null)
+        .expect("Unable to set the pipeline to the `Null` state");
+}
+
 fn test_buffer_flags_single_stream(cmaf: bool, set_dts: bool, caps: gst::Caps) {
     let mut h = if cmaf {
         gst_check::Harness::new("cmafmux")
@@ -1992,4 +2019,22 @@ fn test_chunking_single_stream_gops_after_fragment_end_after_next_chunk_end() {
     assert_eq!(ev.type_(), gst::EventType::Segment);
     let ev = h.pull_event().unwrap();
     assert_eq!(ev.type_(), gst::EventType::Eos);
+}
+
+#[test]
+fn test_roundtrip_vp9_flac() {
+    init();
+
+    let pipeline = gst::parse::launch(
+        r#"
+        videotestsrc num-buffers=99 ! vp9enc ! vp9parse ! mux.
+        audiotestsrc num-buffers=149 ! flacenc ! flacparse ! mux.
+        isofmp4mux name=mux ! qtdemux name=demux
+        demux.audio_0 ! queue ! flacdec ! fakesink
+        demux.video_0 ! queue ! vp9dec ! fakesink
+        "#,
+    )
+    .unwrap();
+    let pipeline = pipeline.downcast().unwrap();
+    to_completion(&pipeline);
 }
