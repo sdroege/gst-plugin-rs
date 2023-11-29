@@ -41,6 +41,7 @@ mod mp4a;
 mod mp4g;
 mod mpa;
 mod mparobust;
+mod mpv;
 mod opus;
 mod pcmau;
 mod raw_video;
@@ -98,6 +99,9 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     mpa::pay::register(plugin)?;
 
     mparobust::depay::register(plugin)?;
+
+    mpv::depay::register(plugin)?;
+    mpv::pay::register(plugin)?;
 
     opus::depay::register(plugin)?;
     opus::pay::register(plugin)?;
