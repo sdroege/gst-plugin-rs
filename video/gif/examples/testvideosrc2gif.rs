@@ -16,7 +16,7 @@ fn main() {
     gst::init().unwrap();
     gstgif::plugin_register_static().expect("Failed to register gif plugin");
 
-    let pipeline = gst::parse_launch(ENCODE_PIPELINE).unwrap();
+    let pipeline = gst::parse::launch(ENCODE_PIPELINE).unwrap();
     let bus = pipeline.bus().unwrap();
 
     pipeline

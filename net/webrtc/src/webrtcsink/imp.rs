@@ -817,7 +817,7 @@ impl EncodingChainBuilder {
             elements.push(match self.codec.is_video() {
                 true => make_converter_for_video_caps(&self.input_caps, &self.codec)?.upcast(),
                 false => {
-                    gst::parse_bin_from_description("audioresample ! audioconvert", true)?.upcast()
+                    gst::parse::bin_from_description("audioresample ! audioconvert", true)?.upcast()
                 }
             });
 

@@ -22,10 +22,10 @@ const FALLBACK_PIPELINE: &str = "videotestsrc is-live=true pattern=snow";
 fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element) {
     let pipeline = gst::Pipeline::default();
 
-    let video_src = gst::parse_bin_from_description(MAIN_PIPELINE, true)
+    let video_src = gst::parse::bin_from_description(MAIN_PIPELINE, true)
         .unwrap()
         .upcast();
-    let fallback_video_src = gst::parse_bin_from_description(FALLBACK_PIPELINE, true)
+    let fallback_video_src = gst::parse::bin_from_description(FALLBACK_PIPELINE, true)
         .unwrap()
         .upcast();
 

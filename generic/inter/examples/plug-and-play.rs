@@ -145,8 +145,7 @@ fn monitor_pipeline(pipeline: &gst::Pipeline, base_time: gst::ClockTime) -> Resu
                     }
                     MessageView::StateChanged(sc) => {
                         if msg.src() == Some(pipeline.upcast_ref()) {
-                            gst::debug_bin_to_dot_file(
-                                pipeline.upcast_ref::<gst::Bin>(),
+                            pipeline.debug_to_dot_file(
                                 gst::DebugGraphDetails::all(),
                                 format!("{}-{:?}-{:?}", pipeline.name(), sc.old(), sc.current()),
                             );

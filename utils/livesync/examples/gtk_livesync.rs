@@ -32,7 +32,7 @@ impl Drop for DroppingProbe {
 }
 
 fn create_pipeline() -> gst::Pipeline {
-    gst::parse_launch(
+    gst::parse::launch(
         r#"videotestsrc name=vsrc is-live=1
             ! video/x-raw,framerate=60/1,width=800,height=600
             ! identity single-segment=1

@@ -127,7 +127,7 @@ async fn run(args: Args) -> Result<(), Error> {
         args.uri
     );
 
-    let pipeline = gst::parse_launch(&pipeline_str)?;
+    let pipeline = gst::parse::launch(&pipeline_str)?;
     let ws = pipeline
         .downcast_ref::<gst::Bin>()
         .unwrap()

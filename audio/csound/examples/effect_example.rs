@@ -75,9 +75,9 @@ const CSD: &str = "
 fn create_pipeline() -> Result<gst::Pipeline, Box<dyn Error>> {
     let pipeline = gst::Pipeline::default();
 
-    let audio_src = gst::parse_bin_from_description(AUDIO_SRC, true)?.upcast();
+    let audio_src = gst::parse::bin_from_description(AUDIO_SRC, true)?.upcast();
 
-    let audio_sink = gst::parse_bin_from_description(AUDIO_SINK, true)?.upcast();
+    let audio_sink = gst::parse::bin_from_description(AUDIO_SINK, true)?.upcast();
 
     let csoundfilter = gst::ElementFactory::make("csoundfilter")
         .property("csd-text", CSD)

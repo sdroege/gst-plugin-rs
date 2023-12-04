@@ -43,13 +43,13 @@ fn create_pipeline(uris: Vec<String>, iterations: u32) -> anyhow::Result<gst::Pi
         let pad_name = src_pad.name();
 
         let sink = if pad_name.starts_with("audio") {
-            gst::parse_bin_from_description(
+            gst::parse::bin_from_description(
                 "queue ! audioconvert ! audioresample ! autoaudiosink",
                 true,
             )
             .unwrap()
         } else if pad_name.starts_with("video") {
-            gst::parse_bin_from_description("queue ! videoconvert ! autovideosink", true).unwrap()
+            gst::parse::bin_from_description("queue ! videoconvert ! autovideosink", true).unwrap()
         } else {
             unimplemented!();
         };

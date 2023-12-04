@@ -38,7 +38,7 @@ fn test_basic() {
         }
     }
 
-    let pipeline = match gst::parse_launch(
+    let pipeline = match gst::parse::launch(
         "videotestsrc num-buffers=99 ! x264enc ! mux. \
          audiotestsrc num-buffers=140 ! fdkaacenc ! mux. \
          isomp4mux name=mux ! filesink name=sink \

@@ -36,7 +36,7 @@ fn run() -> Result<(), Error> {
     let uri = &args[1];
     let hrir = &args[2];
 
-    let pipeline = gst::parse_launch(&format!(
+    let pipeline = gst::parse::launch(&format!(
         "uridecodebin uri={uri} ! audioconvert ! audio/x-raw,channels=1 !
             hrtfrender hrir-file={hrir} name=hrtf ! audioresample ! autoaudiosink"
     ))?

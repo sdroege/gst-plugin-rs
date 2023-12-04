@@ -211,17 +211,13 @@ impl PipelineSnapshot {
                             let dump_name = format!("{}{}", settings.dot_prefix, pipeline.name());
 
                             if settings.dot_ts {
-                                gst::debug_bin_to_dot_file_with_ts(
-                                    &pipeline,
+                                pipeline.debug_to_dot_file_with_ts(
                                     gst::DebugGraphDetails::all(),
                                     &dump_name,
                                 );
                             } else {
-                                gst::debug_bin_to_dot_file(
-                                    &pipeline,
-                                    gst::DebugGraphDetails::all(),
-                                    &dump_name,
-                                );
+                                pipeline
+                                    .debug_to_dot_file(gst::DebugGraphDetails::all(), &dump_name);
                             }
                         }
                     }
