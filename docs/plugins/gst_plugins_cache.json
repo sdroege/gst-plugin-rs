@@ -5732,6 +5732,20 @@
                     }
                 },
                 "properties": {
+                    "cea608-channel": {
+                        "blurb": "Write CEA 608 compatibility bytes with this channel, 0 = disabled (only 1 and 3 currently supported)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "4",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
                     "mode": {
                         "blurb": "Which mode to operate in",
                         "conditionally-available": false,
@@ -5770,6 +5784,20 @@
                         "mutable": "playing",
                         "readable": true,
                         "type": "gint",
+                        "writable": true
+                    },
+                    "roll-up-rows": {
+                        "blurb": "Number of rows to use in roll up mode",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "2",
+                        "max": "31",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint",
                         "writable": true
                     },
                     "roll-up-timeout": {

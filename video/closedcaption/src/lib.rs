@@ -47,7 +47,10 @@ mod ttutils;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "doc")]
-    cea608utils::Cea608Mode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    {
+        cea608utils::Cea608Mode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        cea708utils::Cea708Mode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    }
     mcc_parse::register(plugin)?;
     mcc_enc::register(plugin)?;
     scc_parse::register(plugin)?;

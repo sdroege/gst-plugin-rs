@@ -88,6 +88,7 @@ pub fn textstyle_to_pen_color(style: TextStyle) -> SetPenColorArgs {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct Cea708ServiceWriter {
     codes: Vec<Code>,
     service_no: u8,

@@ -10,6 +10,7 @@ use gst::glib;
 use gst::prelude::*;
 
 mod imp;
+mod translate;
 
 glib::wrapper! {
     pub struct TtToCea708(ObjectSubclass<imp::TtToCea708>) @extends gst::Element, gst::Object;
