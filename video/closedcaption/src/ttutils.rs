@@ -35,6 +35,16 @@ pub struct Lines {
     pub clear: Option<bool>,
 }
 
+impl Lines {
+    pub fn new_empty() -> Self {
+        Self {
+            lines: vec![],
+            mode: None,
+            clear: None,
+        }
+    }
+}
+
 impl Cea608Mode {
     pub fn is_rollup(&self) -> bool {
         *self == Cea608Mode::RollUp2 || *self == Cea608Mode::RollUp3 || *self == Cea608Mode::RollUp4

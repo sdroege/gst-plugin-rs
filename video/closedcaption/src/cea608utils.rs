@@ -33,8 +33,9 @@ pub enum Cea608Mode {
     RollUp4,
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 pub enum TextStyle {
+    #[default]
     White,
     Green,
     Blue,
