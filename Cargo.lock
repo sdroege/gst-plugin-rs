@@ -242,9 +242,9 @@ dependencies = [
 
 [[package]]
 name = "async-tungstenite"
-version = "0.23.0"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1e9efbe14612da0a19fb983059a0b621e9cf6225d7018ecab4f9988215540dc"
+checksum = "3609af4bbf701ddaf1f6bb4e6257dff4ff8932327d0e685d3f653724c258b1ac"
 dependencies = [
  "futures-io",
  "futures-util",
@@ -253,7 +253,7 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tokio-native-tls",
- "tungstenite",
+ "tungstenite 0.21.0",
 ]
 
 [[package]]
@@ -317,7 +317,7 @@ dependencies = [
  "bytes",
  "fastrand",
  "hex",
- "http",
+ "http 0.2.11",
  "hyper",
  "ring 0.17.6",
  "time",
@@ -348,7 +348,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "bytes",
- "http",
+ "http 0.2.11",
  "http-body",
  "pin-project-lite",
  "tracing",
@@ -370,7 +370,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "fastrand",
- "http",
+ "http 0.2.11",
  "percent-encoding",
  "tracing",
  "uuid",
@@ -393,7 +393,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "bytes",
- "http",
+ "http 0.2.11",
  "regex",
  "tracing",
 ]
@@ -415,7 +415,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "bytes",
- "http",
+ "http 0.2.11",
  "regex",
  "tracing",
 ]
@@ -441,7 +441,7 @@ dependencies = [
  "aws-smithy-xml",
  "aws-types",
  "bytes",
- "http",
+ "http 0.2.11",
  "http-body",
  "once_cell",
  "percent-encoding",
@@ -467,7 +467,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "bytes",
- "http",
+ "http 0.2.11",
  "regex",
  "tracing",
 ]
@@ -489,7 +489,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "bytes",
- "http",
+ "http 0.2.11",
  "regex",
  "tracing",
 ]
@@ -512,7 +512,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-smithy-xml",
  "aws-types",
- "http",
+ "http 0.2.11",
  "regex",
  "tracing",
 ]
@@ -536,7 +536,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "bytes",
- "http",
+ "http 0.2.11",
  "hyper",
  "regex",
  "tracing",
@@ -560,7 +560,7 @@ dependencies = [
  "aws-types",
  "bytes",
  "fastrand",
- "http",
+ "http 0.2.11",
  "regex",
  "tracing",
 ]
@@ -581,7 +581,7 @@ dependencies = [
  "form_urlencoded",
  "hex",
  "hmac 0.12.1",
- "http",
+ "http 0.2.11",
  "once_cell",
  "p256",
  "percent-encoding",
@@ -617,7 +617,7 @@ dependencies = [
  "crc32c",
  "crc32fast",
  "hex",
- "http",
+ "http 0.2.11",
  "http-body",
  "md-5",
  "pin-project-lite",
@@ -649,7 +649,7 @@ dependencies = [
  "bytes",
  "bytes-utils",
  "futures-core",
- "http",
+ "http 0.2.11",
  "http-body",
  "once_cell",
  "percent-encoding",
@@ -690,7 +690,7 @@ dependencies = [
  "bytes",
  "fastrand",
  "h2",
- "http",
+ "http 0.2.11",
  "http-body",
  "hyper",
  "hyper-rustls",
@@ -711,7 +711,7 @@ dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
  "bytes",
- "http",
+ "http 0.2.11",
  "pin-project-lite",
  "tokio",
  "tracing",
@@ -728,7 +728,7 @@ dependencies = [
  "bytes",
  "bytes-utils",
  "futures-core",
- "http",
+ "http 0.2.11",
  "http-body",
  "itoa",
  "num-integer",
@@ -760,7 +760,7 @@ dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
- "http",
+ "http 0.2.11",
  "rustc_version",
  "tracing",
 ]
@@ -933,7 +933,7 @@ dependencies = [
 [[package]]
 name = "cairo-rs"
 version = "0.19.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#6b1bdba71308f89d36fef152a47a411becee5329"
+source = "git+https://github.com/gtk-rs/gtk-rs-core.git#6b1bdba71308f89d36fef152a47a411becee5329"
 dependencies = [
  "bitflags 2.4.1",
  "cairo-sys-rs",
@@ -946,7 +946,7 @@ dependencies = [
 [[package]]
 name = "cairo-sys-rs"
 version = "0.19.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#6b1bdba71308f89d36fef152a47a411becee5329"
+source = "git+https://github.com/gtk-rs/gtk-rs-core.git#6b1bdba71308f89d36fef152a47a411becee5329"
 dependencies = [
  "glib-sys",
  "libc",
@@ -1846,7 +1846,7 @@ dependencies = [
 [[package]]
 name = "gdk-pixbuf"
 version = "0.19.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#6b1bdba71308f89d36fef152a47a411becee5329"
+source = "git+https://github.com/gtk-rs/gtk-rs-core.git#6b1bdba71308f89d36fef152a47a411becee5329"
 dependencies = [
  "gdk-pixbuf-sys",
  "gio",
@@ -1858,7 +1858,7 @@ dependencies = [
 [[package]]
 name = "gdk-pixbuf-sys"
 version = "0.19.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#6b1bdba71308f89d36fef152a47a411becee5329"
+source = "git+https://github.com/gtk-rs/gtk-rs-core.git#6b1bdba71308f89d36fef152a47a411becee5329"
 dependencies = [
  "gio-sys",
  "glib-sys",
@@ -2019,7 +2019,7 @@ checksum = "4271d37baee1b8c7e4b708028c57d816cf9d2434acb33a549475f78c181f6253"
 [[package]]
 name = "gio"
 version = "0.19.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#6b1bdba71308f89d36fef152a47a411becee5329"
+source = "git+https://github.com/gtk-rs/gtk-rs-core.git#6b1bdba71308f89d36fef152a47a411becee5329"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -2037,7 +2037,7 @@ dependencies = [
 [[package]]
 name = "gio-sys"
 version = "0.19.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#6b1bdba71308f89d36fef152a47a411becee5329"
+source = "git+https://github.com/gtk-rs/gtk-rs-core.git#6b1bdba71308f89d36fef152a47a411becee5329"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -2049,7 +2049,7 @@ dependencies = [
 [[package]]
 name = "glib"
 version = "0.19.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#6b1bdba71308f89d36fef152a47a411becee5329"
+source = "git+https://github.com/gtk-rs/gtk-rs-core.git#6b1bdba71308f89d36fef152a47a411becee5329"
 dependencies = [
  "bitflags 2.4.1",
  "futures-channel",
@@ -2071,7 +2071,7 @@ dependencies = [
 [[package]]
 name = "glib-macros"
 version = "0.19.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#6b1bdba71308f89d36fef152a47a411becee5329"
+source = "git+https://github.com/gtk-rs/gtk-rs-core.git#6b1bdba71308f89d36fef152a47a411becee5329"
 dependencies = [
  "heck",
  "proc-macro-crate",
@@ -2084,7 +2084,7 @@ dependencies = [
 [[package]]
 name = "glib-sys"
 version = "0.19.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#6b1bdba71308f89d36fef152a47a411becee5329"
+source = "git+https://github.com/gtk-rs/gtk-rs-core.git#6b1bdba71308f89d36fef152a47a411becee5329"
 dependencies = [
  "libc",
  "system-deps",
@@ -2099,7 +2099,7 @@ checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 [[package]]
 name = "gobject-sys"
 version = "0.19.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#6b1bdba71308f89d36fef152a47a411becee5329"
+source = "git+https://github.com/gtk-rs/gtk-rs-core.git#6b1bdba71308f89d36fef152a47a411becee5329"
 dependencies = [
  "glib-sys",
  "libc",
@@ -2109,7 +2109,7 @@ dependencies = [
 [[package]]
 name = "graphene-rs"
 version = "0.19.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#6b1bdba71308f89d36fef152a47a411becee5329"
+source = "git+https://github.com/gtk-rs/gtk-rs-core.git#6b1bdba71308f89d36fef152a47a411becee5329"
 dependencies = [
  "glib",
  "graphene-sys",
@@ -2119,7 +2119,7 @@ dependencies = [
 [[package]]
 name = "graphene-sys"
 version = "0.19.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#6b1bdba71308f89d36fef152a47a411becee5329"
+source = "git+https://github.com/gtk-rs/gtk-rs-core.git#6b1bdba71308f89d36fef152a47a411becee5329"
 dependencies = [
  "glib-sys",
  "libc",
@@ -2837,7 +2837,7 @@ dependencies = [
  "gstreamer-utils",
  "gstreamer-video",
  "gstreamer-webrtc",
- "http",
+ "http 0.2.11",
  "human_bytes",
  "livekit-api",
  "livekit-protocol",
@@ -3358,7 +3358,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "futures-util",
- "http",
+ "http 0.2.11",
  "indexmap 2.1.0",
  "slab",
  "tokio",
@@ -3387,7 +3387,7 @@ dependencies = [
  "base64 0.21.5",
  "bytes",
  "headers-core",
- "http",
+ "http 0.2.11",
  "httpdate",
  "mime",
  "sha1",
@@ -3399,7 +3399,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7f66481bfee273957b1f20485a4ff3362987f85b2c236580d81b4eb7a326429"
 dependencies = [
- "http",
+ "http 0.2.11",
 ]
 
 [[package]]
@@ -3491,13 +3491,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "http"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b32afd38673a8016f7c9ae69e5af41a58f81b1d31689040f2f1959594ce194ea"
+dependencies = [
+ "bytes",
+ "fnv",
+ "itoa",
+]
+
+[[package]]
 name = "http-body"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d5f38f16d184e36f2408a55281cd658ecbd3ca05cce6d6510a176eca393e26d1"
 dependencies = [
  "bytes",
- "http",
+ "http 0.2.11",
  "pin-project-lite",
 ]
 
@@ -3536,7 +3547,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "h2",
- "http",
+ "http 0.2.11",
  "http-body",
  "httparse",
  "httpdate",
@@ -3558,7 +3569,7 @@ dependencies = [
  "bytes",
  "futures",
  "headers",
- "http",
+ "http 0.2.11",
  "hyper",
  "tokio",
  "tower-service",
@@ -3571,7 +3582,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec3efd23720e2049821a693cbc7e65ea87c72f1c58ff2f9522ff332b1491e590"
 dependencies = [
  "futures-util",
- "http",
+ "http 0.2.11",
  "hyper",
  "log",
  "rustls",
@@ -3996,7 +4007,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "hmac 0.11.0",
- "http",
+ "http 0.2.11",
  "httparse",
  "hyper",
  "hyper-proxy",
@@ -4319,7 +4330,7 @@ dependencies = [
  "bytes",
  "encoding_rs",
  "futures-util",
- "http",
+ "http 0.2.11",
  "httparse",
  "log",
  "memchr",
@@ -4623,7 +4634,7 @@ dependencies = [
 [[package]]
 name = "pango"
 version = "0.19.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#6b1bdba71308f89d36fef152a47a411becee5329"
+source = "git+https://github.com/gtk-rs/gtk-rs-core.git#6b1bdba71308f89d36fef152a47a411becee5329"
 dependencies = [
  "gio",
  "glib",
@@ -4635,7 +4646,7 @@ dependencies = [
 [[package]]
 name = "pango-sys"
 version = "0.19.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#6b1bdba71308f89d36fef152a47a411becee5329"
+source = "git+https://github.com/gtk-rs/gtk-rs-core.git#6b1bdba71308f89d36fef152a47a411becee5329"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -4646,7 +4657,7 @@ dependencies = [
 [[package]]
 name = "pangocairo"
 version = "0.19.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#6b1bdba71308f89d36fef152a47a411becee5329"
+source = "git+https://github.com/gtk-rs/gtk-rs-core.git#6b1bdba71308f89d36fef152a47a411becee5329"
 dependencies = [
  "cairo-rs",
  "glib",
@@ -4658,7 +4669,7 @@ dependencies = [
 [[package]]
 name = "pangocairo-sys"
 version = "0.19.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#6b1bdba71308f89d36fef152a47a411becee5329"
+source = "git+https://github.com/gtk-rs/gtk-rs-core.git#6b1bdba71308f89d36fef152a47a411becee5329"
 dependencies = [
  "cairo-sys-rs",
  "glib-sys",
@@ -4705,7 +4716,7 @@ version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3687fe9debbbf2a019f381a8bc6b42049b22647449b39af54b3013985c0cf6de"
 dependencies = [
- "http",
+ "http 0.2.11",
  "lazy_static",
  "regex",
  "url",
@@ -5254,7 +5265,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "h2",
- "http",
+ "http 0.2.11",
  "http-body",
  "hyper",
  "hyper-tls",
@@ -6169,7 +6180,7 @@ dependencies = [
  "native-tls",
  "tokio",
  "tokio-native-tls",
- "tungstenite",
+ "tungstenite 0.20.1",
 ]
 
 [[package]]
@@ -6333,7 +6344,27 @@ dependencies = [
  "byteorder",
  "bytes",
  "data-encoding",
- "http",
+ "http 0.2.11",
+ "httparse",
+ "log",
+ "native-tls",
+ "rand",
+ "sha1",
+ "thiserror",
+ "url",
+ "utf-8",
+]
+
+[[package]]
+name = "tungstenite"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ef1a641ea34f399a848dea702823bbecfb4c486f911735368f1f137cb8257e1"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "data-encoding",
+ "http 1.0.0",
  "httparse",
  "log",
  "native-tls",
@@ -6546,7 +6577,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "headers",
- "http",
+ "http 0.2.11",
  "hyper",
  "log",
  "mime",
