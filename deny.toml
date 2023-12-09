@@ -209,6 +209,30 @@ version = "0.48"
 name = "crypto-bigint"
 version = "0.4"
 
+# livekit-api depends on an older version of tokio-tungstenite
+[[bans.skip]]
+name = "tokio-tungstenite"
+version = "0.20"
+[[bans.skip]]
+name = "tungstenite"
+version = "0.20"
+
+# Various crates depend on an older version of http
+[[bans.skip]]
+name = "http"
+version = "0.2"
+
+# rav1e depends on an older version of bitstream-io
+# https://github.com/xiph/rav1e/pull/3301
+[[bans.skip]]
+name = "bitstream-io"
+version = "1.0"
+
+# Various crates depend on an older version of aws-smithy-http
+[[bans.skip]]
+name = "aws-smithy-http"
+version = "0.60"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
