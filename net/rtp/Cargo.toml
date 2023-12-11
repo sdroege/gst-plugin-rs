@@ -35,6 +35,7 @@ time = { version = "0.3", default-features = false, features = ["std"] }
 # TODO: experiment with other async executors (mio, async-std, etc)
 tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "time", "sync"] }
 tokio-util = "0.7.15"
+itertools = "0.14"
 
 [dev-dependencies]
 # Used by examples
@@ -42,7 +43,6 @@ clap = { version = "4", features = ["derive"] }
 gst-check = { workspace = true, features = ["v1_20"] }
 gst-app   = { workspace = true, features = ["v1_20"] }
 tokio = { version = "1", default-features = false, features = ["macros", "signal"] }
-itertools = "0.14"
 
 [build-dependencies]
 gst-plugin-version-helper.workspace = true

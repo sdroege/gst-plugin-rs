@@ -14633,6 +14633,58 @@
                     }
                 },
                 "rank": "primary"
+            },
+            "rtpvrawdepay2": {
+                "author": "Tim-Philipp Müller <tim centricular com>",
+                "description": "Depayload a Raw Uncompressed Video Stream from RTP packets (RFC 4175)",
+                "hierarchy": [
+                    "GstRtpRawVideoDepay2",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: video\n     clock-rate: 90000\n  encoding-name: RAW\n       sampling: { (string)RGB, (string)RGBA, (string)BGR, (string)BGRA, (string)YCbCr-4:4:4, (string)YCbCr-4:2:2, (string)YCbCr-4:2:0, (string)YCbCr-4:1:1 }\n          depth: 8\napplication/x-rtp:\n          media: video\n     clock-rate: 90000\n  encoding-name: RAW\n       sampling: { (string)YCbCr-4:2:2 }\n          depth: 10\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-raw:\n         format: { RGB, RGBA, BGR, BGRA, v308, UYVY, I420, Y41B, UYVP }\n          width: [ 1, 32767 ]\n         height: [ 1, 32767 ]\n      framerate: [ 0/1, 2147483647/1 ]\n interlace-mode: progressive\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
+            "rtpvrawpay2": {
+                "author": "Tim-Philipp Müller <tim centricular com>",
+                "description": "Payload a Raw Uncompressed Video Stream into RTP packets (RFC 4175)",
+                "hierarchy": [
+                    "GstRtpRawVideoPay",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Payloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-raw:\n         format: { RGB, RGBA, BGR, BGRA, v308, UYVY, I420, Y41B, UYVP }\n          width: [ 1, 32767 ]\n         height: [ 1, 32767 ]\n      framerate: [ 0/1, 2147483647/1 ]\n interlace-mode: progressive\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n          media: video\n     clock-rate: 90000\n  encoding-name: RAW\n       sampling: { (string)RGB, (string)RGBA, (string)BGR, (string)BGRA, (string)YCbCr-4:4:4, (string)YCbCr-4:2:2, (string)YCbCr-4:2:0, (string)YCbCr-4:1:1 }\n          depth: { (string)8, (string)10, (string)12, (string)16 }\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
             }
         },
         "filename": "gstrsrtp",

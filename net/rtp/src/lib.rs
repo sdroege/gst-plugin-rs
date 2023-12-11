@@ -42,6 +42,7 @@ mod mp4g;
 mod mparobust;
 mod opus;
 mod pcmau;
+mod raw_video;
 mod smpte291;
 mod vp8;
 mod vp9;
@@ -102,6 +103,9 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
     smpte291::depay::register(plugin)?;
     smpte291::pay::register(plugin)?;
+
+    raw_video::depay::register(plugin)?;
+    raw_video::pay::register(plugin)?;
 
     vp8::depay::register(plugin)?;
     vp8::pay::register(plugin)?;
