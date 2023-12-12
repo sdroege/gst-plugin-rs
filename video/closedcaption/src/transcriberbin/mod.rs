@@ -20,13 +20,25 @@ pub enum CaptionSource {
     Inband,
 }
 
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, glib::Enum)]
+#[repr(u32)]
+#[enum_type(name = "GstTranscriberBinMuxMethod")]
+enum MuxMethod {
+    #[default]
+    Cea608,
+    Cea708,
+}
+
 glib::wrapper! {
     pub struct TranscriberBin(ObjectSubclass<imp::TranscriberBin>) @extends gst::Bin, gst::Element, gst::Object;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "doc")]
-    CaptionSource::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    {
+        CaptionSource::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        MuxMethod::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    }
 
     gst::Element::register(
         Some(plugin),

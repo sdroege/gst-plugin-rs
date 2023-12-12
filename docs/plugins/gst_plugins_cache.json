@@ -5566,7 +5566,7 @@
                     "mux-method": {
                         "blurb": "The method for muxing multiple transcription streams",
                         "conditionally-available": false,
-                        "construct": false,
+                        "construct": true,
                         "construct-only": false,
                         "controllable": false,
                         "default": "cea608 (0)",
@@ -5903,6 +5903,21 @@
                         "desc": "Inband",
                         "name": "inband",
                         "value": "2"
+                    }
+                ]
+            },
+            "GstTranscriberBinMuxMethod": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Cea608",
+                        "name": "cea608",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Cea708",
+                        "name": "cea708",
+                        "value": "1"
                     }
                 ]
             },

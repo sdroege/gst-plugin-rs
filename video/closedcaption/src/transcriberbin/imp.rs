@@ -17,7 +17,7 @@ use std::sync::Mutex;
 
 use once_cell::sync::Lazy;
 
-use super::CaptionSource;
+use super::{CaptionSource, MuxMethod};
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -37,15 +37,6 @@ const DEFAULT_INPUT_LANG_CODE: &str = "en-US";
 const DEFAULT_MUX_METHOD: MuxMethod = MuxMethod::Cea608;
 
 const CEAX08MUX_LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(100);
-
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, glib::Enum)]
-#[repr(u32)]
-#[enum_type(name = "GstTranscriberBinMuxMethod")]
-enum MuxMethod {
-    #[default]
-    Cea608,
-    Cea708,
-}
 
 /* One per language, including original */
 struct TranscriptionChannel {
@@ -176,7 +167,14 @@ impl TranscriberBin {
                                 "Multiple CEA-608 streams for a language are not supported"
                             );
                         }
-                        cea608_channel = Some(cea608.parse::<u32>()?);
+                        let channel = cea608.parse::<u32>()?;
+                        if (1..=4).contains(&channel) {
+                            cea608_channel = Some(channel);
+                        } else {
+                            anyhow::bail!(
+                                "CEA-608 channels only support values between 1 and 4 inclusive"
+                            );
+                        }
                     } else if let Some(cea708_service) = cc.strip_prefix("708_") {
                         if service_no.is_some() {
                             anyhow::bail!(
@@ -191,13 +189,12 @@ impl TranscriberBin {
                     }
                 }
                 let service_no = service_no.ok_or(anyhow!("No 708 caption service provided"))?;
-                // TODO: handle cea608
-                (
-                    gst::ElementFactory::make("tttocea708")
-                        .property("service-number", service_no)
-                        .build()?,
-                    format!("sink_{}", service_no),
-                )
+                let mut builder =
+                    gst::ElementFactory::make("tttocea708").property("service-number", service_no);
+                if let Some(channel) = cea608_channel {
+                    builder = builder.property("cea608-channel", channel);
+                }
+                (builder.build()?, format!("sink_{}", service_no))
             }
         };
         let capsfilter = gst::ElementFactory::make("capsfilter").build()?;
