@@ -2714,6 +2714,7 @@ dependencies = [
 name = "gst-plugin-rtp"
 version = "0.13.0-alpha.1"
 dependencies = [
+ "anyhow",
  "atomic_refcell",
  "bitstream-io",
  "gst-plugin-version-helper",
@@ -2721,6 +2722,7 @@ dependencies = [
  "gstreamer-app",
  "gstreamer-check",
  "gstreamer-rtp",
+ "gstreamer-video",
  "once_cell",
  "rand",
  "rtp-types",

@@ -26,6 +26,8 @@ mod basepay;
 mod av1;
 mod mp2t;
 mod pcmau;
+mod vp8;
+mod vp9;
 
 #[cfg(test)]
 mod tests;
@@ -53,6 +55,12 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
     pcmau::depay::register(plugin)?;
     pcmau::pay::register(plugin)?;
+
+    vp8::depay::register(plugin)?;
+    vp8::pay::register(plugin)?;
+
+    vp9::depay::register(plugin)?;
+    vp9::pay::register(plugin)?;
 
     Ok(())
 }

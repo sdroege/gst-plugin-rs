@@ -6944,6 +6944,258 @@
                     }
                 },
                 "rank": "marginal"
+            },
+            "rtpvp8depay2": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Depayload VP8 from RTP packets",
+                "hierarchy": [
+                    "GstRtpVp8Depay2",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: video\n     clock-rate: 90000\n  encoding-name: { (string)VP8, (string)VP8-DRAFT-IETF-01 }\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-vp8:\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "request-keyframe": {
+                        "blurb": "Request new keyframe when packet loss is detected",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "wait-for-keyframe": {
+                        "blurb": "Wait for the next keyframe after packet loss",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                },
+                "rank": "marginal"
+            },
+            "rtpvp8pay2": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Payload VP8 as RTP packets",
+                "hierarchy": [
+                    "GstRtpVp8Pay2",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Payloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-vp8:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n          media: video\n        payload: [ 96, 127 ]\n     clock-rate: 90000\n  encoding-name: { (string)VP8, (string)VP8-DRAFT-IETF-01 }\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "fragmentation-mode": {
+                        "blurb": "Fragmentation Mode",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "none (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstRtpVp8Pay2FragmentationMode",
+                        "writable": true
+                    },
+                    "picture-id": {
+                        "blurb": "Current Picture ID",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-1",
+                        "max": "32767",
+                        "min": "-1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": false
+                    },
+                    "picture-id-mode": {
+                        "blurb": "The picture ID mode for payloading",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "none (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstRtpVp8Pay2PictureIdMode",
+                        "writable": true
+                    },
+                    "picture-id-offset": {
+                        "blurb": "Offset to add to the initial picture-id (-1 = random)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-1",
+                        "max": "32767",
+                        "min": "-1",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": true
+                    }
+                },
+                "rank": "marginal"
+            },
+            "rtpvp9depay2": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Depayload VP9 from RTP packets",
+                "hierarchy": [
+                    "GstRtpVp9Depay2",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: video\n     clock-rate: 90000\n  encoding-name: { (string)VP9, (string)VP9-DRAFT-IETF-01 }\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-vp9:\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "request-keyframe": {
+                        "blurb": "Request new keyframe when packet loss is detected",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "wait-for-keyframe": {
+                        "blurb": "Wait for the next keyframe after packet loss",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                },
+                "rank": "marginal"
+            },
+            "rtpvp9pay2": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Payload VP9 as RTP packets",
+                "hierarchy": [
+                    "GstRtpVp9Pay2",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Payloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-vp9:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n          media: video\n        payload: [ 96, 127 ]\n     clock-rate: 90000\n  encoding-name: { (string)VP9, (string)VP9-DRAFT-IETF-01 }\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "picture-id": {
+                        "blurb": "Current Picture ID",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-1",
+                        "max": "32767",
+                        "min": "-1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": false
+                    },
+                    "picture-id-mode": {
+                        "blurb": "The picture ID mode for payloading",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "none (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstRtpVp9Pay2PictureIdMode",
+                        "writable": true
+                    },
+                    "picture-id-offset": {
+                        "blurb": "Offset to add to the initial picture-id (-1 = random)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-1",
+                        "max": "32767",
+                        "min": "-1",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": true
+                    }
+                },
+                "rank": "marginal"
             }
         },
         "filename": "gstrsrtp",
@@ -7374,6 +7626,66 @@
                     "GObject"
                 ],
                 "kind": "object"
+            },
+            "GstRtpVp8Pay2FragmentationMode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Fit as much into each packet as possible",
+                        "name": "none",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Make sure that every partition starts at the start of a packet",
+                        "name": "partition-start",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Create a new packet for every partition",
+                        "name": "every-partition",
+                        "value": "2"
+                    }
+                ]
+            },
+            "GstRtpVp8Pay2PictureIdMode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "No Picture ID",
+                        "name": "none",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "7-bit PictureID",
+                        "name": "7-bit",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "15-bit Picture ID",
+                        "name": "15-bit",
+                        "value": "2"
+                    }
+                ]
+            },
+            "GstRtpVp9Pay2PictureIdMode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "No Picture ID",
+                        "name": "none",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "7-bit PictureID",
+                        "name": "7-bit",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "15-bit Picture ID",
+                        "name": "15-bit",
+                        "value": "2"
+                    }
+                ]
             }
         },
         "package": "gst-plugin-rtp",
