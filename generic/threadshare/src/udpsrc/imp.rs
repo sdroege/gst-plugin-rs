@@ -375,6 +375,8 @@ impl TaskImpl for UdpSrcTask {
                 )
             })?;
 
+            drop(settings);
+
             self.socket = Some(
                 Socket::try_new(
                     self.element.clone().upcast(),
