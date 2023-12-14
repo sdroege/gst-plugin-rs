@@ -381,7 +381,7 @@ impl SinkHandler {
                 let caps = element
                     .emit_by_name::<Option<gst::Caps>>("request-pt-map", &[&(pt as u32)])
                     .ok_or_else(|| {
-                        gst::error!(CAT, obj: pad, "Signal 'request-pt-map' retuned None");
+                        gst::error!(CAT, obj: pad, "Signal 'request-pt-map' returned None");
                         gst::FlowError::Error
                     })?;
                 let mut state = jb.state.lock().unwrap();
