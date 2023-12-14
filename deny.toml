@@ -228,11 +228,6 @@ version = "0.2"
 name = "bitstream-io"
 version = "1.0"
 
-# Various crates depend on an older version of aws-smithy-http
-[[bans.skip]]
-name = "aws-smithy-http"
-version = "0.60"
-
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
