@@ -7263,6 +7263,18 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "rtp-profile": {
+                        "blurb": "RTP Profile to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "avp (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstRtpBin2Profile",
+                        "writable": true
+                    },
                     "stats": {
                         "blurb": "Statistics about the session",
                         "conditionally-available": false,

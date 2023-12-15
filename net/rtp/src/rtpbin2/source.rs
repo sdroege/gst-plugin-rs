@@ -722,6 +722,11 @@ impl RemoteSendSource {
         }
     }
 
+    /// Retrieve the SDES items currently received for this remote sender
+    pub fn sdes(&self) -> &HashMap<u8, String> {
+        &self.source.sdes
+    }
+
     pub(crate) fn set_last_activity(&mut self, time: Instant) {
         self.source.last_activity = time;
     }
@@ -1002,6 +1007,11 @@ impl RemoteReceiveSource {
         if let Ok(s) = std::str::from_utf8(value) {
             self.source.sdes.insert(type_, s.to_owned());
         }
+    }
+
+    /// Retrieve the SDES items currently received for this remote receiver
+    pub fn sdes(&self) -> &HashMap<u8, String> {
+        &self.source.sdes
     }
 
     /// Retrieve the last time that activity was seen on this source

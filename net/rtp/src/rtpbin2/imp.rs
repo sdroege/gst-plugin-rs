@@ -12,7 +12,9 @@ use futures::StreamExt;
 use gst::{glib, prelude::*, subclass::prelude::*};
 use once_cell::sync::Lazy;
 
-use super::session::{RecvReply, RtcpRecvReply, SendReply, Session, RTCP_MIN_REPORT_INTERVAL};
+use super::session::{
+    RecvReply, RtcpRecvReply, RtpProfile, SendReply, Session, RTCP_MIN_REPORT_INTERVAL,
+};
 use super::source::{ReceivedRb, SourceState};
 
 use crate::rtpbin2::RUNTIME;
@@ -28,10 +30,40 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, glib::Enum)]
+#[repr(u32)]
+#[enum_type(name = "GstRtpBin2Profile")]
+enum Profile {
+    #[default]
+    #[enum_value(name = "AVP profile as specified in RFC 3550", nick = "avp")]
+    Avp,
+    #[enum_value(name = "AVPF profile as specified in RFC 4585", nick = "avpf")]
+    Avpf,
+}
+
+impl From<RtpProfile> for Profile {
+    fn from(value: RtpProfile) -> Self {
+        match value {
+            RtpProfile::Avp => Self::Avp,
+            RtpProfile::Avpf => Self::Avpf,
+        }
+    }
+}
+
+impl From<Profile> for RtpProfile {
+    fn from(value: Profile) -> Self {
+        match value {
+            Profile::Avp => Self::Avp,
+            Profile::Avpf => Self::Avpf,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Settings {
     latency: gst::ClockTime,
     min_rtcp_interval: Duration,
+    profile: Profile,
 }
 
 impl Default for Settings {
@@ -39,6 +71,7 @@ impl Default for Settings {
         Settings {
             latency: DEFAULT_LATENCY,
             min_rtcp_interval: DEFAULT_MIN_RTCP_INTERVAL,
+            profile: Profile::default(),
         }
     }
 }
@@ -121,10 +154,15 @@ struct BinSession {
 }
 
 impl BinSession {
-    fn new(id: usize, min_rtcp_interval: Duration) -> Self {
+    fn new(id: usize, settings: &Settings) -> Self {
+        let mut inner = BinSessionInner::new(id);
+        inner
+            .session
+            .set_min_rtcp_interval(settings.min_rtcp_interval);
+        inner.session.set_profile(settings.profile.into());
         Self {
             id,
-            inner: Arc::new(Mutex::new(BinSessionInner::new(id, min_rtcp_interval))),
+            inner: Arc::new(Mutex::new(inner)),
         }
     }
 }
@@ -156,9 +194,7 @@ struct BinSessionInner {
 }
 
 impl BinSessionInner {
-    fn new(id: usize, min_rtcp_interval: Duration) -> Self {
-        let mut session = Session::new();
-        session.set_min_rtcp_interval(min_rtcp_interval);
+    fn new(id: usize) -> Self {
         Self {
             id,
 
@@ -939,6 +975,12 @@ impl ObjectImpl for RtpBin2 {
                     .blurb("Statistics about the session")
                     .read_only()
                     .build(),
+                glib::ParamSpecEnum::builder::<Profile>("rtp-profile")
+                    .nick("RTP Profile")
+                    .blurb("RTP Profile to use")
+                    .default_value(Profile::default())
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -966,6 +1008,10 @@ impl ObjectImpl for RtpBin2 {
                     value.get::<u32>().expect("type checked upstream").into(),
                 );
             }
+            "rtp-profile" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.profile = value.get::<Profile>().expect("Type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -983,6 +1029,10 @@ impl ObjectImpl for RtpBin2 {
             "stats" => {
                 let state = self.state.lock().unwrap();
                 state.stats().to_value()
+            }
+            "rtp-profile" => {
+                let settings = self.settings.lock().unwrap();
+                settings.profile.to_value()
             }
             _ => unimplemented!(),
         }
@@ -1070,7 +1120,7 @@ impl ElementImpl for RtpBin2 {
         _caps: Option<&gst::Caps>, // XXX: do something with caps?
     ) -> Option<gst::Pad> {
         let this = self.obj();
-        let min_rtcp_interval = self.settings.lock().unwrap().min_rtcp_interval;
+        let settings = self.settings.lock().unwrap().clone();
         let mut state = self.state.lock().unwrap();
         let max_session_id = state.max_session_id;
 
@@ -1135,7 +1185,7 @@ impl ElementImpl for RtpBin2 {
                             new_pad(&mut session)
                         }
                     } else {
-                        let session = BinSession::new(id, min_rtcp_interval);
+                        let session = BinSession::new(id, &settings);
                         let mut inner = session.inner.lock().unwrap();
                         let ret = new_pad(&mut inner);
                         drop(inner);
@@ -1178,7 +1228,7 @@ impl ElementImpl for RtpBin2 {
                             new_pad(&mut session)
                         }
                     } else {
-                        let session = BinSession::new(id, min_rtcp_interval);
+                        let session = BinSession::new(id, &settings);
                         let mut inner = session.inner.lock().unwrap();
                         let ret = new_pad(&mut inner);
                         drop(inner);
