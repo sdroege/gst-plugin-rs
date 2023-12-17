@@ -92,8 +92,7 @@ impl RegEx {
                 gst::BufferCopyFlags::FLAGS
                     | gst::BufferCopyFlags::TIMESTAMPS
                     | gst::BufferCopyFlags::META,
-                0,
-                None,
+                ..,
             );
         }
 

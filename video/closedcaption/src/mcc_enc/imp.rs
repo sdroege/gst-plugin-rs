@@ -332,7 +332,7 @@ impl MccEnc {
 
         let mut buf = gst::Buffer::from_mut_slice(outbuf);
         buffer
-            .copy_into(buf.get_mut().unwrap(), gst::BUFFER_COPY_METADATA, 0, None)
+            .copy_into(buf.get_mut().unwrap(), gst::BUFFER_COPY_METADATA, ..)
             .expect("Failed to copy buffer metadata");
 
         drop(state);

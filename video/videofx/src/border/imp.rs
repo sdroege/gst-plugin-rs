@@ -207,7 +207,7 @@ impl RoundedCorners {
                         let copy_flags = gst::BufferCopyFlags::FLAGS
                             | gst::BufferCopyFlags::TIMESTAMPS
                             | gst::BufferCopyFlags::MEMORY;
-                        let mut buf = buf.copy_region(copy_flags, 0, None).unwrap();
+                        let mut buf = buf.copy_region(copy_flags, ..).unwrap();
                         let mut_buf = buf.make_mut();
                         gst_video::VideoMeta::add_full(
                             mut_buf,

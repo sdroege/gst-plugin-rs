@@ -309,7 +309,7 @@ impl VideoAggregatorImpl for VideoCompare {
         // output the reference buffer
         outbuf.remove_all_memory();
         buffer
-            .copy_into(outbuf, gst::BufferCopyFlags::all(), 0, None)
+            .copy_into(outbuf, gst::BufferCopyFlags::all(), ..)
             .map_err(|_| gst::FlowError::Error)?;
 
         // Use current frame as the reference to the comparison

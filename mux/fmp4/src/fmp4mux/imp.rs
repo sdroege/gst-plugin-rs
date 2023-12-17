@@ -2371,12 +2371,9 @@ impl FMP4Mux {
             // Copy metas from the first actual buffer to the fragment header. This allows
             // getting things like the reference timestamp meta or the timecode meta to identify
             // the fragment.
-            let _ = interleaved_buffers[0].buffer.copy_into(
-                buffer,
-                gst::BufferCopyFlags::META,
-                0,
-                None,
-            );
+            let _ = interleaved_buffers[0]
+                .buffer
+                .copy_into(buffer, gst::BufferCopyFlags::META, ..);
         }
 
         let moof_offset = state.current_offset
