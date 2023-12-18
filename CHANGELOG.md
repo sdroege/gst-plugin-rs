@@ -5,6 +5,24 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.11.3] - 2023-12-18
+### Fixed
+- ndi: Mark a private type as such and remove a wrong `Clone` impl of internal types.
+- uriplaylistbin: Fix a minor clippy warning.
+- fallbacksrc: Fix error during badly timed timeout scheduling.
+- webrtcsink: Fail gracefully if webrtcbin pads can't be requested instead of
+  panicking.
+- threadshare: Fix deadlock in `ts-udpsrc` `notify::used-socket` signal
+  emission.
+
+### Changed
+- Update to AWS SDK 1.0.
+- Update to windows-sys 0.52.
+- Update to async-tungstenite 0.24.
+- Update to bitstream-io 2.0.
+- tttocea608: De-duplicate some functions.
+- gtk4: Use async-channel instead of deprecated GLib main context channel.
+
 ## [0.11.2] - 2023-11-11
 ### Fixed
 - filesink / s3sink: Set `sync=false` to allow processing faster than
@@ -283,7 +301,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.2...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.3...HEAD
+[0.11.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.2...0.11.3
 [0.11.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.1...0.11.2
 [0.11.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.0...0.11.1
 [0.11.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.10.11...0.11.0
