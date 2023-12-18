@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-mp4"
-version = "0.11.2"
+version = "0.11.3"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 license = "MPL-2.0"
 description = "GStreamer Rust MP4 Plugin"

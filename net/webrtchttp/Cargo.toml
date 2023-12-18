@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-webrtchttp"
-version = "0.11.2"
+version = "0.11.3"
 authors = ["Taruntej Kanakamalla <taruntej@asymptotic.io"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
