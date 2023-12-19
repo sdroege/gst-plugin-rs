@@ -31,6 +31,7 @@ mod baseaudiopay;
 mod basedepay;
 mod basepay;
 
+mod ac3;
 mod av1;
 mod jpeg;
 mod klv;
@@ -60,6 +61,9 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         crate::baseaudiopay::RtpBaseAudioPay2::static_type()
             .mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }
+
+    ac3::depay::register(plugin)?;
+    ac3::pay::register(plugin)?;
 
     av1::depay::register(plugin)?;
     av1::pay::register(plugin)?;
