@@ -74,16 +74,8 @@ fn main() -> Result<(), Error> {
 
         info!("Listening on: {}", addr);
 
-        while let Ok((stream, _)) = listener.accept().await {
+        while let Ok((stream, address)) = listener.accept().await {
             let mut server_clone = server.clone();
-
-            let address = match stream.peer_addr() {
-                Ok(address) => address,
-                Err(err) => {
-                    warn!("Connected peer with no address: {}", err);
-                    continue;
-                }
-            };
 
             info!("Accepting connection from {}", address);
 
