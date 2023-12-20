@@ -32,6 +32,10 @@ pub struct Server {
 pub enum ServerError {
     #[error("error during handshake {0}")]
     Handshake(#[from] async_tungstenite::tungstenite::Error),
+    #[error("error during TLS handshake {0}")]
+    TLSHandshake(#[from] async_native_tls::Error),
+    #[error("timeout during TLS handshake {0}")]
+    TLSHandshakeTimeout(#[from] async_std::future::TimeoutError),
 }
 
 impl Server {

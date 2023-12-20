@@ -3,14 +3,17 @@
 use async_std::task;
 use clap::Parser;
 use gst_plugin_webrtc_signalling::handlers::Handler;
-use gst_plugin_webrtc_signalling::server::Server;
+use gst_plugin_webrtc_signalling::server::{Server, ServerError};
 use tracing_subscriber::prelude::*;
 
 use anyhow::Error;
 use async_native_tls::TlsAcceptor;
 use async_std::fs::File as AsyncFile;
 use async_std::net::TcpListener;
+use std::time::Duration;
 use tracing::{info, warn};
+
+const TLS_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Parser, Debug)]
 #[clap(about, version, author)]
@@ -84,15 +87,22 @@ fn main() -> Result<(), Error> {
 
             info!("Accepting connection from {}", address);
 
-            if let Some(ref acceptor) = acceptor {
-                let stream = match acceptor.accept(stream).await {
-                    Ok(stream) => stream,
-                    Err(err) => {
-                        warn!("Failed to accept TLS connection from {}: {}", address, err);
-                        continue;
+            if let Some(acceptor) = acceptor.clone() {
+                task::spawn(async move {
+                    match async_std::future::timeout(TLS_HANDSHAKE_TIMEOUT, acceptor.accept(stream))
+                        .await
+                    {
+                        Ok(Ok(stream)) => server_clone.accept_async(stream).await,
+                        Ok(Err(err)) => {
+                            warn!("Failed to accept TLS connection from {}: {}", address, err);
+                            Err(ServerError::TLSHandshake(err))
+                        }
+                        Err(err) => {
+                            warn!("TLS connection timed out {} after {}", address, err);
+                            Err(ServerError::TLSHandshakeTimeout(err))
+                        }
                     }
-                };
-                task::spawn(async move { server_clone.accept_async(stream).await });
+                });
             } else {
                 task::spawn(async move { server_clone.accept_async(stream).await });
             }
