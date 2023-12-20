@@ -15,6 +15,7 @@ use std::{
 use gst::prelude::*;
 
 /// Expected packet produced by the payloader
+#[derive(Debug, Clone)]
 pub struct ExpectedPacket {
     /// All packets are expected to have a known and fixed PTS.
     pub pts: gst::ClockTime,
@@ -87,7 +88,7 @@ impl ExpectedPacketBuilder {
 }
 
 /// Expected buffer produced by the depayloader
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ExpectedBuffer {
     /// If not set then it is asserted that the depayloaded buffer also has no PTS.
     pub pts: Option<gst::ClockTime>,
