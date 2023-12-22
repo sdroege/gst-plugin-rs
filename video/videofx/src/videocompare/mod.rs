@@ -252,7 +252,7 @@ mod test {
         let message: VideoCompareMessage = structure.try_into().unwrap();
         assert_eq!(message.running_time, Some(running_time));
 
-        let pad_distance = message.pad_distances.get(0).unwrap();
+        let pad_distance = message.pad_distances.first().unwrap();
         assert_eq!(pad_distance.pad.name().as_str(), "sink_0");
         assert_eq!(pad_distance.distance, 42f64);
     }

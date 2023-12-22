@@ -2408,7 +2408,7 @@ impl FMP4Mux {
             if let Some(super::FragmentHeaderStream {
                 start_time: Some(start_time),
                 ..
-            }) = streams.get(0)
+            }) = streams.first()
             {
                 state.fragment_offsets.push(super::FragmentOffset {
                     time: *start_time,
@@ -2587,7 +2587,7 @@ impl FMP4Mux {
                     if let Some(header) = s
                         .get::<gst::ArrayRef>("streamheader")
                         .ok()
-                        .and_then(|a| a.get(0).and_then(|v| v.get::<gst::Buffer>().ok()))
+                        .and_then(|a| a.first().and_then(|v| v.get::<gst::Buffer>().ok()))
                     {
                         if gst_pbutils::codec_utils_opus_parse_header(&header, None).is_err() {
                             gst::error!(CAT, obj: pad, "Received invalid Opus header");

@@ -1291,7 +1291,7 @@ fn write_dops(v: &mut Vec<u8>, caps: &gst::Caps) -> Result<(), Error> {
         .unwrap()
         .get::<gst::ArrayRef>("streamheader")
         .ok()
-        .and_then(|a| a.get(0).and_then(|v| v.get::<gst::Buffer>().ok()))
+        .and_then(|a| a.first().and_then(|v| v.get::<gst::Buffer>().ok()))
     {
         (
             rate,

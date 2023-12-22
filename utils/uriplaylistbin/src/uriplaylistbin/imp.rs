@@ -1647,7 +1647,7 @@ impl UriPlaylistBin {
 
         if let Some(state) = state_guard.as_mut() {
             // first streaming item is the one actually being played
-            if let Some(current) = state.streaming.get(0) {
+            if let Some(current) = state.streaming.first() {
                 let (mut current_iteration, current_uri_index) = (
                     (current.index() / uris_len) as u32,
                     (current.index() % uris_len) as u64,
