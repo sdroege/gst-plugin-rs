@@ -202,12 +202,12 @@ impl S3PutObjectSink {
             s3utils::wait(&self.canceller, put_object_req_future).map_err(|err| match err {
                 WaitError::FutureError(err) => Some(gst::error_msg!(
                     gst::ResourceError::OpenWrite,
-                    ["Failed to upload part: {}", err]
+                    ["Failed to upload object: {}", err]
                 )),
                 WaitError::Cancelled => None,
             })?;
 
-        gst::debug!(CAT, imp: self, "Uploaded complete");
+        gst::debug!(CAT, imp: self, "Upload complete");
 
         Ok(())
     }
