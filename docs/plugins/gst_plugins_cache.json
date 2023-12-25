@@ -9738,6 +9738,114 @@
                 },
                 "rank": "marginal"
             },
+            "rtpamrdepay2": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Depayload an AMR audio stream from RTP packets (RFC 3267)",
+                "hierarchy": [
+                    "GstRtpAmrDepay2",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: audio\n  encoding-name: AMR\n     clock-rate: 8000\napplication/x-rtp:\n          media: audio\n  encoding-name: AMR-WB\n     clock-rate: 16000\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "audio/AMR:\n       channels: 1\n           rate: 8000\naudio/AMR-WB:\n       channels: 1\n           rate: 16000\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
+            "rtpamrpay2": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Payload an AMR audio stream into RTP packets (RFC 3267)",
+                "hierarchy": [
+                    "GstRtpAmrPay2",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Payloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/AMR:\n       channels: 1\n           rate: 8000\naudio/AMR-WB:\n       channels: 1\n           rate: 16000\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n          media: audio\n  encoding-name: AMR\n     clock-rate: 8000\nencoding-params: 1\n    octet-align: { (string)0, (string)1 }\n            crc: 0\n robust-sorting: 0\n   interleaving: 0\napplication/x-rtp:\n          media: audio\n  encoding-name: AMR-WB\n     clock-rate: 16000\nencoding-params: 1\n    octet-align: { (string)0, (string)1 }\n            crc: 0\n robust-sorting: 0\n   interleaving: 0\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "aggregate-mode": {
+                        "blurb": "Whether to send out audio frames immediately or aggregate them until a packet is full.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "auto (-1)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstRtpAmrPayAggregateMode",
+                        "writable": true
+                    },
+                    "alignment-threshold": {
+                        "blurb": "Timestamp alignment threshold in nanoseconds",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "40000000",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "discont-wait": {
+                        "blurb": "Window of time in nanoseconds to wait before creating a discontinuity",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1000000000",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "max-ptime": {
+                        "blurb": "Maximum duration of the packet data in ns (-1 = unlimited up to MTU)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "18446744073709551615",
+                        "max": "9223372036854775807",
+                        "min": "-1",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gint64",
+                        "writable": true
+                    }
+                },
+                "rank": "marginal"
+            },
             "rtpav1depay": {
                 "author": "Vivienne Watermeier <vwatermeier@igalia.com>",
                 "description": "Depayload AV1 from RTP packets",
@@ -10880,6 +10988,26 @@
                 }
             },
             "GstRtpAc3PayAggregateMode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Automatic: zero-latency if upstream is live, otherwise aggregate frames until packet is full.",
+                        "name": "auto",
+                        "value": "-1"
+                    },
+                    {
+                        "desc": "Zero Latency: always send out frames right away, do not wait for more frames to fill a packet.",
+                        "name": "zero-latency",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Aggregate: collect audio frames until we have a full packet or the max-ptime limit is hit (if set).",
+                        "name": "aggregate",
+                        "value": "1"
+                    }
+                ]
+            },
+            "GstRtpAmrPayAggregateMode": {
                 "kind": "enum",
                 "values": [
                     {
