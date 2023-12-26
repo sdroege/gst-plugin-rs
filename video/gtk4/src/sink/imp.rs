@@ -963,6 +963,7 @@ impl PaintableSink {
         // FIXME: bindings
         unsafe {
             use gdk_win32::prelude::*;
+            use glib::translate::*;
 
             let d = display.downcast::<gdk_win32::Win32Display>().unwrap();
             let egl_display = d.egl_display().unwrap().as_ptr();
