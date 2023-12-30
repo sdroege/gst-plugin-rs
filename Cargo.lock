@@ -5831,7 +5831,7 @@ dependencies = [
 [[package]]
 name = "rtcp-types"
 version = "0.0.1"
-source = "git+https://github.com/ystreet/rtcp-types#f7fddfb87e9d7f4fed0b967fedc34995dd81ca86"
+source = "git+https://github.com/ystreet/rtcp-types#c1da8a1a193a0c02d798fea5f16863b69abd9000"
 dependencies = [
  "thiserror",
 ]

@@ -129,7 +129,7 @@ pub enum SendReply {
     SsrcCollision(u32),
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RtcpRecvReply {
     /// A new ssrc was discovered.  If you want to change things about the new ssrc, then do it now
     /// before pushing the buffer again
@@ -138,6 +138,8 @@ pub enum RtcpRecvReply {
     SsrcCollision(u32),
     /// RTCP timer needs to be reconsidered.  Call poll_rtcp_send_timeout() to get the new time
     TimerReconsideration,
+    /// Request a key unit for the given SSRC of ours
+    RequestKeyUnit { ssrcs: Vec<u32>, fir: bool },
 }
 
 impl Session {
@@ -434,6 +436,7 @@ impl Session {
         ntp_time: SystemTime,
     ) -> Option<RtcpRecvReply> {
         let mut ret = None;
+
         if let Some(source) = self.local_senders.get_mut(&rb.ssrc()) {
             source.add_last_rb(sender_ssrc, rb, now, ntp_time);
             source.set_last_activity(now);
@@ -452,6 +455,7 @@ impl Session {
             source.set_last_activity(now);
             source.add_last_rb(sender_ssrc, rb, now, ntp_time);
         }
+
         ret
     }
 
@@ -655,7 +659,27 @@ impl Session {
                         }
                     }
                 }
-                Ok(Packet::Unknown(_unk)) => (),
+                Ok(Packet::PayloadFeedback(pf)) => {
+                    if let Ok(_pli) = pf.parse_fci::<rtcp_types::Pli>() {
+                        self.handle_remote_request_key_unit(
+                            now,
+                            &mut replies,
+                            false,
+                            pf.sender_ssrc(),
+                            std::iter::once(pf.media_ssrc()),
+                        );
+                    } else if let Ok(fir) = pf.parse_fci::<rtcp_types::Fir>() {
+                        self.handle_remote_request_key_unit(
+                            now,
+                            &mut replies,
+                            true,
+                            pf.sender_ssrc(),
+                            // TODO: What to do with the sequence?
+                            fir.entries().map(|entry| entry.ssrc()),
+                        );
+                    }
+                }
+                Ok(Packet::TransportFeedback(_)) | Ok(Packet::Unknown(_)) => (),
                 // TODO: in RFC4585 profile, need to listen for feedback messages and remove any
                 // that we would have sent
                 Err(_) => (),
@@ -663,6 +687,56 @@ impl Session {
         }
         self.update_point_to_point();
         replies
+    }
+
+    fn handle_remote_request_key_unit(
+        &mut self,
+        now: Instant,
+        replies: &mut Vec<RtcpRecvReply>,
+        fir: bool,
+        sender_ssrc: u32,
+        media_ssrcs: impl Iterator<Item = u32>,
+    ) {
+        if !self.remote_receivers.contains_key(&sender_ssrc)
+            && !self.remote_senders.contains_key(&sender_ssrc)
+        {
+            trace!("No remote source known for sender ssrc {sender_ssrc}");
+        }
+
+        let mut ssrcs = Vec::new();
+        for media_ssrc in media_ssrcs {
+            let Some(sender) = self.local_senders.get(&media_ssrc) else {
+                trace!("Not a local sender for ssrc {media_ssrc}");
+                continue;
+            };
+
+            let Some(rb) = sender
+                .received_report_blocks()
+                .find(|(ssrc, _rb)| *ssrc == sender_ssrc)
+            else {
+                trace!("No RB for sender ssrc {sender_ssrc} yet");
+                continue;
+            };
+
+            if let Some(sender) = self.remote_senders.get_mut(&sender_ssrc) {
+                if !sender.remote_request_key_unit_allowed(now, rb.1) {
+                    trace!("Requesting key-unit not allowed again yet");
+                    continue;
+                }
+            } else if let Some(sender) = self.remote_receivers.get_mut(&sender_ssrc) {
+                if !sender.remote_request_key_unit_allowed(now, rb.1) {
+                    trace!("Requesting key-unit not allowed again yet");
+                    continue;
+                }
+            }
+
+            trace!("Requesting key-unit from sender ssrc {sender_ssrc} for media ssrc {media_ssrc} (fir: {fir})");
+            ssrcs.push(media_ssrc);
+        }
+
+        if !ssrcs.is_empty() {
+            replies.push(RtcpRecvReply::RequestKeyUnit { ssrcs, fir });
+        }
     }
 
     fn generate_sr<'a>(

@@ -791,6 +791,9 @@ impl RtpBin2 {
         let replies = session
             .session
             .handle_rtcp_recv(rtcp, mapped.len(), addr, now, ntp_now);
+        let rtp_send_sinkpad = session.rtp_send_sinkpad.clone();
+        drop(session);
+
         for reply in replies {
             match reply {
                 RtcpRecvReply::NewSsrc(_ssrc) => (), // TODO: handle new ssrc
@@ -799,6 +802,20 @@ impl RtpBin2 {
                     if let Some(ref waker) = waker {
                         // reconsider timers means that we wake the rtcp task to get a new timeout
                         waker.wake_by_ref();
+                    }
+                }
+                RtcpRecvReply::RequestKeyUnit { ssrcs, fir } => {
+                    if let Some(ref rtp_send_sinkpad) = rtp_send_sinkpad {
+                        gst::debug!(CAT, imp: self, "Sending force-keyunit event for ssrcs {ssrcs:?} (all headers: {fir})");
+                        // TODO what to do with the ssrc?
+                        let event = gst_video::UpstreamForceKeyUnitEvent::builder()
+                            .all_headers(fir)
+                            .other_field("ssrcs", &gst::Array::new(ssrcs))
+                            .build();
+
+                        let _ = rtp_send_sinkpad.push_event(event);
+                    } else {
+                        gst::debug!(CAT, imp: self, "Can't send force-keyunit event because of missing sinkpad");
                     }
                 }
             }

@@ -427,6 +427,7 @@ pub struct RemoteSendSource {
     bitrate: Bitrate,
     last_sent_rb: Option<Rb>,
     last_received_rb: HashMap<u32, ReceivedRb>,
+    last_request_key_unit: HashMap<u32, Instant>,
 }
 
 // The first time we recev a packet for jitter calculations
@@ -452,6 +453,7 @@ impl RemoteSendSource {
             bitrate: Bitrate::new(BITRATE_WINDOW),
             last_sent_rb: None,
             last_received_rb: HashMap::new(),
+            last_request_key_unit: HashMap::new(),
         }
     }
 
@@ -886,7 +888,28 @@ impl RemoteSendSource {
         RemoteReceiveSource {
             source: self.source,
             rtcp_from: self.rtcp_from,
+            last_request_key_unit: self.last_request_key_unit,
         }
+    }
+
+    pub(crate) fn remote_request_key_unit_allowed(
+        &mut self,
+        now: Instant,
+        rb: &ReceivedRb,
+    ) -> bool {
+        let rtt = rb.round_trip_time();
+
+        // Allow up to one key-unit request per RTT and SSRC.
+        let mut allowed = false;
+        self.last_request_key_unit
+            .entry(rb.rb.ssrc)
+            .and_modify(|previous| {
+                allowed = now.duration_since(*previous) >= rtt;
+                *previous = now;
+            })
+            .or_insert_with(|| now);
+
+        allowed
     }
 }
 
@@ -969,6 +992,7 @@ impl LocalReceiveSource {
 pub struct RemoteReceiveSource {
     source: Source,
     rtcp_from: Option<SocketAddr>,
+    last_request_key_unit: HashMap<u32, Instant>,
 }
 
 impl RemoteReceiveSource {
@@ -976,6 +1000,7 @@ impl RemoteReceiveSource {
         Self {
             source: Source::new(ssrc),
             rtcp_from: None,
+            last_request_key_unit: HashMap::new(),
         }
     }
 
@@ -1038,7 +1063,28 @@ impl RemoteReceiveSource {
             bitrate: Bitrate::new(BITRATE_WINDOW),
             last_sent_rb: None,
             last_received_rb: HashMap::new(),
+            last_request_key_unit: self.last_request_key_unit,
         }
+    }
+
+    pub(crate) fn remote_request_key_unit_allowed(
+        &mut self,
+        now: Instant,
+        rb: &ReceivedRb,
+    ) -> bool {
+        let rtt = rb.round_trip_time();
+
+        // Allow up to one key-unit request per RTT.
+        let mut allowed = false;
+        self.last_request_key_unit
+            .entry(rb.rb.ssrc)
+            .and_modify(|previous| {
+                allowed = now.duration_since(*previous) >= rtt;
+                *previous = now;
+            })
+            .or_insert_with(|| now);
+
+        allowed
     }
 }
 
