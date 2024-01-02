@@ -72,6 +72,7 @@ pub struct Session {
     // settings
     min_rtcp_interval: Duration,
     profile: RtpProfile,
+    reduced_size_rtcp: bool,
     // state
     local_senders: HashMap<u32, LocalSendSource>,
     local_receivers: HashMap<u32, LocalReceiveSource>,
@@ -162,6 +163,7 @@ impl Session {
         Self {
             min_rtcp_interval: RTCP_MIN_REPORT_INTERVAL,
             profile: RtpProfile::default(),
+            reduced_size_rtcp: false,
             local_senders: HashMap::new(),
             // also known as remote_senders
             local_receivers: HashMap::new(),
@@ -195,6 +197,11 @@ impl Session {
     /// Set the RTP profile to use.
     pub fn set_profile(&mut self, profile: RtpProfile) {
         self.profile = profile;
+    }
+
+    /// Set usage of reduced size RTCP
+    pub fn set_reduced_size_rtcp(&mut self, reduced_size_rtcp: bool) {
+        self.reduced_size_rtcp = reduced_size_rtcp;
     }
 
     fn n_members(&self) -> usize {
@@ -759,6 +766,11 @@ impl Session {
         minimum: bool, // RFC 4585
         ssrcs_reported: &mut Vec<u32>,
     ) -> CompoundBuilder<'a> {
+        // Don't include in an early reduced-size RTCP packet
+        if minimum && self.reduced_size_rtcp_allowed() {
+            return rtcp;
+        }
+
         let ntp_time = system_time_to_ntp_time_u64(ntp_now);
         if self
             .local_senders
@@ -844,6 +856,10 @@ impl Session {
         rtcp
     }
 
+    fn reduced_size_rtcp_allowed(&self) -> bool {
+        self.reduced_size_rtcp && matches!(self.profile, RtpProfile::Avpf)
+    }
+
     fn have_ssrc(&self, ssrc: u32) -> bool {
         self.local_senders.contains_key(&ssrc)
             || self.local_receivers.contains_key(&ssrc)
@@ -882,6 +898,11 @@ impl Session {
         minimum: bool, // RFC 4585
         ssrcs_reported: &mut Vec<u32>,
     ) -> CompoundBuilder<'a> {
+        // Don't include in an early reduced-size RTCP packet
+        if minimum && self.reduced_size_rtcp_allowed() {
+            return rtcp;
+        }
+
         if self
             .local_senders
             .values()
@@ -924,6 +945,11 @@ impl Session {
         rtcp: CompoundBuilder<'a>,
         minimum: bool, // RFC 4585
     ) -> CompoundBuilder<'a> {
+        // Don't include in an early reduced-size RTCP packet
+        if minimum && self.reduced_size_rtcp_allowed() {
+            return rtcp;
+        }
+
         let mut sdes = Sdes::builder();
         let mut have_chunk = false;
         for sender in self.local_senders.values() {

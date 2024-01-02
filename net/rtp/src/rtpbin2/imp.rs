@@ -22,6 +22,7 @@ use crate::rtpbin2::RUNTIME;
 
 const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(0);
 const DEFAULT_MIN_RTCP_INTERVAL: Duration = RTCP_MIN_REPORT_INTERVAL;
+const DEFAULT_REDUCED_SIZE_RTCP: bool = false;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -65,6 +66,7 @@ struct Settings {
     latency: gst::ClockTime,
     min_rtcp_interval: Duration,
     profile: Profile,
+    reduced_size_rtcp: bool,
 }
 
 impl Default for Settings {
@@ -73,6 +75,7 @@ impl Default for Settings {
             latency: DEFAULT_LATENCY,
             min_rtcp_interval: DEFAULT_MIN_RTCP_INTERVAL,
             profile: Profile::default(),
+            reduced_size_rtcp: DEFAULT_REDUCED_SIZE_RTCP,
         }
     }
 }
@@ -161,6 +164,9 @@ impl BinSession {
             .session
             .set_min_rtcp_interval(settings.min_rtcp_interval);
         inner.session.set_profile(settings.profile.into());
+        inner
+            .session
+            .set_reduced_size_rtcp(settings.reduced_size_rtcp);
         Self {
             id,
             inner: Arc::new(Mutex::new(inner)),
@@ -1066,6 +1072,12 @@ impl ObjectImpl for RtpBin2 {
                     .default_value(Profile::default())
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("reduced-size-rtcp")
+                    .nick("Reduced Size RTCP")
+                    .blurb("Use reduced size RTCP. Only has an effect if rtp-profile=avpf")
+                    .default_value(DEFAULT_REDUCED_SIZE_RTCP)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -1097,6 +1109,10 @@ impl ObjectImpl for RtpBin2 {
                 let mut settings = self.settings.lock().unwrap();
                 settings.profile = value.get::<Profile>().expect("Type checked upstream");
             }
+            "reduced-size-rtcp" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.reduced_size_rtcp = value.get::<bool>().expect("Type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -1118,6 +1134,10 @@ impl ObjectImpl for RtpBin2 {
             "rtp-profile" => {
                 let settings = self.settings.lock().unwrap();
                 settings.profile.to_value()
+            }
+            "reduced-size-rtcp" => {
+                let settings = self.settings.lock().unwrap();
+                settings.reduced_size_rtcp.to_value()
             }
             _ => unimplemented!(),
         }
