@@ -48,6 +48,12 @@ pub enum RtpProfile {
     Avpf,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyUnitRequestType {
+    Pli,
+    Fir(u32),
+}
+
 impl RtpProfile {
     fn is_feedback(&self) -> bool {
         self == &Self::Avpf
@@ -140,6 +146,12 @@ pub enum RtcpRecvReply {
     TimerReconsideration,
     /// Request a key unit for the given SSRC of ours
     RequestKeyUnit { ssrcs: Vec<u32>, fir: bool },
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum RequestRemoteKeyUnitReply {
+    /// RTCP timer needs to be reconsidered.  Call poll_rtcp_send_timeout() to get the new time
+    TimerReconsideration,
 }
 
 impl Session {
@@ -1003,6 +1015,50 @@ impl Session {
         rtcp
     }
 
+    fn generate_pli<'a>(
+        &mut self,
+        mut rtcp: CompoundBuilder<'a>,
+        _now: Instant,
+    ) -> CompoundBuilder<'a> {
+        let ssrc = self.ensure_internal_send_src();
+
+        for source in self.remote_senders.values_mut() {
+            let pli = source.generate_pli();
+            if let Some(pli) = pli {
+                debug!("Generating PLI for sender {}: {:?}", source.ssrc(), pli);
+                rtcp = rtcp.add_packet(
+                    rtcp_types::PayloadFeedback::builder_owned(pli)
+                        .sender_ssrc(ssrc)
+                        .media_ssrc(source.ssrc()),
+                );
+            }
+        }
+        rtcp
+    }
+
+    fn generate_fir<'a>(
+        &mut self,
+        mut rtcp: CompoundBuilder<'a>,
+        _now: Instant,
+    ) -> CompoundBuilder<'a> {
+        let mut have_fir = false;
+        let mut fir = rtcp_types::Fir::builder();
+
+        for source in self.remote_senders.values_mut() {
+            fir = source.generate_fir(fir, &mut have_fir);
+        }
+
+        if have_fir {
+            let ssrc = self.ensure_internal_send_src();
+
+            debug!("Generating FIR: {:?}", fir);
+            rtcp =
+                rtcp.add_packet(rtcp_types::PayloadFeedback::builder_owned(fir).sender_ssrc(ssrc));
+        }
+
+        rtcp
+    }
+
     // RFC 3550 6.3.5
     fn handle_timeouts(&mut self, now: Instant) {
         trace!("handling rtcp timeouts");
@@ -1110,6 +1166,8 @@ impl Session {
             rtcp = self.generate_sr(rtcp, now, ntp_now, is_early, &mut ssrcs_reported);
             rtcp = self.generate_rr(rtcp, now, ntp_now, is_early, &mut ssrcs_reported);
             rtcp = self.generate_sdes(rtcp, is_early);
+            rtcp = self.generate_pli(rtcp, now);
+            rtcp = self.generate_fir(rtcp, now);
             rtcp = self.generate_bye(rtcp, now);
 
             let size = rtcp.calculate_size().unwrap();
@@ -1428,6 +1486,35 @@ impl Session {
     #[cfg(test)]
     fn mut_remote_sender_source_by_ssrc(&mut self, ssrc: u32) -> Option<&mut RemoteSendSource> {
         self.remote_senders.get_mut(&ssrc)
+    }
+
+    pub(crate) fn request_remote_key_unit(
+        &mut self,
+        now: Instant,
+        typ: KeyUnitRequestType,
+        ssrc: u32,
+    ) -> Vec<RequestRemoteKeyUnitReply> {
+        let mut replies = Vec::new();
+
+        if !self.remote_senders.contains_key(&ssrc) {
+            trace!("No remote sender with ssrc {ssrc} known");
+            return replies;
+        };
+
+        debug!("Requesting remote key-unit for ssrc {ssrc} of type {typ:?}");
+
+        // FIXME: Use hard-coded 5s interval here
+        let res = self.request_early_rtcp(now, Duration::from_secs(5));
+        if res == RequestEarlyRtcpResult::TimerReconsideration {
+            replies.push(RequestRemoteKeyUnitReply::TimerReconsideration);
+        }
+
+        if res != RequestEarlyRtcpResult::NotScheduled {
+            let source = self.remote_senders.get_mut(&ssrc).unwrap();
+            source.request_remote_key_unit(now, typ);
+        }
+
+        replies
     }
 }
 

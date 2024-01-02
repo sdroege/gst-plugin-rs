@@ -8,7 +8,10 @@ use std::{
 
 use rtcp_types::{ReportBlock, ReportBlockBuilder};
 
-use super::time::{system_time_to_ntp_time_u64, NtpTime};
+use super::{
+    session::KeyUnitRequestType,
+    time::{system_time_to_ntp_time_u64, NtpTime},
+};
 
 use gst::prelude::MulDiv;
 
@@ -428,6 +431,15 @@ pub struct RemoteSendSource {
     last_sent_rb: Option<Rb>,
     last_received_rb: HashMap<u32, ReceivedRb>,
     last_request_key_unit: HashMap<u32, Instant>,
+
+    // If a NACK/PLI is pending with the next RTCP packet
+    send_pli: bool,
+    // If a FIR is pending with the next RTCP packet
+    send_fir: bool,
+    // Sequence number of the next FIR
+    send_fir_seqnum: u8,
+    // Count from the ForceKeyUnitEvent to de-duplicate FIR
+    send_fir_count: Option<u32>,
 }
 
 // The first time we recev a packet for jitter calculations
@@ -454,6 +466,10 @@ impl RemoteSendSource {
             last_sent_rb: None,
             last_received_rb: HashMap::new(),
             last_request_key_unit: HashMap::new(),
+            send_pli: false,
+            send_fir: false,
+            send_fir_seqnum: 0,
+            send_fir_count: None,
         }
     }
 
@@ -911,6 +927,48 @@ impl RemoteSendSource {
 
         allowed
     }
+
+    pub(crate) fn request_remote_key_unit(&mut self, _now: Instant, typ: KeyUnitRequestType) {
+        match typ {
+            KeyUnitRequestType::Fir(count) => {
+                if self
+                    .send_fir_count
+                    .map_or(true, |previous_count| previous_count != count)
+                {
+                    self.send_fir_seqnum = self.send_fir_seqnum.wrapping_add(1);
+                }
+                self.send_fir = true;
+                self.send_fir_count = Some(count);
+            }
+            KeyUnitRequestType::Pli if !self.send_fir => {
+                self.send_pli = true;
+            }
+            _ => {}
+        }
+    }
+
+    pub(crate) fn generate_pli(&mut self) -> Option<rtcp_types::PliBuilder> {
+        if self.send_pli {
+            self.send_pli = false;
+            Some(rtcp_types::Pli::builder())
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn generate_fir(
+        &mut self,
+        fir: rtcp_types::FirBuilder,
+        added: &mut bool,
+    ) -> rtcp_types::FirBuilder {
+        if self.send_fir {
+            self.send_fir = false;
+            *added = true;
+            fir.add_ssrc(self.ssrc(), self.send_fir_seqnum)
+        } else {
+            fir
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -1064,6 +1122,10 @@ impl RemoteReceiveSource {
             last_sent_rb: None,
             last_received_rb: HashMap::new(),
             last_request_key_unit: self.last_request_key_unit,
+            send_pli: false,
+            send_fir: false,
+            send_fir_seqnum: 0,
+            send_fir_count: None,
         }
     }
 

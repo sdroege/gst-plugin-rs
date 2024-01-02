@@ -13,7 +13,8 @@ use gst::{glib, prelude::*, subclass::prelude::*};
 use once_cell::sync::Lazy;
 
 use super::session::{
-    RecvReply, RtcpRecvReply, RtpProfile, SendReply, Session, RTCP_MIN_REPORT_INTERVAL,
+    KeyUnitRequestType, RecvReply, RequestRemoteKeyUnitReply, RtcpRecvReply, RtpProfile, SendReply,
+    Session, RTCP_MIN_REPORT_INTERVAL,
 };
 use super::source::{ReceivedRb, SourceState};
 
@@ -245,6 +246,7 @@ impl BinSessionInner {
             (pad.pad.clone(), false)
         } else {
             let src_templ = rtpbin.obj().pad_template("rtp_recv_src_%u_%u_%u").unwrap();
+            let id = self.id;
             let srcpad = gst::Pad::builder_from_template(&src_templ)
                 .iterate_internal_links_function(|pad, parent| {
                     RtpBin2::catch_panic_pad_function(
@@ -258,6 +260,13 @@ impl BinSessionInner {
                         parent,
                         || false,
                         |this| this.src_query(pad, query),
+                    )
+                })
+                .event_function(move |pad, parent, event| {
+                    RtpBin2::catch_panic_pad_function(
+                        parent,
+                        || false,
+                        |this| this.rtp_recv_src_event(pad, event, id, pt, ssrc),
                     )
                 })
                 .name(format!("rtp_recv_src_{}_{}_{}", self.id, pt, ssrc))
@@ -951,6 +960,65 @@ impl RtpBin2 {
             Some((pt as u8, clock_rate as u32))
         } else {
             None
+        }
+    }
+
+    fn rtp_recv_src_event(
+        &self,
+        pad: &gst::Pad,
+        event: gst::Event,
+        id: usize,
+        pt: u8,
+        ssrc: u32,
+    ) -> bool {
+        match event.view() {
+            gst::EventView::CustomUpstream(custom) => {
+                if let Ok(fku) = gst_video::UpstreamForceKeyUnitEvent::parse(custom) {
+                    let all_headers = fku.all_headers;
+                    let count = fku.count;
+
+                    let state = self.state.lock().unwrap();
+                    if let Some(session) = state.session_by_id(id) {
+                        let now = Instant::now();
+                        let mut session = session.inner.lock().unwrap();
+                        let caps = session.caps_from_pt_ssrc(pt, ssrc);
+                        let s = caps.structure(0).unwrap();
+
+                        let pli = s.has_field("rtcp-fb-nack-pli");
+                        let fir = s.has_field("rtcp-fb-ccm-fir") && all_headers;
+
+                        let typ = if fir {
+                            KeyUnitRequestType::Fir(count)
+                        } else {
+                            KeyUnitRequestType::Pli
+                        };
+
+                        if pli || fir {
+                            let replies = session.session.request_remote_key_unit(now, typ, ssrc);
+
+                            let waker = state.rtcp_waker.clone();
+                            drop(session);
+                            drop(state);
+
+                            for reply in replies {
+                                match reply {
+                                    RequestRemoteKeyUnitReply::TimerReconsideration => {
+                                        if let Some(ref waker) = waker {
+                                            // reconsider timers means that we wake the rtcp task to get a new timeout
+                                            waker.wake_by_ref();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Don't forward
+                    return true;
+                }
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
+            }
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
 }
