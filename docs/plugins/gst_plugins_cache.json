@@ -12476,6 +12476,20 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "buffer-size": {
+                        "blurb": "Size of the kernel receive buffer in bytes, 0=default",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
                     "caps": {
                         "blurb": "Caps to use",
                         "conditionally-available": false,

@@ -50,6 +50,7 @@ const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: Duration = Duration::ZERO;
 const DEFAULT_RETRIEVE_SENDER_ADDRESS: bool = true;
 const DEFAULT_MULTICAST_LOOP: bool = true;
+const DEFAULT_BUFFER_SIZE: u32 = 0;
 
 #[derive(Debug, Default)]
 struct State {
@@ -69,6 +70,7 @@ struct Settings {
     context_wait: Duration,
     retrieve_sender_address: bool,
     multicast_loop: bool,
+    buffer_size: u32,
 }
 
 impl Default for Settings {
@@ -85,6 +87,7 @@ impl Default for Settings {
             context_wait: DEFAULT_CONTEXT_WAIT,
             retrieve_sender_address: DEFAULT_RETRIEVE_SENDER_ADDRESS,
             multicast_loop: DEFAULT_MULTICAST_LOOP,
+            buffer_size: DEFAULT_BUFFER_SIZE,
         }
     }
 }
@@ -311,6 +314,29 @@ impl TaskImpl for UdpSrcTask {
                         ["Failed to set reuse_address: {}", err]
                     )
                 })?;
+
+                gst::debug!(
+                    CAT,
+                    obj = self.element,
+                    "socket recv buffer size is {:?}",
+                    socket.recv_buffer_size()
+                );
+                if settings.buffer_size != 0 {
+                    gst::debug!(
+                        CAT,
+                        obj = self.element,
+                        "changing the socket recv buffer size to {}",
+                        settings.buffer_size
+                    );
+                    socket
+                        .set_recv_buffer_size(settings.buffer_size as usize)
+                        .map_err(|err| {
+                            gst::error_msg!(
+                                gst::ResourceError::OpenRead,
+                                ["Failed to set buffer_size: {}", err]
+                            )
+                        })?;
+                }
 
                 #[cfg(unix)]
                 {
@@ -793,6 +819,13 @@ impl ObjectImpl for UdpSrc {
                     .blurb("Set the multicast loop parameter")
                     .default_value(DEFAULT_MULTICAST_LOOP)
                     .build(),
+                glib::ParamSpecUInt::builder("buffer-size")
+                    .nick("Buffer Size")
+                    .blurb("Size of the kernel receive buffer in bytes, 0=default")
+                    .maximum(u32::MAX)
+                    .default_value(DEFAULT_BUFFER_SIZE)
+                    .build(),
+
             ];
 
             #[cfg(not(windows))]
@@ -862,6 +895,9 @@ impl ObjectImpl for UdpSrc {
             "loop" => {
                 settings.multicast_loop = value.get().expect("type checked upstream");
             }
+            "buffer-size" => {
+                settings.buffer_size = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -888,6 +924,7 @@ impl ObjectImpl for UdpSrc {
             "context-wait" => (settings.context_wait.as_millis() as u32).to_value(),
             "retrieve-sender-address" => settings.retrieve_sender_address.to_value(),
             "loop" => settings.multicast_loop.to_value(),
+            "buffer-size" => settings.buffer_size.to_value(),
             _ => unimplemented!(),
         }
     }
