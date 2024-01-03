@@ -350,6 +350,104 @@ gst-launch-1.0 -e uridecodebin uri=file:///home/meh/path/to/video/file ! \
 
 You should see a second video displayed in the videoroomtest web page.
 
+## Streaming from LiveKit using the livekitwebrtcsrc element
+
+First, publish a stream to the room using the following command:
+
+```shell
+gst-launch-1.0 livekitwebrtcsink name=sink \
+    signaller::ws-url=ws://127.0.0.1:7880 \
+    signaller::api-key=devkey \
+    signaller::secret-key=secret \
+    signaller::room-name=testroom \
+    signaller::identity=gst-producer \
+    signaller::participant-name=gst-producer \
+    video-caps='video/x-h264' \
+  videotestsrc is-live=1 \
+  ! video/x-raw,width=640,height=360,framerate=15/1 \
+  ! timeoverlay ! videoconvert ! queue ! sink.
+```
+
+Then play back the published stream:
+
+```shell
+gst-launch-1.0 livekitwebrtcsrc \
+    name=src \
+    signaller::ws-url=ws://127.0.0.1:7880 \
+    signaller::api-key=devkey \
+    signaller::secret-key=secret \
+    signaller::room-name=testroom \
+    signaller::identity=gst-consumer \
+    signaller::participant-name=gst-consumer \
+    signaller::producer-peer-id=gst-producer \
+    video-codecs='<H264>' \
+  src. ! queue ! videoconvert ! autovideosink
+```
+
+### Auto-subscribe with livekitwebrtcsrc element
+
+With the LiveKit source element, you can also subscribe to all the peers in
+your room, simply by not specifying any value for
+`signaller::producer-peer-id`. Unwanted peers can also be ignored by supplying
+an array of peer IDs to `signaller::excluded-producer-peer-ids`. Importantly,
+it is also necessary to add sinks for all the streams in the room that the
+source element has subscribed to.
+
+First, publish a few streams using different connections:
+
+```shell
+gst-launch-1.0 \
+  livekitwebrtcsink name=sinka \
+    signaller::ws-url=ws://127.0.0.1:7880 \
+    signaller::api-key=devkey \
+    signaller::secret-key=secret \
+    signaller::room-name=testroom \
+    signaller::identity=gst-producer-a \
+    signaller::participant-name=gst-producer-a \
+    video-caps='video/x-vp8' \
+  livekitwebrtcsink name=sinkb \
+    signaller::ws-url=ws://127.0.0.1:7880 \
+    signaller::api-key=devkey \
+    signaller::secret-key=secret \
+    signaller::room-name=testroom \
+    signaller::identity=gst-producer-b \
+    signaller::participant-name=gst-producer-b \
+    video-caps='video/x-vp8' \
+  livekitwebrtcsink name=sinkc \
+    signaller::ws-url=ws://127.0.0.1:7880 \
+    signaller::api-key=devkey \
+    signaller::secret-key=secret \
+    signaller::room-name=testroom \
+    signaller::identity=gst-producer-c \
+    signaller::participant-name=gst-producer-c \
+    video-caps='video/x-vp8' \
+  videotestsrc is-live=1 \
+  ! video/x-raw,width=640,height=360,framerate=15/1 \
+  ! timeoverlay ! videoconvert ! queue ! sinka. \
+  videotestsrc pattern=ball is-live=1 \
+  ! video/x-raw,width=320,height=180,framerate=15/1 \
+  ! timeoverlay ! videoconvert ! queue ! sinkb.
+  videotestsrc is-live=1 \
+  ! video/x-raw,width=320,height=180,framerate=15/1 \
+  ! timeoverlay ! videoconvert ! queue ! sinkc.
+```
+
+Then watch only streams A and B by excluding peer C:
+
+```shell
+gst-launch-1.0 livekitwebrtcsrc \
+  name=src \
+  signaller::ws-url=ws://127.0.0.1:7880 \
+  signaller::api-key=devkey \
+  signaller::secret-key=secret \
+  signaller::room-name=testroom \
+  signaller::identity=gst-consumer \
+  signaller::participant-name=gst-consumer \
+  signaller::excluded-producer-peer-ids='<gst-producer-c>' \
+  src. ! queue ! videoconvert ! autovideosink
+  src. ! queue ! videoconvert ! autovideosink
+```
+
 [LiveKit]: https://livekit.io/
 [janus]: https://github.com/meetecho/janus-gateway
 [simple whip server]: https://github.com/meetecho/simple-whip-server/
