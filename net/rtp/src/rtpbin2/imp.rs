@@ -639,7 +639,15 @@ impl RtpBin2 {
         let rtp = match rtp_types::RtpPacket::parse(&mapped) {
             Ok(rtp) => rtp,
             Err(e) => {
-                // TODO: handle if it's a valid rtcp-muxed RTCP packet
+                // If this is a valid RTCP packet then it was muxed with the RTP stream and can be
+                // handled just fine.
+                if rtcp_types::Compound::parse(&mapped).map_or(false, |mut rtcp| {
+                    rtcp.next().map_or(false, |rtcp| rtcp.is_ok())
+                }) {
+                    drop(mapped);
+                    return Self::rtcp_recv_sink_chain(self, id, buffer);
+                }
+
                 gst::error!(CAT, imp: self, "Failed to parse input as valid rtp packet: {e:?}");
                 return Ok(gst::FlowSuccess::Ok);
             }
