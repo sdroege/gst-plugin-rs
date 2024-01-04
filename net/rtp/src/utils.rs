@@ -306,6 +306,55 @@ macro_rules! define_wrapping_comparable_u32_with_display {
     };
 }
 
+/// Stores information necessary to compute a series of extended timestamps
+#[derive(Default, Debug)]
+pub(crate) struct ExtendedTimestamp {
+    last_ext: Option<u64>,
+}
+
+impl ExtendedTimestamp {
+    /// Produces the next extended timestamp from a new RTP timestamp
+    pub(crate) fn next(&mut self, rtp_timestamp: u32) -> u64 {
+        let ext = match self.last_ext {
+            None => (1u64 << 32) + rtp_timestamp as u64,
+            Some(last_ext) => {
+                // pick wraparound counter from previous timestamp and add to new timestamp
+                let mut ext = rtp_timestamp as u64 + (last_ext & !0xffffffff);
+
+                // check for timestamp wraparound
+                if ext < last_ext {
+                    let diff = last_ext - ext;
+
+                    if diff > std::i32::MAX as u64 {
+                        // timestamp went backwards more than allowed, we wrap around and get
+                        // updated extended timestamp.
+                        ext += 1u64 << 32;
+                    }
+                } else {
+                    let diff = ext - last_ext;
+
+                    if diff > std::i32::MAX as u64 {
+                        if ext < 1u64 << 32 {
+                            // We can't ever get to such a case as our counter is opaque
+                            unreachable!()
+                        } else {
+                            ext -= 1u64 << 32;
+                            // We don't want the extended timestamp storage to go back, ever
+                            return ext;
+                        }
+                    }
+                }
+
+                ext
+            }
+        };
+
+        self.last_ext = Some(ext);
+
+        ext
+    }
+}
+
 /// Stores information necessary to compute a series of extended seqnums
 #[derive(Default, Debug)]
 pub(crate) struct ExtendedSeqnum {
@@ -584,6 +633,77 @@ mod tests {
         assert!(cmp(0, 0x8000_0000).is_none());
         assert_eq!(try_cmp(0x8000_0000, 0), Err(ComparisonLimit));
         assert_eq!(try_cmp(0, 0x8000_0000), Err(ComparisonLimit));
+    }
+
+    #[test]
+    fn extended_timestamp_basic() {
+        let mut ext_ts = ExtendedTimestamp::default();
+
+        // No wraparound when timestamps are increasing
+        assert_eq!(ext_ts.next(0), (1 << 32));
+        assert_eq!(ext_ts.next(10), (1 << 32) + 10);
+        assert_eq!(ext_ts.next(10), (1 << 32) + 10);
+        assert_eq!(
+            ext_ts.next(1 + std::i32::MAX as u32),
+            (1 << 32) + 1 + std::i32::MAX as u64
+        );
+
+        // Even big bumps under G_MAXINT32 don't result in wrap-around
+        ext_ts = ExtendedTimestamp::default();
+
+        assert_eq!(ext_ts.next(1087500), (1 << 32) + 1087500);
+        assert_eq!(ext_ts.next(24), (1 << 32) + 24);
+    }
+
+    #[test]
+    fn extended_timestamp_wraparound() {
+        let mut ext_ts = ExtendedTimestamp::default();
+        assert_eq!(
+            ext_ts.next(std::u32::MAX - 90000 + 1),
+            (1 << 32) + std::u32::MAX as u64 - 90000 + 1
+        );
+        assert_eq!(ext_ts.next(0), (1 << 32) + std::u32::MAX as u64 + 1);
+        assert_eq!(
+            ext_ts.next(90000),
+            (1 << 32) + std::u32::MAX as u64 + 1 + 90000
+        );
+    }
+
+    #[test]
+    fn extended_timestamp_wraparound_disordered() {
+        let mut ext_ts = ExtendedTimestamp::default();
+
+        assert_eq!(
+            ext_ts.next(std::u32::MAX - 90000 + 1),
+            (1 << 32) + std::u32::MAX as u64 - 90000 + 1
+        );
+        assert_eq!(ext_ts.next(0), (1 << 32) + std::u32::MAX as u64 + 1);
+
+        // Unwrapping around
+        assert_eq!(
+            ext_ts.next(std::u32::MAX - 90000 + 1),
+            (1 << 32) + std::u32::MAX as u64 - 90000 + 1
+        );
+        assert_eq!(
+            ext_ts.next(90000),
+            (1 << 32) + std::u32::MAX as u64 + 1 + 90000
+        );
+    }
+
+    #[test]
+    fn extended_timestamp_wraparound_disordered_backwards() {
+        let mut ext_ts = ExtendedTimestamp::default();
+
+        assert_eq!(ext_ts.next(90000), (1 << 32) + 90000);
+
+        // Wraps backwards
+        assert_eq!(
+            ext_ts.next(std::u32::MAX - 90000 + 1),
+            std::u32::MAX as u64 - 90000 + 1
+        );
+
+        // Wraps again forwards
+        assert_eq!(ext_ts.next(90000), (1 << 32) + 90000);
     }
 
     #[test]

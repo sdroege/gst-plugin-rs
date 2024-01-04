@@ -147,6 +147,10 @@ pub enum RtcpRecvReply {
     TimerReconsideration,
     /// Request a key unit for the given SSRC of ours
     RequestKeyUnit { ssrcs: Vec<u32>, fir: bool },
+    /// A new cname to ssrc mapping was found in a sdes: (cname, ssrc)
+    NewCName((String, u32)),
+    /// A new RTP to NTP mapping was received for an ssrc: (ssrc, RTP, NTP)
+    NewRtpNtp((u32, u32, u64)),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -625,6 +629,12 @@ impl Session {
                         sr.packet_count(),
                     );
 
+                    replies.push(RtcpRecvReply::NewRtpNtp((
+                        sr.ssrc(),
+                        sr.rtp_timestamp(),
+                        sr.ntp_timestamp(),
+                    )));
+
                     for rb in sr.report_blocks() {
                         if let Some(reply) = self.handle_rb(sr.ssrc(), rb, from, now, ntp_time) {
                             replies.push(reply);
@@ -674,6 +684,15 @@ impl Session {
                                 source.received_sdes(item.type_(), item.value());
                                 source.set_state(SourceState::Normal);
                                 source.set_last_activity(now);
+                            }
+
+                            if item.type_() == SdesItem::CNAME {
+                                if let Ok(s) = std::str::from_utf8(item.value()) {
+                                    replies.push(RtcpRecvReply::NewCName((
+                                        s.to_owned(),
+                                        chunk.ssrc(),
+                                    )));
+                                }
                             }
                         }
                     }
@@ -1086,6 +1105,8 @@ impl Session {
     }
 
     // RFC 3550 6.3.5
+    // FIXME: we should surface this information to the element in order
+    // to perform clean up of the sync context
     fn handle_timeouts(&mut self, now: Instant) {
         trace!("handling rtcp timeouts");
         let td = RTCP_SOURCE_TIMEOUT_N_INTERVALS
@@ -1917,7 +1938,18 @@ pub(crate) mod tests {
 
         assert_eq!(
             session.handle_rtcp_recv(rtcp, len, None, now, ntp_now),
-            vec![]
+            vec![
+                RtcpRecvReply::NewRtpNtp((
+                    ssrcs[0],
+                    4,
+                    system_time_to_ntp_time_u64(ntp_now).as_u64()
+                )),
+                RtcpRecvReply::NewRtpNtp((
+                    ssrcs[1],
+                    20,
+                    system_time_to_ntp_time_u64(ntp_now).as_u64()
+                ))
+            ]
         );
 
         let (rtcp_data, _new_now, new_ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
@@ -2211,7 +2243,10 @@ pub(crate) mod tests {
         let rtcp = Compound::parse(&data[..len]).unwrap();
         assert_eq!(
             session.handle_rtcp_recv(rtcp, len, Some(from), now, ntp_now),
-            vec![RtcpRecvReply::NewSsrc(ssrc)]
+            vec![
+                RtcpRecvReply::NewSsrc(ssrc),
+                RtcpRecvReply::NewCName(("cname".to_string(), ssrc))
+            ]
         );
 
         let rtp_data = generate_rtp_packet(ssrc, 500, 0, 4);
@@ -2235,7 +2270,10 @@ pub(crate) mod tests {
         let rtcp = Compound::parse(&data[..len]).unwrap();
         assert_eq!(
             session.handle_rtcp_recv(rtcp, len, Some(from), now, ntp_now),
-            vec![RtcpRecvReply::NewSsrc(new_ssrc)]
+            vec![
+                RtcpRecvReply::NewSsrc(new_ssrc),
+                RtcpRecvReply::NewCName(("cname".to_string(), new_ssrc))
+            ]
         );
 
         let rtp_data = generate_rtp_packet(new_ssrc, 510, 10, 4);
@@ -2484,7 +2522,10 @@ pub(crate) mod tests {
         let rtcp = Compound::parse(&data[..len]).unwrap();
         assert_eq!(
             session.handle_rtcp_recv(rtcp, len, Some(from), now, ntp_now),
-            vec![RtcpRecvReply::NewSsrc(recv_ssrc)]
+            vec![
+                RtcpRecvReply::NewSsrc(recv_ssrc),
+                RtcpRecvReply::NewCName(("cname1".to_string(), recv_ssrc))
+            ]
         );
         assert!(session.is_point_to_point);
 
@@ -2508,7 +2549,11 @@ pub(crate) mod tests {
         let rtcp = Compound::parse(&data[..len]).unwrap();
         assert_eq!(
             session.handle_rtcp_recv(rtcp, len, Some(from), now, ntp_now),
-            vec![RtcpRecvReply::NewSsrc(recv2_ssrc)]
+            vec![
+                RtcpRecvReply::NewCName(("cname1".to_string(), recv_ssrc)),
+                RtcpRecvReply::NewSsrc(recv2_ssrc),
+                RtcpRecvReply::NewCName(("cname1".to_string(), recv2_ssrc))
+            ]
         );
         assert!(session.is_point_to_point);
 
@@ -2532,7 +2577,10 @@ pub(crate) mod tests {
         let rtcp = Compound::parse(&data[..len]).unwrap();
         assert_eq!(
             session.handle_rtcp_recv(rtcp, len, Some(from), now, ntp_now),
-            vec![]
+            vec![
+                RtcpRecvReply::NewCName(("cname1".to_string(), recv_ssrc)),
+                RtcpRecvReply::NewCName(("cname2".to_string(), recv2_ssrc))
+            ]
         );
         assert!(!session.is_point_to_point);
     }

@@ -7297,6 +7297,18 @@
                         "readable": true,
                         "type": "guint",
                         "writable": false
+                    },
+                    "timestamping-mode": {
+                        "blurb": "Govern how to pick presentation timestamps for packets",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "skew (2)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstRtpBin2TimestampingMode",
+                        "writable": true
                     }
                 },
                 "rank": "none"
@@ -8521,6 +8533,26 @@
                         "when": "last"
                     }
                 }
+            },
+            "GstRtpBin2TimestampingMode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Use arrival time as timestamp",
+                        "name": "arrival",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Use RTP timestamps as is",
+                        "name": "rtp",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Correct skew to synchronize sender and receiver clocks",
+                        "name": "skew",
+                        "value": "2"
+                    }
+                ]
             },
             "GstRtpGCCBwEEstimator": {
                 "kind": "enum",

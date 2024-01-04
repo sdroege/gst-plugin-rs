@@ -19,6 +19,7 @@ use super::session::{
     Session, RTCP_MIN_REPORT_INTERVAL,
 };
 use super::source::{ReceivedRb, SourceState};
+use super::sync;
 
 use crate::rtpbin2::RUNTIME;
 
@@ -69,6 +70,7 @@ struct Settings {
     min_rtcp_interval: Duration,
     profile: Profile,
     reduced_size_rtcp: bool,
+    timestamping_mode: sync::TimestampingMode,
 }
 
 impl Default for Settings {
@@ -78,6 +80,7 @@ impl Default for Settings {
             min_rtcp_interval: DEFAULT_MIN_RTCP_INTERVAL,
             profile: Profile::default(),
             reduced_size_rtcp: DEFAULT_REDUCED_SIZE_RTCP,
+            timestamping_mode: sync::TimestampingMode::default(),
         }
     }
 }
@@ -390,7 +393,9 @@ impl BinSessionInner {
             };
 
             let mut recv_flow_combiner = recv_flow_combiner.lock().unwrap();
-            let _combined_flow = recv_flow_combiner.update_pad_flow(&pad, pad.push(buffer));
+            let flow = pad.push(buffer);
+            gst::trace!(CAT, obj: pad, "Pushed buffer, flow ret {:?}", flow);
+            let _combined_flow = recv_flow_combiner.update_pad_flow(&pad, flow);
             // TODO: store flow, return only on session pads?
         })?;
 
@@ -496,6 +501,7 @@ struct State {
     rtcp_waker: Option<Waker>,
     max_session_id: usize,
     pads_session_id_map: HashMap<gst::Pad, usize>,
+    sync_context: Option<sync::Context>,
 }
 
 impl State {
@@ -854,11 +860,11 @@ impl RtpBin2 {
 
     fn rtp_recv_sink_chain(
         &self,
-        _pad: &gst::Pad,
+        pad: &gst::Pad,
         id: usize,
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap();
         let Some(session) = state.session_by_id(id) else {
             return Err(gst::FlowError::Error);
         };
@@ -869,10 +875,29 @@ impl RtpBin2 {
         //
         // Check if this makes sense or if this leads to issue with eg interleaved
         // TCP.
-        if buffer.dts().is_none() {
-            let buf_mut = buffer.make_mut();
-            buf_mut.set_dts(self.obj().current_running_time());
-        }
+        let arrival_time = match buffer.dts() {
+            Some(dts) => {
+                let session_inner = session.inner.lock().unwrap();
+                let segment = session_inner.rtp_recv_sink_segment.as_ref().unwrap();
+                // TODO: use running_time_full if we care to support that
+                match segment.to_running_time(dts) {
+                    Some(time) => time,
+                    None => {
+                        gst::error!(CAT, obj: pad, "out of segment DTS are not supported");
+                        return Err(gst::FlowError::Error);
+                    }
+                }
+            }
+            None => match self.obj().current_running_time() {
+                Some(time) => time,
+                None => {
+                    gst::error!(CAT, obj: pad, "Failed to get current time");
+                    return Err(gst::FlowError::Error);
+                }
+            },
+        };
+
+        gst::trace!(CAT, obj: pad, "using arrival time {}", arrival_time);
 
         let addr: Option<SocketAddr> =
             buffer
@@ -906,7 +931,45 @@ impl RtpBin2 {
         };
 
         let session = session.clone();
+
         let mut session_inner = session.inner.lock().unwrap();
+
+        let current_caps = session_inner.rtp_recv_sink_caps.clone();
+        let ssrc_map = session_inner
+            .caps_map
+            .entry(rtp.payload_type())
+            .or_default();
+        if ssrc_map.get(&rtp.ssrc()).is_none() {
+            if let Some(mut caps) =
+                current_caps.filter(|caps| Self::clock_rate_from_caps(caps).is_some())
+            {
+                state
+                    .sync_context
+                    .as_mut()
+                    .unwrap()
+                    .set_clock_rate(rtp.ssrc(), Self::clock_rate_from_caps(&caps).unwrap());
+                {
+                    // Ensure the caps we send out hold a payload field
+                    let caps = caps.make_mut();
+                    let s = caps.structure_mut(0).unwrap();
+                    s.set("payload", rtp.payload_type() as i32);
+                }
+                ssrc_map.insert(rtp.ssrc(), caps);
+            }
+        }
+
+        // TODO: Put NTP time as `gst::ReferenceTimeStampMeta` on the buffers if selected via property
+        let (pts, _ntp_time) = state.sync_context.as_mut().unwrap().calculate_pts(
+            rtp.ssrc(),
+            rtp.timestamp(),
+            arrival_time.nseconds(),
+        );
+        let segment = session_inner.rtp_recv_sink_segment.as_ref().unwrap();
+        let pts = segment
+            .position_from_running_time(gst::ClockTime::from_nseconds(pts))
+            .unwrap();
+        gst::debug!(CAT, "Calculated PTS: {}", pts);
+
         drop(state);
 
         // Start jitterbuffer task now if not started yet
@@ -922,6 +985,10 @@ impl RtpBin2 {
                     let pt = rtp.payload_type();
                     let ssrc = rtp.ssrc();
                     drop(mapped);
+                    {
+                        let buf_mut = buffer.make_mut();
+                        buf_mut.set_pts(pts);
+                    }
                     let (pad, new_pad) = session_inner.get_or_create_rtp_recv_src(self, pt, ssrc);
                     session_inner.recv_store.push(HeldRecvBuffer {
                         hold_id: Some(hold_id),
@@ -956,6 +1023,10 @@ impl RtpBin2 {
                     let pt = rtp.payload_type();
                     let ssrc = rtp.ssrc();
                     drop(mapped);
+                    {
+                        let buf_mut = buffer.make_mut();
+                        buf_mut.set_pts(pts);
+                    }
                     let (pad, new_pad) = session_inner.get_or_create_rtp_recv_src(self, pt, ssrc);
                     buffers_to_push.push(HeldRecvBuffer {
                         hold_id: None,
@@ -998,7 +1069,7 @@ impl RtpBin2 {
 
             match jitterbuffer_store.jitterbuffer.queue(
                 &rtp,
-                held.buffer.dts().unwrap().nseconds(),
+                held.buffer.pts().unwrap().nseconds(),
                 now,
             ) {
                 jitterbuffer::QueueResult::Queued(id) => {
@@ -1135,6 +1206,20 @@ impl RtpBin2 {
                     } else {
                         gst::debug!(CAT, imp: self, "Can't send force-keyunit event because of missing sinkpad");
                     }
+                }
+                RtcpRecvReply::NewCName((cname, ssrc)) => {
+                    let mut state = self.state.lock().unwrap();
+
+                    state.sync_context.as_mut().unwrap().associate(ssrc, &cname);
+                }
+                RtcpRecvReply::NewRtpNtp((ssrc, rtp, ntp)) => {
+                    let mut state = self.state.lock().unwrap();
+
+                    state
+                        .sync_context
+                        .as_mut()
+                        .unwrap()
+                        .add_sender_report(ssrc, rtp, ntp);
                 }
             }
         }
@@ -1304,6 +1389,20 @@ impl RtpBin2 {
         }
     }
 
+    fn clock_rate_from_caps(caps: &gst::CapsRef) -> Option<u32> {
+        let Some(s) = caps.structure(0) else {
+            return None;
+        };
+        let Some(clock_rate) = s.get::<i32>("clock-rate").ok() else {
+            return None;
+        };
+        if clock_rate > 0 {
+            Some(clock_rate as u32)
+        } else {
+            None
+        }
+    }
+
     fn pt_clock_rate_from_caps(caps: &gst::CapsRef) -> Option<(u8, u32)> {
         let Some(s) = caps.structure(0) else {
             return None;
@@ -1430,6 +1529,12 @@ impl ObjectImpl for RtpBin2 {
                     .default_value(DEFAULT_REDUCED_SIZE_RTCP)
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecEnum::builder::<sync::TimestampingMode>("timestamping-mode")
+                    .nick("Timestamping Mode")
+                    .blurb("Govern how to pick presentation timestamps for packets")
+                    .default_value(sync::TimestampingMode::default())
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -1465,6 +1570,12 @@ impl ObjectImpl for RtpBin2 {
                 let mut settings = self.settings.lock().unwrap();
                 settings.reduced_size_rtcp = value.get::<bool>().expect("Type checked upstream");
             }
+            "timestamping-mode" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.timestamping_mode = value
+                    .get::<sync::TimestampingMode>()
+                    .expect("Type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -1490,6 +1601,10 @@ impl ObjectImpl for RtpBin2 {
             "reduced-size-rtcp" => {
                 let settings = self.settings.lock().unwrap();
                 settings.reduced_size_rtcp.to_value()
+            }
+            "timestamping-mode" => {
+                let settings = self.settings.lock().unwrap();
+                settings.timestamping_mode.to_value()
             }
             _ => unimplemented!(),
         }
@@ -1576,7 +1691,6 @@ impl ElementImpl for RtpBin2 {
         name: Option<&str>,
         _caps: Option<&gst::Caps>, // XXX: do something with caps?
     ) -> Option<gst::Pad> {
-        let this = self.obj();
         let settings = self.settings.lock().unwrap().clone();
         let mut state = self.state.lock().unwrap();
         let max_session_id = state.max_session_id;
@@ -1599,7 +1713,12 @@ impl ElementImpl for RtpBin2 {
         match templ.name_template() {
             "rtp_send_sink_%u" => {
                 sess_parse(name, "rtp_send_sink_", max_session_id).and_then(|id| {
-                    let new_pad = move |session: &mut BinSessionInner| -> Option<(gst::Pad, Option<gst::Pad>, usize)> {
+                    let new_pad = move |session: &mut BinSessionInner| -> Option<(
+                        gst::Pad,
+                        Option<gst::Pad>,
+                        usize,
+                        Vec<gst::Event>,
+                    )> {
                         let sinkpad = gst::Pad::builder_from_template(templ)
                             .chain_function(move |_pad, parent, buffer| {
                                 RtpBin2::catch_panic_pad_function(
@@ -1609,28 +1728,36 @@ impl ElementImpl for RtpBin2 {
                                 )
                             })
                             .iterate_internal_links_function(|pad, parent| {
-                                RtpBin2::catch_panic_pad_function(parent, || gst::Iterator::from_vec(vec![]), |this| this.iterate_internal_links(pad))
+                                RtpBin2::catch_panic_pad_function(
+                                    parent,
+                                    || gst::Iterator::from_vec(vec![]),
+                                    |this| this.iterate_internal_links(pad),
+                                )
                             })
-                            .event_function(move |pad, parent, event|
-                                RtpBin2::catch_panic_pad_function(parent, || false, |this| this.rtp_send_sink_event(pad, event, id))
-                            )
+                            .event_function(move |pad, parent, event| {
+                                RtpBin2::catch_panic_pad_function(
+                                    parent,
+                                    || false,
+                                    |this| this.rtp_send_sink_event(pad, event, id),
+                                )
+                            })
                             .flags(gst::PadFlags::PROXY_CAPS)
                             .name(format!("rtp_send_sink_{}", id))
                             .build();
-                        sinkpad.set_active(true).unwrap();
-                        this.add_pad(&sinkpad).unwrap();
                         let src_templ = self.obj().pad_template("rtp_send_src_%u").unwrap();
                         let srcpad = gst::Pad::builder_from_template(&src_templ)
                             .iterate_internal_links_function(|pad, parent| {
-                                RtpBin2::catch_panic_pad_function(parent, || gst::Iterator::from_vec(vec![]), |this| this.iterate_internal_links(pad))
+                                RtpBin2::catch_panic_pad_function(
+                                    parent,
+                                    || gst::Iterator::from_vec(vec![]),
+                                    |this| this.iterate_internal_links(pad),
+                                )
                             })
                             .name(format!("rtp_send_src_{}", id))
                             .build();
-                        srcpad.set_active(true).unwrap();
-                        this.add_pad(&srcpad).unwrap();
                         session.rtp_send_sinkpad = Some(sinkpad.clone());
                         session.rtp_send_srcpad = Some(srcpad.clone());
-                        Some((sinkpad, Some(srcpad), id))
+                        Some((sinkpad, Some(srcpad), id, vec![]))
                     };
 
                     let session = state.session_by_id(id);
@@ -1653,7 +1780,12 @@ impl ElementImpl for RtpBin2 {
             }
             "rtp_recv_sink_%u" => {
                 sess_parse(name, "rtp_recv_sink_", max_session_id).and_then(|id| {
-                    let new_pad = move |session: &mut BinSessionInner| -> Option<(gst::Pad, Option<gst::Pad>, usize)> {
+                    let new_pad = move |session: &mut BinSessionInner| -> Option<(
+                        gst::Pad,
+                        Option<gst::Pad>,
+                        usize,
+                        Vec<gst::Event>,
+                    )> {
                         let sinkpad = gst::Pad::builder_from_template(templ)
                             .chain_function(move |pad, parent, buffer| {
                                 RtpBin2::catch_panic_pad_function(
@@ -1663,17 +1795,23 @@ impl ElementImpl for RtpBin2 {
                                 )
                             })
                             .iterate_internal_links_function(|pad, parent| {
-                                RtpBin2::catch_panic_pad_function(parent, || gst::Iterator::from_vec(vec![]), |this| this.iterate_internal_links(pad))
+                                RtpBin2::catch_panic_pad_function(
+                                    parent,
+                                    || gst::Iterator::from_vec(vec![]),
+                                    |this| this.iterate_internal_links(pad),
+                                )
                             })
-                            .event_function(move |pad, parent, event|
-                                RtpBin2::catch_panic_pad_function(parent, || false, |this| this.rtp_recv_sink_event(pad, event, id))
-                            )
+                            .event_function(move |pad, parent, event| {
+                                RtpBin2::catch_panic_pad_function(
+                                    parent,
+                                    || false,
+                                    |this| this.rtp_recv_sink_event(pad, event, id),
+                                )
+                            })
                             .name(format!("rtp_recv_sink_{}", id))
                             .build();
-                        sinkpad.set_active(true).unwrap();
-                        this.add_pad(&sinkpad).unwrap();
                         session.rtp_recv_sinkpad = Some(sinkpad.clone());
-                        Some((sinkpad, None, id))
+                        Some((sinkpad, None, id, vec![]))
                     };
 
                     let session = state.session_by_id(id);
@@ -1710,14 +1848,16 @@ impl ElementImpl for RtpBin2 {
                                     )
                                 })
                                 .iterate_internal_links_function(|pad, parent| {
-                                    RtpBin2::catch_panic_pad_function(parent, || gst::Iterator::from_vec(vec![]), |this| this.iterate_internal_links(pad))
+                                    RtpBin2::catch_panic_pad_function(
+                                        parent,
+                                        || gst::Iterator::from_vec(vec![]),
+                                        |this| this.iterate_internal_links(pad),
+                                    )
                                 })
                                 .name(format!("rtcp_recv_sink_{}", id))
                                 .build();
-                            sinkpad.set_active(true).unwrap();
-                            this.add_pad(&sinkpad).unwrap();
                             session.rtcp_recv_sinkpad = Some(sinkpad.clone());
-                            Some((sinkpad, None, id))
+                            Some((sinkpad, None, id, vec![]))
                         }
                     })
                 })
@@ -1731,10 +1871,13 @@ impl ElementImpl for RtpBin2 {
                         if session.rtcp_send_srcpad.is_some() {
                             None
                         } else {
-                            let this = self.obj();
                             let srcpad = gst::Pad::builder_from_template(templ)
                                 .iterate_internal_links_function(|pad, parent| {
-                                    RtpBin2::catch_panic_pad_function(parent, || gst::Iterator::from_vec(vec![]), |this| this.iterate_internal_links(pad))
+                                    RtpBin2::catch_panic_pad_function(
+                                        parent,
+                                        || gst::Iterator::from_vec(vec![]),
+                                        |this| this.iterate_internal_links(pad),
+                                    )
                                 })
                                 .name(format!("rtcp_send_src_{}", id))
                                 .build();
@@ -1749,27 +1892,34 @@ impl ElementImpl for RtpBin2 {
                             let segment = gst::FormattedSegment::<gst::ClockTime>::new();
                             let segment = gst::event::Segment::new(&segment);
 
-                            srcpad.set_active(true).unwrap();
-
-                            let _ = srcpad.store_sticky_event(&stream_start);
-                            let _ = srcpad.store_sticky_event(&caps);
-                            let _ = srcpad.store_sticky_event(&segment);
-
-                            this.add_pad(&srcpad).unwrap();
                             session.rtcp_send_srcpad = Some(srcpad.clone());
-                            Some((srcpad, None, id))
+                            Some((srcpad, None, id, vec![stream_start, caps, segment]))
                         }
                     })
                 })
             }
             _ => None,
         }
-        .map(|(pad, otherpad, id)| {
+        .map(|(pad, otherpad, id, sticky_events)| {
             state.max_session_id = (id + 1).max(state.max_session_id);
             state.pads_session_id_map.insert(pad.clone(), id);
-            if let Some(pad) = otherpad {
-                state.pads_session_id_map.insert(pad, id);
+            if let Some(ref pad) = otherpad {
+                state.pads_session_id_map.insert(pad.clone(), id);
             }
+
+            drop(state);
+
+            pad.set_active(true).unwrap();
+            for event in sticky_events {
+                let _ = pad.store_sticky_event(&event);
+            }
+            self.obj().add_pad(&pad).unwrap();
+
+            if let Some(pad) = otherpad {
+                pad.set_active(true).unwrap();
+                self.obj().add_pad(&pad).unwrap();
+            }
+
             pad
         })
     }
@@ -1838,20 +1988,28 @@ impl ElementImpl for RtpBin2 {
         self.parent_release_pad(pad)
     }
 
+    #[allow(clippy::single_match)]
     fn change_state(
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
+        match transition {
+            gst::StateChange::ReadyToPaused => {
+                let settings = self.settings.lock().unwrap();
+                let mut state = self.state.lock().unwrap();
+
+                state.sync_context = Some(sync::Context::new(settings.timestamping_mode));
+            }
+            _ => (),
+        }
+
         let mut success = self.parent_change_state(transition)?;
 
         match transition {
             gst::StateChange::ReadyToNull => {
                 self.stop_rtcp_task();
             }
-            gst::StateChange::ReadyToPaused => {
-                success = gst::StateChangeSuccess::NoPreroll;
-            }
-            gst::StateChange::PlayingToPaused => {
+            gst::StateChange::ReadyToPaused | gst::StateChange::PlayingToPaused => {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToReady => {
@@ -1879,6 +2037,7 @@ impl ElementImpl for RtpBin2 {
                 for pad in removed_pads.iter() {
                     state.pads_session_id_map.remove(pad);
                 }
+                state.sync_context = None;
                 drop(state);
 
                 for pad in removed_pads {
@@ -1891,6 +2050,7 @@ impl ElementImpl for RtpBin2 {
             }
             _ => (),
         }
+
         Ok(success)
     }
 }

@@ -19,6 +19,10 @@ impl NtpTime {
         Self((dur.as_secs_f64() * F32) as u64)
     }
 
+    pub fn as_duration(&self) -> Result<Duration, std::time::TryFromFloatSecsError> {
+        Duration::try_from_secs_f64(self.0 as f64 / F32)
+    }
+
     pub fn as_u32(self) -> u32 {
         ((self.0 >> 16) & 0xffffffff) as u32
     }
