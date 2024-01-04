@@ -11,7 +11,7 @@ rust-version = "1.70"
 [dependencies]
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-rav1e = { version = "0.6", default-features = false, features = ["threading"] }
+rav1e = { version = "0.7", default-features = false, features = ["threading"] }
 atomic_refcell = "0.1"
 
 [dev-dependencies]
