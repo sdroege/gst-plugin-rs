@@ -225,50 +225,12 @@ fn write_moov(v: &mut Vec<u8>, header: &super::Header) -> Result<(), Error> {
     Ok(())
 }
 
-fn stream_to_timescale(stream: &super::Stream) -> u32 {
-    if stream.trak_timescale > 0 {
-        stream.trak_timescale
-    } else {
-        let s = stream.caps.structure(0).unwrap();
-
-        if let Ok(fps) = s.get::<gst::Fraction>("framerate") {
-            if fps.numer() == 0 {
-                return 10_000;
-            }
-
-            if fps.denom() != 1 && fps.denom() != 1001 {
-                if let Some(fps) = (fps.denom() as u64)
-                    .nseconds()
-                    .mul_div_round(1_000_000_000, fps.numer() as u64)
-                    .and_then(gst_video::guess_framerate)
-                {
-                    return (fps.numer() as u32)
-                        .mul_div_round(100, fps.denom() as u32)
-                        .unwrap_or(10_000);
-                }
-            }
-
-            if fps.denom() == 1001 {
-                fps.numer() as u32
-            } else {
-                (fps.numer() as u32)
-                    .mul_div_round(100, fps.denom() as u32)
-                    .unwrap_or(10_000)
-            }
-        } else if let Ok(rate) = s.get::<i32>("rate") {
-            rate as u32
-        } else {
-            10_000
-        }
-    }
-}
-
 fn header_to_timescale(header: &super::Header) -> u32 {
     if header.movie_timescale > 0 {
         header.movie_timescale
     } else {
         // Use the reference track timescale
-        stream_to_timescale(&header.streams[0])
+        header.streams[0].timescale
     }
 }
 
@@ -352,7 +314,7 @@ fn write_trak(
     if !references.is_empty() {
         write_box(v, b"tref", |v| write_tref(v, header, references))?;
     }
-    write_box(v, b"edts", |v| write_edts(v, header, stream))?;
+    write_box(v, b"edts", |v| write_edts(v, stream))?;
 
     Ok(())
 }
@@ -480,7 +442,7 @@ fn write_mdhd(
     stream: &super::Stream,
     creation_time: u64,
 ) -> Result<(), Error> {
-    let timescale = stream_to_timescale(stream);
+    let timescale = stream.timescale;
 
     // Creation time
     v.extend(creation_time.to_be_bytes());
@@ -1454,7 +1416,7 @@ fn write_stts(
     _header: &super::Header,
     stream: &super::Stream,
 ) -> Result<(), Error> {
-    let timescale = stream_to_timescale(stream);
+    let timescale = stream.timescale;
 
     let entry_count_position = v.len();
     // Entry count, rewritten in the end
@@ -1508,7 +1470,7 @@ fn write_ctts(
     stream: &super::Stream,
     version: u8,
 ) -> Result<(), Error> {
-    let timescale = stream_to_timescale(stream);
+    let timescale = stream.timescale;
 
     let entry_count_position = v.len();
     // Entry count, rewritten in the end
@@ -1578,7 +1540,7 @@ fn write_cslg(
     _header: &super::Header,
     stream: &super::Stream,
 ) -> Result<(), Error> {
-    let timescale = stream_to_timescale(stream);
+    let timescale = stream.timescale;
 
     let (min_ctts, max_ctts) = stream
         .chunks
@@ -1794,82 +1756,31 @@ fn write_tref(
     Ok(())
 }
 
-fn write_edts(
-    v: &mut Vec<u8>,
-    header: &super::Header,
-    stream: &super::Stream,
-) -> Result<(), Error> {
-    write_full_box(v, b"elst", FULL_BOX_VERSION_1, 0, |v| {
-        write_elst(v, header, stream)
-    })?;
+fn write_edts(v: &mut Vec<u8>, stream: &super::Stream) -> Result<(), Error> {
+    write_full_box(v, b"elst", FULL_BOX_VERSION_1, 0, |v| write_elst(v, stream))?;
 
     Ok(())
 }
 
-fn write_elst(
-    v: &mut Vec<u8>,
-    header: &super::Header,
-    stream: &super::Stream,
-) -> Result<(), Error> {
-    // In movie header timescale
-    let timescale = header_to_timescale(header);
+fn write_elst(v: &mut Vec<u8>, stream: &super::Stream) -> Result<(), Error> {
+    // Entry count
+    v.extend((stream.elst_infos.len() as u32).to_be_bytes());
 
-    let min_earliest_pts = header.streams.iter().map(|s| s.earliest_pts).min().unwrap();
+    for elst_info in &stream.elst_infos {
+        v.extend(
+            elst_info
+                .duration
+                .expect("Should have been set by `get_elst_infos`")
+                .to_be_bytes(),
+        );
 
-    if min_earliest_pts != stream.earliest_pts {
-        let gap = (stream.earliest_pts - min_earliest_pts)
-            .nseconds()
-            .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
-            .context("too big gap")?;
+        // Media time
+        v.extend(elst_info.start.to_be_bytes());
 
-        if gap > 0 {
-            // Entry count
-            v.extend(2u32.to_be_bytes());
-
-            // First entry for the gap
-
-            // Edit duration
-            v.extend(gap.to_be_bytes());
-
-            // Media time
-            v.extend((-1i64).to_be_bytes());
-
-            // Media rate
-            v.extend(1u16.to_be_bytes());
-            v.extend(0u16.to_be_bytes());
-        } else {
-            // Entry count
-            v.extend(1u32.to_be_bytes());
-        }
-    } else {
-        // Entry count
-        v.extend(1u32.to_be_bytes());
+        // Media rate
+        v.extend(1u16.to_be_bytes());
+        v.extend(0u16.to_be_bytes());
     }
-
-    // Edit duration
-    let duration = (stream.end_pts - stream.earliest_pts)
-        .nseconds()
-        .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
-        .context("too big track duration")?;
-    v.extend(duration.to_be_bytes());
-
-    // Media time
-    if let Some(start_dts) = stream.start_dts {
-        let shift = (gst::Signed::Positive(stream.earliest_pts) - start_dts)
-            .nseconds()
-            .positive()
-            .unwrap_or(0)
-            .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
-            .context("too big track duration")?;
-
-        v.extend(shift.to_be_bytes());
-    } else {
-        v.extend(0u64.to_be_bytes());
-    }
-
-    // Media rate
-    v.extend(1u16.to_be_bytes());
-    v.extend(0u16.to_be_bytes());
 
     Ok(())
 }

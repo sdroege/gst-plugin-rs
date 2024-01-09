@@ -169,6 +169,12 @@ pub(crate) struct HeaderConfiguration {
     start_utc_time: Option<u64>,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct ElstInfo {
+    start: i64,
+    duration: Option<u64>,
+}
+
 #[derive(Debug)]
 pub(crate) struct HeaderStream {
     /// Caps of this stream
@@ -182,6 +188,9 @@ pub(crate) struct HeaderStream {
 
     // More data to be included in the fragmented stream header
     extra_header_data: Option<Vec<u8>>,
+
+    /// Edit list clipping information
+    elst_infos: Vec<ElstInfo>,
 }
 
 #[derive(Debug)]

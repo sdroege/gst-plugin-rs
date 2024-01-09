@@ -6,6 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use crate::fmp4mux::imp::CAT;
 use gst::prelude::*;
 
 use anyhow::{anyhow, bail, Context, Error};
@@ -555,6 +556,35 @@ struct TrackReference {
     track_ids: Vec<u32>,
 }
 
+fn write_edts(v: &mut Vec<u8>, stream: &super::HeaderStream) -> Result<(), Error> {
+    write_full_box(v, b"elst", FULL_BOX_VERSION_1, 0, |v| write_elst(v, stream))?;
+
+    Ok(())
+}
+
+fn write_elst(v: &mut Vec<u8>, stream: &super::HeaderStream) -> Result<(), Error> {
+    // Entry count
+    v.extend((stream.elst_infos.len() as u32).to_be_bytes());
+
+    for elst_info in &stream.elst_infos {
+        v.extend(
+            elst_info
+                .duration
+                .expect("Should have been set by `get_elst_infos`")
+                .to_be_bytes(),
+        );
+
+        // Media time
+        v.extend(elst_info.start.to_be_bytes());
+
+        // Media rate
+        v.extend(1u16.to_be_bytes());
+        v.extend(0u16.to_be_bytes());
+    }
+
+    Ok(())
+}
+
 fn write_trak(
     v: &mut Vec<u8>,
     cfg: &super::HeaderConfiguration,
@@ -571,10 +601,13 @@ fn write_trak(
         |v| write_tkhd(v, cfg, idx, stream, creation_time),
     )?;
 
-    // TODO: write edts if necessary: for audio tracks to remove initialization samples
     // TODO: write edts optionally for negative DTS instead of offsetting the DTS
-
     write_box(v, b"mdia", |v| write_mdia(v, cfg, stream, creation_time))?;
+    if !stream.elst_infos.is_empty() {
+        if let Err(e) = write_edts(v, stream) {
+            gst::warning!(CAT, "Failed to write edts: {e}");
+        }
+    }
 
     if !references.is_empty() {
         write_box(v, b"tref", |v| write_tref(v, cfg, references))?;

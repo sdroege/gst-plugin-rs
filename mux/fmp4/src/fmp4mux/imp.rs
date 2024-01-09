@@ -12,6 +12,7 @@ use gst::subclass::prelude::*;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
+use anyhow::Context;
 use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use std::mem;
@@ -90,7 +91,7 @@ fn utc_time_to_running_time(
         .and_then(|res| res.positive())
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+pub static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "fmp4mux",
         gst::DebugColorFlags::empty(),
@@ -234,6 +235,88 @@ struct Stream {
     running_time_utc_time_mapping: Option<(gst::Signed<gst::ClockTime>, gst::ClockTime)>,
 
     extra_header_data: Option<Vec<u8>>,
+
+    /// Earliest PTS of the whole stream
+    earliest_pts: Option<gst::ClockTime>,
+    /// Current end PTS of the whole stream
+    end_pts: Option<gst::ClockTime>,
+
+    /// Edit list entries for this stream.
+    elst_infos: Vec<super::ElstInfo>,
+}
+
+impl Stream {
+    fn get_elst_infos(&self) -> Result<Vec<super::ElstInfo>, anyhow::Error> {
+        let mut elst_infos = self.elst_infos.clone();
+        let timescale = self.timescale();
+        let earliest_pts = self.earliest_pts.unwrap_or(gst::ClockTime::ZERO);
+        let end_pts = self
+            .end_pts
+            .unwrap_or(gst::ClockTime::from_nseconds(u64::MAX - 1));
+
+        let mut iter = elst_infos.iter_mut().peekable();
+        while let Some(&mut ref mut elst_info) = iter.next() {
+            if elst_info.duration.unwrap_or(0) == 0 {
+                elst_info.duration = if let Some(next) = iter.peek_mut() {
+                    let duration = next.start - elst_info.start;
+                    if duration < 0 {
+                        anyhow::bail!("Invalid edit list entry, negative duration");
+                    }
+                    Some(duration as u64)
+                } else {
+                    Some(
+                        (end_pts.checked_sub(earliest_pts))
+                            .expect("stream end < stream start?")
+                            .nseconds()
+                            .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
+                            .context("too big track duration")?,
+                    )
+                }
+            }
+        }
+
+        Ok(elst_infos)
+    }
+
+    fn timescale(&self) -> u32 {
+        let trak_timescale = { self.sinkpad.imp().state.lock().unwrap().trak_timescale };
+
+        if trak_timescale > 0 {
+            return trak_timescale;
+        }
+
+        let s = self.caps.structure(0).unwrap();
+
+        if let Ok(fps) = s.get::<gst::Fraction>("framerate") {
+            if fps.numer() == 0 {
+                return 10_000;
+            }
+
+            if fps.denom() != 1 && fps.denom() != 1001 {
+                if let Some(fps) = (fps.denom() as u64)
+                    .nseconds()
+                    .mul_div_round(1_000_000_000, fps.numer() as u64)
+                    .and_then(gst_video::guess_framerate)
+                {
+                    return (fps.numer() as u32)
+                        .mul_div_round(100, fps.denom() as u32)
+                        .unwrap_or(10_000);
+                }
+            }
+
+            if fps.denom() == 1001 {
+                fps.numer() as u32
+            } else {
+                (fps.numer() as u32)
+                    .mul_div_round(100, fps.denom() as u32)
+                    .unwrap_or(10_000)
+            }
+        } else if let Ok(rate) = s.get::<i32>("rate") {
+            rate as u32
+        } else {
+            10_000
+        }
+    }
 }
 
 #[derive(Default)]
@@ -295,6 +378,68 @@ pub(crate) struct FMP4Mux {
 }
 
 impl FMP4Mux {
+    fn add_elst_info(
+        &self,
+        buffer: &PreQueuedBuffer,
+        stream: &mut Stream,
+    ) -> Result<(), anyhow::Error> {
+        if let Some(cmeta) = buffer.buffer.meta::<gst_audio::AudioClippingMeta>() {
+            let timescale = stream
+                .caps
+                .structure(0)
+                .unwrap()
+                .get::<i32>("rate")
+                .unwrap_or_else(|_| stream.timescale() as i32);
+
+            let gstclocktime_to_samples = move |v: gst::ClockTime| {
+                v.nseconds()
+                    .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
+                    .context("Invalid start in the AudioClipMeta")
+            };
+
+            let generic_to_samples = move |t| -> Result<Option<u64>, anyhow::Error> {
+                if let gst::GenericFormattedValue::Default(Some(v)) = t {
+                    let v = v.into();
+                    Ok(Some(v).filter(|x| x != &0u64))
+                } else if let gst::GenericFormattedValue::Time(Some(v)) = t {
+                    Ok(Some(gstclocktime_to_samples(v)?))
+                } else {
+                    Ok(None)
+                }
+            };
+
+            let start = generic_to_samples(cmeta.start())?;
+            let end = generic_to_samples(cmeta.end())?;
+            if end.is_none() && start.is_none() {
+                return Err(anyhow::anyhow!(
+                    "No start or end time in `default` format in the AudioClipingMeta"
+                ));
+            }
+
+            let start = if let Some(start) = generic_to_samples(cmeta.start())? {
+                start + gstclocktime_to_samples(buffer.pts)?
+            } else {
+                0
+            };
+            let duration = if let Some(e) = end {
+                Some(
+                    gstclocktime_to_samples(buffer.end_pts)?
+                        .checked_sub(e)
+                        .context("Invalid end in the AudioClipMeta")?,
+                )
+            } else {
+                None
+            };
+
+            stream.elst_infos.push(super::ElstInfo {
+                start: start as i64,
+                duration,
+            });
+        }
+
+        Ok(())
+    }
+
     /// Checks if a buffer is valid according to the stream configuration.
     fn check_buffer(buffer: &gst::BufferRef, stream: &Stream) -> Result<(), gst::FlowError> {
         let Stream {
@@ -399,6 +544,17 @@ impl FMP4Mux {
                 gst::warning!(CAT, obj = stream.sinkpad, "Negative PTSs are not supported");
                 gst::ClockTime::ZERO
             });
+
+        if stream
+            .earliest_pts
+            .map_or(true, |earliest_pts| earliest_pts > pts)
+        {
+            stream.end_pts = Some(pts);
+        }
+
+        if stream.end_pts.opt_lt(end_pts).unwrap_or(true) {
+            stream.end_pts = Some(end_pts);
+        }
 
         let (dts, end_dts) = if !stream.delta_frames.requires_dts() {
             (None, None)
@@ -665,7 +821,13 @@ impl FMP4Mux {
             assert!(stream.running_time_utc_time_mapping.is_some());
         }
 
-        stream.pre_queue.pop_front().unwrap()
+        let buffer = stream.pre_queue.pop_front().unwrap();
+
+        if let Err(err) = self.add_elst_info(&buffer, stream) {
+            gst::error!(CAT, "Failed to add elst info: {err:#}");
+        }
+
+        buffer
     }
 
     // Caps/tag changes are allowed only in case that the
@@ -2083,8 +2245,6 @@ impl FMP4Mux {
         );
 
         for (idx, stream) in state.streams.iter_mut().enumerate() {
-            let stream_settings = stream.sinkpad.imp().settings.lock().unwrap().clone();
-
             let gops = self.drain_buffers_one_stream(
                 settings,
                 stream,
@@ -2163,6 +2323,7 @@ impl FMP4Mux {
                 }
             }
 
+            let trak_timescale = stream.sinkpad.imp().state.lock().unwrap().trak_timescale;
             if gops.is_empty() {
                 gst::info!(CAT, obj = stream.sinkpad, "Draining no buffers",);
 
@@ -2171,7 +2332,7 @@ impl FMP4Mux {
                         caps: stream.caps.clone(),
                         start_time: None,
                         delta_frames: stream.delta_frames,
-                        trak_timescale: stream_settings.trak_timescale,
+                        trak_timescale,
                     },
                     VecDeque::new(),
                 ));
@@ -2222,7 +2383,7 @@ impl FMP4Mux {
                             caps: stream.caps.clone(),
                             start_time: None,
                             delta_frames: stream.delta_frames,
-                            trak_timescale: stream_settings.trak_timescale,
+                            trak_timescale,
                         },
                         VecDeque::new(),
                     ));
@@ -2270,7 +2431,7 @@ impl FMP4Mux {
                     caps: stream.caps.clone(),
                     start_time: Some(start_time),
                     delta_frames: stream.delta_frames,
-                    trak_timescale: stream_settings.trak_timescale,
+                    trak_timescale,
                 },
                 buffers,
             ));
@@ -2860,6 +3021,9 @@ impl FMP4Mux {
                 current_position: gst::ClockTime::ZERO,
                 running_time_utc_time_mapping: None,
                 extra_header_data: None,
+                earliest_pts: None,
+                end_pts: None,
+                elst_infos: Vec::new(),
             });
         }
 
@@ -2923,11 +3087,19 @@ impl FMP4Mux {
         let streams = state
             .streams
             .iter()
-            .map(|s| super::HeaderStream {
-                trak_timescale: s.sinkpad.imp().settings.lock().unwrap().trak_timescale,
-                delta_frames: s.delta_frames,
-                caps: s.caps.clone(),
-                extra_header_data: s.extra_header_data.clone(),
+            .map(|s| {
+                let trak_timescale = { s.sinkpad.imp().settings.lock().unwrap().trak_timescale };
+                super::HeaderStream {
+                    trak_timescale,
+                    delta_frames: s.delta_frames,
+                    caps: s.caps.clone(),
+                    extra_header_data: s.extra_header_data.clone(),
+                    elst_infos: s.get_elst_infos().unwrap_or_else(|e| {
+                        gst::error!(CAT, "Could not prepare edit lists: {e:?}");
+
+                        Vec::new()
+                    }),
+                }
             })
             .collect::<Vec<_>>();
 
@@ -3598,6 +3770,12 @@ impl AggregatorImpl for FMP4Mux {
     fn start(&self) -> Result<(), gst::ErrorMessage> {
         gst::trace!(CAT, imp = self, "Starting");
 
+        for pad in self.obj().sink_pads() {
+            let pad = pad.downcast_ref::<super::FMP4MuxPad>().unwrap().imp();
+
+            pad.state.lock().unwrap().trak_timescale = pad.settings.lock().unwrap().trak_timescale;
+        }
+
         self.parent_start()?;
 
         // For non-single-stream variants configure a default segment that allows for negative
@@ -4239,9 +4417,16 @@ struct PadSettings {
     trak_timescale: u32,
 }
 
+#[derive(Default, Clone)]
+struct PadState {
+    // the selected trak_timescale
+    trak_timescale: u32,
+}
+
 #[derive(Default)]
 pub(crate) struct FMP4MuxPad {
     settings: Mutex<PadSettings>,
+    state: Mutex<PadState>,
 }
 
 #[glib::object_subclass]

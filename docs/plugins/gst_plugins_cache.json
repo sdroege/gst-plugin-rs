@@ -2425,6 +2425,18 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "write-edts-mode": {
+                        "blurb": "Mode for writing EDTS, when in auto mode, edts written only for non-live streams.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "auto (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstFMP4MuxWriteEdtsMode",
+                        "writable": true
+                    },
                     "write-mehd": {
                         "blurb": "Write movie extends header box with the duration at the end of the stream (needs a header-update-mode enabled)",
                         "conditionally-available": false,
@@ -2516,6 +2528,26 @@
                         "writable": true
                     }
                 }
+            },
+            "GstFMP4MuxWriteEdtsMode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Auto",
+                        "name": "auto",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Always",
+                        "name": "always",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Never",
+                        "name": "never",
+                        "value": "2"
+                    }
+                ]
             }
         },
         "package": "gst-plugin-fmp4",

@@ -6,6 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use anyhow::{anyhow, Context};
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -131,6 +132,10 @@ struct Stream {
 
     /// Earliest PTS.
     earliest_pts: Option<gst::ClockTime>,
+
+    /// Edit list entries for this stream.
+    elst_infos: Vec<super::ElstInfo>,
+
     /// Current end PTS.
     end_pts: Option<gst::ClockTime>,
 
@@ -141,6 +146,122 @@ struct Stream {
 
     /// Orientation from tags
     orientation: Option<ImageOrientation>,
+}
+
+impl Stream {
+    fn get_elst_infos(
+        &self,
+        min_earliest_pts: gst::ClockTime,
+    ) -> Result<Vec<super::ElstInfo>, anyhow::Error> {
+        let mut elst_infos = self.elst_infos.clone();
+        let timescale = self.timescale();
+        let earliest_pts = self
+            .earliest_pts
+            .expect("Streams without earliest_pts should have been skipped");
+        let end_pts = self
+            .end_pts
+            .expect("Streams without end_pts should have been skipped");
+
+        // If no elst info were set, use the whole track
+        if self.elst_infos.is_empty() {
+            let start = if let Some(start_dts) = self.start_dts {
+                ((gst::Signed::Positive(earliest_pts) - start_dts)
+                    .nseconds()
+                    .positive()
+                    .unwrap_or(0)
+                    .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
+                    .context("too big track duration")?) as i64
+            } else {
+                0i64
+            };
+
+            elst_infos.push(super::ElstInfo {
+                start,
+                duration: Some(
+                    (end_pts - earliest_pts)
+                        .nseconds()
+                        .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
+                        .context("too big track duration")?,
+                ),
+            });
+        }
+
+        // Add a gap at the beginning if needed
+        if min_earliest_pts != earliest_pts {
+            let gap_duration = (earliest_pts - min_earliest_pts)
+                .nseconds()
+                .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
+                .context("too big gap")?;
+
+            if gap_duration > 0 {
+                elst_infos.insert(
+                    0,
+                    super::ElstInfo {
+                        start: -1,
+                        duration: Some(gap_duration),
+                    },
+                );
+            }
+        }
+
+        let mut iter = elst_infos.iter_mut().peekable();
+        while let Some(&mut ref mut elst_info) = iter.next() {
+            if elst_info.duration.unwrap_or(0u64) == 0u64 {
+                elst_info.duration = if let Some(next) = iter.peek_mut() {
+                    Some((next.start - elst_info.start) as u64)
+                } else {
+                    Some(
+                        (end_pts - earliest_pts)
+                            .nseconds()
+                            .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
+                            .context("too big track duration")?,
+                    )
+                }
+            }
+        }
+
+        Ok(elst_infos)
+    }
+
+    fn timescale(&self) -> u32 {
+        let trak_timescale = { self.sinkpad.imp().settings.lock().unwrap().trak_timescale };
+
+        if trak_timescale > 0 {
+            return trak_timescale;
+        }
+
+        let s = self.caps.structure(0).unwrap();
+
+        if let Ok(fps) = s.get::<gst::Fraction>("framerate") {
+            if fps.numer() == 0 {
+                return 10_000;
+            }
+
+            if fps.denom() != 1 && fps.denom() != 1001 {
+                if let Some(fps) = (fps.denom() as u64)
+                    .nseconds()
+                    .mul_div_round(1_000_000_000, fps.numer() as u64)
+                    .and_then(gst_video::guess_framerate)
+                {
+                    return (fps.numer() as u32)
+                        .mul_div_round(100, fps.denom() as u32)
+                        .unwrap_or(10_000);
+                }
+            }
+
+            if fps.denom() == 1001 {
+                fps.numer() as u32
+            } else {
+                (fps.numer() as u32)
+                    .mul_div_round(100, fps.denom() as u32)
+                    .unwrap_or(10_000)
+            }
+        } else if let Ok(rate) = s.get::<i32>("rate") {
+            rate as u32
+        } else {
+            10_000
+        }
+    }
 }
 
 #[derive(Default)]
@@ -196,6 +317,77 @@ impl MP4Mux {
             gst::error!(CAT, obj = sinkpad, "Intra-only stream with delta units");
             return Err(gst::FlowError::Error);
         }
+
+        Ok(())
+    }
+
+    fn add_elst_info(
+        &self,
+        buffer: &PendingBuffer,
+        stream: &mut Stream,
+    ) -> Result<(), anyhow::Error> {
+        let cmeta = if let Some(cmeta) = buffer.buffer.meta::<gst_audio::AudioClippingMeta>() {
+            cmeta
+        } else {
+            return Ok(());
+        };
+
+        let timescale = stream
+            .caps
+            .structure(0)
+            .unwrap()
+            .get::<i32>("rate")
+            .unwrap_or_else(|_| stream.timescale() as i32);
+
+        let gstclocktime_to_samples = move |v: gst::ClockTime| {
+            v.nseconds()
+                .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
+                .context("Invalid start in the AudioClipMeta")
+        };
+
+        let generic_to_samples = move |t| -> Result<Option<u64>, anyhow::Error> {
+            if let gst::GenericFormattedValue::Default(Some(v)) = t {
+                let v: u64 = v.into();
+                Ok(Some(v).filter(|x| x != &0u64))
+            } else if let gst::GenericFormattedValue::Time(Some(v)) = t {
+                Ok(Some(gstclocktime_to_samples(v)?))
+            } else {
+                Ok(None)
+            }
+        };
+
+        let start: Option<u64> = generic_to_samples(cmeta.start())?;
+        let end: Option<u64> = generic_to_samples(cmeta.end())?;
+
+        if end.is_none() && start.is_none() {
+            return Err(anyhow!(
+                "No start or end time in `default` format in the AudioClipingMeta"
+            ));
+        }
+
+        let start = if let Some(start) = generic_to_samples(cmeta.start())? {
+            start + gstclocktime_to_samples(buffer.pts)?
+        } else {
+            0
+        };
+        let duration = if let Some(e) = end {
+            Some(
+                gstclocktime_to_samples(buffer.pts)?
+                    + gstclocktime_to_samples(
+                        buffer
+                            .duration
+                            .context("No duration on buffer, we can't add edit list")?,
+                    )?
+                    - e,
+            )
+        } else {
+            None
+        };
+
+        stream.elst_infos.push(super::ElstInfo {
+            start: start as i64,
+            duration,
+        });
 
         Ok(())
     }
@@ -889,6 +1081,11 @@ impl MP4Mux {
 
             let duration = buffer.duration.unwrap();
             let composition_time_offset = buffer.composition_time_offset;
+
+            if let Err(err) = self.add_elst_info(&buffer, stream) {
+                gst::error!(CAT, "Failed to add elst info: {:#}", err);
+            }
+
             let mut buffer = buffer.buffer;
 
             stream.queued_chunk_time += duration;
@@ -1018,6 +1215,7 @@ impl MP4Mux {
                 queued_chunk_bytes: 0,
                 start_dts: None,
                 earliest_pts: None,
+                elst_infos: Default::default(),
                 end_pts: None,
                 running_time_utc_time_mapping: None,
                 extra_header_data: None,
@@ -1468,9 +1666,14 @@ impl AggregatorImpl for MP4Mux {
                 state.mdat_size
             );
 
+            let min_earliest_pts = state
+                .streams
+                .iter()
+                .filter_map(|s| s.earliest_pts)
+                .min()
+                .unwrap();
             let mut streams = Vec::with_capacity(state.streams.len());
             for stream in state.streams.drain(..) {
-                let pad_settings = stream.sinkpad.imp().settings.lock().unwrap().clone();
                 let (earliest_pts, end_pts) = match Option::zip(stream.earliest_pts, stream.end_pts)
                 {
                     Some(res) => res,
@@ -1480,10 +1683,14 @@ impl AggregatorImpl for MP4Mux {
                 streams.push(super::Stream {
                     caps: stream.caps.clone(),
                     delta_frames: stream.delta_frames,
-                    trak_timescale: pad_settings.trak_timescale,
-                    start_dts: stream.start_dts,
+                    timescale: stream.timescale(),
                     earliest_pts,
                     end_pts,
+                    elst_infos: stream.get_elst_infos(min_earliest_pts).unwrap_or_else(|e| {
+                        gst::error!(CAT, "Could not prepare edit lists: {e:?}");
+
+                        Vec::new()
+                    }),
                     chunks: stream.chunks,
                     extra_header_data: stream.extra_header_data.clone(),
                     orientation: stream.orientation,
