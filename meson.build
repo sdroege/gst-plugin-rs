@@ -118,6 +118,7 @@ plugins = {
   'spotify': {'library': 'libgstspotify'},
 
   'file': {'library': 'libgstrsfile'},
+  'originalbuffer': {'library': 'libgstoriginalbuffer'},
   # sodium can have an external dependency, see below
   'threadshare': {
     'library': 'libgstthreadshare',

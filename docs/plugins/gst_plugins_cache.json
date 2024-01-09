@@ -3709,6 +3709,68 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "originalbuffer": {
+        "description": "GStreamer Origin buffer meta Plugin",
+        "elements": {
+            "originalbufferrestore": {
+                "author": "Olivier Crête <olivier.crete@collabora.com>",
+                "description": "Restores a reference to the buffer in a meta",
+                "hierarchy": [
+                    "GstOriginalBufferRestore",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Generic",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "none"
+            },
+            "originalbuffersave": {
+                "author": "Olivier Crête <olivier.crete@collabora.com>",
+                "description": "Saves a reference to the buffer in a meta",
+                "hierarchy": [
+                    "GstOriginalBufferSave",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Generic",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstoriginalbuffer",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-originalbuffer",
+        "source": "gst-plugin-originalbuffer",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "raptorq": {
         "description": "GStreamer RaptorQ FEC Plugin",
         "elements": {

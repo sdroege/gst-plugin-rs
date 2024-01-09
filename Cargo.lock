@@ -2557,6 +2557,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "gst-plugin-originalbuffer"
+version = "0.13.0-alpha.1"
+dependencies = [
+ "atomic_refcell",
+ "glib",
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "gstreamer-video",
+ "once_cell",
+]
+
+[[package]]
 name = "gst-plugin-png"
 version = "0.13.0-alpha.1"
 dependencies = [
