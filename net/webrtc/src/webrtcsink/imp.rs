@@ -1484,33 +1484,11 @@ impl BaseWebRTCSink {
             return Ok(());
         }
 
-        let enabled_extensions: gst::Array = payloader.property("extensions");
-        let twcc = enabled_extensions
-            .iter()
-            .find(|value| {
-                let value = value.get::<gst_rtp::RTPHeaderExtension>().unwrap();
-
-                match value.uri() {
-                    Some(v) => v == RTP_TWCC_URI,
-                    None => false,
-                }
-            })
-            .map(|value| value.get::<gst_rtp::RTPHeaderExtension>().unwrap());
-
-        if let Some(ext) = twcc {
-            gst::debug!(CAT, obj: payloader, "TWCC extension is already mapped to id {} by application", ext.id());
+        let Some(twcc_id) = self.pick_twcc_extension_id(payloader, extension_configuration_type)
+        else {
             return Ok(());
-        }
-
-        let twcc_id = match extension_configuration_type {
-            ExtensionConfigurationType::Auto => utils::find_smallest_available_ext_id(
-                enabled_extensions
-                    .iter()
-                    .map(|value| value.get::<gst_rtp::RTPHeaderExtension>().unwrap().id()),
-            ),
-            ExtensionConfigurationType::Apply { twcc_id } => twcc_id,
-            ExtensionConfigurationType::Skip => unreachable!(),
         };
+
         gst::debug!(CAT, obj: payloader, "Mapping TWCC extension to ID {}", twcc_id);
 
         /* We only enforce TWCC in the offer caps, once a remote description
@@ -1527,6 +1505,70 @@ impl BaseWebRTCSink {
         }
 
         Ok(())
+    }
+
+    fn has_connected_payloader_setup_slots(&self) -> bool {
+        use glib::{signal, subclass};
+
+        let signal_id =
+            subclass::signal::SignalId::lookup("payloader-setup", BaseWebRTCSink::type_()).unwrap();
+
+        signal::signal_has_handler_pending(
+            self.obj().upcast_ref::<gst::Object>(),
+            signal_id,
+            None,
+            false,
+        )
+    }
+
+    /// Returns Some with an available ID for TWCC extension or None if it's already configured
+    fn pick_twcc_extension_id(
+        &self,
+        payloader: &gst::Element,
+        extension_configuration_type: ExtensionConfigurationType,
+    ) -> Option<u32> {
+        match extension_configuration_type {
+            ExtensionConfigurationType::Auto => {
+                // GstRTPBasePayload::extensions property is only available since GStreamer 1.24
+                if !payloader.has_property("extensions", Some(gst::Array::static_type()))
+                    && self.has_connected_payloader_setup_slots()
+                {
+                    gst::warning!(CAT, "'extensions' property is not available: TWCC extension ID will default to 1. \
+        Application code must ensure to pick non-conflicting IDs for any additionally configured extensions. \
+        Please consider updating GStreamer to 1.24.");
+                    return Some(1);
+                }
+
+                let enabled_extensions: gst::Array = payloader.property("extensions");
+
+                let twcc = enabled_extensions
+                    .iter()
+                    .find(|value| {
+                        let value = value.get::<gst_rtp::RTPHeaderExtension>().unwrap();
+
+                        match value.uri() {
+                            Some(v) => v == RTP_TWCC_URI,
+                            None => false,
+                        }
+                    })
+                    .map(|value| value.get::<gst_rtp::RTPHeaderExtension>().unwrap());
+
+                if let Some(ext) = twcc {
+                    gst::debug!(CAT, obj: payloader, "TWCC extension is already mapped to id {} by application", ext.id());
+                    return None;
+                }
+
+                let ext_id = utils::find_smallest_available_ext_id(
+                    enabled_extensions
+                        .iter()
+                        .map(|value| value.get::<gst_rtp::RTPHeaderExtension>().unwrap().id()),
+                );
+
+                Some(ext_id)
+            }
+            ExtensionConfigurationType::Apply { twcc_id } => Some(twcc_id),
+            ExtensionConfigurationType::Skip => unreachable!(),
+        }
     }
 
     fn configure_payloader(
