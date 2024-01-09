@@ -44,6 +44,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         FMP4Mux::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
         FMP4MuxPad::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
         HeaderUpdateMode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        WriteEdtsMode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }
     gst::Element::register(
         Some(plugin),
@@ -167,6 +168,9 @@ pub(crate) struct HeaderConfiguration {
     /// Start UTC time in ONVIF mode.
     /// Since Jan 1 1601 in 100ns units.
     start_utc_time: Option<u64>,
+
+    /// Whether to write edts box
+    write_edts: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -295,4 +299,13 @@ pub(crate) enum HeaderUpdateMode {
     None,
     Rewrite,
     Update,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, glib::Enum, Default)]
+#[enum_type(name = "GstFMP4MuxWriteEdtsMode")]
+pub(crate) enum WriteEdtsMode {
+    #[default]
+    Auto,
+    Always,
+    Never,
 }

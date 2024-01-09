@@ -26,6 +26,7 @@ use once_cell::sync::Lazy;
 use super::boxes;
 use super::Buffer;
 use super::DeltaFrames;
+use super::WriteEdtsMode;
 
 /// Offset for the segment in non-single-stream variants.
 const SEGMENT_OFFSET: gst::ClockTime = gst::ClockTime::from_seconds(60 * 60 * 1000);
@@ -106,6 +107,7 @@ const DEFAULT_WRITE_MFRA: bool = false;
 const DEFAULT_WRITE_MEHD: bool = false;
 const DEFAULT_INTERLEAVE_BYTES: Option<u64> = None;
 const DEFAULT_INTERLEAVE_TIME: Option<gst::ClockTime> = Some(gst::ClockTime::from_mseconds(250));
+const DEFAULT_WRITE_EDTS_MODE: WriteEdtsMode = WriteEdtsMode::Auto;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -118,6 +120,7 @@ struct Settings {
     interleave_time: Option<gst::ClockTime>,
     movie_timescale: u32,
     offset_to_zero: bool,
+    write_edts_mode: WriteEdtsMode,
 }
 
 impl Default for Settings {
@@ -132,6 +135,7 @@ impl Default for Settings {
             interleave_time: DEFAULT_INTERLEAVE_TIME,
             movie_timescale: 0,
             offset_to_zero: false,
+            write_edts_mode: DEFAULT_WRITE_EDTS_MODE,
         }
     }
 }
@@ -3103,6 +3107,12 @@ impl FMP4Mux {
             })
             .collect::<Vec<_>>();
 
+        let write_edts = match settings.write_edts_mode {
+            WriteEdtsMode::Auto => self.obj().latency().is_none(),
+            WriteEdtsMode::Always => true,
+            WriteEdtsMode::Never => false,
+        };
+
         let mut buffer = boxes::create_fmp4_header(super::HeaderConfiguration {
             variant,
             update: at_eos,
@@ -3112,6 +3122,7 @@ impl FMP4Mux {
             duration: if at_eos { duration } else { None },
             language_code: state.language_code,
             orientation: state.orientation,
+            write_edts,
             start_utc_time: if variant == super::Variant::ONVIF {
                 state
                     .earliest_pts
@@ -3335,6 +3346,11 @@ impl ObjectImpl for FMP4Mux {
                     .blurb("Timescale to use for the movie (units per second, 0 is automatic)")
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecEnum::builder_with_default("write-edts-mode", DEFAULT_WRITE_EDTS_MODE)
+                    .nick("Write edts mode")
+                    .blurb("Mode for writing EDTS, when in auto mode, edts written only for non-live streams.")
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -3404,7 +3420,10 @@ impl ObjectImpl for FMP4Mux {
                 let mut settings = self.settings.lock().unwrap();
                 settings.movie_timescale = value.get().expect("type checked upstream");
             }
-
+            "write-edts-mode" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.write_edts_mode = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -3449,6 +3468,10 @@ impl ObjectImpl for FMP4Mux {
             "movie-timescale" => {
                 let settings = self.settings.lock().unwrap();
                 settings.movie_timescale.to_value()
+            }
+            "write-edts-mode" => {
+                let settings = self.settings.lock().unwrap();
+                settings.write_edts_mode.to_value()
             }
 
             _ => unimplemented!(),

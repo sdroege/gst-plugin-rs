@@ -347,7 +347,7 @@ impl MP4Mux {
 
         let generic_to_samples = move |t| -> Result<Option<u64>, anyhow::Error> {
             if let gst::GenericFormattedValue::Default(Some(v)) = t {
-                let v: u64 = v.into();
+                let v = u64::from(v);
                 Ok(Some(v).filter(|x| x != &0u64))
             } else if let gst::GenericFormattedValue::Time(Some(v)) = t {
                 Ok(Some(gstclocktime_to_samples(v)?))
@@ -356,8 +356,8 @@ impl MP4Mux {
             }
         };
 
-        let start: Option<u64> = generic_to_samples(cmeta.start())?;
-        let end: Option<u64> = generic_to_samples(cmeta.end())?;
+        let start = generic_to_samples(cmeta.start())?;
+        let end = generic_to_samples(cmeta.end())?;
 
         if end.is_none() && start.is_none() {
             return Err(anyhow!(

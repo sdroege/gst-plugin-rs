@@ -603,7 +603,7 @@ fn write_trak(
 
     // TODO: write edts optionally for negative DTS instead of offsetting the DTS
     write_box(v, b"mdia", |v| write_mdia(v, cfg, stream, creation_time))?;
-    if !stream.elst_infos.is_empty() {
+    if !stream.elst_infos.is_empty() && cfg.write_edts {
         if let Err(e) = write_edts(v, stream) {
             gst::warning!(CAT, "Failed to write edts: {e}");
         }
