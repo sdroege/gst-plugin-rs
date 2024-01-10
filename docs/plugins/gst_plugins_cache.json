@@ -6321,6 +6321,97 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "rsrtsp": {
+        "description": "GStreamer RTSP Client Plugin",
+        "elements": {
+            "rtspsrc2": {
+                "author": "Nirbheek Chauhan <nirbheek centricular com>",
+                "description": "Receive audio or video from a network device via the Real Time Streaming Protocol (RTSP) (RFC 2326, 7826)",
+                "hierarchy": [
+                    "GstRtspSrc2",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy",
+                    "GstURIHandler"
+                ],
+                "klass": "Source/Network",
+                "pad-templates": {
+                    "stream_%%u": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    }
+                },
+                "properties": {
+                    "location": {
+                        "blurb": "RTSP server, credentials and media path, e.g. rtsp://user:p4ssw0rd@camera-5.local:8554/h264_1080p30",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "port-start": {
+                        "blurb": "Port number to start allocating client ports for receiving RTP and RTCP data, eg. 3000 (0 = automatic selection)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "protocols": {
+                        "blurb": "Allowed lower transport protocols, in order of preference",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "udp-mcast,udp,tcp",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "timeout": {
+                        "blurb": "Timeout for network activity, in nanoseconds",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "2000000000",
+                        "max": "18446744073709551614",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstrsrtsp",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-rtsp",
+        "source": "gst-plugin-rtsp",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "rstracers": {
         "description": "GStreamer Rust tracers plugin",
         "elements": {},

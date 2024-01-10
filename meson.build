@@ -66,7 +66,9 @@ deps = [
 ]
 
 webrtc_option = get_option('webrtc')
-rtp_option = get_option('rtp').enable_if(webrtc_option.enabled(), error_message: 'webrtc option is enabled')
+rtp_option = get_option('rtp').enable_if(webrtc_option.enabled(), error_message: 'webrtc option needs rtp')
+
+rtsp_option = get_option('rtsp')
 
 if get_option('threadshare').allowed() \
   or get_option('onvif').allowed() \
@@ -86,7 +88,7 @@ endif
 if get_option('gtk4').allowed()
   deps += [['gstreamer-gl-1.0', 'gst-plugins-base', 'gst_gl_dep', 'gstgl']]
 endif
-if get_option('threadshare').allowed()
+if get_option('threadshare').allowed() or get_option('rtsp').allowed()
   deps += [['gstreamer-net-1.0', 'gstreamer', 'gst_net_dep', 'gst_net']]
 endif
 
@@ -150,6 +152,7 @@ plugins = {
   },
   'raptorq': {'library': 'libgstraptorq'},
   'reqwest': {'library': 'libgstreqwest'},
+  'rtsp': {'library': 'libgstrsrtsp'},
   'rtp': {'library': 'libgstrsrtp'},
   'webrtchttp': {'library': 'libgstwebrtchttp'},
   'webrtc': {

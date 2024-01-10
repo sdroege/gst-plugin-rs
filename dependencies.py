@@ -29,6 +29,7 @@ RENAMES = {
     'rsfile': 'file',
     'rsflv': 'flavors',
     'rsrtp': 'rtp',
+    'rsrtsp': 'rtsp',
     'rswebp': 'webp',
     'rsonvif': 'onvif',
     'rstracers': 'tracers',
