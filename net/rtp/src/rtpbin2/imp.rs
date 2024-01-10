@@ -158,7 +158,7 @@ impl JitterBufferStream {
 }
 
 impl futures::stream::Stream for JitterBufferStream {
-    type Item = (gst::Buffer, mpsc::Sender<gst::Buffer>);
+    type Item = (JitterBufferItem, mpsc::Sender<JitterBufferItem>);
 
     fn poll_next(
         self: Pin<&mut Self>,
@@ -173,16 +173,19 @@ impl futures::stream::Stream for JitterBufferStream {
             match jitterbuffer_store.jitterbuffer.poll(now) {
                 jitterbuffer::PollResult::Forward { id, discont } => {
                     if let Some(ref tx) = pad.tx {
-                        let mut packet = jitterbuffer_store
+                        let mut item = jitterbuffer_store
                             .store
                             .remove(&id)
                             .unwrap_or_else(|| panic!("Buffer with id {id} not in store!"));
-                        if discont {
-                            gst::debug!(CAT, obj: pad.pad, "Forwarding discont buffer");
-                            let packet_mut = packet.make_mut();
-                            packet_mut.set_flags(gst::BufferFlags::DISCONT);
+
+                        if let JitterBufferItem::Packet(ref mut packet) = item {
+                            if discont {
+                                gst::debug!(CAT, obj: pad.pad, "Forwarding discont buffer");
+                                let packet_mut = packet.make_mut();
+                                packet_mut.set_flags(gst::BufferFlags::DISCONT);
+                            }
                         }
-                        return Poll::Ready(Some((packet, tx.clone())));
+                        return Poll::Ready(Some((item, tx.clone())));
                     }
                 }
                 jitterbuffer::PollResult::Timeout(timeout) => {
@@ -212,8 +215,18 @@ impl futures::stream::Stream for JitterBufferStream {
 }
 
 #[derive(Debug)]
+enum JitterBufferItem {
+    Packet(gst::Buffer),
+    Event(gst::Event),
+    Query(std::ptr::NonNull<gst::QueryRef>),
+}
+
+// SAFETY: Need to be able to pass *mut gst::QueryRef
+unsafe impl Send for JitterBufferItem {}
+
+#[derive(Debug)]
 struct JitterBufferStore {
-    store: BTreeMap<usize, gst::Buffer>,
+    store: BTreeMap<usize, JitterBufferItem>,
     jitterbuffer: JitterBuffer,
 }
 
@@ -222,7 +235,7 @@ struct RtpRecvSrcPad {
     pt: u8,
     ssrc: u32,
     pad: gst::Pad,
-    tx: Option<mpsc::Sender<gst::Buffer>>,
+    tx: Option<mpsc::Sender<JitterBufferItem>>,
     jitter_buffer_store: Arc<Mutex<JitterBufferStore>>,
 }
 
@@ -305,6 +318,9 @@ struct BinSessionInner {
     rtp_recv_sink_segment: Option<gst::FormattedSegment<gst::ClockTime>>,
     rtp_recv_sink_seqnum: Option<gst::Seqnum>,
 
+    // For replying to synchronized queries on the sink pad
+    query_tx: Arc<Mutex<Option<std::sync::mpsc::Sender<bool>>>>,
+
     caps_map: HashMap<u8, HashMap<u32, gst::Caps>>,
     recv_store: Vec<HeldRecvBuffer>,
     jitterbuffer_task: Option<JitterBufferTask>,
@@ -333,6 +349,8 @@ impl BinSessionInner {
             rtp_recv_sink_caps: None,
             rtp_recv_sink_segment: None,
             rtp_recv_sink_seqnum: None,
+
+            query_tx: Arc::new(Mutex::new(None)),
 
             caps_map: HashMap::default(),
             recv_store: vec![],
@@ -377,6 +395,7 @@ impl BinSessionInner {
         let pad_weak = pad.downgrade();
 
         let recv_flow_combiner = self.recv_flow_combiner.clone();
+        let query_tx = Arc::downgrade(&self.query_tx);
         // A task per received ssrc may be a bit excessive.
         // Other options are:
         // - Single task per received input stream rather than per output ssrc/pt
@@ -386,17 +405,33 @@ impl BinSessionInner {
                 return;
             };
 
-            let Some(buffer) = rx.blocking_recv() else {
+            let Some(item) = rx.blocking_recv() else {
                 gst::debug!(CAT, obj: pad, "Pad channel was closed, pausing");
                 let _ = pad.pause_task();
                 return;
             };
 
-            let mut recv_flow_combiner = recv_flow_combiner.lock().unwrap();
-            let flow = pad.push(buffer);
-            gst::trace!(CAT, obj: pad, "Pushed buffer, flow ret {:?}", flow);
-            let _combined_flow = recv_flow_combiner.update_pad_flow(&pad, flow);
-            // TODO: store flow, return only on session pads?
+            match item {
+                JitterBufferItem::Packet(buffer) => {
+                    let mut recv_flow_combiner = recv_flow_combiner.lock().unwrap();
+                    let flow = pad.push(buffer);
+                    gst::trace!(CAT, obj: pad, "Pushed buffer, flow ret {:?}", flow);
+                    let _combined_flow = recv_flow_combiner.update_pad_flow(&pad, flow);
+                    // TODO: store flow, return only on session pads?
+                }
+                JitterBufferItem::Event(event) => {
+                    let res = pad.push_event(event);
+                    gst::trace!(CAT, obj: pad, "Pushed serialized event, result: {}", res);
+                }
+                JitterBufferItem::Query(mut query) => {
+                    // This is safe because the thread holding the original reference is waiting
+                    // for us exclusively
+                    let res = pad.query(unsafe { query.as_mut() });
+                    if let Some(query_tx) = query_tx.upgrade() {
+                        let _ = query_tx.lock().unwrap().as_mut().unwrap().send(res);
+                    }
+                }
+            }
         })?;
 
         gst::debug!(CAT, obj: pad, "Task started");
@@ -791,8 +826,8 @@ impl RtpBin2 {
 
     async fn jitterbuffer_task(state: Arc<Mutex<BinSessionInner>>) {
         let mut stream = JitterBufferStream::new(state);
-        while let Some((buffer, tx)) = stream.next().await {
-            let _ = tx.send(buffer).await;
+        while let Some((item, tx)) = stream.next().await {
+            let _ = tx.send(item).await;
         }
     }
 
@@ -1067,7 +1102,7 @@ impl RtpBin2 {
             // is blocked
             let mut jitterbuffer_store = held.pad.jitter_buffer_store.lock().unwrap();
 
-            match jitterbuffer_store.jitterbuffer.queue(
+            match jitterbuffer_store.jitterbuffer.queue_packet(
                 &rtp,
                 held.buffer.pts().unwrap().nseconds(),
                 now,
@@ -1075,7 +1110,9 @@ impl RtpBin2 {
                 jitterbuffer::QueueResult::Queued(id) => {
                     drop(mapped);
 
-                    jitterbuffer_store.store.insert(id, held.buffer);
+                    jitterbuffer_store
+                        .store
+                        .insert(id, JitterBufferItem::Packet(held.buffer));
                 }
                 jitterbuffer::QueueResult::Late => {
                     gst::warning!(CAT, "Late buffer was dropped");
@@ -1287,6 +1324,115 @@ impl RtpBin2 {
         }
     }
 
+    pub fn rtp_recv_sink_query(
+        &self,
+        pad: &gst::Pad,
+        query: &mut gst::QueryRef,
+        id: usize,
+    ) -> bool {
+        gst::log!(CAT, obj: pad, "Handling query {query:?}");
+
+        if query.is_serialized() {
+            let state = self.state.lock().unwrap();
+            let mut ret = true;
+
+            if let Some(session) = state.session_by_id(id) {
+                let session = session.inner.lock().unwrap();
+
+                let (query_tx, query_rx) = std::sync::mpsc::channel();
+
+                assert!(session.query_tx.lock().unwrap().replace(query_tx).is_none());
+
+                let jb_stores: Vec<Arc<Mutex<JitterBufferStore>>> = session
+                    .rtp_recv_srcpads
+                    .iter()
+                    .filter(|r| state.pads_session_id_map.contains_key(&r.pad))
+                    .map(|p| p.jitter_buffer_store.clone())
+                    .collect();
+
+                drop(session);
+
+                let query = std::ptr::NonNull::from(query);
+
+                // The idea here is to reproduce the default behavior of GstPad, where
+                // queries will run sequentially on each internally linked source pad
+                // until one succeeds.
+                //
+                // We however jump through hoops here in order to keep the query
+                // reasonably synchronized with the data flow.
+                //
+                // While the GstPad behavior makes complete sense for allocation
+                // queries (can't have it succeed for two downstream branches as they
+                // need to modify the query), we could in the future decide to have
+                // the drain query run on all relevant source pads no matter what.
+                //
+                // Also note that if there were no internally linked pads, GstPad's
+                // behavior is to return TRUE, we do this here too.
+                for jb_store in jb_stores {
+                    let mut jitterbuffer_store = jb_store.lock().unwrap();
+
+                    let jitterbuffer::QueueResult::Queued(id) =
+                        jitterbuffer_store.jitterbuffer.queue_serialized_item()
+                    else {
+                        unreachable!()
+                    };
+
+                    jitterbuffer_store
+                        .store
+                        .insert(id, JitterBufferItem::Query(query));
+
+                    // Now block until the jitterbuffer has processed the query
+                    match query_rx.recv() {
+                        Ok(res) => {
+                            ret |= res;
+                            if ret {
+                                break;
+                            }
+                        }
+                        _ => {
+                            // The sender was closed because of a state change
+                            break;
+                        }
+                    }
+                }
+            }
+
+            ret
+        } else {
+            gst::Pad::query_default(pad, Some(pad), query)
+        }
+    }
+
+    // Serialized events received on our sink pads have to navigate
+    // through the relevant jitterbuffers in order to remain (reasonably)
+    // consistently ordered with the RTP packets once output on our source
+    // pads
+    fn rtp_recv_sink_queue_serialized_event(&self, id: usize, event: gst::Event) -> bool {
+        let state = self.state.lock().unwrap();
+        if let Some(session) = state.session_by_id(id) {
+            let session = session.inner.lock().unwrap();
+            for srcpad in session
+                .rtp_recv_srcpads
+                .iter()
+                .filter(|r| state.pads_session_id_map.contains_key(&r.pad))
+            {
+                let mut jitterbuffer_store = srcpad.jitter_buffer_store.lock().unwrap();
+
+                let jitterbuffer::QueueResult::Queued(id) =
+                    jitterbuffer_store.jitterbuffer.queue_serialized_item()
+                else {
+                    unreachable!()
+                };
+
+                jitterbuffer_store
+                    .store
+                    .insert(id, JitterBufferItem::Event(event.clone()));
+            }
+        }
+
+        true
+    }
+
     fn rtp_recv_sink_event(&self, pad: &gst::Pad, mut event: gst::Event, id: usize) -> bool {
         match event.view() {
             gst::EventView::StreamStart(stream_start) => {
@@ -1346,7 +1492,7 @@ impl RtpBin2 {
 
                 drop(state);
 
-                gst::Pad::event_default(pad, Some(&*self.obj()), event)
+                self.rtp_recv_sink_queue_serialized_event(id, event)
             }
             gst::EventView::Eos(_eos) => {
                 let now = Instant::now();
@@ -1385,7 +1531,13 @@ impl RtpBin2 {
                 // FIXME: may need to delay sending eos under some circumstances
                 true
             }
-            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
+            _ => {
+                if event.is_serialized() {
+                    self.rtp_recv_sink_queue_serialized_event(id, event)
+                } else {
+                    gst::Pad::event_default(pad, Some(&*self.obj()), event)
+                }
+            }
         }
     }
 
@@ -1808,6 +1960,13 @@ impl ElementImpl for RtpBin2 {
                                     |this| this.rtp_recv_sink_event(pad, event, id),
                                 )
                             })
+                            .query_function(move |pad, parent, query| {
+                                RtpBin2::catch_panic_pad_function(
+                                    parent,
+                                    || false,
+                                    |this| this.rtp_recv_sink_query(pad, query, id),
+                                )
+                            })
                             .name(format!("rtp_recv_sink_{}", id))
                             .build();
                         session.rtp_recv_sinkpad = Some(sinkpad.clone());
@@ -2028,6 +2187,7 @@ impl ElementImpl for RtpBin2 {
                     session.rtp_recv_sink_group_id = None;
 
                     session.caps_map.clear();
+                    session.query_tx.lock().unwrap().take();
 
                     if let Some(jitterbuffer_task) = session.jitterbuffer_task.take() {
                         jitterbuffer_task.abort_handle.abort();

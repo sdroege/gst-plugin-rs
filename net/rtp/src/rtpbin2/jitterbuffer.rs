@@ -65,7 +65,13 @@ struct Item {
 
 impl Ord for Item {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.seqnum.cmp(&other.seqnum)
+        self.seqnum
+            .cmp(&other.seqnum)
+            .then(match (self.pts, other.pts) {
+                (None, Some(_)) => Ordering::Greater,
+                (Some(_), None) => Ordering::Less,
+                _ => Ordering::Equal,
+            })
     }
 }
 
@@ -101,7 +107,21 @@ impl JitterBuffer {
         }
     }
 
-    pub fn queue(&mut self, rtp: &RtpPacket, mut pts: u64, now: Instant) -> QueueResult {
+    pub fn queue_serialized_item(&mut self) -> QueueResult {
+        let id = self.packet_counter;
+        self.packet_counter += 1;
+        let item = Item {
+            id,
+            pts: None,
+            seqnum: (*self.seqnums.last().unwrap_or(&0)),
+        };
+        self.items.insert(item);
+        trace!("Queued serialized item and assigned ID {id}");
+
+        QueueResult::Queued(id)
+    }
+
+    pub fn queue_packet(&mut self, rtp: &RtpPacket, mut pts: u64, now: Instant) -> QueueResult {
         // From this point on we always work with extended sequence numbers
         let seqnum = self.extended_seqnum.next(rtp.sequence_number());
 
@@ -257,7 +277,7 @@ mod tests {
 
         let now = Instant::now();
 
-        let QueueResult::Queued(id) = jb.queue(&packet, 0, now) else {
+        let QueueResult::Queued(id) = jb.queue_packet(&packet, 0, now) else {
             unreachable!()
         };
 
@@ -273,7 +293,7 @@ mod tests {
 
         let mut now = Instant::now();
 
-        let QueueResult::Queued(id) = jb.queue(&packet, 0, now) else {
+        let QueueResult::Queued(id) = jb.queue_packet(&packet, 0, now) else {
             unreachable!()
         };
 
@@ -304,13 +324,13 @@ mod tests {
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
 
-        let QueueResult::Queued(id_first) = jb.queue(&packet, 0, now) else {
+        let QueueResult::Queued(id_first) = jb.queue_packet(&packet, 0, now) else {
             unreachable!()
         };
 
         let rtp_data = generate_rtp_packet(0x12345678, 1, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        let QueueResult::Queued(id_second) = jb.queue(&packet, 0, now) else {
+        let QueueResult::Queued(id_second) = jb.queue_packet(&packet, 0, now) else {
             unreachable!()
         };
 
@@ -338,13 +358,13 @@ mod tests {
 
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        let QueueResult::Queued(id_first) = jb.queue(&packet, 0, now) else {
+        let QueueResult::Queued(id_first) = jb.queue_packet(&packet, 0, now) else {
             unreachable!()
         };
 
         let rtp_data = generate_rtp_packet(0x12345678, 2, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        let QueueResult::Queued(id_second) = jb.queue(&packet, 0, now) else {
+        let QueueResult::Queued(id_second) = jb.queue_packet(&packet, 0, now) else {
             unreachable!()
         };
 
@@ -372,7 +392,7 @@ mod tests {
 
         let rtp_data = generate_rtp_packet(0x12345678, 1, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        let QueueResult::Queued(id) = jb.queue(&packet, 0, now) else {
+        let QueueResult::Queued(id) = jb.queue_packet(&packet, 0, now) else {
             unreachable!()
         };
 
@@ -380,17 +400,17 @@ mod tests {
 
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        assert_eq!(jb.queue(&packet, 0, now), QueueResult::Late);
+        assert_eq!(jb.queue_packet(&packet, 0, now), QueueResult::Late);
 
         // Try and push a duplicate
         let rtp_data = generate_rtp_packet(0x12345678, 1, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        assert_eq!(jb.queue(&packet, 0, now), QueueResult::Duplicate);
+        assert_eq!(jb.queue_packet(&packet, 0, now), QueueResult::Duplicate);
 
         // We do accept future sequence numbers up to a distance of at least std::i16::MAX
         let rtp_data = generate_rtp_packet(0x12345678, std::i16::MAX as u16 + 1, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        let QueueResult::Queued(id) = jb.queue(&packet, 0, now) else {
+        let QueueResult::Queued(id) = jb.queue_packet(&packet, 0, now) else {
             unreachable!()
         };
 
@@ -399,7 +419,7 @@ mod tests {
         // But no further
         let rtp_data = generate_rtp_packet(0x12345678, 2, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        assert_eq!(jb.queue(&packet, 0, now), QueueResult::Late);
+        assert_eq!(jb.queue_packet(&packet, 0, now), QueueResult::Late);
     }
 
     #[test]
@@ -410,7 +430,7 @@ mod tests {
 
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        let QueueResult::Queued(id_first) = jb.queue(&packet, 0, now) else {
+        let QueueResult::Queued(id_first) = jb.queue_packet(&packet, 0, now) else {
             unreachable!()
         };
 
@@ -421,7 +441,7 @@ mod tests {
 
         let rtp_data = generate_rtp_packet(0x12345678, 1, 180000, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        let QueueResult::Queued(id_second) = jb.queue(&packet, 2_000_000_000, now) else {
+        let QueueResult::Queued(id_second) = jb.queue_packet(&packet, 2_000_000_000, now) else {
             unreachable!()
         };
 
@@ -479,13 +499,13 @@ mod tests {
 
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        jb.queue(&packet, 0, now);
+        jb.queue_packet(&packet, 0, now);
 
         assert_stats(&jb, 0, 0, 0, 0);
 
         // At this point pushing the same packet in before it gets output
         // results in an increment of the duplicate stat
-        jb.queue(&packet, 0, now);
+        jb.queue_packet(&packet, 0, now);
         assert_stats(&jb, 0, 0, 1, 0);
 
         now += Duration::from_secs(1);
@@ -495,14 +515,14 @@ mod tests {
 
         // Pushing it after the first version got output also results in
         // an increment of the duplicate stat
-        jb.queue(&packet, 0, now);
+        jb.queue_packet(&packet, 0, now);
         assert_stats(&jb, 0, 0, 2, 1);
 
         // Then after a packet with seqnum 2 goes through, the lost
         // stat must be incremented by 1 (as packet with seqnum 1 went missing)
         let rtp_data = generate_rtp_packet(0x12345678, 2, 9000, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        jb.queue(&packet, 100_000_000, now);
+        jb.queue_packet(&packet, 100_000_000, now);
 
         now += Duration::from_millis(100);
         let _ = jb.poll(now);
@@ -512,7 +532,7 @@ mod tests {
         // considered both late and lost
         let rtp_data = generate_rtp_packet(0x12345678, 1, 4500, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        jb.queue(&packet, 50_000_000, now);
+        jb.queue_packet(&packet, 50_000_000, now);
 
         let _ = jb.poll(now);
         assert_stats(&jb, 1, 1, 2, 2);
@@ -520,9 +540,66 @@ mod tests {
         // Finally if it arrives again it should be considered a duplicate,
         // and will have achieved the dubious honor of simultaneously being
         // lost, late and duplicated
-        jb.queue(&packet, 50_000_000, now);
+        jb.queue_packet(&packet, 50_000_000, now);
 
         let _ = jb.poll(now);
         assert_stats(&jb, 1, 1, 3, 2);
+    }
+
+    #[test]
+    fn serialized_items() {
+        let mut jb = JitterBuffer::new(Duration::from_secs(0));
+
+        let now = Instant::now();
+
+        let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
+        let packet = RtpPacket::parse(&rtp_data).unwrap();
+
+        let QueueResult::Queued(id_first_serialized_item) = jb.queue_serialized_item() else {
+            unreachable!()
+        };
+
+        let QueueResult::Queued(id_first) = jb.queue_packet(&packet, 0, now) else {
+            unreachable!()
+        };
+
+        let QueueResult::Queued(id_second_serialized_item) = jb.queue_serialized_item() else {
+            unreachable!()
+        };
+
+        let rtp_data = generate_rtp_packet(0x12345678, 1, 0, 4);
+        let packet = RtpPacket::parse(&rtp_data).unwrap();
+        let QueueResult::Queued(id_second) = jb.queue_packet(&packet, 0, now) else {
+            unreachable!()
+        };
+
+        assert_eq!(
+            jb.poll(now),
+            PollResult::Forward {
+                id: id_first_serialized_item,
+                discont: false
+            }
+        );
+        assert_eq!(
+            jb.poll(now),
+            PollResult::Forward {
+                id: id_first,
+                discont: true
+            }
+        );
+        assert_eq!(
+            jb.poll(now),
+            PollResult::Forward {
+                id: id_second_serialized_item,
+                discont: false
+            }
+        );
+        assert_eq!(
+            jb.poll(now),
+            PollResult::Forward {
+                id: id_second,
+                discont: false
+            }
+        );
     }
 }
