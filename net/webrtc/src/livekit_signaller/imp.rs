@@ -395,30 +395,14 @@ impl SignallableImpl for Signaller {
                             }
                         }
 
-                        // let layers = if mtype == proto::TrackType::Video {
-                        //     let ssrc = if let Some(attr) = media.attribute_val("ssrc") {
-                        //         let mut split = attr.split_whitespace();
-                        //         if let Some(ssrc_str) = split.next() {
-                        //             ssrc_str.parse().unwrap_or(0)
-                        //         } else {
-                        //             0
-                        //         }
-                        //     } else {
-                        //         0 as u32
-                        //     };
-
-                        //     gst::debug!(CAT, imp: imp, "Adding video track {mid} with ssrc {ssrc}");
-                        //     vec![ proto::VideoLayer {
-                        //         quality: proto::VideoQuality::High as i32,
-                        //         width: 1280,
-                        //         height: 720,
-                        //         bitrate: 5000,
-                        //         ssrc
-                        //     }]
-                        // } else {
-                        //     gst::debug!(CAT, imp: imp, "Adding audio track {mid}");
-                        //     Vec::new()
-                        // };
+                        let layers = if mtype == proto::TrackType::Video {
+                            vec![proto::VideoLayer {
+                                quality: proto::VideoQuality::High as i32,
+                                ..Default::default()
+                            }]
+                        } else {
+                            vec![]
+                        };
 
                         let req = proto::AddTrackRequest {
                             cid: trackid.to_string(),
@@ -428,7 +412,7 @@ impl SignallableImpl for Signaller {
                             source: msource,
                             disable_dtx: true,
                             disable_red,
-                            //    layers: layers,
+                            layers,
                             ..Default::default()
                         };
 
