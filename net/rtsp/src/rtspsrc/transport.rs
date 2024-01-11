@@ -22,7 +22,7 @@ pub enum RtspTransportInfo {
     },
     Udp {
         source: Option<String>,
-        server_port: (u16, Option<u16>),
+        server_port: Option<(u16, Option<u16>)>,
         client_port: Option<(u16, Option<u16>)>,
         sockets: Option<(UdpSocket, Option<UdpSocket>)>,
     },
@@ -73,15 +73,9 @@ impl TryFrom<&RtpTransport> for RtspTransportInfo {
                         ttl: t.params.ttl,
                     })
                 } else {
-                    let Some(server_port) = t.params.server_port else {
-                        return Err(RtspError::Fatal(format!(
-                            "Need server unicast UDP port(s): {:#?}",
-                            t.params,
-                        )));
-                    };
                     Ok(RtspTransportInfo::Udp {
                         source: t.params.source.clone(),
-                        server_port,
+                        server_port: t.params.server_port,
                         client_port: t.params.client_port,
                         sockets: None,
                     })

@@ -41,7 +41,6 @@ Roughly in order of priority:
   - Or TCP reconnection if UDP has not timed out
 * Parse SDP rtcp-fb attributes
 * Parse SDP ssrc attributes
-* Don't require Transport header in SETUP response, it is optional
 * Clock sync support, such as RFC7273
 * PAUSE support with VOD
 * Seeking support with VOD
