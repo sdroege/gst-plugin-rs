@@ -45,6 +45,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 
 use super::body::Body;
+use super::sdp;
 use super::transport::RtspTransportInfo;
 
 const DEFAULT_LOCATION: Option<Url> = None;
@@ -1360,99 +1361,6 @@ impl RtspTaskState {
         Ok(())
     }
 
-    fn parse_fmtp(fmtp: &str, s: &mut gst::structure::Structure) {
-        // Non-compliant RTSP servers will incorrectly set these here, ignore them
-        let ignore_fields = [
-            "media",
-            "payload",
-            "clock-rate",
-            "encoding-name",
-            "encoding-params",
-        ];
-        let encoding_name = s.get::<String>("encoding-name").unwrap();
-        let Some((_, fmtp)) = fmtp.split_once(' ') else {
-            gst::warning!(CAT, "Could not parse fmtp: {fmtp}");
-            return;
-        };
-        let iter = fmtp.split(';').map_while(|x| x.split_once('='));
-        for (k, v) in iter {
-            let k = k.trim().to_ascii_lowercase();
-            if ignore_fields.contains(&k.as_str()) {
-                continue;
-            }
-            if encoding_name == "H264" && k == "profile-level-id" {
-                let profile_idc = u8::from_str_radix(&v[0..2], 16);
-                let csf_idc = u8::from_str_radix(&v[2..4], 16);
-                let level_idc = u8::from_str_radix(&v[4..6], 16);
-                if let (Ok(p), Ok(c), Ok(l)) = (profile_idc, csf_idc, level_idc) {
-                    let sps = &[p, c, l];
-                    let profile = gst_pbutils::codec_utils_h264_get_profile(sps);
-                    let level = gst_pbutils::codec_utils_h264_get_level(sps);
-                    if let (Ok(profile), Ok(level)) = (profile, level) {
-                        s.set("profile", profile);
-                        s.set("level", level);
-                        continue;
-                    }
-                }
-                gst::warning!(CAT, "Failed to parse profile-level-id {v}, ignoring...");
-                continue;
-            }
-            s.set(k, v);
-        }
-    }
-
-    fn parse_rtpmap(rtpmap: &str, s: &mut gst::structure::Structure) -> Result<(), RtspError> {
-        let Some((_, rtpmap)) = rtpmap.split_once(' ') else {
-            return Err(RtspError::InvalidMessage(
-                "Could not parse rtpmap: {rtpmap}",
-            ));
-        };
-
-        let mut iter = rtpmap.split('/');
-        let Some(encoding_name) = iter.next() else {
-            return Err(RtspError::InvalidMessage(
-                "Could not parse encoding-name from rtpmap: {rtpmap}",
-            ));
-        };
-        s.set("encoding-name", encoding_name);
-
-        let Some(v) = iter.next() else {
-            return Err(RtspError::InvalidMessage(
-                "Could not parse clock-rate from rtpmap: {rtpmap}",
-            ));
-        };
-
-        let Ok(clock_rate) = v.parse::<i32>() else {
-            return Err(RtspError::InvalidMessage(
-                "Could not parse clock-rate from rtpmap: {rtpmap}",
-            ));
-        };
-        s.set("clock-rate", clock_rate);
-
-        if let Some(v) = iter.next() {
-            s.set("encoding-params", v);
-        }
-
-        debug_assert!(iter.next().is_none());
-
-        Ok(())
-    }
-
-    // https://datatracker.ietf.org/doc/html/rfc2326#appendix-C.1.1
-    fn parse_control_path(path: &str, base: &Url) -> Option<Url> {
-        match Url::parse(path) {
-            Ok(v) => Some(v),
-            Err(url::ParseError::RelativeUrlWithoutBase) => {
-                if path == "*" {
-                    Some(base.clone())
-                } else {
-                    base.join(path).ok()
-                }
-            }
-            Err(_) => None,
-        }
-    }
-
     fn parse_setup_transports(
         transports: &Transports,
         s: &mut gst::Structure,
@@ -1518,9 +1426,10 @@ impl RtspTaskState {
             // No attribute and no value have the same meaning for us
             .ok()
             .flatten()
-            .and_then(|v| Self::parse_control_path(v, &base));
+            .and_then(|v| sdp::parse_control_path(v, &base));
         let mut b = gst::Structure::builder("application/x-rtp");
 
+        // TODO: parse range for VOD
         let skip_attrs = ["control", "range"];
         for sdp_types::Attribute { attribute, value } in &sdp.attributes {
             if skip_attrs.contains(&attribute.as_str()) {
@@ -1528,6 +1437,8 @@ impl RtspTaskState {
             }
             b = b.field(format!("a-{attribute}"), value);
         }
+        // TODO: parse global extmap
+
         let message_structure = b.build();
 
         let conn_source = sdp
@@ -1539,7 +1450,6 @@ impl RtspTaskState {
         let mut port_next = port_start;
         let mut stream_num = 0;
         let mut setup_params: Vec<RtspSetupParams> = Vec::new();
-        let skip_attrs = ["control", "rtpmap", "fmtp"];
         for m in &sdp.medias {
             if !["audio", "video"].contains(&m.media.as_str()) {
                 gst::info!(CAT, "Ignoring unsupported media {}", m.media);
@@ -1550,7 +1460,7 @@ impl RtspTaskState {
                 // No attribute and no value have the same meaning for us
                 .ok()
                 .flatten()
-                .and_then(|v| Self::parse_control_path(v, &base));
+                .and_then(|v| sdp::parse_control_path(v, &base));
             let Some(control_url) = media_control.as_ref().or(self.aggregate_control.as_ref())
             else {
                 gst::warning!(
@@ -1563,87 +1473,31 @@ impl RtspTaskState {
             };
 
             // RTP caps
-            // FIXME: move SDP -> Caps parsing to a separate file
-            debug_assert_eq!(m.port, 0); // TCP
-            let Ok(pt) = m.fmt.parse::<i32>() else {
+            let Ok(pt) = m.fmt.parse::<u8>() else {
                 gst::error!(CAT, "Could not parse pt: {}, ignoring media", m.fmt);
                 continue;
             };
 
             let mut s = message_structure.clone();
-            s.set("media", &m.media);
-            s.set("payload", pt);
+            let media = m.media.to_ascii_lowercase();
+            s.set("media", &media);
+            s.set("payload", pt as i32);
 
-            if let Ok(Some(rtpmap)) = m.get_first_attribute_value("rtpmap") {
-                Self::parse_rtpmap(rtpmap, &mut s)?;
-            } else {
-                gst::warning!(CAT, "No rtpmap for {} {}, skipping", m.media, m.fmt);
+            if let Err(err) = sdp::parse_media_attributes(&m.attributes, pt, &media, &mut s) {
+                gst::warning!(
+                    CAT,
+                    "Skipping media {} {}, no rtpmap: {err:?}",
+                    m.media,
+                    m.fmt
+                );
                 continue;
-            }
-
-            if let Ok(Some(fmtp)) = m.get_first_attribute_value("fmtp") {
-                Self::parse_fmtp(fmtp, &mut s);
-            }
-
-            for sdp_types::Attribute { attribute, value } in &m.attributes {
-                if skip_attrs.contains(&attribute.as_str()) {
-                    continue;
-                }
-                // https://github.com/sdroege/sdp-types/issues/17
-                if attribute == "ssrc" {
-                    continue;
-                }
-                s.set(format!("a-{attribute}"), value);
-            }
-
-            // TODO: rtcp-fb: fields
-
-            if s.get_optional("encoding-name") == Ok(Some("H264")) {
-                if s.get_optional("level-asymmetry-allowed") != Ok(Some("0"))
-                    && s.has_field("level")
-                {
-                    s.remove_field("level");
-                }
-                if s.has_field("level-asymmetry-allowed") {
-                    s.remove_field("level-asymmetry-allowed");
-                };
             }
 
             // SETUP
             let mut rtp_socket: Option<UdpSocket> = None;
             let mut rtcp_socket: Option<UdpSocket> = None;
             let mut transports = Vec::new();
-            let mut is_ipv4 = true;
-            let mut conn_protocols = BTreeSet::new();
-            for conn in &m.connections {
-                if conn.nettype != "IN" {
-                    continue;
-                }
-                // XXX: For now, assume that all connections use the same addrtype
-                match conn.addrtype.as_str() {
-                    "IP4" => is_ipv4 = true,
-                    "IP6" => is_ipv4 = false,
-                    _ => continue,
-                };
-                // Strip subnet mask, if any
-                let addr = if let Some((first, _)) = conn.connection_address.split_once('/') {
-                    first
-                } else {
-                    conn.connection_address.as_str()
-                };
-                let Ok(addr) = addr.parse::<IpAddr>() else {
-                    continue;
-                };
-                // If this is an instance of gst-rtsp-server that only supports
-                // udp-multicast, it will put the multicast address in the media
-                // connections field.
-                if addr.is_multicast() {
-                    conn_protocols.insert(RtspProtocol::UdpMulticast);
-                } else {
-                    conn_protocols.insert(RtspProtocol::Tcp);
-                    conn_protocols.insert(RtspProtocol::Udp);
-                }
-            }
+            let (conn_protocols, is_ipv4) = sdp::parse_connections(&m.connections);
 
             let protocols = if !conn_protocols.is_empty() {
                 let p = protocols.iter().cloned().collect::<BTreeSet<_>>();
@@ -2007,7 +1861,7 @@ async fn udp_rtp_task(
     // We would not be connected if the server didn't give us a Transport header or its Transport
     // header didn't specify the server port, so we don't know the sender port from which we will
     // get data till we get the first packet here.
-    if !socket.peer_addr().is_ok() {
+    if socket.peer_addr().is_err() {
         let ret = match time::timeout(t, socket.peek_sender()).await {
             Ok(Ok(addr)) => {
                 let _ = socket.connect(addr).await;
@@ -2035,10 +1889,10 @@ async fn udp_rtp_task(
     pool.set_active(true).unwrap();
     let error = loop {
         let Ok(buffer) = pool.acquire_buffer(None) else {
-            break format!("Failed to acquire buffer");
+            break "Failed to acquire buffer".to_string();
         };
         let Ok(mut map) = buffer.into_mapped_buffer_writable() else {
-            break format!("Failed to map buffer writable");
+            break "Failed to map buffer writable".to_string();
         };
         match time::timeout(t, socket.recv(map.as_mut_slice())).await {
             Ok(Ok(len)) => {

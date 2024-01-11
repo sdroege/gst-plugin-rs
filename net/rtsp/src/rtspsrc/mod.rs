@@ -13,6 +13,7 @@ use gst::prelude::*;
 
 mod body;
 mod imp;
+mod sdp;
 mod tcp_message;
 mod transport;
 

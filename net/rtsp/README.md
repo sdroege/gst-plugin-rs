@@ -38,8 +38,13 @@ Roughly in order of priority:
 * `GET_PARAMETER` / `SET_PARAMETER`
 * Make TCP connection optional when using UDP transport
   - Or TCP reconnection if UDP has not timed out
-* Parse SDP rtcp-fb attributes
-* Parse SDP ssrc attributes
+* Parse more SDP attributes
+  - extmap
+  - key-mgmt
+  - rid
+  - rtcp-fb
+  - source-filter
+  - ssrc
 * Clock sync support, such as RFC7273
 * PAUSE support with VOD
 * Seeking support with VOD
@@ -60,7 +65,6 @@ yet:
 
 ## Maintenance and future cleanup
 
-* Refactor SDP → Caps parsing into a module
 * Test with market RTSP cameras
   - Currently, only live555 and gst-rtsp-server have been tested
 * Add tokio-console and tokio tracing support
