@@ -30,7 +30,6 @@ Roughly in order of priority:
 * Credentials support
 * TLS/TCP support
 * NAT hole punching
-* Allocate a buffer pool for receiving + pushing UDP packets
 * Allow ignoring specific streams (SDP medias)
   - Currently all available source pads must be linked
 * SRTP support

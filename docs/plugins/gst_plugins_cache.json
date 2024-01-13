@@ -6386,6 +6386,20 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "receive-mtu": {
+                        "blurb": "Initial size of buffers to allocate in the buffer pool, will be increased if too small",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1508",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
                     "timeout": {
                         "blurb": "Timeout for network activity, in nanoseconds",
                         "conditionally-available": false,
