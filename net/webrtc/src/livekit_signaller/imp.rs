@@ -100,8 +100,8 @@ impl Signaller {
                     signal_client::SignalEvent::Message(signal) => {
                         self.on_signal_event(*signal).await;
                     }
-                    signal_client::SignalEvent::Close => {
-                        gst::debug!(CAT, imp: self, "Close");
+                    signal_client::SignalEvent::Close(reason) => {
+                        gst::debug!(CAT, imp: self, "Close: {reason}");
                         self.raise_error("Server disconnected".to_string());
                         break;
                     }
