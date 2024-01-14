@@ -71,11 +71,6 @@ version = "0.9"
 name = "hmac"
 version = "0.11"
 
-# ignore duplicated spin dependency because various crates depend on an old version
-[[bans.skip]]
-name = "spin"
-version = "0.5"
-
 # cookie_store depends on older idna
 # https://github.com/pfernie/cookie_store/commit/b9c710f45550c5c8997f18a83e6fcc5998cf1726
 [[bans.skip]]
@@ -133,24 +128,15 @@ version = "1.0"
 name = "hashbrown"
 version = "0.12"
 
-# av1-grain depends on an old version of itertools
-# https://github.com/rust-av/av1-grain/pull/12
+# various livekit dependencies depend on an old version of itertools
 [[bans.skip]]
 name = "itertools"
-version = "0.10"
+version = "0.11"
 
 # matchers depends on an old version of regex-automata
 [[bans.skip]]
 name = "regex-automata"
 version = "0.1"
-
-# aws-config and jsonwebtoken depend on an old version of ring
-[[bans.skip]]
-name = "ring"
-version = "0.16"
-[[bans.skip]]
-name = "untrusted"
-version = "0.7"
 
 # proc-macro-crate depends on an older version of toml_edit
 # https://github.com/bkchr/proc-macro-crate/pull/41
