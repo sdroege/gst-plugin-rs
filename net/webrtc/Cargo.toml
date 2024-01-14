@@ -51,8 +51,8 @@ reqwest = { version = "0.11", features = ["default-tls"] }
 parse_link_header = {version = "0.3", features = ["url"]}
 async-recursion = "1.0.0"
 
-livekit-protocol = { version = "0.2" }
-livekit-api = { version = "0.2", default-features = false, features = ["signal-client", "access-token", "native-tls"] }
+livekit-protocol = { version = "0.3" }
+livekit-api = { version = "0.3", default-features = false, features = ["signal-client", "access-token", "native-tls"] }
 
 [dev-dependencies]
 tracing = { version = "0.1", features = ["log"] }
