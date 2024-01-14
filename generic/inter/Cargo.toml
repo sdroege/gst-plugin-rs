@@ -21,7 +21,7 @@ gst-check = { package = "gstreamer-check", git="https://gitlab.freedesktop.org/g
 futures = "0.3"
 tokio = { version = "1", features = ["fs", "macros", "rt-multi-thread", "time"] }
 tokio-stream = "0.1.11"
-serial_test = "2"
+serial_test = "3"
 
 [lib]
 name = "gstrsinter"
