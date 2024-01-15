@@ -39,13 +39,16 @@ pub struct JitterBuffer {
     extended_seqnum: ExtendedSeqnum,
     last_input_ts: Option<u64>,
     stats: Stats,
+    flushing: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum PollResult {
     Forward { id: usize, discont: bool },
+    Drop(usize),
     Timeout(Instant),
     Empty,
+    Flushing,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -53,6 +56,7 @@ pub enum QueueResult {
     Queued(usize),
     Late,
     Duplicate,
+    Flushing,
 }
 
 #[derive(Eq, Debug)]
@@ -104,6 +108,7 @@ impl JitterBuffer {
                 num_duplicates: 0,
                 num_pushed: 0,
             },
+            flushing: true,
         }
     }
 
@@ -121,7 +126,17 @@ impl JitterBuffer {
         QueueResult::Queued(id)
     }
 
+    pub fn set_flushing(&mut self, flushing: bool) {
+        trace!("Flush changed from {} to {flushing}", self.flushing);
+        self.flushing = flushing;
+        self.last_output_seqnum = None;
+    }
+
     pub fn queue_packet(&mut self, rtp: &RtpPacket, mut pts: u64, now: Instant) -> QueueResult {
+        if self.flushing {
+            return QueueResult::Flushing;
+        }
+
         // From this point on we always work with extended sequence numbers
         let seqnum = self.extended_seqnum.next(rtp.sequence_number());
 
@@ -185,6 +200,14 @@ impl JitterBuffer {
     }
 
     pub fn poll(&mut self, now: Instant) -> PollResult {
+        if self.flushing {
+            if let Some(item) = self.items.pop_first() {
+                return PollResult::Drop(item.id);
+            } else {
+                return PollResult::Flushing;
+            }
+        }
+
         trace!("Polling at {:?}", now);
 
         let Some((base_instant, base_ts)) = self.base_times else {
@@ -262,6 +285,7 @@ mod tests {
     #[test]
     fn empty() {
         let mut jb = JitterBuffer::new(Duration::from_secs(1));
+        jb.set_flushing(false);
 
         let now = Instant::now();
 
@@ -271,6 +295,7 @@ mod tests {
     #[test]
     fn receive_one_packet_no_latency() {
         let mut jb = JitterBuffer::new(Duration::from_secs(0));
+        jb.set_flushing(false);
 
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
@@ -287,6 +312,7 @@ mod tests {
     #[test]
     fn receive_one_packet_with_latency() {
         let mut jb = JitterBuffer::new(Duration::from_secs(1));
+        jb.set_flushing(false);
 
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
@@ -318,6 +344,7 @@ mod tests {
     #[test]
     fn ordered_packets_no_latency() {
         let mut jb = JitterBuffer::new(Duration::from_secs(0));
+        jb.set_flushing(false);
 
         let now = Instant::now();
 
@@ -353,6 +380,7 @@ mod tests {
     #[test]
     fn ordered_packets_no_latency_with_gap() {
         let mut jb = JitterBuffer::new(Duration::from_secs(0));
+        jb.set_flushing(false);
 
         let now = Instant::now();
 
@@ -387,6 +415,7 @@ mod tests {
     #[test]
     fn misordered_packets_no_latency() {
         let mut jb = JitterBuffer::new(Duration::from_secs(0));
+        jb.set_flushing(false);
 
         let now = Instant::now();
 
@@ -425,6 +454,7 @@ mod tests {
     #[test]
     fn ordered_packets_with_latency() {
         let mut jb = JitterBuffer::new(Duration::from_secs(1));
+        jb.set_flushing(false);
 
         let mut now = Instant::now();
 
@@ -494,6 +524,7 @@ mod tests {
     #[test]
     fn stats() {
         let mut jb = JitterBuffer::new(Duration::from_secs(1));
+        jb.set_flushing(false);
 
         let mut now = Instant::now();
 
@@ -549,6 +580,7 @@ mod tests {
     #[test]
     fn serialized_items() {
         let mut jb = JitterBuffer::new(Duration::from_secs(0));
+        jb.set_flushing(false);
 
         let now = Instant::now();
 
@@ -601,5 +633,37 @@ mod tests {
                 discont: false
             }
         );
+    }
+
+    #[test]
+    fn flushing_queue() {
+        let mut jb = JitterBuffer::new(Duration::from_secs(0));
+        jb.set_flushing(false);
+
+        let now = Instant::now();
+
+        let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
+        let packet = RtpPacket::parse(&rtp_data).unwrap();
+
+        let QueueResult::Queued(id_first_serialized_item) = jb.queue_serialized_item() else {
+            unreachable!()
+        };
+
+        let QueueResult::Queued(id_first) = jb.queue_packet(&packet, 0, now) else {
+            unreachable!()
+        };
+
+        // Everything after this should eventually return flushing, poll() will instruct to drop
+        // everything stored and then return flushing indefinitely.
+        jb.set_flushing(true);
+        assert_eq!(jb.queue_packet(&packet, 0, now), QueueResult::Flushing);
+
+        assert_eq!(jb.poll(now), PollResult::Drop(id_first_serialized_item));
+        assert_eq!(jb.poll(now), PollResult::Drop(id_first));
+        assert_eq!(jb.poll(now), PollResult::Flushing);
+        assert_eq!(jb.poll(now), PollResult::Flushing);
+
+        jb.set_flushing(false);
+        assert_eq!(jb.poll(now), PollResult::Empty);
     }
 }

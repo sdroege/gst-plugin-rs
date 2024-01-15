@@ -11,7 +11,6 @@ use futures::future::{AbortHandle, Abortable};
 use futures::StreamExt;
 use gst::{glib, prelude::*, subclass::prelude::*};
 use once_cell::sync::Lazy;
-use tokio::sync::mpsc;
 
 use super::jitterbuffer::{self, JitterBuffer};
 use super::session::{
@@ -144,21 +143,21 @@ impl futures::stream::Stream for RtcpSendStream {
 #[derive(Debug)]
 #[must_use = "futures/streams/sinks do nothing unless you `.await` or poll them"]
 struct JitterBufferStream {
-    session: Arc<Mutex<BinSessionInner>>,
+    store: Arc<Mutex<JitterBufferStore>>,
     sleep: Pin<Box<tokio::time::Sleep>>,
 }
 
 impl JitterBufferStream {
-    fn new(session: Arc<Mutex<BinSessionInner>>) -> Self {
+    fn new(store: Arc<Mutex<JitterBufferStore>>) -> Self {
         Self {
-            session,
+            store,
             sleep: Box::pin(tokio::time::sleep(Duration::from_secs(1))),
         }
     }
 }
 
 impl futures::stream::Stream for JitterBufferStream {
-    type Item = (JitterBufferItem, mpsc::Sender<JitterBufferItem>);
+    type Item = JitterBufferItem;
 
     fn poll_next(
         self: Pin<&mut Self>,
@@ -167,40 +166,42 @@ impl futures::stream::Stream for JitterBufferStream {
         let now = Instant::now();
         let mut lowest_wait = None;
 
-        let mut session = self.session.lock().unwrap();
-        for pad in session.rtp_recv_srcpads.iter_mut() {
-            let mut jitterbuffer_store = pad.jitter_buffer_store.lock().unwrap();
-            match jitterbuffer_store.jitterbuffer.poll(now) {
-                jitterbuffer::PollResult::Forward { id, discont } => {
-                    if let Some(ref tx) = pad.tx {
-                        let mut item = jitterbuffer_store
-                            .store
-                            .remove(&id)
-                            .unwrap_or_else(|| panic!("Buffer with id {id} not in store!"));
-
-                        if let JitterBufferItem::Packet(ref mut packet) = item {
-                            if discont {
-                                gst::debug!(CAT, obj: pad.pad, "Forwarding discont buffer");
-                                let packet_mut = packet.make_mut();
-                                packet_mut.set_flags(gst::BufferFlags::DISCONT);
-                            }
-                        }
-                        return Poll::Ready(Some((item, tx.clone())));
+        let mut jitterbuffer_store = self.store.lock().unwrap();
+        match jitterbuffer_store.jitterbuffer.poll(now) {
+            jitterbuffer::PollResult::Flushing => {
+                return Poll::Ready(None);
+            }
+            jitterbuffer::PollResult::Drop(id) => {
+                jitterbuffer_store
+                    .store
+                    .remove(&id)
+                    .unwrap_or_else(|| panic!("Buffer with id {id} not in store!"));
+            }
+            jitterbuffer::PollResult::Forward { id, discont } => {
+                let mut item = jitterbuffer_store
+                    .store
+                    .remove(&id)
+                    .unwrap_or_else(|| panic!("Buffer with id {id} not in store!"));
+                if let JitterBufferItem::Packet(ref mut packet) = item {
+                    if discont {
+                        gst::debug!(CAT, "Forwarding discont buffer");
+                        let packet_mut = packet.make_mut();
+                        packet_mut.set_flags(gst::BufferFlags::DISCONT);
                     }
                 }
-                jitterbuffer::PollResult::Timeout(timeout) => {
-                    if lowest_wait.map_or(true, |lowest_wait| timeout < lowest_wait) {
-                        lowest_wait = Some(timeout);
-                    }
-                }
-                jitterbuffer::PollResult::Empty => {
-                    continue;
+                return Poll::Ready(Some(item));
+            }
+            jitterbuffer::PollResult::Timeout(timeout) => {
+                if lowest_wait.map_or(true, |lowest_wait| timeout < lowest_wait) {
+                    lowest_wait = Some(timeout);
                 }
             }
+            // Will be woken up when necessary
+            jitterbuffer::PollResult::Empty => (),
         }
 
-        session.jitterbuffer_waker = Some(cx.waker().clone());
-        drop(session);
+        jitterbuffer_store.waker = Some(cx.waker().clone());
+        drop(jitterbuffer_store);
 
         if let Some(timeout) = lowest_wait {
             let this = self.get_mut();
@@ -218,7 +219,10 @@ impl futures::stream::Stream for JitterBufferStream {
 enum JitterBufferItem {
     Packet(gst::Buffer),
     Event(gst::Event),
-    Query(std::ptr::NonNull<gst::QueryRef>),
+    Query(
+        std::ptr::NonNull<gst::QueryRef>,
+        std::sync::mpsc::SyncSender<bool>,
+    ),
 }
 
 // SAFETY: Need to be able to pass *mut gst::QueryRef
@@ -227,6 +231,7 @@ unsafe impl Send for JitterBufferItem {}
 #[derive(Debug)]
 struct JitterBufferStore {
     store: BTreeMap<usize, JitterBufferItem>,
+    waker: Option<Waker>,
     jitterbuffer: JitterBuffer,
 }
 
@@ -235,7 +240,6 @@ struct RtpRecvSrcPad {
     pt: u8,
     ssrc: u32,
     pad: gst::Pad,
-    tx: Option<mpsc::Sender<JitterBufferItem>>,
     jitter_buffer_store: Arc<Mutex<JitterBufferStore>>,
 }
 
@@ -318,13 +322,8 @@ struct BinSessionInner {
     rtp_recv_sink_segment: Option<gst::FormattedSegment<gst::ClockTime>>,
     rtp_recv_sink_seqnum: Option<gst::Seqnum>,
 
-    // For replying to synchronized queries on the sink pad
-    query_tx: Arc<Mutex<Option<std::sync::mpsc::Sender<bool>>>>,
-
     caps_map: HashMap<u8, HashMap<u32, gst::Caps>>,
     recv_store: Vec<HeldRecvBuffer>,
-    jitterbuffer_task: Option<JitterBufferTask>,
-    jitterbuffer_waker: Option<Waker>,
 
     rtp_recv_srcpads: Vec<RtpRecvSrcPad>,
     recv_flow_combiner: Arc<Mutex<gst_base::UniqueFlowCombiner>>,
@@ -350,12 +349,8 @@ impl BinSessionInner {
             rtp_recv_sink_segment: None,
             rtp_recv_sink_seqnum: None,
 
-            query_tx: Arc::new(Mutex::new(None)),
-
             caps_map: HashMap::default(),
             recv_store: vec![],
-            jitterbuffer_task: None,
-            jitterbuffer_waker: None,
 
             rtp_recv_srcpads: vec![],
             recv_flow_combiner: Arc::new(Mutex::new(gst_base::UniqueFlowCombiner::new())),
@@ -383,19 +378,22 @@ impl BinSessionInner {
     fn start_rtp_recv_task(&mut self, pad: &gst::Pad) -> Result<(), glib::BoolError> {
         gst::debug!(CAT, obj: pad, "Starting rtp recv src task");
 
-        let (tx, mut rx) = mpsc::channel(1);
-
         let recv_pad = self
             .rtp_recv_srcpads
             .iter_mut()
             .find(|recv| &recv.pad == pad)
             .unwrap();
-        recv_pad.tx = Some(tx);
 
         let pad_weak = pad.downgrade();
-
         let recv_flow_combiner = self.recv_flow_combiner.clone();
-        let query_tx = Arc::downgrade(&self.query_tx);
+        let store = recv_pad.jitter_buffer_store.clone();
+
+        {
+            let mut store = store.lock().unwrap();
+            store.jitterbuffer.set_flushing(false);
+            store.waker.take();
+        }
+
         // A task per received ssrc may be a bit excessive.
         // Other options are:
         // - Single task per received input stream rather than per output ssrc/pt
@@ -405,33 +403,33 @@ impl BinSessionInner {
                 return;
             };
 
-            let Some(item) = rx.blocking_recv() else {
-                gst::debug!(CAT, obj: pad, "Pad channel was closed, pausing");
-                let _ = pad.pause_task();
-                return;
-            };
+            let recv_flow_combiner = recv_flow_combiner.clone();
+            let store = store.clone();
 
-            match item {
-                JitterBufferItem::Packet(buffer) => {
-                    let mut recv_flow_combiner = recv_flow_combiner.lock().unwrap();
-                    let flow = pad.push(buffer);
-                    gst::trace!(CAT, obj: pad, "Pushed buffer, flow ret {:?}", flow);
-                    let _combined_flow = recv_flow_combiner.update_pad_flow(&pad, flow);
-                    // TODO: store flow, return only on session pads?
-                }
-                JitterBufferItem::Event(event) => {
-                    let res = pad.push_event(event);
-                    gst::trace!(CAT, obj: pad, "Pushed serialized event, result: {}", res);
-                }
-                JitterBufferItem::Query(mut query) => {
-                    // This is safe because the thread holding the original reference is waiting
-                    // for us exclusively
-                    let res = pad.query(unsafe { query.as_mut() });
-                    if let Some(query_tx) = query_tx.upgrade() {
-                        let _ = query_tx.lock().unwrap().as_mut().unwrap().send(res);
+            RUNTIME.block_on(async move {
+                let mut stream = JitterBufferStream::new(store);
+                while let Some(item) = stream.next().await {
+                    match item {
+                        JitterBufferItem::Packet(buffer) => {
+                            let flow = pad.push(buffer);
+                            gst::trace!(CAT, obj: pad, "Pushed buffer, flow ret {:?}", flow);
+                            let mut recv_flow_combiner = recv_flow_combiner.lock().unwrap();
+                            let _combined_flow = recv_flow_combiner.update_pad_flow(&pad, flow);
+                            // TODO: store flow, return only on session pads?
+                        }
+                        JitterBufferItem::Event(event) => {
+                            let res = pad.push_event(event);
+                            gst::trace!(CAT, obj: pad, "Pushed serialized event, result: {}", res);
+                        }
+                        JitterBufferItem::Query(mut query, tx) => {
+                            // This is safe because the thread holding the original reference is waiting
+                            // for us exclusively
+                            let res = pad.query(unsafe { query.as_mut() });
+                            let _ = tx.send(res);
+                        }
                     }
                 }
-            }
+            })
         })?;
 
         gst::debug!(CAT, obj: pad, "Task started");
@@ -439,18 +437,21 @@ impl BinSessionInner {
         Ok(())
     }
 
-    fn stop_rtp_recv_task(&mut self, pad: &gst::Pad) {
+    fn stop_rtp_recv_task(&mut self, pad: &gst::Pad) -> Result<(), glib::BoolError> {
+        gst::debug!(CAT, obj: pad, "Stopping rtp recv src task");
         let recv_pad = self
             .rtp_recv_srcpads
             .iter_mut()
             .find(|recv| &recv.pad == pad)
             .unwrap();
-        // Drop the sender so the task is unblocked and we don't deadlock below
-        drop(recv_pad.tx.take());
 
-        gst::debug!(CAT, obj: pad, "Stopping task");
+        let mut store = recv_pad.jitter_buffer_store.lock().unwrap();
+        store.jitterbuffer.set_flushing(true);
+        if let Some(waker) = store.waker.take() {
+            waker.wake();
+        }
 
-        let _ = pad.stop_task();
+        Ok(())
     }
 
     fn get_or_create_rtp_recv_src(
@@ -513,8 +514,8 @@ impl BinSessionInner {
                 pt,
                 ssrc,
                 pad: srcpad.clone(),
-                tx: None,
                 jitter_buffer_store: Arc::new(Mutex::new(JitterBufferStore {
+                    waker: None,
                     store: BTreeMap::new(),
                     jitterbuffer: JitterBuffer::new(settings.latency.into()),
                 })),
@@ -717,11 +718,6 @@ struct RtcpTask {
     abort_handle: AbortHandle,
 }
 
-#[derive(Debug)]
-struct JitterBufferTask {
-    abort_handle: AbortHandle,
-}
-
 impl RtpBin2 {
     fn rtp_recv_src_activatemode(
         &self,
@@ -747,7 +743,12 @@ impl RtpBin2 {
             if active {
                 session.start_rtp_recv_task(pad)?;
             } else {
-                session.stop_rtp_recv_task(pad);
+                session.stop_rtp_recv_task(pad)?;
+                drop(session);
+
+                gst::debug!(CAT, obj: pad, "Stopping task");
+
+                let _ = pad.stop_task();
             }
 
             Ok(())
@@ -802,32 +803,6 @@ impl RtpBin2 {
 
         if let Some(rtcp) = rtcp_task.take() {
             rtcp.abort_handle.abort();
-        }
-    }
-
-    fn start_jitterbuffer_task(&self, session: &BinSession, inner: &mut BinSessionInner) {
-        if inner.jitterbuffer_task.is_some() {
-            return;
-        }
-
-        // run the runtime from another task to prevent the "start a runtime from within a runtime" panic
-        // when the plugin is statically linked.
-        let (abort_handle, abort_registration) = AbortHandle::new_pair();
-        RUNTIME.spawn({
-            let inner = session.inner.clone();
-            async move {
-                let future = Abortable::new(Self::jitterbuffer_task(inner), abort_registration);
-                future.await
-            }
-        });
-
-        inner.jitterbuffer_task = Some(JitterBufferTask { abort_handle });
-    }
-
-    async fn jitterbuffer_task(state: Arc<Mutex<BinSessionInner>>) {
-        let mut stream = JitterBufferStream::new(state);
-        while let Some((item, tx)) = stream.next().await {
-            let _ = tx.send(item).await;
         }
     }
 
@@ -1007,9 +982,6 @@ impl RtpBin2 {
 
         drop(state);
 
-        // Start jitterbuffer task now if not started yet
-        self.start_jitterbuffer_task(&session, &mut session_inner);
-
         let now = Instant::now();
         let mut buffers_to_push = vec![];
         loop {
@@ -1107,12 +1079,18 @@ impl RtpBin2 {
                 held.buffer.pts().unwrap().nseconds(),
                 now,
             ) {
+                jitterbuffer::QueueResult::Flushing => {
+                    // TODO: return flushing result upstream
+                }
                 jitterbuffer::QueueResult::Queued(id) => {
                     drop(mapped);
 
                     jitterbuffer_store
                         .store
                         .insert(id, JitterBufferItem::Packet(held.buffer));
+                    if let Some(waker) = jitterbuffer_store.waker.take() {
+                        waker.wake()
+                    }
                 }
                 jitterbuffer::QueueResult::Late => {
                     gst::warning!(CAT, "Late buffer was dropped");
@@ -1122,12 +1100,6 @@ impl RtpBin2 {
                 }
             }
         }
-
-        let session_inner = session.inner.lock().unwrap();
-        if let Some(ref waker) = session_inner.jitterbuffer_waker {
-            waker.wake_by_ref();
-        }
-        drop(session_inner);
 
         Ok(gst::FlowSuccess::Ok)
     }
@@ -1339,10 +1311,6 @@ impl RtpBin2 {
             if let Some(session) = state.session_by_id(id) {
                 let session = session.inner.lock().unwrap();
 
-                let (query_tx, query_rx) = std::sync::mpsc::channel();
-
-                assert!(session.query_tx.lock().unwrap().replace(query_tx).is_none());
-
                 let jb_stores: Vec<Arc<Mutex<JitterBufferStore>>> = session
                     .rtp_recv_srcpads
                     .iter()
@@ -1377,9 +1345,11 @@ impl RtpBin2 {
                         unreachable!()
                     };
 
+                    let (query_tx, query_rx) = std::sync::mpsc::sync_channel(1);
+
                     jitterbuffer_store
                         .store
-                        .insert(id, JitterBufferItem::Query(query));
+                        .insert(id, JitterBufferItem::Query(query, query_tx));
 
                     // Now block until the jitterbuffer has processed the query
                     match query_rx.recv() {
@@ -1531,6 +1501,7 @@ impl RtpBin2 {
                 // FIXME: may need to delay sending eos under some circumstances
                 true
             }
+            // TODO: need to handle FlushStart/FlushStop through the jitterbuffer queue
             _ => {
                 if event.is_serialized() {
                     self.rtp_recv_sink_queue_serialized_event(id, event)
@@ -2084,8 +2055,9 @@ impl ElementImpl for RtpBin2 {
     }
 
     fn release_pad(&self, pad: &gst::Pad) {
-        let mut state = self.state.lock().unwrap();
+        let state = self.state.lock().unwrap();
         let mut removed_pads = vec![];
+        let mut removed_session_ids = vec![];
         if let Some(&id) = state.pads_session_id_map.get(pad) {
             removed_pads.push(pad.clone());
             if let Some(session) = state.session_by_id(id) {
@@ -2097,11 +2069,6 @@ impl ElementImpl for RtpBin2 {
                     session.recv_flow_combiner.lock().unwrap().clear();
                     session.rtp_recv_srcpads.clear();
                     session.recv_store.clear();
-
-                    if let Some(jitterbuffer_task) = session.jitterbuffer_task.take() {
-                        jitterbuffer_task.abort_handle.abort();
-                    }
-                    session.jitterbuffer_waker = None;
                 }
 
                 if Some(pad) == session.rtp_send_sinkpad.as_ref() {
@@ -2124,23 +2091,39 @@ impl ElementImpl for RtpBin2 {
                     && session.rtcp_recv_sinkpad.is_none()
                     && session.rtcp_send_srcpad.is_none()
                 {
-                    let id = session.id;
-                    drop(session);
-                    state.sessions.retain(|s| s.id != id);
+                    removed_session_ids.push(session.id);
                 }
-            }
-
-            for pad in removed_pads.iter() {
-                state.pads_session_id_map.remove(pad);
             }
         }
         drop(state);
 
-        for pad in removed_pads {
+        for pad in removed_pads.iter() {
             let _ = pad.set_active(false);
             // Pad might not have been added yet if it's a RTP recv srcpad
             if pad.has_as_parent(&*self.obj()) {
-                let _ = self.obj().remove_pad(&pad);
+                let _ = self.obj().remove_pad(pad);
+            }
+        }
+
+        {
+            let mut state = self.state.lock().unwrap();
+
+            for pad in removed_pads.iter() {
+                state.pads_session_id_map.remove(pad);
+            }
+            for id in removed_session_ids {
+                if let Some(session) = state.session_by_id(id) {
+                    let session = session.inner.lock().unwrap();
+                    if session.rtp_recv_sinkpad.is_none()
+                        && session.rtp_send_sinkpad.is_none()
+                        && session.rtcp_recv_sinkpad.is_none()
+                        && session.rtcp_send_srcpad.is_none()
+                    {
+                        let id = session.id;
+                        drop(session);
+                        state.sessions.retain(|s| s.id != id);
+                    }
+                }
             }
         }
 
@@ -2177,6 +2160,7 @@ impl ElementImpl for RtpBin2 {
                 for session in &state.sessions {
                     let mut session = session.inner.lock().unwrap();
                     removed_pads.extend(session.rtp_recv_srcpads.iter().map(|r| r.pad.clone()));
+
                     session.recv_flow_combiner.lock().unwrap().clear();
                     session.rtp_recv_srcpads.clear();
                     session.recv_store.clear();
@@ -2187,26 +2171,23 @@ impl ElementImpl for RtpBin2 {
                     session.rtp_recv_sink_group_id = None;
 
                     session.caps_map.clear();
-                    session.query_tx.lock().unwrap().take();
-
-                    if let Some(jitterbuffer_task) = session.jitterbuffer_task.take() {
-                        jitterbuffer_task.abort_handle.abort();
-                    }
-                    session.jitterbuffer_waker = None;
-                }
-                for pad in removed_pads.iter() {
-                    state.pads_session_id_map.remove(pad);
                 }
                 state.sync_context = None;
                 drop(state);
 
-                for pad in removed_pads {
+                for pad in removed_pads.iter() {
                     let _ = pad.set_active(false);
                     // Pad might not have been added yet if it's a RTP recv srcpad
                     if pad.has_as_parent(&*self.obj()) {
-                        let _ = self.obj().remove_pad(&pad);
+                        let _ = self.obj().remove_pad(pad);
                     }
                 }
+
+                let mut state = self.state.lock().unwrap();
+                for pad in removed_pads {
+                    state.pads_session_id_map.remove(&pad);
+                }
+                drop(state);
             }
             _ => (),
         }
