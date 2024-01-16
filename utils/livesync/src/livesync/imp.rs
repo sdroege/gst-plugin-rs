@@ -1034,7 +1034,13 @@ impl LiveSync {
             );
 
             let (res, jitter) = MutexGuard::unlocked(&mut state, || clock_id.wait());
-            gst::trace!(CAT, imp: self, "Clock returned {res:?} {jitter}",);
+            gst::trace!(
+                CAT,
+                imp: self,
+                "Clock returned {res:?} {}{}",
+                if jitter.is_negative() { "-" } else { "" },
+                gst::ClockTime::from_nseconds(jitter.unsigned_abs())
+            );
 
             if res == Err(gst::ClockError::Unscheduled) {
                 return Err(gst::FlowError::Flushing);
