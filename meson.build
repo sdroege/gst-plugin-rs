@@ -387,8 +387,11 @@ foreach plugin_name, details: plugins
         features += extra_features.split(',')
       endif
 
-      examples += details.get('examples', [])
       lib = details.get('library')
+      # No 'lib' suffix with MSVC
+      if cc.get_argument_syntax() == 'msvc'
+        lib = lib.substring(3)
+      endif
       if default_library in ['shared', 'both']
         output += [lib + '.' + ext_dynamic]
       endif
@@ -461,8 +464,11 @@ gst_plugins = []
 pc_files = []
 plugin_names = []
 foreach plugin : plugins
-  # skip the 'lib' prefix and extension from plugin path
-  plugin_name = fs.stem(plugin.full_path()).substring(3)
+  plugin_name = fs.stem(plugin.full_path())
+  # skip the 'lib' prefix from plugin path when not building with MSVC
+  if cc.get_argument_syntax() != 'msvc'
+    plugin_name = plugin_name.substring(3)
+  endif
 
   option_name = plugin_name.substring(3)
   if option_name.startswith('rs')
@@ -537,7 +543,7 @@ endif
 if get_option('webrtc').allowed()
   custom_target('gst-webrtc-signalling-server',
     build_by_default: true,
-    output: 'gst-webrtc-signalling-server',
+    output: 'gst-webrtc-signalling-server' + exe_suffix,
     console: true,
     install: true,
     install_dir: get_option('bindir'),
@@ -558,9 +564,13 @@ if get_option('webrtc').allowed()
 endif
 
 if get_option('examples').allowed() and examples.length() > 0
+  outputs = []
+  foreach example: examples
+    outputs += [example + exe_suffix]
+  endforeach
   custom_target('gst-plugins-rs-examples',
     build_by_default: true,
-    output: examples,
+    output: outputs,
     console: true,
     install: false,
     depfile: 'gst-plugins-rs-examples.dep',
