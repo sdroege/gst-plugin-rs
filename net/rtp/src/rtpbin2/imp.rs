@@ -167,7 +167,9 @@ impl futures::stream::Stream for JitterBufferStream {
         let mut lowest_wait = None;
 
         let mut jitterbuffer_store = self.store.lock().unwrap();
-        match jitterbuffer_store.jitterbuffer.poll(now) {
+        let ret = jitterbuffer_store.jitterbuffer.poll(now);
+        gst::trace!(CAT, "jitterbuffer poll ret: {ret:?}");
+        match ret {
             jitterbuffer::PollResult::Flushing => {
                 return Poll::Ready(None);
             }
@@ -176,6 +178,7 @@ impl futures::stream::Stream for JitterBufferStream {
                     .store
                     .remove(&id)
                     .unwrap_or_else(|| panic!("Buffer with id {id} not in store!"));
+                cx.waker().wake_by_ref();
             }
             jitterbuffer::PollResult::Forward { id, discont } => {
                 let mut item = jitterbuffer_store
@@ -1397,6 +1400,9 @@ impl RtpBin2 {
                 jitterbuffer_store
                     .store
                     .insert(id, JitterBufferItem::Event(event.clone()));
+                if let Some(waker) = jitterbuffer_store.waker.take() {
+                    waker.wake();
+                }
             }
         }
 
@@ -1498,10 +1504,48 @@ impl RtpBin2 {
                         waker.wake();
                     }
                 }
+                drop(state);
                 // FIXME: may need to delay sending eos under some circumstances
+                self.rtp_recv_sink_queue_serialized_event(id, event);
                 true
             }
-            // TODO: need to handle FlushStart/FlushStop through the jitterbuffer queue
+            gst::EventView::FlushStart(_fs) => {
+                let state = self.state.lock().unwrap();
+                let mut pause_tasks = vec![];
+                if let Some(session) = state.session_by_id(id) {
+                    let session = session.inner.lock().unwrap();
+                    for recv_pad in session.rtp_recv_srcpads.iter() {
+                        let mut store = recv_pad.jitter_buffer_store.lock().unwrap();
+                        store.jitterbuffer.set_flushing(true);
+                        if let Some(waker) = store.waker.take() {
+                            waker.wake();
+                        }
+                        pause_tasks.push(recv_pad.pad.clone());
+                    }
+                }
+                drop(state);
+                for pad in pause_tasks {
+                    let _ = pad.pause_task();
+                }
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
+            }
+            gst::EventView::FlushStop(_fs) => {
+                let state = self.state.lock().unwrap();
+                if let Some(session) = state.session_by_id(id) {
+                    let mut session = session.inner.lock().unwrap();
+                    let pads = session
+                        .rtp_recv_srcpads
+                        .iter()
+                        .map(|r| r.pad.clone())
+                        .collect::<Vec<_>>();
+                    for pad in pads {
+                        // Will reset flushing to false and ensure task is woken up
+                        let _ = session.start_rtp_recv_task(&pad);
+                    }
+                }
+                drop(state);
+                self.rtp_recv_sink_queue_serialized_event(id, event)
+            }
             _ => {
                 if event.is_serialized() {
                     self.rtp_recv_sink_queue_serialized_event(id, event)

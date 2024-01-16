@@ -177,3 +177,65 @@ fn test_receive() {
         TEST_SSRC as i32
     );
 }
+
+#[test]
+fn test_receive_flush() {
+    init();
+
+    let h = Arc::new(Mutex::new(Harness::with_padnames(
+        "rtpbin2",
+        Some("rtp_recv_sink_0"),
+        None,
+    )));
+    let weak_h = Arc::downgrade(&h);
+    let mut inner = h.lock().unwrap();
+    inner
+        .element()
+        .unwrap()
+        .connect_pad_added(move |_elem, pad| {
+            weak_h
+                .upgrade()
+                .unwrap()
+                .lock()
+                .unwrap()
+                .add_element_src_pad(pad)
+        });
+    inner.play();
+
+    let caps = Caps::builder("application/x-rtp")
+        .field("media", "audio")
+        .field("payload", TEST_PT as i32)
+        .field("clock-rate", TEST_CLOCK_RATE as i32)
+        .field("encoding-name", "custom-test")
+        .build();
+    inner.set_src_caps(caps);
+
+    // Cannot push with harness lock as the 'pad-added' handler needs to add the newly created pad to
+    // the harness and needs to also take the harness lock.  Workaround by pushing from the
+    // internal harness pad directly.
+    let push_pad = inner
+        .element()
+        .unwrap()
+        .static_pad("rtp_recv_sink_0")
+        .unwrap()
+        .peer()
+        .unwrap();
+    drop(inner);
+    push_pad.push(generate_rtp_buffer(500, 20, 9)).unwrap();
+    push_pad.push(generate_rtp_buffer(501, 30, 11)).unwrap();
+    let mut inner = h.lock().unwrap();
+    let seqnum = gst::Seqnum::next();
+    inner.push_event(gst::event::FlushStart::builder().seqnum(seqnum).build());
+    inner.push_event(gst::event::FlushStop::builder(false).seqnum(seqnum).build());
+
+    let event = inner.pull_event().unwrap();
+    let gst::EventView::FlushStart(fs) = event.view() else {
+        unreachable!();
+    };
+    assert_eq!(fs.seqnum(), seqnum);
+    let event = inner.pull_event().unwrap();
+    let gst::EventView::FlushStop(fs) = event.view() else {
+        unreachable!();
+    };
+    assert_eq!(fs.seqnum(), seqnum);
+}
