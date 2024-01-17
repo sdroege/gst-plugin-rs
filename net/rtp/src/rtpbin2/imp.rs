@@ -20,6 +20,7 @@ use super::session::{
 use super::source::{ReceivedRb, SourceState};
 use super::sync;
 
+use crate::rtpbin2::config::RtpBin2Session;
 use crate::rtpbin2::RUNTIME;
 
 const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(200);
@@ -264,7 +265,7 @@ impl RtpRecvSrcPad {
             .seqnum(seqnum)
             .build();
 
-        let caps = session_inner.caps_from_pt_ssrc(self.pt, self.ssrc);
+        let caps = session_inner.caps_from_pt(self.pt);
         let caps = gst::event::Caps::builder(&caps).seqnum(seqnum).build();
 
         let segment =
@@ -290,9 +291,10 @@ struct HeldRecvBuffer {
 }
 
 #[derive(Debug, Clone)]
-struct BinSession {
+pub struct BinSession {
     id: usize,
     inner: Arc<Mutex<BinSessionInner>>,
+    config: RtpBin2Session,
 }
 
 impl BinSession {
@@ -305,15 +307,18 @@ impl BinSession {
         inner
             .session
             .set_reduced_size_rtcp(settings.reduced_size_rtcp);
+        let inner = Arc::new(Mutex::new(inner));
+        let weak_inner = Arc::downgrade(&inner);
         Self {
             id,
-            inner: Arc::new(Mutex::new(inner)),
+            inner,
+            config: RtpBin2Session::new(weak_inner),
         }
     }
 }
 
 #[derive(Debug)]
-struct BinSessionInner {
+pub(crate) struct BinSessionInner {
     id: usize,
 
     session: Session,
@@ -325,7 +330,7 @@ struct BinSessionInner {
     rtp_recv_sink_segment: Option<gst::FormattedSegment<gst::ClockTime>>,
     rtp_recv_sink_seqnum: Option<gst::Seqnum>,
 
-    caps_map: HashMap<u8, HashMap<u32, gst::Caps>>,
+    pt_map: HashMap<u8, gst::Caps>,
     recv_store: Vec<HeldRecvBuffer>,
 
     rtp_recv_srcpads: Vec<RtpRecvSrcPad>,
@@ -352,7 +357,7 @@ impl BinSessionInner {
             rtp_recv_sink_segment: None,
             rtp_recv_sink_seqnum: None,
 
-            caps_map: HashMap::default(),
+            pt_map: HashMap::default(),
             recv_store: vec![],
 
             rtp_recv_srcpads: vec![],
@@ -366,16 +371,32 @@ impl BinSessionInner {
         }
     }
 
-    fn caps_from_pt_ssrc(&self, pt: u8, ssrc: u32) -> gst::Caps {
-        self.caps_map
-            .get(&pt)
-            .and_then(|ssrc_map| ssrc_map.get(&ssrc))
-            .cloned()
-            .unwrap_or(
-                gst::Caps::builder("application/x-rtp")
-                    .field("payload", pt as i32)
-                    .build(),
-            )
+    pub fn clear_pt_map(&mut self) {
+        self.pt_map.clear();
+    }
+
+    pub fn add_caps(&mut self, caps: gst::Caps) {
+        let Some((pt, clock_rate)) = pt_clock_rate_from_caps(&caps) else {
+            return;
+        };
+        let caps_clone = caps.clone();
+        self.pt_map
+            .entry(pt)
+            .and_modify(move |entry| *entry = caps)
+            .or_insert_with(move || caps_clone);
+        self.session.set_pt_clock_rate(pt, clock_rate);
+    }
+
+    fn caps_from_pt(&self, pt: u8) -> gst::Caps {
+        self.pt_map.get(&pt).cloned().unwrap_or(
+            gst::Caps::builder("application/x-rtp")
+                .field("payload", pt as i32)
+                .build(),
+        )
+    }
+
+    pub fn pt_map(&self) -> impl Iterator<Item = (u8, &gst::Caps)> + '_ {
+        self.pt_map.iter().map(|(&k, v)| (k, v))
     }
 
     fn start_rtp_recv_task(&mut self, pad: &gst::Pad) -> Result<(), glib::BoolError> {
@@ -948,26 +969,23 @@ impl RtpBin2 {
         let mut session_inner = session.inner.lock().unwrap();
 
         let current_caps = session_inner.rtp_recv_sink_caps.clone();
-        let ssrc_map = session_inner
-            .caps_map
-            .entry(rtp.payload_type())
-            .or_default();
-        if ssrc_map.get(&rtp.ssrc()).is_none() {
-            if let Some(mut caps) =
-                current_caps.filter(|caps| Self::clock_rate_from_caps(caps).is_some())
+        if let std::collections::hash_map::Entry::Vacant(e) =
+            session_inner.pt_map.entry(rtp.payload_type())
+        {
+            if let Some(mut caps) = current_caps.filter(|caps| clock_rate_from_caps(caps).is_some())
             {
                 state
                     .sync_context
                     .as_mut()
                     .unwrap()
-                    .set_clock_rate(rtp.ssrc(), Self::clock_rate_from_caps(&caps).unwrap());
+                    .set_clock_rate(rtp.ssrc(), clock_rate_from_caps(&caps).unwrap());
                 {
                     // Ensure the caps we send out hold a payload field
                     let caps = caps.make_mut();
                     let s = caps.structure_mut(0).unwrap();
                     s.set("payload", rtp.payload_type() as i32);
                 }
-                ssrc_map.insert(rtp.ssrc(), caps);
+                e.insert(caps);
             }
         }
 
@@ -1243,12 +1261,14 @@ impl RtpBin2 {
     fn rtp_send_sink_event(&self, pad: &gst::Pad, event: gst::Event, id: usize) -> bool {
         match event.view() {
             gst::EventView::Caps(caps) => {
-                if let Some((pt, clock_rate)) = Self::pt_clock_rate_from_caps(caps.caps()) {
+                if let Some((pt, clock_rate)) = pt_clock_rate_from_caps(caps.caps()) {
                     let state = self.state.lock().unwrap();
                     if let Some(session) = state.session_by_id(id) {
                         let mut session = session.inner.lock().unwrap();
                         session.session.set_pt_clock_rate(pt, clock_rate);
                     }
+                } else {
+                    gst::warning!(CAT, obj: pad, "input caps are missing payload or clock-rate fields");
                 }
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
@@ -1431,8 +1451,10 @@ impl RtpBin2 {
                     let mut session = session.inner.lock().unwrap();
                     let caps = caps.caps_owned();
 
-                    if let Some((pt, clock_rate)) = Self::pt_clock_rate_from_caps(&caps) {
+                    if let Some((pt, clock_rate)) = pt_clock_rate_from_caps(&caps) {
                         session.session.set_pt_clock_rate(pt, clock_rate);
+                    } else {
+                        gst::warning!(CAT, obj: pad, "input caps are missing payload or clock-rate fields");
                     }
 
                     session.rtp_recv_sink_caps = Some(caps);
@@ -1556,37 +1578,6 @@ impl RtpBin2 {
         }
     }
 
-    fn clock_rate_from_caps(caps: &gst::CapsRef) -> Option<u32> {
-        let Some(s) = caps.structure(0) else {
-            return None;
-        };
-        let Some(clock_rate) = s.get::<i32>("clock-rate").ok() else {
-            return None;
-        };
-        if clock_rate > 0 {
-            Some(clock_rate as u32)
-        } else {
-            None
-        }
-    }
-
-    fn pt_clock_rate_from_caps(caps: &gst::CapsRef) -> Option<(u8, u32)> {
-        let Some(s) = caps.structure(0) else {
-            return None;
-        };
-        let Some((clock_rate, pt)) = Option::zip(
-            s.get::<i32>("clock-rate").ok(),
-            s.get::<i32>("payload").ok(),
-        ) else {
-            return None;
-        };
-        if (0..=127).contains(&pt) && clock_rate > 0 {
-            Some((pt as u8, clock_rate as u32))
-        } else {
-            None
-        }
-    }
-
     fn rtp_recv_src_event(
         &self,
         pad: &gst::Pad,
@@ -1605,7 +1596,7 @@ impl RtpBin2 {
                     if let Some(session) = state.session_by_id(id) {
                         let now = Instant::now();
                         let mut session = session.inner.lock().unwrap();
-                        let caps = session.caps_from_pt_ssrc(pt, ssrc);
+                        let caps = session.caps_from_pt(pt);
                         let s = caps.structure(0).unwrap();
 
                         let pli = s.has_field("rtcp-fb-nack-pli");
@@ -1775,6 +1766,27 @@ impl ObjectImpl for RtpBin2 {
             }
             _ => unimplemented!(),
         }
+    }
+
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+            vec![glib::subclass::Signal::builder("get-session")
+                .param_types([u32::static_type()])
+                .return_type::<crate::rtpbin2::config::RtpBin2Session>()
+                .action()
+                .class_handler(|_token, args| {
+                    let element = args[0].get::<super::RtpBin2>().expect("signal arg");
+                    let id = args[1].get::<u32>().expect("signal arg");
+                    let bin = element.imp();
+                    let state = bin.state.lock().unwrap();
+                    state
+                        .session_by_id(id as usize)
+                        .map(|sess| sess.config.to_value())
+                })
+                .build()]
+        });
+
+        SIGNALS.as_ref()
     }
 }
 
@@ -2214,7 +2226,7 @@ impl ElementImpl for RtpBin2 {
                     session.rtp_recv_sink_seqnum = None;
                     session.rtp_recv_sink_group_id = None;
 
-                    session.caps_map.clear();
+                    session.pt_map.clear();
                 }
                 state.sync_context = None;
                 drop(state);
@@ -2237,6 +2249,46 @@ impl ElementImpl for RtpBin2 {
         }
 
         Ok(success)
+    }
+}
+
+pub fn pt_clock_rate_from_caps(caps: &gst::CapsRef) -> Option<(u8, u32)> {
+    let Some(s) = caps.structure(0) else {
+        gst::debug!(CAT, "no structure!");
+        return None;
+    };
+    let Some((clock_rate, pt)) = Option::zip(
+        s.get::<i32>("clock-rate").ok(),
+        s.get::<i32>("payload").ok(),
+    ) else {
+        gst::debug!(
+            CAT,
+            "could not retrieve clock-rate and/or payload from structure"
+        );
+        return None;
+    };
+    if (0..=127).contains(&pt) && clock_rate > 0 {
+        Some((pt as u8, clock_rate as u32))
+    } else {
+        gst::debug!(
+            CAT,
+            "payload value {pt} out of bounds or clock-rate {clock_rate} out of bounds"
+        );
+        None
+    }
+}
+
+fn clock_rate_from_caps(caps: &gst::CapsRef) -> Option<u32> {
+    let Some(s) = caps.structure(0) else {
+        return None;
+    };
+    let Some(clock_rate) = s.get::<i32>("clock-rate").ok() else {
+        return None;
+    };
+    if clock_rate > 0 {
+        Some(clock_rate as u32)
+    } else {
+        None
     }
 }
 

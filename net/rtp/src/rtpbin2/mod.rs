@@ -3,6 +3,7 @@
 use gst::glib;
 use gst::prelude::*;
 use once_cell::sync::Lazy;
+mod config;
 mod imp;
 mod jitterbuffer;
 mod session;
@@ -18,6 +19,8 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "doc")]
     {
         crate::rtpbin2::sync::TimestampingMode::static_type()
+            .mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        crate::rtpbin2::config::Rtp2Session::static_type()
             .mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }
     gst::Element::register(

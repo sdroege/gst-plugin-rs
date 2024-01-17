@@ -7311,7 +7311,20 @@
                         "writable": true
                     }
                 },
-                "rank": "none"
+                "rank": "none",
+                "signals": {
+                    "get-session": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "guint"
+                            }
+                        ],
+                        "return-type": "GstRtpBin2Session",
+                        "when": "last"
+                    }
+                }
             },
             "rtpgccbwe": {
                 "author": "Thibault Saunier <tsaunier@igalia.com>",
@@ -8131,6 +8144,49 @@
         "filename": "gstrsrtp",
         "license": "MPL-2.0",
         "other-types": {
+            "GstRtp2Session": {
+                "hierarchy": [
+                    "GstRtp2Session",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "pt-map": {
+                        "blurb": "Mapping of RTP payload type to caps",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "application/x-rtp2-pt-map;",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": true
+                    }
+                },
+                "signals": {
+                    "bye-ssrc": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "guint"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "new-ssrc": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "guint"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    }
+                }
+            },
             "GstRtpBaseAudioPay2": {
                 "hierarchy": [
                     "GstRtpBaseAudioPay2",

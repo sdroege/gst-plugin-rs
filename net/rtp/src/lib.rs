@@ -105,3 +105,14 @@ gst::plugin_define!(
     env!("CARGO_PKG_REPOSITORY"),
     env!("BUILD_REL_DATE")
 );
+
+#[cfg(test)]
+pub(crate) fn test_init() {
+    use std::sync::Once;
+    static INIT: Once = Once::new();
+
+    INIT.call_once(|| {
+        gst::init().unwrap();
+        plugin_register_static().expect("rtp plugin test");
+    });
+}
