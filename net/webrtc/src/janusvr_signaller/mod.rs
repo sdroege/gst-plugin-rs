@@ -9,9 +9,6 @@ glib::wrapper! {
     pub struct JanusVRSignaller(ObjectSubclass<imp::Signaller>) @implements Signallable;
 }
 
-unsafe impl Send for JanusVRSignaller {}
-unsafe impl Sync for JanusVRSignaller {}
-
 impl Default for JanusVRSignaller {
     fn default() -> Self {
         glib::Object::new()

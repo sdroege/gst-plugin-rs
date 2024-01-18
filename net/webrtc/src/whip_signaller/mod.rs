@@ -13,17 +13,11 @@ glib::wrapper! {
     pub struct WhipServerSignaller(ObjectSubclass<imp::WhipServer>) @implements Signallable;
 }
 
-unsafe impl Send for WhipClientSignaller {}
-unsafe impl Sync for WhipClientSignaller {}
-
 impl Default for WhipClientSignaller {
     fn default() -> Self {
         glib::Object::new()
     }
 }
-
-unsafe impl Send for WhipServerSignaller {}
-unsafe impl Sync for WhipServerSignaller {}
 
 impl Default for WhipServerSignaller {
     fn default() -> Self {

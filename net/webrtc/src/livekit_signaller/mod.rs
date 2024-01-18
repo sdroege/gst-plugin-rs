@@ -9,9 +9,6 @@ glib::wrapper! {
     pub struct LiveKitSignaller(ObjectSubclass<imp::Signaller>) @implements Signallable;
 }
 
-unsafe impl Send for LiveKitSignaller {}
-unsafe impl Sync for LiveKitSignaller {}
-
 impl Default for LiveKitSignaller {
     fn default() -> Self {
         glib::Object::new()

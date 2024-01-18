@@ -10,9 +10,6 @@ glib::wrapper! {
     pub struct AwsKvsSignaller(ObjectSubclass<imp::Signaller>) @implements Signallable;
 }
 
-unsafe impl Send for AwsKvsSignaller {}
-unsafe impl Sync for AwsKvsSignaller {}
-
 impl Default for AwsKvsSignaller {
     fn default() -> Self {
         glib::Object::new()
