@@ -37,8 +37,8 @@ const DEFAULT_TIMEOUT: u32 = 15;
 
 #[derive(Debug, Clone)]
 struct Settings {
-    video_caps: gst::Caps,
-    audio_caps: gst::Caps,
+    video_caps: Option<gst::Caps>,
+    audio_caps: Option<gst::Caps>,
     turn_server: Option<String>,
     stun_server: Option<String>,
     whep_endpoint: Option<String>,
@@ -51,8 +51,8 @@ struct Settings {
 #[allow(clippy::derivable_impls)]
 impl Default for Settings {
     fn default() -> Self {
-        Self {
-            video_caps: [
+        let video_caps = Some(
+            [
                 "video/x-vp8",
                 "video/x-h264",
                 "video/x-vp9",
@@ -62,10 +62,17 @@ impl Default for Settings {
             .into_iter()
             .map(gst::Structure::new_empty)
             .collect::<gst::Caps>(),
-            audio_caps: ["audio/x-opus"]
+        );
+        let audio_caps = Some(
+            ["audio/x-opus"]
                 .into_iter()
                 .map(gst::Structure::new_empty)
                 .collect::<gst::Caps>(),
+        );
+
+        Self {
+            video_caps,
+            audio_caps,
             stun_server: None,
             turn_server: None,
             whep_endpoint: None,
@@ -264,15 +271,13 @@ impl ObjectImpl for WhepSrc {
                 let mut settings = self.settings.lock().unwrap();
                 settings.video_caps = value
                     .get::<Option<gst::Caps>>()
-                    .expect("type checked upstream")
-                    .unwrap_or_else(gst::Caps::new_empty);
+                    .expect("type checked upstream");
             }
             "audio-caps" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.audio_caps = value
                     .get::<Option<gst::Caps>>()
-                    .expect("type checked upstream")
-                    .unwrap_or_else(gst::Caps::new_empty);
+                    .expect("type checked upstream");
             }
             "stun-server" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -839,25 +844,31 @@ impl WhepSrc {
             settings.video_caps
         );
 
+        if settings.audio_caps.is_none() && settings.video_caps.is_none() {
+            self.raise_error(
+                gst::ResourceError::Failed,
+                "One of audio-caps or video-caps must be set".to_string(),
+            );
+            return;
+        }
+
         /*
          * Since we will be recvonly we need to add a transceiver without which
          * WebRTC bin does not generate ICE candidates.
          */
-        self.webrtcbin.emit_by_name::<WebRTCRTPTransceiver>(
-            "add-transceiver",
-            &[
-                &WebRTCRTPTransceiverDirection::Recvonly,
-                &settings.audio_caps,
-            ],
-        );
+        if let Some(audio_caps) = &settings.audio_caps {
+            self.webrtcbin.emit_by_name::<WebRTCRTPTransceiver>(
+                "add-transceiver",
+                &[&WebRTCRTPTransceiverDirection::Recvonly, &audio_caps],
+            );
+        }
 
-        self.webrtcbin.emit_by_name::<WebRTCRTPTransceiver>(
-            "add-transceiver",
-            &[
-                &WebRTCRTPTransceiverDirection::Recvonly,
-                &settings.video_caps,
-            ],
-        );
+        if let Some(video_caps) = &settings.video_caps {
+            self.webrtcbin.emit_by_name::<WebRTCRTPTransceiver>(
+                "add-transceiver",
+                &[&WebRTCRTPTransceiverDirection::Recvonly, &video_caps],
+            );
+        }
 
         drop(settings);
 
