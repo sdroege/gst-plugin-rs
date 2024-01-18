@@ -474,7 +474,7 @@ where
     }
 }
 
-pub trait SignallableImpl: object::ObjectImpl + 'static {
+pub trait SignallableImpl: object::ObjectImpl + Send + Sync + 'static {
     fn start(&self) {}
     fn stop(&self) {}
     fn send_sdp(&self, _session_id: &str, _sdp: &gst_webrtc::WebRTCSessionDescription) {}
