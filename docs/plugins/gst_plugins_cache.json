@@ -6704,12 +6704,14 @@
                     "audio_%%u": {
                         "caps": "audio/x-raw:\naudio/x-opus:\n",
                         "direction": "sink",
-                        "presence": "request"
+                        "presence": "request",
+                        "type": "GstWebRTCSinkPad"
                     },
                     "video_%%u": {
                         "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n\nvideo/x-raw(memory:D3D11Memory):\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\n",
                         "direction": "sink",
-                        "presence": "request"
+                        "presence": "request",
+                        "type": "GstWebRTCSinkPad"
                     }
                 },
                 "rank": "none"
@@ -6735,12 +6737,14 @@
                     "audio_%%u": {
                         "caps": "audio/x-raw:\naudio/x-opus:\n",
                         "direction": "sink",
-                        "presence": "request"
+                        "presence": "request",
+                        "type": "GstWebRTCSinkPad"
                     },
                     "video_%%u": {
                         "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n\nvideo/x-raw(memory:D3D11Memory):\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\n",
                         "direction": "sink",
-                        "presence": "request"
+                        "presence": "request",
+                        "type": "GstWebRTCSinkPad"
                     }
                 },
                 "rank": "none"
@@ -6766,12 +6770,14 @@
                     "audio_%%u": {
                         "caps": "audio/x-raw:\naudio/x-opus:\n",
                         "direction": "sink",
-                        "presence": "request"
+                        "presence": "request",
+                        "type": "GstWebRTCSinkPad"
                     },
                     "video_%%u": {
                         "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n\nvideo/x-raw(memory:D3D11Memory):\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\n",
                         "direction": "sink",
-                        "presence": "request"
+                        "presence": "request",
+                        "type": "GstWebRTCSinkPad"
                     }
                 },
                 "rank": "none"
@@ -6797,12 +6803,14 @@
                     "audio_%%u": {
                         "caps": "audio/x-raw:\naudio/x-opus:\n",
                         "direction": "sink",
-                        "presence": "request"
+                        "presence": "request",
+                        "type": "GstWebRTCSinkPad"
                     },
                     "video_%%u": {
                         "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n\nvideo/x-raw(memory:D3D11Memory):\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\n",
                         "direction": "sink",
-                        "presence": "request"
+                        "presence": "request",
+                        "type": "GstWebRTCSinkPad"
                     }
                 },
                 "rank": "none"
@@ -6862,12 +6870,14 @@
                     "audio_%%u": {
                         "caps": "audio/x-raw:\naudio/x-opus:\n",
                         "direction": "sink",
-                        "presence": "request"
+                        "presence": "request",
+                        "type": "GstWebRTCSinkPad"
                     },
                     "video_%%u": {
                         "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n\nvideo/x-raw(memory:D3D11Memory):\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\n",
                         "direction": "sink",
-                        "presence": "request"
+                        "presence": "request",
+                        "type": "GstWebRTCSinkPad"
                     }
                 },
                 "rank": "none"
@@ -7589,6 +7599,32 @@
                         "value": "2"
                     }
                 ]
+            },
+            "GstWebRTCSinkPad": {
+                "hierarchy": [
+                    "GstWebRTCSinkPad",
+                    "GstGhostPad",
+                    "GstProxyPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "msid": {
+                        "blurb": "Remote MediaStream ID in use for this pad",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                }
             },
             "GstWebRTCSrcPad": {
                 "hierarchy": [

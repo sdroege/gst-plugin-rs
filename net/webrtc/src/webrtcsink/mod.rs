@@ -39,9 +39,14 @@ use gst::subclass::prelude::*;
 mod homegrown_cc;
 
 mod imp;
+mod pad;
 
 glib::wrapper! {
     pub struct BaseWebRTCSink(ObjectSubclass<imp::BaseWebRTCSink>) @extends gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
+}
+
+glib::wrapper! {
+    pub struct WebRTCSinkPad(ObjectSubclass<pad::WebRTCSinkPad>) @extends gst::GhostPad, gst::ProxyPad, gst::Pad, gst::Object;
 }
 
 glib::wrapper! {
@@ -124,6 +129,7 @@ enum WebRTCSinkMitigationMode {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    WebRTCSinkPad::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     BaseWebRTCSink::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     WebRTCSinkCongestionControl::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     gst::Element::register(
