@@ -20,7 +20,9 @@ use std::ops::Mul;
 use std::sync::{mpsc, Arc, Condvar, Mutex};
 
 use super::homegrown_cc::CongestionController;
-use super::{WebRTCSinkCongestionControl, WebRTCSinkError, WebRTCSinkMitigationMode};
+use super::{
+    WebRTCSinkCongestionControl, WebRTCSinkError, WebRTCSinkMitigationMode, WebRTCSinkPad,
+};
 use crate::aws_kvs_signaller::AwsKvsSignaller;
 use crate::janusvr_signaller::JanusVRSignaller;
 use crate::livekit_signaller::LiveKitSignaller;
@@ -186,7 +188,7 @@ impl futures::stream::FusedStream for CustomBusStream {
 /// Wrapper around our sink pads
 #[derive(Debug, Clone)]
 struct InputStream {
-    sink_pad: gst::GhostPad,
+    sink_pad: WebRTCSinkPad,
     producer: Option<StreamProducer>,
     /// The (fixed) caps coming in
     in_caps: Option<gst::Caps>,
@@ -1434,6 +1436,10 @@ impl InputStream {
             ),
         )
     }
+
+    fn msid(&self) -> Option<String> {
+        self.sink_pad.property("msid")
+    }
 }
 
 impl NavigationEventHandler {
@@ -1737,6 +1743,11 @@ impl BaseWebRTCSink {
                 );
                 return;
             };
+
+            if let Some(msid) = stream.msid() {
+                gst::trace!(CAT, obj: element, "forwarding msid={msid:?} to webrtcbin sinkpad");
+                pad.set_property("msid", &msid);
+            }
 
             let transceiver = pad.property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
 
@@ -4071,11 +4082,12 @@ impl ElementImpl for BaseWebRTCSink {
                 caps_builder = caps_builder.structure(codec.caps.structure(0).unwrap().to_owned());
             }
 
-            let video_pad_template = gst::PadTemplate::new(
+            let video_pad_template = gst::PadTemplate::with_gtype(
                 "video_%u",
                 gst::PadDirection::Sink,
                 gst::PadPresence::Request,
                 &caps_builder.build(),
+                WebRTCSinkPad::static_type(),
             )
             .unwrap();
 
@@ -4084,11 +4096,12 @@ impl ElementImpl for BaseWebRTCSink {
             for codec in Codecs::audio_codecs() {
                 caps_builder = caps_builder.structure(codec.caps.structure(0).unwrap().to_owned());
             }
-            let audio_pad_template = gst::PadTemplate::new(
+            let audio_pad_template = gst::PadTemplate::with_gtype(
                 "audio_%u",
                 gst::PadDirection::Sink,
                 gst::PadPresence::Request,
                 &caps_builder.build(),
+                WebRTCSinkPad::static_type(),
             )
             .unwrap();
 
@@ -4127,13 +4140,13 @@ impl ElementImpl for BaseWebRTCSink {
             (name, false)
         };
 
-        let sink_pad = gst::GhostPad::builder_from_template(templ)
+        let sink_pad = gst::PadBuilder::<WebRTCSinkPad>::from_template(templ)
             .name(name.as_str())
             .chain_function(|pad, parent, buffer| {
                 BaseWebRTCSink::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |this| this.chain(pad, buffer),
+                    |this| this.chain(pad.upcast_ref(), buffer),
                 )
             })
             .event_function(|pad, parent, event| {
@@ -4250,7 +4263,7 @@ impl ChildProxyImpl for BaseWebRTCSink {
     fn child_by_name(&self, name: &str) -> Option<glib::Object> {
         match name {
             "signaller" => Some(self.settings.lock().unwrap().signaller.clone().upcast()),
-            _ => None,
+            _ => self.obj().static_pad(name).map(|pad| pad.upcast()),
         }
     }
 }
