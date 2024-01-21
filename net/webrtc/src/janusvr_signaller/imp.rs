@@ -278,14 +278,15 @@ impl Signaller {
         let (ws_sender, mut ws_receiver) = mpsc::channel::<OutgoingMessage>(1000);
         let send_task_handle =
             RUNTIME.spawn(glib::clone!(@weak-allow-none self as this => async move {
+                let mut res = Ok(());
                 loop {
                     tokio::select! {
                         opt = ws_receiver.next() => match opt {
                             Some(msg) => {
                                 gst::log!(CAT, "Sending websocket message {:?}", msg);
-                                ws_sink
+                                res = ws_sink
                                     .send(WsMessage::Text(serde_json::to_string(&msg).unwrap()))
-                                    .await?;
+                                    .await;
                             },
                             None => break,
                         },
@@ -301,22 +302,29 @@ impl Signaller {
                                     transaction,
                                     session_id,
                                 });
-                                ws_sink
+                                res = ws_sink
                                     .send(WsMessage::Text(serde_json::to_string(&msg).unwrap()))
-                                    .await?;
+                                    .await;
                             }
                         }
                     }
+
+                    if let Err(ref err) = res {
+                        this.as_ref().map_or_else(|| gst::error!(CAT, "Quitting send task: {err}"),
+                            |this| gst::error!(CAT, imp: this, "Quitting send task: {err}")
+                        );
+
+                        break;
+                    }
                 }
 
-                let msg = "Done sending";
-                this.map_or_else(|| gst::info!(CAT, "{msg}"),
-                    |this| gst::info!(CAT, imp: this, "{msg}")
+                this.map_or_else(|| gst::debug!(CAT, "Done sending"),
+                    |this| gst::debug!(CAT, imp: this, "Done sending")
                 );
 
-                ws_sink.close().await?;
+                let _ = ws_sink.close().await;
 
-                Ok::<(), Error>(())
+                res.map_err(Into::into)
             }));
 
         let recv_task_handle =
