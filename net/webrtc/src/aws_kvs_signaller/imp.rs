@@ -424,6 +424,7 @@ impl Signaller {
         let imp = self.downgrade();
         let ping_timeout = settings.ping_timeout;
         let send_task_handle = task::spawn(async move {
+            let mut res = Ok(());
             loop {
                 match tokio::time::timeout(
                     std::time::Duration::from_secs(ping_timeout as u64),
@@ -440,26 +441,38 @@ impl Signaller {
                                 serde_json::to_string(&msg).unwrap()
                             );
                         }
-                        ws_sink
+                        res = ws_sink
                             .send(WsMessage::Text(serde_json::to_string(&msg).unwrap()))
-                            .await?;
+                            .await;
                     }
                     Ok(None) => {
                         break;
                     }
                     Err(_) => {
-                        ws_sink.send(WsMessage::Ping(vec![])).await?;
+                        res = ws_sink.send(WsMessage::Ping(vec![])).await;
                     }
+                }
+
+                if let Err(ref err) = res {
+                    if let Some(imp) = imp.upgrade() {
+                        gst::error!(CAT, imp: imp, "Quitting send loop: {err}");
+                    } else {
+                        gst::error!(CAT, "Quitting send loop: {err}");
+                    }
+
+                    break;
                 }
             }
 
             if let Some(imp) = imp.upgrade() {
-                gst::info!(CAT, imp: imp, "Done sending");
+                gst::debug!(CAT, imp: imp, "Done sending");
+            } else {
+                gst::debug!(CAT, "Done sending");
             }
 
-            ws_sink.close().await?;
+            let _ = ws_sink.close().await;
 
-            Ok::<(), Error>(())
+            res.map_err(Into::into)
         });
 
         let imp = self.downgrade();
