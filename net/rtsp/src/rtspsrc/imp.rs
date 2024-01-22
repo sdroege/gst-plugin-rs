@@ -15,6 +15,7 @@ use std::collections::{btree_set::BTreeSet, HashMap};
 use std::convert::TryFrom;
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use std::num::NonZeroUsize;
 use std::pin::Pin;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -37,12 +38,14 @@ use rtsp_types::headers::{
 };
 use rtsp_types::{Message, Method, Request, Response, StatusCode, Version};
 
+use lru::LruCache;
 use url::Url;
 
 use gst::buffer::{MappedBuffer, Readable};
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst_net::gio;
 
 use super::body::Body;
 use super::sdp;
@@ -60,6 +63,7 @@ const DEFAULT_RECEIVE_MTU: u32 = 1500 + 8;
 const MAX_MESSAGE_SIZE: usize = 1024 * 1024;
 const MAX_BIND_PORT_RETRY: u16 = 100;
 const UDP_PACKET_MAX_SIZE: u32 = 65535 - 8;
+const RTCP_ADDR_CACHE_SIZE: usize = 100;
 
 static RTCP_CAPS: Lazy<gst::Caps> =
     Lazy::new(|| gst::Caps::from(gst::Structure::new_empty("application/x-rtcp")));
@@ -1858,28 +1862,40 @@ async fn udp_rtp_task(
     receive_mtu: u32,
 ) {
     let t = Duration::from_secs(timeout.into());
-    // We would not be connected if the server didn't give us a Transport header or its Transport
-    // header didn't specify the server port, so we don't know the sender port from which we will
-    // get data till we get the first packet here.
-    if socket.peer_addr().is_err() {
-        let ret = match time::timeout(t, socket.peek_sender()).await {
-            Ok(Ok(addr)) => {
-                let _ = socket.connect(addr).await;
-                Ok(())
+    let addr = match socket.peer_addr() {
+        Ok(addr) => addr,
+        // We would not be connected if the server didn't give us a Transport header or its
+        // Transport header didn't specify the server port, so we don't know the sender port from
+        // which we will get data till we get the first packet here.
+        Err(_) => {
+            let ret = match time::timeout(t, socket.peek_sender()).await {
+                Ok(Ok(addr)) => {
+                    let _ = socket.connect(addr).await;
+                    Ok(addr)
+                }
+                Ok(Err(_elapsed)) => {
+                    Err(format!("No data after {DEFAULT_TIMEOUT} seconds, exiting"))
+                }
+                Err(err) => Err(format!("UDP socket was closed: {err:?}")),
+            };
+            match ret {
+                Ok(addr) => addr,
+                Err(err) => {
+                    gst::element_error!(
+                        appsrc,
+                        gst::ResourceError::Failed,
+                        ("{}", err),
+                        ["{:#?}", socket]
+                    );
+                    return;
+                }
             }
-            Ok(Err(_elapsed)) => Err(format!("No data after {DEFAULT_TIMEOUT} seconds, exiting")),
-            Err(err) => Err(format!("UDP socket was closed: {err:?}")),
-        };
-        if let Err(s) = ret {
-            gst::element_error!(
-                appsrc,
-                gst::ResourceError::Failed,
-                ("{}", s),
-                ["{:#?}", socket]
-            );
-            return;
         }
-    }
+    };
+    let gio_addr = {
+        let inet_addr: gio::InetAddress = addr.ip().into();
+        gio::InetSocketAddress::new(&inet_addr, addr.port())
+    };
     let mut size = receive_mtu;
     let caps = appsrc.caps();
     let mut pool = gst::BufferPool::new();
@@ -1918,6 +1934,7 @@ async fn udp_rtp_task(
                 let bufref = buffer.make_mut();
                 bufref.set_size(len);
                 bufref.set_dts(t);
+                gst_net::NetAddressMeta::add(bufref, &gio_addr);
                 if let Err(err) = appsrc.push_buffer(buffer) {
                     break format!("UDP buffer push failed: {err:?}");
                 }
@@ -1944,6 +1961,7 @@ async fn udp_rtcp_task(
     // In that case, we will connect when we get an RTCP packet.
     let mut is_connected = socket.peer_addr().is_ok();
     let mut buf = vec![0; UDP_PACKET_MAX_SIZE as usize];
+    let mut cache: LruCache<_, _> = LruCache::new(NonZeroUsize::new(RTCP_ADDR_CACHE_SIZE).unwrap());
     let error = loop {
         tokio::select! {
             send_rtcp = rx.recv() => match send_rtcp {
@@ -1975,6 +1993,11 @@ async fn udp_rtcp_task(
                     let mut buffer = gst::Buffer::from_slice(buf[..len].to_owned());
                     let bufref = buffer.make_mut();
                     bufref.set_dts(t);
+                    let gio_addr = cache.get_or_insert(addr, || {
+                        let inet_addr: gio::InetAddress = addr.ip().into();
+                        gio::InetSocketAddress::new(&inet_addr, addr.port())
+                    });
+                    gst_net::NetAddressMeta::add(bufref, gio_addr);
                     if let Err(err) = appsrc.push_buffer(buffer) {
                         break format!("UDP buffer push failed: {err:?}");
                     }

@@ -15,8 +15,10 @@ data-encoding = "2.4"
 futures = "0.3"
 gst = { workspace = true, features = ["v1_20"] }
 gst-app = { workspace = true, features = ["v1_20"] }
+gst-net = { workspace = true, features = ["v1_20"] }
 gst-pbutils = { workspace = true, features = ["v1_20"] }
 once_cell.workspace = true
+lru = "0.12"
 rtsp-types = "0.1"
 sdp-types = "0.1"
 socket2 = "0.5"
@@ -50,4 +52,4 @@ versioning = false
 import_library = false
 
 [package.metadata.capi.pkg_config]
-requires_private = "gstreamer-1.0, gobject-2.0, glib-2.0, gmodule-2.0"
+requires_private = "gstreamer-1.0, gstreamer-net-1.0, gobject-2.0, glib-2.0, gmodule-2.0"
