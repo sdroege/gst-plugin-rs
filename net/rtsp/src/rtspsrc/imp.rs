@@ -52,7 +52,7 @@ use super::sdp;
 use super::transport::RtspTransportInfo;
 
 const DEFAULT_LOCATION: Option<Url> = None;
-const DEFAULT_TIMEOUT: gst::ClockTime = gst::ClockTime::from_seconds(2);
+const DEFAULT_TIMEOUT: gst::ClockTime = gst::ClockTime::from_seconds(5);
 const DEFAULT_PORT_START: u16 = 0;
 // Priority list has multicast first, because we want to prefer multicast if it's available
 const DEFAULT_PROTOCOLS: &str = "udp-mcast,udp,tcp";
@@ -1873,9 +1873,10 @@ async fn udp_rtp_task(
                     let _ = socket.connect(addr).await;
                     Ok(addr)
                 }
-                Ok(Err(_elapsed)) => {
-                    Err(format!("No data after {DEFAULT_TIMEOUT} seconds, exiting"))
-                }
+                Ok(Err(_elapsed)) => Err(format!(
+                    "No data after {} seconds, exiting",
+                    timeout.seconds()
+                )),
                 Err(err) => Err(format!("UDP socket was closed: {err:?}")),
             };
             match ret {
@@ -1939,7 +1940,9 @@ async fn udp_rtp_task(
                     break format!("UDP buffer push failed: {err:?}");
                 }
             }
-            Ok(Err(_elapsed)) => break format!("No data after {DEFAULT_TIMEOUT} seconds, exiting"),
+            Ok(Err(_elapsed)) => {
+                break format!("No data after {} seconds, exiting", timeout.seconds())
+            }
             Err(err) => break format!("UDP socket was closed: {err:?}"),
         };
     };

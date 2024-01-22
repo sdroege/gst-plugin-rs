@@ -6406,7 +6406,7 @@
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
-                        "default": "2000000000",
+                        "default": "5000000000",
                         "max": "18446744073709551614",
                         "min": "0",
                         "mutable": "ready",
