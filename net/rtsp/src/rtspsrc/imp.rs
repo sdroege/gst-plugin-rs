@@ -1088,9 +1088,29 @@ struct RtspManager {
 impl RtspManager {
     fn new(rtpbin2: bool) -> Self {
         let name = if rtpbin2 { "rtpbin2" } else { "rtpbin" };
+        let manager = gst::ElementFactory::make_with_name(name, None)
+            .unwrap_or_else(|_| panic!("{name} not found"));
+        if !rtpbin2 {
+            let on_bye = |args: &[glib::Value]| {
+                let m = args[0].get::<gst::Element>().unwrap();
+                let Some(obj) = m.parent() else {
+                    return None;
+                };
+                let bin = obj.downcast::<gst::Bin>().unwrap();
+                bin.send_event(gst::event::Eos::new());
+                None
+            };
+            manager.connect("on-bye-ssrc", true, move |args| {
+                gst::info!(CAT, "Received BYE packet");
+                on_bye(args)
+            });
+            manager.connect("on-bye-timeout", true, move |args| {
+                gst::info!(CAT, "BYE due to timeout");
+                on_bye(args)
+            });
+        }
         RtspManager {
-            inner: gst::ElementFactory::make_with_name(name, None)
-                .unwrap_or_else(|_| panic!("{name} not found")),
+            inner: manager,
             using_rtpbin2: rtpbin2,
         }
     }
