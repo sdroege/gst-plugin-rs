@@ -148,6 +148,12 @@ impl TextWrap {
             gst::FlowError::Error
         })?;
 
+        if data.is_empty() {
+            gst::trace!(CAT, imp: self, "processing gap {:?}", buffer);
+        } else {
+            gst::debug!(CAT, imp: self, "processing {} in {:?}", data, buffer);
+        }
+
         let accumulate_time = self.settings.lock().unwrap().accumulate_time;
         let mut state = self.state.lock().unwrap();
 
@@ -162,13 +168,21 @@ impl TextWrap {
                 .unwrap_or(false);
 
             if add_buffer {
-                let mut buf =
-                    gst::Buffer::from_mut_slice(mem::take(&mut state.current_text).into_bytes());
+                let drained = mem::take(&mut state.current_text);
+                let duration = state.end_ts.opt_checked_sub(state.start_ts).ok().flatten();
+                gst::info!(
+                    CAT,
+                    imp: self,
+                    "Outputting contents {}, ts: {}, duration: {}",
+                    drained,
+                    state.start_ts.display(),
+                    duration.display(),
+                );
+                let mut buf = gst::Buffer::from_mut_slice(drained.into_bytes());
                 {
                     let buf_mut = buf.get_mut().unwrap();
                     buf_mut.set_pts(state.start_ts);
-                    buf_mut
-                        .set_duration(state.end_ts.opt_checked_sub(state.start_ts).ok().flatten());
+                    buf_mut.set_duration(duration);
                 }
                 bufferlist.get_mut().unwrap().add(buf);
 
@@ -318,10 +332,27 @@ impl TextWrap {
         use gst::EventView;
 
         match event.view() {
-            EventView::Gap(_) => {
+            EventView::Gap(gap) => {
                 let state = self.state.lock().unwrap();
                 /* We are currently accumulating text, no need to forward the gap */
                 if state.start_ts.is_some() {
+                    let (pts, duration) = gap.get();
+
+                    let mut gap_buffer = gst::Buffer::new();
+                    {
+                        let buf_mut = gap_buffer.get_mut().expect("reference should be exclusive");
+                        buf_mut.set_pts(pts);
+                        buf_mut.set_duration(duration);
+                    }
+
+                    drop(state);
+
+                    let res = self.sink_chain(pad, gap_buffer);
+
+                    if res != Ok(gst::FlowSuccess::Ok) {
+                        gst::warning!(CAT, "Failed to process gap: {:?}", res);
+                    }
+
                     true
                 } else {
                     gst::Pad::event_default(pad, Some(&*self.obj()), event)
