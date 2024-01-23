@@ -1,6 +1,7 @@
 import argparse
 import csv
 import re
+import statistics
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -72,6 +73,16 @@ for (i, (pad, values)) in enumerate(pads.items()):
         '.', label = '{}: lateness'.format(pad),
         color = colors[i],
     )
+
+    late = [x[1] for x in values['lateness'] if x[2]]
+    n_late = len(late)
+    n_buffers = len(values['lateness'])
+
+    print("{} late buffers: {}/{} ratio: {:.2f}% min: {} max: {} mean: {}".format(
+        pad, n_late, n_buffers, (n_late / n_buffers) * 100,
+        min(late) if n_late > 0 else "",
+        max(late) if n_late > 0 else "",
+        statistics.mean(late) if n_late > 0 else ""))
 
     if not args.no_latency:
         ax1.plot(
