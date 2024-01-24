@@ -38,7 +38,7 @@ fn audio_info_from_caps(
 
 fn duration_from_caps(caps: &gst::CapsRef) -> Option<gst::ClockTime> {
     caps.structure(0)
-        .filter(|s| s.name().starts_with("video/"))
+        .filter(|s| s.name().starts_with("video/") || s.name().starts_with("image/"))
         .and_then(|s| s.get::<gst::Fraction>("framerate").ok())
         .filter(|framerate| framerate.denom() > 0 && framerate.numer() > 0)
         .and_then(|framerate| {
