@@ -197,6 +197,32 @@ plugins = {
   },
 }
 
+if get_option('examples').allowed()
+  plugins += {
+    'fallbackswitch': {
+      'library': 'libgstfallbackswitch',
+      'examples': ['gtk-fallbackswitch'],
+      'features': ['gtk', 'gio', 'gst-plugin-gtk4'],
+    },
+    'livesync': {
+      'library': 'libgstlivesync',
+      'examples': ['gtk-livesync'],
+      'features': ['gtk', 'gio', 'gst-plugin-gtk4'],
+    },
+    'togglerecord': {
+      'library': 'libgsttogglerecord',
+      'examples': ['gtk-recording'],
+      'features': ['gtk', 'gio', 'gst-plugin-gtk4'],
+    },
+  }
+else
+  plugins += {
+    'fallbackswitch': { 'library': 'libgstfallbackswitch'},
+    'livesync': { 'library': 'libgstlivesync'},
+    'togglerecord': { 'library': 'libgsttogglerecord'},
+  }
+endif
+
 # Won't build on platforms where it bundles the sources because of:
 # https://github.com/qnighy/libwebp-sys2-rs/issues/12
 # the fix is:
@@ -270,21 +296,6 @@ if get_option('gtk4').allowed()
       'examples': ['gtksink'],
       'extra-deps': {'gtk4': '>=4.6'},
       'features': gtk4_features,
-    },
-    'fallbackswitch': {
-      'library': 'libgstfallbackswitch',
-      'examples': ['gtk-fallbackswitch'],
-      'features': ['gtk', 'gio', 'gst-plugin-gtk4'],
-    },
-    'livesync': {
-      'library': 'libgstlivesync',
-      'examples': ['gtk-livesync'],
-      'features': ['gtk', 'gio', 'gst-plugin-gtk4'],
-    },
-    'togglerecord': {
-      'library': 'libgsttogglerecord',
-      'examples': ['gtk-recording'],
-      'features': ['gtk', 'gio', 'gst-plugin-gtk4'],
     },
   }
 endif
