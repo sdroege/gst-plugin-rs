@@ -62,7 +62,7 @@ deps = [
   ['gstreamer-app-1.0', 'gst-plugins-base', 'app_dep', 'gstapp'],
   ['gstreamer-audio-1.0', 'gst-plugins-base', 'audio_dep', 'gstaudio'],
   ['gstreamer-base-1.0', 'gstreamer', 'gst_base_dep', 'gst_base'],
-  ['gstreamer-video-1.0', 'gst-plugins-base', 'video_dep', 'gstvideo']  
+  ['gstreamer-video-1.0', 'gst-plugins-base', 'video_dep', 'gstvideo'],
 ]
 
 if get_option('threadshare').allowed() \
