@@ -417,7 +417,7 @@ if get_option('doc').disabled()
 endif
 
 # 'pkgconfig' is the entry in the machine file, if specified
-pkg_config = find_program('pkgconfig', 'pkg-config', required: false)
+pkg_config = find_program('pkgconfig', 'pkg-config')
 if pkg_config.found()
   extra_env += {'PKG_CONFIG': pkg_config.full_path()}
 endif
