@@ -339,8 +339,12 @@ if get_option('gtk4').allowed()
   endif
 endif
 
-if get_option('rav1e').allowed() and find_program('nasm', required: false).found()
-  features += 'gst-plugin-rav1e/asm'
+if get_option('rav1e').allowed()
+  nasm = find_program('nasm', required: false)
+  if nasm.found()
+    features += 'gst-plugin-rav1e/asm'
+    extra_env += {'NASM': nasm.full_path()}
+  endif
 endif
 
 if get_option('default_library') == 'static'
