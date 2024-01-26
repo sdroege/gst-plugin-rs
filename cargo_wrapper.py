@@ -89,6 +89,9 @@ if __name__ == "__main__":
     pkg_config_path.append(str(opts.root_dir / 'meson-uninstalled'))
     env['PKG_CONFIG_PATH'] = os.pathsep.join(pkg_config_path)
 
+    if 'NASM' in env:
+        env['PATH'] = os.pathsep.join([os.path.dirname(env['NASM']), env['PATH']])
+
     rustc_target = None
     if 'RUSTC' in env:
         rustc_cmdline = shlex.split(env['RUSTC'])
