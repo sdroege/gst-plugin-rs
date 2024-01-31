@@ -14,7 +14,7 @@ use gst::subclass::prelude::*;
 use crate::jsontovtt::fku::ForceKeyUnitRequest;
 use crate::ttutils::Lines;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 use std::collections::{BinaryHeap, VecDeque};
 use std::sync::Mutex;

@@ -7,12 +7,12 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use gst::glib::once_cell::sync::Lazy;
 use gst::{
     glib::{self, translate::IntoGlib},
     prelude::*,
     subclass::prelude::*,
 };
+use once_cell::sync::Lazy;
 use parking_lot::{Condvar, Mutex, MutexGuard};
 use std::{collections::VecDeque, sync::mpsc};
 

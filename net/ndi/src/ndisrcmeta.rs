@@ -85,7 +85,7 @@ mod imp {
 
     use super::Buffer;
     use glib::translate::*;
-    use gst::glib::once_cell::sync::Lazy;
+    use once_cell::sync::Lazy;
     use std::mem;
     use std::ptr;
 

@@ -9,7 +9,7 @@ use gst_base::subclass::prelude::*;
 use std::sync::Mutex;
 use std::u32;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 use crate::ndisrcmeta::NdiSrcMeta;
 use crate::ndisys;

@@ -10,10 +10,10 @@
 
 use gst::format::Bytes;
 use gst::glib;
-use gst::glib::once_cell::sync::Lazy;
 use gst::subclass::prelude::*;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
+use once_cell::sync::Lazy;
 
 use crate::constants::{
     CDG_COMMAND, CDG_HEIGHT, CDG_MASK, CDG_PACKET_PERIOD, CDG_PACKET_SIZE, CDG_WIDTH,

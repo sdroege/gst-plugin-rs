@@ -21,7 +21,7 @@ use nnnoiseless::DenoiseState;
 
 use byte_slice_cast::*;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 use atomic_refcell::AtomicRefCell;
 

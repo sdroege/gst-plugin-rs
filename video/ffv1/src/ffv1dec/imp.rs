@@ -18,7 +18,7 @@ use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 use gst_video::VideoFormat;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
 #[derive(Default)]

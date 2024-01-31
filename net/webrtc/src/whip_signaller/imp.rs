@@ -7,12 +7,12 @@ use crate::utils::{
 };
 use crate::RUNTIME;
 use async_recursion::async_recursion;
-use gst::glib::once_cell::sync::Lazy;
 use gst::glib::{self, RustClosure};
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_sdp::SDPMessage;
 use gst_webrtc::{WebRTCICEGatheringState, WebRTCSessionDescription};
+use once_cell::sync::Lazy;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
 use reqwest::StatusCode;

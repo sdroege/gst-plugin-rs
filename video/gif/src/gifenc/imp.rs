@@ -10,11 +10,11 @@
 
 use atomic_refcell::AtomicRefCell;
 use gst::glib;
-use gst::glib::once_cell::sync::Lazy;
 use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 use gst_video::VideoFormat;
+use once_cell::sync::Lazy;
 use std::{
     io,
     io::Write,

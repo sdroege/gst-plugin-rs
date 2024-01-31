@@ -9,7 +9,7 @@
 use cea708_types::{tables::*, Service};
 
 use gst::glib;
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 
 use crate::cea608utils::TextStyle;

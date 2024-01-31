@@ -9,7 +9,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use futures::future;
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 use std::io::Write;
 use std::str::FromStr;
 use std::sync::mpsc::{self, Receiver, SyncSender};

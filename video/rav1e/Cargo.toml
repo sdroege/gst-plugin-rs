@@ -13,6 +13,7 @@ gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/g
 gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 rav1e = { version = "0.7", default-features = false, features = ["threading"] }
 atomic_refcell = "0.1"
+once_cell = "1"
 
 [dev-dependencies]
 gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }

@@ -34,7 +34,7 @@ use crate::ttutils::{Chunk, Line, Lines};
 
 use atomic_refcell::AtomicRefCell;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;

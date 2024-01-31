@@ -14,7 +14,7 @@ use gst::subclass::prelude::*;
 use std::cmp;
 use std::sync::{Mutex, MutexGuard};
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 use super::parser::{SccLine, SccParser};
 use crate::line_reader::LineReader;

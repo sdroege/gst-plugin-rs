@@ -26,7 +26,7 @@ use gst::subclass::prelude::*;
 use gst::EventView;
 use gst::{element_error, error_msg};
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 use crate::runtime::executor::block_on_or_add_sub_task;
 use crate::runtime::prelude::*;

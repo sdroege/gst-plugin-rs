@@ -29,7 +29,7 @@ use sodiumoxide::crypto::box_;
 
 use std::sync::Mutex;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "sodiumdecrypter",

@@ -30,7 +30,7 @@ mod ndi_cc_meta;
 #[cfg(feature = "doc")]
 use gst::prelude::*;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum, Default)]
 #[repr(u32)]

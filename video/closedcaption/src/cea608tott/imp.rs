@@ -13,7 +13,7 @@ use gst::subclass::prelude::*;
 use crate::caption_frame::{CaptionFrame, Status};
 use atomic_refcell::AtomicRefCell;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 #[derive(Copy, Clone, Debug)]
 enum Format {

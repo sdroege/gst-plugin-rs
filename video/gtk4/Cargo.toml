@@ -22,6 +22,7 @@ gst_gl_wayland = { package = "gstreamer-gl-wayland", git = "https://gitlab.freed
 gst_gl_x11 = { package = "gstreamer-gl-x11", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"], optional = true }
 gst_gl_egl = { package = "gstreamer-gl-egl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"], optional = true }
 async-channel = "2.0.0"
+once_cell = "1"
 
 
 [target.'cfg(target_os = "macos")'.dependencies]

@@ -26,7 +26,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_rtp::RTPBuffer;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, VecDeque};

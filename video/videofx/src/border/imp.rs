@@ -14,7 +14,7 @@ use gst_base::{
 };
 use gst_video::{subclass::prelude::*, VideoFormat};
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
 const DEFAULT_BORDER_RADIUS: u32 = 0;

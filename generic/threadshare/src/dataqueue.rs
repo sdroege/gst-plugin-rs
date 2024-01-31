@@ -21,7 +21,7 @@ use futures::future::{self, abortable, AbortHandle};
 
 use gst::prelude::*;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 use std::collections::VecDeque;
 use std::sync::Arc;

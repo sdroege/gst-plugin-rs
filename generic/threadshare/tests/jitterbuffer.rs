@@ -21,7 +21,7 @@ use gst::prelude::*;
 
 use std::sync::mpsc;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(

@@ -9,7 +9,7 @@
 use gst::glib;
 use gst::prelude::*;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 static CONFIG: Lazy<glib::Bytes> = Lazy::new(|| {
     let buff = include_bytes!("test.hrir");

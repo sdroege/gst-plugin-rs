@@ -24,7 +24,7 @@ use std::u32;
 use num_traits::cast::NumCast;
 use num_traits::float::Float;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 // This module contains the private implementation details of our element
 

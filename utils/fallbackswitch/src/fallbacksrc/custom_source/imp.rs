@@ -11,10 +11,12 @@ use gst::glib::SignalHandlerId;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use std::{mem, sync::Mutex};
+use std::{
+    mem,
+    sync::{Mutex, OnceLock},
+};
 
-use gst::glib::once_cell::sync::Lazy;
-use gst::glib::once_cell::sync::OnceCell;
+use once_cell::sync::Lazy;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -43,7 +45,7 @@ struct State {
 
 #[derive(Default)]
 pub struct CustomSource {
-    source: OnceCell<gst::Element>,
+    source: OnceLock<gst::Element>,
     state: Mutex<State>,
 }
 

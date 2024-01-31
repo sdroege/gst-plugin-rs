@@ -10,10 +10,10 @@
 use atomic_refcell::AtomicRefCell;
 use color_name;
 use color_thief::{get_palette, Color, ColorFormat};
-use gst::glib::once_cell::sync::Lazy;
 use gst::{glib, subclass::prelude::*};
 use gst_base::prelude::*;
 use gst_video::{subclass::prelude::*, VideoFormat};
+use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
 const DEFAULT_QUALITY: u32 = 10;

@@ -15,6 +15,7 @@ gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org
 gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 byte-slice-cast = "1.0"
 num-traits = "0.2"
+once_cell = "1"
 
 [dev-dependencies]
 gst_check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }

@@ -13,7 +13,7 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 use std::mem::size_of;
 use std::sync::Mutex;

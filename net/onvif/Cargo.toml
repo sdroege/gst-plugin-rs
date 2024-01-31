@@ -19,6 +19,7 @@ cairo-rs = { git = "https://github.com/gtk-rs/gtk-rs-core", features=["use_glib"
 pango = { git = "https://github.com/gtk-rs/gtk-rs-core" }
 pangocairo = { git = "https://github.com/gtk-rs/gtk-rs-core" }
 xmltree = "0.10"
+once_cell = "1"
 
 [lib]
 name = "gstrsonvif"

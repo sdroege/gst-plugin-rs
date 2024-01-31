@@ -8,7 +8,7 @@ use gst_base::subclass::prelude::*;
 
 use std::sync::Mutex;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 use crate::ndi::SendInstance;
 use crate::ndi_cc_meta::NDICCMetaEncoder;

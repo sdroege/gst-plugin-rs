@@ -17,7 +17,7 @@ use atomic_refcell::AtomicRefCell;
 use crate::cea608utils::*;
 use crate::cea708utils::{textstyle_foreground_color, textstyle_to_pen_color, Cea708ServiceWriter};
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 #[derive(Debug, Copy, Clone)]
 enum Cea608Format {

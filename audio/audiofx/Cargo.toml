@@ -21,6 +21,7 @@ nnnoiseless = { version = "0.5", default-features = false }
 smallvec = "1"
 atomic_refcell = "0.1"
 rayon = "1.5"
+once_cell = "1"
 
 [lib]
 name = "gstrsaudiofx"

@@ -15,7 +15,7 @@ use aws_types::sdk_config::SdkConfig;
 
 use bytes::{buf::BufMut, Bytes, BytesMut};
 use futures::{future, Future};
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 use std::sync::Mutex;
 use std::time::Duration;
 use tokio::runtime;

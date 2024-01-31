@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use atomic_refcell::AtomicRefCell;
-use gst::glib::once_cell::sync::Lazy;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_video::prelude::*;
+use once_cell::sync::Lazy;
 
 use std::{cmp, collections::VecDeque, sync::Mutex};
 

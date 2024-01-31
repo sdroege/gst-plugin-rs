@@ -18,7 +18,7 @@ use gst_video::subclass::prelude::*;
 
 use std::sync::Mutex;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 use super::super::hsvutils;
 

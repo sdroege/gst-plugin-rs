@@ -8,7 +8,7 @@
     clippy::missing_safety_doc
 )]
 
-use glib::once_cell::sync::OnceCell;
+use once_cell::sync::OnceCell;
 
 #[cfg(unix)]
 use libloading::os::unix::{Library, Symbol};

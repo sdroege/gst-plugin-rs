@@ -31,7 +31,7 @@ use std::path::PathBuf;
 
 use pretty_assertions::assert_eq;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 static SENDER_PUBLIC: Lazy<glib::Bytes> = Lazy::new(|| {
     let public = [
         66, 248, 199, 74, 216, 55, 228, 116, 52, 17, 147, 56, 65, 130, 134, 148, 157, 153, 235,

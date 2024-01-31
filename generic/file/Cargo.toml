@@ -12,6 +12,7 @@ rust-version = "1.70"
 url = "2"
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+once_cell = "1"
 
 [lib]
 name = "gstrsfile"

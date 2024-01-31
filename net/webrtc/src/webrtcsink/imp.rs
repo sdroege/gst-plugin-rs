@@ -13,7 +13,7 @@ use gst_webrtc::{WebRTCDataChannel, WebRTCICETransportPolicy};
 use futures::prelude::*;
 
 use anyhow::{anyhow, Error};
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
 use std::ops::Mul;

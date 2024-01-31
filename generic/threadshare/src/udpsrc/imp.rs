@@ -25,7 +25,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_net::*;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 use std::i32;
 use std::io;

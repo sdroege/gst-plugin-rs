@@ -12,7 +12,7 @@ use gst::subclass::prelude::*;
 use gst_rtp::rtp_buffer::*;
 use gst_rtp::RTPBuffer;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 use std::collections::HashSet;
 use std::sync::{mpsc, Mutex};

@@ -25,7 +25,7 @@
 use gst::glib;
 use gst::prelude::*;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 use pretty_assertions::assert_eq;
 

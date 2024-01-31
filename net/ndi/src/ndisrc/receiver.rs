@@ -8,7 +8,7 @@ use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::thread;
 use std::time;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 use crate::ndi::*;
 use crate::ndisrcmeta::Buffer;

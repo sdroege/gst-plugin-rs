@@ -3,13 +3,12 @@
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use gst::glib::once_cell::sync::OnceCell;
+use std::{
+    sync::{atomic, Mutex, OnceLock},
+    thread,
+};
 
-use std::sync::atomic;
-use std::sync::Mutex;
-use std::thread;
-
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 use crate::ndi;
 
@@ -190,7 +189,7 @@ impl DeviceProvider {
 
 #[derive(Debug)]
 pub struct Device {
-    source: OnceCell<ndi::Source<'static>>,
+    source: OnceLock<ndi::Source<'static>>,
 }
 
 #[glib::object_subclass]
@@ -201,7 +200,7 @@ impl ObjectSubclass for Device {
 
     fn new() -> Self {
         Self {
-            source: OnceCell::new(),
+            source: OnceLock::new(),
         }
     }
 }

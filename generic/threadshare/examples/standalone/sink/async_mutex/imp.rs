@@ -14,7 +14,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::EventView;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 use gstthreadshare::runtime::executor::block_on_or_add_sub_task;
 use gstthreadshare::runtime::{prelude::*, PadSink};

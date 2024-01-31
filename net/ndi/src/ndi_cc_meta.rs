@@ -9,9 +9,9 @@ use anyhow::{bail, Result};
 use data_encoding::BASE64;
 use smallvec::SmallVec;
 
-use gst::glib::once_cell::sync::Lazy;
 use gst::glib::translate::IntoGlib;
 use gst_video::{VideoAncillary, VideoAncillaryDID16, VideoVBIEncoder, VideoVBIParser};
+use once_cell::sync::Lazy;
 
 use std::ffi::CString;
 

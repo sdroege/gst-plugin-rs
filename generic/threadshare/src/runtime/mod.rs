@@ -44,7 +44,7 @@ pub mod prelude {
     pub use super::task::TaskImpl;
 }
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 static RUNTIME_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(

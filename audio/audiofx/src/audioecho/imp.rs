@@ -19,7 +19,7 @@ use byte_slice_cast::*;
 use num_traits::cast::{FromPrimitive, ToPrimitive};
 use num_traits::float::Float;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 static _CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "rsaudioecho",

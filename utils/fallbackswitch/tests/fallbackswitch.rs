@@ -10,7 +10,7 @@
 use gst::debug;
 use gst::prelude::*;
 
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 
 const LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(10);
 

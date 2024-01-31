@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use gst::glib;
-use gst::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 
 use crate::ffi;
