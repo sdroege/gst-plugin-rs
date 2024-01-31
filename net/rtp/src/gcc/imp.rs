@@ -559,8 +559,7 @@ impl Detector {
 
         let estimate_uncertainty = self.estimate_error + Q;
         self.gain = estimate_uncertainty / (estimate_uncertainty + self.measurement_uncertainty);
-        self.estimate =
-            self.estimate + Duration::nanoseconds((self.gain * zms * 1_000_000.) as i64);
+        self.estimate += Duration::nanoseconds((self.gain * zms * 1_000_000.) as i64);
         self.estimate_error = (1. - self.gain) * estimate_uncertainty;
     }
 
@@ -618,7 +617,7 @@ impl Detector {
         let d = abs_estimate - self.threshold;
         let add = k * d.num_milliseconds() as f64 * time_delta.num_milliseconds() as f64;
 
-        self.threshold = self.threshold + Duration::nanoseconds((add * 100. * 1_000.) as i64);
+        self.threshold += Duration::nanoseconds((add * 100. * 1_000.) as i64);
         self.threshold = self.threshold.clamp(*MIN_THRESHOLD, *MAX_THRESHOLD);
         self.last_threshold_update = Some(now);
     }
@@ -639,7 +638,7 @@ impl Detector {
         );
         match th_usage {
             NetworkUsage::Over => {
-                self.increasing_duration = self.increasing_duration + delta;
+                self.increasing_duration += delta;
                 self.increasing_counter += 1;
 
                 if self.increasing_duration > *OVERUSE_TIME_TH
