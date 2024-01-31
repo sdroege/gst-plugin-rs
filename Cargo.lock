@@ -2771,7 +2771,7 @@ dependencies = [
  "gstreamer-utils",
  "gstreamer-video",
  "gstreamer-webrtc",
- "http 0.2.11",
+ "http 1.0.0",
  "human_bytes",
  "livekit-api",
  "livekit-protocol",
