@@ -138,12 +138,6 @@ version = "0.11"
 name = "regex-automata"
 version = "0.1"
 
-# proc-macro-crate depends on an older version of toml_edit
-# https://github.com/bkchr/proc-macro-crate/pull/41
-[[bans.skip]]
-name = "toml_edit"
-version = "0.20"
-
 # Various crates depend on old versions of the windows crates
 [[bans.skip]]
 name = "windows_x86_64_msvc"
