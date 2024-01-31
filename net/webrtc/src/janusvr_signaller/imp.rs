@@ -13,7 +13,7 @@ use gst::glib::once_cell::sync::Lazy;
 use gst::glib::Properties;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use http_1::Uri;
+use http::Uri;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::ops::ControlFlow;
@@ -260,7 +260,7 @@ impl Signaller {
             .into_client_request()?;
         request.headers_mut().append(
             "Sec-WebSocket-Protocol",
-            http_1::HeaderValue::from_static("janus-protocol"),
+            http::HeaderValue::from_static("janus-protocol"),
         );
 
         let (ws, _) = timeout(

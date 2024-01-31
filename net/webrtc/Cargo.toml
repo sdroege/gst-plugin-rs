@@ -41,7 +41,7 @@ aws-smithy-http = { version = "0.60", features = [ "rt-tokio" ] }
 aws-smithy-types = "1.0"
 aws-sdk-kinesisvideo = "1.0"
 aws-sdk-kinesisvideosignaling = "1.0"
-http = "0.2"
+http = "1.0"
 chrono = "0.4"
 data-encoding = "2.3.3"
 url-escape = "0.1.1"
@@ -57,7 +57,6 @@ livekit-api = { version = "0.3", default-features = false, features = ["signal-c
 warp = "0.3"
 crossbeam-channel = "0.5"
 rand = "0.8"
-http_1 = { version = "1.0", package = "http" }
 
 [dev-dependencies]
 tracing = { version = "0.1", features = ["log"] }

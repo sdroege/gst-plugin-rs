@@ -403,7 +403,7 @@ impl Signaller {
             .expect("Failed to build valid request");
         let (signing_instructions, _signature) =
             sign(signable_request, &signing_params)?.into_parts();
-        signing_instructions.apply_to_request_http0x(&mut request);
+        signing_instructions.apply_to_request_http1x(&mut request);
 
         let url = request.uri().to_string();
 
