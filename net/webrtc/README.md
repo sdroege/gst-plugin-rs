@@ -68,7 +68,7 @@ If more granular control is required, applications should use `webrtcbin`
 directly, `webrtcsink` will focus on trying to just do the right thing, although
 it might expose more interfaces to guide and tune the heuristics it employs.
 
-[example project]: https://github.com/centricular/webrtcsink-custom-signaller
+[example project]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/tree/main/net/webrtc/examples/webrtcsink-custom-signaller
 
 ## Building
 
@@ -160,7 +160,15 @@ with the following GSteamer pipeline as a client:
 
 ``` shell
 gst-launch-1.0 webrtcsrc signaller::producer-peer-id=<webrtcsink-peer-id> enable-data-channel-navigation=true ! videoconvert ! autovideosink
+```
 
+### Sending HTTP headers
+
+During the initial signalling server handshake, you have the option to transmit 
+HTTP headers, which can be utilized, for instance, for authentication purposes or sticky sessions:
+
+``` shell
+gst-launch-1.0 webrtcsink signaller::uri="ws://127.0.0.1:8443" signaller::headers="headers,foo=bar,cookie=\"session=1234567890; foo=bar\""
 ```
 
 [`GstNavigation`]: https://gstreamer.freedesktop.org/documentation/video/gstnavigation.html
