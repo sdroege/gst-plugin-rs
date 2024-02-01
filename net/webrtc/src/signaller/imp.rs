@@ -493,21 +493,33 @@ impl ObjectImpl for Signaller {
         static PROPS: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
                 glib::ParamSpecString::builder("uri")
+                    .nick("Signaller URI")
+                    .blurb("URI for connecting to the signaller server")
                     .flags(glib::ParamFlags::READWRITE)
                     .build(),
                 glib::ParamSpecString::builder("producer-peer-id")
+                    .nick("Producer peer id")
+                    .blurb("The peer id of the producer transmitted to the signaller server")
                     .flags(glib::ParamFlags::READWRITE)
                     .build(),
                 glib::ParamSpecString::builder("cafile")
+                    .nick("Certificate Authority (CA) file")
+                    .blurb("Certificate file used in TLS session")
                     .flags(glib::ParamFlags::READWRITE)
                     .build(),
                 glib::ParamSpecEnum::builder_with_default("role", WebRTCSignallerRole::Consumer)
+                    .nick("Role")
+                    .blurb("Role within the session (Consumer, Producer or Listener)")
                     .flags(glib::ParamFlags::READWRITE)
                     .build(),
                 glib::ParamSpecString::builder("client-id")
+                    .nick("Client id")
+                    .blurb("The client id transmitted to the signaller server")
                     .flags(glib::ParamFlags::READABLE)
                     .build(),
                 glib::ParamSpecBoxed::builder::<gst::Structure>("headers")
+                    .nick("HTTP headers")
+                    .blurb("HTTP headers sent during the connection handshake")
                     .flags(glib::ParamFlags::READWRITE)
                     .build(),
             ]
