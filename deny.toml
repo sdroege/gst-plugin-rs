@@ -71,12 +71,6 @@ version = "0.9"
 name = "hmac"
 version = "0.11"
 
-# cookie_store depends on older idna
-# https://github.com/pfernie/cookie_store/commit/b9c710f45550c5c8997f18a83e6fcc5998cf1726
-[[bans.skip]]
-name = "idna"
-version = "0.2"
-
 # field-offset and nix depend on an older memoffset
 # https://github.com/Diggsey/rust-field-offset/pull/23
 # https://github.com/nix-rust/nix/pull/1885
