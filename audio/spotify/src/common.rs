@@ -109,7 +109,7 @@ impl Settings {
         cat: &gst::DebugCategory,
     ) -> anyhow::Result<Session>
     where
-        T: glib::IsA<glib::Object>,
+        T: IsA<glib::Object>,
     {
         let credentials_cache = if self.cache_credentials.is_empty() {
             None

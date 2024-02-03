@@ -409,7 +409,7 @@ unsafe impl prelude::ObjectInterface for Signallable {
 
 unsafe impl<Obj: SignallableImpl> types::IsImplementable<Obj> for super::Signallable
 where
-    <Obj as types::ObjectSubclass>::Type: glib::IsA<glib::Object>,
+    <Obj as types::ObjectSubclass>::Type: IsA<glib::Object>,
 {
     fn interface_init(iface: &mut glib::Interface<Self>) {
         let iface = ::std::convert::AsMut::as_mut(iface);
@@ -503,7 +503,7 @@ pub trait SignallableExt: 'static {
     fn end_session(&self, session_id: &str);
 }
 
-impl<Obj: glib::IsA<super::Signallable>> SignallableExt for Obj {
+impl<Obj: IsA<super::Signallable>> SignallableExt for Obj {
     fn start(&self) {
         self.emit_by_name::<bool>("start", &[]);
     }
