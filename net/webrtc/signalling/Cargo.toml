@@ -1,12 +1,12 @@
 [package]
 name = "gst-plugin-webrtc-signalling"
-version = "0.12.0-alpha.1"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 authors = ["Mathieu Duponchelle <mathieu@centricular.com>"]
 license = "MPL-2.0"
 description = "GStreamer WebRTC sink signalling server"
-repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-rust-version = "1.70"
+repository.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 anyhow = "1"

@@ -1,32 +1,32 @@
 [package]
 name = "gst-plugin-hlssink3"
 description = "GStreamer HLS (HTTP Live Streaming) Plugin"
-repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-version = "0.12.0-alpha.1"
+repository.workspace = true
+version.workspace = true
 authors = ["Rafael Caricio <rafael@caricio.com>"]
-edition = "2021"
+edition.workspace = true
 license = "MPL-2.0"
-rust-version = "1.70"
+rust-version.workspace = true
 
 [dependencies]
-gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main" }
-gst_app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main" }
-gio = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "master" }
+gst.workspace = true
+gst-app.workspace = true
+gio.workspace = true
 once_cell = "1.7.2"
 m3u8-rs = "5.0"
 chrono = "0.4"
 sprintf = "0.1.3"
 
 [dev-dependencies]
-gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main" }
-gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main" }
-gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main" }
-gst-pbutils = { package = "gstreamer-pbutils", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", features = ["v1_20"] }
+gst-audio.workspace = true
+gst-video.workspace = true
+gst-check.workspace = true
+gst-pbutils = { workspace = true, features = ["v1_20"] }
 m3u8-rs = "5.0"
 anyhow = "1"
 
 [build-dependencies]
-gst-plugin-version-helper = { path = "../../version-helper" }
+gst-plugin-version-helper.workspace = true
 
 [lib]
 name = "gsthlssink3"

@@ -26,15 +26,15 @@ use std::sync::{Mutex, MutexGuard};
 
 use crate::utils;
 
-#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
+#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
 use gst_gl::prelude::GLContextExt as GstGLContextExt;
-#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
+#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
 use gst_gl::prelude::*;
 
 // Global GL context that is created by the first sink and kept around until the end of the
 // process. This is provided to other elements in the pipeline to make sure they create GL contexts
 // that are sharing with the GTK GL context.
-#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
+#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
 enum GLContext {
     Uninitialized,
     Unsupported,
@@ -45,7 +45,7 @@ enum GLContext {
     },
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
+#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
 static GL_CONTEXT: Mutex<GLContext> = Mutex::new(GLContext::Uninitialized);
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -154,12 +154,12 @@ impl ElementImpl for PaintableSink {
 
                 for features in [
                     None,
-                    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
+                    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
                     Some(gst::CapsFeatures::new([
                         "memory:GLMemory",
                         "meta:GstVideoOverlayComposition",
                     ])),
-                    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
+                    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
                     Some(gst::CapsFeatures::new(["memory:GLMemory"])),
                     Some(gst::CapsFeatures::new([
                         "memory:SystemMemory",
@@ -237,7 +237,7 @@ impl ElementImpl for PaintableSink {
                 // Notify the pipeline about the GL display and wrapped context so that any other
                 // elements in the pipeline ideally use the same / create GL contexts that are
                 // sharing with this one.
-                #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
+                #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
                 {
                     let gl_context = GL_CONTEXT.lock().unwrap();
                     if let GLContext::Initialized {
@@ -343,7 +343,7 @@ impl BaseSinkImpl for PaintableSink {
         // TODO: Provide a preferred "window size" here for higher-resolution rendering
         query.add_allocation_meta::<gst_video::VideoOverlayCompositionMeta>(None);
 
-        #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
+        #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
         {
             if let GLContext::Initialized {
                 wrapped_context, ..
@@ -364,7 +364,7 @@ impl BaseSinkImpl for PaintableSink {
         gst::log!(CAT, imp: self, "Handling query {:?}", query);
 
         match query.view_mut() {
-            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
+            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             gst::QueryViewMut::Context(q) => {
                 // Avoid holding the locks while we respond to the query
                 // The objects are ref-counted anyway.
@@ -420,11 +420,11 @@ impl VideoSinkImpl for PaintableSink {
         })?;
 
         let wrapped_context = {
-            #[cfg(not(any(target_os = "macos", target_os = "windows", feature = "gst_gl")))]
+            #[cfg(not(any(target_os = "macos", target_os = "windows", feature = "gst-gl")))]
             {
                 None
             }
-            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
+            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             {
                 let gl_context = GL_CONTEXT.lock().unwrap();
                 if let GLContext::Initialized {
@@ -492,7 +492,7 @@ impl PaintableSink {
         #[allow(unused_mut)]
         let mut tmp_caps = Self::pad_templates()[0].caps().clone();
 
-        #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
+        #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
         {
             // Filter out GL caps from the template pads if we have no context
             if !matches!(&*GL_CONTEXT.lock().unwrap(), GLContext::Initialized { .. }) {
@@ -511,7 +511,7 @@ impl PaintableSink {
     }
 
     fn create_paintable(&self, paintable_storage: &mut MutexGuard<Option<ThreadGuard<Paintable>>>) {
-        #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
+        #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
         {
             self.initialize_gl_context();
         }
@@ -545,7 +545,7 @@ impl PaintableSink {
 
         // Create the paintable from the main thread
         let paintable = utils::invoke_on_main_thread(move || {
-            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
+            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             {
                 let gdk_context = if let GLContext::Initialized { gdk_context, .. } =
                     &*GL_CONTEXT.lock().unwrap()
@@ -556,7 +556,7 @@ impl PaintableSink {
                 };
                 ThreadGuard::new(Paintable::new(gdk_context))
             }
-            #[cfg(not(any(target_os = "macos", target_os = "windows", feature = "gst_gl")))]
+            #[cfg(not(any(target_os = "macos", target_os = "windows", feature = "gst-gl")))]
             {
                 ThreadGuard::new(Paintable::new(None))
             }
@@ -567,7 +567,7 @@ impl PaintableSink {
         *self.sender.lock().unwrap() = Some(sender);
     }
 
-    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
+    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
     fn initialize_gl_context(&self) {
         gst::debug!(CAT, imp: self, "Realizing GDK GL Context");
 
@@ -577,7 +577,7 @@ impl PaintableSink {
         });
     }
 
-    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
+    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
     fn initialize_gl_context_main(&self) {
         gst::debug!(CAT, imp: self, "Realizing GDK GL Context from main thread");
 

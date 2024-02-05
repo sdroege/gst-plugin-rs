@@ -5,11 +5,11 @@ authors = ["Sajeer Ahamed <ahamedsajeer.15.15@cse.mrt.ac.lk>",
            "Sebastian Dröge <sebastian@centricular.com>"]
 categories = ["development-tools"]
 description = "build.rs helper function for GStreamer plugin metadata"
-repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+repository.workspace = true
 license = "MIT"
 homepage = "https://gstreamer.freedesktop.org"
 keywords = ["gstreamer", "multimedia", "cargo"]
-edition = "2021"
+edition.workspace = true
 rust-version = "1.67"
 
 [dependencies]

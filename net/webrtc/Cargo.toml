@@ -1,22 +1,22 @@
 [package]
 name = "gst-plugin-webrtc"
-version = "0.12.0-alpha.1"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 authors = ["Mathieu Duponchelle <mathieu@centricular.com>", "Thibault Saunier <tsaunier@igalia.com>"]
 license = "MPL-2.0"
 description = "GStreamer plugin for high level WebRTC elements and a simple signaling server"
-repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-rust-version = "1.70"
+repository.workspace = true
+rust-version.workspace = true
 
 [dependencies]
-gst = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", package = "gstreamer", features = ["v1_20", "serde"] }
-gst-app = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", package = "gstreamer-app", features = ["v1_20"] }
-gst-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", package = "gstreamer-video", features = ["v1_20", "serde"] }
-gst-webrtc = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", package = "gstreamer-webrtc", features = ["v1_20"] }
-gst-sdp = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", package = "gstreamer-sdp", features = ["v1_20"] }
-gst-rtp = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", package = "gstreamer-rtp", features = ["v1_20"] }
-gst-utils = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", package = "gstreamer-utils" }
-gst-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", package = "gstreamer-base" }
+gst = { workspace = true, features = ["v1_20", "serde"] }
+gst-app = { workspace = true, features = ["v1_20"] }
+gst-video = { workspace = true, features = ["v1_20", "serde"] }
+gst-webrtc = { workspace = true, features = ["v1_20"] }
+gst-sdp = { workspace = true, features = ["v1_20"] }
+gst-rtp = { workspace = true, features = ["v1_20"] }
+gst-utils.workspace = true
+gst-base.workspace = true
 uuid = { version = "1", features = ["v4"] }
 
 anyhow = "1"
@@ -57,7 +57,7 @@ livekit-api = { version = "0.3", default-features = false, features = ["signal-c
 warp = "0.3"
 crossbeam-channel = "0.5"
 rand = "0.8"
-once_cell = "1"
+once_cell.workspace = true
 
 [dev-dependencies]
 tracing = { version = "0.1", features = ["log"] }
@@ -71,7 +71,7 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [build-dependencies]
-gst-plugin-version-helper = { path = "../../version-helper" }
+gst-plugin-version-helper.workspace = true
 
 [features]
 default = ["v1_22"]
