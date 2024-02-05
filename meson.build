@@ -140,13 +140,13 @@ plugins = {
 
   'aws': {
     'library': 'libgstaws',
-    'extra-deps': {'openssl': '>=1.1'},
+    'extra-deps': {'openssl': ['>=1.1']},
   },
   'hlssink3': {'library': 'libgsthlssink3'},
   'ndi': {'library': 'libgstndi'},
   'onvif': {
     'library': 'libgstrsonvif',
-    'extra-deps': {'pangocairo': ''},
+    'extra-deps': {'pangocairo': []},
   },
   'raptorq': {'library': 'libgstraptorq'},
   'reqwest': {'library': 'libgstreqwest'},
@@ -173,14 +173,14 @@ plugins = {
   'closedcaption': {
     'library': 'libgstrsclosedcaption',
     'extra-deps': {
-      'pango': '',
-      'pangocairo': '',
-      'cairo-gobject': '',
+      'pango': [],
+      'pangocairo': [],
+      'cairo-gobject': [],
     }
   },
   'dav1d': {
     'library': 'libgstdav1d',
-    'extra-deps': {'dav1d': '>=1.0'},
+    'extra-deps': {'dav1d': ['>=1.0']},
   },
   'ffv1': {'library': 'libgstffv1'},
   'flavors': {'library': 'libgstrsflv'},
@@ -197,7 +197,7 @@ plugins = {
   'rav1e': {'library': 'libgstrav1e'},
   'videofx': {
     'library': 'libgstrsvideofx',
-    'extra-deps': {'cairo-gobject': ''},
+    'extra-deps': {'cairo-gobject': []},
   },
 }
 
@@ -236,7 +236,7 @@ if host_system not in ['windows', 'darwin']
   # https://github.com/qnighy/libwebp-sys2-rs/issues/4
   plugins += {'webp': {
     'library': 'libgstrswebp',
-    'extra-deps': {'libwebpdemux': ''},
+    'extra-deps': {'libwebpdemux': []},
   }}
 endif
 
@@ -302,7 +302,7 @@ if get_option('gtk4').allowed()
     'gtk4': {
       'library': 'libgstgtk4',
       'examples': ['gtksink'],
-      'extra-deps': {'gtk4': '>=4.6'},
+      'extra-deps': {'gtk4': ['>=4.6']},
       'features': gtk4_features,
     },
   }
@@ -373,7 +373,7 @@ foreach plugin_name, details: plugins
   if plugin_opt.allowed()
     plugin_deps_found = true
     foreach dep_name, dep_ver: details.get('extra-deps', {})
-      if dep_ver != ''
+      if dep_ver.length() != 0
         dep = dependency(dep_name, version: dep_ver, required: plugin_opt)
       else
         dep = dependency(dep_name, required: plugin_opt)
