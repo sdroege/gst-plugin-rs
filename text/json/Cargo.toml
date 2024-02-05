@@ -15,6 +15,7 @@ serde_json = { version = "1.0", features = ["raw_value"] }
 
 [dependencies.gst]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+branch = "main"
 package="gstreamer"
 features=["serde"]
 
@@ -28,6 +29,7 @@ gst-plugin-version-helper = { path="../../version-helper" }
 
 [dev-dependencies.gst-check]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+branch = "main"
 package="gstreamer-check"
 
 [features]

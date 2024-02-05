@@ -9,7 +9,7 @@ edition = "2021"
 rust-version = "1.70"
 
 [dependencies]
-cairo-rs = { git = "https://github.com/gtk-rs/gtk-rs-core", features=["use_glib"] }
+cairo-rs = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "master", features=["use_glib"] }
 atomic_refcell = "0.1"
 color-thief = "0.2.2"
 color-name = "1.0.0"
@@ -21,21 +21,25 @@ once_cell = "1"
 
 [dependencies.gst]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+branch = "main"
 features = ["v1_16"]
 package = "gstreamer"
 
 [dependencies.gst-base]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+branch = "main"
 features = ["v1_16"]
 package = "gstreamer-base"
 
 [dependencies.gst-video]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+branch = "main"
 features = ["v1_16"]
 package = "gstreamer-video"
 
 [dev-dependencies.gst-check]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+branch = "main"
 package = "gstreamer-check"
 
 [lib]

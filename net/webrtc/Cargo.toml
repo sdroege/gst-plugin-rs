@@ -9,14 +9,14 @@ repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 rust-version = "1.70"
 
 [dependencies]
-gst = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer", features = ["v1_20", "serde"] }
-gst-app = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-app", features = ["v1_20"] }
-gst-video = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-video", features = ["v1_20", "serde"] }
-gst-webrtc = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-webrtc", features = ["v1_20"] }
-gst-sdp = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-sdp", features = ["v1_20"] }
-gst-rtp = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-rtp", features = ["v1_20"] }
-gst-utils = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-utils" }
-gst-base = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-base" }
+gst = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", package = "gstreamer", features = ["v1_20", "serde"] }
+gst-app = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", package = "gstreamer-app", features = ["v1_20"] }
+gst-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", package = "gstreamer-video", features = ["v1_20", "serde"] }
+gst-webrtc = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", package = "gstreamer-webrtc", features = ["v1_20"] }
+gst-sdp = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", package = "gstreamer-sdp", features = ["v1_20"] }
+gst-rtp = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", package = "gstreamer-rtp", features = ["v1_20"] }
+gst-utils = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", package = "gstreamer-utils" }
+gst-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", package = "gstreamer-base" }
 uuid = { version = "1", features = ["v4"] }
 
 anyhow = "1"
