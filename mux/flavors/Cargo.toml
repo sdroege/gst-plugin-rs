@@ -15,7 +15,6 @@ gst-audio.workspace = true
 num-rational = { version = "0.4", default-features = false, features = [] }
 nom = "7"
 flavors = { git = "https://github.com/rust-av/flavors" }
-muldiv = "1.0"
 byteorder = "1.0"
 smallvec = "1.0"
 once_cell.workspace = true

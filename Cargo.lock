@@ -2183,7 +2183,6 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-video",
  "image",
- "muldiv",
  "once_cell",
 ]
 
@@ -2308,7 +2307,6 @@ dependencies = [
  "gstreamer",
  "gstreamer-audio",
  "gstreamer-base",
- "muldiv",
  "nom",
  "num-rational",
  "once_cell",
@@ -2459,7 +2457,6 @@ dependencies = [
  "gstreamer-audio",
  "gstreamer-check",
  "gtk4",
- "muldiv",
  "num-rational",
  "once_cell",
  "parking_lot",

@@ -15,7 +15,6 @@ gst-video.workspace = true
 cdg = "0.1"
 cdg_renderer = "0.7"
 image = { version = "0.24", default-features = false }
-muldiv = "1.0"
 once_cell.workspace = true
 
 [dev-dependencies]
