@@ -10,7 +10,7 @@
  */
 
 import "webrtc-adapter";
-import { gstWebRTCAPI, start } from "./gstwebrtc-api.js";
+import GstWebRTCAPI from "./gstwebrtc-api.js";
 
 /**
  * @external MediaStream
@@ -49,9 +49,6 @@ import { gstWebRTCAPI, start } from "./gstwebrtc-api.js";
  * @see https://developer.mozilla.org/en-US/docs/Web/API/HTMLVideoElement
  */
 
-if (!window.gstWebRTCAPI) {
-  window.gstWebRTCAPI = gstWebRTCAPI;
-  window.addEventListener("DOMContentLoaded", () => {
-    start(window.gstWebRTCConfig);
-  });
+if (!window.GstWebRTCAPI) {
+  window.GstWebRTCAPI = GstWebRTCAPI;
 }

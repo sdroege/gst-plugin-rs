@@ -13,10 +13,10 @@ import WebRTCSession from "./webrtc-session.js";
 import SessionState from "./session-state.js";
 
 /**
- * @class gstWebRTCAPI.ClientSession
+ * @class GstWebRTCAPI.ClientSession
  * @hideconstructor
  * @classdesc Client session representing a link between a remote consumer and a local producer session.
- * @extends {gstWebRTCAPI.WebRTCSession}
+ * @extends {GstWebRTCAPI.WebRTCSession}
  */
 class ClientSession extends WebRTCSession {
   constructor(peerId, sessionId, comChannel, stream) {
@@ -102,33 +102,33 @@ class ClientSession extends WebRTCSession {
 
 /**
  * Event name: "clientConsumerAdded".<br>
- * Triggered when a remote consumer peer connects to a local {@link gstWebRTCAPI.ProducerSession}.
- * @event gstWebRTCAPI#ClientConsumerAddedEvent
+ * Triggered when a remote consumer peer connects to a local {@link GstWebRTCAPI.ProducerSession}.
+ * @event GstWebRTCAPI#ClientConsumerAddedEvent
  * @type {external:CustomEvent}
- * @property {gstWebRTCAPI.ClientSession} detail - The WebRTC session associated with the added consumer peer.
- * @see gstWebRTCAPI.ProducerSession
+ * @property {GstWebRTCAPI.ClientSession} detail - The WebRTC session associated with the added consumer peer.
+ * @see GstWebRTCAPI.ProducerSession
  */
 /**
  * Event name: "clientConsumerRemoved".<br>
- * Triggered when a remote consumer peer disconnects from a local {@link gstWebRTCAPI.ProducerSession}.
- * @event gstWebRTCAPI#ClientConsumerRemovedEvent
+ * Triggered when a remote consumer peer disconnects from a local {@link GstWebRTCAPI.ProducerSession}.
+ * @event GstWebRTCAPI#ClientConsumerRemovedEvent
  * @type {external:CustomEvent}
- * @property {gstWebRTCAPI.ClientSession} detail - The WebRTC session associated with the removed consumer peer.
- * @see gstWebRTCAPI.ProducerSession
+ * @property {GstWebRTCAPI.ClientSession} detail - The WebRTC session associated with the removed consumer peer.
+ * @see GstWebRTCAPI.ProducerSession
  */
 
 /**
- * @class gstWebRTCAPI.ProducerSession
+ * @class GstWebRTCAPI.ProducerSession
  * @hideconstructor
  * @classdesc Producer session managing the streaming out of a local {@link external:MediaStream}.<br>
  * It manages all underlying WebRTC connections to each peer client consuming the stream.
- * <p>Call {@link gstWebRTCAPI#createProducerSession} to create a ProducerSession instance.</p>
+ * <p>Call {@link GstWebRTCAPI#createProducerSession} to create a ProducerSession instance.</p>
  * @extends {external:EventTarget}
- * @fires {@link gstWebRTCAPI#event:ErrorEvent}
- * @fires {@link gstWebRTCAPI#event:StateChangedEvent}
- * @fires {@link gstWebRTCAPI#event:ClosedEvent}
- * @fires {@link gstWebRTCAPI#event:ClientConsumerAddedEvent}
- * @fires {@link gstWebRTCAPI#event:ClientConsumerRemovedEvent}
+ * @fires {@link GstWebRTCAPI#event:ErrorEvent}
+ * @fires {@link GstWebRTCAPI#event:StateChangedEvent}
+ * @fires {@link GstWebRTCAPI#event:ClosedEvent}
+ * @fires {@link GstWebRTCAPI#event:ClientConsumerAddedEvent}
+ * @fires {@link GstWebRTCAPI#event:ClientConsumerRemovedEvent}
  */
 export default class ProducerSession extends EventTarget {
   constructor(comChannel, stream) {
@@ -142,7 +142,7 @@ export default class ProducerSession extends EventTarget {
 
   /**
      * The local stream produced out by this session.
-     * @member {external:MediaStream} gstWebRTCAPI.ProducerSession#stream
+     * @member {external:MediaStream} GstWebRTCAPI.ProducerSession#stream
      * @readonly
      */
   get stream() {
@@ -151,7 +151,7 @@ export default class ProducerSession extends EventTarget {
 
   /**
      * The current producer session state.
-     * @member {gstWebRTCAPI.SessionState} gstWebRTCAPI.ProducerSession#state
+     * @member {GstWebRTCAPI.SessionState} GstWebRTCAPI.ProducerSession#state
      * @readonly
      */
   get state() {
@@ -163,10 +163,10 @@ export default class ProducerSession extends EventTarget {
      * This method must be called after creating the producer session in order to start streaming. It registers this
      * producer session to the signaling server and gets ready to serve peer requests from consumers.
      * <p>Even on success, streaming can fail later if any error occurs during or after connection. In order to know
-     * the effective streaming state, you should be listening to the [error]{@link gstWebRTCAPI#event:ErrorEvent},
-     * [stateChanged]{@link gstWebRTCAPI#event:StateChangedEvent} and/or [closed]{@link gstWebRTCAPI#event:ClosedEvent}
+     * the effective streaming state, you should be listening to the [error]{@link GstWebRTCAPI#event:ErrorEvent},
+     * [stateChanged]{@link GstWebRTCAPI#event:StateChangedEvent} and/or [closed]{@link GstWebRTCAPI#event:ClosedEvent}
      * events.</p>
-     * @method gstWebRTCAPI.ProducerSession#start
+     * @method GstWebRTCAPI.ProducerSession#start
      * @returns {boolean} true in case of success (may fail later during or after connection) or false in case of
      * immediate error (wrong session state or no connection to the signaling server).
      */
@@ -203,7 +203,7 @@ export default class ProducerSession extends EventTarget {
      * Terminates the producer session.<br>
      * It immediately disconnects all peer consumers attached to this producer session and unregisters the producer
      * from the signaling server.
-     * @method gstWebRTCAPI.ProducerSession#close
+     * @method GstWebRTCAPI.ProducerSession#close
      */
   close() {
     if (this._state !== SessionState.closed) {

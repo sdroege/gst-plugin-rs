@@ -220,13 +220,7 @@
     }
   </style>
   <script>
-    const signalingProtocol = window.location.protocol.startsWith("https") ? "wss" : "ws";
-    window.gstWebRTCConfig = {
-      meta: { name: `WebClient-${Date.now()}` },
-      signalingServerUrl: `${signalingProtocol}://${window.location.host}/webrtc`
-    };
-
-    function initCapture() {
+    function initCapture(api) {
       const captureSection = document.getElementById("capture");
       const clientIdElement = captureSection.querySelector(".client-id");
       const videoElement = captureSection.getElementsByTagName("video")[0];
@@ -235,7 +229,7 @@
         connected: function(clientId) { clientIdElement.textContent = clientId; },
         disconnected: function() { clientIdElement.textContent = "none"; }
       };
-      gstWebRTCAPI.registerConnectionListener(listener);
+      api.registerConnectionListener(listener);
 
       document.getElementById("capture-button").addEventListener("click", (event) => {
         event.preventDefault();
@@ -249,7 +243,7 @@
             video: { width: 1280, height: 720 }
           };
           navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
-            const session = gstWebRTCAPI.createProducerSession(stream);
+            const session = api.createProducerSession(stream);
             if (session) {
               captureSection._producerSession = session;
 
@@ -270,7 +264,7 @@
 
               session.addEventListener("stateChanged", (event) => {
                 if ((captureSection._producerSession === session) &&
-                  (event.target.state === gstWebRTCAPI.SessionState.streaming)) {
+                  (event.target.state === GstWebRTCAPI.SessionState.streaming)) {
                   videoElement.srcObject = stream;
                   videoElement.play().catch(() => {});
                   captureSection.classList.remove("starting");
@@ -306,7 +300,7 @@
       });
     }
 
-    function initRemoteStreams() {
+    function initRemoteStreams(api) {
       const remoteStreamsElement = document.getElementById("remote-streams");
 
       const listener = {
@@ -347,7 +341,7 @@
               if (entryElement._consumerSession) {
                 entryElement._consumerSession.close();
               } else {
-                const session = gstWebRTCAPI.createConsumerSession(producerId);
+                const session = api.createConsumerSession(producerId);
                 if (session) {
                   entryElement._consumerSession = session;
 
@@ -408,8 +402,8 @@
         }
       };
 
-      gstWebRTCAPI.registerProducersListener(listener);
-      for (const producer of gstWebRTCAPI.getAvailableProducers()) {
+      api.registerProducersListener(listener);
+      for (const producer of api.getAvailableProducers()) {
         listener.producerAdded(producer);
       }
     }
@@ -422,8 +416,15 @@
         }
       });
 
-      initCapture();
-      initRemoteStreams();
+      const signalingProtocol = window.location.protocol.startsWith("https") ? "wss" : "ws";
+      const gstWebRTCConfig = {
+        meta: { name: `WebClient-${Date.now()}` },
+        signalingServerUrl: `${signalingProtocol}://${window.location.host}/webrtc`,
+      };
+
+      const api = new GstWebRTCAPI(gstWebRTCConfig);
+      initCapture(api);
+      initRemoteStreams(api);
     });
   </script>
 </head>

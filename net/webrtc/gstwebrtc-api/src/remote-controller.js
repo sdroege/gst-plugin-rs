@@ -65,7 +65,7 @@ function getModifiers(event) {
 }
 
 /**
- * @class gstWebRTCAPI.RemoteController
+ * @class GstWebRTCAPI.RemoteController
  * @hideconstructor
  * @classdesc Manages a specific WebRTC data channel created by a remote GStreamer webrtcsink producer and offering
  * remote control of the producer through
@@ -76,10 +76,10 @@ function getModifiers(event) {
  * <p>You can attach an {@link external:HTMLVideoElement} to the remote controller, then all mouse and keyboard events
  * emitted by this element will be automatically relayed to the remote producer.</p>
  * @extends {external:EventTarget}
- * @fires {@link gstWebRTCAPI#event:ErrorEvent}
- * @fires {@link gstWebRTCAPI#event:ClosedEvent}
- * @see gstWebRTCAPI.ConsumerSession#remoteController
- * @see gstWebRTCAPI.RemoteController#attachVideoElement
+ * @fires {@link GstWebRTCAPI#event:ErrorEvent}
+ * @fires {@link GstWebRTCAPI#event:ClosedEvent}
+ * @see GstWebRTCAPI.ConsumerSession#remoteController
+ * @see GstWebRTCAPI.RemoteController#attachVideoElement
  * @see https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/tree/main/net/webrtc/gstwebrtc-api#produce-a-gstreamer-interactive-webrtc-stream-with-remote-control
  */
 export default class RemoteController extends EventTarget {
@@ -114,7 +114,7 @@ export default class RemoteController extends EventTarget {
   /**
      * The underlying WebRTC data channel connected to a remote GStreamer webrtcsink producer offering remote control.
      * The value may be null if the remote controller has been closed.
-     * @member {external:RTCDataChannel} gstWebRTCAPI.RemoteController#rtcDataChannel
+     * @member {external:RTCDataChannel} GstWebRTCAPI.RemoteController#rtcDataChannel
      * @readonly
      */
   get rtcDataChannel() {
@@ -123,7 +123,7 @@ export default class RemoteController extends EventTarget {
 
   /**
      * The consumer session associated with this remote controller.
-     * @member {gstWebRTCAPI.ConsumerSession} gstWebRTCAPI.RemoteController#consumerSession
+     * @member {GstWebRTCAPI.ConsumerSession} GstWebRTCAPI.RemoteController#consumerSession
      * @readonly
      */
   get consumerSession() {
@@ -133,9 +133,9 @@ export default class RemoteController extends EventTarget {
   /**
      * The video element that is currently used to send all mouse and keyboard events to the remote producer. Value may
      * be null if no video element is attached.
-     * @member {external:HTMLVideoElement} gstWebRTCAPI.RemoteController#videoElement
+     * @member {external:HTMLVideoElement} GstWebRTCAPI.RemoteController#videoElement
      * @readonly
-     * @see gstWebRTCAPI.RemoteController#attachVideoElement
+     * @see GstWebRTCAPI.RemoteController#attachVideoElement
      */
   get videoElement() {
     return this._videoElement;
@@ -145,7 +145,7 @@ export default class RemoteController extends EventTarget {
      * Associates a video element with this remote controller.<br>
      * When a video element is attached to this remote controller, all mouse and keyboard events emitted by this
      * element will be sent to the remote GStreamer webrtcink producer.
-     * @method gstWebRTCAPI.RemoteController#attachVideoElement
+     * @method GstWebRTCAPI.RemoteController#attachVideoElement
      * @param {external:HTMLVideoElement|null} element - the video element to use to relay mouse and keyboard events,
      * or null to detach any previously attached element. If the provided element parameter is not null and not a
      * valid instance of an {@link external:HTMLVideoElement}, then the method does nothing.
@@ -183,7 +183,7 @@ export default class RemoteController extends EventTarget {
      * Closes the remote controller channel.<br>
      * It immediately shuts down the underlying WebRTC data channel connected to a remote GStreamer webrtcsink
      * producer and detaches any video element that may be used to relay mouse and keyboard events.
-     * @method gstWebRTCAPI.RemoteController#close
+     * @method GstWebRTCAPI.RemoteController#close
      */
   close() {
     this.attachVideoElement(null);

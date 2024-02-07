@@ -12,7 +12,7 @@
 /**
  * Session states enumeration.<br>
  * Session state always increases from idle to closed and never switches backwards.
- * @typedef {enum} gstWebRTCAPI.SessionState
+ * @typedef {enum} GstWebRTCAPI.SessionState
  * @readonly
  * @property {0} idle - Default state when creating a new session, goes to <i>connecting</i> when starting
  * the session.

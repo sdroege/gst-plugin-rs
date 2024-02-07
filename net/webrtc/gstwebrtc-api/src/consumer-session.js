@@ -15,28 +15,28 @@ import RemoteController from "./remote-controller.js";
 
 /**
  * Event name: "streamsChanged".<br>
- * Triggered when the underlying media streams of a {@link gstWebRTCAPI.ConsumerSession} change.
- * @event gstWebRTCAPI#StreamsChangedEvent
+ * Triggered when the underlying media streams of a {@link GstWebRTCAPI.ConsumerSession} change.
+ * @event GstWebRTCAPI#StreamsChangedEvent
  * @type {external:Event}
- * @see gstWebRTCAPI.ConsumerSession#streams
+ * @see GstWebRTCAPI.ConsumerSession#streams
  */
 /**
  * Event name: "remoteControllerChanged".<br>
- * Triggered when the underlying remote controller of a {@link gstWebRTCAPI.ConsumerSession} changes.
- * @event gstWebRTCAPI#RemoteControllerChangedEvent
+ * Triggered when the underlying remote controller of a {@link GstWebRTCAPI.ConsumerSession} changes.
+ * @event GstWebRTCAPI#RemoteControllerChangedEvent
  * @type {external:Event}
- * @see gstWebRTCAPI.ConsumerSession#remoteController
+ * @see GstWebRTCAPI.ConsumerSession#remoteController
  */
 
 /**
- * @class gstWebRTCAPI.ConsumerSession
+ * @class GstWebRTCAPI.ConsumerSession
  * @hideconstructor
  * @classdesc Consumer session managing a peer-to-peer WebRTC channel between a remote producer and this client
  * instance.
- * <p>Call {@link gstWebRTCAPI#createConsumerSession} to create a ConsumerSession instance.</p>
- * @extends {gstWebRTCAPI.WebRTCSession}
- * @fires {@link gstWebRTCAPI#event:StreamsChangedEvent}
- * @fires {@link gstWebRTCAPI#event:RemoteControllerChangedEvent}
+ * <p>Call {@link GstWebRTCAPI#createConsumerSession} to create a ConsumerSession instance.</p>
+ * @extends {GstWebRTCAPI.WebRTCSession}
+ * @fires {@link GstWebRTCAPI#event:StreamsChangedEvent}
+ * @fires {@link GstWebRTCAPI#event:RemoteControllerChangedEvent}
  */
 export default class ConsumerSession extends WebRTCSession {
   constructor(peerId, comChannel) {
@@ -55,7 +55,7 @@ export default class ConsumerSession extends WebRTCSession {
 
   /**
      * The array of remote media streams consumed locally through this WebRTC channel.
-     * @member {external:MediaStream[]} gstWebRTCAPI.ConsumerSession#streams
+     * @member {external:MediaStream[]} GstWebRTCAPI.ConsumerSession#streams
      * @readonly
      */
   get streams() {
@@ -65,7 +65,7 @@ export default class ConsumerSession extends WebRTCSession {
   /**
      * The remote controller associated with this WebRTC consumer session. Value may be null if consumer session
      * has no remote controller.
-     * @member {gstWebRTCAPI.RemoteController} gstWebRTCAPI.ConsumerSession#remoteController
+     * @member {GstWebRTCAPI.RemoteController} GstWebRTCAPI.ConsumerSession#remoteController
      * @readonly
      */
   get remoteController() {
@@ -77,10 +77,10 @@ export default class ConsumerSession extends WebRTCSession {
      * This method must be called after creating the consumer session in order to start receiving the remote streams.
      * It registers this consumer session to the signaling server and gets ready to receive audio/video streams.
      * <p>Even on success, streaming can fail later if any error occurs during or after connection. In order to know
-     * the effective streaming state, you should be listening to the [error]{@link gstWebRTCAPI#event:ErrorEvent},
-     * [stateChanged]{@link gstWebRTCAPI#event:StateChangedEvent} and/or [closed]{@link gstWebRTCAPI#event:ClosedEvent}
+     * the effective streaming state, you should be listening to the [error]{@link GstWebRTCAPI#event:ErrorEvent},
+     * [stateChanged]{@link GstWebRTCAPI#event:StateChangedEvent} and/or [closed]{@link GstWebRTCAPI#event:ClosedEvent}
      * events.</p>
-     * @method gstWebRTCAPI.ConsumerSession#connect
+     * @method GstWebRTCAPI.ConsumerSession#connect
      * @returns {boolean} true in case of success (may fail later during or after connection) or false in case of
      * immediate error (wrong session state or no connection to the signaling server).
      */

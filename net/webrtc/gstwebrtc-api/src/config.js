@@ -11,17 +11,16 @@
 
 /**
  * GStreamer WebRTC configuration.
- * <p>You can override default values by defining configuration before receiving the <i>DOMContentLoaded</i> event.<br>
- * Once the <i>DOMContentLoaded</i> event triggered, changing configuration will have no effect.</p>
+ * <p>The config can be passed on creation of the GstWebRTCAPI class.</p>
  * <p>For example:
  * <pre>
  *     const signalingProtocol = window.location.protocol.startsWith("https") ? "wss" : "ws";
- *     window.gstWebRTCConfig = {
+ *     const api = new GstWebRTCAPI({
  *         meta: { name: `WebClient-${Date.now()}` },
  *         signalingServerUrl: `${signalingProtocol}://${window.location.host}/webrtc`
- *     };
+ *     });
  * </pre></p>
- * @typedef {object} gstWebRTCConfig
+ * @typedef {object} GstWebRTCConfig
  * @property {object} meta=null - Client free-form information that will be exchanged with all peers through the
  * signaling <i>meta</i> property, its content depends on your application.
  * @property {string} signalingServerUrl=ws://127.0.0.1:8443 - The WebRTC signaling server URL.
