@@ -142,12 +142,10 @@ impl PaintableImpl for Paintable {
                 }
             }
 
-            if trans_x != 0.0 || trans_y != 0.0 {
-                snapshot.append_color(
-                    &gdk::RGBA::BLACK,
-                    &graphene::Rect::new(0f32, 0f32, width as f32, height as f32),
-                );
-            }
+            snapshot.append_color(
+                &gdk::RGBA::BLACK,
+                &graphene::Rect::new(0f32, 0f32, width as f32, height as f32),
+            );
 
             snapshot.translate(&graphene::Point::new(trans_x as f32, trans_y as f32));
             snapshot.scale(scale_x as f32, scale_y as f32);
