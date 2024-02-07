@@ -13,7 +13,7 @@ use gtk::glib;
 use gtk::glib::prelude::*;
 
 mod frame;
-mod imp;
+pub(super) mod imp;
 mod paintable;
 
 enum SinkEvent {

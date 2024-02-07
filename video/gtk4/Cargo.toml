@@ -52,6 +52,9 @@ x11egl = ["gtk/v4_6", "gdk-x11", "gst-gl", "gst-gl-egl"]
 winegl = ["gdk-win32/egl", "gst-gl-egl"]
 capi = []
 doc = ["gst/v1_18"]
+gtk_v4_10 = ["gtk/v4_10"]
+gtk_v4_12 = ["gtk/v4_12", "gtk_v4_10"]
+gtk_v4_14 = ["gtk/v4_14", "gtk_v4_12"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

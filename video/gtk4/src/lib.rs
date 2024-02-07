@@ -22,6 +22,13 @@ mod utils;
 pub use sink::PaintableSink;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(not(feature = "gtk_v4_10"))]
+    {
+        if gtk::micro_version() >= 13 {
+            gst::warning!(sink::imp::CAT, obj: plugin, "GTK 4.13 or newer detected but plugin not compiled with support for this version. Rendering of video frames with alpha will likely be wrong");
+        }
+    }
+
     sink::register(plugin)
 }
 

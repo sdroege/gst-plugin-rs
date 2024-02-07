@@ -94,6 +94,18 @@ impl AsRef<[u8]> for FrameWrapper {
     }
 }
 
+fn video_format_to_memory_format(f: gst_video::VideoFormat) -> gdk::MemoryFormat {
+    match f {
+        gst_video::VideoFormat::Bgra => gdk::MemoryFormat::B8g8r8a8,
+        gst_video::VideoFormat::Argb => gdk::MemoryFormat::A8r8g8b8,
+        gst_video::VideoFormat::Rgba => gdk::MemoryFormat::R8g8b8a8,
+        gst_video::VideoFormat::Abgr => gdk::MemoryFormat::A8b8g8r8,
+        gst_video::VideoFormat::Rgb => gdk::MemoryFormat::R8g8b8,
+        gst_video::VideoFormat::Bgr => gdk::MemoryFormat::B8g8r8,
+        _ => unreachable!(),
+    }
+}
+
 fn video_frame_to_memory_texture(
     frame: gst_video::VideoFrame<gst_video::video_frame::Readable>,
     cached_textures: &mut HashMap<usize, gdk::Texture>,
@@ -109,15 +121,7 @@ fn video_frame_to_memory_texture(
         return (texture.clone(), pixel_aspect_ratio);
     }
 
-    let format = match frame.format() {
-        gst_video::VideoFormat::Bgra => gdk::MemoryFormat::B8g8r8a8,
-        gst_video::VideoFormat::Argb => gdk::MemoryFormat::A8r8g8b8,
-        gst_video::VideoFormat::Rgba => gdk::MemoryFormat::R8g8b8a8,
-        gst_video::VideoFormat::Abgr => gdk::MemoryFormat::A8b8g8r8,
-        gst_video::VideoFormat::Rgb => gdk::MemoryFormat::R8g8b8,
-        gst_video::VideoFormat::Bgr => gdk::MemoryFormat::B8g8r8,
-        _ => unreachable!(),
-    };
+    let format = video_format_to_memory_format(frame.format());
     let width = frame.width();
     let height = frame.height();
     let rowstride = frame.plane_stride()[0] as usize;
@@ -143,7 +147,7 @@ fn video_frame_to_gl_texture(
     cached_textures: &mut HashMap<usize, gdk::Texture>,
     used_textures: &mut HashSet<usize>,
     gdk_context: &gdk::GLContext,
-    wrapped_context: &gst_gl::GLContext,
+    #[allow(unused)] wrapped_context: &gst_gl::GLContext,
 ) -> (gdk::Texture, f64) {
     let texture_id = frame.texture_id(0).expect("Invalid texture id") as usize;
 
@@ -159,19 +163,77 @@ fn video_frame_to_gl_texture(
     let height = frame.height();
 
     let sync_meta = frame.buffer().meta::<gst_gl::GLSyncMeta>().unwrap();
-    sync_meta.wait(wrapped_context);
 
     let texture = unsafe {
-        gdk::GLTexture::with_release_func(
-            gdk_context,
-            texture_id as u32,
-            width as i32,
-            height as i32,
-            move || {
-                // Unmap and drop the GStreamer GL texture once GTK is done with it and not earlier
-                drop(frame);
-            },
-        )
+        #[cfg(feature = "gtk_v4_12")]
+        {
+            let format = {
+                let format = video_format_to_memory_format(frame.format());
+                #[cfg(feature = "gtk_v4_14")]
+                {
+                    use gtk::prelude::*;
+
+                    if gdk_context.api() != gdk::GLAPI::GLES || gdk_context.version().0 < 3 {
+                        // Map alpha formats to the pre-multiplied versions because we pre-multiply
+                        // ourselves if not GLES3 with the new GL renderer is used as the GTK GL
+                        // backend does not natively support non-premultiplied formats.
+                        match format {
+                            gdk::MemoryFormat::B8g8r8a8 => gdk::MemoryFormat::B8g8r8a8Premultiplied,
+                            gdk::MemoryFormat::A8r8g8b8 => gdk::MemoryFormat::A8r8g8b8Premultiplied,
+                            gdk::MemoryFormat::R8g8b8a8 => gdk::MemoryFormat::R8g8b8a8Premultiplied,
+                            gdk::MemoryFormat::A8b8g8r8 => gdk::MemoryFormat::A8r8g8b8Premultiplied,
+                            gdk::MemoryFormat::R8g8b8 | gdk::MemoryFormat::B8g8r8 => format,
+                            _ => unreachable!(),
+                        }
+                    } else {
+                        format
+                    }
+                }
+
+                #[cfg(not(feature = "gtk_v4_14"))]
+                {
+                    // Map alpha formats to the pre-multiplied versions because we pre-multiply
+                    // ourselves in pre-4.14 versions as the GTK GL backend does not natively
+                    // support non-premultiplied formats
+                    match format {
+                        gdk::MemoryFormat::B8g8r8a8 => gdk::MemoryFormat::B8g8r8a8Premultiplied,
+                        gdk::MemoryFormat::A8r8g8b8 => gdk::MemoryFormat::A8r8g8b8Premultiplied,
+                        gdk::MemoryFormat::R8g8b8a8 => gdk::MemoryFormat::R8g8b8a8Premultiplied,
+                        gdk::MemoryFormat::A8b8g8r8 => gdk::MemoryFormat::A8r8g8b8Premultiplied,
+                        gdk::MemoryFormat::R8g8b8 | gdk::MemoryFormat::B8g8r8 => format,
+                        _ => unreachable!(),
+                    }
+                }
+            };
+            let sync_point = (*sync_meta.as_ptr()).data;
+
+            gdk::GLTextureBuilder::new()
+                .set_context(Some(gdk_context))
+                .set_id(texture_id as u32)
+                .set_width(width as i32)
+                .set_height(height as i32)
+                .set_format(format)
+                .set_sync(Some(sync_point))
+                .build_with_release_func(move || {
+                    // Unmap and drop the GStreamer GL texture once GTK is done with it and not earlier
+                    drop(frame);
+                })
+        }
+        #[cfg(not(feature = "gtk_v4_12"))]
+        {
+            sync_meta.wait(wrapped_context);
+
+            gdk::GLTexture::with_release_func(
+                gdk_context,
+                texture_id as u32,
+                width as i32,
+                height as i32,
+                move || {
+                    // Unmap and drop the GStreamer GL texture once GTK is done with it and not earlier
+                    drop(frame);
+                },
+            )
+        }
         .upcast::<gdk::Texture>()
     };
 
