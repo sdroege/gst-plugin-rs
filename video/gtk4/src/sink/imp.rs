@@ -17,6 +17,13 @@ use glib::thread_guard::ThreadGuard;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
+#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
+use gst_gl::prelude::GLContextExt as GstGLContextExt;
+#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
+use gst_gl::prelude::*;
+
+#[allow(unused_imports)]
+use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_base::subclass::prelude::*;
 use gst_video::subclass::prelude::*;
@@ -25,11 +32,6 @@ use once_cell::sync::Lazy;
 use std::sync::{Mutex, MutexGuard};
 
 use crate::utils;
-
-#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
-use gst_gl::prelude::GLContextExt as GstGLContextExt;
-#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
-use gst_gl::prelude::*;
 
 // Global GL context that is created by the first sink and kept around until the end of the
 // process. This is provided to other elements in the pipeline to make sure they create GL contexts

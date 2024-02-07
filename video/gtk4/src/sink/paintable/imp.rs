@@ -15,7 +15,7 @@ use gtk::{gdk, glib, graphene, gsk};
 
 use crate::sink::frame::{Frame, Texture};
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
 use once_cell::sync::Lazy;
@@ -33,6 +33,7 @@ pub struct Paintable {
     paintables: RefCell<Vec<Texture>>,
     cached_textures: RefCell<HashMap<usize, gdk::Texture>>,
     gl_context: RefCell<Option<gdk::GLContext>>,
+    background_color: Cell<gdk::RGBA>,
     #[cfg(not(feature = "gtk_v4_10"))]
     premult_shader: gsk::GLShader,
 }
@@ -43,6 +44,7 @@ impl Default for Paintable {
             paintables: Default::default(),
             cached_textures: Default::default(),
             gl_context: Default::default(),
+            background_color: Cell::new(gdk::RGBA::BLACK),
             #[cfg(not(feature = "gtk_v4_10"))]
             premult_shader: gsk::GLShader::from_bytes(&glib::Bytes::from_static(include_bytes!(
                 "premult.glsl"
@@ -67,6 +69,11 @@ impl ObjectImpl for Paintable {
                     .blurb("GL context to use for rendering")
                     .construct_only()
                     .build(),
+                glib::ParamSpecUInt::builder("background-color")
+                    .nick("Background Color")
+                    .blurb("Background color to render behind the video frame and in the borders")
+                    .default_value(0)
+                    .build(),
             ]
         });
 
@@ -76,6 +83,16 @@ impl ObjectImpl for Paintable {
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "gl-context" => self.gl_context.borrow().to_value(),
+            "background-color" => {
+                let color = self.background_color.get();
+
+                let v = (f32::clamp(color.red() * 255.0, 0.0, 255.0) as u32) << 24
+                    | (f32::clamp(color.green() * 255.0, 0.0, 255.0) as u32) << 16
+                    | (f32::clamp(color.blue() * 255.0, 0.0, 255.0) as u32) << 8
+                    | (f32::clamp(color.alpha() * 255.0, 0.0, 255.0) as u32);
+
+                v.to_value()
+            }
             _ => unimplemented!(),
         }
     }
@@ -84,6 +101,15 @@ impl ObjectImpl for Paintable {
         match pspec.name() {
             "gl-context" => {
                 *self.gl_context.borrow_mut() = value.get::<Option<gtk::gdk::GLContext>>().unwrap();
+            }
+            "background-color" => {
+                let v = value.get::<u32>().unwrap();
+                let red = ((v & 0xff_00_00_00) >> 24) as f32 / 255.0;
+                let green = ((v & 0x00_ff_00_00) >> 16) as f32 / 255.0;
+                let blue = ((v & 0x00_00_ff_00) >> 8) as f32 / 255.0;
+                let alpha = (v & 0x00_00_00_ff) as f32 / 255.0;
+                self.background_color
+                    .set(gdk::RGBA::new(red, green, blue, alpha))
             }
             _ => unimplemented!(),
         }
@@ -118,6 +144,7 @@ impl PaintableImpl for Paintable {
     fn snapshot(&self, snapshot: &gdk::Snapshot, width: f64, height: f64) {
         let snapshot = snapshot.downcast_ref::<gtk::Snapshot>().unwrap();
 
+        let background_color = self.background_color.get();
         let paintables = self.paintables.borrow();
 
         if !paintables.is_empty() {
@@ -145,7 +172,7 @@ impl PaintableImpl for Paintable {
             }
 
             snapshot.append_color(
-                &gdk::RGBA::BLACK,
+                &background_color,
                 &graphene::Rect::new(0f32, 0f32, width as f32, height as f32),
             );
 
@@ -246,7 +273,7 @@ impl PaintableImpl for Paintable {
         } else {
             gst::trace!(CAT, imp: self, "Snapshotting black frame");
             snapshot.append_color(
-                &gdk::RGBA::BLACK,
+                &background_color,
                 &graphene::Rect::new(0f32, 0f32, width as f32, height as f32),
             );
         }
