@@ -134,12 +134,24 @@ mod imp {
                 _ => unreachable!(),
             }
         }
+
+        fn signals() -> &'static [glib::subclass::Signal] {
+            static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+                vec![glib::subclass::Signal::builder("new-ssrc")
+                    .param_types([u32::static_type()])
+                    .build()]
+            });
+
+            SIGNALS.as_ref()
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::test_init;
+    use std::sync::{atomic::AtomicBool, Arc};
+
+    use crate::{rtpbin2::session::tests::generate_rtp_packet, test_init};
 
     use super::*;
 
@@ -185,5 +197,43 @@ mod tests {
         session.set_property("pt-map", None::<gst::Structure>);
         let prop = session.property::<gst::Structure>("pt-map");
         assert!(prop.has_name("application/x-rtpbin2-pt-map"));
+    }
+
+    #[test]
+    fn new_send_ssrc() {
+        test_init();
+        let ssrc = 0x12345678;
+        let new_ssrc_hit = Arc::new(AtomicBool::new(false));
+        let rtpbin2 = gst::ElementFactory::make("rtpbin2").build().unwrap();
+        let mut h = gst_check::Harness::with_element(
+            &rtpbin2,
+            Some("rtp_send_sink_0"),
+            Some("rtp_send_src_0"),
+        );
+        let session = h
+            .element()
+            .unwrap()
+            .emit_by_name::<gst::glib::Object>("get-session", &[&0u32]);
+        let ssrc_hit = new_ssrc_hit.clone();
+        session.connect("new-ssrc", false, move |args| {
+            let new_ssrc = args[1].get::<u32>().unwrap();
+            ssrc_hit.store(true, std::sync::atomic::Ordering::SeqCst);
+            assert_eq!(new_ssrc, ssrc);
+            None
+        });
+        h.set_src_caps_str("application/x-rtp,payload=96,clock-rate=90000");
+        let mut segment = gst::Segment::new();
+        segment.set_format(gst::Format::Time);
+        h.push_event(gst::event::Segment::builder(&segment).build());
+        let buf1 = gst::Buffer::from_mut_slice(generate_rtp_packet(ssrc, 0x34, 0x10, 16));
+        h.push(buf1.clone()).unwrap();
+        assert!(new_ssrc_hit.load(std::sync::atomic::Ordering::SeqCst));
+        let buf2 = gst::Buffer::from_mut_slice(generate_rtp_packet(ssrc, 0x35, 0x10, 16));
+        h.push(buf2.clone()).unwrap();
+
+        let buf3 = h.pull().unwrap();
+        assert_eq!(buf3, buf1);
+        let buf4 = h.pull().unwrap();
+        assert_eq!(buf4, buf2);
     }
 }

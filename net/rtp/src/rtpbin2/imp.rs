@@ -1008,7 +1008,11 @@ impl RtpBin2 {
         loop {
             match session_inner.session.handle_recv(&rtp, addr, now) {
                 RecvReply::SsrcCollision(_ssrc) => (), // TODO: handle ssrc collision
-                RecvReply::NewSsrc(_ssrc, _pt) => (),  // TODO: signal new ssrc externally
+                RecvReply::NewSsrc(ssrc, _pt) => {
+                    drop(session_inner);
+                    session.config.emit_by_name::<()>("new-ssrc", &[&ssrc]);
+                    session_inner = session.inner.lock().unwrap();
+                }
                 RecvReply::Hold(hold_id) => {
                     let pt = rtp.payload_type();
                     let ssrc = rtp.ssrc();
@@ -1149,22 +1153,26 @@ impl RtpBin2 {
         };
 
         let session = session.clone();
-        let mut session = session.inner.lock().unwrap();
+        let mut session_inner = session.inner.lock().unwrap();
         drop(state);
 
         let now = Instant::now();
         loop {
-            match session.session.handle_send(&rtp, now) {
+            match session_inner.session.handle_send(&rtp, now) {
                 SendReply::SsrcCollision(_ssrc) => (), // TODO: handle ssrc collision
-                SendReply::NewSsrc(_ssrc, _pt) => (),  // TODO; signal ssrc externally
+                SendReply::NewSsrc(ssrc, _pt) => {
+                    drop(session_inner);
+                    session.config.emit_by_name::<()>("new-ssrc", &[&ssrc]);
+                    session_inner = session.inner.lock().unwrap();
+                }
                 SendReply::Passthrough => break,
                 SendReply::Drop => return Ok(gst::FlowSuccess::Ok),
             }
         }
         // TODO: handle other processing
         drop(mapped);
-        let srcpad = session.rtp_send_srcpad.clone().unwrap();
-        drop(session);
+        let srcpad = session_inner.rtp_send_srcpad.clone().unwrap();
+        drop(session_inner);
         srcpad.push(buffer)
     }
 
@@ -1201,21 +1209,24 @@ impl RtpBin2 {
         };
 
         let session = session.clone();
-        let mut session = session.inner.lock().unwrap();
+        let mut session_inner = session.inner.lock().unwrap();
         let waker = state.rtcp_waker.clone();
         drop(state);
 
         let now = Instant::now();
         let ntp_now = SystemTime::now();
-        let replies = session
-            .session
-            .handle_rtcp_recv(rtcp, mapped.len(), addr, now, ntp_now);
-        let rtp_send_sinkpad = session.rtp_send_sinkpad.clone();
-        drop(session);
+        let replies =
+            session_inner
+                .session
+                .handle_rtcp_recv(rtcp, mapped.len(), addr, now, ntp_now);
+        let rtp_send_sinkpad = session_inner.rtp_send_sinkpad.clone();
+        drop(session_inner);
 
         for reply in replies {
             match reply {
-                RtcpRecvReply::NewSsrc(_ssrc) => (), // TODO: handle new ssrc
+                RtcpRecvReply::NewSsrc(ssrc) => {
+                    session.config.emit_by_name::<()>("new-ssrc", &[&ssrc]);
+                }
                 RtcpRecvReply::SsrcCollision(_ssrc) => (), // TODO: handle ssrc collision
                 RtcpRecvReply::TimerReconsideration => {
                     if let Some(ref waker) = waker {
