@@ -17,6 +17,7 @@ use std::sync::LazyLock;
 
 mod onvifmetadatacombiner;
 mod onvifmetadatadepay;
+mod onvifmetadataextractor;
 mod onvifmetadataoverlay;
 mod onvifmetadataparse;
 mod onvifmetadatapay;
@@ -119,6 +120,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     onvifmetadatacombiner::register(plugin)?;
     onvifmetadataoverlay::register(plugin)?;
     onvifmetadataparse::register(plugin)?;
+    onvifmetadataextractor::register(plugin)?;
 
     if !gst::meta::CustomMeta::is_registered("OnvifXMLFrameMeta") {
         gst::meta::CustomMeta::register("OnvifXMLFrameMeta", &[]);

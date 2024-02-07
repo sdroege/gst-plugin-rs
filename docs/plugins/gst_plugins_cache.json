@@ -7635,6 +7635,50 @@
                 },
                 "rank": "primary"
             },
+            "onvifmetadataextractor": {
+                "author": "Benjamin Gaignard <benjamin.gaignard@collabora.com>",
+                "description": "Extract the ONVIF GstMeta into a separate stream",
+                "hierarchy": [
+                    "GstOnvifMetadataExtractor",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Video/Metadata",
+                "pad-templates": {
+                    "meta_src": {
+                        "caps": "application/x-onvif-metadata:\n",
+                        "direction": "src",
+                        "presence": "always"
+                    },
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "remove-onvif-metadata": {
+                        "blurb": "Remove ONVIF metadata from output stream",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
             "onvifmetadataoverlay": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Renders ONVIF analytics meta over raw video frames",
