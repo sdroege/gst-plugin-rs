@@ -96,6 +96,12 @@ mod imp {
 
             ret.build()
         }
+
+        pub fn stats(&self) -> Option<gst::Structure> {
+            let session = self.session()?;
+            let session = session.lock().unwrap();
+            Some(session.stats())
+        }
     }
 
     #[glib::object_subclass]
@@ -120,6 +126,7 @@ mod imp {
         fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
             match pspec.name() {
                 "pt-map" => self.pt_map().to_value(),
+                "stats" => self.stats().to_value(),
                 _ => unreachable!(),
             }
         }
