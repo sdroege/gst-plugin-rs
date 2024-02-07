@@ -48,7 +48,7 @@ enum GLContext {
 #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst_gl"))]
 static GL_CONTEXT: Mutex<GLContext> = Mutex::new(GLContext::Uninitialized);
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+pub(crate) static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "gtk4paintablesink",
         gst::DebugColorFlags::empty(),

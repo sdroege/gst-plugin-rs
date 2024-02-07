@@ -33,6 +33,7 @@ pub struct Paintable {
     paintables: RefCell<Vec<Texture>>,
     cached_textures: RefCell<HashMap<usize, gdk::Texture>>,
     gl_context: RefCell<Option<gdk::GLContext>>,
+    #[cfg(not(feature = "gtk_v4_10"))]
     premult_shader: gsk::GLShader,
 }
 
@@ -42,6 +43,7 @@ impl Default for Paintable {
             paintables: Default::default(),
             cached_textures: Default::default(),
             gl_context: Default::default(),
+            #[cfg(not(feature = "gtk_v4_10"))]
             premult_shader: gsk::GLShader::from_bytes(&glib::Bytes::from_static(include_bytes!(
                 "premult.glsl"
             ))),
@@ -167,20 +169,78 @@ impl PaintableImpl for Paintable {
                 let bounds = graphene::Rect::new(*x, *y, *paintable_width, *paintable_height);
 
                 // Only premultiply GL textures that expect to be in premultiplied RGBA format.
-                let do_premult = texture.is::<gdk::GLTexture>() && *has_alpha;
-                if do_premult {
-                    snapshot.push_gl_shader(
-                        &self.premult_shader,
-                        &bounds,
-                        gsk::ShaderArgsBuilder::new(&self.premult_shader, None).to_args(),
-                    );
+                //
+                // For GTK 4.14 or newer we use the correct format directly when building the
+                // texture, but only if a GLES3+ context is used. In that case the NGL renderer is
+                // used by GTK, which supports non-premultiplied formats correctly and fast.
+                //
+                // For GTK 4.10-4.12, or 4.14 and newer if a GLES2 context is used, we use a
+                // self-mask to pre-multiply the alpha.
+                //
+                // For GTK before 4.10, we use a GL shader and hope that it works.
+                #[cfg(feature = "gtk_v4_10")]
+                {
+                    let context_requires_premult = {
+                        #[cfg(feature = "gtk_v4_14")]
+                        {
+                            self.gl_context.borrow().as_ref().map_or(false, |context| {
+                                context.api() != gdk::GLAPI::GLES || context.version().0 < 3
+                            })
+                        }
+
+                        #[cfg(not(feature = "gtk_v4_14"))]
+                        {
+                            true
+                        }
+                    };
+
+                    let do_premult =
+                        context_requires_premult && texture.is::<gdk::GLTexture>() && *has_alpha;
+                    if do_premult {
+                        snapshot.push_mask(gsk::MaskMode::Alpha);
+                        snapshot.append_texture(texture, &bounds);
+                        snapshot.pop(); // pop mask
+
+                        // color matrix to set alpha of the source to 1.0 as it was
+                        // already applied via the mask just above.
+                        snapshot.push_color_matrix(
+                            &graphene::Matrix::from_float({
+                                [
+                                    1.0, 0.0, 0.0, 0.0, //
+                                    0.0, 1.0, 0.0, 0.0, //
+                                    0.0, 0.0, 1.0, 0.0, //
+                                    0.0, 0.0, 0.0, 0.0,
+                                ]
+                            }),
+                            &graphene::Vec4::new(0.0, 0.0, 0.0, 1.0),
+                        );
+                    }
+
+                    snapshot.append_texture(texture, &bounds);
+
+                    if do_premult {
+                        snapshot.pop(); // pop color matrix
+                        snapshot.pop(); // pop mask 2
+                    }
                 }
+                #[cfg(not(feature = "gtk_v4_10"))]
+                {
+                    let do_premult =
+                        texture.is::<gdk::GLTexture>() && *has_alpha && gtk::micro_version() < 13;
+                    if do_premult {
+                        snapshot.push_gl_shader(
+                            &self.premult_shader,
+                            &bounds,
+                            gsk::ShaderArgsBuilder::new(&self.premult_shader, None).to_args(),
+                        );
+                    }
 
-                snapshot.append_texture(texture, &bounds);
+                    snapshot.append_texture(texture, &bounds);
 
-                if do_premult {
-                    snapshot.gl_shader_pop_texture(); // pop texture appended above from the shader
-                    snapshot.pop(); // pop shader
+                    if do_premult {
+                        snapshot.gl_shader_pop_texture(); // pop texture appended above from the shader
+                        snapshot.pop(); // pop shader
+                    }
                 }
 
                 snapshot.pop(); // pop opacity
