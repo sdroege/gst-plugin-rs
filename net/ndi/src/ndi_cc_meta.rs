@@ -10,9 +10,12 @@ use data_encoding::BASE64;
 use smallvec::SmallVec;
 
 use gst::glib::translate::IntoGlib;
-use gst_video::{VideoAncillary, VideoAncillaryDID16, VideoVBIEncoder, VideoVBIParser};
+#[cfg(feature = "sink")]
+use gst_video::VideoVBIEncoder;
+use gst_video::{VideoAncillary, VideoAncillaryDID16, VideoVBIParser};
 use once_cell::sync::Lazy;
 
+#[cfg(feature = "sink")]
 use std::ffi::CString;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -29,9 +32,13 @@ const C608_TAG_BYTES: &[u8] = C608_TAG.as_bytes();
 const C708_TAG: &str = "C708";
 const C708_TAG_BYTES: &[u8] = C708_TAG.as_bytes();
 
+#[cfg(feature = "sink")]
 const LINE_ATTR: &str = "line";
+#[cfg(feature = "sink")]
 const DEFAULT_LINE: u8 = 21;
+#[cfg(feature = "sink")]
 const DEFAULT_LINE_STR: &str = "21";
+#[cfg(feature = "sink")]
 const DEFAULT_LINE_C708_STR: &str = "10";
 
 // Video anc AFD content:
@@ -50,6 +57,7 @@ const NDI_CC_CAPACITY: usize = NDI_CC_CONTENT_CAPACITY + 13 + 10;
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 /// NDI Video Captions related Errors.
 pub enum NDICCError {
+    #[cfg(feature = "sink")]
     #[error("Unsupported closed caption type {cc_type:?}")]
     UnsupportedCC {
         cc_type: gst_video::VideoCaptionType,
@@ -71,6 +79,7 @@ impl NDICCError {
     }
 }
 
+#[cfg(feature = "sink")]
 /// NDI Closed Captions Meta encoder.
 pub struct NDICCMetaEncoder {
     v210_encoder: VideoVBIEncoder,
@@ -78,6 +87,7 @@ pub struct NDICCMetaEncoder {
     line_buf: Vec<u8>,
 }
 
+#[cfg(feature = "sink")]
 impl NDICCMetaEncoder {
     pub fn new(width: u32) -> Self {
         let v210_encoder = VideoVBIEncoder::try_new(gst_video::VideoFormat::V210, width).unwrap();
@@ -383,8 +393,10 @@ impl NDICCMetaDecoder {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "sink")]
     use gst_video::VideoCaptionType;
 
+    #[cfg(feature = "sink")]
     #[test]
     fn encode_gst_meta_c608() {
         gst::init().unwrap();
@@ -406,6 +418,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "sink")]
     #[test]
     fn encode_gst_meta_c708() {
         gst::init().unwrap();
@@ -435,6 +448,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "sink")]
     #[test]
     fn encode_gst_meta_c608_and_c708() {
         gst::init().unwrap();
@@ -469,6 +483,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "sink")]
     #[test]
     fn encode_gst_meta_unsupported_cc() {
         gst::init().unwrap();
@@ -488,6 +503,7 @@ mod tests {
         assert!(ndi_cc_encoder.encode(&buf).is_none());
     }
 
+    #[cfg(feature = "sink")]
     #[test]
     fn encode_gst_meta_none() {
         gst::init().unwrap();
