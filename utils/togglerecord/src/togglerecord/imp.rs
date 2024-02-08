@@ -693,7 +693,7 @@ impl ToggleRecord {
         }
     }
 
-    #[allow(clippy::blocks_in_if_conditions)]
+    #[allow(clippy::block_in_conditions)]
     fn handle_secondary_stream<T: HandleData>(
         &self,
         pad: &gst::Pad,
