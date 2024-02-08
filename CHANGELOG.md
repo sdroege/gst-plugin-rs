@@ -5,6 +5,49 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.12.0] - 2024-02-08
+### Changed
+- ndi: `ndisrc` passes received data downstream without an additional copy, if
+  possible.
+- webrtc: Cleanups to webrtcsrc/sink default signalling protocol, JavaScript
+  implementation and server implementation.
+- webrtc: `whipwebrtcsink` is renamed to `whipclientsink` and deprecate old
+  `whipsink`.
+
+### Fixed
+- gtk4: Fix Windows build when using EGL.
+- gtk4: Fix ARGB pre-multiplication with GTK 4.14. This requires building with
+  the `gtk_v4_10` or even better `gtk_v4_14` feature.
+- gtk4: Fix segfault if GTK3 is used in the same process.
+- gtk4: Always draw background behind the video frame and not only when
+  borders have to be added to avoid glitches.
+- livekitwebrtcsink: Add high-quality layer for video streams.
+- webrtc: Fix potential hang and fd leak in signalling server.
+- webrtc: Fix closing of WebSockets.
+- webrtchttp: Allow setting `None` for audio/video caps for WHEP.
+
+### Added
+- New `awss3putobjectsink` that works similar to `awss3sink` but with a
+  different upload strategy.
+- New `hlscmafsink` element for writing HLS streams with CMAF/ISOBMFF
+  fragments.
+- New `inter` plugin with `intersink` / `intersrc` elements that allow to
+  connect different pipelines in the same process.
+- New `janusvrwebrtcsink` element for the Janus VideoRoom API.
+- New `rtspsrc2` element.
+- New `whipserversrc` element.
+
+- gtk4: New `background-color` property for setting the color of the
+  background of the frame and the borders, if any.
+- gtk4: New `scale-filter` property for defining how to scale the frames.
+- livesync: Add support for image formats.
+- ndi: Closed Caption support in `ndisrc` / `ndisink`.
+- textwrap: Add support for gaps.
+- tracers: Optionally only show late buffers in `buffer-lateness` tracer.
+- webrtc: Add support for custom headers.
+- webrtcsink: New `payloader-setup` signal to configure payloader elements.
+- webrtcsrc: Support for navigation events.
+
 ## [0.11.3] - 2023-12-18
 ### Fixed
 - ndi: Mark a private type as such and remove a wrong `Clone` impl of internal types.
@@ -301,7 +344,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.3...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.0...HEAD
+[0.12.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.3...0.12.0
 [0.11.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.2...0.11.3
 [0.11.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.1...0.11.2
 [0.11.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.0...0.11.1
