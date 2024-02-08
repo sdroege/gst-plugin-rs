@@ -97,8 +97,8 @@ trigger:
 
     - cargo build --locked --color=always --workspace --all-targets
     - G_DEBUG=fatal_warnings cargo test --locked --color=always --workspace --all-targets
-    - cargo build --locked --color=always --workspace --all-targets --all-features
-    - G_DEBUG=fatal_warnings cargo test --locked --color=always --workspace --all-targets --all-features
+    - cargo build --locked --color=always --workspace --all-targets --all-features --exclude gst-plugin-gtk4
+    - G_DEBUG=fatal_warnings cargo test --locked --color=always --workspace --all-targets --all-features --exclude gst-plugin-gtk4
     - cargo build --locked --color=always --workspace --all-targets --no-default-features
     - G_DEBUG=fatal_warnings cargo test --locked --color=always --workspace --all-targets --no-default-features
 
@@ -326,7 +326,9 @@ clippy:
     # csound-sys only looks at /usr/lib and /usr/local top levels
     CSOUND_LIB_DIR: '/usr/lib/x86_64-linux-gnu/'
   script:
-    - cargo clippy --locked --color=always --all --all-features --all-targets -- -D warnings -A unknown-lints
+    - cargo clippy --locked --color=always --all --all-targets -- -D warnings -A unknown-lints
+    - cargo clippy --locked --color=always --all --all-features --all-targets --exclude gst-plugin-gtk4 -- -D warnings -A unknown-lints
+    - cargo clippy --locked --color=always --all --all-targets --no-default-features -- -D warnings -A unknown-lints
 
 deny:
   extends: .debian:12-stable
@@ -365,7 +367,7 @@ coverage:
     # csound-sys only looks at /usr/lib and /usr/local top levels
     CSOUND_LIB_DIR: '/usr/lib/x86_64-linux-gnu/'
   script:
-    - cargo test --locked --color=always --all --all-features
+    - cargo test --locked --color=always --all --all-features --exclude gst-plugin-gtk4
     # generate html report
     - grcov . --binary-path ./target/debug/ -s . -t html --branch --ignore-not-existing --ignore "*target*" --ignore "*/build.rs" -o ./coverage/
     # generate cobertura report for gitlab integration
