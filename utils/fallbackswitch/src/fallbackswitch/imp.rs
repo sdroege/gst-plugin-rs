@@ -984,16 +984,23 @@ impl FallbackSwitch {
             // be NONE by now
             let pts = buffer.pts().unwrap();
 
-            let mut builder = gst::event::Gap::builder(pts)
-                .duration(buffer.duration())
-                .seqnum(in_gap_event.seqnum());
-
-            #[cfg(feature = "v1_20")]
-            {
-                builder = builder.gap_flags(in_gap_event.gap_flags());
-            }
-
-            let out_gap_event = builder.build();
+            let out_gap_event = {
+                #[cfg(feature = "v1_20")]
+                {
+                    gst::event::Gap::builder(pts)
+                        .duration(buffer.duration())
+                        .seqnum(in_gap_event.seqnum())
+                        .gap_flags(in_gap_event.gap_flags())
+                        .build()
+                }
+                #[cfg(not(feature = "v1_20"))]
+                {
+                    gst::event::Gap::builder(pts)
+                        .duration(buffer.duration())
+                        .seqnum(in_gap_event.seqnum())
+                        .build()
+                }
+            };
 
             self.with_src_busy(|| {
                 self.src_pad.push_event(out_gap_event);
