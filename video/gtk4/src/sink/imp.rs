@@ -99,6 +99,14 @@ impl ObjectImpl for PaintableSink {
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "paintable" => {
+                // Fix segfault when GTK3 and GTK4 are loaded (e.g. `gst-inspect-1.0 -a`)
+                // checking if GtkBin is registered to know if libgtk3.so is already present
+                // GtkBin was dropped for GTK4 https://gitlab.gnome.org/GNOME/gtk/-/commit/3c165b3b77
+                if glib::types::Type::from_name("GtkBin").is_some() {
+                    gst::error!(CAT, imp: self, "Skipping the creation of paintable to avoid segfault between GTK3 and GTK4");
+                    return None::<&gdk::Paintable>.to_value();
+                }
+
                 let mut paintable = self.paintable.lock().unwrap();
                 if paintable.is_none() {
                     self.create_paintable(&mut paintable);
