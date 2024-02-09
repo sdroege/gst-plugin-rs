@@ -70,6 +70,9 @@ version = "0.9"
 [[bans.skip]]
 name = "hmac"
 version = "0.11"
+[[bans.skip]]
+name = "zerocopy"
+version = "0.6"
 
 # field-offset and nix depend on an older memoffset
 # https://github.com/Diggsey/rust-field-offset/pull/23
