@@ -61,6 +61,7 @@ pub(crate) static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 #[derive(Default)]
 pub struct PaintableSink {
     paintable: Mutex<Option<ThreadGuard<Paintable>>>,
+    window: Mutex<Option<ThreadGuard<gtk::Window>>>,
     info: Mutex<Option<gst_video::VideoInfo>>,
     sender: Mutex<Option<async_channel::Sender<SinkEvent>>>,
     pending_frame: Mutex<Option<Frame>>,
@@ -231,6 +232,18 @@ impl ElementImpl for PaintableSink {
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         match transition {
             gst::StateChange::NullToReady => {
+                let create_window = glib::program_name().as_deref() == Some("gst-launch-1.0")
+                    || std::env::var("GST_GTK4_WINDOW").as_deref() == Ok("1");
+
+                if create_window {
+                    let res = utils::invoke_on_main_thread(gtk::init);
+
+                    if let Err(err) = res {
+                        gst::error!(CAT, imp: self, "Failed to create initialize GTK: {err}");
+                        return Err(gst::StateChangeError);
+                    }
+                }
+
                 let mut paintable = self.paintable.lock().unwrap();
 
                 if paintable.is_none() {
@@ -273,6 +286,10 @@ impl ElementImpl for PaintableSink {
                         );
                     }
                 }
+
+                if create_window {
+                    self.create_window();
+                }
             }
             _ => (),
         }
@@ -293,6 +310,17 @@ impl ElementImpl for PaintableSink {
                         paintable.get_ref().handle_flush_frames();
                     }
                 });
+            }
+            gst::StateChange::ReadyToNull => {
+                let mut window_guard = self.window.lock().unwrap();
+                if let Some(window) = window_guard.take() {
+                    drop(window_guard);
+
+                    glib::MainContext::default().invoke(move || {
+                        let window = window.get_ref();
+                        window.close();
+                    });
+                }
             }
             _ => (),
         }
@@ -518,6 +546,46 @@ impl PaintableSink {
             .lock()
             .expect("Failed to lock Mutex")
             .replace(tmp_caps);
+    }
+
+    fn create_window(&self) {
+        let self_ = self.to_owned();
+        glib::MainContext::default().invoke(move || {
+            let mut window_guard = self_.window.lock().unwrap();
+            if window_guard.is_some() {
+                return;
+            }
+
+            let paintable = match &*self_.paintable.lock().unwrap() {
+                Some(paintable) => paintable.get_ref().clone(),
+                None => return,
+            };
+
+            let window = gtk::Window::new();
+            let picture = gtk::Picture::new();
+            picture.set_paintable(Some(&paintable));
+            window.set_child(Some(&picture));
+            window.set_default_size(640, 480);
+
+            window.connect_close_request({
+                let self_ = self_.clone();
+                move |_window| {
+                    if self_.window.lock().unwrap().is_some() {
+                        gst::element_imp_error!(
+                            self_,
+                            gst::ResourceError::NotFound,
+                            ("Output window was closed")
+                        );
+                    }
+
+                    glib::Propagation::Proceed
+                }
+            });
+
+            window.show();
+
+            *window_guard = Some(ThreadGuard::new(window));
+        });
     }
 
     fn create_paintable(&self, paintable_storage: &mut MutexGuard<Option<ThreadGuard<Paintable>>>) {
