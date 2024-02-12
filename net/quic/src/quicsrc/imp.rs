@@ -25,6 +25,7 @@ use std::sync::Mutex;
 
 static DEFAULT_SERVER_NAME: &str = "localhost";
 static DEFAULT_SERVER_ADDR: &str = "127.0.0.1:5000";
+const DEFAULT_ALPN: &str = "h3";
 const DEFAULT_TIMEOUT: u32 = 15;
 const DEFAULT_PRIVATE_KEY_TYPE: QuicPrivateKeyType = QuicPrivateKeyType::Pkcs8;
 const DEFAULT_SECURE_CONNECTION: bool = true;
@@ -53,6 +54,7 @@ enum State {
 struct Settings {
     server_address: SocketAddr,
     server_name: String,
+    alpn: String,
     timeout: u32,
     secure_conn: bool,
     caps: gst::Caps,
@@ -66,6 +68,7 @@ impl Default for Settings {
         Settings {
             server_address: DEFAULT_SERVER_ADDR.parse::<SocketAddr>().unwrap(),
             server_name: DEFAULT_SERVER_NAME.to_string(),
+            alpn: DEFAULT_ALPN.to_string(),
             timeout: DEFAULT_TIMEOUT,
             secure_conn: DEFAULT_SECURE_CONNECTION,
             caps: gst::Caps::new_any(),
@@ -167,6 +170,10 @@ impl ObjectImpl for QuicSrc {
                     .nick("QUIC server address")
                     .blurb("Address of the QUIC server to connect to e.g. 127.0.0.1:5000")
                     .build(),
+		glib::ParamSpecString::builder("alpn")
+                    .nick("QUIC ALPN value")
+                    .blurb("QUIC connection Application-Layer Protocol Negotiation (ALPN) value")
+                    .build(),
                 glib::ParamSpecUInt::builder("timeout")
                     .nick("Timeout")
                     .blurb("Value in seconds to timeout QUIC endpoint requests (0 = No timeout).")
@@ -223,6 +230,10 @@ impl ObjectImpl for QuicSrc {
                     ),
                 }
             }
+            "alpn" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.alpn = value.get::<String>().expect("type checked upstream");
+            }
             "caps" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.caps = value
@@ -269,6 +280,10 @@ impl ObjectImpl for QuicSrc {
             "server-address" => {
                 let settings = self.settings.lock().unwrap();
                 settings.server_address.to_string().to_value()
+            }
+            "alpn" => {
+                let settings = self.settings.lock().unwrap();
+                settings.alpn.to_value()
             }
             "caps" => {
                 let settings = self.settings.lock().unwrap();
@@ -520,6 +535,7 @@ impl QuicSrc {
     async fn wait_for_connection(&self) -> Result<(Connection, Option<RecvStream>), WaitError> {
         let server_addr;
         let server_name;
+        let alpn;
         let use_datagram;
         let secure_conn;
         let cert_path;
@@ -529,6 +545,7 @@ impl QuicSrc {
             let settings = self.settings.lock().unwrap();
             server_addr = settings.server_address;
             server_name = settings.server_name.clone();
+            alpn = settings.alpn.clone();
             use_datagram = settings.use_datagram;
             secure_conn = settings.secure_conn;
             cert_path = settings.certificate_path.clone();
@@ -539,6 +556,7 @@ impl QuicSrc {
             server_addr,
             &server_name,
             secure_conn,
+            &alpn,
             cert_path,
             private_key_type,
         )

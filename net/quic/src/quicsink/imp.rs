@@ -22,6 +22,7 @@ use std::sync::Mutex;
 static DEFAULT_SERVER_NAME: &str = "localhost";
 static DEFAULT_SERVER_ADDR: &str = "127.0.0.1:5000";
 static DEFAULT_CLIENT_ADDR: &str = "127.0.0.1:5001";
+const DEFAULT_ALPN: &str = "h3";
 const DEFAULT_TIMEOUT: u32 = 15;
 const DEFAULT_SECURE_CONNECTION: bool = true;
 
@@ -46,6 +47,7 @@ struct Settings {
     client_address: SocketAddr,
     server_address: SocketAddr,
     server_name: String,
+    alpn: String,
     timeout: u32,
     secure_conn: bool,
     use_datagram: bool,
@@ -57,6 +59,7 @@ impl Default for Settings {
             client_address: DEFAULT_CLIENT_ADDR.parse::<SocketAddr>().unwrap(),
             server_address: DEFAULT_SERVER_ADDR.parse::<SocketAddr>().unwrap(),
             server_name: DEFAULT_SERVER_NAME.to_string(),
+            alpn: DEFAULT_ALPN.to_string(),
             timeout: DEFAULT_TIMEOUT,
             secure_conn: DEFAULT_SECURE_CONNECTION,
             use_datagram: false,
@@ -132,6 +135,10 @@ impl ObjectImpl for QuicSink {
                     .nick("QUIC client address")
                     .blurb("Address to be used by this QUIC client e.g. 127.0.0.1:5001")
                     .build(),
+		glib::ParamSpecString::builder("alpn")
+                    .nick("QUIC ALPN value")
+                    .blurb("QUIC connection Application-Layer Protocol Negotiation (ALPN) value")
+                    .build(),
                 glib::ParamSpecUInt::builder("timeout")
                     .nick("Timeout")
                     .blurb("Value in seconds to timeout QUIC endpoint requests (0 = No timeout).")
@@ -191,6 +198,10 @@ impl ObjectImpl for QuicSink {
                     ),
                 }
             }
+            "alpn" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.alpn = value.get::<String>().expect("type checked upstream");
+            }
             "timeout" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.timeout = value.get().expect("type checked upstream");
@@ -220,6 +231,10 @@ impl ObjectImpl for QuicSink {
             "client-address" => {
                 let settings = self.settings.lock().unwrap();
                 settings.client_address.to_string().to_value()
+            }
+            "alpn" => {
+                let settings = self.settings.lock().unwrap();
+                settings.alpn.to_value()
             }
             "timeout" => {
                 let settings = self.settings.lock().unwrap();
@@ -424,6 +439,7 @@ impl QuicSink {
         let client_addr;
         let server_addr;
         let server_name;
+        let alpn;
         let use_datagram;
         let secure_conn;
 
@@ -432,11 +448,12 @@ impl QuicSink {
             client_addr = settings.client_address;
             server_addr = settings.server_address;
             server_name = settings.server_name.clone();
+            alpn = settings.alpn.clone();
             use_datagram = settings.use_datagram;
             secure_conn = settings.secure_conn;
         }
 
-        let endpoint = client_endpoint(client_addr, secure_conn).map_err(|err| {
+        let endpoint = client_endpoint(client_addr, secure_conn, &alpn).map_err(|err| {
             WaitError::FutureError(gst::error_msg!(
                 gst::ResourceError::Failed,
                 ["Failed to configure endpoint: {}", err]
