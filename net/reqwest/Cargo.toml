@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-reqwest"
-version = "0.9.12"
+version = "0.9.13"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT OR Apache-2.0"
