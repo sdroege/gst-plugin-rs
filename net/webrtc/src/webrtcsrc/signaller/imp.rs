@@ -150,7 +150,6 @@ impl Signaller {
                     |this| gst::info!(CAT, imp: this, "{msg}")
                 );
 
-                ws_sink.send(WsMessage::Close(None)).await?;
                 ws_sink.close().await?;
 
                 Ok::<(), Error>(())
