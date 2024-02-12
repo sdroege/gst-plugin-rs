@@ -174,7 +174,7 @@ impl TextWrap {
                     CAT,
                     imp: self,
                     "Outputting contents {}, ts: {}, duration: {}",
-                    drained.to_string(),
+                    drained,
                     state.start_ts.display(),
                     duration.display(),
                 );
