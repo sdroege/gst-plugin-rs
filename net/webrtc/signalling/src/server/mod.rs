@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-use tracing::{info, instrument, trace, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 struct Peer {
     receive_task_handle: task::JoinHandle<()>,
@@ -138,6 +138,7 @@ impl Server {
         let this_id_clone = this_id.clone();
         let (mut ws_sink, mut ws_stream) = ws.split();
         let send_task_handle = task::spawn(async move {
+            let mut res = Ok(());
             loop {
                 match async_std::future::timeout(
                     std::time::Duration::from_secs(30),
@@ -147,21 +148,28 @@ impl Server {
                 {
                     Ok(Some(msg)) => {
                         trace!(this_id = %this_id_clone, "sending {}", msg);
-                        ws_sink.send(WsMessage::Text(msg)).await?;
+                        res = ws_sink.send(WsMessage::Text(msg)).await;
                     }
                     Ok(None) => {
                         break;
                     }
                     Err(_) => {
                         trace!(this_id = %this_id_clone, "timeout, sending ping");
-                        ws_sink.send(WsMessage::Ping(vec![])).await?;
+                        res = ws_sink.send(WsMessage::Ping(vec![])).await;
                     }
+                }
+
+                if let Err(ref err) = res {
+                    error!(this_id = %this_id_clone, %err, "Quitting send loop");
+                    break;
                 }
             }
 
-            ws_sink.close().await?;
+            debug!(this_id = %this_id_clone, "Done sending");
 
-            Ok::<(), Error>(())
+            let _ = ws_sink.close().await;
+
+            res.map_err(Into::into)
         });
 
         let mut tx = self.state.lock().unwrap().tx.clone();

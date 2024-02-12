@@ -138,21 +138,29 @@ impl Signaller {
         let (websocket_sender, mut websocket_receiver) = mpsc::channel::<p::IncomingMessage>(1000);
         let send_task_handle =
             task::spawn(glib::clone!(@weak-allow-none self as this => async move {
+                let mut res = Ok(());
                 while let Some(msg) = websocket_receiver.next().await {
                     gst::log!(CAT, "Sending websocket message {:?}", msg);
-                    ws_sink
+                    res = ws_sink
                         .send(WsMessage::Text(serde_json::to_string(&msg).unwrap()))
-                        .await?;
+                        .await;
+
+                    if let Err(ref err) = res {
+                        this.as_ref().map_or_else(|| gst::error!(CAT, "Quitting send loop: {err}"),
+                            |this| gst::error!(CAT, imp: this, "Quitting send loop: {err}")
+                        );
+                        break;
+                    }
                 }
 
                 let msg = "Done sending";
-                this.map_or_else(|| gst::info!(CAT, "{msg}"),
-                    |this| gst::info!(CAT, imp: this, "{msg}")
+                this.map_or_else(|| gst::debug!(CAT, "{msg}"),
+                    |this| gst::debug!(CAT, imp: this, "{msg}")
                 );
 
-                ws_sink.close().await?;
+                let _ = ws_sink.close().await;
 
-                Ok::<(), Error>(())
+                res.map_err(Into::into)
             }));
 
         let obj = self.obj();

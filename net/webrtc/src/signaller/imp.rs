@@ -83,22 +83,30 @@ impl Signaller {
             mpsc::channel::<p::IncomingMessage>(1000);
         let element_clone = element.downgrade();
         let send_task_handle = task::spawn(async move {
+            let mut res = Ok(());
             while let Some(msg) = websocket_receiver.next().await {
                 if let Some(element) = element_clone.upgrade() {
                     gst::trace!(CAT, obj: element, "Sending websocket message {:?}", msg);
                 }
-                ws_sink
+                res = ws_sink
                     .send(WsMessage::Text(serde_json::to_string(&msg).unwrap()))
-                    .await?;
+                    .await;
+
+                if let Err(ref err) = res {
+                    if let Some(element) = element_clone.upgrade() {
+                        gst::error!(CAT, obj: element, "Quitting send loop: {err}")
+                    }
+                    break;
+                }
             }
 
             if let Some(element) = element_clone.upgrade() {
-                gst::info!(CAT, obj: element, "Done sending");
+                gst::debug!(CAT, obj: element, "Done sending");
             }
 
-            ws_sink.close().await?;
+            let _ = ws_sink.close().await;
 
-            Ok::<(), Error>(())
+            res.map_err(Into::into)
         });
 
         let meta = if let Some(meta) = element.property::<Option<gst::Structure>>("meta") {
