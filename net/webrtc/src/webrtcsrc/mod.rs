@@ -54,6 +54,10 @@ glib::wrapper! {
 }
 
 glib::wrapper! {
+    pub struct LiveKitWebRTCSrc(ObjectSubclass<imp::LiveKitWebRTCSrc>) @extends BaseWebRTCSrc, gst::Bin, gst::Element, gst::Object, @implements gst::URIHandler, gst::ChildProxy;
+}
+
+glib::wrapper! {
     pub struct WebRTCSrcPad(ObjectSubclass<pad::WebRTCSrcPad>) @extends gst::GhostPad, gst::ProxyPad, gst::Pad, gst::Object;
 }
 
@@ -74,6 +78,61 @@ pub fn register(plugin: Option<&gst::Plugin>) -> Result<(), glib::BoolError> {
         "whipserversrc",
         gst::Rank::PRIMARY,
         WhipServerSrc::static_type(),
+    )?;
+
+    /**
+     * element-livekitwebrtcsrc:
+     *
+     * The `livekitwebrtcsrc` plays streams from a LiveKit room.
+     *
+     * The element can either subscribe to the streams published by a single
+     * peer in the room using the same `signaller::producer-peer-id` child
+     * property that other webrtcsrc elements use or auto-subscribe to all peers
+     * in a room by not specifying anything for that property. When in
+     * auto-subscribe mode, you can use
+     * `signaller::excluded-producer-peer-ids=<a,b,c>` to ignore peers `a`, `b`,
+     * and `c` while subscribing to all other members of the room.
+     *
+     * ## Sample Pipeline
+     *
+     * First, start the livekit server with the `--dev` flag to enable the test credentials.
+     *
+     * Next, publish a stream:
+     *
+     * ```shell
+     * gst-launch-1.0 \
+     * videotestsrc is-live=1 \
+     * ! video/x-raw,width=640,height=360,framerate=15/1 \
+     * ! timeoverlay ! videoconvert ! queue \
+     * ! livekitwebrtcsink name=sink \
+     *     signaller::ws-url=ws://127.0.0.1:7880 \
+     *     signaller::api-key=devkey \
+     *     signaller::secret-key=secret \
+     *     signaller::room-name=testroom \
+     *     signaller::identity=gst-producer \
+     *     signaller::participant-name=gst-producer \
+     *     video-caps='video/x-vp8'
+     * ```
+     *
+     * Finally, watch the stream:
+     *
+     * ```shell
+     * gst-launch-1.0 \
+     * livekitwebrtcsrc \
+     *   signaller::ws-url=ws://127.0.0.1:7880 \
+     *   signaller::api-key=devkey \
+     *   signaller::secret-key=secret \
+     *   signaller::room-name=testroom \
+     *   signaller::identity=gst-consumer \
+     *   signaller::participant-name=gst-consumer \
+     * ! queue ! videoconvert ! autovideosink
+     * ```
+     */
+    gst::Element::register(
+        plugin,
+        "livekitwebrtcsrc",
+        gst::Rank::NONE,
+        LiveKitWebRTCSrc::static_type(),
     )?;
 
     Ok(())

@@ -2,6 +2,7 @@
 
 use gst::prelude::*;
 
+use crate::livekit_signaller::LiveKitSignaller;
 use crate::signaller::{prelude::*, Signallable, Signaller};
 use crate::utils::{Codec, Codecs, NavigationEvent, AUDIO_CAPS, RTP_CAPS, VIDEO_CAPS};
 use crate::webrtcsrc::WebRTCSrcPad;
@@ -1288,5 +1289,46 @@ impl BaseWebRTCSrcImpl for WhipServerSrc {}
 impl ObjectSubclass for WhipServerSrc {
     const NAME: &'static str = "GstWhipServerSrc";
     type Type = super::WhipServerSrc;
+    type ParentType = super::BaseWebRTCSrc;
+}
+
+#[derive(Default)]
+pub struct LiveKitWebRTCSrc;
+
+impl ObjectImpl for LiveKitWebRTCSrc {
+    fn constructed(&self) {
+        self.parent_constructed();
+        let element = self.obj();
+        let ws = element.upcast_ref::<super::BaseWebRTCSrc>().imp();
+
+        let _ = ws.set_signaller(LiveKitSignaller::new_consumer().upcast());
+    }
+}
+
+impl GstObjectImpl for LiveKitWebRTCSrc {}
+
+impl BinImpl for LiveKitWebRTCSrc {}
+
+impl ElementImpl for LiveKitWebRTCSrc {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "LiveKitWebRTCSrc",
+                "Source/Network/WebRTC",
+                "WebRTC source with LiveKit signaller",
+                "Jordan Yelloz <jordan.yelloz@collabora.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+}
+
+impl BaseWebRTCSrcImpl for LiveKitWebRTCSrc {}
+
+#[glib::object_subclass]
+impl ObjectSubclass for LiveKitWebRTCSrc {
+    const NAME: &'static str = "GstLiveKitWebRTCSrc";
+    type Type = super::LiveKitWebRTCSrc;
     type ParentType = super::BaseWebRTCSrc;
 }
