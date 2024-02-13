@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-aws"
-version = "0.11.3"
+version = "0.11.4"
 authors = ["Arun Raghavan <arun@arunraghavan.net>",
            "Jordan Petridis <jordan@centricular.com>",
            "Mathieu Duponchelle <mathieu@centricular.com>"]

@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-togglerecord"
-version = "0.11.3"
+version = "0.11.4"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 license = "MPL-2.0"
 description = "GStreamer Toggle Record Plugin"
