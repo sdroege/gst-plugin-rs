@@ -5,6 +5,28 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.11.4] - 2024-02-13
+### Fixed
+- Various meson build fixes.
+- gtk4: Build on Windows using winegl.
+- gtk4: Segfault if GTK3 is used in the same process.
+- gtk4: Handling of RGBA textures with GTK 4.14.
+- gtk4: Glitches with black background when switching rendering dimensions.
+- webrtc: Potential hang and fd leak in signalling server.
+- webrtc: Usage and compilation with GStreamer 1.20.
+- webrtc: Closing of WebSocket connections.
+- webrtc: Add high-quality layer for livekit video streams.
+- webrtchttp: Allow specifying `None` for audio/video caps with WHEP.
+
+### Added
+- livesync: Support for image formats.
+- textwrap: Support for gaps.
+
+### Changed
+- Update to rav1e 0.7.
+- Update to livekit 0.3.
+- Update to gif 0.13.
+
 ## [0.11.3] - 2023-12-18
 ### Fixed
 - ndi: Mark a private type as such and remove a wrong `Clone` impl of internal types.
@@ -301,7 +323,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.3...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.4...HEAD
+[0.11.4]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.3...0.11.4
 [0.11.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.2...0.11.3
 [0.11.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.1...0.11.2
 [0.11.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.0...0.11.1
