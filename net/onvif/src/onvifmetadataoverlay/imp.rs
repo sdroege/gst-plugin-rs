@@ -400,6 +400,12 @@ impl OnvifMetadataOverlay {
 
                 let mut object_ids = HashSet::new();
 
+                // Default values for translation and scaling
+                let mut x_translate: f64 = 0.0;
+                let mut y_translate: f64 = 0.0;
+                let mut x_scale: f64 = 1.0;
+                let mut y_scale: f64 = 1.0;
+
                 for buffer in frames.iter().rev() {
                     let buffer = buffer.map_readable().map_err(|_| {
                         gst::element_imp_error!(
@@ -441,6 +447,108 @@ impl OnvifMetadataOverlay {
                         if object.name == "Frame"
                             && object.namespace.as_deref() == Some(crate::ONVIF_METADATA_SCHEMA)
                         {
+                            for transformation in object
+                                .children
+                                .iter()
+                                .filter_map(|n| n.as_element())
+                                .filter(|e| {
+                                    e.name == "Transformation"
+                                        && e.namespace.as_deref()
+                                            == Some(crate::ONVIF_METADATA_SCHEMA)
+                                })
+                            {
+                                gst::trace!(
+                                    CAT,
+                                    imp = self,
+                                    "Handling transformation {:?}",
+                                    transformation
+                                );
+
+                                let translate = match transformation
+                                    .get_child(("Translate", crate::ONVIF_METADATA_SCHEMA))
+                                {
+                                    Some(translate) => translate,
+                                    None => {
+                                        gst::warning!(
+                                            CAT,
+                                            imp = self,
+                                            "Transform with no Translate node"
+                                        );
+                                        continue;
+                                    }
+                                };
+
+                                x_translate = match translate
+                                    .attributes
+                                    .get("x")
+                                    .and_then(|val| val.parse().ok())
+                                {
+                                    Some(val) => val,
+                                    None => {
+                                        gst::warning!(
+                                            CAT,
+                                            imp = self,
+                                            "Translate with no x attribute"
+                                        );
+                                        continue;
+                                    }
+                                };
+
+                                y_translate = match translate
+                                    .attributes
+                                    .get("y")
+                                    .and_then(|val| val.parse().ok())
+                                {
+                                    Some(val) => val,
+                                    None => {
+                                        gst::warning!(
+                                            CAT,
+                                            imp = self,
+                                            "Translate with no y attribute"
+                                        );
+                                        continue;
+                                    }
+                                };
+
+                                let scale = match transformation
+                                    .get_child(("Scale", crate::ONVIF_METADATA_SCHEMA))
+                                {
+                                    Some(translate) => translate,
+                                    None => {
+                                        gst::warning!(
+                                            CAT,
+                                            imp = self,
+                                            "Transform with no Scale node"
+                                        );
+                                        continue;
+                                    }
+                                };
+
+                                x_scale = match scale
+                                    .attributes
+                                    .get("x")
+                                    .and_then(|val| val.parse().ok())
+                                {
+                                    Some(val) => val,
+                                    None => {
+                                        gst::warning!(CAT, imp = self, "Scale with no x attribute");
+                                        continue;
+                                    }
+                                };
+
+                                y_scale = match scale
+                                    .attributes
+                                    .get("y")
+                                    .and_then(|val| val.parse().ok())
+                                {
+                                    Some(val) => val,
+                                    None => {
+                                        gst::warning!(CAT, imp = self, "Scale with no y attribute");
+                                        continue;
+                                    }
+                                };
+                            }
+
                             for object in object
                                 .children
                                 .iter()
@@ -574,10 +682,14 @@ impl OnvifMetadataOverlay {
                                     }
                                 };
 
-                                let x1 = width / 2 + ((left * (width / 2) as f64) as i32);
-                                let y1 = height / 2 - ((top * (height / 2) as f64) as i32);
-                                let x2 = width / 2 + ((right * (width / 2) as f64) as i32);
-                                let y2 = height / 2 - ((bottom * (height / 2) as f64) as i32);
+                                let x1 = ((1.0 + x_translate) * width as f64 / 2.0) as i32
+                                    + ((left * x_scale * (width / 2) as f64) as i32);
+                                let x2 = ((1.0 + x_translate) * width as f64 / 2.0) as i32
+                                    + ((right * x_scale * (width / 2) as f64) as i32);
+                                let y1 = ((1.0 + y_translate) * height as f64 / 2.0) as i32
+                                    + ((top * y_scale * (height / 2) as f64) as i32);
+                                let y2 = ((1.0 + y_translate) * height as f64 / 2.0) as i32
+                                    + ((bottom * y_scale * (height / 2) as f64) as i32);
 
                                 let w = (x2 - x1) as u32;
                                 let h = (y2 - y1) as u32;
