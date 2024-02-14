@@ -1146,15 +1146,12 @@ impl ObjectSubclass for BandwidthEstimator {
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_from_template(&templ)
-            .chain_function(|_pad, parent, mut buffer| {
+            .chain_function(|_pad, parent, buffer| {
                 BandwidthEstimator::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
                     |this| {
                         let mut state = this.state.lock().unwrap();
-                        let mutbuf = buffer.make_mut();
-                        mutbuf.set_pts(None);
-                        mutbuf.set_dts(None);
                         state.buffers.push_front(buffer);
 
                         state.flow_return
