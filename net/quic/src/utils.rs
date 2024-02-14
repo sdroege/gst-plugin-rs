@@ -131,7 +131,7 @@ impl rustls::client::ServerCertVerifier for SkipServerVerification {
     }
 }
 
-fn configure_client(secure_conn: bool, alpn: &str) -> Result<ClientConfig, Box<dyn Error>> {
+fn configure_client(secure_conn: bool, alpns: Vec<String>) -> Result<ClientConfig, Box<dyn Error>> {
     if secure_conn {
         Ok(ClientConfig::with_native_roots())
     } else {
@@ -139,7 +139,11 @@ fn configure_client(secure_conn: bool, alpn: &str) -> Result<ClientConfig, Box<d
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_no_client_auth();
-        crypto.alpn_protocols = vec![alpn.as_bytes().to_vec()];
+        let alpn_protocols: Vec<Vec<u8>> = alpns
+            .iter()
+            .map(|x| x.as_bytes().to_vec())
+            .collect::<Vec<_>>();
+        crypto.alpn_protocols = alpn_protocols;
 
         Ok(ClientConfig::new(Arc::new(crypto)))
     }
@@ -202,8 +206,8 @@ fn read_certs_from_file(
 fn configure_server(
     server_name: &str,
     secure_conn: bool,
-    alpn: &str,
     certificate_path: Option<PathBuf>,
+    alpns: Vec<String>,
     private_key_type: QuicPrivateKeyType,
 ) -> Result<(ServerConfig, Vec<rustls::Certificate>), Box<dyn Error>> {
     let (cert, key) = if secure_conn {
@@ -225,7 +229,11 @@ fn configure_server(
         .unwrap()
         .with_no_client_auth()
         .with_single_cert(cert.clone(), key)?;
-    crypto.alpn_protocols = vec![alpn.as_bytes().to_vec()];
+    let alpn_protocols: Vec<Vec<u8>> = alpns
+        .iter()
+        .map(|x| x.as_bytes().to_vec())
+        .collect::<Vec<_>>();
+    crypto.alpn_protocols = alpn_protocols;
     let mut server_config = ServerConfig::with_crypto(Arc::new(crypto));
 
     Arc::get_mut(&mut server_config.transport)
@@ -240,12 +248,17 @@ pub fn server_endpoint(
     server_addr: SocketAddr,
     server_name: &str,
     secure_conn: bool,
-    alpn: &str,
+    alpns: Vec<String>,
     certificate_path: Option<PathBuf>,
     private_key_type: QuicPrivateKeyType,
 ) -> Result<Endpoint, Box<dyn Error>> {
-    let (server_config, _) =
-        configure_server(server_name, secure_conn, alpn, certificate_path, private_key_type)?;
+    let (server_config, _) = configure_server(
+        server_name,
+        secure_conn,
+        certificate_path,
+        alpns,
+        private_key_type,
+    )?;
     let endpoint = Endpoint::server(server_config, server_addr)?;
 
     Ok(endpoint)
@@ -254,7 +267,7 @@ pub fn server_endpoint(
 pub fn client_endpoint(
     client_addr: SocketAddr,
     secure_conn: bool,
-    alpn: &str,
+    alpn: Vec<String>,
 ) -> Result<Endpoint, Box<dyn Error>> {
     let client_cfg = configure_client(secure_conn, alpn)?;
     let mut endpoint = Endpoint::client(client_addr)?;

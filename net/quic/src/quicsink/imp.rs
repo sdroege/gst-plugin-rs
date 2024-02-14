@@ -22,6 +22,14 @@ use std::sync::Mutex;
 static DEFAULT_SERVER_NAME: &str = "localhost";
 static DEFAULT_SERVER_ADDR: &str = "127.0.0.1:5000";
 static DEFAULT_CLIENT_ADDR: &str = "127.0.0.1:5001";
+/*
+ * For QUIC transport parameters
+ * <https://datatracker.ietf.org/doc/html/rfc9000#section-7.4>
+ *
+ * A HTTP client might specify "http/1.1" and/or "h2" or "h3".
+ * Other well-known values are listed in the at IANA registry at
+ * <https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids>.
+ */
 const DEFAULT_ALPN: &str = "h3";
 const DEFAULT_TIMEOUT: u32 = 15;
 const DEFAULT_SECURE_CONNECTION: bool = true;
@@ -47,7 +55,7 @@ struct Settings {
     client_address: SocketAddr,
     server_address: SocketAddr,
     server_name: String,
-    alpn: String,
+    alpns: Vec<String>,
     timeout: u32,
     secure_conn: bool,
     use_datagram: bool,
@@ -59,7 +67,7 @@ impl Default for Settings {
             client_address: DEFAULT_CLIENT_ADDR.parse::<SocketAddr>().unwrap(),
             server_address: DEFAULT_SERVER_ADDR.parse::<SocketAddr>().unwrap(),
             server_name: DEFAULT_SERVER_NAME.to_string(),
-            alpn: DEFAULT_ALPN.to_string(),
+            alpns: vec![DEFAULT_ALPN.to_string()],
             timeout: DEFAULT_TIMEOUT,
             secure_conn: DEFAULT_SECURE_CONNECTION,
             use_datagram: false,
@@ -135,9 +143,10 @@ impl ObjectImpl for QuicSink {
                     .nick("QUIC client address")
                     .blurb("Address to be used by this QUIC client e.g. 127.0.0.1:5001")
                     .build(),
-		glib::ParamSpecString::builder("alpn")
-                    .nick("QUIC ALPN value")
-                    .blurb("QUIC connection Application-Layer Protocol Negotiation (ALPN) value")
+		gst::ParamSpecArray::builder("alpn-protocols")
+                    .nick("QUIC ALPN values")
+                    .blurb("QUIC connection Application-Layer Protocol Negotiation (ALPN) values")
+                    .element_spec(&glib::ParamSpecString::builder("alpn-protocol").build())
                     .build(),
                 glib::ParamSpecUInt::builder("timeout")
                     .nick("Timeout")
@@ -198,9 +207,19 @@ impl ObjectImpl for QuicSink {
                     ),
                 }
             }
-            "alpn" => {
+            "alpn-protocols" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.alpn = value.get::<String>().expect("type checked upstream");
+                settings.alpns = value
+                    .get::<gst::ArrayRef>()
+                    .expect("type checked upstream")
+                    .as_slice()
+                    .iter()
+                    .map(|alpn| {
+                        alpn.get::<&str>()
+                            .expect("type checked upstream")
+                            .to_string()
+                    })
+                    .collect::<Vec<_>>();
             }
             "timeout" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -232,9 +251,10 @@ impl ObjectImpl for QuicSink {
                 let settings = self.settings.lock().unwrap();
                 settings.client_address.to_string().to_value()
             }
-            "alpn" => {
+            "alpn-protocols" => {
                 let settings = self.settings.lock().unwrap();
-                settings.alpn.to_value()
+                let alpns = settings.alpns.iter().map(|v| v.as_str());
+                gst::Array::new(alpns).to_value()
             }
             "timeout" => {
                 let settings = self.settings.lock().unwrap();
@@ -439,7 +459,7 @@ impl QuicSink {
         let client_addr;
         let server_addr;
         let server_name;
-        let alpn;
+        let alpns;
         let use_datagram;
         let secure_conn;
 
@@ -448,12 +468,12 @@ impl QuicSink {
             client_addr = settings.client_address;
             server_addr = settings.server_address;
             server_name = settings.server_name.clone();
-            alpn = settings.alpn.clone();
+            alpns = settings.alpns.clone();
             use_datagram = settings.use_datagram;
             secure_conn = settings.secure_conn;
         }
 
-        let endpoint = client_endpoint(client_addr, secure_conn, &alpn).map_err(|err| {
+        let endpoint = client_endpoint(client_addr, secure_conn, alpns).map_err(|err| {
             WaitError::FutureError(gst::error_msg!(
                 gst::ResourceError::Failed,
                 ["Failed to configure endpoint: {}", err]

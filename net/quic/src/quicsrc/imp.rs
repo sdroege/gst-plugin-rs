@@ -25,6 +25,14 @@ use std::sync::Mutex;
 
 static DEFAULT_SERVER_NAME: &str = "localhost";
 static DEFAULT_SERVER_ADDR: &str = "127.0.0.1:5000";
+/*
+ * For QUIC transport parameters
+ * <https://datatracker.ietf.org/doc/html/rfc9000#section-7.4>
+ *
+ * A HTTP client might specify "http/1.1" and/or "h2" or "h3".
+ * Other well-known values are listed in the at IANA registry at
+ * <https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids>.
+ */
 const DEFAULT_ALPN: &str = "h3";
 const DEFAULT_TIMEOUT: u32 = 15;
 const DEFAULT_PRIVATE_KEY_TYPE: QuicPrivateKeyType = QuicPrivateKeyType::Pkcs8;
@@ -54,7 +62,7 @@ enum State {
 struct Settings {
     server_address: SocketAddr,
     server_name: String,
-    alpn: String,
+    alpns: Vec<String>,
     timeout: u32,
     secure_conn: bool,
     caps: gst::Caps,
@@ -68,7 +76,7 @@ impl Default for Settings {
         Settings {
             server_address: DEFAULT_SERVER_ADDR.parse::<SocketAddr>().unwrap(),
             server_name: DEFAULT_SERVER_NAME.to_string(),
-            alpn: DEFAULT_ALPN.to_string(),
+            alpns: vec![DEFAULT_ALPN.to_string()],
             timeout: DEFAULT_TIMEOUT,
             secure_conn: DEFAULT_SECURE_CONNECTION,
             caps: gst::Caps::new_any(),
@@ -170,9 +178,10 @@ impl ObjectImpl for QuicSrc {
                     .nick("QUIC server address")
                     .blurb("Address of the QUIC server to connect to e.g. 127.0.0.1:5000")
                     .build(),
-		glib::ParamSpecString::builder("alpn")
-                    .nick("QUIC ALPN value")
-                    .blurb("QUIC connection Application-Layer Protocol Negotiation (ALPN) value")
+		gst::ParamSpecArray::builder("alpn-protocols")
+                    .nick("QUIC ALPN values")
+                    .blurb("QUIC connection Application-Layer Protocol Negotiation (ALPN) values")
+                    .element_spec(&glib::ParamSpecString::builder("alpn-protocol").build())
                     .build(),
                 glib::ParamSpecUInt::builder("timeout")
                     .nick("Timeout")
@@ -230,9 +239,19 @@ impl ObjectImpl for QuicSrc {
                     ),
                 }
             }
-            "alpn" => {
+            "alpn-protocols" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.alpn = value.get::<String>().expect("type checked upstream");
+                settings.alpns = value
+                    .get::<gst::ArrayRef>()
+                    .expect("type checked upstream")
+                    .as_slice()
+                    .iter()
+                    .map(|alpn| {
+                        alpn.get::<&str>()
+                            .expect("type checked upstream")
+                            .to_string()
+                    })
+                    .collect::<Vec<String>>()
             }
             "caps" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -281,9 +300,10 @@ impl ObjectImpl for QuicSrc {
                 let settings = self.settings.lock().unwrap();
                 settings.server_address.to_string().to_value()
             }
-            "alpn" => {
+            "alpn-protocols" => {
                 let settings = self.settings.lock().unwrap();
-                settings.alpn.to_value()
+                let alpns = settings.alpns.iter().map(|v| v.as_str());
+                gst::Array::new(alpns).to_value()
             }
             "caps" => {
                 let settings = self.settings.lock().unwrap();
@@ -535,7 +555,7 @@ impl QuicSrc {
     async fn wait_for_connection(&self) -> Result<(Connection, Option<RecvStream>), WaitError> {
         let server_addr;
         let server_name;
-        let alpn;
+        let alpns;
         let use_datagram;
         let secure_conn;
         let cert_path;
@@ -545,7 +565,7 @@ impl QuicSrc {
             let settings = self.settings.lock().unwrap();
             server_addr = settings.server_address;
             server_name = settings.server_name.clone();
-            alpn = settings.alpn.clone();
+            alpns = settings.alpns.clone();
             use_datagram = settings.use_datagram;
             secure_conn = settings.secure_conn;
             cert_path = settings.certificate_path.clone();
@@ -556,7 +576,7 @@ impl QuicSrc {
             server_addr,
             &server_name,
             secure_conn,
-            &alpn,
+            alpns,
             cert_path,
             private_key_type,
         )
