@@ -121,63 +121,40 @@ struct ItemInner {
 }
 
 struct Playlist {
-    items: Box<dyn Iterator<Item = Item> + Send>,
     uris: Vec<String>,
+    iterations: u32,
+
+    next_index: usize,
 }
 
 impl Playlist {
     fn new(uris: Vec<String>, iterations: u32) -> Self {
         Self {
-            items: Self::create_items(uris.clone(), iterations),
             uris,
-        }
-    }
-
-    fn create_items(
-        uris: Vec<String>,
-        iterations: u32,
-    ) -> Box<dyn Iterator<Item = Item> + Send + Sync> {
-        fn infinite_iter(uris: Vec<String>) -> Box<dyn Iterator<Item = Item> + Send + Sync> {
-            Box::new(
-                uris.into_iter()
-                    .cycle()
-                    .enumerate()
-                    .map(|(index, uri)| Item::new(uri, index)),
-            )
-        }
-        fn finite_iter(
-            uris: Vec<String>,
-            iterations: u32,
-        ) -> Box<dyn Iterator<Item = Item> + Send + Sync> {
-            let n = (iterations as usize)
-                .checked_mul(uris.len())
-                .unwrap_or(usize::MAX);
-
-            Box::new(
-                uris.into_iter()
-                    .cycle()
-                    .take(n)
-                    .enumerate()
-                    .map(|(index, uri)| Item::new(uri, index)),
-            )
-        }
-
-        if iterations == 0 {
-            infinite_iter(uris)
-        } else {
-            finite_iter(uris, iterations)
+            iterations,
+            next_index: 0,
         }
     }
 
     fn next(&mut self) -> Option<Item> {
-        let item = match self.items.next() {
-            None => return None,
-            Some(item) => item,
-        };
+        let uris_len = self.uris.len();
+        let (iteration, uri_index) = (
+            (self.next_index / uris_len) as u32,
+            (self.next_index % uris_len),
+        );
 
-        if item.index() == usize::MAX {
+        if self.iterations != 0 && iteration >= self.iterations {
+            // playlist is done
+            return None;
+        }
+
+        let uri = self.uris[uri_index].clone();
+        let item = Item::new(uri, self.next_index);
+
+        self.next_index += 1;
+        if self.next_index == usize::MAX {
             // prevent overflow with infinite playlist
-            self.items = Self::create_items(self.uris.clone(), 0);
+            self.next_index = 0;
         }
 
         Some(item)
