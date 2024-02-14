@@ -71,11 +71,19 @@ fn init() {
     });
 }
 
+struct IterationsChange {
+    /// change the uriplaylistbin iterations property when receiving the nth stream-start event
+    when_ss: u32,
+    /// new 'iterations' value
+    iterations: u32,
+}
+
 fn test(
     medias: Vec<TestMedia>,
     n_streams: u32,
     iterations: u32,
     check_streams: bool,
+    iterations_change: Option<IterationsChange>,
 ) -> (Vec<gst::Message>, u32, u64) {
     init();
 
@@ -128,6 +136,7 @@ fn test(
 
     let bus = pipeline.bus().unwrap();
     let mut events = vec![];
+    let mut n_stream_start = 0;
 
     loop {
         let msg = bus.iter_timed(gst::ClockTime::NONE).next().unwrap();
@@ -153,6 +162,14 @@ fn test(
                 events.push(msg.clone())
             }
             MessageView::StreamsSelected(_) => events.push(msg.clone()),
+            MessageView::StreamStart(_) => {
+                n_stream_start += 1;
+                if let Some(change) = &iterations_change {
+                    if change.when_ss == n_stream_start {
+                        playlist.set_property("iterations", change.iterations);
+                    }
+                }
+            }
             _ => {}
         }
     }
@@ -253,7 +270,8 @@ fn assert_stream_selected(msg: gst::Message, n_streams: usize) -> gst::Object {
 
 #[test]
 fn single_audio() {
-    let (events, current_iteration, current_uri_index) = test(vec![TestMedia::ogg()], 1, 1, true);
+    let (events, current_iteration, current_uri_index) =
+        test(vec![TestMedia::ogg()], 1, 1, true, None);
     assert_eos(events.into_iter().last().unwrap());
     assert_eq!(current_iteration, 0);
     assert_eq!(current_uri_index, 0);
@@ -261,7 +279,8 @@ fn single_audio() {
 
 #[test]
 fn single_video() {
-    let (events, current_iteration, current_uri_index) = test(vec![TestMedia::mkv()], 2, 1, true);
+    let (events, current_iteration, current_uri_index) =
+        test(vec![TestMedia::mkv()], 2, 1, true, None);
     assert_eos(events.into_iter().last().unwrap());
     assert_eq!(current_iteration, 0);
     assert_eq!(current_uri_index, 0);
@@ -274,6 +293,7 @@ fn multi_audio() {
         1,
         1,
         true,
+        None,
     );
     assert_eos(events.into_iter().last().unwrap());
     assert_eq!(current_iteration, 0);
@@ -283,7 +303,7 @@ fn multi_audio() {
 #[test]
 fn multi_audio_video() {
     let (events, current_iteration, current_uri_index) =
-        test(vec![TestMedia::mkv(), TestMedia::mkv()], 2, 1, true);
+        test(vec![TestMedia::mkv(), TestMedia::mkv()], 2, 1, true, None);
     assert_eos(events.into_iter().last().unwrap());
     assert_eq!(current_iteration, 0);
     assert_eq!(current_uri_index, 1);
@@ -292,7 +312,7 @@ fn multi_audio_video() {
 #[test]
 fn iterations() {
     let (events, current_iteration, current_uri_index) =
-        test(vec![TestMedia::mkv(), TestMedia::mkv()], 2, 2, true);
+        test(vec![TestMedia::mkv(), TestMedia::mkv()], 2, 2, true, None);
     assert_eos(events.into_iter().last().unwrap());
     assert_eq!(current_iteration, 1);
     assert_eq!(current_uri_index, 1);
@@ -303,7 +323,7 @@ fn iterations() {
 #[ignore]
 fn nb_streams_increasing() {
     let (events, current_iteration, current_uri_index) =
-        test(vec![TestMedia::ogg(), TestMedia::mkv()], 2, 1, false);
+        test(vec![TestMedia::ogg(), TestMedia::mkv()], 2, 1, false, None);
     assert_eos(events.into_iter().last().unwrap());
     assert_eq!(current_iteration, 0);
     assert_eq!(current_uri_index, 1);
@@ -316,6 +336,7 @@ fn missing_file() {
         1,
         1,
         false,
+        None,
     );
     assert_error(
         events.into_iter().last().unwrap(),
@@ -332,11 +353,66 @@ fn missing_http() {
         1,
         1,
         false,
+        None,
     );
     assert_error(
         events.into_iter().last().unwrap(),
         TestMedia::missing_http(),
     );
     assert_eq!(current_iteration, 0);
+    assert_eq!(current_uri_index, 0);
+}
+
+#[test]
+/// increase playlist iterations while it's playing
+fn increase_iterations() {
+    let (events, current_iteration, current_uri_index) = test(
+        vec![TestMedia::mkv()],
+        2,
+        4,
+        false,
+        Some(IterationsChange {
+            when_ss: 2,
+            iterations: 8,
+        }),
+    );
+    assert_eos(events.into_iter().last().unwrap());
+    assert_eq!(current_iteration, 7);
+    assert_eq!(current_uri_index, 0);
+}
+
+#[test]
+/// decrease playlist iterations while it's playing
+fn decrease_iterations() {
+    let (events, current_iteration, current_uri_index) = test(
+        vec![TestMedia::mkv()],
+        2,
+        4,
+        false,
+        Some(IterationsChange {
+            when_ss: 2,
+            iterations: 1,
+        }),
+    );
+    assert_eos(events.into_iter().last().unwrap());
+    assert_eq!(current_iteration, 2);
+    assert_eq!(current_uri_index, 0);
+}
+
+#[test]
+/// change an infinite playlist to a finite one
+fn infinite_to_finite() {
+    let (events, current_iteration, current_uri_index) = test(
+        vec![TestMedia::mkv()],
+        2,
+        0,
+        false,
+        Some(IterationsChange {
+            when_ss: 2,
+            iterations: 4,
+        }),
+    );
+    assert_eos(events.into_iter().last().unwrap());
+    assert_eq!(current_iteration, 3);
     assert_eq!(current_uri_index, 0);
 }

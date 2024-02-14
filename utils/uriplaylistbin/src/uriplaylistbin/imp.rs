@@ -81,6 +81,10 @@ impl State {
             current_uri_index: 0,
         }
     }
+
+    fn update_iterations(&mut self, iterations: u32) {
+        self.playlist.iterations = iterations;
+    }
 }
 
 #[derive(Default)]
@@ -189,7 +193,7 @@ impl ObjectImpl for UriPlaylistBin {
                     .nick("Iterations")
                     .blurb("Number of time the playlist items should be played each (0 = unlimited)")
                     .default_value(1)
-                    .mutable_ready()
+                    .mutable_playing()
                     .build(),
                 glib::ParamSpecUInt::builder("current-iteration")
                     .nick("Current iteration")
@@ -222,16 +226,25 @@ impl ObjectImpl for UriPlaylistBin {
                 settings.uris = new_value;
             }
             "iterations" => {
-                let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
-                gst::info!(
-                    CAT,
-                    imp: self,
-                    "Changing iterations from {:?} to {:?}",
-                    settings.iterations,
-                    new_value,
-                );
-                settings.iterations = new_value;
+                {
+                    let mut settings = self.settings.lock().unwrap();
+                    gst::info!(
+                        CAT,
+                        imp: self,
+                        "Changing iterations from {:?} to {:?}",
+                        settings.iterations,
+                        new_value,
+                    );
+                    settings.iterations = new_value;
+                }
+
+                {
+                    let mut state = self.state.lock().unwrap();
+                    if let Some(state) = state.as_mut() {
+                        state.update_iterations(new_value);
+                    }
+                }
             }
             _ => unimplemented!(),
         }
