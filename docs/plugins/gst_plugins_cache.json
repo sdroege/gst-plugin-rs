@@ -7970,6 +7970,31 @@
     "rsrelationmeta": {
         "description": "GStreamer Rust Relation Meta Plugin",
         "elements": {
+            "onvifmeta2relationmeta": {
+                "author": "Benjamin Gaignard <benjamin.gaignard@collabora.com>",
+                "description": "Convert ONVIF metadata to relation metadata",
+                "hierarchy": [
+                    "GstOnvifMeta2RelationMeta",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Metadata",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "none"
+            },
             "relationmeta2onvifmeta": {
                 "author": "Benjamin Gaignard <benjamin.gaignard@collabora.com>",
                 "description": "Convert relation metadata to ONVIF metadata",

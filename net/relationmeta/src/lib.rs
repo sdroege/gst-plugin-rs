@@ -17,10 +17,12 @@ use gst::glib;
 pub(crate) const ONVIF_METADATA_SCHEMA: &str = "http://www.onvif.org/ver10/schema";
 pub(crate) const ONVIF_METADATA_PREFIX: &str = "tt";
 
+mod onvifmeta2relationmeta;
 mod relationmeta2onvifmeta;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     relationmeta2onvifmeta::register(plugin)?;
+    onvifmeta2relationmeta::register(plugin)?;
 
     if !gst::meta::CustomMeta::is_registered("OnvifXMLFrameMeta") {
         gst::meta::CustomMeta::register("OnvifXMLFrameMeta", &[]);
