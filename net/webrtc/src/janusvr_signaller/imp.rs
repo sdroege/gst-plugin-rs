@@ -42,6 +42,13 @@ fn feed_id() -> u32 {
     thread_rng().gen()
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[serde(untagged)]
+enum RoomId {
+    Str(String),
+    Num(u32),
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 struct KeepAliveMsg {
     janus: String,
@@ -70,8 +77,8 @@ struct AttachPluginMsg {
 struct RoomRequestBody {
     request: String,
     ptype: String,
-    room: u64,
-    id: u32,
+    room: RoomId,
+    id: RoomId,
     #[serde(skip_serializing_if = "Option::is_none")]
     display: Option<String>,
 }
@@ -147,12 +154,12 @@ struct InnerError {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct RoomJoined {
-    room: Option<u64>,
+    room: Option<RoomId>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct RoomEvent {
-    room: Option<u64>,
+    room: Option<RoomId>,
     error_code: Option<i32>,
     error: Option<String>,
 }
@@ -219,13 +226,15 @@ struct State {
     session_id: Option<u64>,
     handle_id: Option<u64>,
     transaction_id: Option<String>,
+    room_id: Option<RoomId>,
+    feed_id: Option<RoomId>,
 }
 
 #[derive(Clone)]
 struct Settings {
     janus_endpoint: String,
     room_id: Option<String>,
-    feed_id: u32,
+    feed_id: String,
     display_name: Option<String>,
     secret_key: Option<String>,
 }
@@ -235,7 +244,7 @@ impl Default for Settings {
         Self {
             janus_endpoint: "ws://127.0.0.1:8188".to_string(),
             room_id: None,
-            feed_id: feed_id(),
+            feed_id: feed_id().to_string(),
             display_name: None,
             secret_key: None,
         }
@@ -248,7 +257,7 @@ pub struct Signaller {
     state: Mutex<State>,
     #[property(name="janus-endpoint", get, set, type = String, member = janus_endpoint, blurb = "The Janus server endpoint to POST SDP offer to")]
     #[property(name="room-id", get, set, type = String, member = room_id, blurb = "The Janus Room ID that will be joined to")]
-    #[property(name="feed-id", get, set, type = u32, member = feed_id, blurb = "The Janus Feed ID to identify where the track is coming from")]
+    #[property(name="feed-id", get, set, type = String, member = feed_id, blurb = "The Janus Feed ID to identify where the track is coming from")]
     #[property(name="display-name", get, set, type = String, member = display_name, blurb = "The name of the publisher in the Janus Video Room")]
     #[property(name="secret-key", get, set, type = String, member = secret_key, blurb = "The secret API key to communicate with Janus server")]
     settings: Mutex<Settings>,
@@ -416,7 +425,7 @@ impl Signaller {
                     match plugindata {
                         VideoRoomData::Joined(joined) => {
                             if let Some(room) = joined.room {
-                                gst::trace!(CAT, imp: self, "Joined room {} successfully", room);
+                                gst::trace!(CAT, imp: self, "Joined room {room:?} successfully");
                                 self.session_requested();
                             }
                         }
@@ -519,7 +528,7 @@ impl Signaller {
 
     fn join_room(&self) {
         let (transaction, session_id, handle_id, room, feed_id, display, apisecret) = {
-            let state = self.state.lock().unwrap();
+            let mut state = self.state.lock().unwrap();
             let settings = self.settings.lock().unwrap();
 
             if settings.room_id.is_none() {
@@ -527,12 +536,30 @@ impl Signaller {
                 return;
             }
 
+            /* room_id and feed_id can be either a string or integer depending
+             * on server configuration. The property is always a string, if we
+             * can parse it to integer then assume that's what the server expects.
+             * Save parsed value in state to not have to parse it again for future
+             * API calls.
+             */
+            let room_id_str = settings.room_id.as_ref().unwrap();
+            match room_id_str.parse::<u32>() {
+                Ok(n) => {
+                    state.room_id = Some(RoomId::Num(n));
+                    state.feed_id = Some(RoomId::Num(settings.feed_id.parse().unwrap()));
+                }
+                Err(_) => {
+                    state.room_id = Some(RoomId::Str(room_id_str.clone()));
+                    state.feed_id = Some(RoomId::Str(settings.feed_id.clone()));
+                }
+            };
+
             (
                 state.transaction_id.clone().unwrap(),
                 state.session_id.unwrap(),
                 state.handle_id.unwrap(),
-                settings.room_id.as_ref().unwrap().parse().unwrap(),
-                settings.feed_id,
+                state.room_id.clone().unwrap(),
+                state.feed_id.clone().unwrap(),
                 settings.display_name.clone(),
                 settings.secret_key.clone(),
             )
@@ -567,8 +594,8 @@ impl Signaller {
                 state.transaction_id.clone().unwrap(),
                 state.session_id.unwrap(),
                 state.handle_id.unwrap(),
-                settings.room_id.as_ref().unwrap().parse().unwrap(),
-                settings.feed_id,
+                state.room_id.clone().unwrap(),
+                state.feed_id.clone().unwrap(),
                 settings.display_name.clone(),
                 settings.secret_key.clone(),
             )
