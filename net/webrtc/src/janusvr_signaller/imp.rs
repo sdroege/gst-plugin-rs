@@ -47,12 +47,14 @@ struct KeepAliveMsg {
     janus: String,
     transaction: String,
     session_id: u64,
+    apisecret: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 struct CreateSessionMsg {
     janus: String,
     transaction: String,
+    apisecret: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -61,6 +63,7 @@ struct AttachPluginMsg {
     transaction: String,
     plugin: String,
     session_id: u64,
+    apisecret: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -79,6 +82,7 @@ struct RoomRequestMsg {
     transaction: String,
     session_id: u64,
     handle_id: u64,
+    apisecret: Option<String>,
     body: RoomRequestBody,
 }
 
@@ -102,6 +106,7 @@ struct PublishMsg {
     transaction: String,
     session_id: u64,
     handle_id: u64,
+    apisecret: Option<String>,
     body: PublishBody,
     jsep: Jsep,
 }
@@ -119,6 +124,7 @@ struct TrickleMsg {
     transaction: String,
     session_id: u64,
     handle_id: u64,
+    apisecret: Option<String>,
     candidate: Candidate,
 }
 
@@ -221,6 +227,7 @@ struct Settings {
     room_id: Option<String>,
     feed_id: u32,
     display_name: Option<String>,
+    secret_key: Option<String>,
 }
 
 impl Default for Settings {
@@ -230,6 +237,7 @@ impl Default for Settings {
             room_id: None,
             feed_id: feed_id(),
             display_name: None,
+            secret_key: None,
         }
     }
 }
@@ -242,6 +250,7 @@ pub struct Signaller {
     #[property(name="room-id", get, set, type = String, member = room_id, blurb = "The Janus Room ID that will be joined to")]
     #[property(name="feed-id", get, set, type = u32, member = feed_id, blurb = "The Janus Feed ID to identify where the track is coming from")]
     #[property(name="display-name", get, set, type = String, member = display_name, blurb = "The name of the publisher in the Janus Video Room")]
+    #[property(name="secret-key", get, set, type = String, member = secret_key, blurb = "The secret API key to communicate with Janus server")]
     settings: Mutex<Settings>,
 }
 
@@ -292,15 +301,20 @@ impl Signaller {
                         },
                         _ = tokio::time::sleep(Duration::from_secs(10)) => {
                             if let Some(ref this) = this {
-                                let (transaction, session_id) = {
+                                let (transaction, session_id, apisecret) = {
                                     let state = this.state.lock().unwrap();
-                                    (state.transaction_id.clone().unwrap(),
-                                    state.session_id.unwrap())
+                                    let settings = this.settings.lock().unwrap();
+                                    (
+                                        state.transaction_id.clone().unwrap(),
+                                        state.session_id.unwrap(),
+                                        settings.secret_key.clone(),
+                                    )
                                 };
                                 let msg = OutgoingMessage::KeepAlive(KeepAliveMsg {
                                     janus: "keepalive".to_string(),
                                     transaction,
                                     session_id,
+                                    apisecret,
                                 });
                                 res = ws_sink
                                     .send(WsMessage::Text(serde_json::to_string(&msg).unwrap()))
@@ -466,9 +480,12 @@ impl Signaller {
     fn create_session(&self) {
         let transaction = transaction_id();
         self.set_transaction_id(transaction.clone());
+        let settings = self.settings.lock().unwrap();
+        let apisecret = settings.secret_key.clone();
         self.send(OutgoingMessage::CreateSession(CreateSessionMsg {
             janus: "create".to_string(),
             transaction,
+            apisecret,
         }));
     }
 
@@ -481,12 +498,14 @@ impl Signaller {
     }
 
     fn attach_plugin(&self) {
-        let (transaction, session_id) = {
+        let (transaction, session_id, apisecret) = {
             let state = self.state.lock().unwrap();
+            let settings = self.settings.lock().unwrap();
 
             (
                 state.transaction_id.clone().unwrap(),
                 state.session_id.unwrap(),
+                settings.secret_key.clone(),
             )
         };
         self.send(OutgoingMessage::AttachPlugin(AttachPluginMsg {
@@ -494,11 +513,12 @@ impl Signaller {
             transaction,
             plugin: "janus.plugin.videoroom".to_string(),
             session_id,
+            apisecret,
         }));
     }
 
     fn join_room(&self) {
-        let (transaction, session_id, handle_id, room, feed_id, display) = {
+        let (transaction, session_id, handle_id, room, feed_id, display, apisecret) = {
             let state = self.state.lock().unwrap();
             let settings = self.settings.lock().unwrap();
 
@@ -514,6 +534,7 @@ impl Signaller {
                 settings.room_id.as_ref().unwrap().parse().unwrap(),
                 settings.feed_id,
                 settings.display_name.clone(),
+                settings.secret_key.clone(),
             )
         };
         self.send(OutgoingMessage::RoomRequest(RoomRequestMsg {
@@ -521,6 +542,7 @@ impl Signaller {
             transaction,
             session_id,
             handle_id,
+            apisecret,
             body: RoomRequestBody {
                 request: "join".to_string(),
                 ptype: "publisher".to_string(),
@@ -532,7 +554,7 @@ impl Signaller {
     }
 
     fn leave_room(&self) {
-        let (transaction, session_id, handle_id, room, feed_id, display) = {
+        let (transaction, session_id, handle_id, room, feed_id, display, apisecret) = {
             let state = self.state.lock().unwrap();
             let settings = self.settings.lock().unwrap();
 
@@ -548,6 +570,7 @@ impl Signaller {
                 settings.room_id.as_ref().unwrap().parse().unwrap(),
                 settings.feed_id,
                 settings.display_name.clone(),
+                settings.secret_key.clone(),
             )
         };
         self.send_blocking(OutgoingMessage::RoomRequest(RoomRequestMsg {
@@ -555,6 +578,7 @@ impl Signaller {
             transaction,
             session_id,
             handle_id,
+            apisecret,
             body: RoomRequestBody {
                 request: "leave".to_string(),
                 ptype: "publisher".to_string(),
@@ -566,7 +590,7 @@ impl Signaller {
     }
 
     fn publish(&self, offer: &gst_webrtc::WebRTCSessionDescription) {
-        let (transaction, session_id, handle_id) = {
+        let (transaction, session_id, handle_id, apisecret) = {
             let state = self.state.lock().unwrap();
             let settings = self.settings.lock().unwrap();
 
@@ -579,6 +603,7 @@ impl Signaller {
                 state.transaction_id.clone().unwrap(),
                 state.session_id.unwrap(),
                 state.handle_id.unwrap(),
+                settings.secret_key.clone(),
             )
         };
         let sdp_data = offer.sdp().as_text().unwrap();
@@ -587,6 +612,7 @@ impl Signaller {
             transaction,
             session_id,
             handle_id,
+            apisecret,
             body: PublishBody {
                 request: "publish".to_string(),
                 audio: true,
@@ -601,7 +627,7 @@ impl Signaller {
     }
 
     fn trickle(&self, candidate: &str, sdp_m_line_index: u32) {
-        let (transaction, session_id, handle_id) = {
+        let (transaction, session_id, handle_id, apisecret) = {
             let state = self.state.lock().unwrap();
             let settings = self.settings.lock().unwrap();
 
@@ -614,6 +640,7 @@ impl Signaller {
                 state.transaction_id.clone().unwrap(),
                 state.session_id.unwrap(),
                 state.handle_id.unwrap(),
+                settings.secret_key.clone(),
             )
         };
         self.send(OutgoingMessage::Trickle(TrickleMsg {
@@ -621,6 +648,7 @@ impl Signaller {
             transaction,
             session_id,
             handle_id,
+            apisecret,
             candidate: Candidate {
                 candidate: candidate.to_string(),
                 sdp_m_line_index,
