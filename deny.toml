@@ -184,6 +184,9 @@ version = "0.2"
 [[bans.skip]]
 name = "toml_edit"
 version = "0.21"
+[[bans.skip]]
+name = "winnow"
+version = "0.5"
 
 [sources]
 unknown-registry = "deny"
