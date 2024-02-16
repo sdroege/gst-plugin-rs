@@ -199,7 +199,7 @@ impl TextWrap {
 
             state.end_ts = buffer.pts();
 
-            let words = data.split_whitespace();
+            let words = data.split_ascii_whitespace();
             let mut current_text = state.current_text.to_string();
 
             for word in words {
