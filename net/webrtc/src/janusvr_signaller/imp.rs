@@ -237,6 +237,7 @@ struct Settings {
     feed_id: String,
     display_name: Option<String>,
     secret_key: Option<String>,
+    string_ids: bool,
 }
 
 impl Default for Settings {
@@ -247,6 +248,7 @@ impl Default for Settings {
             feed_id: feed_id().to_string(),
             display_name: None,
             secret_key: None,
+            string_ids: false,
         }
     }
 }
@@ -260,6 +262,7 @@ pub struct Signaller {
     #[property(name="feed-id", get, set, type = String, member = feed_id, blurb = "The Janus Feed ID to identify where the track is coming from")]
     #[property(name="display-name", get, set, type = String, member = display_name, blurb = "The name of the publisher in the Janus Video Room")]
     #[property(name="secret-key", get, set, type = String, member = secret_key, blurb = "The secret API key to communicate with Janus server")]
+    #[property(name="string-ids", get, set, type = bool, member = string_ids, blurb = "Force passing room-id and feed-id as string even if they can be parsed into an integer")]
     settings: Mutex<Settings>,
 }
 
@@ -538,21 +541,27 @@ impl Signaller {
 
             /* room_id and feed_id can be either a string or integer depending
              * on server configuration. The property is always a string, if we
-             * can parse it to integer then assume that's what the server expects.
+             * can parse it to integer then assume that's what the server expects,
+             * unless string-ids=true is set to force usage of strings.
              * Save parsed value in state to not have to parse it again for future
              * API calls.
              */
-            let room_id_str = settings.room_id.as_ref().unwrap();
-            match room_id_str.parse::<u32>() {
-                Ok(n) => {
-                    state.room_id = Some(RoomId::Num(n));
-                    state.feed_id = Some(RoomId::Num(settings.feed_id.parse().unwrap()));
-                }
-                Err(_) => {
-                    state.room_id = Some(RoomId::Str(room_id_str.clone()));
-                    state.feed_id = Some(RoomId::Str(settings.feed_id.clone()));
-                }
-            };
+            if settings.string_ids {
+                state.room_id = Some(RoomId::Str(settings.room_id.clone().unwrap()));
+                state.feed_id = Some(RoomId::Str(settings.feed_id.clone()));
+            } else {
+                let room_id_str = settings.room_id.as_ref().unwrap();
+                match room_id_str.parse::<u32>() {
+                    Ok(n) => {
+                        state.room_id = Some(RoomId::Num(n));
+                        state.feed_id = Some(RoomId::Num(settings.feed_id.parse().unwrap()));
+                    }
+                    Err(_) => {
+                        state.room_id = Some(RoomId::Str(room_id_str.clone()));
+                        state.feed_id = Some(RoomId::Str(settings.feed_id.clone()));
+                    }
+                };
+            }
 
             (
                 state.transaction_id.clone().unwrap(),
