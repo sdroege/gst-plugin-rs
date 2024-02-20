@@ -1543,12 +1543,13 @@ impl BaseWebRTCSink {
         match extension_configuration_type {
             ExtensionConfigurationType::Auto => {
                 // GstRTPBasePayload::extensions property is only available since GStreamer 1.24
-                if !payloader.has_property("extensions", Some(gst::Array::static_type()))
-                    && self.has_connected_payloader_setup_slots()
-                {
-                    gst::warning!(CAT, "'extensions' property is not available: TWCC extension ID will default to 1. \
+                if !payloader.has_property("extensions", Some(gst::Array::static_type())) {
+                    if self.has_connected_payloader_setup_slots() {
+                        gst::warning!(CAT, "'extensions' property is not available: TWCC extension ID will default to 1. \
         Application code must ensure to pick non-conflicting IDs for any additionally configured extensions. \
         Please consider updating GStreamer to 1.24.");
+                    }
+
                     return Some(1);
                 }
 
