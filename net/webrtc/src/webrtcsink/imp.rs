@@ -556,8 +556,8 @@ fn make_converter_for_video_caps(caps: &gst::Caps, codec: &Codec) -> Result<gst:
                 // NVIDIA V4L2 encoders require NVMM memory as input and that requires using the
                 // corresponding converter
                 || codec
-                    .encoder_factory()
-                    .map_or(false, |factory| factory.name().starts_with("nvv4l2"))
+                .encoder_factory()
+                .map_or(false, |factory| factory.name().starts_with("nvv4l2"))
             {
                 let queue = make_element("queue", None)?;
                 let nvconvert = if let Ok(nvconvert) = make_element("nvvideoconvert", None) {
@@ -1878,7 +1878,7 @@ impl BaseWebRTCSink {
                         gst::StreamError::Failed,
                         ["Signalling error: {}", error]
                     );
-                })
+                }),
             ),
 
             request_meta: signaler.connect_closure(
@@ -1888,7 +1888,7 @@ impl BaseWebRTCSink {
                     let meta = instance.imp().settings.lock().unwrap().meta.clone();
 
                     meta
-                })
+                }),
             ),
 
             session_requested: signaler.connect_closure(
@@ -1898,7 +1898,7 @@ impl BaseWebRTCSink {
                     if let Err(err) = instance.imp().start_session(session_id, peer_id, offer) {
                         gst::warning!(CAT, "{}", err);
                     }
-                })
+                }),
             ),
 
             session_description: signaler.connect_closure(
@@ -1919,9 +1919,9 @@ impl BaseWebRTCSink {
             ),
 
             handle_ice: signaler.connect_closure(
-                    "handle-ice",
-                    false,
-                    glib::closure!(@watch instance => move |
+                "handle-ice",
+                false,
+                glib::closure!(@watch instance => move |
                         _signaler: glib::Object,
                         session_id: &str,
                         sdp_m_line_index: u32,
@@ -1931,7 +1931,7 @@ impl BaseWebRTCSink {
                             .imp()
                             .handle_ice(session_id, Some(sdp_m_line_index), None, candidate);
                     }),
-                ),
+            ),
 
             session_ended: signaler.connect_closure(
                 "session-ended",
@@ -1941,7 +1941,7 @@ impl BaseWebRTCSink {
                         gst::warning!(CAT, "{}", err);
                     }
                     false
-                })
+                }),
             ),
 
             shutdown: signaler.connect_closure(
@@ -1949,7 +1949,7 @@ impl BaseWebRTCSink {
                 false,
                 glib::closure!(@watch instance => move |_signaler: glib::Object|{
                     instance.imp().shutdown(instance);
-                })
+                }),
             ),
         });
     }
@@ -2596,7 +2596,7 @@ impl BaseWebRTCSink {
         if session.congestion_controller.is_some() {
             let session_id_str = session_id.to_string();
             rtpbin.connect_closure("on-new-ssrc", true,
-                glib::closure!(@weak-allow-none element,
+                                   glib::closure!(@weak-allow-none element,
                                 => move |rtpbin: gst::Object, session_id: u32, _src: u32| {
                         let rtp_session = rtpbin.emit_by_name::<gst::Element>("get-session", &[&session_id]);
 
@@ -2617,8 +2617,8 @@ impl BaseWebRTCSink {
                                 ));
                             }
                         }
-                    })
-                );
+                    }),
+            );
         }
 
         let clock = element.clock();
@@ -3729,7 +3729,7 @@ impl ObjectImpl for BaseWebRTCSink {
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecObject::builder::<Signallable>("signaller")
-                    .flags(glib::ParamFlags::READABLE  | gst::PARAM_FLAG_MUTABLE_READY)
+                    .flags(glib::ParamFlags::READABLE | gst::PARAM_FLAG_MUTABLE_READY)
                     .blurb("The Signallable object to use to handle WebRTC Signalling")
                     .build(),
             ]
