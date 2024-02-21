@@ -144,6 +144,7 @@ fn configure_client(secure_conn: bool, alpns: Vec<String>) -> Result<ClientConfi
             .map(|x| x.as_bytes().to_vec())
             .collect::<Vec<_>>();
         crypto.alpn_protocols = alpn_protocols;
+        crypto.key_log = Arc::new(rustls::KeyLogFile::new());
 
         Ok(ClientConfig::new(Arc::new(crypto)))
     }
@@ -234,6 +235,7 @@ fn configure_server(
         .map(|x| x.as_bytes().to_vec())
         .collect::<Vec<_>>();
     crypto.alpn_protocols = alpn_protocols;
+    crypto.key_log = Arc::new(rustls::KeyLogFile::new());
     let mut server_config = ServerConfig::with_crypto(Arc::new(crypto));
 
     Arc::get_mut(&mut server_config.transport)
