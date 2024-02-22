@@ -489,6 +489,16 @@ foreach plugin : plugins
     plugin_name = plugin_name.substring(3)
   endif
 
+  plugin_display_name = plugin_name
+  if plugin_name.startswith('gst')
+    plugin_display_name = plugin_name.substring(3)
+  endif
+  if plugin_display_name in plugin_names
+    # When default_library=both plugins are duplicated.
+    continue
+  endif
+  plugin_names += plugin_display_name
+
   option_name = plugin_name.substring(3)
   if option_name.startswith('rs')
     option_name = option_name.substring(2)
@@ -533,13 +543,7 @@ foreach plugin : plugins
     warning('Static plugin @0@ is known to fail. It will not be included in libgstreamer-full.'.format(plugin_name))
   else
     gst_plugins += dep
-
     pc_files += [plugin_name + '.pc']
-    if plugin_name.startswith('gst')
-      plugin_names += [plugin_name.substring(3)]
-    else
-      plugin_names += [plugin_name]
-    endif
   endif
 endforeach
 
