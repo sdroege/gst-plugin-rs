@@ -114,7 +114,10 @@ fn test(
             return;
         };
 
-        let sink = gst::ElementFactory::make("fakesink").build().unwrap();
+        let sink = gst::ElementFactory::make("fakesink")
+            .property("sync", true)
+            .build()
+            .unwrap();
         pipeline.add(&sink).unwrap();
         sink.sync_state_with_parent().unwrap();
 
