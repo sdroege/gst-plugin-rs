@@ -182,8 +182,8 @@ fn main() -> Result<(), Error> {
                 let mut write_segment =
                     |start: gst::ClockTime, duration: gst::ClockTime, repeat: usize| {
                         let mut s = dash_mpd::S {
-                            t: Some(start.mseconds() as i64),
-                            d: duration.mseconds() as i64,
+                            t: Some(start.mseconds()),
+                            d: duration.mseconds(),
                             ..Default::default()
                         };
                         if repeat > 0 {
