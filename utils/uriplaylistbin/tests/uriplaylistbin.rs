@@ -252,8 +252,6 @@ fn assert_stream_selected(msg: gst::Message, n_streams: usize) -> gst::Object {
 }
 
 #[test]
-// FIXME: test deadlocks: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/194
-#[ignore]
 fn single_audio() {
     let (events, current_iteration, current_uri_index) = test(vec![TestMedia::ogg()], 1, 1, true);
     assert_eos(events.into_iter().last().unwrap());
@@ -262,8 +260,6 @@ fn single_audio() {
 }
 
 #[test]
-// FIXME: test deadlocks: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/194
-#[ignore]
 fn single_video() {
     let (events, current_iteration, current_uri_index) = test(vec![TestMedia::mkv()], 2, 1, true);
     assert_eos(events.into_iter().last().unwrap());
@@ -272,8 +268,6 @@ fn single_video() {
 }
 
 #[test]
-// FIXME: this test hits deadlocks, see https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/184
-#[ignore]
 fn multi_audio() {
     let (events, current_iteration, current_uri_index) = test(
         vec![TestMedia::ogg(), TestMedia::ogg(), TestMedia::ogg()],
@@ -287,8 +281,6 @@ fn multi_audio() {
 }
 
 #[test]
-// FIXME: test deadlocks: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/194
-#[ignore]
 fn multi_audio_video() {
     let (events, current_iteration, current_uri_index) =
         test(vec![TestMedia::mkv(), TestMedia::mkv()], 2, 1, true);
@@ -298,8 +290,6 @@ fn multi_audio_video() {
 }
 
 #[test]
-// FIXME: test deadlocks: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/194
-#[ignore]
 fn iterations() {
     let (events, current_iteration, current_uri_index) =
         test(vec![TestMedia::mkv(), TestMedia::mkv()], 2, 2, true);
@@ -309,8 +299,6 @@ fn iterations() {
 }
 
 #[test]
-// FIXME: test deadlocks: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/194
-#[ignore]
 fn nb_streams_increasing() {
     let (events, current_iteration, current_uri_index) =
         test(vec![TestMedia::ogg(), TestMedia::mkv()], 2, 1, false);
@@ -336,8 +324,6 @@ fn missing_file() {
 }
 
 #[test]
-// FIXME: test deadlocks: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/194
-#[ignore]
 fn missing_http() {
     let (events, current_iteration, current_uri_index) = test(
         vec![TestMedia::ogg(), TestMedia::missing_http()],
