@@ -222,6 +222,7 @@ plugins = {
       'quic_roq',
     ],
   },
+  'skia': {'library': 'libgstskia'},
   'speechmatics': {'library': 'libgstspeechmatics'},
   'vvdec': {
     'library': 'libgstvvdec',

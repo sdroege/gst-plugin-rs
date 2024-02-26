@@ -14555,6 +14555,348 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "skia": {
+        "description": "GStreamer skia plugin",
+        "elements": {
+            "skiacompositor": {
+                "author": "Thibault Saunier <tsaunier@igalia.com>, Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Skia based compositor",
+                "hierarchy": [
+                    "GstSkiaCompositor",
+                    "GstVideoAggregator",
+                    "GstAggregator",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
+                "klass": "Compositor/Video",
+                "pad-templates": {
+                    "sink_%%u": {
+                        "caps": "video/x-raw:\n         format: { A444_16LE, A444_16BE, Y416_LE, AYUV64, RGBA64_LE, ARGB64, ARGB64_LE, BGRA64_LE, ABGR64_LE, Y416_BE, RGBA64_BE, ARGB64_BE, BGRA64_BE, ABGR64_BE, A422_16LE, A422_16BE, A420_16LE, A420_16BE, A444_12LE, GBRA_12LE, A444_12BE, GBRA_12BE, Y412_LE, Y412_BE, A422_12LE, A422_12BE, A420_12LE, A420_12BE, A444_10LE, GBRA_10LE, A444_10BE, GBRA_10BE, A422_10LE, A422_10BE, A420_10LE, A420_10BE, BGR10A2_LE, RGB10A2_LE, Y410, A444, GBRA, AYUV, VUYA, RGBA, RBGA, ARGB, BGRA, ABGR, A422, A420, AV12, Y444_16LE, GBR_16LE, Y444_16BE, GBR_16BE, Y216_LE, Y216_BE, v216, P016_LE, P016_BE, Y444_12LE, GBR_12LE, Y444_12BE, GBR_12BE, I422_12LE, I422_12BE, Y212_LE, Y212_BE, I420_12LE, I420_12BE, P012_LE, P012_BE, Y444_10LE, GBR_10LE, Y444_10BE, GBR_10BE, r210, I422_10LE, I422_10BE, NV16_10LE32, Y210, UYVP, v210, I420_10LE, I420_10BE, P010_10LE, NV12_10LE40, NV12_10LE32, P010_10BE, MT2110R, MT2110T, NV12_10BE_8L128, NV12_10LE40_4L4, Y444, BGRP, GBR, RGBP, NV24, v308, IYU2, RGBx, xRGB, BGRx, xBGR, RGB, BGR, Y42B, NV16, NV61, YUY2, YVYU, UYVY, VYUY, I420, YV12, NV12, NV21, NV12_16L32S, NV12_32L32, NV12_4L4, NV12_64Z32, NV12_8L128, Y41B, IYU1, YUV9, YVU9, BGR16, RGB16, BGR15, RGB15, RGB8P, GRAY16_LE, GRAY16_BE, GRAY10_LE16, GRAY10_LE32, GRAY8 }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "GstSkiaCompositorPad"
+                    },
+                    "src": {
+                        "caps": "video/x-raw:\n         format: { RGBA, BGRA, RGBx, RGB16, GRAY8 }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "background": {
+                        "blurb": "NULL",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "checker (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstSkiaCompositorBackground",
+                        "writable": true
+                    }
+                },
+                "rank": "secondary"
+            }
+        },
+        "filename": "gstskia",
+        "license": "MIT/X11",
+        "other-types": {
+            "GstSkiaCompositorBackground": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Checker",
+                        "name": "checker",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Black",
+                        "name": "black",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "White",
+                        "name": "white",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "Transparent",
+                        "name": "transparent",
+                        "value": "3"
+                    }
+                ]
+            },
+            "GstSkiaCompositorPad": {
+                "hierarchy": [
+                    "GstSkiaCompositorPad",
+                    "GstVideoAggregatorConvertPad",
+                    "GstVideoAggregatorPad",
+                    "GstAggregatorPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "alpha": {
+                        "blurb": "Alpha value of the input",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1",
+                        "max": "1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gdouble",
+                        "writable": true
+                    },
+                    "anti-alias": {
+                        "blurb": "Whether to use anti-aliasing",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "height": {
+                        "blurb": "Height of the picture",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-1",
+                        "max": "3.40282e+38",
+                        "min": "-1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gfloat",
+                        "writable": true
+                    },
+                    "operator": {
+                        "blurb": "Blending operator to use for blending this pad over the previous ones",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "over (1)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstSkiaCompositorPadOperator",
+                        "writable": true
+                    },
+                    "width": {
+                        "blurb": "Width of the picture",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-1",
+                        "max": "3.40282e+38",
+                        "min": "-1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gfloat",
+                        "writable": true
+                    },
+                    "xpos": {
+                        "blurb": "Horizontal position of the input",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "3.40282e+38",
+                        "min": "-3.40282e+38",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gfloat",
+                        "writable": true
+                    },
+                    "ypos": {
+                        "blurb": "Vertical position of the input",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "3.40282e+38",
+                        "min": "-3.40282e+38",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gfloat",
+                        "writable": true
+                    }
+                }
+            },
+            "GstSkiaCompositorPadOperator": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Source",
+                        "name": "source",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Over",
+                        "name": "over",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Add",
+                        "name": "add",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "Dest",
+                        "name": "dest",
+                        "value": "3"
+                    },
+                    {
+                        "desc": "Clear",
+                        "name": "clear",
+                        "value": "4"
+                    },
+                    {
+                        "desc": "DestOver",
+                        "name": "dest-over",
+                        "value": "5"
+                    },
+                    {
+                        "desc": "SourceIn",
+                        "name": "source-in",
+                        "value": "6"
+                    },
+                    {
+                        "desc": "DestIn",
+                        "name": "dest-in",
+                        "value": "7"
+                    },
+                    {
+                        "desc": "SourceOut",
+                        "name": "source-out",
+                        "value": "8"
+                    },
+                    {
+                        "desc": "DestOut",
+                        "name": "dest-out",
+                        "value": "9"
+                    },
+                    {
+                        "desc": "SourceATop",
+                        "name": "source-a-top",
+                        "value": "10"
+                    },
+                    {
+                        "desc": "DestATop",
+                        "name": "dest-a-top",
+                        "value": "11"
+                    },
+                    {
+                        "desc": "Xor",
+                        "name": "xor",
+                        "value": "12"
+                    },
+                    {
+                        "desc": "Modulate",
+                        "name": "modulate",
+                        "value": "13"
+                    },
+                    {
+                        "desc": "Screen",
+                        "name": "screen",
+                        "value": "14"
+                    },
+                    {
+                        "desc": "Overlay",
+                        "name": "overlay",
+                        "value": "15"
+                    },
+                    {
+                        "desc": "Darken",
+                        "name": "darken",
+                        "value": "16"
+                    },
+                    {
+                        "desc": "Lighten",
+                        "name": "lighten",
+                        "value": "17"
+                    },
+                    {
+                        "desc": "ColorDodge",
+                        "name": "color-dodge",
+                        "value": "18"
+                    },
+                    {
+                        "desc": "ColorBurn",
+                        "name": "color-burn",
+                        "value": "19"
+                    },
+                    {
+                        "desc": "HardLight",
+                        "name": "hard-light",
+                        "value": "20"
+                    },
+                    {
+                        "desc": "SoftLight",
+                        "name": "soft-light",
+                        "value": "21"
+                    },
+                    {
+                        "desc": "Difference",
+                        "name": "difference",
+                        "value": "22"
+                    },
+                    {
+                        "desc": "Exclusion",
+                        "name": "exclusion",
+                        "value": "23"
+                    },
+                    {
+                        "desc": "Multiply",
+                        "name": "multiply",
+                        "value": "24"
+                    },
+                    {
+                        "desc": "Hue",
+                        "name": "hue",
+                        "value": "25"
+                    },
+                    {
+                        "desc": "Saturation",
+                        "name": "saturation",
+                        "value": "26"
+                    },
+                    {
+                        "desc": "Color",
+                        "name": "color",
+                        "value": "27"
+                    },
+                    {
+                        "desc": "Luminosity",
+                        "name": "luminosity",
+                        "value": "28"
+                    }
+                ]
+            }
+        },
+        "package": "gst-plugin-skia",
+        "source": "gst-plugin-skia",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "sodium": {
         "description": "GStreamer plugin for libsodium-based file encryption and decryption",
         "elements": {
