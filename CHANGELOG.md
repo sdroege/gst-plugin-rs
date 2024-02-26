@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.12.2] - 2024-02-26
+### Fixed
+- rtpgccbwe: Don't reset PTS/DTS to `None` as otherwise `rtpsession` won't be
+  able to generate valid RTCP.
+- webrtcsink: Fix usage with 1.22.
+
+### Added
+- janusvrwebrtcsink: Add `secret-key` property.
+- janusvrwebrtcsink: Allow for string room ids and add `string-ids` property.
+- textwrap: Don't split on all whitespaces, especially not on non-breaking
+  whitespace.
+
 ## [0.12.1] - 2024-02-13
 ### Added
 - gtk4: Create a window for testing purposes when running in `gst-launch-1.0`
@@ -350,7 +362,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.1...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.2...HEAD
+[0.12.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.1...0.12.2
 [0.12.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.0...0.12.1
 [0.12.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.3...0.12.0
 [0.11.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.2...0.11.3
