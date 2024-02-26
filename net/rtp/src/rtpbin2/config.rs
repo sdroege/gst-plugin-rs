@@ -144,9 +144,14 @@ mod imp {
 
         fn signals() -> &'static [glib::subclass::Signal] {
             static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
-                vec![glib::subclass::Signal::builder("new-ssrc")
-                    .param_types([u32::static_type()])
-                    .build()]
+                vec![
+                    glib::subclass::Signal::builder("new-ssrc")
+                        .param_types([u32::static_type()])
+                        .build(),
+                    glib::subclass::Signal::builder("bye-ssrc")
+                        .param_types([u32::static_type()])
+                        .build(),
+                ]
             });
 
             SIGNALS.as_ref()
@@ -242,5 +247,46 @@ mod tests {
         assert_eq!(buf3, buf1);
         let buf4 = h.pull().unwrap();
         assert_eq!(buf4, buf2);
+    }
+
+    #[test]
+    fn bye_send_ssrc() {
+        test_init();
+        let ssrc = 0x12345678;
+        let (bye_ssrc_sender, bye_ssrc_receiver) = std::sync::mpsc::sync_channel(16);
+        let rtpbin2 = gst::ElementFactory::make("rtpbin2").build().unwrap();
+        let mut h = gst_check::Harness::with_element(
+            &rtpbin2,
+            Some("rtp_send_sink_0"),
+            Some("rtp_send_src_0"),
+        );
+        let mut h_rtcp = gst_check::Harness::with_element(&rtpbin2, None, Some("rtcp_send_src_0"));
+        let session = h
+            .element()
+            .unwrap()
+            .emit_by_name::<gst::glib::Object>("get-session", &[&0u32]);
+        session.connect("bye-ssrc", false, move |args| {
+            let bye_ssrc = args[1].get::<u32>().unwrap();
+            assert_eq!(bye_ssrc, ssrc);
+            bye_ssrc_sender.send(ssrc).unwrap();
+            None
+        });
+        h.set_src_caps_str("application/x-rtp,payload=96,clock-rate=90000");
+        let mut segment = gst::Segment::new();
+        segment.set_format(gst::Format::Time);
+        h.push_event(gst::event::Segment::builder(&segment).build());
+        let buf1 = gst::Buffer::from_mut_slice(generate_rtp_packet(ssrc, 0x34, 0x10, 16));
+        h.push(buf1.clone()).unwrap();
+        let buf2 = gst::Buffer::from_mut_slice(generate_rtp_packet(ssrc, 0x35, 0x10, 16));
+        h.push(buf2.clone()).unwrap();
+
+        let buf3 = h.pull().unwrap();
+        assert_eq!(buf3, buf1);
+        let buf4 = h.pull().unwrap();
+        assert_eq!(buf4, buf2);
+
+        h.push_event(gst::event::Eos::builder().build());
+        let _rtcp = h_rtcp.pull().unwrap();
+        assert_eq!(bye_ssrc_receiver.recv().unwrap(), ssrc);
     }
 }

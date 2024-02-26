@@ -14,8 +14,8 @@ use once_cell::sync::Lazy;
 
 use super::jitterbuffer::{self, JitterBuffer};
 use super::session::{
-    KeyUnitRequestType, RecvReply, RequestRemoteKeyUnitReply, RtcpRecvReply, RtpProfile, SendReply,
-    Session, RTCP_MIN_REPORT_INTERVAL,
+    KeyUnitRequestType, RecvReply, RequestRemoteKeyUnitReply, RtcpRecvReply, RtcpSendReply,
+    RtpProfile, SendReply, Session, RTCP_MIN_REPORT_INTERVAL,
 };
 use super::source::{ReceivedRb, SourceState};
 use super::sync;
@@ -102,7 +102,7 @@ impl RtcpSendStream {
 }
 
 impl futures::stream::Stream for RtcpSendStream {
-    type Item = (Vec<u8>, usize);
+    type Item = (usize, RtcpSendReply);
 
     fn poll_next(
         self: Pin<&mut Self>,
@@ -114,8 +114,8 @@ impl futures::stream::Stream for RtcpSendStream {
         let mut lowest_wait = None;
         for session in state.sessions.iter_mut() {
             let mut session = session.inner.lock().unwrap();
-            if let Some(data) = session.session.poll_rtcp_send(now, ntp_now) {
-                return Poll::Ready(Some((data, session.id)));
+            if let Some(reply) = session.session.poll_rtcp_send(now, ntp_now) {
+                return Poll::Ready(Some((session.id, reply)));
             }
             if let Some(wait) = session.session.poll_rtcp_send_timeout(now) {
                 if lowest_wait.map_or(true, |lowest_wait| wait < lowest_wait) {
@@ -808,20 +808,28 @@ impl RtpBin2 {
 
     async fn rtcp_task(state: Arc<Mutex<State>>) {
         let mut stream = RtcpSendStream::new(state.clone());
-        while let Some((data, session_id)) = stream.next().await {
+        while let Some((session_id, reply)) = stream.next().await {
             let state = state.lock().unwrap();
             let Some(session) = state.session_by_id(session_id) else {
                 continue;
             };
-            let Some(rtcp_srcpad) = session.inner.lock().unwrap().rtcp_send_srcpad.clone() else {
-                continue;
-            };
-            RUNTIME.spawn_blocking(move || {
-                let buffer = gst::Buffer::from_mut_slice(data);
-                if let Err(e) = rtcp_srcpad.push(buffer) {
-                    gst::warning!(CAT, obj: rtcp_srcpad, "Failed to send rtcp data: flow return {e:?}");
+            match reply {
+                RtcpSendReply::Data(data) => {
+                    let Some(rtcp_srcpad) = session.inner.lock().unwrap().rtcp_send_srcpad.clone()
+                    else {
+                        continue;
+                    };
+                    RUNTIME.spawn_blocking(move || {
+                        let buffer = gst::Buffer::from_mut_slice(data);
+                        if let Err(e) = rtcp_srcpad.push(buffer) {
+                            gst::warning!(CAT, obj: rtcp_srcpad, "Failed to send rtcp data: flow return {e:?}");
+                        }
+                    });
                 }
-            });
+                RtcpSendReply::SsrcBye(ssrc) => {
+                    session.config.emit_by_name::<()>("bye-ssrc", &[&ssrc])
+                }
+            }
         }
     }
 
@@ -1264,6 +1272,9 @@ impl RtpBin2 {
                         .as_mut()
                         .unwrap()
                         .add_sender_report(ssrc, rtp, ntp);
+                }
+                RtcpRecvReply::SsrcBye(ssrc) => {
+                    session.config.emit_by_name::<()>("bye-ssrc", &[&ssrc])
                 }
             }
         }

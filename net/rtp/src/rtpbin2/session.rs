@@ -101,6 +101,7 @@ pub struct Session {
     last_rtcp_sent_times: VecDeque<Instant>,
     // time for the next early rtcp to be sent
     next_early_rtcp_time: Option<Instant>,
+    pending_rtcp_send: VecDeque<RtcpSendReply>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -151,6 +152,16 @@ pub enum RtcpRecvReply {
     NewCName((String, u32)),
     /// A new RTP to NTP mapping was received for an ssrc: (ssrc, RTP, NTP)
     NewRtpNtp((u32, u32, u64)),
+    /// A ssrc has byed
+    SsrcBye(u32),
+}
+
+#[derive(Debug)]
+pub enum RtcpSendReply {
+    /// Data needs to be sent
+    Data(Vec<u8>),
+    /// A ssrc has byed
+    SsrcBye(u32),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -190,6 +201,7 @@ impl Session {
             next_early_rtcp_time: None,
             last_rtcp_handle_time: None,
             is_point_to_point: true,
+            pending_rtcp_send: VecDeque::new(),
         }
     }
 
@@ -550,10 +562,12 @@ impl Session {
                             source.set_last_activity(now);
                             source.set_state(SourceState::Bye);
                             check_reconsideration = true;
+                            replies.push(RtcpRecvReply::SsrcBye(ssrc));
                         } else if let Some(source) = self.remote_receivers.get_mut(&ssrc) {
                             source.set_last_activity(now);
                             source.set_state(SourceState::Bye);
                             check_reconsideration = true;
+                            replies.push(RtcpRecvReply::SsrcBye(ssrc));
                         }
                         // XXX: do we need to handle an unknown ssrc here?
                         // TODO: signal rtcp timeout needs recalcuating
@@ -1047,6 +1061,8 @@ impl Session {
             for (reason, ssrcs) in bye_reason_ssrcs.iter() {
                 let mut bye = Bye::builder().reason_owned(reason);
                 for ssrc in ssrcs.iter() {
+                    self.pending_rtcp_send
+                        .push_front(RtcpSendReply::SsrcBye(*ssrc));
                     bye = bye.add_source(*ssrc);
                     if let Some(source) = self.local_senders.get_mut(ssrc) {
                         source.bye_sent_at(now);
@@ -1165,7 +1181,11 @@ impl Session {
     /// Produce a RTCP packet (or `None` if it is too early to send a RTCP packet).  After this call returns,
     /// the next time to send a RTCP packet can be retrieved from `poll_rtcp_send_timeout`
     // TODO: return RtcpPacketBuilder thing
-    pub fn poll_rtcp_send(&mut self, now: Instant, ntp_now: SystemTime) -> Option<Vec<u8>> {
+    pub fn poll_rtcp_send(&mut self, now: Instant, ntp_now: SystemTime) -> Option<RtcpSendReply> {
+        if let Some(event) = self.pending_rtcp_send.pop_back() {
+            return Some(event);
+        }
+
         let Some(next_rtcp_send) = self.next_rtcp_send.time else {
             trace!("no next check time yet");
             return None;
@@ -1258,7 +1278,7 @@ impl Session {
         }
         self.last_rtcp_handle_time = Some(now);
         self.next_early_rtcp_time = None;
-        Some(data)
+        Some(RtcpSendReply::Data(data))
     }
 
     /// Returns the next time to send a RTCP packet.
@@ -1678,7 +1698,7 @@ pub(crate) mod tests {
         session: &mut Session,
         mut now: Instant,
         mut ntp_now: SystemTime,
-    ) -> (Vec<u8>, Instant, SystemTime) {
+    ) -> (RtcpSendReply, Instant, SystemTime) {
         let mut ret = None;
         while ret.is_none() {
             ret = session.poll_rtcp_send(now, ntp_now);
@@ -1777,6 +1797,9 @@ pub(crate) mod tests {
         );
 
         let (rtcp_data, _now, _ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
+        let RtcpSendReply::Data(rtcp_data) = rtcp_data else {
+            unreachable!();
+        };
 
         let rtcp = Compound::parse(&rtcp_data).unwrap();
         let mut n_rb_ssrcs = 0;
@@ -1860,6 +1883,9 @@ pub(crate) mod tests {
         assert_eq!(session.handle_send(&packet, now), SendReply::Passthrough);
 
         let rtcp_data = session.poll_rtcp_send(now, ntp_now).unwrap();
+        let RtcpSendReply::Data(rtcp_data) = rtcp_data else {
+            unreachable!();
+        };
         let rtcp = Compound::parse(&rtcp_data).unwrap();
         let mut n_rb_ssrcs = 0;
         for p in rtcp {
@@ -1953,6 +1979,9 @@ pub(crate) mod tests {
         );
 
         let (rtcp_data, _new_now, new_ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
+        let RtcpSendReply::Data(rtcp_data) = rtcp_data else {
+            unreachable!();
+        };
 
         let rtcp = Compound::parse(&rtcp_data).unwrap();
         for p in rtcp {
@@ -2022,6 +2051,9 @@ pub(crate) mod tests {
         assert_eq!(session.handle_send(&packet, now), SendReply::Passthrough);
 
         let rtcp_data = session.poll_rtcp_send(now, ntp_now).unwrap();
+        let RtcpSendReply::Data(rtcp_data) = rtcp_data else {
+            unreachable!();
+        };
         trace!("rtcp data {rtcp_data:?}");
         let rtcp = Compound::parse(&rtcp_data).unwrap();
         let mut n_sr_ssrcs = 0;
@@ -2060,6 +2092,9 @@ pub(crate) mod tests {
         );
 
         let (rtcp_data, _now, _ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
+        let RtcpSendReply::Data(rtcp_data) = rtcp_data else {
+            unreachable!();
+        };
 
         trace!("rtcp data {rtcp_data:?}");
         let rtcp = Compound::parse(&rtcp_data).unwrap();
@@ -2102,6 +2137,9 @@ pub(crate) mod tests {
         );
 
         let (rtcp_data, _now, _ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
+        let RtcpSendReply::Data(rtcp_data) = rtcp_data else {
+            unreachable!();
+        };
 
         let rtcp = Compound::parse(&rtcp_data).unwrap();
         for p in rtcp {
@@ -2139,6 +2177,9 @@ pub(crate) mod tests {
         assert_eq!(session.handle_send(&packet, now), SendReply::Passthrough);
 
         let (rtcp_data, now, ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
+        let RtcpSendReply::Data(rtcp_data) = rtcp_data else {
+            unreachable!();
+        };
 
         let rtcp = Compound::parse(&rtcp_data).unwrap();
         for p in rtcp {
@@ -2156,6 +2197,9 @@ pub(crate) mod tests {
         let mut seen_rr = false;
         for _ in 0..=5 {
             let (rtcp_data, _now, _ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
+            let RtcpSendReply::Data(rtcp_data) = rtcp_data else {
+                unreachable!();
+            };
             let rtcp = Compound::parse(&rtcp_data).unwrap();
             for p in rtcp {
                 trace!("{p:?}");
@@ -2194,6 +2238,9 @@ pub(crate) mod tests {
         assert_eq!(session.handle_send(&packet, now), SendReply::Passthrough);
 
         let (rtcp_data, now, ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
+        let RtcpSendReply::Data(rtcp_data) = rtcp_data else {
+            unreachable!();
+        };
         let rtcp = Compound::parse(&rtcp_data).unwrap();
 
         for p in rtcp {
@@ -2359,7 +2406,10 @@ pub(crate) mod tests {
         );
 
         // send initial rtcp
-        let (_rtcp_data, now, ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
+        let (rtcp_data, now, ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
+        let RtcpSendReply::Data(_rtcp_data) = rtcp_data else {
+            unreachable!();
+        };
 
         let rtcp = Compound::builder().add_packet(Bye::builder().add_source(ssrc));
         let mut data = vec![0; 128];
@@ -2369,7 +2419,10 @@ pub(crate) mod tests {
         let rtcp = Compound::parse(data).unwrap();
         assert_eq!(
             session.handle_rtcp_recv(rtcp, len, None, now, ntp_now),
-            vec![RtcpRecvReply::TimerReconsideration]
+            vec![
+                RtcpRecvReply::SsrcBye(ssrc),
+                RtcpRecvReply::TimerReconsideration
+            ]
         );
         let source = session.mut_remote_sender_source_by_ssrc(ssrc).unwrap();
         assert_eq!(source.state(), SourceState::Bye);
@@ -2392,7 +2445,10 @@ pub(crate) mod tests {
         assert_eq!(session.handle_send(&packet, now), SendReply::Passthrough);
 
         // send initial rtcp
-        let (_rtcp_data, now, ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
+        let (rtcp_data, now, ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
+        let RtcpSendReply::Data(_rtcp_data) = rtcp_data else {
+            unreachable!();
+        };
 
         let source = session.mut_local_send_source_by_ssrc(ssrc).unwrap();
         source.mark_bye("Cya");
@@ -2401,7 +2457,10 @@ pub(crate) mod tests {
         // data after bye should be dropped
         assert_eq!(session.handle_send(&packet, now), SendReply::Drop);
 
-        let (rtcp_data, _now, _ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
+        let (rtcp_data, now, ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
+        let RtcpSendReply::Data(rtcp_data) = rtcp_data else {
+            unreachable!();
+        };
 
         let rtcp = Compound::parse(&rtcp_data).unwrap();
         let mut received_bye = false;
@@ -2421,6 +2480,11 @@ pub(crate) mod tests {
             }
         }
         assert!(received_bye);
+        let (rtcp_data, _now, _ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
+        let RtcpSendReply::SsrcBye(bye_ssrc) = rtcp_data else {
+            unreachable!();
+        };
+        assert_eq!(bye_ssrc, ssrc);
     }
 
     #[test]
@@ -2459,7 +2523,10 @@ pub(crate) mod tests {
         assert_eq!(session.handle_send(&packet, now), SendReply::Passthrough);
 
         // complete first regular rtcp
-        let (_rtcp_data, now, _ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
+        let (rtcp_data, now, _ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
+        let RtcpSendReply::Data(_rtcp_data) = rtcp_data else {
+            unreachable!();
+        };
 
         let source = session.mut_local_send_source_by_ssrc(send_ssrc).unwrap();
         source.set_sdes_item(SdesItem::NAME, b"name");
@@ -2470,6 +2537,9 @@ pub(crate) mod tests {
         assert!(session.next_early_rtcp_time.is_some());
 
         let (rtcp_data, _now, _ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
+        let RtcpSendReply::Data(rtcp_data) = rtcp_data else {
+            unreachable!();
+        };
         let rtcp = Compound::parse(&rtcp_data).unwrap();
         let mut n_sr_ssrc = 0;
         let mut n_sdes = 0;
