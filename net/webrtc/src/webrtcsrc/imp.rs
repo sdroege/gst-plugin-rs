@@ -211,7 +211,7 @@ impl ObjectImpl for BaseWebRTCSrc {
             vec![
                 /**
                  * BaseWebRTCSrc::request-encoded-filter:
-                 * @producer_id: Identifier of the producer
+                 * @producer_id: (nullable): Identifier of the producer
                  * @pad_name: The name of the output pad
                  * @allowed_caps: the allowed caps for the output pad
                  *
@@ -404,7 +404,11 @@ impl BaseWebRTCSrc {
             .expect("Adding ghostpad to the bin should always work");
 
         if let Some(srcpad) = srcpad {
-            let producer_id = self.signaller().property::<String>("producer-peer-id");
+            let producer_id = self
+                .signaller()
+                .property::<Option<String>>("producer-peer-id")
+                .or_else(|| pad.property("msid"));
+
             let encoded_filter = self.obj().emit_by_name::<Option<gst::Element>>(
                 "request-encoded-filter",
                 &[&producer_id, &srcpad.name(), &srcpad.allowed_caps()],
