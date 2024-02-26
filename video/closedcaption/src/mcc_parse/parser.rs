@@ -9,7 +9,7 @@
 use either::Either;
 
 use crate::parser_utils::{digits, digits_range, end_of_line, timecode, TimeCode};
-use nom::IResult;
+use winnow::{error::StrContext, PResult, Parser};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MccLine<'a> {
@@ -37,110 +37,84 @@ pub struct MccParser {
 }
 
 /// Parser for the MCC header
-fn header(s: &[u8]) -> IResult<&[u8], MccLine> {
-    use nom::branch::alt;
-    use nom::bytes::complete::tag;
-    use nom::combinator::{map, opt};
-    use nom::error::context;
-    use nom::sequence::tuple;
+fn header<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
+    use winnow::combinator::{alt, opt};
+    use winnow::token::literal;
 
-    context(
-        "invalid header",
-        map(
-            tuple((
-                opt(tag(&[0xEFu8, 0xBBu8, 0xBFu8][..])),
-                tag("File Format=MacCaption_MCC V"),
-                alt((tag("1.0"), tag("2.0"))),
-                end_of_line,
-            )),
-            |_| MccLine::Header,
-        ),
-    )(s)
+    (
+        opt(literal(&[0xEFu8, 0xBBu8, 0xBFu8][..])),
+        literal("File Format=MacCaption_MCC V"),
+        alt((literal("1.0"), literal("2.0"))),
+        end_of_line,
+    )
+        .map(|_| MccLine::Header)
+        .context(StrContext::Label("invalid header"))
+        .parse_next(s)
 }
 
 /// Parser for an MCC comment, i.e. a line starting with `//`. We don't return the actual comment
 /// text as it's irrelevant for us.
-fn comment(s: &[u8]) -> IResult<&[u8], MccLine> {
-    use nom::bytes::complete::tag;
-    use nom::combinator::{map, rest};
-    use nom::error::context;
-    use nom::sequence::tuple;
+fn comment<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
+    use winnow::combinator::rest;
+    use winnow::token::literal;
 
-    context(
-        "invalid comment",
-        map(tuple((tag("//"), rest)), |_| MccLine::Comment),
-    )(s)
+    (literal("//"), rest)
+        .map(|_| MccLine::Comment)
+        .context(StrContext::Label("invalid comment"))
+        .parse_next(s)
 }
 
 /// Parser for the MCC UUID line.
-fn uuid(s: &[u8]) -> IResult<&[u8], MccLine> {
-    use nom::bytes::complete::{tag, take_while1};
-    use nom::combinator::map;
-    use nom::error::context;
-    use nom::sequence::tuple;
+fn uuid<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
+    use winnow::token::{literal, take_while};
 
-    context(
-        "invalid uuid",
-        map(
-            tuple((
-                tag("UUID="),
-                take_while1(|b| b != b'\n' && b != b'\r'),
-                end_of_line,
-            )),
-            |(_, uuid, _)| MccLine::Uuid(uuid),
-        ),
-    )(s)
+    (
+        literal("UUID="),
+        take_while(1.., |b| b != b'\n' && b != b'\r'),
+        end_of_line,
+    )
+        .map(|(_, uuid, _)| MccLine::Uuid(uuid))
+        .context(StrContext::Label("invalid uuid"))
+        .parse_next(s)
 }
 
 /// Parser for the MCC Time Code Rate line.
-fn time_code_rate(s: &[u8]) -> IResult<&[u8], MccLine> {
-    use nom::bytes::complete::tag;
-    use nom::combinator::{map, opt};
-    use nom::error::context;
-    use nom::sequence::tuple;
+fn time_code_rate<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
+    use winnow::combinator::opt;
+    use winnow::token::literal;
 
-    context(
-        "invalid timecode rate",
-        map(
-            tuple((
-                tag("Time Code Rate="),
-                digits_range(1..256),
-                opt(tag("DF")),
-                end_of_line,
-            )),
-            |(_, v, df, _)| MccLine::TimeCodeRate(v as u8, df.is_some()),
-        ),
-    )(s)
+    (
+        literal("Time Code Rate="),
+        digits_range(1..256),
+        opt(literal("DF")),
+        end_of_line,
+    )
+        .map(|(_, v, df, _)| MccLine::TimeCodeRate(v as u8, df.is_some()))
+        .context(StrContext::Label("invalid timecode rate"))
+        .parse_next(s)
 }
 
 /// Parser for generic MCC metadata lines in the form `key=value`.
-fn metadata(s: &[u8]) -> IResult<&[u8], MccLine> {
-    use nom::bytes::complete::take_while1;
-    use nom::character::complete::char;
-    use nom::combinator::map;
-    use nom::error::context;
-    use nom::sequence::tuple;
+fn metadata<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
+    use winnow::token::{one_of, take_while};
 
-    context(
-        "invalid metadata",
-        map(
-            tuple((
-                take_while1(|b| b != b'='),
-                char('='),
-                take_while1(|b| b != b'\n' && b != b'\r'),
-                end_of_line,
-            )),
-            |(name, _, value, _)| MccLine::Metadata(name, value),
-        ),
-    )(s)
+    (
+        take_while(1.., |b| b != b'='),
+        one_of('='),
+        take_while(1.., |b| b != b'\n' && b != b'\r'),
+        end_of_line,
+    )
+        .map(|(name, _, value, _)| MccLine::Metadata(name, value))
+        .context(StrContext::Label("invalid metadata"))
+        .parse_next(s)
 }
 
 /// Parser that accepts only an empty line
-fn empty_line(s: &[u8]) -> IResult<&[u8], MccLine> {
-    use nom::combinator::map;
-    use nom::error::context;
-
-    context("invalid empty line", map(end_of_line, |_| MccLine::Empty))(s)
+fn empty_line<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
+    end_of_line
+        .map(|_| MccLine::Empty)
+        .context(StrContext::Label("invalid empty line"))
+        .parse_next(s)
 }
 
 /// A single MCC payload item. This is ASCII hex encoded bytes plus some single-character
@@ -148,152 +122,145 @@ fn empty_line(s: &[u8]) -> IResult<&[u8], MccLine> {
 ///
 /// It returns an `Either` of the single hex encoded byte or the short-cut byte sequence as a
 /// static byte slice.
-fn mcc_payload_item(s: &[u8]) -> IResult<&[u8], Either<u8, &'static [u8]>> {
-    use nom::branch::alt;
-    use nom::bytes::complete::tag;
-    use nom::bytes::complete::take_while_m_n;
-    use nom::character::is_hex_digit;
-    use nom::combinator::map;
-    use nom::error::context;
+fn mcc_payload_item(s: &mut &[u8]) -> PResult<Either<u8, &'static [u8]>> {
+    use winnow::combinator::alt;
+    use winnow::stream::AsChar;
+    use winnow::token::{literal, take_while};
 
-    context(
-        "invalid payload item",
-        alt((
-            map(tag("G"), |_| Either::Right([0xfa, 0x00, 0x00].as_ref())),
-            map(tag("H"), |_| {
-                Either::Right([0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00].as_ref())
-            }),
-            map(tag("I"), |_| {
-                Either::Right([0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00].as_ref())
-            }),
-            map(tag("J"), |_| {
-                Either::Right(
-                    [
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                    ]
-                    .as_ref(),
-                )
-            }),
-            map(tag("K"), |_| {
-                Either::Right(
-                    [
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                        0xfa, 0x00, 0x00,
-                    ]
-                    .as_ref(),
-                )
-            }),
-            map(tag("L"), |_| {
-                Either::Right(
-                    [
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                    ]
-                    .as_ref(),
-                )
-            }),
-            map(tag("M"), |_| {
-                Either::Right(
-                    [
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                    ]
-                    .as_ref(),
-                )
-            }),
-            map(tag("N"), |_| {
-                Either::Right(
-                    [
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                    ]
-                    .as_ref(),
-                )
-            }),
-            map(tag("O"), |_| {
-                Either::Right(
-                    [
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                        0xfa, 0x00, 0x00,
-                    ]
-                    .as_ref(),
-                )
-            }),
-            map(tag("P"), |_| Either::Right([0xfb, 0x80, 0x80].as_ref())),
-            map(tag("Q"), |_| Either::Right([0xfc, 0x80, 0x80].as_ref())),
-            map(tag("R"), |_| Either::Right([0xfd, 0x80, 0x80].as_ref())),
-            map(tag("S"), |_| Either::Right([0x96, 0x69].as_ref())),
-            map(tag("T"), |_| Either::Right([0x61, 0x01].as_ref())),
-            map(tag("U"), |_| Either::Right([0xe1, 0x00, 0x00].as_ref())),
-            map(tag("Z"), |_| Either::Right([0x00].as_ref())),
-            map(take_while_m_n(2, 2, is_hex_digit), |s: &[u8]| {
-                let hex_to_u8 = |v: u8| match v {
-                    v if v.is_ascii_digit() => v - b'0',
-                    v if (b'A'..=b'F').contains(&v) => 10 + v - b'A',
-                    v if (b'a'..=b'f').contains(&v) => 10 + v - b'a',
-                    _ => unreachable!(),
-                };
-                let val = (hex_to_u8(s[0]) << 4) | hex_to_u8(s[1]);
-                Either::Left(val)
-            }),
-        )),
-    )(s)
+    alt((
+        literal("G").map(|_| Either::Right([0xfa, 0x00, 0x00].as_ref())),
+        literal("H").map(|_| Either::Right([0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00].as_ref())),
+        literal("I").map(|_| {
+            Either::Right([0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00].as_ref())
+        }),
+        literal("J").map(|_| {
+            Either::Right(
+                [
+                    0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
+                ]
+                .as_ref(),
+            )
+        }),
+        literal("K").map(|_| {
+            Either::Right(
+                [
+                    0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
+                    0x00, 0x00,
+                ]
+                .as_ref(),
+            )
+        }),
+        literal("L").map(|_| {
+            Either::Right(
+                [
+                    0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
+                    0x00, 0x00, 0xfa, 0x00, 0x00,
+                ]
+                .as_ref(),
+            )
+        }),
+        literal("M").map(|_| {
+            Either::Right(
+                [
+                    0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
+                    0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
+                ]
+                .as_ref(),
+            )
+        }),
+        literal("N").map(|_| {
+            Either::Right(
+                [
+                    0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
+                    0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
+                ]
+                .as_ref(),
+            )
+        }),
+        literal("O").map(|_| {
+            Either::Right(
+                [
+                    0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
+                    0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00,
+                    0x00,
+                ]
+                .as_ref(),
+            )
+        }),
+        literal("P").map(|_| Either::Right([0xfb, 0x80, 0x80].as_ref())),
+        literal("Q").map(|_| Either::Right([0xfc, 0x80, 0x80].as_ref())),
+        literal("R").map(|_| Either::Right([0xfd, 0x80, 0x80].as_ref())),
+        literal("S").map(|_| Either::Right([0x96, 0x69].as_ref())),
+        literal("T").map(|_| Either::Right([0x61, 0x01].as_ref())),
+        literal("U").map(|_| Either::Right([0xe1, 0x00, 0x00].as_ref())),
+        literal("Z").map(|_| Either::Right([0x00].as_ref())),
+        take_while(2..=2, AsChar::is_hex_digit).map(|s: &[u8]| {
+            let hex_to_u8 = |v: u8| match v {
+                v if v.is_ascii_digit() => v - b'0',
+                v if (b'A'..=b'F').contains(&v) => 10 + v - b'A',
+                v if (b'a'..=b'f').contains(&v) => 10 + v - b'a',
+                _ => unreachable!(),
+            };
+            let val = (hex_to_u8(s[0]) << 4) | hex_to_u8(s[1]);
+            Either::Left(val)
+        }),
+    ))
+    .context(StrContext::Label("invalid payload item"))
+    .parse_next(s)
 }
 
 /// Parser for the whole MCC payload with conversion to the underlying byte values.
-fn mcc_payload(s: &[u8]) -> IResult<&[u8], Vec<u8>> {
-    use nom::error::context;
-    use nom::multi::fold_many1;
+fn mcc_payload(s: &mut &[u8]) -> PResult<Vec<u8>> {
+    use winnow::combinator::repeat;
 
-    context(
-        "invalid MCC payload",
-        fold_many1(mcc_payload_item, Vec::new, |mut acc: Vec<_>, item| {
+    repeat(1.., mcc_payload_item)
+        .fold(Vec::new, |mut acc: Vec<_>, item| {
             match item {
                 Either::Left(val) => acc.push(val),
                 Either::Right(vals) => acc.extend_from_slice(vals),
             }
             acc
-        }),
-    )(s)
+        })
+        .context(StrContext::Label("invalid MCC payload"))
+        .parse_next(s)
 }
 
 /// Parser for a MCC caption line in the form `timecode\tpayload`.
-fn caption(parse_payload: bool) -> impl FnMut(&[u8]) -> IResult<&[u8], MccLine> {
-    use nom::bytes::complete::take_while;
-    use nom::character::complete::{char, one_of};
-    use nom::combinator::{map, opt};
-    use nom::error::context;
-    use nom::sequence::tuple;
+fn caption<'a>(
+    parse_payload: bool,
+) -> impl Parser<&'a [u8], MccLine<'a>, winnow::error::ContextError> {
+    use winnow::combinator::opt;
+    use winnow::token::{one_of, take_while};
 
-    fn parse(parse_payload: bool) -> impl FnMut(&[u8]) -> IResult<&[u8], Option<Vec<u8>>> {
-        move |s| {
+    fn parse<'a>(
+        parse_payload: bool,
+    ) -> impl Parser<&'a [u8], Option<Vec<u8>>, winnow::error::ContextError> {
+        move |s: &mut &'a [u8]| {
             if parse_payload {
-                map(mcc_payload, Some)(s)
+                mcc_payload.map(Some).parse_next(s)
             } else {
-                map(take_while(|b| b != b'\n' && b != b'\r'), |_| None)(s)
+                take_while(0.., |b| b != b'\n' && b != b'\r')
+                    .map(|_| None)
+                    .parse_next(s)
             }
         }
     }
 
-    move |s: &[u8]| {
-        context(
-            "invalid MCC caption",
-            map(
-                tuple((
-                    timecode,
-                    opt(tuple((
-                        char('.'),
-                        one_of("01"),
-                        opt(tuple((char(','), digits))),
-                    ))),
-                    char('\t'),
-                    parse(parse_payload),
-                    end_of_line,
-                )),
-                |(tc, _, _, value, _)| MccLine::Caption(tc, value),
-            ),
-        )(s)
+    move |s: &mut &'a [u8]| {
+        (
+            timecode,
+            opt((
+                one_of('.'),
+                one_of(|c| b"01".contains(&c)),
+                opt((one_of(','), digits)),
+            )),
+            one_of('\t'),
+            parse(parse_payload),
+            end_of_line,
+        )
+            .map(|(tc, _, _, value, _)| MccLine::Caption(tc, value))
+            .context(StrContext::Label("invalid MCC caption"))
+            .parse_next(s)
     }
 }
 
@@ -317,60 +284,64 @@ impl MccParser {
 
     pub fn parse_line<'a>(
         &mut self,
-        line: &'a [u8],
+        mut line: &'a [u8],
         parse_payload: bool,
-    ) -> Result<MccLine<'a>, nom::error::Error<&'a [u8]>> {
-        use nom::branch::alt;
+    ) -> Result<MccLine<'a>, winnow::error::ContextError> {
+        use winnow::combinator::alt;
 
         match self.state {
-            State::Header => header(line)
+            State::Header => header(&mut line)
                 .map(|v| {
                     self.state = State::EmptyAfterHeader;
-                    v.1
+                    v
                 })
                 .map_err(|err| match err {
-                    nom::Err::Incomplete(_) => unreachable!(),
-                    nom::Err::Error(e) | nom::Err::Failure(e) => e,
+                    winnow::error::ErrMode::Incomplete(_) => unreachable!(),
+                    winnow::error::ErrMode::Backtrack(e) | winnow::error::ErrMode::Cut(e) => e,
                 }),
-            State::EmptyAfterHeader => empty_line(line)
+            State::EmptyAfterHeader => empty_line(&mut line)
                 .map(|v| {
                     self.state = State::Comments;
-                    v.1
+                    v
                 })
                 .map_err(|err| match err {
-                    nom::Err::Incomplete(_) => unreachable!(),
-                    nom::Err::Error(e) | nom::Err::Failure(e) => e,
+                    winnow::error::ErrMode::Incomplete(_) => unreachable!(),
+                    winnow::error::ErrMode::Backtrack(e) | winnow::error::ErrMode::Cut(e) => e,
                 }),
-            State::Comments => alt((empty_line, comment))(line)
+            State::Comments => alt((empty_line, comment))
+                .parse_next(&mut line)
                 .map(|v| {
-                    if v.1 == MccLine::Empty {
+                    if v == MccLine::Empty {
                         self.state = State::Metadata;
                     }
 
-                    v.1
+                    v
                 })
                 .map_err(|err| match err {
-                    nom::Err::Incomplete(_) => unreachable!(),
-                    nom::Err::Error(e) | nom::Err::Failure(e) => e,
+                    winnow::error::ErrMode::Incomplete(_) => unreachable!(),
+                    winnow::error::ErrMode::Backtrack(e) | winnow::error::ErrMode::Cut(e) => e,
                 }),
-            State::Metadata => alt((empty_line, uuid, time_code_rate, metadata))(line)
+            State::Metadata => alt((empty_line, uuid, time_code_rate, metadata))
+                .parse_next(&mut line)
                 .map(|v| {
-                    if v.1 == MccLine::Empty {
+                    if v == MccLine::Empty {
                         self.state = State::Captions;
                     }
 
-                    v.1
+                    v
                 })
                 .map_err(|err| match err {
-                    nom::Err::Incomplete(_) => unreachable!(),
-                    nom::Err::Error(e) | nom::Err::Failure(e) => e,
+                    winnow::error::ErrMode::Incomplete(_) => unreachable!(),
+                    winnow::error::ErrMode::Backtrack(e) | winnow::error::ErrMode::Cut(e) => e,
                 }),
-            State::Captions => caption(parse_payload)(line)
-                .map(|v| v.1)
-                .map_err(|err| match err {
-                    nom::Err::Incomplete(_) => unreachable!(),
-                    nom::Err::Error(e) | nom::Err::Failure(e) => e,
-                }),
+            State::Captions => {
+                caption(parse_payload)
+                    .parse_next(&mut line)
+                    .map_err(|err| match err {
+                        winnow::error::ErrMode::Incomplete(_) => unreachable!(),
+                        winnow::error::ErrMode::Backtrack(e) | winnow::error::ErrMode::Cut(e) => e,
+                    })
+            }
         }
     }
 }
@@ -381,293 +352,221 @@ mod tests {
 
     #[test]
     fn test_header() {
-        assert_eq!(
-            header(b"File Format=MacCaption_MCC V1.0".as_ref()),
-            Ok((b"".as_ref(), MccLine::Header))
-        );
+        let mut input = b"File Format=MacCaption_MCC V1.0".as_slice();
+        assert_eq!(header(&mut input), Ok(MccLine::Header));
+        assert!(input.is_empty());
 
-        assert_eq!(
-            header(b"File Format=MacCaption_MCC V1.0\n".as_ref()),
-            Ok((b"".as_ref(), MccLine::Header))
-        );
+        let mut input = b"File Format=MacCaption_MCC V1.0\n".as_slice();
+        assert_eq!(header(&mut input), Ok(MccLine::Header));
+        assert!(input.is_empty());
 
-        assert_eq!(
-            header(b"File Format=MacCaption_MCC V1.0\r\n".as_ref()),
-            Ok((b"".as_ref(), MccLine::Header))
-        );
+        let mut input = b"File Format=MacCaption_MCC V1.0\r\n".as_slice();
+        assert_eq!(header(&mut input), Ok(MccLine::Header));
+        assert!(input.is_empty());
 
-        assert_eq!(
-            header(b"File Format=MacCaption_MCC V2.0\r\n".as_ref()),
-            Ok((b"".as_ref(), MccLine::Header))
-        );
+        let mut input = b"File Format=MacCaption_MCC V2.0\r\n".as_slice();
+        assert_eq!(header(&mut input), Ok(MccLine::Header));
+        assert!(input.is_empty());
 
-        assert_eq!(
-            header(b"File Format=MacCaption_MCC V1.1".as_ref()),
-            Err(nom::Err::Error(nom::error::Error::new(
-                b"1.1".as_ref(),
-                nom::error::ErrorKind::Tag
-            ))),
-        );
+        let mut input = b"File Format=MacCaption_MCC V1.1".as_slice();
+        assert!(header(&mut input).is_err());
     }
 
     #[test]
     fn test_empty_line() {
-        assert_eq!(empty_line(b"".as_ref()), Ok((b"".as_ref(), MccLine::Empty)));
+        let mut input = b"".as_slice();
+        assert_eq!(empty_line(&mut input), Ok(MccLine::Empty));
+        assert!(input.is_empty());
 
-        assert_eq!(
-            empty_line(b"\n".as_ref()),
-            Ok((b"".as_ref(), MccLine::Empty))
-        );
+        let mut input = b"\n".as_slice();
+        assert_eq!(empty_line(&mut input), Ok(MccLine::Empty));
+        assert!(input.is_empty());
 
-        assert_eq!(
-            empty_line(b"\r\n".as_ref()),
-            Ok((b"".as_ref(), MccLine::Empty))
-        );
+        let mut input = b"\r\n".as_slice();
+        assert_eq!(empty_line(&mut input), Ok(MccLine::Empty));
+        assert!(input.is_empty());
 
-        assert_eq!(
-            empty_line(b" \r\n".as_ref()),
-            Err(nom::Err::Error(nom::error::Error::new(
-                b" \r\n".as_ref(),
-                nom::error::ErrorKind::Eof
-            ))),
-        );
+        let mut input = b" \r\n".as_slice();
+        assert!(empty_line(&mut input).is_err());
     }
 
     #[test]
     fn test_comment() {
-        assert_eq!(
-            comment(b"// blabla".as_ref()),
-            Ok((b"".as_ref(), MccLine::Comment))
-        );
+        let mut input = b"// blabla".as_slice();
+        assert_eq!(comment(&mut input), Ok(MccLine::Comment));
+        assert!(input.is_empty());
 
-        assert_eq!(
-            comment(b"//\n".as_ref()),
-            Ok((b"".as_ref(), MccLine::Comment))
-        );
+        let mut input = b"//\n".as_slice();
+        assert_eq!(comment(&mut input), Ok(MccLine::Comment));
+        assert!(input.is_empty());
 
-        assert_eq!(
-            comment(b"//".as_ref()),
-            Ok((b"".as_ref(), MccLine::Comment))
-        );
+        let mut input = b"//".as_slice();
+        assert_eq!(comment(&mut input), Ok(MccLine::Comment));
+        assert!(input.is_empty());
 
-        assert_eq!(
-            comment(b" //".as_ref()),
-            Err(nom::Err::Error(nom::error::Error::new(
-                b" //".as_ref(),
-                nom::error::ErrorKind::Tag
-            ))),
-        );
+        let mut input = b" //".as_slice();
+        assert!(comment(&mut input).is_err());
     }
 
     #[test]
     fn test_uuid() {
-        assert_eq!(
-            uuid(b"UUID=1234".as_ref()),
-            Ok((b"".as_ref(), MccLine::Uuid(b"1234".as_ref())))
-        );
+        let mut input = b"UUID=1234".as_slice();
+        assert_eq!(uuid(&mut input), Ok(MccLine::Uuid(b"1234".as_ref())));
+        assert!(input.is_empty());
 
-        assert_eq!(
-            uuid(b"UUID=1234\n".as_ref()),
-            Ok((b"".as_ref(), MccLine::Uuid(b"1234".as_ref())))
-        );
+        let mut input = b"UUID=1234\n".as_slice();
+        assert_eq!(uuid(&mut input), Ok(MccLine::Uuid(b"1234".as_ref())));
+        assert!(input.is_empty());
 
-        assert_eq!(
-            uuid(b"UUID=1234\r\n".as_ref()),
-            Ok((b"".as_ref(), MccLine::Uuid(b"1234".as_ref())))
-        );
+        let mut input = b"UUID=1234\r\n".as_slice();
+        assert_eq!(uuid(&mut input), Ok(MccLine::Uuid(b"1234".as_ref())));
+        assert!(input.is_empty());
 
-        assert_eq!(
-            uuid(b"UUID=".as_ref()),
-            Err(nom::Err::Error(nom::error::Error::new(
-                b"".as_ref(),
-                nom::error::ErrorKind::TakeWhile1
-            ))),
-        );
+        let mut input = b"UUID=".as_slice();
+        assert!(uuid(&mut input).is_err());
 
-        assert_eq!(
-            uuid(b"uUID=1234".as_ref()),
-            Err(nom::Err::Error(nom::error::Error::new(
-                b"uUID=1234".as_ref(),
-                nom::error::ErrorKind::Tag,
-            ))),
-        );
+        let mut input = b"uUID=1234".as_slice();
+        assert!(uuid(&mut input).is_err());
     }
 
     #[test]
     fn test_time_code_rate() {
+        let mut input = b"Time Code Rate=30".as_slice();
         assert_eq!(
-            time_code_rate(b"Time Code Rate=30".as_ref()),
-            Ok((b"".as_ref(), MccLine::TimeCodeRate(30, false)))
+            time_code_rate(&mut input),
+            Ok(MccLine::TimeCodeRate(30, false))
         );
+        assert!(input.is_empty());
 
+        let mut input = b"Time Code Rate=30DF".as_slice();
         assert_eq!(
-            time_code_rate(b"Time Code Rate=30DF".as_ref()),
-            Ok((b"".as_ref(), MccLine::TimeCodeRate(30, true)))
+            time_code_rate(&mut input),
+            Ok(MccLine::TimeCodeRate(30, true))
         );
+        assert!(input.is_empty());
 
+        let mut input = b"Time Code Rate=60".as_slice();
         assert_eq!(
-            time_code_rate(b"Time Code Rate=60".as_ref()),
-            Ok((b"".as_ref(), MccLine::TimeCodeRate(60, false)))
+            time_code_rate(&mut input),
+            Ok(MccLine::TimeCodeRate(60, false))
         );
+        assert!(input.is_empty());
 
-        assert_eq!(
-            time_code_rate(b"Time Code Rate=17F".as_ref()),
-            Err(nom::Err::Error(nom::error::Error::new(
-                b"F".as_ref(),
-                nom::error::ErrorKind::Eof
-            ))),
-        );
+        let mut input = b"Time Code Rate=17F".as_slice();
+        assert!(time_code_rate(&mut input).is_err(),);
 
-        assert_eq!(
-            time_code_rate(b"Time Code Rate=256".as_ref()),
-            Err(nom::Err::Error(nom::error::Error::new(
-                b"256".as_ref(),
-                nom::error::ErrorKind::Verify
-            ))),
-        );
+        let mut input = b"Time Code Rate=256".as_slice();
+        assert!(time_code_rate(&mut input).is_err(),);
     }
 
     #[test]
     fn test_metadata() {
+        let mut input = b"Creation Date=Thursday, June 04, 2015".as_slice();
         assert_eq!(
-            metadata(b"Creation Date=Thursday, June 04, 2015".as_ref()),
-            Ok((
-                b"".as_ref(),
-                MccLine::Metadata(
-                    b"Creation Date".as_ref(),
-                    b"Thursday, June 04, 2015".as_ref()
-                ),
+            metadata(&mut input),
+            Ok(MccLine::Metadata(
+                b"Creation Date".as_ref(),
+                b"Thursday, June 04, 2015".as_ref()
             ))
         );
+        assert!(input.is_empty());
 
+        let mut input = b"Creation Date= ".as_slice();
         assert_eq!(
-            metadata(b"Creation Date= ".as_ref()),
-            Ok((
-                b"".as_ref(),
-                MccLine::Metadata(b"Creation Date".as_ref(), b" ".as_ref()),
-            ))
+            metadata(&mut input),
+            Ok(MccLine::Metadata(b"Creation Date".as_ref(), b" ".as_ref()),)
         );
+        assert!(input.is_empty());
 
-        assert_eq!(
-            metadata(b"Creation Date".as_ref()),
-            Err(nom::Err::Error(nom::error::Error::new(
-                b"".as_ref(),
-                nom::error::ErrorKind::Char
-            ))),
-        );
+        let mut input = b"Creation Date".as_slice();
+        assert!(metadata(&mut input).is_err());
 
-        assert_eq!(
-            metadata(b"Creation Date\n".as_ref()),
-            Err(nom::Err::Error(nom::error::Error::new(
-                b"".as_ref(),
-                nom::error::ErrorKind::Char,
-            ))),
-        );
+        let mut input = b"Creation Date\n".as_slice();
+        assert!(metadata(&mut input).is_err());
 
-        assert_eq!(
-            metadata(b"Creation Date=".as_ref()),
-            Err(nom::Err::Error(nom::error::Error::new(
-                b"".as_ref(),
-                nom::error::ErrorKind::TakeWhile1
-            ))),
-        );
+        let mut input = b"Creation Date=".as_slice();
+        assert!(metadata(&mut input).is_err());
 
-        assert_eq!(
-            metadata(b"Creation Date=\n".as_ref()),
-            Err(nom::Err::Error(nom::error::Error::new(
-                b"\n".as_ref(),
-                nom::error::ErrorKind::TakeWhile1
-            ))),
-        );
+        let mut input = b"Creation Date=\n".as_slice();
+        assert!(metadata(&mut input).is_err());
     }
 
     #[test]
     fn test_caption() {
+        let mut input = b"00:00:00:00\tT52S524F67ZZ72F4QROO7391UC13FFF74ZZAEB4".as_slice();
         assert_eq!(
-            caption(true)(b"00:00:00:00\tT52S524F67ZZ72F4QROO7391UC13FFF74ZZAEB4".as_ref()),
-            Ok((
-                b"".as_ref(),
-                MccLine::Caption(
-                    TimeCode {
-                        hours: 0,
-                        minutes: 0,
-                        seconds: 0,
-                        frames: 0,
-                        drop_frame: false
-                    },
-                    Some(vec![
-                        0x61, 0x01, 0x52, 0x96, 0x69, 0x52, 0x4F, 0x67, 0x00, 0x00, 0x72, 0xF4,
-                        0xFC, 0x80, 0x80, 0xFD, 0x80, 0x80, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
-                        0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
-                        0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
-                        0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
-                        0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
-                        0x73, 0x91, 0xE1, 0x00, 0x00, 0xC1, 0x3F, 0xFF, 0x74, 0x00, 0x00, 0xAE,
-                        0xB4
-                    ])
-                ),
+            caption(true).parse_next(&mut input),
+            Ok(MccLine::Caption(
+                TimeCode {
+                    hours: 0,
+                    minutes: 0,
+                    seconds: 0,
+                    frames: 0,
+                    drop_frame: false
+                },
+                Some(vec![
+                    0x61, 0x01, 0x52, 0x96, 0x69, 0x52, 0x4F, 0x67, 0x00, 0x00, 0x72, 0xF4, 0xFC,
+                    0x80, 0x80, 0xFD, 0x80, 0x80, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00,
+                    0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
+                    0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA,
+                    0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00,
+                    0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0x73, 0x91, 0xE1, 0x00, 0x00, 0xC1,
+                    0x3F, 0xFF, 0x74, 0x00, 0x00, 0xAE, 0xB4
+                ])
             ))
         );
+        assert!(input.is_empty());
 
+        let mut input = b"00:00:00:00.0\tT52S524F67ZZ72F4QROO7391UC13FFF74ZZAEB4".as_slice();
         assert_eq!(
-            caption(true)(b"00:00:00:00.0\tT52S524F67ZZ72F4QROO7391UC13FFF74ZZAEB4".as_ref()),
-            Ok((
-                b"".as_ref(),
-                MccLine::Caption(
-                    TimeCode {
-                        hours: 0,
-                        minutes: 0,
-                        seconds: 0,
-                        frames: 0,
-                        drop_frame: false
-                    },
-                    Some(vec![
-                        0x61, 0x01, 0x52, 0x96, 0x69, 0x52, 0x4F, 0x67, 0x00, 0x00, 0x72, 0xF4,
-                        0xFC, 0x80, 0x80, 0xFD, 0x80, 0x80, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
-                        0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
-                        0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
-                        0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
-                        0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
-                        0x73, 0x91, 0xE1, 0x00, 0x00, 0xC1, 0x3F, 0xFF, 0x74, 0x00, 0x00, 0xAE,
-                        0xB4
-                    ])
-                ),
+            caption(true).parse_next(&mut input),
+            Ok(MccLine::Caption(
+                TimeCode {
+                    hours: 0,
+                    minutes: 0,
+                    seconds: 0,
+                    frames: 0,
+                    drop_frame: false
+                },
+                Some(vec![
+                    0x61, 0x01, 0x52, 0x96, 0x69, 0x52, 0x4F, 0x67, 0x00, 0x00, 0x72, 0xF4, 0xFC,
+                    0x80, 0x80, 0xFD, 0x80, 0x80, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00,
+                    0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
+                    0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA,
+                    0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00,
+                    0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0x73, 0x91, 0xE1, 0x00, 0x00, 0xC1,
+                    0x3F, 0xFF, 0x74, 0x00, 0x00, 0xAE, 0xB4
+                ])
             ))
         );
+        assert!(input.is_empty());
 
+        let mut input = b"00:00:00:00.0,9\tT52S524F67ZZ72F4QROO7391UC13FFF74ZZAEB4".as_slice();
         assert_eq!(
-            caption(true)(b"00:00:00:00.0,9\tT52S524F67ZZ72F4QROO7391UC13FFF74ZZAEB4".as_ref()),
-            Ok((
-                b"".as_ref(),
-                MccLine::Caption(
-                    TimeCode {
-                        hours: 0,
-                        minutes: 0,
-                        seconds: 0,
-                        frames: 0,
-                        drop_frame: false
-                    },
-                    Some(vec![
-                        0x61, 0x01, 0x52, 0x96, 0x69, 0x52, 0x4F, 0x67, 0x00, 0x00, 0x72, 0xF4,
-                        0xFC, 0x80, 0x80, 0xFD, 0x80, 0x80, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
-                        0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
-                        0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
-                        0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
-                        0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
-                        0x73, 0x91, 0xE1, 0x00, 0x00, 0xC1, 0x3F, 0xFF, 0x74, 0x00, 0x00, 0xAE,
-                        0xB4
-                    ])
-                ),
+            caption(true).parse_next(&mut input),
+            Ok(MccLine::Caption(
+                TimeCode {
+                    hours: 0,
+                    minutes: 0,
+                    seconds: 0,
+                    frames: 0,
+                    drop_frame: false
+                },
+                Some(vec![
+                    0x61, 0x01, 0x52, 0x96, 0x69, 0x52, 0x4F, 0x67, 0x00, 0x00, 0x72, 0xF4, 0xFC,
+                    0x80, 0x80, 0xFD, 0x80, 0x80, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00,
+                    0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
+                    0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA,
+                    0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00,
+                    0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0x73, 0x91, 0xE1, 0x00, 0x00, 0xC1,
+                    0x3F, 0xFF, 0x74, 0x00, 0x00, 0xAE, 0xB4
+                ])
             ))
         );
+        assert!(input.is_empty());
 
-        assert_eq!(
-            caption(true)(b"Creation Date=\n".as_ref()),
-            Err(nom::Err::Error(nom::error::Error::new(
-                b"Creation Date=\n".as_ref(),
-                nom::error::ErrorKind::MapRes
-            ))),
-        );
+        let mut input = b"Creation Date=\n".as_slice();
+        assert!(caption(true).parse_next(&mut input).is_err());
     }
 
     #[test]

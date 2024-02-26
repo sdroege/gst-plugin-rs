@@ -6,7 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use nom::IResult;
+use winnow::{error::StrContext, PResult, Parser};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TimeCode {
@@ -18,66 +18,62 @@ pub struct TimeCode {
 }
 
 /// Parser for parsing a run of ASCII, decimal digits and converting them into a `u32`
-pub fn digits(s: &[u8]) -> IResult<&[u8], u32> {
-    use nom::bytes::complete::take_while;
-    use nom::character::is_digit;
-    use nom::combinator::map_res;
+pub fn digits(s: &mut &[u8]) -> PResult<u32> {
+    use winnow::stream::AsChar;
+    use winnow::token::take_while;
 
-    map_res(
-        map_res(take_while(is_digit), std::str::from_utf8),
-        |s: &str| s.parse::<u32>(),
-    )(s)
+    take_while(0.., AsChar::is_dec_digit)
+        .try_map(std::str::from_utf8)
+        .try_map(|s: &str| s.parse::<u32>())
+        .parse_next(s)
 }
 
 /// Parser for a run of decimal digits, that converts them into a `u32` and checks if the result is
 /// in the allowed range.
-pub fn digits_range<R: std::ops::RangeBounds<u32>>(
+pub fn digits_range<'a, R: std::ops::RangeBounds<u32>>(
     range: R,
-) -> impl FnMut(&[u8]) -> IResult<&[u8], u32> {
-    use nom::combinator::verify;
-    use nom::error::context;
-
-    move |s: &[u8]| context("digits out of range", verify(digits, |v| range.contains(v)))(s)
+) -> impl Parser<&'a [u8], u32, winnow::error::ContextError> {
+    move |s: &mut &'a [u8]| {
+        digits
+            .verify(|v| range.contains(v))
+            .context(StrContext::Label("digits out of range"))
+            .parse_next(s)
+    }
 }
 
 /// Parser for a timecode in the form `hh:mm:ss:fs`
-pub fn timecode(s: &[u8]) -> IResult<&[u8], TimeCode> {
-    use nom::character::complete::{char, one_of};
-    use nom::combinator::map;
-    use nom::error::context;
-    use nom::sequence::tuple;
+pub fn timecode(s: &mut &[u8]) -> PResult<TimeCode> {
+    use winnow::token::one_of;
 
-    context(
-        "invalid timecode",
-        map(
-            tuple((
-                digits,
-                char(':'),
-                digits_range(0..60),
-                char(':'),
-                digits_range(0..60),
-                one_of(":.;,"),
-                digits,
-            )),
-            |(hours, _, minutes, _, seconds, sep, frames)| TimeCode {
-                hours,
-                minutes,
-                seconds,
-                frames,
-                drop_frame: sep == ';' || sep == ',',
-            },
-        ),
-    )(s)
+    (
+        digits,
+        one_of(':'),
+        digits_range(0..60),
+        one_of(':'),
+        digits_range(0..60),
+        one_of(|c| b":.;,".contains(&c)),
+        digits,
+    )
+        .map(|(hours, _, minutes, _, seconds, sep, frames)| TimeCode {
+            hours,
+            minutes,
+            seconds,
+            frames,
+            drop_frame: sep == b';' || sep == b',',
+        })
+        .context(StrContext::Label("invalid timecode"))
+        .parse_next(s)
 }
 
 /// Parser that checks for EOF and optionally `\n` or `\r\n` before EOF
-pub fn end_of_line(s: &[u8]) -> IResult<&[u8], ()> {
-    use nom::branch::alt;
-    use nom::bytes::complete::tag;
-    use nom::combinator::{eof, map, opt};
-    use nom::sequence::pair;
+pub fn end_of_line(s: &mut &[u8]) -> PResult<()> {
+    use winnow::combinator::alt;
+    use winnow::combinator::{eof, opt};
+    use winnow::token::literal;
 
-    map(pair(opt(alt((tag("\r\n"), tag("\n")))), eof), |_| ())(s)
+    (opt(alt((literal("\r\n"), literal("\n")))), eof)
+        .map(|_| ())
+        .parse_next(s)
 }
 
 #[cfg(test)]
@@ -86,54 +82,46 @@ mod tests {
 
     #[test]
     fn test_timecode() {
+        let mut input = b"11:12:13;14".as_slice();
         assert_eq!(
-            timecode(b"11:12:13;14".as_ref()),
-            Ok((
-                b"".as_ref(),
-                TimeCode {
-                    hours: 11,
-                    minutes: 12,
-                    seconds: 13,
-                    frames: 14,
-                    drop_frame: true
-                },
-            ))
+            timecode(&mut input),
+            Ok(TimeCode {
+                hours: 11,
+                minutes: 12,
+                seconds: 13,
+                frames: 14,
+                drop_frame: true
+            })
         );
+        assert!(input.is_empty());
 
+        let mut input = b"11:12:13:14".as_slice();
         assert_eq!(
-            timecode(b"11:12:13:14".as_ref()),
-            Ok((
-                b"".as_ref(),
-                TimeCode {
-                    hours: 11,
-                    minutes: 12,
-                    seconds: 13,
-                    frames: 14,
-                    drop_frame: false
-                },
-            ))
+            timecode(&mut input),
+            Ok(TimeCode {
+                hours: 11,
+                minutes: 12,
+                seconds: 13,
+                frames: 14,
+                drop_frame: false
+            })
         );
+        assert!(input.is_empty());
 
+        let mut input = b"11:12:13:14abcd".as_slice();
         assert_eq!(
-            timecode(b"11:12:13:14abcd".as_ref()),
-            Ok((
-                b"abcd".as_ref(),
-                TimeCode {
-                    hours: 11,
-                    minutes: 12,
-                    seconds: 13,
-                    frames: 14,
-                    drop_frame: false
-                },
-            ))
+            timecode(&mut input),
+            Ok(TimeCode {
+                hours: 11,
+                minutes: 12,
+                seconds: 13,
+                frames: 14,
+                drop_frame: false
+            })
         );
+        assert_eq!(input, b"abcd");
 
-        assert_eq!(
-            timecode(b"abcd11:12:13:14".as_ref()),
-            Err(nom::Err::Error(nom::error::Error::new(
-                b"abcd11:12:13:14".as_ref(),
-                nom::error::ErrorKind::MapRes
-            ))),
-        );
+        let mut input = b"abcd11:12:13:14".as_slice();
+        assert!(timecode(&mut input).is_err());
     }
 }

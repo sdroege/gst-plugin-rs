@@ -2255,7 +2255,6 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-check",
  "gstreamer-video",
- "nom",
  "once_cell",
  "pango",
  "pangocairo",
@@ -2264,6 +2263,7 @@ dependencies = [
  "serde",
  "serde_json",
  "uuid",
+ "winnow 0.6.2",
 ]
 
 [[package]]

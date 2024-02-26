@@ -10,7 +10,6 @@ repository.workspace = true
 
 [dependencies]
 anyhow = "1"
-nom = "7.0"
 either = "1"
 uuid = { version = "1.0", features = ["v4"] }
 chrono = "0.4.23"
@@ -26,6 +25,7 @@ once_cell.workspace = true
 gst = { workspace = true, features = ["v1_16"]}
 gst-base = { workspace = true, features = ["v1_16"]}
 gst-video = { workspace = true, features = ["v1_16"]}
+winnow = "0.6"
 
 [dev-dependencies]
 pretty_assertions = "1"
