@@ -1249,11 +1249,6 @@ impl ObjectImpl for WhipServerSrc {
 
         let _ = ws.set_signaller(WhipServerSignaller::default().upcast());
 
-        let obj = &*self.obj();
-
-        obj.set_suppressed_flags(gst::ElementFlags::SINK | gst::ElementFlags::SOURCE);
-        obj.set_element_flags(gst::ElementFlags::SOURCE);
-
         let settings = ws.settings.lock().unwrap();
         element
             .bind_property("stun-server", &settings.signaller, "stun-server")
