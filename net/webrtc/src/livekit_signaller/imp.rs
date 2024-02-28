@@ -516,6 +516,17 @@ impl Signaller {
             }
         }
     }
+
+    async fn close_signal_client(signal_client: &signal_client::SignalClient) {
+        signal_client
+            .send(proto::signal_request::Message::Leave(proto::LeaveRequest {
+                can_reconnect: false,
+                reason: proto::DisconnectReason::ClientInitiated as i32,
+                ..Default::default()
+            }))
+            .await;
+        signal_client.close().await;
+    }
 }
 
 impl SignallableImpl for Signaller {
@@ -745,7 +756,7 @@ impl SignallableImpl for Signaller {
 
         if let Some(connection) = self.connection.lock().unwrap().take() {
             block_on(connection.signal_task).unwrap();
-            block_on(connection.signal_client.close());
+            block_on(Self::close_signal_client(&connection.signal_client));
         }
     }
 
