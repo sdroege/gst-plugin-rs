@@ -96,8 +96,6 @@ struct RoomRequestMsg {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 struct PublishBody {
     request: String,
-    audio: bool,
-    video: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -651,8 +649,6 @@ impl Signaller {
             apisecret,
             body: PublishBody {
                 request: "publish".to_string(),
-                audio: true,
-                video: true,
             },
             jsep: Jsep {
                 sdp: sdp_data,
