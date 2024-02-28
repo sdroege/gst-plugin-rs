@@ -51,6 +51,15 @@ enum JanusId {
     Num(u64),
 }
 
+impl std::fmt::Display for JanusId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            JanusId::Str(s) => write!(f, "{s}"),
+            JanusId::Num(n) => write!(f, "{n}"),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 struct KeepAliveMsg {
     janus: String,
@@ -155,6 +164,7 @@ struct InnerError {
 #[derive(Serialize, Deserialize, Debug)]
 struct RoomJoined {
     room: JanusId,
+    id: JanusId,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -238,6 +248,9 @@ struct Settings {
     display_name: Option<String>,
     secret_key: Option<String>,
     string_ids: bool,
+
+    // read-only
+    joined_id: Option<String>,
 }
 
 impl Default for Settings {
@@ -249,6 +262,7 @@ impl Default for Settings {
             display_name: None,
             secret_key: None,
             string_ids: false,
+            joined_id: None,
         }
     }
 }
@@ -263,6 +277,8 @@ pub struct Signaller {
     #[property(name="display-name", get, set, type = String, member = display_name, blurb = "The name of the publisher in the Janus Video Room")]
     #[property(name="secret-key", get, set, type = String, member = secret_key, blurb = "The secret API key to communicate with Janus server")]
     #[property(name="string-ids", get, set, type = bool, member = string_ids, blurb = "Force passing room-id and feed-id as string even if they can be parsed into an integer")]
+    // read-only
+    #[property(name="joined-id", get, type = String, member = joined_id, blurb = "Unique ID of the participant")]
     settings: Mutex<Settings>,
 }
 
@@ -427,6 +443,12 @@ impl Signaller {
                 if let Some(PluginData::VideoRoom { data: plugindata }) = event.plugindata {
                     match plugindata {
                         VideoRoomData::Joined(joined) => {
+                            {
+                                let mut settings = self.settings.lock().unwrap();
+                                settings.joined_id = Some(joined.id.to_string());
+                            }
+                            self.obj().notify("joined-id");
+
                             gst::trace!(CAT, imp: self, "Joined room {:?} successfully", joined.room);
                             self.session_requested();
                         }
