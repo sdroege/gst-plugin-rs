@@ -152,7 +152,7 @@ struct InnerError {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct RoomJoined {
-    room: Option<RoomId>,
+    room: RoomId,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -425,10 +425,8 @@ impl Signaller {
                 if let Some(PluginData::VideoRoom { data: plugindata }) = event.plugindata {
                     match plugindata {
                         VideoRoomData::Joined(joined) => {
-                            if let Some(room) = joined.room {
-                                gst::trace!(CAT, imp: self, "Joined room {room:?} successfully");
-                                self.session_requested();
-                            }
+                            gst::trace!(CAT, imp: self, "Joined room {:?} successfully", joined.room);
+                            self.session_requested();
                         }
                         VideoRoomData::Event(room_event) => {
                             if room_event.error_code.is_some() && room_event.error.is_some() {
