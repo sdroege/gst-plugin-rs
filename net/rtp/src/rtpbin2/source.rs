@@ -734,7 +734,7 @@ impl RemoteSendSource {
             };
             self.transit = Some(transit);
             trace!("jitter {} diff {diff}", self.jitter);
-            self.jitter += diff.saturating_sub((self.jitter + 8) >> 4);
+            self.jitter += diff.saturating_sub((self.jitter.saturating_add(8)) >> 4);
         }
         self.source.payload_type = Some(payload_type);
 

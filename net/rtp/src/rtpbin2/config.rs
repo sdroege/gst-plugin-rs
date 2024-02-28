@@ -6,22 +6,22 @@ use gst::subclass::prelude::*;
 use once_cell::sync::Lazy;
 use std::sync::{Mutex, Weak};
 
-use crate::rtpbin2::imp::BinSessionInner;
+use crate::rtpbin2::internal::SharedSessionInner;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "rtpbin2-config",
+        "rtp2-config",
         gst::DebugColorFlags::empty(),
-        Some("RtpBin2 config"),
+        Some("Rtp2 config"),
     )
 });
 
 glib::wrapper! {
-    pub struct RtpBin2Session(ObjectSubclass<imp::RtpBin2Session>);
+    pub struct Rtp2Session(ObjectSubclass<imp::Rtp2Session>);
 }
 
-impl RtpBin2Session {
-    pub(crate) fn new(weak_session: Weak<Mutex<BinSessionInner>>) -> Self {
+impl Rtp2Session {
+    pub(crate) fn new(weak_session: Weak<Mutex<SharedSessionInner>>) -> Self {
         let ret = glib::Object::new::<Self>();
         let imp = ret.imp();
         imp.set_session(weak_session);
@@ -36,21 +36,21 @@ mod imp {
 
     #[derive(Debug, Default)]
     struct State {
-        pub(super) weak_session: Option<Weak<Mutex<BinSessionInner>>>,
+        pub(super) weak_session: Option<Weak<Mutex<SharedSessionInner>>>,
     }
 
     #[derive(Debug, Default)]
-    pub struct RtpBin2Session {
+    pub struct Rtp2Session {
         state: Mutex<State>,
     }
 
-    impl RtpBin2Session {
-        pub(super) fn set_session(&self, weak_session: Weak<Mutex<BinSessionInner>>) {
+    impl Rtp2Session {
+        pub(super) fn set_session(&self, weak_session: Weak<Mutex<SharedSessionInner>>) {
             let mut state = self.state.lock().unwrap();
             state.weak_session = Some(weak_session);
         }
 
-        fn session(&self) -> Option<Arc<Mutex<BinSessionInner>>> {
+        fn session(&self) -> Option<Arc<Mutex<SharedSessionInner>>> {
             self.state
                 .lock()
                 .unwrap()
@@ -84,7 +84,7 @@ mod imp {
         }
 
         pub fn pt_map(&self) -> gst::Structure {
-            let mut ret = gst::Structure::builder("application/x-rtpbin2-pt-map");
+            let mut ret = gst::Structure::builder("application/x-rtp2-pt-map");
             let Some(session) = self.session() else {
                 return ret.build();
             };
@@ -105,13 +105,13 @@ mod imp {
     }
 
     #[glib::object_subclass]
-    impl ObjectSubclass for RtpBin2Session {
-        const NAME: &'static str = "GstRtpBin2Session";
-        type Type = super::RtpBin2Session;
+    impl ObjectSubclass for Rtp2Session {
+        const NAME: &'static str = "GstRtp2Session";
+        type Type = super::Rtp2Session;
         type ParentType = glib::Object;
     }
 
-    impl ObjectImpl for RtpBin2Session {
+    impl ObjectImpl for Rtp2Session {
         fn properties() -> &'static [glib::ParamSpec] {
             static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
                 vec![glib::ParamSpecBoxed::builder::<gst::Structure>("pt-map")
@@ -161,40 +161,57 @@ mod imp {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{atomic::AtomicBool, Arc};
+    use std::sync::{
+        atomic::{AtomicBool, AtomicUsize},
+        Arc,
+    };
 
     use crate::{rtpbin2::session::tests::generate_rtp_packet, test_init};
 
     use super::*;
 
+    static ELEMENT_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    fn next_element_counter() -> usize {
+        ELEMENT_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+    }
+
     #[test]
     fn pt_map_get_empty() {
         test_init();
-        let rtpbin2 = gst::ElementFactory::make("rtpbin2").build().unwrap();
-        let _pad = rtpbin2.request_pad_simple("rtp_send_sink_0").unwrap();
+        let id = next_element_counter();
+        let rtpbin2 = gst::ElementFactory::make("rtpsend")
+            .property("rtp-id", id.to_string())
+            .build()
+            .unwrap();
+        let _pad = rtpbin2.request_pad_simple("rtp_sink_0").unwrap();
         let session = rtpbin2.emit_by_name::<gst::glib::Object>("get-session", &[&0u32]);
         let pt_map = session.property::<gst::Structure>("pt-map");
-        assert!(pt_map.has_name("application/x-rtpbin2-pt-map"));
+        assert!(pt_map.has_name("application/x-rtp2-pt-map"));
         assert_eq!(pt_map.fields().len(), 0);
     }
 
     #[test]
     fn pt_map_set() {
         test_init();
-        let rtpbin2 = gst::ElementFactory::make("rtpbin2").build().unwrap();
-        let _pad = rtpbin2.request_pad_simple("rtp_send_sink_0").unwrap();
+        let id = next_element_counter();
+        let rtpbin2 = gst::ElementFactory::make("rtpsend")
+            .property("rtp-id", id.to_string())
+            .build()
+            .unwrap();
+        let _pad = rtpbin2.request_pad_simple("rtp_sink_0").unwrap();
         let session = rtpbin2.emit_by_name::<gst::glib::Object>("get-session", &[&0u32]);
         let pt = 96i32;
         let pt_caps = gst::Caps::builder("application/x-rtp")
             .field("payload", pt)
             .field("clock-rate", 90000i32)
             .build();
-        let pt_map = gst::Structure::builder("application/x-rtpbin2-pt-map")
+        let pt_map = gst::Structure::builder("application/x-rtp2-pt-map")
             .field(pt.to_string(), pt_caps.clone())
             .build();
         session.set_property("pt-map", pt_map);
         let prop = session.property::<gst::Structure>("pt-map");
-        assert!(prop.has_name("application/x-rtpbin2-pt-map"));
+        assert!(prop.has_name("application/x-rtp2-pt-map"));
         assert_eq!(prop.fields().len(), 1);
         let caps = prop.get::<gst::Caps>(pt.to_string()).unwrap();
         assert_eq!(pt_caps, caps);
@@ -203,12 +220,16 @@ mod tests {
     #[test]
     fn pt_map_set_none() {
         test_init();
-        let rtpbin2 = gst::ElementFactory::make("rtpbin2").build().unwrap();
-        let _pad = rtpbin2.request_pad_simple("rtp_send_sink_0").unwrap();
+        let id = next_element_counter();
+        let rtpbin2 = gst::ElementFactory::make("rtpsend")
+            .property("rtp-id", id.to_string())
+            .build()
+            .unwrap();
+        let _pad = rtpbin2.request_pad_simple("rtp_sink_0").unwrap();
         let session = rtpbin2.emit_by_name::<gst::glib::Object>("get-session", &[&0u32]);
         session.set_property("pt-map", None::<gst::Structure>);
         let prop = session.property::<gst::Structure>("pt-map");
-        assert!(prop.has_name("application/x-rtpbin2-pt-map"));
+        assert!(prop.has_name("application/x-rtp2-pt-map"));
     }
 
     #[test]
@@ -216,12 +237,13 @@ mod tests {
         test_init();
         let ssrc = 0x12345678;
         let new_ssrc_hit = Arc::new(AtomicBool::new(false));
-        let rtpbin2 = gst::ElementFactory::make("rtpbin2").build().unwrap();
-        let mut h = gst_check::Harness::with_element(
-            &rtpbin2,
-            Some("rtp_send_sink_0"),
-            Some("rtp_send_src_0"),
-        );
+        let id = next_element_counter();
+        let rtpbin2 = gst::ElementFactory::make("rtpsend")
+            .property("rtp-id", id.to_string())
+            .build()
+            .unwrap();
+        let mut h =
+            gst_check::Harness::with_element(&rtpbin2, Some("rtp_sink_0"), Some("rtp_src_0"));
         let session = h
             .element()
             .unwrap()
@@ -254,13 +276,14 @@ mod tests {
         test_init();
         let ssrc = 0x12345678;
         let (bye_ssrc_sender, bye_ssrc_receiver) = std::sync::mpsc::sync_channel(16);
-        let rtpbin2 = gst::ElementFactory::make("rtpbin2").build().unwrap();
-        let mut h = gst_check::Harness::with_element(
-            &rtpbin2,
-            Some("rtp_send_sink_0"),
-            Some("rtp_send_src_0"),
-        );
-        let mut h_rtcp = gst_check::Harness::with_element(&rtpbin2, None, Some("rtcp_send_src_0"));
+        let id = next_element_counter();
+        let rtpbin2 = gst::ElementFactory::make("rtpsend")
+            .property("rtp-id", id.to_string())
+            .build()
+            .unwrap();
+        let mut h =
+            gst_check::Harness::with_element(&rtpbin2, Some("rtp_sink_0"), Some("rtp_src_0"));
+        let mut h_rtcp = gst_check::Harness::with_element(&rtpbin2, None, Some("rtcp_src_0"));
         let session = h
             .element()
             .unwrap()

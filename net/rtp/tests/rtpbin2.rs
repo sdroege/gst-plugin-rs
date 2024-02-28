@@ -7,11 +7,17 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::sync::{Arc, Mutex};
+use std::sync::{atomic::AtomicUsize, Arc, Mutex};
 
 use gst::{prelude::*, Caps};
 use gst_check::Harness;
 use rtp_types::*;
+
+static ELEMENT_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+fn next_element_counter() -> usize {
+    ELEMENT_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+}
 
 fn init() {
     use std::sync::Once;
@@ -34,7 +40,7 @@ fn generate_rtp_buffer(seqno: u16, rtpts: u32, payload_len: usize) -> gst::Buffe
         .payload_type(TEST_PT)
         .sequence_number(seqno)
         .timestamp(rtpts)
-        .payload(&payload);
+        .payload(payload.as_slice());
     let size = packet.calculate_size().unwrap();
     let mut data = vec![0; size];
     packet.write_into(&mut data).unwrap();
@@ -44,8 +50,13 @@ fn generate_rtp_buffer(seqno: u16, rtpts: u32, payload_len: usize) -> gst::Buffe
 #[test]
 fn test_send() {
     init();
+    let id = next_element_counter();
 
-    let mut h = Harness::with_padnames("rtpbin2", Some("rtp_send_sink_0"), Some("rtp_send_src_0"));
+    let elem = gst::ElementFactory::make("rtpsend")
+        .property("rtp-id", id.to_string())
+        .build()
+        .unwrap();
+    let mut h = Harness::with_element(&elem, Some("rtp_sink_0"), Some("rtp_src_0"));
     h.play();
 
     let caps = Caps::builder("application/x-rtp")
@@ -89,10 +100,15 @@ fn test_send() {
 #[test]
 fn test_receive() {
     init();
+    let id = next_element_counter();
 
-    let h = Arc::new(Mutex::new(Harness::with_padnames(
-        "rtpbin2",
-        Some("rtp_recv_sink_0"),
+    let elem = gst::ElementFactory::make("rtprecv")
+        .property("rtp-id", id.to_string())
+        .build()
+        .unwrap();
+    let h = Arc::new(Mutex::new(Harness::with_element(
+        &elem,
+        Some("rtp_sink_0"),
         None,
     )));
     let weak_h = Arc::downgrade(&h);
@@ -124,7 +140,7 @@ fn test_receive() {
     let push_pad = inner
         .element()
         .unwrap()
-        .static_pad("rtp_recv_sink_0")
+        .static_pad("rtp_sink_0")
         .unwrap()
         .peer()
         .unwrap();
@@ -181,10 +197,15 @@ fn test_receive() {
 #[test]
 fn test_receive_flush() {
     init();
+    let id = next_element_counter();
 
-    let h = Arc::new(Mutex::new(Harness::with_padnames(
-        "rtpbin2",
-        Some("rtp_recv_sink_0"),
+    let elem = gst::ElementFactory::make("rtprecv")
+        .property("rtp-id", id.to_string())
+        .build()
+        .unwrap();
+    let h = Arc::new(Mutex::new(Harness::with_element(
+        &elem,
+        Some("rtp_sink_0"),
         None,
     )));
     let weak_h = Arc::downgrade(&h);
@@ -216,7 +237,7 @@ fn test_receive_flush() {
     let push_pad = inner
         .element()
         .unwrap()
-        .static_pad("rtp_recv_sink_0")
+        .static_pad("rtp_sink_0")
         .unwrap()
         .peer()
         .unwrap();

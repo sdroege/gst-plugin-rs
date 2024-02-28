@@ -1614,7 +1614,7 @@ pub(crate) mod tests {
 
     pub(crate) fn init_logs() {
         let _ = gst::init();
-        use crate::rtpbin2::imp::GstRustLogger;
+        use crate::rtpbin2::internal::GstRustLogger;
         GstRustLogger::install();
     }
 
@@ -1680,8 +1680,8 @@ pub(crate) mod tests {
             .ssrc(ssrc)
             .sequence_number(seq_no)
             .timestamp(rtp_ts)
-            .payload(&payload)
-            .write_into(&mut rtp_data)
+            .payload(payload.as_slice())
+            .write_into(rtp_data.as_mut_slice())
             .unwrap();
         rtp_data[..len].to_vec()
     }

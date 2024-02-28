@@ -7191,141 +7191,6 @@
                 },
                 "rank": "marginal"
             },
-            "rtpbin2": {
-                "author": "Matthew Waters <matthew@centricular.com>",
-                "description": "RTP sessions management",
-                "hierarchy": [
-                    "GstRtpBin2",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Network/RTP/Filter",
-                "pad-templates": {
-                    "rtcp_recv_sink_%%u": {
-                        "caps": "application/x-rtcp:\n",
-                        "direction": "sink",
-                        "presence": "request"
-                    },
-                    "rtcp_send_src_%%u": {
-                        "caps": "application/x-rtcp:\n",
-                        "direction": "src",
-                        "presence": "request"
-                    },
-                    "rtp_recv_sink_%%u": {
-                        "caps": "application/x-rtp:\n",
-                        "direction": "sink",
-                        "presence": "request"
-                    },
-                    "rtp_recv_src_%%u_%%u_%%u": {
-                        "caps": "application/x-rtp:\n",
-                        "direction": "src",
-                        "presence": "sometimes"
-                    },
-                    "rtp_send_sink_%%u": {
-                        "caps": "application/x-rtp:\n",
-                        "direction": "sink",
-                        "presence": "request"
-                    },
-                    "rtp_send_src_%%u": {
-                        "caps": "application/x-rtp:\n",
-                        "direction": "src",
-                        "presence": "sometimes"
-                    }
-                },
-                "properties": {
-                    "latency": {
-                        "blurb": "Amount of ms to buffer",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "200",
-                        "max": "-1",
-                        "min": "0",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "guint",
-                        "writable": true
-                    },
-                    "min-rtcp-interval": {
-                        "blurb": "Minimum time (in ms) between RTCP reports",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "5000",
-                        "max": "-1",
-                        "min": "0",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "guint",
-                        "writable": true
-                    },
-                    "reduced-size-rtcp": {
-                        "blurb": "Use reduced size RTCP. Only has an effect if rtp-profile=avpf",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "false",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "gboolean",
-                        "writable": true
-                    },
-                    "rtp-profile": {
-                        "blurb": "RTP Profile to use",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "avp (0)",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "GstRtpBin2Profile",
-                        "writable": true
-                    },
-                    "stats": {
-                        "blurb": "Statistics about the session",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "mutable": "null",
-                        "readable": true,
-                        "type": "guint",
-                        "writable": false
-                    },
-                    "timestamping-mode": {
-                        "blurb": "Govern how to pick presentation timestamps for packets",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "skew (2)",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "GstRtpBin2TimestampingMode",
-                        "writable": true
-                    }
-                },
-                "rank": "none",
-                "signals": {
-                    "get-session": {
-                        "action": true,
-                        "args": [
-                            {
-                                "name": "arg0",
-                                "type": "guint"
-                            }
-                        ],
-                        "return-type": "GstRtpBin2Session",
-                        "when": "last"
-                    }
-                }
-            },
             "rtpgccbwe": {
                 "author": "Thibault Saunier <tsaunier@igalia.com>",
                 "description": "Estimates current network bandwidth using the Google Congestion Control algorithm notifying about it through the 'bitrate' property",
@@ -7887,6 +7752,206 @@
                     }
                 },
                 "rank": "marginal"
+            },
+            "rtprecv": {
+                "author": "Matthew Waters <matthew@centricular.com>",
+                "description": "RTP sessions management (receiver)",
+                "hierarchy": [
+                    "GstRtpRecv",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Network/RTP/Filter",
+                "pad-templates": {
+                    "rtcp_sink_%%u": {
+                        "caps": "application/x-rtcp:\n",
+                        "direction": "sink",
+                        "presence": "request"
+                    },
+                    "rtp_sink_%%u": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "sink",
+                        "presence": "request"
+                    },
+                    "rtp_src_%%u_%%u_%%u": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    }
+                },
+                "properties": {
+                    "latency": {
+                        "blurb": "Amount of ms to buffer",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "200",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "rtp-id": {
+                        "blurb": "A connection ID shared with a rtpsend element for implementing both sending and receiving using the same RTP context",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "rtp-id",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "stats": {
+                        "blurb": "Statistics about the session",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": false
+                    },
+                    "timestamping-mode": {
+                        "blurb": "Govern how to pick presentation timestamps for packets",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "skew (2)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstRtpBin2TimestampingMode",
+                        "writable": true
+                    }
+                },
+                "rank": "none",
+                "signals": {
+                    "get-session": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "guint"
+                            }
+                        ],
+                        "return-type": "GstRtp2Session",
+                        "when": "last"
+                    }
+                }
+            },
+            "rtpsend": {
+                "author": "Matthew Waters <matthew@centricular.com>",
+                "description": "RTP session management (sender)",
+                "hierarchy": [
+                    "GstRtpSend",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Network/RTP/Filter",
+                "pad-templates": {
+                    "rtcp_src_%%u": {
+                        "caps": "application/x-rtcp:\n",
+                        "direction": "src",
+                        "presence": "request"
+                    },
+                    "rtp_sink_%%u": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "sink",
+                        "presence": "request"
+                    },
+                    "rtp_src_%%u": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    }
+                },
+                "properties": {
+                    "min-rtcp-interval": {
+                        "blurb": "Minimum time (in ms) between RTCP reports",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "5000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "reduced-size-rtcp": {
+                        "blurb": "Use reduced size RTCP. Only has an effect if rtp-profile=avpf",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "rtp-id": {
+                        "blurb": "A connection ID shared with a rtprecv element for implementing both sending and receiving using the same RTP context",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "rtp-id",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "rtp-profile": {
+                        "blurb": "RTP Profile to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "avp (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstRtpSendProfile",
+                        "writable": true
+                    },
+                    "stats": {
+                        "blurb": "Statistics about the session",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": false
+                    }
+                },
+                "rank": "none",
+                "signals": {
+                    "get-session": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "guint"
+                            }
+                        ],
+                        "return-type": "GstRtp2Session",
+                        "when": "last"
+                    }
+                }
             },
             "rtpvp8depay2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",

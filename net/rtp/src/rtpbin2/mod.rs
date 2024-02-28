@@ -4,15 +4,20 @@ use gst::glib;
 use gst::prelude::*;
 use once_cell::sync::Lazy;
 mod config;
-mod imp;
+mod internal;
 mod jitterbuffer;
+mod rtprecv;
+mod rtpsend;
 mod session;
 mod source;
 mod sync;
 mod time;
 
 glib::wrapper! {
-    pub struct RtpBin2(ObjectSubclass<imp::RtpBin2>) @extends gst::Element, gst::Object;
+    pub struct RtpSend(ObjectSubclass<rtpsend::RtpSend>) @extends gst::Element, gst::Object;
+}
+glib::wrapper! {
+    pub struct RtpRecv(ObjectSubclass<rtprecv::RtpRecv>) @extends gst::Element, gst::Object;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
@@ -22,12 +27,20 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
             .mark_as_plugin_api(gst::PluginAPIFlags::empty());
         crate::rtpbin2::config::Rtp2Session::static_type()
             .mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        crate::rtpbin2::rtpsend::Profile::static_type()
+            .mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }
     gst::Element::register(
         Some(plugin),
-        "rtpbin2",
+        "rtpsend",
         gst::Rank::NONE,
-        RtpBin2::static_type(),
+        RtpSend::static_type(),
+    )?;
+    gst::Element::register(
+        Some(plugin),
+        "rtprecv",
+        gst::Rank::NONE,
+        RtpRecv::static_type(),
     )
 }
 
