@@ -9,7 +9,7 @@ use futures::channel::mpsc;
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 use gst::glib;
-use gst::glib::Properties;
+use gst::glib::{subclass::Signal, Properties};
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use http::Uri;
@@ -42,7 +42,7 @@ fn transaction_id() -> String {
 #[serde(untagged)]
 /// Ids are either u64 (default) or string in Janus, depending of the
 /// `string_ids` configuration in the videoroom plugin config file.
-enum JanusId {
+pub(crate) enum JanusId {
     Str(String),
     Num(u64),
 }
@@ -180,12 +180,20 @@ struct RoomEvent {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(tag = "videoroom")]
+struct RoomTalking {
+    room: JanusId,
+    id: JanusId,
+    #[serde(rename = "audio-level-dBov-avg")]
+    audio_level: f32,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "videoroom", rename_all = "kebab-case")]
 enum VideoRoomData {
-    #[serde(rename = "joined")]
     Joined(RoomJoined),
-    #[serde(rename = "event")]
     Event(RoomEvent),
+    Talking(RoomTalking),
+    StoppedTalking(RoomTalking),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -476,6 +484,12 @@ impl Signaller {
                                 }
                             }
                         }
+                        VideoRoomData::Talking(talking) => {
+                            self.emit_talking(true, talking.id, talking.audio_level);
+                        }
+                        VideoRoomData::StoppedTalking(talking) => {
+                            self.emit_talking(false, talking.id, talking.audio_level);
+                        }
                     }
                 }
             }
@@ -721,6 +735,11 @@ impl Signaller {
             }
         }
     }
+
+    fn emit_talking(&self, talking: bool, id: JanusId, audio_level: f32) {
+        let obj = self.obj();
+        (obj.class().as_ref().emit_talking)(&obj, talking, id, audio_level)
+    }
 }
 
 impl SignallableImpl for Signaller {
@@ -825,9 +844,33 @@ pub mod signaller_u64 {
     }
 
     #[glib::derived_properties]
-    impl ObjectImpl for SignallerU64 {}
+    impl ObjectImpl for SignallerU64 {
+        fn signals() -> &'static [Signal] {
+            static SIGNALS: Lazy<Vec<Signal>> = Lazy::new(|| {
+                vec![
+                    /**
+                     * GstJanusVRWebRTCSignallerU64::talking:
+                     * @self: A #GstJanusVRWebRTCSignallerStr
+                     * @talking: if the publisher is talking, or not
+                     * @id: unique numeric ID of the publisher
+                     * @audio-level: average value of audio level, 127=muted, 0='too loud'
+                     */
+                    Signal::builder("talking")
+                        .param_types([bool::static_type(), u64::static_type(), f32::static_type()])
+                        .build(),
+                ]
+            });
 
-    impl super::super::JanusVRSignallerImpl for SignallerU64 {}
+            SIGNALS.as_ref()
+        }
+    }
+
+    impl super::super::JanusVRSignallerImpl for SignallerU64 {
+        fn emit_talking(&self, talking: bool, id: super::JanusId, audio_level: f32) {
+            self.obj()
+                .emit_by_name::<()>("talking", &[&talking, &id.as_num(), &audio_level]);
+        }
+    }
 
     impl SignallerU64 {
         fn get_room_id(&self) -> u64 {
@@ -892,9 +935,33 @@ pub mod signaller_str {
     }
 
     #[glib::derived_properties]
-    impl ObjectImpl for SignallerStr {}
+    impl ObjectImpl for SignallerStr {
+        fn signals() -> &'static [Signal] {
+            static SIGNALS: Lazy<Vec<Signal>> = Lazy::new(|| {
+                vec![
+                    /**
+                     * GstJanusVRWebRTCSignallerStr::talking:
+                     * @self: A #GstJanusVRWebRTCSignallerStr
+                     * @talking: if the publisher is talking, or not
+                     * @id: unique string ID of the publisher
+                     * @audio-level: average value of audio level, 127=muted, 0='too loud'
+                     */
+                    Signal::builder("talking")
+                        .param_types([bool::static_type(), str::static_type(), f32::static_type()])
+                        .build(),
+                ]
+            });
 
-    impl super::super::JanusVRSignallerImpl for SignallerStr {}
+            SIGNALS.as_ref()
+        }
+    }
+
+    impl super::super::JanusVRSignallerImpl for SignallerStr {
+        fn emit_talking(&self, talking: bool, id: super::JanusId, audio_level: f32) {
+            self.obj()
+                .emit_by_name::<()>("talking", &[&talking, &id.as_string(), &audio_level]);
+        }
+    }
 
     impl SignallerStr {
         fn get_room_id(&self) -> String {

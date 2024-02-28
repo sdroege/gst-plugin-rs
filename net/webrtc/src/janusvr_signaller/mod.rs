@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::signaller::Signallable;
-use gst::{glib, glib::subclass::prelude::*};
+use gst::{glib, glib::prelude::*, glib::subclass::prelude::*};
 
 mod imp;
 
@@ -10,11 +10,16 @@ glib::wrapper! {
     pub struct JanusVRSignaller(ObjectSubclass<imp::Signaller>) @implements Signallable;
 }
 
-trait JanusVRSignallerImpl: ObjectImpl {}
+trait JanusVRSignallerImpl: ObjectImpl {
+    fn emit_talking(&self, talking: bool, id: imp::JanusId, audio_level: f32);
+}
 
 #[repr(C)]
 pub struct JanusVRSignallerClass {
     parent: glib::object::ObjectClass,
+
+    // virtual methods
+    emit_talking: fn(&JanusVRSignaller, talking: bool, id: imp::JanusId, audio_level: f32),
 }
 
 unsafe impl ClassStruct for JanusVRSignallerClass {
@@ -32,6 +37,13 @@ impl std::ops::Deref for JanusVRSignallerClass {
 unsafe impl<T: JanusVRSignallerImpl> IsSubclassable<T> for JanusVRSignaller {
     fn class_init(class: &mut glib::Class<Self>) {
         Self::parent_class_init::<T>(class);
+
+        let class = class.as_mut();
+
+        class.emit_talking = |obj, talking, id, audio_level| unsafe {
+            let imp = obj.unsafe_cast_ref::<T::Type>().imp();
+            imp.emit_talking(talking, id, audio_level)
+        };
     }
 }
 
