@@ -46,7 +46,7 @@ fn feed_id() -> u32 {
 #[serde(untagged)]
 enum RoomId {
     Str(String),
-    Num(u32),
+    Num(u64),
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -551,7 +551,7 @@ impl Signaller {
                 state.feed_id = Some(RoomId::Str(settings.feed_id.clone()));
             } else {
                 let room_id_str = settings.room_id.as_ref().unwrap();
-                match room_id_str.parse::<u32>() {
+                match room_id_str.parse() {
                     Ok(n) => {
                         state.room_id = Some(RoomId::Num(n));
                         state.feed_id = Some(RoomId::Num(settings.feed_id.parse().unwrap()));
