@@ -44,7 +44,9 @@ fn feed_id() -> u32 {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 #[serde(untagged)]
-enum RoomId {
+/// Ids are either u64 (default) or string in Janus, depending of the
+/// `string_ids` configuration in the videoroom plugin config file.
+enum JanusId {
     Str(String),
     Num(u64),
 }
@@ -77,8 +79,8 @@ struct AttachPluginMsg {
 struct RoomRequestBody {
     request: String,
     ptype: String,
-    room: RoomId,
-    id: RoomId,
+    room: JanusId,
+    id: JanusId,
     #[serde(skip_serializing_if = "Option::is_none")]
     display: Option<String>,
 }
@@ -152,12 +154,12 @@ struct InnerError {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct RoomJoined {
-    room: RoomId,
+    room: JanusId,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct RoomEvent {
-    room: Option<RoomId>,
+    room: Option<JanusId>,
     error_code: Option<i32>,
     error: Option<String>,
 }
@@ -224,8 +226,8 @@ struct State {
     session_id: Option<u64>,
     handle_id: Option<u64>,
     transaction_id: Option<String>,
-    room_id: Option<RoomId>,
-    feed_id: Option<RoomId>,
+    room_id: Option<JanusId>,
+    feed_id: Option<JanusId>,
 }
 
 #[derive(Clone)]
@@ -543,18 +545,18 @@ impl Signaller {
              * API calls.
              */
             if settings.string_ids {
-                state.room_id = Some(RoomId::Str(settings.room_id.clone().unwrap()));
-                state.feed_id = Some(RoomId::Str(settings.feed_id.clone()));
+                state.room_id = Some(JanusId::Str(settings.room_id.clone().unwrap()));
+                state.feed_id = Some(JanusId::Str(settings.feed_id.clone()));
             } else {
                 let room_id_str = settings.room_id.as_ref().unwrap();
                 match room_id_str.parse() {
                     Ok(n) => {
-                        state.room_id = Some(RoomId::Num(n));
-                        state.feed_id = Some(RoomId::Num(settings.feed_id.parse().unwrap()));
+                        state.room_id = Some(JanusId::Num(n));
+                        state.feed_id = Some(JanusId::Num(settings.feed_id.parse().unwrap()));
                     }
                     Err(_) => {
-                        state.room_id = Some(RoomId::Str(room_id_str.clone()));
-                        state.feed_id = Some(RoomId::Str(settings.feed_id.clone()));
+                        state.room_id = Some(JanusId::Str(room_id_str.clone()));
+                        state.feed_id = Some(JanusId::Str(settings.feed_id.clone()));
                     }
                 };
             }
