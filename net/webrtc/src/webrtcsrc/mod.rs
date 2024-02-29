@@ -54,7 +54,7 @@ glib::wrapper! {
 }
 
 glib::wrapper! {
-    pub struct LiveKitWebRTCSrc(ObjectSubclass<imp::LiveKitWebRTCSrc>) @extends BaseWebRTCSrc, gst::Bin, gst::Element, gst::Object, @implements gst::URIHandler, gst::ChildProxy;
+    pub struct LiveKitWebRTCSrc(ObjectSubclass<imp::LiveKitWebRTCSrc>) @extends BaseWebRTCSrc, gst::Bin, gst::Element, gst::Object, gst::ChildProxy;
 }
 
 glib::wrapper! {
