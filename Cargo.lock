@@ -62,9 +62,9 @@ dependencies = [
 
 [[package]]
 name = "ahash"
-version = "0.8.9"
+version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d713b3834d76b85304d4d525563c1276e2e30dc97cc67bfb4585a4a29fc2c89f"
+checksum = "8b79b82693f705137f8fb9b37871d99e4f9a7df12b917eed79c3d3954830a60b"
 dependencies = [
  "cfg-if",
  "once_cell",
@@ -104,9 +104,9 @@ dependencies = [
 
 [[package]]
 name = "anstream"
-version = "0.6.12"
+version = "0.6.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96b09b5178381e0874812a9b157f7fe84982617e48f71f4e3235482775e5b540"
+checksum = "d96bd03f33fe50a863e394ee9718a706f988b9079b20c3784fb726e7678b62fb"
 dependencies = [
  "anstyle",
  "anstyle-parse",
@@ -170,7 +170,7 @@ checksum = "0ae92a5119aa49cdbcf6b9f893fe4e1d98b04ccbf82ee0584ad948a44a734dea"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -213,7 +213,7 @@ checksum = "5fd55a5ba1179988837d24ab4c7cc8ed6efdeff578ede0416b4225a5fca35bd0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -235,7 +235,7 @@ checksum = "16e62a023e7c117e27523144c5d2459f4397fcc3cab0085af8e2224f643a0193"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -252,7 +252,7 @@ checksum = "c980ee35e870bd1a4d2c8294d4c04d0499e67bca1e4b5cefcc693c2fa00caea9"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -310,9 +310,9 @@ dependencies = [
 
 [[package]]
 name = "aws-config"
-version = "1.1.6"
+version = "1.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3182c19847238b50b62ae0383a6dbfc14514e552eb5e307e1ea83ccf5840b8a6"
+checksum = "0b96342ea8948ab9bef3e6234ea97fc32e2d8a88d8fb6a084e52267317f94b6b"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -340,9 +340,9 @@ dependencies = [
 
 [[package]]
 name = "aws-credential-types"
-version = "1.1.6"
+version = "1.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5635d8707f265c773282a22abe1ecd4fbe96a8eb2f0f14c0796f8016f11a41a"
+checksum = "273fa47dafc9ef14c2c074ddddbea4561ff01b7f68d5091c0e9737ced605c01d"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
@@ -352,9 +352,9 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.1.6"
+version = "1.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f82b9ae2adfd9d6582440d0eeb394c07f74d21b4c0cc72bdb73735c9e1a9c0e"
+checksum = "6e38bab716c8bf07da24be07ecc02e0f5656ce8f30a891322ecdcb202f943b85"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
@@ -376,9 +376,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-kinesisvideo"
-version = "1.15.0"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05d4be3124deae7a5ccee6cdb9e35d85c4f4e72e7604b90bdd735c4ab824662f"
+checksum = "d21a2c1b7fea8dc7654eb5cd831276024de5166045c1c44577c556f6a0fd15e9"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -398,9 +398,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-kinesisvideosignaling"
-version = "1.14.0"
+version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3cea7f346b30ab5f95ad4ed5a14ec9d916ff4c7b0cd97dbdf31e5c52d090dd00"
+checksum = "f9e1e9272e23824ecf0b2bc1acd55200c447adc5a4e28f33091c830e55b3d094"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -420,9 +420,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-s3"
-version = "1.16.0"
+version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5076637347e7d0218e61facae853110682ae58efabd2f4e2a9e530c203d5fa7b"
+checksum = "93d35d39379445970fc3e4ddf7559fff2c32935ce0b279f9cb27080d6b7c6d94"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -449,9 +449,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-sso"
-version = "1.14.0"
+version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca7e8097448832fcd22faf6bb227e97d76b40e354509d1307653a885811c7151"
+checksum = "d84bd3925a17c9adbf6ec65d52104a44a09629d8f70290542beeee69a95aee7f"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -471,9 +471,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ssooidc"
-version = "1.14.0"
+version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a75073590e23d63044606771afae309fada8eb10ded54a1ce4598347221d3fef"
+checksum = "2c2dae39e997f58bc4d6292e6244b26ba630c01ab671b6f9f44309de3eb80ab8"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -493,9 +493,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-sts"
-version = "1.14.0"
+version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "650e4aaae41547151dea4d8142f7ffcc8ab8ba76d5dccc8933936ef2102c3356"
+checksum = "17fd9a53869fee17cea77e352084e1aa71e2c5e323d974c13a9c2bcfd9544c7f"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -516,9 +516,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-transcribestreaming"
-version = "1.14.0"
+version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "231890715df8ce51d279108012f0903e7ffaafb7e23c149857992e4e90b72b17"
+checksum = "68e7cebb14f375fa723b30e0c5443edf10e833fd056fa605ca68b32fcaabf080"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -541,9 +541,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-translate"
-version = "1.14.0"
+version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bda5973bd8ede9d58d46d20f4c3e0c48eaddaf463bf6c470800a170cc519dde"
+checksum = "8b22af2a8825c819a8bb104cf9cb16e3ad371c2ee2c3e9782feebee579cf42aa"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -564,9 +564,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sigv4"
-version = "1.1.6"
+version = "1.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "404c64a104188ac70dd1684718765cb5559795458e446480e41984e68e57d888"
+checksum = "8ada00a4645d7d89f296fe0ddbc3fe3554f03035937c849a05d37ddffc1f29a1"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-eventstream",
@@ -750,9 +750,9 @@ dependencies = [
 
 [[package]]
 name = "aws-types"
-version = "1.1.6"
+version = "1.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fbb5d48aae496f628e7aa2e41991dd4074f606d9e3ade1ce1059f293d40f9a2"
+checksum = "d07c63521aa1ea9a9f92a701f1a08ce3fd20b46c6efc0d5c8947c1fd879e3df1"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-async",
@@ -937,7 +937,7 @@ dependencies = [
 [[package]]
 name = "cairo-rs"
 version = "0.20.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#90fc2033d4824e1c80a575d03b3c164e9901faf8"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#8e5054e4daea31be1fe2843d4003a00ccc8b6451"
 dependencies = [
  "bitflags 2.4.2",
  "cairo-sys-rs",
@@ -949,7 +949,7 @@ dependencies = [
 [[package]]
 name = "cairo-sys-rs"
 version = "0.20.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#90fc2033d4824e1c80a575d03b3c164e9901faf8"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#8e5054e4daea31be1fe2843d4003a00ccc8b6451"
 dependencies = [
  "glib-sys",
  "libc",
@@ -1021,7 +1021,7 @@ dependencies = [
  "num-traits",
  "serde",
  "wasm-bindgen",
- "windows-targets 0.52.3",
+ "windows-targets 0.52.4",
 ]
 
 [[package]]
@@ -1064,7 +1064,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -1209,9 +1209,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-channel"
-version = "0.5.11"
+version = "0.5.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "176dc175b78f56c0f321911d9c8eb2b77a78a4860b9c19db83835fea1a46649b"
+checksum = "ab3db02a9c5b5121e1e42fbdb1aeb65f5e02624cc58c43f2884c6ccac0b82f95"
 dependencies = [
  "crossbeam-utils",
 ]
@@ -1335,7 +1335,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strsim",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -1346,7 +1346,7 @@ checksum = "a668eda54683121533a393014d8692171709ff57a7d61f187b6e782719f8933f"
 dependencies = [
  "darling_core",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -1596,9 +1596,9 @@ dependencies = [
 
 [[package]]
 name = "event-listener"
-version = "5.1.0"
+version = "5.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7ad6fd685ce13acd6d9541a30f6db6567a7a24c9ffd4ba2955d29e3f22c8b27"
+checksum = "2b5fb89194fa3cad959b833185b3063ba881dbfc7030680b314250779fb4cc91"
 dependencies = [
  "concurrent-queue",
  "parking",
@@ -1803,7 +1803,7 @@ checksum = "87750cf4b7a4c0625b1529e4c543c2182106e4dedc60a2a6455e00d212c489ac"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -1839,7 +1839,7 @@ dependencies = [
 [[package]]
 name = "gdk-pixbuf"
 version = "0.20.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#90fc2033d4824e1c80a575d03b3c164e9901faf8"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#8e5054e4daea31be1fe2843d4003a00ccc8b6451"
 dependencies = [
  "gdk-pixbuf-sys",
  "gio",
@@ -1850,7 +1850,7 @@ dependencies = [
 [[package]]
 name = "gdk-pixbuf-sys"
 version = "0.20.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#90fc2033d4824e1c80a575d03b3c164e9901faf8"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#8e5054e4daea31be1fe2843d4003a00ccc8b6451"
 dependencies = [
  "gio-sys",
  "glib-sys",
@@ -2009,7 +2009,7 @@ checksum = "4271d37baee1b8c7e4b708028c57d816cf9d2434acb33a549475f78c181f6253"
 [[package]]
 name = "gio"
 version = "0.20.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#90fc2033d4824e1c80a575d03b3c164e9901faf8"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#8e5054e4daea31be1fe2843d4003a00ccc8b6451"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -2026,7 +2026,7 @@ dependencies = [
 [[package]]
 name = "gio-sys"
 version = "0.20.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#90fc2033d4824e1c80a575d03b3c164e9901faf8"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#8e5054e4daea31be1fe2843d4003a00ccc8b6451"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -2038,7 +2038,7 @@ dependencies = [
 [[package]]
 name = "glib"
 version = "0.20.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#90fc2033d4824e1c80a575d03b3c164e9901faf8"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#8e5054e4daea31be1fe2843d4003a00ccc8b6451"
 dependencies = [
  "bitflags 2.4.2",
  "futures-channel",
@@ -2059,19 +2059,19 @@ dependencies = [
 [[package]]
 name = "glib-macros"
 version = "0.20.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#90fc2033d4824e1c80a575d03b3c164e9901faf8"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#8e5054e4daea31be1fe2843d4003a00ccc8b6451"
 dependencies = [
  "heck",
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
 name = "glib-sys"
 version = "0.20.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#90fc2033d4824e1c80a575d03b3c164e9901faf8"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#8e5054e4daea31be1fe2843d4003a00ccc8b6451"
 dependencies = [
  "libc",
  "system-deps",
@@ -2086,7 +2086,7 @@ checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 [[package]]
 name = "gobject-sys"
 version = "0.20.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#90fc2033d4824e1c80a575d03b3c164e9901faf8"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#8e5054e4daea31be1fe2843d4003a00ccc8b6451"
 dependencies = [
  "glib-sys",
  "libc",
@@ -2096,7 +2096,7 @@ dependencies = [
 [[package]]
 name = "graphene-rs"
 version = "0.20.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#90fc2033d4824e1c80a575d03b3c164e9901faf8"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#8e5054e4daea31be1fe2843d4003a00ccc8b6451"
 dependencies = [
  "glib",
  "graphene-sys",
@@ -2106,7 +2106,7 @@ dependencies = [
 [[package]]
 name = "graphene-sys"
 version = "0.20.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#90fc2033d4824e1c80a575d03b3c164e9901faf8"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#8e5054e4daea31be1fe2843d4003a00ccc8b6451"
 dependencies = [
  "glib-sys",
  "libc",
@@ -2263,7 +2263,7 @@ dependencies = [
  "serde",
  "serde_json",
  "uuid",
- "winnow 0.6.2",
+ "winnow 0.6.3",
 ]
 
 [[package]]
@@ -2957,7 +2957,7 @@ dependencies = [
 [[package]]
 name = "gstreamer"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "cfg-if",
  "futures-channel",
@@ -2983,7 +2983,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-app"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -2997,7 +2997,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-app-sys"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib-sys",
  "gstreamer-base-sys",
@@ -3009,7 +3009,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-audio"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "cfg-if",
  "glib",
@@ -3024,7 +3024,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-audio-sys"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3037,7 +3037,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-base"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "atomic_refcell",
  "cfg-if",
@@ -3050,7 +3050,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-base-sys"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3062,7 +3062,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-check"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3072,7 +3072,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-check-sys"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3084,7 +3084,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3098,7 +3098,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-egl"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3110,7 +3110,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-egl-sys"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib-sys",
  "gstreamer-gl-sys",
@@ -3121,7 +3121,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-sys"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3135,7 +3135,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-wayland"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3147,7 +3147,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-wayland-sys"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib-sys",
  "gstreamer-gl-sys",
@@ -3158,7 +3158,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-x11"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3170,7 +3170,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-x11-sys"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib-sys",
  "gstreamer-gl-sys",
@@ -3181,7 +3181,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-net"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "gio",
  "glib",
@@ -3192,7 +3192,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-net-sys"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "gio-sys",
  "glib-sys",
@@ -3204,7 +3204,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-pbutils"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3218,7 +3218,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-pbutils-sys"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3232,7 +3232,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-rtp"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3243,7 +3243,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-rtp-sys"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib-sys",
  "gstreamer-base-sys",
@@ -3255,7 +3255,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-sdp"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3265,7 +3265,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-sdp-sys"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib-sys",
  "gstreamer-sys",
@@ -3276,7 +3276,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-sys"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3287,7 +3287,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-utils"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "gstreamer",
  "gstreamer-app",
@@ -3299,7 +3299,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-video"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "cfg-if",
  "futures-channel",
@@ -3316,7 +3316,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-video-sys"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3329,7 +3329,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-webrtc"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3341,7 +3341,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-webrtc-sys"
 version = "0.23.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#28fe70f479fcb2f22971fc29a3b81e1cef097578"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#14576fdf2627de3af4eddc6ceb2dbabf14ec2776"
 dependencies = [
  "glib-sys",
  "gstreamer-sdp-sys",
@@ -3413,7 +3413,7 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "http 0.2.11",
- "indexmap 2.2.3",
+ "indexmap 2.2.4",
  "slab",
  "tokio",
  "tokio-util",
@@ -3477,9 +3477,9 @@ dependencies = [
 
 [[package]]
 name = "hermit-abi"
-version = "0.3.8"
+version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "379dada1584ad501b383485dd706b8afb7a70fcbc7f4da7d780638a5a6124a60"
+checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
 
 [[package]]
 name = "hex"
@@ -3788,9 +3788,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.2.3"
+version = "2.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "233cf39063f058ea2caae4091bf4a3ef70a653afbc026f5c4a4135d114e3c177"
+checksum = "967d6dd42f16dbf0eb8040cb9e477933562684d3918f7d253f2ff9087fb3e7a3"
 dependencies = [
  "equivalent",
  "hashbrown 0.14.3",
@@ -3805,7 +3805,7 @@ checksum = "c34819042dc3d3971c46c2190835914dfbe0c3c13f61449b2997f4e9722dfa60"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -3820,7 +3820,7 @@ version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f23ff5ef2b80d608d61efee834934d862cd92461afc0560dedf493e4c033738b"
 dependencies = [
- "hermit-abi 0.3.8",
+ "hermit-abi 0.3.9",
  "libc",
  "windows-sys 0.52.0",
 ]
@@ -4168,9 +4168,9 @@ checksum = "01cda141df6706de531b6c46c3a33ecca755538219bd484262fa09410c13539c"
 
 [[package]]
 name = "livekit-api"
-version = "0.3.0"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbeee9976daa3b21af3a5b022395739ed7c832bdeb3dd4bbcab463e4c18f4863"
+checksum = "e20c3fc3de5944ce6b5c8da4084cf828bbae7216671e32e83b767ce61feeb7e0"
 dependencies = [
  "futures-util",
  "jsonwebtoken",
@@ -4190,9 +4190,9 @@ dependencies = [
 
 [[package]]
 name = "livekit-protocol"
-version = "0.3.0"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2f70906636929066ba512615a11f1c9aae553a89ee2cc89bc9fc2cbc5c1847a"
+checksum = "1a1bd23257110be29d024d8d816adff70df18ea1d22ceb1aab6f3ad4aab0d523"
 dependencies = [
  "futures-util",
  "parking_lot",
@@ -4217,9 +4217,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.20"
+version = "0.4.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5e6163cb8c49088c2c36f57875e58ccd8c87c7427f7fbd50ea6710b2f3f2e8f"
+checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
 
 [[package]]
 name = "lru"
@@ -4507,7 +4507,7 @@ checksum = "ed3955f1a9c7c0c15e092f9c887db08b1fc683305fdf6eb6684f22555355e202"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -4548,7 +4548,7 @@ version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4161fcb6d602d4d2081af7c3a45852d875a03dd337a6bfdd6e06407b61342a43"
 dependencies = [
- "hermit-abi 0.3.8",
+ "hermit-abi 0.3.9",
  "libc",
 ]
 
@@ -4605,7 +4605,7 @@ checksum = "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -4661,7 +4661,7 @@ dependencies = [
 [[package]]
 name = "pango"
 version = "0.20.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#90fc2033d4824e1c80a575d03b3c164e9901faf8"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#8e5054e4daea31be1fe2843d4003a00ccc8b6451"
 dependencies = [
  "gio",
  "glib",
@@ -4672,7 +4672,7 @@ dependencies = [
 [[package]]
 name = "pango-sys"
 version = "0.20.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#90fc2033d4824e1c80a575d03b3c164e9901faf8"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#8e5054e4daea31be1fe2843d4003a00ccc8b6451"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -4683,7 +4683,7 @@ dependencies = [
 [[package]]
 name = "pangocairo"
 version = "0.20.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#90fc2033d4824e1c80a575d03b3c164e9901faf8"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#8e5054e4daea31be1fe2843d4003a00ccc8b6451"
 dependencies = [
  "cairo-rs",
  "glib",
@@ -4695,7 +4695,7 @@ dependencies = [
 [[package]]
 name = "pangocairo-sys"
 version = "0.20.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#90fc2033d4824e1c80a575d03b3c164e9901faf8"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=master#8e5054e4daea31be1fe2843d4003a00ccc8b6451"
 dependencies = [
  "cairo-sys-rs",
  "glib-sys",
@@ -4814,7 +4814,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1d3afd2628e69da2be385eb6f2fd57c8ac7977ceeff6dc166ff1657b0e386a9"
 dependencies = [
  "fixedbitset",
- "indexmap 2.2.3",
+ "indexmap 2.2.4",
 ]
 
 [[package]]
@@ -4834,7 +4834,7 @@ checksum = "266c042b60c9c76b8d53061e52b2e0d1116abc57cefc8c5cd671619a56ac3690"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -4927,7 +4927,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a41cf62165e97c7f814d2221421dbb9afcbcdb0a88068e5ea206e19951c2cbb5"
 dependencies = [
  "proc-macro2",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -5007,7 +5007,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8021cf59c8ec9c432cfc2526ac6b8aa508ecaf29cd415f271b8406c1b851c3fd"
 dependencies = [
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -5037,7 +5037,7 @@ dependencies = [
  "prost",
  "prost-types",
  "regex",
- "syn 2.0.51",
+ "syn 2.0.52",
  "tempfile",
  "which",
 ]
@@ -5052,7 +5052,7 @@ dependencies = [
  "itertools 0.11.0",
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -5208,9 +5208,9 @@ dependencies = [
 
 [[package]]
 name = "rayon"
-version = "1.8.1"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa7237101a77a10773db45d62004a272517633fbcc3df19d96455ede1122e051"
+checksum = "e4963ed1bc86e4f3ee217022bd855b297cef07fb9eac5dfa1f788b220b49b3bd"
 dependencies = [
  "either",
  "rayon-core",
@@ -5639,7 +5639,7 @@ checksum = "7eb0b34b42edc17f6b7cac84a52a1c5f0e1bb2227e997ca9011ea3dd34e8610b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -5694,7 +5694,7 @@ dependencies = [
  "chrono",
  "hex",
  "indexmap 1.9.3",
- "indexmap 2.2.3",
+ "indexmap 2.2.4",
  "serde",
  "serde_derive",
  "serde_json",
@@ -5711,7 +5711,7 @@ dependencies = [
  "darling",
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -5736,7 +5736,7 @@ checksum = "b93fb4adc70021ac1b47f7d45e8cc4169baaa7ea58483bc5b721d19a26202212"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -5951,9 +5951,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.51"
+version = "2.0.52"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ab617d94515e94ae53b8406c628598680aa0c9587474ecbe58188f7b345d66c"
+checksum = "b699d15b36d1f02c3e7c69f8ffef53de37aefae075d8488d4ba1a7788d574a07"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6008,9 +6008,9 @@ checksum = "e1fc403891a21bcfb7c37834ba66a547a8f402146eba7265b5a6d88059c9ff2f"
 
 [[package]]
 name = "tempfile"
-version = "3.10.0"
+version = "3.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a365e8cd18e44762ef95d87f284f4b5cd04107fec2ff3052bd6a3e6069669e67"
+checksum = "85b77fafb263dd9d05cbeac119526425676db3784113aa9295c88498cbf8bff1"
 dependencies = [
  "cfg-if",
  "fastrand",
@@ -6045,7 +6045,7 @@ checksum = "7ba277e77219e9eea169e8508942db1bf5d8a41ff2db9b20aab5a5aadc9fa25d"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -6058,7 +6058,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "regex",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -6090,7 +6090,7 @@ checksum = "a953cb265bef375dae3de6663da4d3804eee9682ea80d8e2542529b73c531c81"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -6186,7 +6186,7 @@ checksum = "5b8a1e28f2deaa14e508979454cb3a223b10b938b45af148bc0986de36f1923b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -6275,7 +6275,7 @@ version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a8534fd7f78b5405e860340ad6575217ce99f38d4d5c8f2442cb5ecb50090e1"
 dependencies = [
- "indexmap 2.2.3",
+ "indexmap 2.2.4",
  "toml_datetime",
  "winnow 0.5.40",
 ]
@@ -6286,11 +6286,11 @@ version = "0.22.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c1b5fd4128cc8d3e0cb74d4ed9a9cc7c7284becd4df68f5f940e1ad123606f6"
 dependencies = [
- "indexmap 2.2.3",
+ "indexmap 2.2.4",
  "serde",
  "serde_spanned",
  "toml_datetime",
- "winnow 0.6.2",
+ "winnow 0.6.3",
 ]
 
 [[package]]
@@ -6319,7 +6319,7 @@ checksum = "34704c8d6ebcbc939824180af020566b01a7c01f80641264eba0999f6c2b6be7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -6661,7 +6661,7 @@ dependencies = [
  "once_cell",
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
  "wasm-bindgen-shared",
 ]
 
@@ -6695,7 +6695,7 @@ checksum = "642f325be6301eb8107a83d12a8ac6c1e1c54345a7ef1a9261962dfefda09e66"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -6771,7 +6771,7 @@ version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33ab640c8d7e35bf8ba19b884ba838ceb4fba93a4e8c65a9059d08afcfc683d9"
 dependencies = [
- "windows-targets 0.52.3",
+ "windows-targets 0.52.4",
 ]
 
 [[package]]
@@ -6789,7 +6789,7 @@ version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
 dependencies = [
- "windows-targets 0.52.3",
+ "windows-targets 0.52.4",
 ]
 
 [[package]]
@@ -6809,17 +6809,17 @@ dependencies = [
 
 [[package]]
 name = "windows-targets"
-version = "0.52.3"
+version = "0.52.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d380ba1dc7187569a8a9e91ed34b8ccfc33123bbacb8c0aed2d1ad7f3ef2dc5f"
+checksum = "7dd37b7e5ab9018759f893a1952c9420d060016fc19a472b4bb20d1bdd694d1b"
 dependencies = [
- "windows_aarch64_gnullvm 0.52.3",
- "windows_aarch64_msvc 0.52.3",
- "windows_i686_gnu 0.52.3",
- "windows_i686_msvc 0.52.3",
- "windows_x86_64_gnu 0.52.3",
- "windows_x86_64_gnullvm 0.52.3",
- "windows_x86_64_msvc 0.52.3",
+ "windows_aarch64_gnullvm 0.52.4",
+ "windows_aarch64_msvc 0.52.4",
+ "windows_i686_gnu 0.52.4",
+ "windows_i686_msvc 0.52.4",
+ "windows_x86_64_gnu 0.52.4",
+ "windows_x86_64_gnullvm 0.52.4",
+ "windows_x86_64_msvc 0.52.4",
 ]
 
 [[package]]
@@ -6830,9 +6830,9 @@ checksum = "2b38e32f0abccf9987a4e3079dfb67dcd799fb61361e53e2882c3cbaf0d905d8"
 
 [[package]]
 name = "windows_aarch64_gnullvm"
-version = "0.52.3"
+version = "0.52.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68e5dcfb9413f53afd9c8f86e56a7b4d86d9a2fa26090ea2dc9e40fba56c6ec6"
+checksum = "bcf46cf4c365c6f2d1cc93ce535f2c8b244591df96ceee75d8e83deb70a9cac9"
 
 [[package]]
 name = "windows_aarch64_msvc"
@@ -6842,9 +6842,9 @@ checksum = "dc35310971f3b2dbbf3f0690a219f40e2d9afcf64f9ab7cc1be722937c26b4bc"
 
 [[package]]
 name = "windows_aarch64_msvc"
-version = "0.52.3"
+version = "0.52.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8dab469ebbc45798319e69eebf92308e541ce46760b49b18c6b3fe5e8965b30f"
+checksum = "da9f259dd3bcf6990b55bffd094c4f7235817ba4ceebde8e6d11cd0c5633b675"
 
 [[package]]
 name = "windows_i686_gnu"
@@ -6854,9 +6854,9 @@ checksum = "a75915e7def60c94dcef72200b9a8e58e5091744960da64ec734a6c6e9b3743e"
 
 [[package]]
 name = "windows_i686_gnu"
-version = "0.52.3"
+version = "0.52.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a4e9b6a7cac734a8b4138a4e1044eac3404d8326b6c0f939276560687a033fb"
+checksum = "b474d8268f99e0995f25b9f095bc7434632601028cf86590aea5c8a5cb7801d3"
 
 [[package]]
 name = "windows_i686_msvc"
@@ -6866,9 +6866,9 @@ checksum = "8f55c233f70c4b27f66c523580f78f1004e8b5a8b659e05a4eb49d4166cca406"
 
 [[package]]
 name = "windows_i686_msvc"
-version = "0.52.3"
+version = "0.52.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28b0ec9c422ca95ff34a78755cfa6ad4a51371da2a5ace67500cf7ca5f232c58"
+checksum = "1515e9a29e5bed743cb4415a9ecf5dfca648ce85ee42e15873c3cd8610ff8e02"
 
 [[package]]
 name = "windows_x86_64_gnu"
@@ -6878,9 +6878,9 @@ checksum = "53d40abd2583d23e4718fddf1ebec84dbff8381c07cae67ff7768bbf19c6718e"
 
 [[package]]
 name = "windows_x86_64_gnu"
-version = "0.52.3"
+version = "0.52.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "704131571ba93e89d7cd43482277d6632589b18ecf4468f591fbae0a8b101614"
+checksum = "5eee091590e89cc02ad514ffe3ead9eb6b660aedca2183455434b93546371a03"
 
 [[package]]
 name = "windows_x86_64_gnullvm"
@@ -6890,9 +6890,9 @@ checksum = "0b7b52767868a23d5bab768e390dc5f5c55825b6d30b86c844ff2dc7414044cc"
 
 [[package]]
 name = "windows_x86_64_gnullvm"
-version = "0.52.3"
+version = "0.52.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42079295511643151e98d61c38c0acc444e52dd42ab456f7ccfd5152e8ecf21c"
+checksum = "77ca79f2451b49fa9e2af39f0747fe999fcda4f5e241b2898624dca97a1f2177"
 
 [[package]]
 name = "windows_x86_64_msvc"
@@ -6902,9 +6902,9 @@ checksum = "ed94fce61571a4006852b7389a063ab983c02eb1bb37b47f8272ce92d06d9538"
 
 [[package]]
 name = "windows_x86_64_msvc"
-version = "0.52.3"
+version = "0.52.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0770833d60a970638e989b3fa9fd2bb1aaadcf88963d1659fd7d9990196ed2d6"
+checksum = "32b752e52a2da0ddfbdbcc6fceadfeede4c939ed16d13e648833a61dfb611ed8"
 
 [[package]]
 name = "winnow"
@@ -6917,9 +6917,9 @@ dependencies = [
 
 [[package]]
 name = "winnow"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a4191c47f15cc3ec71fcb4913cb83d58def65dd3787610213c649283b5ce178"
+checksum = "44e19b97e00a4d3db3cdb9b53c8c5f87151b5689b82cc86c2848cbdcccb2689b"
 dependencies = [
  "memchr",
 ]
@@ -6999,7 +6999,7 @@ checksum = "125139de3f6b9d625c39e2efdd73d41bdac468ccd556556440e322be0e1bbd91"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -7010,7 +7010,7 @@ checksum = "9ce1b18ccd8e73a9321186f97e46f9f04b778851177567b1975109d26a08d2a6"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.51",
+ "syn 2.0.52",
 ]
 
 [[package]]
