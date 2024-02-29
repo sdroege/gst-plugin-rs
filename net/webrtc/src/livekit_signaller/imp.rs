@@ -923,6 +923,9 @@ impl ObjectImpl for Signaller {
             }
             "role" => settings.role.to_value(),
             "producer-peer-id" => settings.producer_peer_id.to_value(),
+            "excluded-producer-peer-ids" => {
+                gst::Array::new(&settings.excluded_produder_peer_ids).to_value()
+            }
             _ => unimplemented!(),
         }
     }
