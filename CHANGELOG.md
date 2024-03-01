@@ -54,7 +54,6 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - New `janusvrwebrtcsink` element for the Janus VideoRoom API.
 - New `rtspsrc2` element.
 - New `whipserversrc` element.
-
 - gtk4: New `background-color` property for setting the color of the
   background of the frame and the borders, if any.
 - gtk4: New `scale-filter` property for defining how to scale the frames.
