@@ -378,6 +378,10 @@ impl SccParse {
 
             // Still need to scan lines to find the first buffer
             if state.seeking {
+                // Remember this timecode in order to fallback to this one
+                // if invalid timecode is detected during scanning
+                state.last_timecode = Some(timecode);
+
                 drop(state);
                 return Ok(self.state.lock().unwrap());
             }
