@@ -38,10 +38,6 @@ fn transaction_id() -> String {
         .collect()
 }
 
-fn feed_id() -> u32 {
-    thread_rng().gen()
-}
-
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 #[serde(untagged)]
 /// Ids are either u64 (default) or string in Janus, depending of the
@@ -51,11 +47,19 @@ enum JanusId {
     Num(u64),
 }
 
-impl std::fmt::Display for JanusId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+// Should never reach the panic as Janus will error if trying to use a room ID of the wrong type
+impl JanusId {
+    fn as_string(&self) -> String {
         match self {
-            JanusId::Str(s) => write!(f, "{s}"),
-            JanusId::Num(n) => write!(f, "{n}"),
+            JanusId::Str(s) => s.clone(),
+            JanusId::Num(_) => panic!("IDs from Janus are meant to be strings, not numbers"),
+        }
+    }
+
+    fn as_num(&self) -> u64 {
+        match self {
+            JanusId::Str(_) => panic!("IDs from Janus are meant to be numbers, not strings"),
+            JanusId::Num(n) => *n,
         }
     }
 }
@@ -89,7 +93,8 @@ struct RoomRequestBody {
     request: String,
     ptype: String,
     room: JanusId,
-    id: JanusId,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    id: Option<JanusId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     display: Option<String>,
 }
@@ -243,26 +248,20 @@ struct State {
 #[derive(Clone)]
 struct Settings {
     janus_endpoint: String,
-    room_id: Option<String>,
-    feed_id: String,
+    room_id: Option<JanusId>,
+    feed_id: Option<JanusId>,
     display_name: Option<String>,
     secret_key: Option<String>,
-    string_ids: bool,
-
-    // read-only
-    joined_id: Option<String>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
             janus_endpoint: "ws://127.0.0.1:8188".to_string(),
-            room_id: None,
-            feed_id: feed_id().to_string(),
             display_name: None,
+            room_id: None,
+            feed_id: None,
             secret_key: None,
-            string_ids: false,
-            joined_id: None,
         }
     }
 }
@@ -272,13 +271,9 @@ impl Default for Settings {
 pub struct Signaller {
     state: Mutex<State>,
     #[property(name="janus-endpoint", get, set, type = String, member = janus_endpoint, blurb = "The Janus server endpoint to POST SDP offer to")]
-    #[property(name="room-id", get, set, type = String, member = room_id, blurb = "The Janus Room ID that will be joined to")]
-    #[property(name="feed-id", get, set, type = String, member = feed_id, blurb = "The Janus Feed ID to identify where the track is coming from")]
     #[property(name="display-name", get, set, type = String, member = display_name, blurb = "The name of the publisher in the Janus Video Room")]
     #[property(name="secret-key", get, set, type = String, member = secret_key, blurb = "The secret API key to communicate with Janus server")]
-    #[property(name="string-ids", get, set, type = bool, member = string_ids, blurb = "Force passing room-id and feed-id as string even if they can be parsed into an integer")]
-    // read-only
-    #[property(name="joined-id", get, type = String, member = joined_id, blurb = "Unique ID of the participant")]
+    // Properties whose type depends of the Janus ID format (u64 or string) are implemented in Signaller subclasses
     settings: Mutex<Settings>,
 }
 
@@ -443,11 +438,23 @@ impl Signaller {
                 if let Some(PluginData::VideoRoom { data: plugindata }) = event.plugindata {
                     match plugindata {
                         VideoRoomData::Joined(joined) => {
-                            {
+                            let feed_id_changed = {
+                                let mut feed_id_changed = false;
                                 let mut settings = self.settings.lock().unwrap();
-                                settings.joined_id = Some(joined.id.to_string());
+                                if settings.feed_id.as_ref() != Some(&joined.id) {
+                                    settings.feed_id = Some(joined.id.clone());
+                                    feed_id_changed = true;
+                                }
+
+                                let mut state = self.state.lock().unwrap();
+                                state.feed_id = Some(joined.id);
+
+                                feed_id_changed
+                            };
+
+                            if feed_id_changed {
+                                self.obj().notify("feed-id");
                             }
-                            self.obj().notify("joined-id");
 
                             gst::trace!(CAT, imp: self, "Joined room {:?} successfully", joined.room);
                             self.session_requested();
@@ -559,36 +566,14 @@ impl Signaller {
                 return;
             }
 
-            /* room_id and feed_id can be either a string or integer depending
-             * on server configuration. The property is always a string, if we
-             * can parse it to integer then assume that's what the server expects,
-             * unless string-ids=true is set to force usage of strings.
-             * Save parsed value in state to not have to parse it again for future
-             * API calls.
-             */
-            if settings.string_ids {
-                state.room_id = Some(JanusId::Str(settings.room_id.clone().unwrap()));
-                state.feed_id = Some(JanusId::Str(settings.feed_id.clone()));
-            } else {
-                let room_id_str = settings.room_id.as_ref().unwrap();
-                match room_id_str.parse() {
-                    Ok(n) => {
-                        state.room_id = Some(JanusId::Num(n));
-                        state.feed_id = Some(JanusId::Num(settings.feed_id.parse().unwrap()));
-                    }
-                    Err(_) => {
-                        state.room_id = Some(JanusId::Str(room_id_str.clone()));
-                        state.feed_id = Some(JanusId::Str(settings.feed_id.clone()));
-                    }
-                };
-            }
+            state.room_id = settings.room_id.clone();
 
             (
                 state.transaction_id.clone().unwrap(),
                 state.session_id.unwrap(),
                 state.handle_id.unwrap(),
                 state.room_id.clone().unwrap(),
-                state.feed_id.clone().unwrap(),
+                settings.feed_id.clone(),
                 settings.display_name.clone(),
                 settings.secret_key.clone(),
             )
@@ -639,7 +624,7 @@ impl Signaller {
                 request: "leave".to_string(),
                 ptype: "publisher".to_string(),
                 room,
-                id: feed_id,
+                id: Some(feed_id),
                 display,
             },
         }));
@@ -807,9 +792,149 @@ impl SignallableImpl for Signaller {
 impl ObjectSubclass for Signaller {
     const NAME: &'static str = "GstJanusVRWebRTCSignaller";
     type Type = super::JanusVRSignaller;
+    type Class = super::JanusVRSignallerClass;
     type ParentType = glib::Object;
     type Interfaces = (Signallable,);
+    const ABSTRACT: bool = true;
 }
 
 #[glib::derived_properties]
 impl ObjectImpl for Signaller {}
+
+// below are Signaller subclasses implementing properties whose type depends of the Janus ID format (u64 or string).
+// User can control which signaller is used by setting the `use-string-ids` construct property on `janusvrwebrtcsink`.
+
+// each object needs to live in its own module as the code generated by the Properties macro is not namespaced
+pub mod signaller_u64 {
+    use super::*;
+
+    #[derive(Default, Properties)]
+    #[properties(wrapper_type = super::super::JanusVRSignallerU64)]
+    pub struct SignallerU64 {
+        #[property(name="room-id", get, set, type = u64, get = Self::get_room_id, set = Self::set_room_id, blurb = "The Janus Room ID that will be joined to")]
+        #[property(name="feed-id", get, set, type = u64, get = Self::get_feed_id, set = Self::set_feed_id, blurb = "The Janus Feed ID to identify where the track is coming from")]
+        /// Properties macro does not work with empty struct: https://github.com/gtk-rs/gtk-rs-core/issues/1110
+        _unused: bool,
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for SignallerU64 {
+        const NAME: &'static str = "GstJanusVRWebRTCSignallerU64";
+        type Type = super::super::JanusVRSignallerU64;
+        type ParentType = super::super::JanusVRSignaller;
+    }
+
+    #[glib::derived_properties]
+    impl ObjectImpl for SignallerU64 {}
+
+    impl super::super::JanusVRSignallerImpl for SignallerU64 {}
+
+    impl SignallerU64 {
+        fn get_room_id(&self) -> u64 {
+            let obj = self.obj();
+            let signaller = obj.upcast_ref::<super::super::JanusVRSignaller>().imp();
+            let settings = signaller.settings.lock().unwrap();
+
+            settings
+                .room_id
+                .as_ref()
+                .map(|id| id.as_num())
+                .unwrap_or_default()
+        }
+
+        fn set_room_id(&self, id: u64) {
+            let obj = self.obj();
+            let signaller = obj.upcast_ref::<super::super::JanusVRSignaller>().imp();
+            let mut settings = signaller.settings.lock().unwrap();
+
+            settings.room_id = Some(JanusId::Num(id));
+        }
+
+        fn get_feed_id(&self) -> u64 {
+            let obj = self.obj();
+            let signaller = obj.upcast_ref::<super::super::JanusVRSignaller>().imp();
+            let settings = signaller.settings.lock().unwrap();
+
+            settings
+                .feed_id
+                .as_ref()
+                .map(|id| id.as_num())
+                .unwrap_or_default()
+        }
+
+        fn set_feed_id(&self, id: u64) {
+            let obj = self.obj();
+            let signaller = obj.upcast_ref::<super::super::JanusVRSignaller>().imp();
+            let mut settings = signaller.settings.lock().unwrap();
+
+            settings.feed_id = Some(JanusId::Num(id));
+        }
+    }
+}
+
+pub mod signaller_str {
+    use super::*;
+
+    #[derive(Default, Properties)]
+    #[properties(wrapper_type = super::super::JanusVRSignallerStr)]
+    pub struct SignallerStr {
+        #[property(name="room-id", get, set, type = String, get = Self::get_room_id, set = Self::set_room_id, blurb = "The Janus Room ID that will be joined to")]
+        #[property(name="feed-id", get, set, type = String, get = Self::get_feed_id, set = Self::set_feed_id, blurb = "The Janus Feed ID to identify where the track is coming from")]
+        /// Properties macro does not work with empty struct: https://github.com/gtk-rs/gtk-rs-core/issues/1110
+        _unused: bool,
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for SignallerStr {
+        const NAME: &'static str = "GstJanusVRWebRTCSignallerStr";
+        type Type = super::super::JanusVRSignallerStr;
+        type ParentType = super::super::JanusVRSignaller;
+    }
+
+    #[glib::derived_properties]
+    impl ObjectImpl for SignallerStr {}
+
+    impl super::super::JanusVRSignallerImpl for SignallerStr {}
+
+    impl SignallerStr {
+        fn get_room_id(&self) -> String {
+            let obj = self.obj();
+            let signaller = obj.upcast_ref::<super::super::JanusVRSignaller>().imp();
+            let settings = signaller.settings.lock().unwrap();
+
+            settings
+                .room_id
+                .as_ref()
+                .map(|id| id.as_string())
+                .unwrap_or_default()
+        }
+
+        fn set_room_id(&self, id: String) {
+            let obj = self.obj();
+            let signaller = obj.upcast_ref::<super::super::JanusVRSignaller>().imp();
+            let mut settings = signaller.settings.lock().unwrap();
+
+            settings.room_id = Some(JanusId::Str(id));
+        }
+
+        fn get_feed_id(&self) -> String {
+            let obj = self.obj();
+            let signaller = obj.upcast_ref::<super::super::JanusVRSignaller>().imp();
+            let settings = signaller.settings.lock().unwrap();
+
+            settings
+                .feed_id
+                .as_ref()
+                .map(|id| id.as_string())
+                .unwrap_or_default()
+        }
+
+        fn set_feed_id(&self, id: String) {
+            let obj = self.obj();
+            let signaller = obj.upcast_ref::<super::super::JanusVRSignaller>().imp();
+            let mut settings = signaller.settings.lock().unwrap();
+
+            settings.feed_id = Some(JanusId::Str(id));
+        }
+    }
+}

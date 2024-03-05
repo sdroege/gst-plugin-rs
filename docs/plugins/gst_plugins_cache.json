@@ -7284,6 +7284,20 @@
                         "type": "GstWebRTCSinkPad"
                     }
                 },
+                "properties": {
+                    "use-string-ids": {
+                        "blurb": "Use strings instead of u64 for Janus IDs, see strings_ids config option in janus.plugin.videoroom.jcfg",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": true,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                },
                 "rank": "none"
             },
             "livekitwebrtcsink": {

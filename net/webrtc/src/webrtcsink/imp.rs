@@ -24,7 +24,7 @@ use super::{
     WebRTCSinkCongestionControl, WebRTCSinkError, WebRTCSinkMitigationMode, WebRTCSinkPad,
 };
 use crate::aws_kvs_signaller::AwsKvsSignaller;
-use crate::janusvr_signaller::JanusVRSignaller;
+use crate::janusvr_signaller::{JanusVRSignallerStr, JanusVRSignallerU64};
 use crate::livekit_signaller::LiveKitSignaller;
 use crate::signaller::{prelude::*, Signallable, Signaller, WebRTCSignallerRole};
 use crate::whip_signaller::WhipClientSignaller;
@@ -4439,15 +4439,40 @@ impl ObjectSubclass for LiveKitWebRTCSink {
     type ParentType = super::BaseWebRTCSink;
 }
 
-#[derive(Default)]
-pub struct JanusVRWebRTCSink {}
+#[derive(Debug, Clone, Default)]
+struct JanusSettings {
+    use_string_ids: bool,
+}
 
+#[derive(Default, glib::Properties)]
+#[properties(wrapper_type = super::JanusVRWebRTCSink)]
+pub struct JanusVRWebRTCSink {
+    /**
+     * GstJanusVRWebRTCSink:use-string-ids:
+     *
+     * By default Janus uses `u64` ids to identitify the room, the feed, etc.
+     * But it can be changed to strings using the `strings_ids` option in `janus.plugin.videoroom.jcfg`.
+     * In such case, `janusvrwebrtcsink` has to be created using `use-string-ids=true` so its signaller
+     * uses the right types for such ids and properties.
+     *
+     * Since: plugins-rs-0.13.0
+     */
+    #[property(name="use-string-ids", get, construct_only, type = bool, member = use_string_ids, blurb = "Use strings instead of u64 for Janus IDs, see strings_ids config option in janus.plugin.videoroom.jcfg")]
+    settings: Mutex<JanusSettings>,
+}
+
+#[glib::derived_properties]
 impl ObjectImpl for JanusVRWebRTCSink {
     fn constructed(&self) {
+        let settings = self.settings.lock().unwrap();
         let element = self.obj();
         let ws = element.upcast_ref::<super::BaseWebRTCSink>().imp();
 
-        let _ = ws.set_signaller(JanusVRSignaller::default().upcast());
+        if settings.use_string_ids {
+            let _ = ws.set_signaller(JanusVRSignallerStr::default().upcast());
+        } else {
+            let _ = ws.set_signaller(JanusVRSignallerU64::default().upcast());
+        }
     }
 }
 

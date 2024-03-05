@@ -195,6 +195,14 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
      * $ gst-launch-1.0 videotestsrc ! janusvrwebrtcsink signaller::room-id=1234 signaller::janus-endpoint=wss://janus.conf.meetecho.com/ws
      * ```
      *
+     * By default Janus uses `u64` ids to identitify the room, the feed, etc.
+     * But it can be changed to strings using the `strings_ids` option in `janus.plugin.videoroom.jcfg`.
+     * In such case, `janusvrwebrtcsink` has to be created using `use-string-ids=true` so its signaller uses the right types for such ids and properties:
+     *
+     * ```bash
+     * $ gst-launch-1.0 videotestsrc ! janusvrwebrtcsink signaller::room-id=1234 use-string-ids=true
+     * ```
+     *
      * ## Reference links
      *
      * - [Janus REST/WebSockets docs](https://janus.conf.meetecho.com/docs/rest.html)
