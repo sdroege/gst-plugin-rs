@@ -51,6 +51,15 @@ enum JanusId {
     Num(u64),
 }
 
+impl std::fmt::Display for JanusId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            JanusId::Str(s) => write!(f, "{s}"),
+            JanusId::Num(n) => write!(f, "{n}"),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 struct KeepAliveMsg {
     janus: String,
@@ -166,11 +175,18 @@ struct RoomEvent {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "videoroom")]
+struct RoomDestroyed {
+    room: JanusId,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "videoroom", rename_all = "kebab-case")]
 enum VideoRoomData {
     #[serde(rename = "joined")]
     Joined(RoomJoined),
     #[serde(rename = "event")]
     Event(RoomEvent),
+    Destroyed(RoomDestroyed),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -446,6 +462,14 @@ impl Signaller {
                                     self.handle_answer(jsep.sdp);
                                 }
                             }
+                        }
+                        VideoRoomData::Destroyed(room_destroyed) => {
+                            gst::trace!(CAT, imp: self, "Room {} has been destroyed", room_destroyed.room);
+
+                            self.raise_error(format!(
+                                "room {} has been destroyed",
+                                room_destroyed.room
+                            ));
                         }
                     }
                 }
