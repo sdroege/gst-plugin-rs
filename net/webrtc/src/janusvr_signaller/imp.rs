@@ -162,6 +162,13 @@ struct InnerError {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+struct InnerHangup {
+    session_id: JanusId,
+    sender: JanusId,
+    reason: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 struct RoomJoined {
     room: JanusId,
 }
@@ -218,20 +225,15 @@ struct EventMsg {
 
 // IncomingMessage
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(tag = "janus")]
+#[serde(tag = "janus", rename_all = "lowercase")]
 enum JsonReply {
-    #[serde(rename = "ack")]
     Ack,
-    #[serde(rename = "success")]
     Success(SuccessMsg),
-    #[serde(rename = "event")]
     Event(EventMsg),
-    #[serde(rename = "webrtcup")]
     WebRTCUp,
-    #[serde(rename = "media")]
     Media,
-    #[serde(rename = "error")]
     Error(InnerError),
+    HangUp(InnerHangup),
 }
 
 #[derive(Default)]
@@ -477,6 +479,7 @@ impl Signaller {
             JsonReply::Error(error) => {
                 self.raise_error(format!("code: {}, reason: {}", error.code, error.reason))
             }
+            JsonReply::HangUp(hangup) => self.raise_error(format!("hangup: {}", hangup.reason)),
             // ignore for now
             JsonReply::Ack | JsonReply::Media => {}
         }
