@@ -74,12 +74,10 @@ fn test_pcma_splitting() {
     let mut expected_pay = Vec::with_capacity(134);
     let mut queued = 0;
     let mut pos = 0;
-    for i in 0..134 {
-        if i < 100 {
-            queued += 480;
-        }
+    for i in 0..100 {
+        queued += 480;
 
-        while (i < 100 && queued >= 200) || (i == 100 && queued > 0) {
+        while queued >= 200 || (i == 99 && queued > 0) {
             let size = cmp::min(queued, 400);
             queued -= size;
 
