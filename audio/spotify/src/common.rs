@@ -30,13 +30,13 @@ impl Settings {
     pub fn properties() -> Vec<glib::ParamSpec> {
         vec![glib::ParamSpecString::builder("username")
                     .nick("Username")
-                    .blurb("Spotify device username from https://www.spotify.com/us/account/set-device-password/")
+                    .blurb("Spotify username, Facebook accounts need a device username from https://www.spotify.com/us/account/set-device-password/")
                     .default_value(Some(""))
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecString::builder("password")
                     .nick("Password")
-                    .blurb("Spotify device password from https://www.spotify.com/us/account/set-device-password/")
+                    .blurb("Spotify password, Facebook accounts need a device password from https://www.spotify.com/us/account/set-device-password/")
                     .default_value(Some(""))
                     .mutable_ready()
                     .build(),

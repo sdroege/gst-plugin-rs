@@ -8,10 +8,11 @@ to respect their legal/licensing restrictions.
 
 ## Spotify Credentials
 
-This plugin requires a [Spotify Premium](https://www.spotify.com/premium/) account configured
-with a [device password](https://www.spotify.com/us/account/set-device-password/).
+This plugin requires a [Spotify Premium](https://www.spotify.com/premium/) account.
+If your account is linked with Facebook, you'll need to setup
+a [device username and password](https://www.spotify.com/us/account/set-device-password/).
 
-You can then set the device username and password using the `username` and `password` properties.
+Those username and password are then set using the `username` and `password` properties.
 
 You may also want to cache credentials and downloaded files, see the `cache-` properties on the element.
 
