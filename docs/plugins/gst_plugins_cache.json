@@ -8494,7 +8494,7 @@
                         "writable": true
                     },
                     "password": {
-                        "blurb": "Spotify device password from https://www.spotify.com/us/account/set-device-password/",
+                        "blurb": "Spotify password, Facebook accounts need a device password from https://www.spotify.com/us/account/set-device-password/",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -8518,7 +8518,7 @@
                         "writable": true
                     },
                     "username": {
-                        "blurb": "Spotify device username from https://www.spotify.com/us/account/set-device-password/",
+                        "blurb": "Spotify username, Facebook accounts need a device username from https://www.spotify.com/us/account/set-device-password/",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
