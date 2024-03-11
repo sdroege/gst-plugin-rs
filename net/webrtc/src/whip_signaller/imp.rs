@@ -695,10 +695,10 @@ impl WhipServer {
                         gst::info!(CAT, obj: obj, "ICE gathering complete");
                         let ans: Option<gst_sdp::SDPMessage>;
                         let settings = obj.imp().settings.lock().unwrap();
-                        if let Some(answer_sdp) = webrtcbin
+                        if let Some(answer_desc) = webrtcbin
                             .property::<Option<WebRTCSessionDescription>>("local-description")
                         {
-                            ans = Some(answer_sdp.sdp());
+                            ans = Some(answer_desc.sdp().to_owned());
                         } else {
                             ans = None;
                         }

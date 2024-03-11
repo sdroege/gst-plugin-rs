@@ -901,7 +901,7 @@ impl WhepSrc {
             .webrtcbin
             .property::<Option<WebRTCSessionDescription>>("local-description");
 
-        let offer_sdp = match local_desc {
+        let sess_desc = match local_desc {
             None => {
                 gst::element_imp_error!(
                     self,
@@ -910,17 +910,18 @@ impl WhepSrc {
                 );
                 return;
             }
-            Some(offer) => offer,
+            Some(mut local_desc) => {
+                local_desc.set_type(WebRTCSDPType::Offer);
+                local_desc
+            }
         };
 
         gst::debug!(
             CAT,
             imp: self,
             "Sending offer SDP: {:?}",
-            offer_sdp.sdp().as_text()
+            sess_desc.sdp().as_text()
         );
-
-        let sess_desc = WebRTCSessionDescription::new(WebRTCSDPType::Offer, offer_sdp.sdp());
 
         let timeout;
         let endpoint;
