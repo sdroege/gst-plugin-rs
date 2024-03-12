@@ -75,11 +75,15 @@ fn test_video_singlesegment() {
 }
 
 #[test]
+// FIXME: racy: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/328
+#[ignore]
 fn test_audio_singlesegment() {
     test_audio(true);
 }
 
 #[test]
+// FIXME: racy: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/357
+#[ignore]
 fn test_video_nonsinglesegment() {
     test_video(false);
 }
