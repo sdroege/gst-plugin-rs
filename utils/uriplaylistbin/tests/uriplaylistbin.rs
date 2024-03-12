@@ -299,6 +299,8 @@ fn iterations() {
 }
 
 #[test]
+// FIXME: racy: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/514
+#[ignore]
 fn nb_streams_increasing() {
     let (events, current_iteration, current_uri_index) =
         test(vec![TestMedia::ogg(), TestMedia::mkv()], 2, 1, false);
