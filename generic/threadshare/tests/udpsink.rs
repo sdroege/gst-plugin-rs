@@ -76,6 +76,8 @@ fn test_client_management() {
 }
 
 #[test]
+// FIXME: racy: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/250
+#[ignore]
 fn test_chain() {
     init();
 

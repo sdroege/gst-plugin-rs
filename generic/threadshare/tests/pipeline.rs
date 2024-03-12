@@ -609,6 +609,8 @@ fn premature_shutdown() {
 }
 
 #[test]
+// FIXME: racy: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/250
+#[ignore]
 fn socket_play_null_play() {
     use gio::{
         prelude::SocketExt, InetAddress, InetSocketAddress, SocketFamily, SocketProtocol,
