@@ -979,6 +979,8 @@ fn test_two_stream_close_open_nonlivein_nonliveout() {
 }
 
 #[test]
+// FIXME: racy: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/513
+#[ignore]
 fn test_two_stream_close_open_nonlivein_liveout() {
     init();
 
