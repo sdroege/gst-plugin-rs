@@ -360,7 +360,13 @@ impl TtToCea708 {
                     .translator
                     .set_roll_up_timeout(settings.roll_up_timeout);
                 state.translator.set_roll_up_count(settings.roll_up_rows);
-                state.translator.set_cea608_channel(settings.cea608_channel);
+                state
+                    .translator
+                    .set_cea608_channel(if settings.cea608_channel < 1 {
+                        None
+                    } else {
+                        Some(cea608_types::Id::from_value(settings.cea608_channel as i8))
+                    });
                 state.translator.set_service_no(settings.service_no);
                 state.translator.flush();
 
@@ -526,7 +532,13 @@ impl ObjectImpl for TtToCea708 {
                 let mut settings = self.settings.lock().unwrap();
                 let channel = value.get::<u32>().expect("type checked upstream") as u8;
                 settings.cea608_channel = channel;
-                state.translator.set_cea608_channel(channel);
+                state
+                    .translator
+                    .set_cea608_channel(if settings.cea608_channel < 1 {
+                        None
+                    } else {
+                        Some(cea608_types::Id::from_value(settings.cea608_channel as i8))
+                    });
             }
             "roll-up-rows" => {
                 let mut state = self.state.lock().unwrap();
@@ -657,7 +669,13 @@ impl ElementImpl for TtToCea708 {
                     .translator
                     .set_roll_up_timeout(settings.roll_up_timeout);
                 state.translator.set_column(settings.origin_column as u8);
-                state.translator.set_cea608_channel(settings.cea608_channel);
+                state
+                    .translator
+                    .set_cea608_channel(if settings.cea608_channel < 1 {
+                        None
+                    } else {
+                        Some(cea608_types::Id::from_value(settings.cea608_channel as i8))
+                    });
                 state.translator.set_service_no(settings.service_no);
                 state.translator.flush();
             }

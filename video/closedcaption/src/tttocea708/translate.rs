@@ -53,7 +53,7 @@ pub struct TextToCea708 {
     mode: Cea708Mode,
     roll_up_count: u8,
     service_no: u8,
-    cea608_channel: u8,
+    cea608_channel: Option<cea608_types::Id>,
     origin_column: u32,
     roll_up_timeout: Option<gst::ClockTime>,
     framerate: gst::Fraction,
@@ -78,7 +78,7 @@ impl Default for TextToCea708 {
             mode: Cea708Mode::RollUp,
             roll_up_count: 2,
             service_no: 1,
-            cea608_channel: 1,
+            cea608_channel: Some(cea608_types::Id::CC1),
             origin_column: 0,
             framerate: gst::Fraction::new(DEFAULT_FPS_N, DEFAULT_FPS_D),
             roll_up_timeout: None,
@@ -117,7 +117,7 @@ impl TextToCea708 {
 
     pub fn set_origin_column(&mut self, origin_column: u32) {
         self.origin_column = origin_column;
-        self.cea608.set_origin_column(origin_column);
+        self.cea608.set_origin_column(origin_column as u8);
     }
 
     pub fn set_column(&mut self, column: u8) {
@@ -151,10 +151,12 @@ impl TextToCea708 {
         self.framerate
     }
 
-    pub fn set_cea608_channel(&mut self, channel: u8) {
-        assert!((0..=4).contains(&channel));
+    pub fn set_cea608_channel(&mut self, channel: Option<cea608_types::Id>) {
         if self.cea608_channel != channel {
             self.cea608.flush();
+            if let Some(id) = channel {
+                self.cea608.set_caption_id(id);
+            }
         }
         self.cea608_channel = channel;
     }
@@ -271,23 +273,19 @@ impl TextToCea708 {
         }
         gst::trace!(CAT, "push packet to writer");
         self.cc_data_writer.push_packet(packet);
-        if self.cea608_channel > 0 {
+        if let Some(cea608_id) = self.cea608_channel {
             let tcea608 = self.cea608.pop_output().unwrap_or(TimedCea608 {
-                cea608: 0x8080,
+                cea608: [0x80, 0x80],
                 frame_no: self.last_frame_no,
             });
-            let (byte0, byte1) = (
-                ((tcea608.cea608 & 0xff00) >> 8) as u8,
-                (tcea608.cea608 & 0xff) as u8,
-            );
-            match self.cea608_channel {
-                1 | 2 => self
+            let (byte0, byte1) = (tcea608.cea608[0], tcea608.cea608[1]);
+            match cea608_id.field() {
+                cea608_types::tables::Field::ONE => self
                     .cc_data_writer
                     .push_cea608(cea708_types::Cea608::Field1(byte0, byte1)),
-                3 | 4 => self
+                cea608_types::tables::Field::TWO => self
                     .cc_data_writer
                     .push_cea608(cea708_types::Cea608::Field2(byte0, byte1)),
-                _ => (),
             }
         }
 
@@ -331,7 +329,7 @@ impl TextToCea708 {
         let frame_no = frame_no.max(self.last_frame_no);
         let end_frame_no = end_frame_no.max(frame_no);
 
-        if self.cea608_channel > 0 {
+        if self.cea608_channel.is_some() {
             self.cea608.generate(frame_no, end_frame_no, lines.clone());
         }
 

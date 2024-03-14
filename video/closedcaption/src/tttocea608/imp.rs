@@ -16,7 +16,6 @@ use std::sync::Mutex;
 
 use crate::cea608utils::Cea608Mode;
 use crate::cea608utils::TextStyle;
-use crate::ffi;
 use crate::ttutils::Chunk;
 use crate::ttutils::Line;
 use crate::ttutils::Lines;
@@ -75,40 +74,30 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-fn eia608_to_text(cc_data: u16) -> String {
-    unsafe {
-        let bufsz = ffi::eia608_to_text(std::ptr::null_mut(), 0, cc_data);
-        let mut data = Vec::with_capacity((bufsz + 1) as usize);
-        ffi::eia608_to_text(data.as_ptr() as *mut _, (bufsz + 1) as usize, cc_data);
-        data.set_len(bufsz as usize);
-        String::from_utf8_unchecked(data)
-    }
-}
-
 fn cc_data_buffer(
     imp: &TtToCea608,
-    cc_data: u16,
+    cc_data: [u8; 2],
     pts: gst::ClockTime,
     duration: gst::ClockTime,
 ) -> gst::Buffer {
     let mut ret = gst::Buffer::with_size(2).unwrap();
     let buf_mut = ret.get_mut().unwrap();
-    let data = cc_data.to_be_bytes();
 
-    if cc_data != 0x8080 {
+    if cc_data != [0x80, 0x80] {
+        let code = cea608_types::tables::Code::from_data(cc_data);
         gst::log!(
             CAT,
             imp: imp,
-            "{} -> {}: {}",
+            "{} -> {}: {:?}",
             pts,
             pts + duration,
-            eia608_to_text(cc_data)
+            code
         );
     } else {
         gst::trace!(CAT, imp: imp, "{} -> {}: padding", pts, pts + duration);
     }
 
-    buf_mut.copy_from_slice(0, &data).unwrap();
+    buf_mut.copy_from_slice(0, &cc_data).unwrap();
     buf_mut.set_pts(pts);
     buf_mut.set_duration(duration);
 
@@ -301,6 +290,7 @@ impl TtToCea608 {
                 let framerate = s.get::<gst::Fraction>("framerate").unwrap();
                 state.framerate = framerate;
                 state.translator.set_framerate(framerate);
+                state.translator.set_caption_id(cea608_types::Id::CC1);
 
                 let upstream_caps = e.caps();
                 let s = upstream_caps.structure(0).unwrap();
@@ -362,7 +352,9 @@ impl TtToCea608 {
                 *state = State::default();
                 state.translator.set_mode(settings.mode);
                 state.translator.set_framerate(framerate);
-                state.translator.set_origin_column(settings.origin_column);
+                state
+                    .translator
+                    .set_origin_column(settings.origin_column as u8);
                 state
                     .translator
                     .set_roll_up_timeout(settings.roll_up_timeout);
@@ -606,7 +598,9 @@ impl ElementImpl for TtToCea608 {
                 *state = State::default();
                 state.force_clear = false;
                 state.translator.set_mode(settings.mode);
-                state.translator.set_origin_column(settings.origin_column);
+                state
+                    .translator
+                    .set_origin_column(settings.origin_column as u8);
                 state.translator.set_framerate(framerate);
                 state
                     .translator

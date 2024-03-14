@@ -133,29 +133,7 @@ fn test_rollup() {
             ],
         ), // RU3 -> DeleteWindows(!0), DefineWindow(0...), SetPenLocation(bottom-row)
         ([0x94, 0xAD], vec![Code::CR, Code::ETX]),                  // CR -> CR
-        (
-            [0x94, 0x70],
-            vec![
-                Code::DeleteWindows(!WindowBits::ZERO),
-                Code::DefineWindow(DefineWindowArgs::new(
-                    0,
-                    0,
-                    Anchor::BottomMiddle,
-                    true,
-                    93,
-                    50,
-                    2,
-                    31,
-                    true,
-                    true,
-                    true,
-                    1,
-                    1,
-                )),
-                Code::SetPenLocation(SetPenLocationArgs::new(2, 0)),
-                Code::ETX,
-            ],
-        ), // PAC to bottom left -> SetPenLocation(...)
+        ([0x94, 0x70], vec![Code::ETX]), // PAC to bottom left -> (pen already there) -> nothing to do
         (
             [0xA8, 0x43],
             vec![Code::LeftParenthesis, Code::LatinCapitalC, Code::ETX],
@@ -169,7 +147,7 @@ fn test_rollup() {
                     0,
                     Anchor::BottomMiddle,
                     true,
-                    93,
+                    100,
                     50,
                     2,
                     31,
@@ -183,7 +161,7 @@ fn test_rollup() {
                 Code::ETX,
             ],
         ), // RU3
-        ([0x94, 0xAD], vec![Code::CR, Code::ETX]),                  // CR -> CR
+        ([0x94, 0xAD], vec![Code::CR, Code::ETX]), // CR -> CR
         ([0x94, 0x70], vec![Code::ETX]), // PAC to bottom left -> SetPenLocation(...)
         (
             [0xF2, 0xEF],

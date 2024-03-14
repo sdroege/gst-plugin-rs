@@ -6,6 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use cea608_types::tables::{Channel, PreambleAddressCode};
 use cea708_types::{tables::*, DTVCCPacket};
 use cea708_types::{CCDataWriter, Framerate};
 use gst::glib;
@@ -15,7 +16,11 @@ use gst::subclass::prelude::*;
 use atomic_refcell::AtomicRefCell;
 
 use crate::cea608utils::*;
-use crate::cea708utils::{textstyle_foreground_color, textstyle_to_pen_color, Cea708ServiceWriter};
+use crate::cea708utils::{
+    cea608_color_to_foreground_color, textstyle_to_pen_color, Cea708ServiceWriter,
+};
+
+use cea608_types::{Cea608, Cea608State as Cea608StateTracker};
 
 use once_cell::sync::Lazy;
 
@@ -56,7 +61,7 @@ impl Default for Cea608ServiceState {
     fn default() -> Self {
         Self {
             mode: None,
-            base_row: 15,
+            base_row: 14,
         }
     }
 }
@@ -116,8 +121,8 @@ impl Cea708ServiceState {
         self.pen_attributes.italics = false;
     }
 
-    fn handle_text(&mut self, text: Cea608Text) {
-        if text.code_space == CodeSpace::WestEU {
+    fn handle_text(&mut self, text: cea608_types::Text) {
+        if text.needs_backspace {
             self.writer.push_codes(&[Code::BS]);
         }
         if let Some(c) = text.char1 {
@@ -136,18 +141,18 @@ impl Cea708ServiceState {
         }
     }
 
-    fn handle_preamble(&mut self, preamble: Preamble) {
+    fn handle_preamble(&mut self, preamble: PreambleAddressCode) {
         let mut need_pen_location = false;
-        // TODO: may need a better algorithm then compressing the top four rows
-        let new_row = std::cmp::max(0, preamble.row) as u8;
+        // TODO: may need a better algorithm than compressing the top four rows
+        let new_row = std::cmp::max(0, preamble.row());
         if self.pen_location.row != new_row {
             need_pen_location = true;
             self.pen_location.row = new_row;
         }
 
-        if self.pen_location.column != preamble.col as u8 {
+        if self.pen_location.column != preamble.column() {
             need_pen_location = true;
-            self.pen_location.column = preamble.col as u8;
+            self.pen_location.column = preamble.column();
         }
 
         if need_pen_location {
@@ -155,42 +160,44 @@ impl Cea708ServiceState {
         }
 
         let mut need_pen_attributes = false;
-        if self.pen_attributes.italics != preamble.style.is_italics() {
+        if self.pen_attributes.italics != preamble.italics() {
             need_pen_attributes = true;
-            self.pen_attributes.italics = preamble.style.is_italics();
+            self.pen_attributes.italics = preamble.italics();
         }
 
-        if self.pen_attributes.underline != (preamble.underline > 0) {
+        if self.pen_attributes.underline != preamble.underline() {
             need_pen_attributes = true;
-            self.pen_attributes.underline = preamble.underline > 0;
+            self.pen_attributes.underline = preamble.underline();
         }
 
         if need_pen_attributes {
             self.writer.set_pen_attributes(self.pen_attributes);
         }
 
-        if self.pen_color.foreground_color != textstyle_foreground_color(preamble.style) {
-            self.pen_color.foreground_color = textstyle_foreground_color(preamble.style);
+        if self.pen_color.foreground_color != cea608_color_to_foreground_color(preamble.color()) {
+            self.pen_color.foreground_color = cea608_color_to_foreground_color(preamble.color());
             self.writer.set_pen_color(self.pen_color);
         }
     }
 
-    fn handle_midrowchange(&mut self, midrowchange: MidRowChange) {
+    fn handle_midrowchange(&mut self, midrowchange: cea608_types::tables::MidRow) {
         self.writer.write_char(' ');
-        if self.pen_color.foreground_color != textstyle_foreground_color(midrowchange.style) {
-            self.pen_color.foreground_color = textstyle_foreground_color(midrowchange.style);
-            self.writer.set_pen_color(self.pen_color);
+        if let Some(color) = midrowchange.color() {
+            if self.pen_color.foreground_color != cea608_color_to_foreground_color(color) {
+                self.pen_color.foreground_color = cea608_color_to_foreground_color(color);
+                self.writer.set_pen_color(self.pen_color);
+            }
         }
 
         let mut need_pen_attributes = false;
-        if self.pen_attributes.italics != midrowchange.style.is_italics() {
+        if self.pen_attributes.italics != midrowchange.italics() {
             need_pen_attributes = true;
-            self.pen_attributes.italics = midrowchange.style.is_italics();
+            self.pen_attributes.italics = midrowchange.italics();
         }
 
-        if self.pen_attributes.underline != midrowchange.underline {
+        if self.pen_attributes.underline != midrowchange.underline() {
             need_pen_attributes = true;
-            self.pen_attributes.underline = midrowchange.underline;
+            self.pen_attributes.underline = midrowchange.underline();
         }
 
         if need_pen_attributes {
@@ -287,12 +294,12 @@ enum BufferOrEvent {
 }
 
 impl State {
-    fn field_channel_to_index(&self, field: u8, channel: i32) -> usize {
+    fn field_channel_to_index(&self, field: u8, channel: Channel) -> usize {
         match (field, channel) {
-            (0, 0 | 2) => 0,
-            (0, 1 | 3) => 2,
-            (1, 0 | 2) => 1,
-            (1, 1 | 3) => 3,
+            (0, Channel::ONE) => 0,
+            (0, Channel::TWO) => 2,
+            (1, Channel::ONE) => 1,
+            (1, Channel::TWO) => 3,
             _ => unreachable!(),
         }
     }
@@ -300,12 +307,12 @@ impl State {
     fn service_state_from_608_field_channel(
         &mut self,
         field: u8,
-        channel: i32,
+        channel: Channel,
     ) -> &mut Cea708ServiceState {
         &mut self.cea708.service_state[self.field_channel_to_index(field, channel)]
     }
 
-    fn new_mode(&mut self, field: u8, channel: i32, cea608_mode: Cea608Mode) {
+    fn new_mode(&mut self, field: u8, channel: Channel, cea608_mode: Cea608Mode) {
         let idx = self.field_channel_to_index(field, channel);
         if let Some(old_mode) = self.cea608.service[idx].mode {
             if cea608_mode.is_rollup()
@@ -345,27 +352,20 @@ impl State {
         self.cea708.service_state[idx].new_mode(cea608_mode, base_row);
     }
 
-    fn handle_cc_data(&mut self, imp: &Cea608ToCea708, field: u8, cc_data: u16) {
-        self.cea608.tracker[field as usize].push_cc_data(cc_data);
-
-        let mut channel = None;
-        if let Some(cea608) = self.cea608.tracker[field as usize].pop() {
+    fn handle_cc_data(&mut self, imp: &Cea608ToCea708, field: u8, cc_data: [u8; 2]) {
+        if let Ok(Some(cea608)) = self.cea608.tracker[field as usize].decode(cc_data) {
             gst::trace!(
                 CAT,
                 imp: imp,
-                "have field:{field} channel:{} {cea608:?}",
+                "have field:{field} channel:{:?} {cea608:?}",
                 cea608.channel()
             );
-            if !matches!(cea608, Cea608::Duplicate) {
-                channel = Some(cea608.channel());
-            }
             match cea608 {
-                Cea608::Duplicate => (),
                 Cea608::NewMode(chan, new_mode) => {
-                    self.new_mode(field, chan, new_mode);
+                    self.new_mode(field, chan, new_mode.into());
                 }
                 Cea608::Text(text) => {
-                    let state = self.service_state_from_608_field_channel(field, text.chan);
+                    let state = self.service_state_from_608_field_channel(field, text.channel);
                     state.handle_text(text);
                 }
                 Cea608::EndOfCaption(chan) => {
@@ -373,8 +373,8 @@ impl State {
                     state.writer.end_of_caption();
                     state.writer.etx();
                 }
-                Cea608::Preamble(mut preamble) => {
-                    let idx = self.field_channel_to_index(field, preamble.chan);
+                Cea608::Preamble(chan, mut preamble) => {
+                    let idx = self.field_channel_to_index(field, chan);
                     let rollup_count = self.cea608.service[idx]
                         .mode
                         .map(|mode| {
@@ -388,21 +388,23 @@ impl State {
                     if rollup_count > 0 {
                         // https://www.law.cornell.edu/cfr/text/47/79.101 (f)(1)(ii)
                         let old_base_row = self.cea608.service[idx].base_row;
-                        self.cea608.service[idx].base_row = preamble.row as u8;
-                        let state = self.service_state_from_608_field_channel(field, preamble.chan);
-                        if old_base_row != preamble.row as u8 {
-                            state
-                                .writer
-                                .rollup_preamble(rollup_count, preamble.row as u8);
+                        self.cea608.service[idx].base_row = preamble.row();
+                        let state = self.service_state_from_608_field_channel(field, chan);
+                        if old_base_row != preamble.row() {
+                            state.writer.rollup_preamble(rollup_count, preamble.row());
                         }
                         state.pen_location.row = rollup_count - 1;
-                        preamble.row = rollup_count as i32 - 1;
+                        preamble = PreambleAddressCode::new(
+                            rollup_count - 1,
+                            preamble.underline(),
+                            preamble.code(),
+                        );
                     }
-                    let state = self.service_state_from_608_field_channel(field, preamble.chan);
+                    let state = self.service_state_from_608_field_channel(field, chan);
                     state.handle_preamble(preamble);
                 }
-                Cea608::MidRowChange(midrowchange) => {
-                    let state = self.service_state_from_608_field_channel(field, midrowchange.chan);
+                Cea608::MidRowChange(chan, midrowchange) => {
+                    let state = self.service_state_from_608_field_channel(field, chan);
                     state.handle_midrowchange(midrowchange);
                 }
                 Cea608::Backspace(chan) => {
@@ -432,24 +434,23 @@ impl State {
                 Cea608::TabOffset(chan, count) => {
                     let state = self.service_state_from_608_field_channel(field, chan);
                     state.pen_location.column =
-                        std::cmp::min(state.pen_location.column + count as u8, 32);
+                        std::cmp::min(state.pen_location.column + count, 32);
                 }
+                Cea608::DeleteToEndOfRow(_chan) => (),
             }
-            if let Some(channel) = channel {
-                let idx = self.field_channel_to_index(field, channel);
-                if let Some(
-                    Cea608Mode::RollUp2
-                    | Cea608Mode::RollUp3
-                    | Cea608Mode::RollUp4
-                    | Cea608Mode::PaintOn,
-                ) = self.cea608.service[idx].mode
-                {
-                    // FIXME: actually track state for when things have changed
-                    // and we need to send ETX
-                    self.cea708.service_state[idx]
-                        .writer
-                        .push_codes(&[cea708_types::tables::Code::ETX]);
-                }
+            let idx = self.field_channel_to_index(field, cea608.channel());
+            if let Some(
+                Cea608Mode::RollUp2
+                | Cea608Mode::RollUp3
+                | Cea608Mode::RollUp4
+                | Cea608Mode::PaintOn,
+            ) = self.cea608.service[idx].mode
+            {
+                // FIXME: actually track state for when things have changed
+                // and we need to send ETX
+                self.cea708.service_state[idx]
+                    .writer
+                    .push_codes(&[cea708_types::tables::Code::ETX]);
             }
         }
     }
@@ -529,9 +530,8 @@ impl Cea608ToCea708 {
                     return Ok(gst::FlowSuccess::Ok);
                 }
                 for triple in data.chunks_exact(3) {
-                    let cc_data = (triple[1] as u16) << 8 | triple[2] as u16;
                     let field = (triple[0] & 0x80) >> 7;
-                    state.handle_cc_data(self, field, cc_data);
+                    state.handle_cc_data(self, field, [triple[1], triple[2]]);
                 }
                 data.to_vec()
             }
@@ -559,8 +559,7 @@ impl Cea608ToCea708 {
                 };
                 let mut s334_1a_data = Vec::with_capacity(data.len() / 2 * 3);
                 for pair in data.chunks_exact(2) {
-                    let cc_data = (pair[0] as u16) << 8 | pair[1] as u16;
-                    state.handle_cc_data(self, field, cc_data);
+                    state.handle_cc_data(self, field, [pair[0], pair[1]]);
                     if field == 0 {
                         s334_1a_data.push(0x00);
                     } else {

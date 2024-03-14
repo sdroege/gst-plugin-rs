@@ -25,9 +25,13 @@
 //  * The Chunk object could have an "indent" field, that would get translated
 //    to tab offsets for small bandwidth savings
 
+use cea608_types::tables::Channel;
+use cea608_types::tables::MidRow;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+
+use cea608_types::{Cea608, Cea608State as Cea608StateTracker};
 
 use crate::cea608utils::*;
 use crate::ttutils::{Chunk, Line, Lines};
@@ -248,21 +252,24 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 fn dump(
     imp: &Cea608ToJson,
-    cc_data: u16,
+    cc_data: [u8; 2],
     pts: impl Into<Option<gst::ClockTime>>,
     duration: impl Into<Option<gst::ClockTime>>,
 ) {
     let pts = pts.into();
     let end = pts.opt_add(duration.into());
 
-    if cc_data != 0x8080 {
+    if cc_data != [0x80, 0x80] {
+        let Ok(code) = cea608_types::tables::Code::from_data(cc_data) else {
+            return;
+        };
         gst::debug!(
             CAT,
             imp: imp,
-            "{} -> {}: {}",
+            "{} -> {}: {:?}",
             pts.display(),
             end.display(),
-            eia608_to_text(cc_data)
+            code
         );
     } else {
         gst::trace!(
@@ -346,7 +353,7 @@ impl State {
             }
 
             self.rows.clear();
-            self.cea608_state.flush();
+            self.cea608_state.reset();
         } else {
             for row in self.rows.values() {
                 if !row.is_empty() {
@@ -402,22 +409,18 @@ impl State {
     fn handle_preamble(
         &mut self,
         imp: &Cea608ToJson,
-        preamble: Preamble,
+        preamble: cea608_types::tables::PreambleAddressCode,
     ) -> Option<TimestampedLines> {
-        if preamble.chan != 0 {
-            return None;
-        }
-
         gst::log!(CAT, imp: imp, "preamble: {:?}", preamble);
 
-        let drain_roll_up = self.cursor.row != preamble.row as u32;
+        let drain_roll_up = self.cursor.row != preamble.row() as u32;
 
         // In unbuffered mode, we output the whole roll-up window
         // and need to move it when the preamble relocates it
         // https://www.law.cornell.edu/cfr/text/47/79.101 (f)(1)(ii)
         if self.settings.unbuffered {
             if let Some(mode) = self.mode {
-                if mode.is_rollup() && self.cursor.row != preamble.row as u32 {
+                if mode.is_rollup() && self.cursor.row != preamble.row() as u32 {
                     let offset = match mode {
                         Cea608Mode::RollUp2 => 1,
                         Cea608Mode::RollUp3 => 2,
@@ -426,7 +429,7 @@ impl State {
                     };
 
                     let current_top_row = self.cursor.row.saturating_sub(offset);
-                    let new_row_offset = preamble.row - self.cursor.row as i32;
+                    let new_row_offset = preamble.row() as i32 - self.cursor.row as i32;
 
                     for row in current_top_row..self.cursor.row {
                         if let Some(mut row) = self.rows.remove(&row) {
@@ -441,10 +444,22 @@ impl State {
             }
         }
 
-        self.cursor.row = preamble.row as u32;
-        self.cursor.col = preamble.col as usize;
-        self.cursor.style = preamble.style;
-        self.cursor.underline = preamble.underline != 0;
+        self.cursor.row = preamble.row() as u32;
+        self.cursor.col = preamble.column() as usize;
+        self.cursor.underline = preamble.underline();
+        self.cursor.style = if preamble.italics() {
+            TextStyle::ItalicWhite
+        } else {
+            match preamble.color() {
+                cea608_types::tables::Color::White => TextStyle::White,
+                cea608_types::tables::Color::Green => TextStyle::Green,
+                cea608_types::tables::Color::Blue => TextStyle::Blue,
+                cea608_types::tables::Color::Cyan => TextStyle::Cyan,
+                cea608_types::tables::Color::Red => TextStyle::Red,
+                cea608_types::tables::Color::Yellow => TextStyle::Yellow,
+                cea608_types::tables::Color::Magenta => TextStyle::Magenta,
+            }
+        };
 
         if let Some(mode) = self.mode {
             match mode {
@@ -487,13 +502,9 @@ impl State {
         }
     }
 
-    fn handle_text(&mut self, imp: &Cea608ToJson, text: Cea608Text) {
-        if text.chan != 0 {
-            return;
-        }
-
+    fn handle_text(&mut self, imp: &Cea608ToJson, text: cea608_types::Text) {
         if let Some(row) = self.rows.get_mut(&self.cursor.row) {
-            if text.code_space == CodeSpace::WestEU {
+            if text.needs_backspace {
                 row.pop(&mut self.cursor);
             }
 
@@ -517,11 +528,13 @@ impl State {
         }
     }
 
-    fn handle_midrowchange(&mut self, midrowchange: MidRowChange) {
+    fn handle_midrowchange(&mut self, midrowchange: MidRow) {
         if let Some(row) = self.rows.get_mut(&self.cursor.row) {
-            if midrowchange.chan == 0 {
-                row.push_midrow(&mut self.cursor, midrowchange.style, midrowchange.underline);
-            }
+            row.push_midrow(
+                &mut self.cursor,
+                midrowchange.into(),
+                midrowchange.underline(),
+            );
         }
     }
 
@@ -530,129 +543,115 @@ impl State {
         imp: &Cea608ToJson,
         pts: Option<gst::ClockTime>,
         duration: Option<gst::ClockTime>,
-        cc_data: u16,
+        cc_data: [u8; 2],
     ) -> Option<TimestampedLines> {
-        self.cea608_state.push_cc_data(cc_data);
+        let Ok(Some(cea608)) = self.cea608_state.decode(cc_data) else {
+            return None;
+        };
 
-        while let Some(cea608) = self.cea608_state.pop() {
-            if matches!(cea608, Cea608::Duplicate) {
-                gst::log!(CAT, imp: imp, "Skipping duplicate");
-                return None;
+        self.current_pts = pts;
+        self.current_duration = duration;
+
+        if cea608.channel() != Channel::ONE {
+            return None;
+        }
+
+        match cea608 {
+            Cea608::EraseDisplay(_chan) => {
+                return match self.mode {
+                    Some(Cea608Mode::PopOn) => {
+                        self.clear = Some(true);
+                        self.drain_pending(imp)
+                    }
+                    _ => {
+                        let ret = self.drain(imp, true);
+                        self.clear = Some(true);
+                        ret
+                    }
+                };
             }
+            Cea608::NewMode(_chan, mode) => return self.update_mode(imp, mode.into()),
+            Cea608::CarriageReturn(_chan) => {
+                gst::log!(CAT, imp: imp, "carriage return");
 
-            self.current_pts = pts;
-            self.current_duration = duration;
-
-            match cea608 {
-                Cea608::Duplicate => unreachable!(),
-                Cea608::EraseDisplay(chan) => {
-                    if chan == 0 {
-                        return match self.mode {
-                            Some(Cea608Mode::PopOn) => {
-                                self.clear = Some(true);
-                                self.drain_pending(imp)
-                            }
-                            _ => {
-                                let ret = self.drain(imp, true);
-                                self.clear = Some(true);
-                                ret
-                            }
-                        };
-                    }
-                }
-                Cea608::NewMode(chan, mode) => {
-                    if chan == 0 {
-                        return self.update_mode(imp, mode);
-                    }
-                }
-                Cea608::CarriageReturn(chan) => {
-                    if chan == 0 {
-                        gst::log!(CAT, imp: imp, "carriage return");
-
-                        if let Some(mode) = self.mode {
-                            // https://www.law.cornell.edu/cfr/text/47/79.101 (f)(2)(i) (f)(3)(i)
-                            if mode.is_rollup() {
-                                let ret = if self.settings.unbuffered {
-                                    let offset = match mode {
-                                        Cea608Mode::RollUp2 => 1,
-                                        Cea608Mode::RollUp3 => 2,
-                                        Cea608Mode::RollUp4 => 3,
-                                        _ => unreachable!(),
-                                    };
-
-                                    let top_row = self.cursor.row.saturating_sub(offset);
-
-                                    // https://www.law.cornell.edu/cfr/text/47/79.101 (f)(1)(iii)
-                                    self.rows.remove(&top_row);
-
-                                    for row in top_row + 1..self.cursor.row + 1 {
-                                        if let Some(mut row) = self.rows.remove(&row) {
-                                            row.row -= 1;
-                                            self.rows.insert(row.row, row);
-                                        }
-                                    }
-
-                                    self.rows.insert(self.cursor.row, Row::new(self.cursor.row));
-                                    self.drain(imp, false)
-                                } else {
-                                    let ret = self.drain(imp, true);
-                                    self.carriage_return = Some(true);
-                                    ret
-                                };
-
-                                return ret;
-                            }
-                        }
-                    }
-                }
-                Cea608::Backspace(chan) => {
-                    if chan == 0 {
-                        if let Some(row) = self.rows.get_mut(&self.cursor.row) {
-                            row.pop(&mut self.cursor);
-                        }
-                    }
-                }
-                Cea608::EraseNonDisplay(chan) => {
-                    if chan == 0 && self.mode == Some(Cea608Mode::PopOn) {
-                        self.rows.clear();
-                    }
-                }
-                Cea608::EndOfCaption(chan) => {
-                    if chan == 0 {
-                        // https://www.law.cornell.edu/cfr/text/47/79.101 (f)(2)
-                        self.update_mode(imp, Cea608Mode::PopOn);
-                        self.first_pts = self.current_pts;
+                if let Some(mode) = self.mode {
+                    // https://www.law.cornell.edu/cfr/text/47/79.101 (f)(2)(i) (f)(3)(i)
+                    if mode.is_rollup() {
                         let ret = if self.settings.unbuffered {
-                            self.drain(imp, true)
+                            let offset = match mode {
+                                Cea608Mode::RollUp2 => 1,
+                                Cea608Mode::RollUp3 => 2,
+                                Cea608Mode::RollUp4 => 3,
+                                _ => unreachable!(),
+                            };
+
+                            let top_row = self.cursor.row.saturating_sub(offset);
+
+                            // https://www.law.cornell.edu/cfr/text/47/79.101 (f)(1)(iii)
+                            self.rows.remove(&top_row);
+
+                            for row in top_row + 1..self.cursor.row + 1 {
+                                if let Some(mut row) = self.rows.remove(&row) {
+                                    row.row -= 1;
+                                    self.rows.insert(row.row, row);
+                                }
+                            }
+
+                            self.rows.insert(self.cursor.row, Row::new(self.cursor.row));
+                            self.drain(imp, false)
                         } else {
-                            let ret = self.drain_pending(imp);
-                            self.pending_lines = self.drain(imp, true);
+                            let ret = self.drain(imp, true);
+                            self.carriage_return = Some(true);
                             ret
                         };
+
                         return ret;
                     }
                 }
-                Cea608::TabOffset(chan, count) => {
-                    if chan == 0 {
-                        self.cursor.col += count as usize;
-                        // C.13 Right Margin Limitation
-                        self.cursor.col = std::cmp::min(self.cursor.col, 31);
-                    }
-                }
-                Cea608::Text(text) => {
-                    if let Some(mode) = self.mode {
-                        self.mode?;
-                        gst::log!(CAT, imp: imp, "text");
-                        self.handle_text(imp, text);
-
-                        if mode.is_rollup() && self.settings.unbuffered {
-                            return self.drain(imp, false);
-                        }
-                    }
-                }
-                Cea608::Preamble(preamble) => return self.handle_preamble(imp, preamble),
-                Cea608::MidRowChange(change) => self.handle_midrowchange(change),
             }
+            Cea608::Backspace(_chan) => {
+                if let Some(row) = self.rows.get_mut(&self.cursor.row) {
+                    row.pop(&mut self.cursor);
+                }
+            }
+            Cea608::EraseNonDisplay(_chan) => {
+                if self.mode == Some(Cea608Mode::PopOn) {
+                    self.rows.clear();
+                }
+            }
+            Cea608::EndOfCaption(_chan) => {
+                // https://www.law.cornell.edu/cfr/text/47/79.101 (f)(2)
+                self.update_mode(imp, Cea608Mode::PopOn);
+                self.first_pts = self.current_pts;
+                let ret = if self.settings.unbuffered {
+                    self.drain(imp, true)
+                } else {
+                    let ret = self.drain_pending(imp);
+                    self.pending_lines = self.drain(imp, true);
+                    ret
+                };
+                return ret;
+            }
+            Cea608::TabOffset(_chan, count) => {
+                self.cursor.col += count as usize;
+                // C.13 Right Margin Limitation
+                self.cursor.col = std::cmp::min(self.cursor.col, 31);
+            }
+            Cea608::Text(text) => {
+                if let Some(mode) = self.mode {
+                    self.mode?;
+                    gst::log!(CAT, imp: imp, "text");
+                    self.handle_text(imp, text);
+
+                    if mode.is_rollup() && self.settings.unbuffered {
+                        return self.drain(imp, false);
+                    }
+                }
+            }
+            // TODO: implement
+            Cea608::DeleteToEndOfRow(_chan) => (),
+            Cea608::Preamble(_chan, preamble) => return self.handle_preamble(imp, preamble),
+            Cea608::MidRowChange(_chan, change) => self.handle_midrowchange(change),
         }
         None
     }
@@ -717,7 +716,7 @@ impl Cea608ToJson {
             return Ok(gst::FlowSuccess::Ok);
         }
 
-        let cc_data = (data[0] as u16) << 8 | data[1] as u16;
+        let cc_data = [data[0], data[1]];
 
         dump(self, cc_data, pts, duration);
 

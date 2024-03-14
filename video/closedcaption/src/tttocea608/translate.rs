@@ -10,9 +10,7 @@ use gst::prelude::*;
 use once_cell::sync::Lazy;
 use std::collections::VecDeque;
 
-use crate::ffi;
-
-use crate::cea608utils::{is_basicna, is_specialna, is_westeu, Cea608Mode, TextStyle};
+use crate::cea608utils::{Cea608Mode, TextStyle};
 use crate::ttutils::{Chunk, Lines};
 
 pub const DEFAULT_FPS_N: i32 = 30;
@@ -26,65 +24,24 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-static SPACE: Lazy<u16> = Lazy::new(|| eia608_from_utf8_1(&[0x20, 0, 0, 0, 0]));
-
 fn is_punctuation(word: &str) -> bool {
     word == "." || word == "," || word == "?" || word == "!" || word == ";" || word == ":"
 }
 
-#[allow(clippy::trivially_copy_pass_by_ref)]
-fn eia608_from_utf8_1(c: &[u8; 5]) -> u16 {
-    assert!(c[4] == 0);
-    unsafe { ffi::eia608_from_utf8_1(c.as_ptr() as *const _, 0) }
-}
-
-fn eia608_row_column_preamble(row: i32, col: i32, underline: bool) -> u16 {
-    unsafe {
-        /* Hardcoded chan */
-        ffi::eia608_row_column_pramble(row, col, 0, underline as i32)
-    }
-}
-
-fn eia608_row_style_preamble(row: i32, style: u32, underline: bool) -> u16 {
-    unsafe {
-        /* Hardcoded chan */
-        ffi::eia608_row_style_pramble(row, 0, style, underline as i32)
-    }
-}
-
-fn eia608_midrow_change(style: u32, underline: bool) -> u16 {
-    unsafe {
-        /* Hardcoded chan and underline */
-        ffi::eia608_midrow_change(0, style, underline as i32)
-    }
-}
-
-fn eia608_control_command(cmd: ffi::eia608_control_t) -> u16 {
-    unsafe { ffi::eia608_control_command(cmd, 0) }
-}
-
-fn eia608_from_basicna(bna1: u16, bna2: u16) -> u16 {
-    unsafe { ffi::eia608_from_basicna(bna1, bna2) }
-}
-
-fn erase_non_displayed_memory() -> u16 {
-    eia608_control_command(ffi::eia608_control_t_eia608_control_erase_non_displayed_memory)
-}
-
-fn peek_word_length(chars: std::iter::Peekable<std::str::Chars>) -> u32 {
-    chars.take_while(|c| !c.is_ascii_whitespace()).count() as u32
+fn peek_word_length(chars: std::iter::Peekable<std::str::Chars>) -> u8 {
+    chars.take_while(|c| !c.is_ascii_whitespace()).count() as u8
 }
 
 #[derive(Debug)]
 pub struct TimedCea608 {
-    pub cea608: u16,
+    pub cea608: [u8; 2],
     pub frame_no: u64,
 }
 
 #[derive(Debug)]
 pub struct TextToCea608 {
     // settings
-    origin_column: u32,
+    origin_column: u8,
     framerate: gst::Fraction,
     roll_up_timeout: Option<gst::ClockTime>,
     // state
@@ -96,6 +53,8 @@ pub struct TextToCea608 {
     underline: bool,
     column: u8,
     mode: Cea608Mode,
+    writer: cea608_types::Cea608Writer,
+    caption_id: cea608_types::Id,
 }
 
 impl Default for TextToCea608 {
@@ -112,6 +71,8 @@ impl Default for TextToCea608 {
             style: TextStyle::White,
             underline: false,
             mode: Cea608Mode::PopOn,
+            writer: cea608_types::Cea608Writer::default(),
+            caption_id: cea608_types::Id::CC1,
         }
     }
 }
@@ -121,8 +82,12 @@ impl TextToCea608 {
         self.mode = mode;
         if self.mode != Cea608Mode::PopOn {
             self.send_roll_up_preamble = true;
-            self.column = self.origin_column as u8;
+            self.column = self.origin_column;
         }
+    }
+
+    pub fn set_caption_id(&mut self, id: cea608_types::Id) {
+        self.caption_id = id;
     }
 
     pub fn set_framerate(&mut self, framerate: gst::Fraction) {
@@ -137,7 +102,7 @@ impl TextToCea608 {
         self.roll_up_timeout = timeout;
     }
 
-    pub fn set_origin_column(&mut self, origin_column: u32) {
+    pub fn set_origin_column(&mut self, origin_column: u8) {
         self.origin_column = origin_column
     }
 
@@ -176,7 +141,7 @@ impl TextToCea608 {
         false
     }
 
-    fn cc_data(&mut self, cc_data: u16) {
+    fn cc_data(&mut self, cc_data: [u8; 2]) {
         self.check_erase_display();
 
         self.output_frames.push_back(TimedCea608 {
@@ -190,101 +155,102 @@ impl TextToCea608 {
     fn pad(&mut self, frame_no: u64) {
         while self.last_frame_no < frame_no {
             if !self.check_erase_display() {
-                self.cc_data(0x8080);
+                self.cc_data([0x80, 0x80]);
             }
         }
     }
 
+    fn control_code(&mut self, control: cea608_types::tables::Control) {
+        let code = cea608_types::tables::ControlCode::new(
+            self.caption_id.field(),
+            self.caption_id.channel(),
+            control,
+        );
+        let mut vec = smallvec::SmallVec::<[u8; 2]>::new();
+        let _ = cea608_types::tables::Code::Control(code).write(&mut vec);
+        self.cc_data([vec[0], vec[1]]);
+    }
+
+    fn erase_non_displayed_memory(&mut self) {
+        self.control_code(cea608_types::tables::Control::EraseNonDisplayedMemory);
+    }
+
     fn resume_caption_loading(&mut self) {
-        self.cc_data(eia608_control_command(
-            ffi::eia608_control_t_eia608_control_resume_caption_loading,
-        ))
+        self.control_code(cea608_types::tables::Control::ResumeCaptionLoading);
     }
 
     fn resume_direct_captioning(&mut self) {
-        self.cc_data(eia608_control_command(
-            ffi::eia608_control_t_eia608_control_resume_direct_captioning,
-        ))
+        self.control_code(cea608_types::tables::Control::ResumeDirectionCaptioning);
     }
 
     fn delete_to_end_of_row(&mut self) {
-        self.cc_data(eia608_control_command(
-            ffi::eia608_control_t_eia608_control_delete_to_end_of_row,
-        ))
+        self.control_code(cea608_types::tables::Control::DeleteToEndOfRow);
     }
 
     fn roll_up_2(&mut self) {
-        self.cc_data(eia608_control_command(
-            ffi::eia608_control_t_eia608_control_roll_up_2,
-        ))
+        self.control_code(cea608_types::tables::Control::RollUp2);
     }
 
     fn roll_up_3(&mut self) {
-        self.cc_data(eia608_control_command(
-            ffi::eia608_control_t_eia608_control_roll_up_3,
-        ))
+        self.control_code(cea608_types::tables::Control::RollUp3);
     }
 
     fn roll_up_4(&mut self) {
-        self.cc_data(eia608_control_command(
-            ffi::eia608_control_t_eia608_control_roll_up_4,
-        ))
+        self.control_code(cea608_types::tables::Control::RollUp4);
     }
 
     fn carriage_return(&mut self) {
-        self.cc_data(eia608_control_command(
-            ffi::eia608_control_t_eia608_control_carriage_return,
-        ))
+        self.control_code(cea608_types::tables::Control::CarriageReturn);
     }
 
     fn end_of_caption(&mut self) {
-        self.cc_data(eia608_control_command(
-            ffi::eia608_control_t_eia608_control_end_of_caption,
-        ))
+        self.control_code(cea608_types::tables::Control::EndOfCaption);
     }
 
-    fn tab_offset(&mut self, offset: u32) {
-        match offset {
-            0 => (),
-            1 => self.cc_data(eia608_control_command(
-                ffi::eia608_control_t_eia608_tab_offset_1,
-            )),
-            2 => self.cc_data(eia608_control_command(
-                ffi::eia608_control_t_eia608_tab_offset_2,
-            )),
-            3 => self.cc_data(eia608_control_command(
-                ffi::eia608_control_t_eia608_tab_offset_3,
-            )),
-            _ => unreachable!(),
-        }
+    fn tab_offset(&mut self, offset: u8) {
+        let Some(offset) = cea608_types::tables::Control::tab_offset(offset) else {
+            return;
+        };
+        self.control_code(offset);
     }
 
-    fn preamble_indent(&mut self, row: i32, col: i32, underline: bool) {
-        self.cc_data(eia608_row_column_preamble(row, col, underline))
+    fn preamble_indent(&mut self, row: u8, col: u8, underline: bool) {
+        let Some(preamble) = cea608_types::tables::PreambleType::from_indent(col) else {
+            return;
+        };
+        self.control_code(cea608_types::tables::Control::PreambleAddress(
+            cea608_types::tables::PreambleAddressCode::new(row, underline, preamble),
+        ));
     }
 
-    fn preamble_style(&mut self, row: i32, style: u32, underline: bool) {
-        self.cc_data(eia608_row_style_preamble(row, style, underline))
+    fn preamble_style(&mut self, row: u8, style: TextStyle, underline: bool) {
+        let preamble = if style.is_italics() {
+            cea608_types::tables::PreambleType::WhiteItalics
+        } else {
+            cea608_types::tables::PreambleType::Color(style.to_cea608_color().unwrap())
+        };
+        self.control_code(cea608_types::tables::Control::PreambleAddress(
+            cea608_types::tables::PreambleAddressCode::new(row, underline, preamble),
+        ));
     }
 
-    fn midrow_change(&mut self, style: u32, underline: bool) {
-        self.cc_data(eia608_midrow_change(style, underline))
-    }
-
-    fn bna(&mut self, bna1: u16, bna2: u16) {
-        self.cc_data(eia608_from_basicna(bna1, bna2))
+    fn midrow_change(&mut self, style: TextStyle, underline: bool) {
+        let midrow = if style.is_italics() {
+            cea608_types::tables::MidRow::new_italics(underline)
+        } else {
+            cea608_types::tables::MidRow::new_color(style.to_cea608_color().unwrap(), underline)
+        };
+        self.control_code(cea608_types::tables::Control::MidRow(midrow));
     }
 
     fn erase_display_memory(&mut self) {
         self.erase_display_frame_no = None;
-        self.cc_data(eia608_control_command(
-            ffi::eia608_control_t_eia608_control_erase_display_memory,
-        ))
+        self.control_code(cea608_types::tables::Control::EraseDisplayedMemory);
     }
 
-    fn open_chunk(&mut self, chunk: &Chunk, col: u32) -> bool {
+    fn open_chunk(&mut self, chunk: &Chunk, col: u8) -> bool {
         if (chunk.style != self.style || chunk.underline != self.underline) && col < 31 {
-            self.midrow_change(chunk.style as u32, chunk.underline);
+            self.midrow_change(chunk.style, chunk.underline);
             self.style = chunk.style;
             self.underline = chunk.underline;
             true
@@ -297,8 +263,8 @@ impl TextToCea608 {
     fn open_line(
         &mut self,
         chunk: &Chunk,
-        col: &mut u32,
-        row: i32,
+        col: &mut u8,
+        row: u8,
         carriage_return: Option<bool>,
     ) -> bool {
         let mut ret = true;
@@ -332,7 +298,7 @@ impl TextToCea608 {
             }
 
             if chunk.style != TextStyle::White && indent == 0 {
-                self.preamble_style(row, chunk.style as u32, chunk.underline);
+                self.preamble_style(row, chunk.style, chunk.underline);
                 self.style = chunk.style;
             } else {
                 if chunk.style != TextStyle::White {
@@ -346,7 +312,7 @@ impl TextToCea608 {
                 }
 
                 self.style = TextStyle::White;
-                self.preamble_indent(row, (indent * 4) as i32, chunk.underline);
+                self.preamble_indent(row, indent * 4, chunk.underline);
             }
 
             if self.mode == Cea608Mode::PaintOn {
@@ -393,7 +359,7 @@ impl TextToCea608 {
         let mut col = if self.mode == Cea608Mode::PopOn || self.mode == Cea608Mode::PaintOn {
             0
         } else {
-            self.column as u32
+            self.column
         };
 
         self.pad(frame_no);
@@ -430,19 +396,17 @@ impl TextToCea608 {
         if !lines.lines.is_empty() {
             if self.mode == Cea608Mode::PopOn {
                 self.resume_caption_loading();
-                self.cc_data(erase_non_displayed_memory());
+                self.erase_non_displayed_memory();
             } else if self.mode == Cea608Mode::PaintOn {
                 self.resume_direct_captioning();
             }
         }
 
-        let mut prev_char = 0;
-
         for line in &lines.lines {
             gst::log!(CAT, "Processing {:?}", line);
 
             if let Some(line_row) = line.row {
-                row = line_row;
+                row = line_row as u8;
             }
 
             if row > 14 {
@@ -454,21 +418,20 @@ impl TextToCea608 {
                 if self.mode != Cea608Mode::PopOn && self.mode != Cea608Mode::PaintOn {
                     self.send_roll_up_preamble = true;
                 }
-                col = line_column;
+                col = line_column as u8;
             } else if self.mode == Cea608Mode::PopOn || self.mode == Cea608Mode::PaintOn {
                 col = origin_column;
             }
 
             for (j, chunk) in line.chunks.iter().enumerate() {
                 let mut prepend_space = true;
-                if prev_char != 0 {
-                    self.cc_data(prev_char);
-                    prev_char = 0;
+                while self.writer.n_codes() > 0 {
+                    let data = self.writer.pop();
+                    self.cc_data(data);
                 }
 
                 if j == 0 {
-                    prepend_space =
-                        self.open_line(chunk, &mut col, row as i32, line.carriage_return);
+                    prepend_space = self.open_line(chunk, &mut col, row, line.carriage_return);
                 } else if self.open_chunk(chunk, col) {
                     prepend_space = false;
                     col += 1;
@@ -495,40 +458,22 @@ impl TextToCea608 {
                         continue;
                     }
 
-                    let mut encoded = [0; 5];
-                    c.encode_utf8(&mut encoded);
-                    let mut cc_data = eia608_from_utf8_1(&encoded);
-
-                    if cc_data == 0 {
+                    let code = cea608_types::tables::Code::from_char(
+                        c,
+                        cea608_types::tables::Channel::ONE,
+                    )
+                    .unwrap_or_else(|| {
                         gst::warning!(CAT, "Not translating UTF8: {}", c);
-                        cc_data = *SPACE;
-                    }
+                        cea608_types::tables::Code::Space
+                    });
 
-                    if is_basicna(prev_char) {
-                        if is_basicna(cc_data) {
-                            self.bna(prev_char, cc_data);
-                        } else if is_westeu(cc_data) {
-                            // extended characters overwrite the previous character,
-                            // so insert a dummy char then write the extended char
-                            self.bna(prev_char, *SPACE);
-                            self.cc_data(cc_data);
-                        } else {
-                            self.cc_data(prev_char);
-                            self.cc_data(cc_data);
+                    self.writer.push(code);
+
+                    if let cea608_types::tables::Code::Control(_) = code {
+                        while self.writer.n_codes() > 0 {
+                            let data = self.writer.pop();
+                            self.cc_data(data);
                         }
-                        prev_char = 0;
-                    } else if is_westeu(cc_data) {
-                        // extended characters overwrite the previous character,
-                        // so insert a dummy char then write the extended char
-                        self.cc_data(*SPACE);
-                        self.cc_data(cc_data);
-                    } else if is_basicna(cc_data) {
-                        prev_char = cc_data;
-                    } else {
-                        self.cc_data(cc_data);
-                    }
-
-                    if is_specialna(cc_data) {
                         // adapted from libcaption's generation code:
                         // specialna are treated as control characters. Duplicated control characters are discarded
                         // So we write a resume after a specialna as a noop control command to break repetition detection
@@ -560,12 +505,12 @@ impl TextToCea608 {
                         if (next_word_length <= 32 - origin_column && col + next_word_length > 31)
                             || col > 31
                         {
-                            if prev_char != 0 {
-                                self.cc_data(prev_char);
-                                prev_char = 0;
+                            while self.writer.n_codes() > 0 {
+                                let data = self.writer.pop();
+                                self.cc_data(data);
                             }
 
-                            self.open_line(chunk, &mut col, row as i32, Some(true));
+                            self.open_line(chunk, &mut col, row, Some(true));
                         }
                     } else if col > 31 {
                         if chars.peek().is_some() {
@@ -577,17 +522,18 @@ impl TextToCea608 {
             }
 
             if self.mode == Cea608Mode::PopOn || self.mode == Cea608Mode::PaintOn {
-                if prev_char != 0 {
-                    self.cc_data(prev_char);
-                    prev_char = 0;
+                while self.writer.n_codes() > 0 {
+                    let data = self.writer.pop();
+                    self.cc_data(data);
                 }
                 row += 1;
             }
         }
 
         if !lines.lines.is_empty() {
-            if prev_char != 0 {
-                self.cc_data(prev_char);
+            while self.writer.n_codes() > 0 {
+                let data = self.writer.pop();
+                self.cc_data(data);
             }
 
             if self.mode == Cea608Mode::PopOn {
@@ -597,7 +543,7 @@ impl TextToCea608 {
             }
         }
 
-        self.column = col as u8;
+        self.column = col;
 
         if self.mode == Cea608Mode::PopOn {
             self.erase_display_frame_no =

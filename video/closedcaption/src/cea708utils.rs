@@ -33,39 +33,55 @@ pub enum Cea708Mode {
     RollUp,
 }
 
-pub fn textstyle_foreground_color(style: TextStyle) -> Color {
-    match style {
-        TextStyle::Red => Color {
+pub fn textstyle_foreground_color(style: TextStyle) -> cea708_types::tables::Color {
+    let color = match style {
+        TextStyle::Red => cea608_types::tables::Color::Red,
+        TextStyle::Blue => cea608_types::tables::Color::Blue,
+        TextStyle::Cyan => cea608_types::tables::Color::Cyan,
+        TextStyle::White => cea608_types::tables::Color::White,
+        TextStyle::Green => cea608_types::tables::Color::Green,
+        TextStyle::Yellow => cea608_types::tables::Color::Yellow,
+        TextStyle::Magenta => cea608_types::tables::Color::Magenta,
+        TextStyle::ItalicWhite => cea608_types::tables::Color::White,
+    };
+    cea608_color_to_foreground_color(color)
+}
+
+pub fn cea608_color_to_foreground_color(
+    color: cea608_types::tables::Color,
+) -> cea708_types::tables::Color {
+    match color {
+        cea608_types::tables::Color::Red => cea708_types::tables::Color {
             r: ColorValue::Full,
             g: ColorValue::None,
             b: ColorValue::None,
         },
-        TextStyle::Green => Color {
+        cea608_types::tables::Color::Green => cea708_types::tables::Color {
             r: ColorValue::None,
             g: ColorValue::Full,
             b: ColorValue::None,
         },
-        TextStyle::Blue => Color {
+        cea608_types::tables::Color::Blue => cea708_types::tables::Color {
             r: ColorValue::None,
             g: ColorValue::None,
             b: ColorValue::Full,
         },
-        TextStyle::Cyan => Color {
+        cea608_types::tables::Color::Cyan => cea708_types::tables::Color {
             r: ColorValue::None,
             g: ColorValue::Full,
             b: ColorValue::Full,
         },
-        TextStyle::Yellow => Color {
+        cea608_types::tables::Color::Yellow => cea708_types::tables::Color {
             r: ColorValue::Full,
             g: ColorValue::Full,
             b: ColorValue::None,
         },
-        TextStyle::Magenta => Color {
+        cea608_types::tables::Color::Magenta => cea708_types::tables::Color {
             r: ColorValue::Full,
             g: ColorValue::None,
             b: ColorValue::Full,
         },
-        TextStyle::White | TextStyle::ItalicWhite => Color {
+        cea608_types::tables::Color::White => cea708_types::tables::Color {
             r: ColorValue::Full,
             g: ColorValue::Full,
             b: ColorValue::Full,
@@ -213,7 +229,7 @@ impl Cea708ServiceWriter {
 
     pub fn rollup_preamble(&mut self, rollup_count: u8, base_row: u8) {
         let base_row = std::cmp::max(rollup_count, base_row);
-        let anchor_vertical = (base_row as u32 * 100 / 15) as u8;
+        let anchor_vertical = (base_row as u32 * 100 / 14) as u8;
         gst::trace!(
             CAT,
             "rollup_preamble base {base_row} count {rollup_count}, anchor-v {anchor_vertical}"

@@ -1003,6 +1003,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cea608-types"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3cf75f36b48b2e9701d278a3ab9081abd1b2881d913ad7b3b0e4d9c6e8c59f86"
+dependencies = [
+ "env_logger 0.10.2",
+ "log",
+ "once_cell",
+ "thiserror",
+]
+
+[[package]]
 name = "cea708-types"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2272,6 +2284,7 @@ dependencies = [
  "byteorder",
  "cairo-rs",
  "cc",
+ "cea608-types",
  "cea708-types",
  "chrono",
  "either",
@@ -2287,6 +2300,7 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
+ "smallvec",
  "uuid",
  "winnow 0.6.5",
 ]
