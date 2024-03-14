@@ -10,7 +10,7 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 use std::default::Default;
 use std::sync::Mutex;
 
@@ -193,7 +193,33 @@ impl ObjectImpl for RegEx {
                         }
                     };
 
-                    let regex = match Regex::new(&pattern) {
+                    let mut builder = RegexBuilder::new(&pattern);
+                    builder
+                        .unicode(s.get::<bool>("unicode").unwrap_or(true))
+                        .case_insensitive(s.get::<bool>("case-insensitive").unwrap_or(false))
+                        .multi_line(s.get::<bool>("multi-line").unwrap_or(false))
+                        .dot_matches_new_line(
+                            s.get::<bool>("dot-matches-new-line").unwrap_or(false),
+                        )
+                        .crlf(s.get::<bool>("crlf").unwrap_or(false))
+                        .line_terminator(s.get::<u8>("line-terminator").unwrap_or(b'\n'))
+                        .swap_greed(s.get::<bool>("swap-greed").unwrap_or(false))
+                        .ignore_whitespace(s.get::<bool>("ignore-whitespace").unwrap_or(false))
+                        .octal(s.get::<bool>("octal").unwrap_or(false));
+
+                    if let Ok(limit) = s.get::<u64>("size-limit") {
+                        builder.size_limit(limit as usize);
+                    }
+
+                    if let Ok(limit) = s.get::<u64>("dfa-size-limit") {
+                        builder.dfa_size_limit(limit as usize);
+                    }
+
+                    if let Ok(limit) = s.get::<u32>("nest-limit") {
+                        builder.nest_limit(limit);
+                    }
+
+                    let regex = match builder.build() {
                         Ok(regex) => regex,
                         Err(err) => {
                             gst::error!(CAT, imp: self, "Failed to compile regex: {:?}", err);
