@@ -8733,6 +8733,21 @@
                 ],
                 "kind": "object"
             },
+            "GstRtpSendProfile": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "AVP profile as specified in RFC 3550",
+                        "name": "avp",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "AVPF profile as specified in RFC 4585",
+                        "name": "avpf",
+                        "value": "1"
+                    }
+                ]
+            },
             "GstRtpVp8Pay2FragmentationMode": {
                 "kind": "enum",
                 "values": [
