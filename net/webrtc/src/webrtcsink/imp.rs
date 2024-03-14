@@ -235,6 +235,8 @@ pub struct VideoEncoder {
     session_id: String,
     mitigation_mode: WebRTCSinkMitigationMode,
     pub transceiver: gst_webrtc::WebRTCRTPTransceiver,
+    /// name of the sink pad feeding this encoder
+    stream_name: String,
 }
 
 struct Session {
@@ -920,6 +922,7 @@ impl VideoEncoder {
         session_id: &str,
         codec_name: &str,
         transceiver: gst_webrtc::WebRTCRTPTransceiver,
+        stream_name: String,
     ) -> Option<Self> {
         let halved_framerate = video_info.fps().mul(gst::Fraction::new(1, 2));
         Some(Self {
@@ -938,6 +941,7 @@ impl VideoEncoder {
             session_id: session_id.to_string(),
             mitigation_mode: WebRTCSinkMitigationMode::NONE,
             transceiver,
+            stream_name,
         })
     }
 
@@ -1322,6 +1326,7 @@ impl Session {
                 &self.id,
                 codec.caps.structure(0).unwrap().name(),
                 transceiver,
+                stream_name.clone(),
             ) {
                 match self.cc_info.heuristic {
                     WebRTCSinkCongestionControl::Disabled => {
@@ -3459,6 +3464,37 @@ impl BaseWebRTCSink {
         )
     }
 
+    /// Check if the caps of a sink pad can be changed from `current` to `new` without requiring a WebRTC renegotiation
+    fn input_caps_change_allowed(&self, current: &gst::CapsRef, new: &gst::CapsRef) -> bool {
+        let Some(current) = current.structure(0) else {
+            return false;
+        };
+        let Some(new) = new.structure(0) else {
+            return false;
+        };
+
+        if current.name() != new.name() {
+            return false;
+        }
+
+        let mut current = current.to_owned();
+        let mut new = new.to_owned();
+
+        // Allow changes of fields which should not be part of the SDP, and so can be updated without requiring
+        // a renegotiation.
+        let caps_type = current.name();
+        if caps_type.starts_with("video/") {
+            const VIDEO_ALLOWED_CHANGES: &[&str] = &["width", "height", "framerate"];
+
+            current.remove_fields(VIDEO_ALLOWED_CHANGES.iter().copied());
+            new.remove_fields(VIDEO_ALLOWED_CHANGES.iter().copied());
+        } else if caps_type.starts_with("audio/") {
+            // TODO
+        }
+
+        current == new
+    }
+
     fn sink_event(
         &self,
         pad: &gst::Pad,
@@ -3469,10 +3505,7 @@ impl BaseWebRTCSink {
 
         if let EventView::Caps(e) = event.view() {
             if let Some(caps) = pad.current_caps() {
-                if caps.is_strictly_equal(e.caps()) {
-                    // Nothing changed
-                    return true;
-                } else {
+                if !self.input_caps_change_allowed(&caps, e.caps()) {
                     gst::error!(
                         CAT,
                         obj: pad,
@@ -3482,29 +3515,40 @@ impl BaseWebRTCSink {
                     );
                     return false;
                 }
-            } else {
-                gst::info!(CAT, obj: pad, "Received caps event {:?}", e);
+            }
+            gst::info!(CAT, obj: pad, "Received caps event {:?}", e);
 
-                self.state
-                    .lock()
-                    .unwrap()
-                    .streams
-                    .iter_mut()
-                    .for_each(|(_, stream)| {
-                        if stream.sink_pad.upcast_ref::<gst::Pad>() == pad {
-                            // We do not want VideoInfo to consider max-framerate
-                            // when computing fps, so we strip it away here
-                            let mut caps = e.caps().to_owned();
-                            {
-                                let mut_caps = caps.get_mut().unwrap();
-                                if let Some(s) = mut_caps.structure_mut(0) {
-                                    if s.has_name("video/x-raw") {
-                                        s.remove_field("max-framerate");
-                                    }
-                                }
+            let mut state = self.state.lock().unwrap();
+
+            state.streams.iter_mut().for_each(|(_, stream)| {
+                if stream.sink_pad.upcast_ref::<gst::Pad>() == pad {
+                    // We do not want VideoInfo to consider max-framerate
+                    // when computing fps, so we strip it away here
+                    let mut caps = e.caps().to_owned();
+                    {
+                        let mut_caps = caps.get_mut().unwrap();
+                        if let Some(s) = mut_caps.structure_mut(0) {
+                            if s.has_name("video/x-raw") {
+                                s.remove_field("max-framerate");
                             }
-                            stream.in_caps = Some(caps.to_owned());
                         }
+                    }
+                    stream.in_caps = Some(caps.to_owned());
+                }
+            });
+
+            if let Ok(video_info) = gst_video::VideoInfo::from_caps(e.caps()) {
+                // update video encoder info used when downscaling/downsampling the input
+                let stream_name = pad.name().to_string();
+
+                state
+                    .sessions
+                    .values_mut()
+                    .flat_map(|session| session.unwrap_mut().encoders.iter_mut())
+                    .filter(|encoder| encoder.stream_name == stream_name)
+                    .for_each(|encoder| {
+                        encoder.halved_framerate = video_info.fps().mul(gst::Fraction::new(1, 2));
+                        encoder.video_info = video_info.clone();
                     });
             }
         }
