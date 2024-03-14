@@ -619,14 +619,6 @@ impl Detector {
         let now = time::Instant::now();
         let delta = now - self.last_use_detector_update;
         self.last_use_detector_update = now;
-        gst::log!(
-            CAT,
-            "{:?} - self.estimate {} - estimate: {} - th: {}",
-            th_usage,
-            self.estimate,
-            estimate,
-            self.threshold
-        );
         match th_usage {
             NetworkUsage::Over => {
                 self.increasing_duration += delta;
@@ -646,6 +638,16 @@ impl Detector {
                 self.usage = th_usage;
             }
         }
+        gst::log!(
+            CAT,
+            "{:?} - self.estimate {} - estimate: {} - th: {} - inc_dur: {} - inc_cnt: {}",
+            th_usage,
+            self.estimate,
+            estimate,
+            self.threshold,
+            self.increasing_duration,
+            self.increasing_counter,
+        );
         self.last_overuse_estimate = estimate;
     }
 }
