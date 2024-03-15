@@ -220,7 +220,9 @@ impl PaintableImpl for Paintable {
 
                 let texture_width = *paintable_width * scale_x as f32;
                 let texture_height = *paintable_height * scale_y as f32;
-                let bounds = graphene::Rect::new(*x, *y, texture_width, texture_height);
+                let x = *x * scale_x as f32;
+                let y = *y * scale_y as f32;
+                let bounds = graphene::Rect::new(x, y, texture_width, texture_height);
 
                 // Only premultiply GL textures that expect to be in premultiplied RGBA format.
                 //
