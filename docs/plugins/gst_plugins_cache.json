@@ -10014,6 +10014,18 @@
                     }
                 },
                 "properties": {
+                    "janus-state": {
+                        "blurb": "The current state of the signaller",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "initialized (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstJanusVRWebRTCJanusState",
+                        "writable": false
+                    },
                     "use-string-ids": {
                         "blurb": "Use strings instead of u64 for Janus IDs, see strings_ids config option in janus.plugin.videoroom.jcfg",
                         "conditionally-available": false,
@@ -10708,6 +10720,41 @@
                         "when": "last"
                     }
                 }
+            },
+            "GstJanusVRWebRTCJanusState": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Initialized",
+                        "name": "initialized",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "SessionCreated",
+                        "name": "session-created",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "VideoroomAttached",
+                        "name": "videoroom-attached",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "RoomJoined",
+                        "name": "room-joined",
+                        "value": "3"
+                    },
+                    {
+                        "desc": "Negotiating",
+                        "name": "negotiating",
+                        "value": "4"
+                    },
+                    {
+                        "desc": "WebrtcUp",
+                        "name": "webrtc-up",
+                        "value": "5"
+                    }
+                ]
             },
             "GstRSWebRTCSignallableIface": {
                 "hierarchy": [

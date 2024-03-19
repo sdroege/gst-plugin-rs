@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::signaller::{Signallable, SignallableImpl};
-use crate::RUNTIME;
+use crate::{
+    signaller::{Signallable, SignallableImpl},
+    webrtcsink::JanusVRSignallerState,
+    RUNTIME,
+};
 
 use anyhow::{anyhow, Error};
 use async_tungstenite::tungstenite;
@@ -439,6 +442,9 @@ impl Signaller {
         match reply {
             JsonReply::WebRTCUp => {
                 gst::trace!(CAT, imp = self, "WebRTC streaming is working!");
+
+                self.obj()
+                    .emit_by_name::<()>("state-updated", &[&JanusVRSignallerState::WebrtcUp]);
             }
             JsonReply::Success(success) => {
                 if let Some(data) = success.data {
@@ -491,6 +497,12 @@ impl Signaller {
                                 "Joined room {:?} successfully",
                                 joined.room
                             );
+
+                            self.obj().emit_by_name::<()>(
+                                "state-updated",
+                                &[&JanusVRSignallerState::RoomJoined],
+                            );
+
                             self.session_requested();
                         }
                         VideoRoomData::Event(room_event) => {
@@ -587,11 +599,23 @@ impl Signaller {
     }
 
     fn set_session_id(&self, session_id: u64) {
-        self.state.lock().unwrap().session_id = Some(session_id);
+        {
+            let mut state = self.state.lock().unwrap();
+            state.session_id = Some(session_id);
+        }
+        self.obj()
+            .emit_by_name::<()>("state-updated", &[&JanusVRSignallerState::SessionCreated]);
     }
 
     fn set_handle_id(&self, handle_id: u64) {
-        self.state.lock().unwrap().handle_id = Some(handle_id);
+        {
+            let mut state = self.state.lock().unwrap();
+            state.handle_id = Some(handle_id);
+        }
+        self.obj().emit_by_name::<()>(
+            "state-updated",
+            &[&JanusVRSignallerState::VideoroomAttached],
+        );
     }
 
     fn attach_plugin(&self) {
@@ -697,6 +721,9 @@ impl Signaller {
                 self.raise_error("Janus Room ID must be set".to_string());
                 return;
             }
+
+            self.obj()
+                .emit_by_name::<()>("state-updated", &[&JanusVRSignallerState::Negotiating]);
 
             (
                 state.transaction_id.clone().unwrap(),
@@ -867,7 +894,26 @@ impl ObjectSubclass for Signaller {
 }
 
 #[glib::derived_properties]
-impl ObjectImpl for Signaller {}
+impl ObjectImpl for Signaller {
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+            vec![
+                /**
+                 * GstJanusVRWebRTCSignaller::state-updated:
+                 * @state: the new state.
+                 *
+                 * This signal is emitted when the Janus state of the signaller is updated.
+                 */
+                glib::subclass::Signal::builder("state-updated")
+                    .param_types([JanusVRSignallerState::static_type()])
+                    .build(),
+
+            ]
+        });
+
+        SIGNALS.as_ref()
+    }
+}
 
 // below are Signaller subclasses implementing properties whose type depends of the Janus ID format (u64 or string).
 // User can control which signaller is used by setting the `use-string-ids` construct property on `janusvrwebrtcsink`.

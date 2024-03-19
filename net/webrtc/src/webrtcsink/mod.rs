@@ -134,6 +134,26 @@ enum WebRTCSinkMitigationMode {
     DOWNSAMPLED = 0b00000010,
 }
 
+#[derive(Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
+#[repr(u32)]
+#[enum_type(name = "GstJanusVRWebRTCJanusState")]
+/// State of the Janus Signaller.
+pub enum JanusVRSignallerState {
+    #[default]
+    /// Initial state when the signaller is created.
+    Initialized,
+    /// The Janus session has been created.
+    SessionCreated,
+    /// The session has been attached to the videoroom plugin.
+    VideoroomAttached,
+    /// The room has been joined.
+    RoomJoined,
+    /// The WebRTC stream is being negotiated.
+    Negotiating,
+    /// The WebRTC stream is streaming to Janus.
+    WebrtcUp,
+}
+
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     WebRTCSinkPad::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     BaseWebRTCSink::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
@@ -229,6 +249,9 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         gst::Rank::NONE,
         JanusVRWebRTCSink::static_type(),
     )?;
+
+    #[cfg(feature = "janus")]
+    JanusVRSignallerState::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
 
     Ok(())
 }

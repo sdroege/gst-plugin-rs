@@ -4822,11 +4822,19 @@ pub(super) mod livekit {
 #[cfg(feature = "janus")]
 pub(super) mod janus {
     use super::*;
-    use crate::janusvr_signaller::{JanusVRSignallerStr, JanusVRSignallerU64};
+    use crate::{
+        janusvr_signaller::{JanusVRSignallerStr, JanusVRSignallerU64},
+        webrtcsink::JanusVRSignallerState,
+    };
 
     #[derive(Debug, Clone, Default)]
     struct JanusSettings {
         use_string_ids: bool,
+    }
+
+    #[derive(Debug, Default)]
+    struct JanusState {
+        janus_state: JanusVRSignallerState,
     }
 
     #[derive(Default, glib::Properties)]
@@ -4844,6 +4852,21 @@ pub(super) mod janus {
          */
         #[property(name="use-string-ids", get, construct_only, type = bool, member = use_string_ids, blurb = "Use strings instead of u64 for Janus IDs, see strings_ids config option in janus.plugin.videoroom.jcfg")]
         settings: Mutex<JanusSettings>,
+        /**
+         * GstJanusVRWebRTCSink:janus-state:
+         *
+         * The current state of the signaller.
+         * Since: plugins-rs-0.14.0
+         */
+        #[property(
+        name = "janus-state",
+        // FIXME: can't use `member =` with enums: https://github.com/gtk-rs/gtk-rs-core/issues/1338
+        get = |self_: &Self| self_.state.lock().unwrap().janus_state,
+        type = JanusVRSignallerState,
+        blurb = "The current state of the signaller",
+        builder(JanusVRSignallerState::Initialized)
+    )]
+        state: Mutex<JanusState>,
     }
 
     #[glib::derived_properties]
@@ -4855,11 +4878,28 @@ pub(super) mod janus {
                 .upcast_ref::<crate::webrtcsink::BaseWebRTCSink>()
                 .imp();
 
-            if settings.use_string_ids {
-                let _ = ws.set_signaller(JanusVRSignallerStr::default().upcast());
+            let signaller: Signallable = if settings.use_string_ids {
+                JanusVRSignallerStr::default().upcast()
             } else {
-                let _ = ws.set_signaller(JanusVRSignallerU64::default().upcast());
-            }
+                JanusVRSignallerU64::default().upcast()
+            };
+
+            let self_weak = self.downgrade();
+            signaller.connect("state-updated", false, move |args| {
+                let self_ = self_weak.upgrade()?;
+                let janus_state = args[1].get::<JanusVRSignallerState>().unwrap();
+
+                {
+                    let mut state = self_.state.lock().unwrap();
+                    state.janus_state = janus_state;
+                }
+
+                self_.obj().notify("janus-state");
+
+                None
+            });
+
+            let _ = ws.set_signaller(signaller);
         }
     }
 
