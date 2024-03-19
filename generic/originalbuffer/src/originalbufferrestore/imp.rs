@@ -287,7 +287,7 @@ impl OriginalBufferRestore {
                         && meta
                             .transform(
                                 outbuf.make_mut(),
-                                &gst_video::video_meta::VideoMetaTransform::new(
+                                &gst_video::video_meta::VideoMetaTransformScale::new(
                                     sink_vinfo, meta_vinfo,
                                 ),
                             )
