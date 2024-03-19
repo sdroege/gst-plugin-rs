@@ -191,6 +191,11 @@ version = "0.21"
 name = "winnow"
 version = "0.5"
 
+# Various crates depend on an older version of heck
+[[bans.skip]]
+name = "heck"
+version = "0.4"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
