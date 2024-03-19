@@ -95,7 +95,7 @@ fn cargo_metadata_release_date(crate_dir: &path::Path) -> Option<chrono::DateTim
     let mut contents = String::new();
     file.read_to_string(&mut contents).ok()?;
 
-    let doc = contents.parse::<toml_edit::Document>().ok()?;
+    let doc = contents.parse::<toml_edit::DocumentMut>().ok()?;
     let release_date = doc
         .get("package")
         .and_then(|package| package.as_table_like())
