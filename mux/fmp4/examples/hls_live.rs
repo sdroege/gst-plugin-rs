@@ -153,7 +153,7 @@ fn trim_segments(state: &mut StreamState) {
             // safe side
             removal_time: segment
                 .date_time
-                .checked_add_signed(Duration::seconds(20))
+                .checked_add_signed(Duration::try_seconds(20).unwrap())
                 .unwrap(),
             path: segment.path.clone(),
         });
