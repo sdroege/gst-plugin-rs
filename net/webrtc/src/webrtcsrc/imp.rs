@@ -22,6 +22,7 @@ use url::Url;
 
 const DEFAULT_STUN_SERVER: Option<&str> = Some("stun://stun.l.google.com:19302");
 const DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION: bool = false;
+const DEFAULT_DO_RETRANSMISSION: bool = true;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -39,6 +40,7 @@ struct Settings {
     video_codecs: Vec<Codec>,
     audio_codecs: Vec<Codec>,
     enable_data_channel_navigation: bool,
+    do_retransmission: bool,
 }
 
 #[derive(Default)]
@@ -113,7 +115,13 @@ impl ObjectImpl for BaseWebRTCSrc {
                     .default_value(DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION)
                     .mutable_ready()
                     .build(),
-            ]
+                glib::ParamSpecBoolean::builder("do-retransmission")
+                    .nick("Enable retransmission")
+                    .blurb("Send retransmission events upstream when a packet is late")
+                    .default_value(DEFAULT_DO_RETRANSMISSION)
+                    .mutable_ready()
+                    .build(),
+             ]
         });
 
         PROPS.as_ref()
@@ -171,6 +179,10 @@ impl ObjectImpl for BaseWebRTCSrc {
                 let mut settings = self.settings.lock().unwrap();
                 settings.enable_data_channel_navigation = value.get::<bool>().unwrap();
             }
+            "do-retransmission" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.do_retransmission = value.get::<bool>().unwrap();
+            }
             _ => unimplemented!(),
         }
     }
@@ -203,6 +215,7 @@ impl ObjectImpl for BaseWebRTCSrc {
                 let settings = self.settings.lock().unwrap();
                 settings.enable_data_channel_navigation.to_value()
             }
+            "do-retransmission" => self.settings.lock().unwrap().do_retransmission.to_value(),
             name => panic!("{} getter not implemented", name),
         }
     }
@@ -270,6 +283,7 @@ impl Default for Settings {
                 .filter(|codec| codec.has_decoder())
                 .collect(),
             enable_data_channel_navigation: DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION,
+            do_retransmission: DEFAULT_DO_RETRANSMISSION,
         }
     }
 }
@@ -765,14 +779,17 @@ impl BaseWebRTCSrc {
         let direction = gst_webrtc::WebRTCRTPTransceiverDirection::Recvonly;
         let webrtcbin = self.webrtcbin();
         for (i, media) in sdp.medias().enumerate() {
-            let codec_names = {
+            let (codec_names, do_retransmission) = {
                 let settings = self.settings.lock().unwrap();
-                settings
-                    .video_codecs
-                    .iter()
-                    .chain(settings.audio_codecs.iter())
-                    .map(|codec| codec.name.clone())
-                    .collect::<HashSet<String>>()
+                (
+                    settings
+                        .video_codecs
+                        .iter()
+                        .chain(settings.audio_codecs.iter())
+                        .map(|codec| codec.name.clone())
+                        .collect::<HashSet<String>>(),
+                    settings.do_retransmission,
+                )
             };
             let caps = media
                 .formats()
@@ -833,7 +850,7 @@ impl BaseWebRTCSrc {
                         &[&direction, &caps],
                     );
 
-                    transceiver.set_property("do_nack", true);
+                    transceiver.set_property("do-nack", do_retransmission);
                     transceiver.set_property("fec-type", gst_webrtc::WebRTCFECType::UlpRed);
                 }
             } else {
