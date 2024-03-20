@@ -2629,12 +2629,12 @@ name = "gst-plugin-rtp"
 version = "0.12.2"
 dependencies = [
  "bitstream-io",
- "chrono",
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-check",
  "gstreamer-rtp",
  "once_cell",
+ "time",
 ]
 
 [[package]]

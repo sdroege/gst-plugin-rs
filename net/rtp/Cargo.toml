@@ -12,7 +12,7 @@ rust-version.workspace = true
 bitstream-io = "2.0"
 gst      = { workspace = true, features = ["v1_20"] }
 gst-rtp  = { workspace = true, features = ["v1_20"]}
-chrono = { version = "0.4", default-features = false }
+time = { version = "0.3", default-features = false, features = ["std"] }
 once_cell.workspace = true
 
 [dev-dependencies]
