@@ -7960,6 +7960,18 @@
                         "type": "GstValueArray",
                         "writable": true
                     },
+                    "do-retransmission": {
+                        "blurb": "Send retransmission events upstream when a packet is late",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "enable-data-channel-navigation": {
                         "blurb": "Enable navigation events through a dedicated WebRTCDataChannel",
                         "conditionally-available": false,
