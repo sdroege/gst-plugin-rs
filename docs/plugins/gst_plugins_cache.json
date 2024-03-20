@@ -7808,6 +7808,7 @@
         "source": "gst-plugin-tracers",
         "tracers": {
             "buffer-lateness": {},
+            "pad-push-timings": {},
             "pipeline-snapshot": {},
             "queue-levels": {}
         },

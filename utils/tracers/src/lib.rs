@@ -15,6 +15,7 @@
 use gst::glib;
 
 mod buffer_lateness;
+mod pad_push_timings;
 #[cfg(unix)]
 mod pipeline_snapshot;
 mod queue_levels;
@@ -24,6 +25,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     pipeline_snapshot::register(plugin)?;
     queue_levels::register(plugin)?;
     buffer_lateness::register(plugin)?;
+    pad_push_timings::register(plugin)?;
     Ok(())
 }
 
