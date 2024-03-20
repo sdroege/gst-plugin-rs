@@ -1423,9 +1423,9 @@ checksum = "7e962a19be5cfc3f3bf6dd8f61eb50107f356ad6270fbb3ed41476571db78be5"
 
 [[package]]
 name = "dav1d"
-version = "0.9.6"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96be853ae81fdc81d4fbd921866ba6272147c34f75a8ee5d25781ea0f1bcadc8"
+checksum = "d7eb1fa9954b7ae85ff0d43ef6d186d1b3469d4aa1574845d1938bef05377030"
 dependencies = [
  "bitflags 2.5.0",
  "dav1d-sys",
@@ -1433,9 +1433,9 @@ dependencies = [
 
 [[package]]
 name = "dav1d-sys"
-version = "0.7.3"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a49fd89ad2b234b606f942e8759390fd7176e9b2b50438f516dd232dcc6e58f"
+checksum = "6ecb1c5e8f4dc438eedc1b534a54672fb0e0a56035dae6b50162787bd2c50e95"
 dependencies = [
  "libc",
  "system-deps",
@@ -3971,7 +3971,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c2a198fb6b0eada2a8df47933734e6d35d350665a33a3593d7164fa52c75c19"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.4",
 ]
 
 [[package]]

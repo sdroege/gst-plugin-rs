@@ -185,7 +185,7 @@ plugins = {
   },
   'dav1d': {
     'library': 'libgstdav1d',
-    'extra-deps': {'dav1d': ['>=1.0', '<1.3']},
+    'extra-deps': {'dav1d': ['>=1.3']},
   },
   'ffv1': {'library': 'libgstffv1'},
   'flavors': {'library': 'libgstrsflv'},

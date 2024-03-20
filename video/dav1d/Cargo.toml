@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 description = "GStreamer dav1d AV1 decoder Plugin"
 
 [dependencies]
-dav1d = "0.9"
+dav1d = "0.10"
 gst.workspace = true
 gst-base.workspace = true
 gst-video.workspace = true
