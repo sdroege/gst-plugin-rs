@@ -10,9 +10,9 @@ rust-version.workspace = true
 
 [dependencies]
 url = "2.1"
-reqwest = { version = "0.11", features = ["cookies", "gzip"] }
+reqwest = { version = "0.12", features = ["cookies", "gzip"] }
 futures = "0.3"
-headers = "0.3"
+headers = "0.4"
 mime = "0.3"
 gst.workspace = true
 gst-base.workspace = true
@@ -20,7 +20,10 @@ tokio = { version = "1.0", default-features = false, features = ["time", "rt-mul
 once_cell.workspace = true
 
 [dev-dependencies]
-hyper = { version = "0.14", features = ["server"] }
+hyper = { version = "1.0", features = ["server"] }
+http-body-util = "0.1.1"
+bytes = "1.0"
+pin-project-lite = "0.2"
 gst.workspace = true
 
 [lib]
