@@ -3537,19 +3537,22 @@ impl BaseWebRTCSink {
                 }
             });
 
-            if let Ok(video_info) = gst_video::VideoInfo::from_caps(e.caps()) {
-                // update video encoder info used when downscaling/downsampling the input
-                let stream_name = pad.name().to_string();
+            if e.caps().structure(0).unwrap().name().starts_with("video/") {
+                if let Ok(video_info) = gst_video::VideoInfo::from_caps(e.caps()) {
+                    // update video encoder info used when downscaling/downsampling the input
+                    let stream_name = pad.name().to_string();
 
-                state
-                    .sessions
-                    .values_mut()
-                    .flat_map(|session| session.unwrap_mut().encoders.iter_mut())
-                    .filter(|encoder| encoder.stream_name == stream_name)
-                    .for_each(|encoder| {
-                        encoder.halved_framerate = video_info.fps().mul(gst::Fraction::new(1, 2));
-                        encoder.video_info = video_info.clone();
-                    });
+                    state
+                        .sessions
+                        .values_mut()
+                        .flat_map(|session| session.unwrap_mut().encoders.iter_mut())
+                        .filter(|encoder| encoder.stream_name == stream_name)
+                        .for_each(|encoder| {
+                            encoder.halved_framerate =
+                                video_info.fps().mul(gst::Fraction::new(1, 2));
+                            encoder.video_info = video_info.clone();
+                        });
+                }
             }
         }
 
