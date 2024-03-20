@@ -2656,7 +2656,6 @@ version = "0.13.0-alpha.1"
 dependencies = [
  "atomic_refcell",
  "bitstream-io",
- "chrono",
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-app",
@@ -2666,6 +2665,7 @@ dependencies = [
  "rand",
  "rtp-types",
  "smallvec",
+ "time",
 ]
 
 [[package]]

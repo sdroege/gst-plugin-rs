@@ -11,13 +11,13 @@ rust-version.workspace = true
 [dependencies]
 atomic_refcell = "0.1"
 bitstream-io = "2.1"
-chrono = { version = "0.4", default-features = false }
 gst     = { workspace = true, features = ["v1_20"] }
 gst-rtp = { workspace = true, features = ["v1_20"] }
 once_cell.workspace = true
 rand = { version = "0.8", default-features = false, features = ["std", "std_rng" ] }
 rtp-types = { version = "0.1" }
 smallvec = { version = "1.11", features = ["union", "write", "const_generics", "const_new"] }
+time = { version = "0.3", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 gst-check = { workspace = true, features = ["v1_20"] }
