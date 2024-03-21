@@ -1040,10 +1040,7 @@ impl RtpBaseDepay2 {
 
         // If npt-start is set, all the other values are also valid.
         if let Some(npt_start) = state.npt_start {
-            let Some((mut npt_start_pts, npt_start_ext_rtptime)) = state.npt_start_times else {
-                return None;
-            };
-
+            let (mut npt_start_pts, npt_start_ext_rtptime) = state.npt_start_times?;
             let clock_rate = state.clock_rate.unwrap();
 
             let mut start = segment.start().unwrap();

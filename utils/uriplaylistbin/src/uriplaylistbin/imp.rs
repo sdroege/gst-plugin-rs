@@ -505,9 +505,7 @@ impl UriPlaylistBin {
 
             let bin_weak = self.obj().downgrade();
             uridecodebin.connect("about-to-finish", false, move |_args| {
-                let Some(bin) = bin_weak.upgrade() else {
-                    return None;
-                };
+                let bin = bin_weak.upgrade()?;
                 let self_ = bin.imp();
 
                 gst::debug!(CAT, obj: bin, "current URI about to finish");

@@ -1045,7 +1045,7 @@ impl BaseSrcImpl for ReqwestHttpSrc {
             .ok_or_else(|| {
                 gst::error_msg!(gst::CoreError::StateChange, ["Can't start without an URI"])
             })
-            .map(|uri| uri.clone())?;
+            .cloned()?;
 
         gst::debug!(CAT, imp: self, "Starting for URI {}", uri);
 

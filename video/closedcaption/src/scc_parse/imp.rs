@@ -149,19 +149,15 @@ impl State {
         match parse_timecode(framerate, tc) {
             Ok(timecode) => Ok(timecode),
             Err(err) => {
-                let last_timecode =
-                    self.last_timecode
-                        .as_ref()
-                        .map(Clone::clone)
-                        .ok_or_else(|| {
-                            gst::element_imp_error!(
-                                imp,
-                                gst::StreamError::Decode,
-                                ["Invalid first timecode {:?}", err]
-                            );
+                let last_timecode = self.last_timecode.clone().ok_or_else(|| {
+                    gst::element_imp_error!(
+                        imp,
+                        gst::StreamError::Decode,
+                        ["Invalid first timecode {:?}", err]
+                    );
 
-                            gst::FlowError::Error
-                        })?;
+                    gst::FlowError::Error
+                })?;
 
                 gst::warning!(
                     CAT,

@@ -1140,9 +1140,7 @@ impl RtspManager {
         if !rtpbin2 {
             let on_bye = |args: &[glib::Value]| {
                 let m = args[0].get::<gst::Element>().unwrap();
-                let Some(obj) = m.parent() else {
-                    return None;
-                };
+                let obj = m.parent()?;
                 let bin = obj.downcast::<gst::Bin>().unwrap();
                 bin.send_event(gst::event::Eos::new());
                 None
