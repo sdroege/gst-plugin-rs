@@ -57,7 +57,7 @@ const READ: usize = 0;
 const WRITE: usize = 1;
 
 thread_local! {
-    static CURRENT_REACTOR: RefCell<Option<Reactor>> = RefCell::new(None);
+    static CURRENT_REACTOR: RefCell<Option<Reactor>> = const { RefCell::new(None) };
 }
 
 #[derive(Debug)]

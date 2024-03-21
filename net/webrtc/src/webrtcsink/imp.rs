@@ -483,6 +483,7 @@ struct PipelineWrapper(gst::Pipeline);
 
 // Structure to generate GstNavigation event from a WebRTCDataChannel
 // This is simply used to hold references to the inner items.
+#[allow(dead_code)]
 #[derive(Debug)]
 struct NavigationEventHandler((glib::SignalHandlerId, WebRTCDataChannel));
 

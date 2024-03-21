@@ -27,7 +27,7 @@ use super::{CallOnDrop, JoinHandle, Reactor};
 use crate::runtime::RUNTIME_CAT;
 
 thread_local! {
-    static CURRENT_SCHEDULER: RefCell<Option<HandleWeak>> = RefCell::new(None);
+    static CURRENT_SCHEDULER: RefCell<Option<HandleWeak>> = const { RefCell::new(None) };
 }
 
 #[derive(Debug)]

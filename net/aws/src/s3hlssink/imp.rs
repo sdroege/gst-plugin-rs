@@ -642,10 +642,7 @@ impl ObjectImpl for S3HlsSink {
         self.hlssink.connect("get-playlist-stream", false, {
             let self_weak = self.downgrade();
             move |args| -> Option<glib::Value> {
-                let Some(self_) = self_weak.upgrade() else {
-                    return None;
-                };
-
+                let self_ = self_weak.upgrade()?;
                 let s3client = self_.s3client_from_settings();
                 let settings = self_.settings.lock().unwrap();
                 let mut state = self_.state.lock().unwrap();
@@ -676,10 +673,7 @@ impl ObjectImpl for S3HlsSink {
         self.hlssink.connect("get-fragment-stream", false, {
             let self_weak = self.downgrade();
             move |args| -> Option<glib::Value> {
-                let Some(self_) = self_weak.upgrade() else {
-                    return None;
-                };
-
+                let self_ = self_weak.upgrade()?;
                 let s3client = self_.s3client_from_settings();
                 let settings = self_.settings.lock().unwrap();
                 let mut state = self_.state.lock().unwrap();
@@ -710,10 +704,7 @@ impl ObjectImpl for S3HlsSink {
         self.hlssink.connect("delete-fragment", false, {
             let self_weak = self.downgrade();
             move |args| -> Option<glib::Value> {
-                let Some(self_) = self_weak.upgrade() else {
-                    return None;
-                };
-
+                let self_ = self_weak.upgrade()?;
                 let s3_client = self_.s3client_from_settings();
                 let settings = self_.settings.lock().unwrap();
 

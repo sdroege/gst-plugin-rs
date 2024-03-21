@@ -548,10 +548,7 @@ impl WhepSrc {
         let self_weak = self.downgrade();
         self.webrtcbin.connect("on-negotiation-needed", false, {
             move |_| {
-                let Some(self_) = self_weak.upgrade() else {
-                    return None;
-                };
-
+                let self_ = self_weak.upgrade()?;
                 let settings = self_.settings.lock().unwrap();
 
                 let endpoint =

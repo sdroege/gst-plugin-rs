@@ -771,7 +771,7 @@ impl FallbackSwitch {
             is_active
         );
 
-        #[allow(clippy::block_in_conditions)]
+        #[allow(clippy::blocks_in_conditions)]
         let output_clockid = if is_active {
             pad_state.schedule_clock(
                 self,

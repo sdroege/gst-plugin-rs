@@ -24,7 +24,7 @@ use super::CallOnDrop;
 use crate::runtime::RUNTIME_CAT;
 
 thread_local! {
-    static CURRENT_TASK_ID: Cell<Option<TaskId>> = Cell::new(None);
+    static CURRENT_TASK_ID: Cell<Option<TaskId>> = const { Cell::new(None) };
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
