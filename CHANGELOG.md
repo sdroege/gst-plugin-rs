@@ -5,6 +5,29 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.12.3] - 2024-03-21
+### Fixed
+- gtk4paintablesink: Fix scaling of texture position.
+- janusvrwebrtcsink: Handle 64 bit numerical room ids.
+- janusvrwebrtcsink: Don't include deprecated audio/video fields in publish
+  messages.
+- janusvrwebrtcsink: Handle various other messages to avoid printing errors.
+- livekitwebrtc: Fix shutdown behaviour.
+- rtpgccbwe: Don't forward buffer lists with buffers from different SSRCs to
+  avoid breaking assumptions in rtpsession.
+- sccparse: Ignore invalid timecodes during seeking.
+- webrtcsink: Don't try parsing audio caps as video caps.
+
+### Changed
+- webrtc: Allow resolution and framerate changes.
+- webrtcsrc: Make produce-peer-id optional.
+
+### Added
+- livekitwebrtcsrc: Add new LiveKit source element.
+- regex: Add support for configuring regex behaviour.
+- spotifyaudiosrc: Document how to use with non-Facebook accounts.
+- webrtcsrc: Add `do-retransmission` property.
+
 ## [0.12.2] - 2024-02-26
 ### Fixed
 - rtpgccbwe: Don't reset PTS/DTS to `None` as otherwise `rtpsession` won't be
@@ -361,7 +384,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.2...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.3...HEAD
+[0.12.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.2...0.12.3
 [0.12.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.1...0.12.2
 [0.12.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.0...0.12.1
 [0.12.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.11.3...0.12.0
