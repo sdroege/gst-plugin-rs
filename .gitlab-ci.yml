@@ -20,6 +20,8 @@ variables:
   # to ensure that we are testing against the same thing as GStreamer itself.
   # The tag name is included above from the main repo.
   GSTREAMER_DOC_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer/amd64/fedora:$FEDORA_TAG-main"
+  # Use the gstreamer image to trigger the cerbero job, same as the monorepo
+  CERBERO_TRIGGER_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer/amd64/fedora:$FEDORA_TAG-main"
   WINDOWS_BASE: "registry.freedesktop.org/gstreamer/gstreamer-rs/windows"
   WINDOWS_RUST_MINIMUM_IMAGE: "$WINDOWS_BASE:$GST_RS_IMG_TAG-main-$GST_RS_MSRV"
   WINDOWS_RUST_STABLE_IMAGE: "$WINDOWS_BASE:$GST_RS_IMG_TAG-main-$GST_RS_STABLE"
@@ -384,3 +386,34 @@ coverage:
       coverage_report:
         coverage_format: cobertura
         path: coverage.xml
+
+cerbero trigger:
+  image: $CERBERO_TRIGGER_IMAGE
+  needs: [ "trigger" ]
+  variables:
+    # We will build this cerbero branch in the cerbero trigger CI
+    CERBERO_UPSTREAM_BRANCH: 'main'
+  script:
+    - ci/cerbero/trigger_cerbero_pipeline.py
+  rules:
+    # Never run post merge
+    - if: '$CI_PROJECT_NAMESPACE == "gstreamer"'
+      when: never
+    # Don't run if the only changes are files that cargo-c does not read
+    - if:
+      changes:
+      - "CHANGELOG.md"
+      - "README.md"
+      - "deny.toml"
+      - "rustfmt.toml"
+      - "typos.toml"
+      - "*.py"
+      - "*.sh"
+      - "Makefile"
+      - "meson.build"
+      - "meson_options.txt"
+      - "**/meson.build"
+      - "ci/*.sh"
+      - "ci/*.py"
+      when: never
+    - when: always
