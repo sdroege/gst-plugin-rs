@@ -101,6 +101,7 @@ pub enum CleanupMode {
 struct Settings {
     dot_prefix: Option<String>,
     dot_ts: bool,
+    dot_pipeline_ptr: bool,
     dot_dir: Option<String>,
     cleanup_mode: CleanupMode,
 }
@@ -112,10 +113,10 @@ impl Default for Settings {
             dot_prefix: Some("pipeline-snapshot-".to_string()),
             dot_ts: true,
             cleanup_mode: CleanupMode::None,
+            dot_pipeline_ptr: false,
         }
     }
 }
-
 impl Settings {
     fn set_dot_dir(&mut self, dot_dir: Option<String>) {
         if let Some(dot_dir) = dot_dir {
@@ -155,6 +156,11 @@ impl Settings {
             self.dot_ts = dot_ts;
         }
 
+        if let Ok(dot_pipeline_ptr) = s.get("dot-pipeline-ptr") {
+            gst::log!(CAT, imp = imp, "dot-pipeline-ptr = {}", dot_pipeline_ptr);
+            self.dot_pipeline_ptr = dot_pipeline_ptr;
+        }
+
         if let Ok(cleanup_mod) = s.get::<String>("cleanup-mode") {
             gst::log!(CAT, imp = imp, "cleanup-mode = {:?}", cleanup_mod);
             self.cleanup_mode = match cleanup_mod.as_str() {
@@ -176,6 +182,7 @@ pub struct PipelineSnapshot {
     #[property(name="dot-dir", get, set = Self::set_dot_dir, construct_only, type = String, member = dot_dir, blurb = "Directory where to place dot files")]
     #[property(name="dot-prefix", get, set, type = String, member = dot_prefix, blurb = "Prefix for dot files")]
     #[property(name="dot-ts", get, set, type = bool, member = dot_ts, blurb = "Add timestamp to dot files")]
+    #[property(name="dot-pipeline-ptr", get, set, type = bool, member = dot_pipeline_ptr, blurb = "Add pipeline ptr value to dot files")]
     #[property(name="cleanup-mode", get  = |s: &Self| s.settings.read().unwrap().cleanup_mode, set, type = CleanupMode, member = cleanup_mode, blurb = "Cleanup mode", builder(CleanupMode::None))]
     settings: RwLock<Settings>,
     pipelines: Arc<Mutex<HashMap<ElementPtr, glib::WeakRef<gst::Element>>>>,
@@ -292,27 +299,29 @@ impl PipelineSnapshot {
             self.cleanup_dots();
         }
 
+        let ts = if settings.dot_ts {
+            format!("{:?}-", gst::get_timestamp() - *START_TIME)
+        } else {
+            "".to_string()
+        };
+
         for pipeline in pipelines.into_iter() {
             let pipeline = pipeline.downcast::<gst::Pipeline>().unwrap();
             gst::debug!(CAT, imp = self, "dump {}", pipeline.name());
 
-            let dump_name = if settings.dot_ts {
-                format!(
-                    "{}-{}{}",
-                    gst::get_timestamp() - *START_TIME,
-                    settings.dot_prefix.as_ref().map_or("", |s| s.as_str()),
-                    pipeline.name()
-                )
-            } else {
-                format!(
-                    "{}{}",
-                    settings.dot_prefix.as_ref().map_or("", |s| s.as_str()),
-                    pipeline.name()
-                )
-            };
+            let pipeline_ptr = if settings.dot_pipeline_ptr {
+                let pipeline_ptr: *const gst::ffi::GstPipeline = pipeline.to_glib_none().0;
 
-            let dot_path = format!("{}/{}.dot", dot_dir, dump_name);
-            gst::debug!(CAT, imp = self, "Writing {}", dot_path);
+                format!("-{:?}", pipeline_ptr)
+            } else {
+                "".to_string()
+            };
+            let dot_path = format!(
+                "{dot_dir}/{ts}{}{}{pipeline_ptr}.dot",
+                settings.dot_prefix.as_ref().map_or("", |s| s.as_str()),
+                pipeline.name(),
+            );
+            gst::debug!(CAT, im =: self, "Writing {}", dot_path);
             match std::fs::File::create(&dot_path) {
                 Ok(mut f) => {
                     let data = pipeline.debug_to_dot_data(gst::DebugGraphDetails::all());
