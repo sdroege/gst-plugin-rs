@@ -15,10 +15,8 @@ use once_cell::sync::Lazy;
 
 use std::sync::Mutex;
 
-use pango::prelude::*;
-
-use crate::caption_frame::{CaptionFrame, Status};
 use crate::ccutils::extract_cdp;
+use crate::cea608utils::Cea608Renderer;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -50,10 +48,8 @@ impl Default for Settings {
 
 struct State {
     video_info: Option<gst_video::VideoInfo>,
-    layout: Option<pango::Layout>,
-    caption_frame: CaptionFrame,
+    renderer: Cea608Renderer,
     composition: Option<gst_video::VideoOverlayComposition>,
-    left_alignment: i32,
     attach: bool,
     selected_field: Option<u8>,
     last_cc_pts: Option<gst::ClockTime>,
@@ -68,10 +64,8 @@ impl Default for State {
     fn default() -> Self {
         Self {
             video_info: None,
-            layout: None,
-            caption_frame: CaptionFrame::default(),
+            renderer: Cea608Renderer::new(),
             composition: None,
-            left_alignment: 0,
             attach: false,
             selected_field: None,
             last_cc_pts: gst::ClockTime::NONE,
@@ -87,165 +81,10 @@ pub struct Cea608Overlay {
 }
 
 impl Cea608Overlay {
-    // FIXME: we want to render the text in the largest 32 x 15 characters
-    // that will fit the viewport. This is a truly terrible way to determine
-    // the appropriate font size, but we only need to run that on resolution
-    // changes, and the API that would allow us to precisely control the
-    // line height has not yet been exposed by the bindings:
-    //
-    // https://blogs.gnome.org/mclasen/2019/07/27/more-text-rendering-updates/
-    //
-    // TODO: switch to the API presented in this post once it's been exposed
-    fn recalculate_layout(&self, state: &mut State) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let video_info = state.video_info.as_ref().unwrap();
-        let fontmap = pangocairo::FontMap::new();
-        let context = fontmap.create_context();
-        context.set_language(Some(&pango::Language::from_string("en_US")));
-        context.set_base_dir(pango::Direction::Ltr);
-        let layout = pango::Layout::new(&context);
-        layout.set_alignment(pango::Alignment::Left);
-        let mut font_desc = pango::FontDescription::from_string("monospace");
-
-        let mut font_size = 1;
-        let mut left_alignment = 0;
-        loop {
-            font_desc.set_size(font_size * pango::SCALE);
-            layout.set_font_description(Some(&font_desc));
-            layout.set_text(
-                "12345678901234567890123456789012\n2\n3\n4\n5\n6\n7\n8\n9\n0\n1\n2\n3\n4\n5",
-            );
-            let (_ink_rect, logical_rect) = layout.extents();
-            if logical_rect.width() > video_info.width() as i32 * pango::SCALE
-                || logical_rect.height() > video_info.height() as i32 * pango::SCALE
-            {
-                font_desc.set_size((font_size - 1) * pango::SCALE);
-                layout.set_font_description(Some(&font_desc));
-                break;
-            }
-            left_alignment = (video_info.width() as i32 - logical_rect.width() / pango::SCALE) / 2;
-            font_size += 1;
+    fn overlay(&self, state: &mut State) {
+        if let Some(rect) = state.renderer.generate_rectangle() {
+            state.composition = gst_video::VideoOverlayComposition::new(Some(&rect)).ok();
         }
-
-        if self.settings.lock().unwrap().black_background {
-            let attrs = pango::AttrList::new();
-            let attr = pango::AttrColor::new_background(0, 0, 0);
-            attrs.insert(attr);
-            layout.set_attributes(Some(&attrs));
-        }
-
-        state.left_alignment = left_alignment;
-        state.layout = Some(layout);
-
-        Ok(gst::FlowSuccess::Ok)
-    }
-
-    fn overlay_text(&self, text: &str, state: &mut State) {
-        let video_info = state.video_info.as_ref().unwrap();
-        let layout = state.layout.as_ref().unwrap();
-        layout.set_text(text);
-        let (_ink_rect, logical_rect) = layout.extents();
-        let height = logical_rect.height() / pango::SCALE;
-        let width = logical_rect.width() / pango::SCALE;
-
-        // No text actually needs rendering
-        if width == 0 || height == 0 {
-            state.composition = None;
-            return;
-        }
-
-        let render_buffer = || -> Option<gst::Buffer> {
-            let mut buffer = gst::Buffer::with_size((width * height) as usize * 4).ok()?;
-
-            gst_video::VideoMeta::add(
-                buffer.get_mut().unwrap(),
-                gst_video::VideoFrameFlags::empty(),
-                #[cfg(target_endian = "little")]
-                gst_video::VideoFormat::Bgra,
-                #[cfg(target_endian = "big")]
-                gst_video::VideoFormat::Argb,
-                width as u32,
-                height as u32,
-            )
-            .ok()?;
-            let buffer = buffer.into_mapped_buffer_writable().unwrap();
-
-            // Pass ownership of the buffer to the cairo surface but keep around
-            // a raw pointer so we can later retrieve it again when the surface
-            // is done
-            let buffer_ptr = buffer.buffer().as_ptr();
-            let surface = cairo::ImageSurface::create_for_data(
-                buffer,
-                cairo::Format::ARgb32,
-                width,
-                height,
-                width * 4,
-            )
-            .ok()?;
-
-            let cr = cairo::Context::new(&surface).ok()?;
-
-            // Clear background
-            cr.set_operator(cairo::Operator::Source);
-            cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-            cr.paint().ok()?;
-
-            // Render text outline
-            cr.save().ok()?;
-            cr.set_operator(cairo::Operator::Over);
-
-            cr.set_source_rgba(0.0, 0.0, 0.0, 1.0);
-
-            pangocairo::functions::layout_path(&cr, layout);
-            cr.stroke().ok()?;
-            cr.restore().ok()?;
-
-            // Render text
-            cr.save().ok()?;
-            cr.set_source_rgba(255.0, 255.0, 255.0, 1.0);
-
-            pangocairo::functions::show_layout(&cr, layout);
-
-            cr.restore().ok()?;
-            drop(cr);
-
-            // Safety: The surface still owns a mutable reference to the buffer but our reference
-            // to the surface here is the last one. After dropping the surface the buffer would be
-            // freed, so we keep an additional strong reference here before dropping the surface,
-            // which is then returned. As such it's guaranteed that nothing is using the buffer
-            // anymore mutably.
-            unsafe {
-                assert_eq!(
-                    cairo::ffi::cairo_surface_get_reference_count(surface.to_raw_none()),
-                    1
-                );
-                let buffer = glib::translate::from_glib_none(buffer_ptr);
-                drop(surface);
-                buffer
-            }
-        };
-
-        let buffer = match render_buffer() {
-            Some(buffer) => buffer,
-            None => {
-                gst::error!(CAT, imp: self, "Failed to render buffer");
-                state.composition = None;
-                return;
-            }
-        };
-
-        let rect = gst_video::VideoOverlayRectangle::new_raw(
-            &buffer,
-            state.left_alignment,
-            (video_info.height() as i32 - height) / 2,
-            width as u32,
-            height as u32,
-            gst_video::VideoOverlayFormatFlags::PREMULTIPLIED_ALPHA,
-        );
-
-        state.composition = match gst_video::VideoOverlayComposition::new(Some(&rect)) {
-            Ok(composition) => Some(composition),
-            Err(_) => None,
-        };
     }
 
     fn negotiate(&self, state: &mut State) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -285,7 +124,12 @@ impl Cea608Overlay {
 
         state.attach = upstream_has_meta || downstream_accepts_meta;
 
-        let _ = state.layout.take();
+        state
+            .renderer
+            .set_video_size(video_info.width(), video_info.height());
+        state
+            .renderer
+            .set_channel(cea608_types::tables::Channel::ONE);
 
         if !self.srcpad.push_event(gst::event::Caps::new(&caps)) {
             Err(gst::FlowError::NotNegotiated)
@@ -294,7 +138,7 @@ impl Cea608Overlay {
         }
     }
 
-    fn decode_cc_data(&self, pad: &gst::Pad, state: &mut State, data: &[u8], pts: gst::ClockTime) {
+    fn decode_cc_data(&self, state: &mut State, data: &[u8], pts: gst::ClockTime) {
         if data.len() % 3 != 0 {
             gst::warning!(CAT, "cc_data length is not a multiple of 3, truncating");
         }
@@ -303,57 +147,39 @@ impl Cea608Overlay {
             let cc_valid = (triple[0] & 0x04) == 0x04;
             let cc_type = triple[0] & 0x03;
 
-            if cc_valid {
-                if cc_type == 0x00 || cc_type == 0x01 {
-                    if state.selected_field.is_none() {
-                        state.selected_field = Some(cc_type);
-                        gst::info!(CAT, imp: self, "Selected field {} automatically", cc_type);
-                    }
-
-                    if Some(cc_type) == state.selected_field {
-                        match state
-                            .caption_frame
-                            .decode((triple[1] as u16) << 8 | triple[2] as u16, 0.0)
-                        {
-                            Ok(Status::Ready) => {
-                                let text = match state.caption_frame.to_text(true) {
-                                    Ok(text) => text,
-                                    Err(_) => {
-                                        gst::error!(
-                                            CAT,
-                                            obj: pad,
-                                            "Failed to convert caption frame to text"
-                                        );
-                                        continue;
-                                    }
-                                };
-
-                                self.overlay_text(&text, state);
-                            }
-                            Ok(Status::Clear) => {
-                                self.overlay_text("", state);
-                            }
-                            Ok(Status::Ok) => (),
-                            Err(err) => {
-                                gst::error!(
-                                    CAT,
-                                    obj: pad,
-                                    "Failed to decode caption frame: {:?}",
-                                    err
-                                );
-                            }
-                        }
-
-                        self.reset_timeout(state, pts);
-                    }
-                } else {
-                    break;
+            if !cc_valid {
+                continue;
+            }
+            if cc_type == 0x00 || cc_type == 0x01 {
+                if state.selected_field.is_none() {
+                    state.selected_field = Some(cc_type);
+                    gst::info!(CAT, imp: self, "Selected field {} automatically", cc_type);
                 }
+
+                if Some(cc_type) != state.selected_field {
+                    continue;
+                };
+                match state.renderer.push_pair([triple[1], triple[2]]) {
+                    Err(e) => {
+                        gst::warning!(CAT, imp: self, "Failed to parse incoming CEA-608: {e:?}");
+                        continue;
+                    }
+                    Ok(true) => {
+                        state.composition.take();
+                    }
+                    Ok(false) => continue,
+                };
+
+                self.overlay(state);
+
+                self.reset_timeout(state, pts);
+            } else {
+                break;
             }
         }
     }
 
-    fn decode_s334_1a(&self, pad: &gst::Pad, state: &mut State, data: &[u8], pts: gst::ClockTime) {
+    fn decode_s334_1a(&self, state: &mut State, data: &[u8], pts: gst::ClockTime) {
         if data.len() % 3 != 0 {
             gst::warning!(CAT, "cc_data length is not a multiple of 3, truncating");
         }
@@ -365,24 +191,22 @@ impl Cea608Overlay {
                 gst::info!(CAT, imp: self, "Selected field {} automatically", cc_type);
             }
 
-            if Some(cc_type) == state.selected_field {
-                if let Ok(Status::Ready) = state
-                    .caption_frame
-                    .decode((triple[1] as u16) << 8 | triple[2] as u16, 0.0)
-                {
-                    let text = match state.caption_frame.to_text(true) {
-                        Ok(text) => text,
-                        Err(_) => {
-                            gst::error!(CAT, obj: pad, "Failed to convert caption frame to text");
-                            continue;
-                        }
-                    };
-
-                    self.overlay_text(&text, state);
+            if Some(cc_type) != state.selected_field {
+                continue;
+            };
+            match state.renderer.push_pair([triple[1], triple[2]]) {
+                Err(e) => {
+                    gst::warning!(CAT, imp: self, "Failed to parse incoming CEA-608: {e:?}");
+                    continue;
                 }
+                Ok(true) => {
+                    state.composition.take();
+                }
+                Ok(false) => continue,
+            };
+            self.overlay(state);
 
-                self.reset_timeout(state, pts);
-            }
+            self.reset_timeout(state, pts);
         }
     }
 
@@ -408,15 +232,11 @@ impl Cea608Overlay {
             self.negotiate(&mut state)?;
         }
 
-        if state.layout.is_none() {
-            self.recalculate_layout(&mut state)?;
-        }
-
         for meta in buffer.iter_meta::<gst_video::VideoCaptionMeta>() {
             if meta.caption_type() == gst_video::VideoCaptionType::Cea708Cdp {
                 match extract_cdp(meta.data()) {
                     Ok(data) => {
-                        self.decode_cc_data(pad, &mut state, data, pts);
+                        self.decode_cc_data(&mut state, data, pts);
                     }
                     Err(e) => {
                         gst::warning!(CAT, "{e}");
@@ -424,31 +244,25 @@ impl Cea608Overlay {
                     }
                 }
             } else if meta.caption_type() == gst_video::VideoCaptionType::Cea708Raw {
-                self.decode_cc_data(pad, &mut state, meta.data(), pts);
+                self.decode_cc_data(&mut state, meta.data(), pts);
             } else if meta.caption_type() == gst_video::VideoCaptionType::Cea608S3341a {
-                self.decode_s334_1a(pad, &mut state, meta.data(), pts);
+                self.decode_s334_1a(&mut state, meta.data(), pts);
             } else if meta.caption_type() == gst_video::VideoCaptionType::Cea608Raw {
                 let data = meta.data();
                 assert!(data.len() % 2 == 0);
-                for i in 0..data.len() / 2 {
-                    if let Ok(Status::Ready) = state
-                        .caption_frame
-                        .decode((data[i * 2] as u16) << 8 | data[i * 2 + 1] as u16, 0.0)
-                    {
-                        let text = match state.caption_frame.to_text(true) {
-                            Ok(text) => text,
-                            Err(_) => {
-                                gst::error!(
-                                    CAT,
-                                    obj: pad,
-                                    "Failed to convert caption frame to text"
-                                );
-                                continue;
-                            }
-                        };
+                for pair in data.chunks_exact(2) {
+                    match state.renderer.push_pair([pair[0], pair[1]]) {
+                        Err(e) => {
+                            gst::warning!(CAT, imp: self, "Failed to parse incoming CEA-608: {e:?}");
+                            continue;
+                        }
+                        Ok(true) => {
+                            state.composition.take();
+                        }
+                        Ok(false) => continue,
+                    };
 
-                        self.overlay_text(&text, &mut state);
-                    }
+                    self.overlay(&mut state);
 
                     self.reset_timeout(&mut state, pts);
                 }
@@ -504,9 +318,15 @@ impl Cea608Overlay {
                 }
             }
             EventView::FlushStop(..) => {
+                let settings = self.settings.lock().unwrap();
                 let mut state = self.state.lock().unwrap();
-                state.caption_frame = CaptionFrame::default();
+                state.renderer = Cea608Renderer::new();
+                state
+                    .renderer
+                    .set_black_background(settings.black_background);
                 state.composition = None;
+                drop(state);
+                drop(settings);
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
@@ -604,7 +424,10 @@ impl ObjectImpl for Cea608Overlay {
                 let mut state = self.state.lock().unwrap();
 
                 settings.black_background = value.get().expect("type checked upstream");
-                let _ = state.layout.take();
+                state
+                    .renderer
+                    .set_black_background(settings.black_background);
+                state.composition.take();
             }
             "timeout" => {
                 let mut settings = self.settings.lock().unwrap();
