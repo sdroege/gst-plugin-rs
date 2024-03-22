@@ -8,7 +8,7 @@
 
 use gio::prelude::*;
 use gst::prelude::*;
-use gsthlssink3::HlsSink3PlaylistType;
+use gsthlssink3::hlssink3::HlsSink3PlaylistType;
 use once_cell::sync::Lazy;
 use std::io::Write;
 use std::sync::{mpsc, Arc, Mutex};
