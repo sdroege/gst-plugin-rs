@@ -302,6 +302,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1fdabc7756949593fe60f30ec81974b613357de856987752631dea1e3394c80"
 
 [[package]]
+name = "av-data"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d75b98a3525d00f920df9a2d44cc99b9cc5b7dc70d7fbb612cd755270dbe6552"
+dependencies = [
+ "byte-slice-cast",
+ "bytes",
+ "num-derive",
+ "num-rational",
+ "num-traits",
+ "thiserror",
+]
+
+[[package]]
 name = "av1-grain"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1450,12 +1464,14 @@ checksum = "7e962a19be5cfc3f3bf6dd8f61eb50107f356ad6270fbb3ed41476571db78be5"
 
 [[package]]
 name = "dav1d"
-version = "0.10.2"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7eb1fa9954b7ae85ff0d43ef6d186d1b3469d4aa1574845d1938bef05377030"
+checksum = "0d4b54a40baf633a71c6f0fb49494a7e4ee7bc26f3e727212b6cb915aa1ea1e1"
 dependencies = [
+ "av-data",
  "bitflags 2.5.0",
  "dav1d-sys",
+ "static_assertions",
 ]
 
 [[package]]
@@ -6186,6 +6202,12 @@ name = "sprintf"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c0cdea5a20a06e7c57f627094e7b1618e5665592cd88f2d45fa4014e348db58"
+
+[[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "strength_reduce"
