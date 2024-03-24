@@ -2283,7 +2283,6 @@ dependencies = [
  "atomic_refcell",
  "byteorder",
  "cairo-rs",
- "cc",
  "cea608-types",
  "cea708-types",
  "chrono",

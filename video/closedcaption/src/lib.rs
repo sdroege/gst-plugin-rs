@@ -17,12 +17,6 @@ use gst::glib;
 #[cfg(feature = "doc")]
 use gst::prelude::*;
 
-#[allow(non_camel_case_types, non_upper_case_globals, unused)]
-#[allow(clippy::redundant_static_lifetimes, clippy::unreadable_literal)]
-#[allow(clippy::useless_transmute, clippy::trivially_copy_pass_by_ref)]
-mod ffi;
-
-mod caption_frame;
 mod ccdetect;
 mod ccutils;
 mod cea608overlay;
