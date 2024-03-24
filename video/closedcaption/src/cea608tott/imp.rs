@@ -6,14 +6,16 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use cea608_types::Cea608State;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use crate::caption_frame::{CaptionFrame, Status};
 use atomic_refcell::AtomicRefCell;
 
 use once_cell::sync::Lazy;
+
+use crate::cea608utils::Cea608Frame;
 
 #[derive(Copy, Clone, Debug)]
 enum Format {
@@ -25,7 +27,8 @@ enum Format {
 struct State {
     format: Option<Format>,
     wrote_header: bool,
-    caption_frame: CaptionFrame,
+    state: Cea608State,
+    frame: Cea608Frame,
     previous_text: Option<(gst::ClockTime, String)>,
     index: u64,
 }
@@ -35,7 +38,8 @@ impl Default for State {
         State {
             format: None,
             wrote_header: false,
-            caption_frame: CaptionFrame::default(),
+            state: Cea608State::default(),
+            frame: Cea608Frame::new(),
             previous_text: None,
             index: 1,
         }
@@ -79,8 +83,6 @@ impl Cea608ToTt {
             gst::FlowError::Error
         })?;
 
-        let pts = (buffer_pts.nseconds() as f64) / 1_000_000_000.0;
-
         let data = buffer.map_readable().map_err(|_| {
             gst::error!(CAT, obj: pad, "Can't map buffer readable");
 
@@ -93,39 +95,48 @@ impl Cea608ToTt {
             return Ok(gst::FlowSuccess::Ok);
         }
 
-        let previous_text = match state
-            .caption_frame
-            .decode((data[0] as u16) << 8 | data[1] as u16, pts)
-        {
-            Ok(Status::Ok) => return Ok(gst::FlowSuccess::Ok),
-            Err(_) => {
-                gst::error!(CAT, obj: pad, "Failed to decode closed caption packet");
-                return Ok(gst::FlowSuccess::Ok);
-            }
-            Ok(Status::Clear) => {
-                gst::debug!(CAT, obj: pad, "Clearing previous closed caption packet");
-                state.previous_text.take()
-            }
-            Ok(Status::Ready) => {
-                gst::debug!(CAT, obj: pad, "Have new closed caption packet");
-                let text = match state.caption_frame.to_text(false) {
-                    Ok(text) => text,
-                    Err(_) => {
-                        gst::error!(CAT, obj: pad, "Failed to convert caption frame to text");
+        let previous_text = {
+            match state.state.decode([data[0], data[1]]) {
+                Err(e) => {
+                    gst::error!(CAT, obj: pad, "Failed to decode closed caption packet: {e:?}");
+                    return Ok(gst::FlowSuccess::Ok);
+                }
+                Ok(Some(cea608)) => {
+                    gst::trace!(CAT, obj: pad, "received {:x?} cea608: {cea608:?}", [data[0], data[1]]);
+                    if state.frame.push_code(cea608) {
+                        let text = state.frame.get_text();
+                        gst::trace!(CAT, obj: pad, "generated text: {text}");
+                        if text.is_empty() {
+                            state.previous_text.take()
+                        } else if state.frame.mode() == Some(cea608_types::Mode::PaintOn)
+                            || matches!(
+                                cea608,
+                                cea608_types::Cea608::EraseDisplay(_)
+                                    | cea608_types::Cea608::Backspace(_)
+                                    | cea608_types::Cea608::EndOfCaption(_)
+                                    | cea608_types::Cea608::DeleteToEndOfRow(_)
+                            )
+                        {
+                            // only in some specific circumstances do we want to actually change
+                            // our generated text
+                            state.previous_text.replace((buffer_pts, text))
+                        } else {
+                            return Ok(gst::FlowSuccess::Ok);
+                        }
+                    } else {
+                        // no change, nothing to do
                         return Ok(gst::FlowSuccess::Ok);
                     }
-                };
-
-                state.previous_text.replace((buffer_pts, text))
+                }
+                Ok(None) => {
+                    return Ok(gst::FlowSuccess::Ok);
+                }
             }
         };
 
-        let previous_text = match previous_text {
-            Some(previous_text) => previous_text,
-            None => {
-                gst::debug!(CAT, obj: pad, "Have no previous text");
-                return Ok(gst::FlowSuccess::Ok);
-            }
+        let Some(previous_text) = previous_text else {
+            gst::debug!(CAT, obj: pad, "Have no previous text");
+            return Ok(gst::FlowSuccess::Ok);
         };
 
         let duration = buffer_pts.saturating_sub(previous_text.0);
@@ -317,7 +328,8 @@ impl Cea608ToTt {
             }
             EventView::FlushStop(..) => {
                 let mut state = self.state.borrow_mut();
-                state.caption_frame = CaptionFrame::default();
+                state.frame = Cea608Frame::new();
+                state.state = Cea608State::default();
                 state.previous_text = None;
             }
             EventView::Eos(..) => {

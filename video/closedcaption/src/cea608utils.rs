@@ -408,6 +408,37 @@ impl Cea608Frame {
     pub fn iter(&self) -> impl Iterator<Item = &Cea608Line> {
         self.display_lines.iter()
     }
+
+    pub fn get_text(&self) -> String {
+        let mut text = String::new();
+        for (i, line) in self.iter().enumerate() {
+            let mut seen_non_space = false;
+            if i != 0 {
+                text.push('\r');
+                text.push('\n');
+            }
+            for (_i, c) in line.display_iter() {
+                match c {
+                    Cea608Cell::Empty | Cea608Cell::MidRow(_) => {
+                        if seen_non_space {
+                            text.push(' ')
+                        }
+                    }
+                    Cea608Cell::Char(c) => {
+                        if *c != ' ' {
+                            seen_non_space = true;
+                        }
+                        text.push(*c);
+                    }
+                }
+            }
+        }
+        text
+    }
+
+    pub fn mode(&self) -> Option<cea608_types::Mode> {
+        self.mode
+    }
 }
 
 #[derive(Debug)]
