@@ -196,6 +196,29 @@ version = "0.5"
 name = "heck"
 version = "0.4"
 
+# Various crates depend on an older version of hyper / reqwest / headers / etc
+[[bans.skip]]
+name = "hyper"
+version = "0.14"
+[[bans.skip]]
+name = "hyper-tls"
+version = "0.5"
+[[bans.skip]]
+name = "http-body"
+version = "0.4"
+[[bans.skip]]
+name = "headers-core"
+version = "0.2"
+[[bans.skip]]
+name = "headers"
+version = "0.3"
+[[bans.skip]]
+name = "h2"
+version = "0.3"
+[[bans.skip]]
+name = "reqwest"
+version = "0.11"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
