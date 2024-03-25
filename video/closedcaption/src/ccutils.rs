@@ -155,13 +155,12 @@ pub(crate) fn recalculate_pango_layout(
     layout: &pango::Layout,
     video_width: u32,
     video_height: u32,
-) -> i32 {
+) -> (i32, i32) {
     let mut font_desc = pango::FontDescription::from_string("monospace");
     let video_width = video_width * 80 / 100;
     let video_height = video_height * 80 / 100;
 
     let mut font_size = 1;
-    let mut left_alignment = 0;
     loop {
         font_desc.set_size(font_size * pango::SCALE);
         layout.set_font_description(Some(&font_desc));
@@ -175,10 +174,12 @@ pub(crate) fn recalculate_pango_layout(
             layout.set_font_description(Some(&font_desc));
             break;
         }
-        left_alignment = (video_width as i32 - logical_rect.width() / pango::SCALE) / 2
-            + video_width as i32 / 10;
         font_size += 1;
     }
 
-    left_alignment
+    let (_ink_rect, logical_rect) = layout.extents();
+    (
+        logical_rect.width() / pango::SCALE,
+        logical_rect.height() / pango::SCALE,
+    )
 }

@@ -501,7 +501,7 @@ impl Cea608Renderer {
         context.set_base_dir(pango::Direction::Ltr);
         let layout = pango::Layout::new(&context);
         layout.set_alignment(pango::Alignment::Left);
-        let left_alignment = recalculate_pango_layout(&layout, video_width, video_height);
+        recalculate_pango_layout(&layout, video_width, video_height);
         Self {
             frame: Cea608Frame::new(),
             state: Cea608State::default(),
@@ -510,7 +510,7 @@ impl Cea608Renderer {
             rectangle: None,
             video_width,
             video_height,
-            left_alignment,
+            left_alignment: 0,
             black_background: false,
         }
     }
@@ -533,13 +533,19 @@ impl Cea608Renderer {
         }
     }
 
+    pub fn channel(&self) -> Option<cea608_types::tables::Channel> {
+        self.frame.selected_channel
+    }
+
     pub fn set_video_size(&mut self, width: u32, height: u32) {
         if width != self.video_width || height != self.video_height {
             self.video_width = width;
             self.video_height = height;
             self.layout = pango::Layout::new(&self.context);
             self.layout.set_alignment(pango::Alignment::Left);
-            self.left_alignment = recalculate_pango_layout(&self.layout, width, height);
+            let (max_layout_width, _max_layout_height) =
+                recalculate_pango_layout(&self.layout, width, height);
+            self.left_alignment = (width as i32 - max_layout_width) / 2 + width as i32 / 10;
             self.rectangle.take();
         }
     }

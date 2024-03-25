@@ -25,6 +25,7 @@ mod cea608tojson;
 mod cea608tott;
 mod cea608utils;
 mod cea708mux;
+mod cea708overlay;
 mod cea708utils;
 mod jsontovtt;
 mod line_reader;
@@ -60,6 +61,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     cea608tocea708::register(plugin)?;
     cea708mux::register(plugin)?;
     tttocea708::register(plugin)?;
+    cea708overlay::register(plugin)?;
     Ok(())
 }
 
