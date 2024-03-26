@@ -33,6 +33,9 @@ use std::time::{Duration, SystemTime};
 const DEFAULT_AWS_REGION: &str = "us-east-1";
 const DEFAULT_PING_TIMEOUT: i32 = 30;
 
+pub static AWS_BEHAVIOR_VERSION: Lazy<aws_config::BehaviorVersion> =
+    Lazy::new(aws_config::BehaviorVersion::v2023_11_09);
+
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "webrtc-aws-kvs-signaller",
@@ -233,7 +236,7 @@ impl Signaller {
         };
 
         let client = Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
+            &aws_config::defaults(AWS_BEHAVIOR_VERSION.clone())
                 .credentials_provider(credentials.clone())
                 .load()
                 .await,
@@ -303,7 +306,7 @@ impl Signaller {
         );
 
         let signaling_config = aws_sdk_kinesisvideosignaling::config::Builder::from(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
+            &aws_config::defaults(AWS_BEHAVIOR_VERSION.clone())
                 .credentials_provider(credentials.clone())
                 .load()
                 .await,

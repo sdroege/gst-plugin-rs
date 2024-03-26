@@ -14,7 +14,7 @@
 mod tests {
     use gst::prelude::*;
 
-    const DEFAULT_S3_REGION: &str = "us-west-2";
+    use gstaws::s3utils::{AWS_BEHAVIOR_VERSION, DEFAULT_S3_REGION};
 
     fn init() {
         use std::sync::Once;
@@ -40,7 +40,7 @@ mod tests {
         )
         .or_default_provider();
 
-        let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+        let config = aws_config::defaults(AWS_BEHAVIOR_VERSION.clone())
             .region(region_provider)
             .load()
             .await;

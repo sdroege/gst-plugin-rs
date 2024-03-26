@@ -47,6 +47,9 @@ static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
         .unwrap()
 });
 
+static AWS_BEHAVIOR_VERSION: Lazy<aws_config::BehaviorVersion> =
+    Lazy::new(aws_config::BehaviorVersion::v2023_11_09);
+
 const DEFAULT_TRANSCRIBER_REGION: &str = "us-east-1";
 
 // Deprecated in 0.11.0: due to evolutions of the transcriber element,
@@ -545,7 +548,7 @@ impl Transcriber {
         let config_loader = match (access_key, secret_access_key) {
             (Some(key), Some(secret_key)) => {
                 gst::debug!(CAT, imp: self, "Using settings credentials");
-                aws_config::ConfigLoader::default().credentials_provider(
+                aws_config::defaults(AWS_BEHAVIOR_VERSION.clone()).credentials_provider(
                     aws_transcribe::config::Credentials::new(
                         key,
                         secret_key,
@@ -557,7 +560,7 @@ impl Transcriber {
             }
             _ => {
                 gst::debug!(CAT, imp: self, "Attempting to get credentials from env...");
-                aws_config::defaults(aws_config::BehaviorVersion::latest())
+                aws_config::defaults(AWS_BEHAVIOR_VERSION.clone())
             }
         };
 
