@@ -9,6 +9,7 @@
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_s3::{
     config::{timeout::TimeoutConfig, Credentials, Region},
+    error::ProvideErrorMetadata,
     primitives::{ByteStream, ByteStreamError},
 };
 use aws_types::sdk_config::SdkConfig;
@@ -16,6 +17,7 @@ use aws_types::sdk_config::SdkConfig;
 use bytes::{buf::BufMut, Bytes, BytesMut};
 use futures::{future, Future};
 use once_cell::sync::Lazy;
+use std::fmt;
 use std::sync::Mutex;
 use std::time::Duration;
 use tokio::runtime;
@@ -38,6 +40,15 @@ static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
 pub enum WaitError<E> {
     Cancelled,
     FutureError(E),
+}
+
+impl<E: ProvideErrorMetadata + std::error::Error> fmt::Display for WaitError<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WaitError::Cancelled => f.write_str("Cancelled"),
+            WaitError::FutureError(err) => write!(f, "{err}: {}", err.meta()),
+        }
+    }
 }
 
 pub fn wait<F, T, E>(

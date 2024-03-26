@@ -11,6 +11,7 @@ use gst::subclass::prelude::*;
 use gst::{glib, prelude::*};
 
 use aws_sdk_transcribestreaming as aws_transcribe;
+use aws_sdk_transcribestreaming::error::ProvideErrorMetadata;
 use aws_sdk_transcribestreaming::types;
 
 use futures::channel::mpsc;
@@ -165,7 +166,7 @@ impl TranscriberStream {
             .send()
             .await
             .map_err(|err| {
-                let err = format!("Transcribe ws init error: {err}");
+                let err = format!("Transcribe ws init error: {err}: {}", err.meta());
                 gst::error!(CAT, imp: imp, "{err}");
                 gst::error_msg!(gst::LibraryError::Init, ["{err}"])
             })?;
@@ -187,7 +188,7 @@ impl TranscriberStream {
                 .recv()
                 .await
                 .map_err(|err| {
-                    let err = format!("Transcribe ws stream error: {err}");
+                    let err = format!("Transcribe ws stream error: {err}: {}", err.meta());
                     gst::error!(CAT, imp: self.imp, "{err}");
                     gst::error_msg!(gst::LibraryError::Failed, ["{err}"])
                 })?;
