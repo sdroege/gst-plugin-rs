@@ -20,7 +20,10 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tokio::runtime;
 
-const DEFAULT_S3_REGION: &str = "us-west-2";
+pub const DEFAULT_S3_REGION: &str = "us-west-2";
+
+pub static AWS_BEHAVIOR_VERSION: Lazy<aws_config::BehaviorVersion> =
+    Lazy::new(aws_config::BehaviorVersion::v2023_11_09);
 
 static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
     runtime::Builder::new_multi_thread()
@@ -111,12 +114,12 @@ pub fn wait_config(
         .or_default_provider()
         .or_else(Region::new(DEFAULT_S3_REGION));
     let config_future = match credentials {
-        Some(cred) => aws_config::defaults(aws_config::BehaviorVersion::latest())
+        Some(cred) => aws_config::defaults(AWS_BEHAVIOR_VERSION.clone())
             .timeout_config(timeout_config)
             .region(region_provider)
             .credentials_provider(cred)
             .load(),
-        None => aws_config::defaults(aws_config::BehaviorVersion::latest())
+        None => aws_config::defaults(AWS_BEHAVIOR_VERSION.clone())
             .timeout_config(timeout_config)
             .region(region_provider)
             .load(),

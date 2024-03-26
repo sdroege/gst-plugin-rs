@@ -18,7 +18,7 @@ mod s3hlssink;
 mod s3sink;
 mod s3src;
 mod s3url;
-mod s3utils;
+pub mod s3utils;
 mod transcribe_parse;
 mod transcriber;
 
