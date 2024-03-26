@@ -276,10 +276,9 @@ impl S3HlsSink {
                             gst::error!(
                                 CAT,
                                 imp: self,
-                                "Put object request for S3 key {} of data length {} failed with error {:?}",
+                                "Put object request for S3 key {} of data length {} failed with error {err}",
                                 s3_key,
                                 s3_data_len,
-                                err,
                             );
                             element_imp_error!(
                                 self,
@@ -320,9 +319,8 @@ impl S3HlsSink {
                         gst::error!(
                             CAT,
                             imp: self,
-                            "Delete object request for S3 key {} failed with error {:?}",
+                            "Delete object request for S3 key {} failed with error {err}",
                             s3_key,
-                            err
                         );
                         element_imp_error!(
                             self,

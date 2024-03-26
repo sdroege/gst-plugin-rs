@@ -10,6 +10,7 @@ use gst::glib;
 use gst::subclass::prelude::*;
 
 use aws_sdk_translate as aws_translate;
+use aws_sdk_translate::error::ProvideErrorMetadata;
 
 use futures::channel::mpsc;
 use futures::prelude::*;
@@ -78,7 +79,10 @@ impl TranslateLoop {
 
     pub async fn check_language(&self) -> Result<(), gst::ErrorMessage> {
         let language_list = self.client.list_languages().send().await.map_err(|err| {
-            let err = format!("Failed to call list_languages service: {err}");
+            let err = format!(
+                "Failed to call list_languages service: {err}: {}",
+                err.meta()
+            );
             gst::info!(CAT, imp: self.pad, "{err}");
             gst::error_msg!(gst::LibraryError::Failed, ["{err}"])
         })?;
@@ -143,7 +147,7 @@ impl TranslateLoop {
                 .send()
                 .await
                 .map_err(|err| {
-                    let err = format!("Failed to call translation service: {err}");
+                    let err = format!("Failed to call translation service: {err}: {}", err.meta());
                     gst::info!(CAT, imp: self.pad, "{err}");
                     gst::error_msg!(gst::LibraryError::Failed, ["{err}"])
                 })?
