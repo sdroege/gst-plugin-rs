@@ -45,6 +45,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use gst::glib;
 use gst::glib::translate::ToGlibPtr;
+use gst::glib::Properties;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use std::sync::LazyLock;
@@ -120,7 +121,7 @@ impl Settings {
 
         if let Ok(dot_dir) = s.get("dot-dir") {
             self.set_dot_dir(dot_dir);
-            gst::log!(CAT, imp: imp, "dot-dir = {:?}", self.dot_dir);
+            gst::log!(CAT, imp = imp, "dot-dir = {:?}", self.dot_dir);
         }
 
         if let Ok(dot_prefix) = s.get("dot-prefix") {
@@ -135,12 +136,18 @@ impl Settings {
     }
 }
 
-#[derive(Default)]
+#[derive(Properties, Debug, Default)]
+#[properties(wrapper_type = super::PipelineSnapshot)]
 pub struct PipelineSnapshot {
+    #[property(name="dot-dir", get, set = Self::set_dot_dir, construct_only, type = String, member = dot_dir, blurb = "Directory where to place dot files")]
+    #[property(name="dot-prefix", get, set, type = String, member = dot_prefix, blurb = "Prefix for dot files")]
+    #[property(name="dot-ts", get, set, type = bool, member = dot_ts, blurb = "Add timestamp to dot files")]
+    settings: RwLock<Settings>,
     pipelines: Arc<Mutex<HashMap<ElementPtr, glib::WeakRef<gst::Element>>>>,
     handles: Mutex<Option<Handles>>,
 }
 
+#[derive(Debug)]
 struct Handles {
     #[cfg(unix)]
     signal: signal_hook::iterator::Handle,
@@ -154,12 +161,13 @@ impl ObjectSubclass for PipelineSnapshot {
     type ParentType = gst::Tracer;
 }
 
+#[glib::derived_properties]
 impl ObjectImpl for PipelineSnapshot {
     fn constructed(&self) {
         let _ = START_TIME.as_ref();
         self.parent_constructed();
 
-        let mut settings = Settings::default();
+        let mut settings = self.settings.write().unwrap();
         if let Some(params) = self.obj().property::<Option<String>>("params") {
             settings.update_from_params(self, params);
         }
@@ -167,9 +175,24 @@ impl ObjectImpl for PipelineSnapshot {
         self.register_hook(TracerHook::ElementNew);
         self.register_hook(TracerHook::ObjectDestroyed);
 
-        if let Err(err) = self.setup_signal(settings) {
+        if let Err(err) = self.setup_signal() {
             gst::warning!(CAT, imp = self, "failed to setup UNIX signals: {}", err);
         }
+    }
+
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+            vec![glib::subclass::Signal::builder("snapshot")
+                .action()
+                .class_handler(|_, args| {
+                    args[0].get::<super::PipelineSnapshot>().unwrap().snapshot();
+
+                    None
+                })
+                .build()]
+        });
+
+        SIGNALS.as_ref()
     }
 
     fn dispose(&self) {
@@ -203,49 +226,81 @@ impl TracerImpl for PipelineSnapshot {
 }
 
 impl PipelineSnapshot {
+    fn set_dot_dir(&self, dot_dir: Option<String>) {
+        let mut settings = self.settings.write().unwrap();
+        settings.set_dot_dir(dot_dir);
+    }
+
+    pub(crate) fn snapshot(&self) {
+        let pipelines = {
+            let weaks = self.pipelines.lock().unwrap();
+            weaks
+                .values()
+                .filter_map(|w| w.upgrade())
+                .collect::<Vec<_>>()
+        };
+
+        let settings = self.settings.read().unwrap();
+        let dot_dir = if let Some(dot_dir) = settings.dot_dir.as_ref() {
+            dot_dir
+        } else {
+            gst::info!(CAT, imp = self, "No dot-dir set, not dumping pipelines");
+            return;
+        };
+
+        for pipeline in pipelines.into_iter() {
+            let pipeline = pipeline.downcast::<gst::Pipeline>().unwrap();
+            gst::debug!(CAT, imp = self, "dump {}", pipeline.name());
+
+            let dump_name = if settings.dot_ts {
+                format!(
+                    "{}-{}{}",
+                    gst::get_timestamp() - *START_TIME,
+                    settings.dot_prefix.as_ref().map_or("", |s| s.as_str()),
+                    pipeline.name()
+                )
+            } else {
+                format!(
+                    "{}{}",
+                    settings.dot_prefix.as_ref().map_or("", |s| s.as_str()),
+                    pipeline.name()
+                )
+            };
+
+            let dot_path = format!("{}/{}.dot", dot_dir, dump_name);
+            gst::debug!(CAT, imp = self, "Writing {}", dot_path);
+            match std::fs::File::create(&dot_path) {
+                Ok(mut f) => {
+                    let data = pipeline.debug_to_dot_data(gst::DebugGraphDetails::all());
+                    if let Err(e) = f.write_all(data.as_bytes()) {
+                        gst::warning!(CAT, imp = self, "Failed to write {}: {}", dot_path, e);
+                    }
+                }
+                Err(e) => {
+                    gst::warning!(CAT, imp = self, "Failed to create {}: {}", dot_path, e);
+                }
+            }
+        }
+    }
+
     #[cfg(unix)]
-    fn setup_signal(&self, settings: Settings) -> anyhow::Result<()> {
+    fn setup_signal(&self) -> anyhow::Result<()> {
         use signal_hook::consts::signal::*;
         use signal_hook::iterator::Signals;
 
         let mut signals = Signals::new([SIGUSR1])?;
         let signal_handle = signals.handle();
 
-        let tracer_weak = self.obj().downgrade();
-        let pipelines = self.pipelines.clone();
-
+        let this_weak = self.obj().downgrade();
         let thread_handle = std::thread::spawn(move || {
             for signal in &mut signals {
                 match signal {
                     SIGUSR1 => {
-                        let Some(tracer) = tracer_weak.upgrade() else {
+                        if let Some(this) = this_weak.upgrade() {
+                            this.snapshot();
+                        } else {
                             break;
                         };
-
-                        let pipelines = {
-                            let weaks = pipelines.lock().unwrap();
-                            weaks
-                                .values()
-                                .filter_map(|w| w.upgrade())
-                                .collect::<Vec<_>>()
-                        };
-
-                        for pipeline in pipelines.into_iter() {
-                            let pipeline = pipeline.downcast::<gst::Pipeline>().unwrap();
-                            gst::debug!(CAT, obj = tracer, "dump {}", pipeline.name());
-
-                            let dump_name = format!("{}{}", settings.dot_prefix, pipeline.name());
-
-                            if settings.dot_ts {
-                                pipeline.debug_to_dot_file_with_ts(
-                                    gst::DebugGraphDetails::all(),
-                                    &dump_name,
-                                );
-                            } else {
-                                pipeline
-                                    .debug_to_dot_file(gst::DebugGraphDetails::all(), &dump_name);
-                            }
-                        }
                     }
                     _ => unreachable!(),
                 }

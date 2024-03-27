@@ -8,11 +8,18 @@
 
 use gst::glib;
 use gst::prelude::*;
+use gst::subclass::prelude::*;
 
 mod imp;
 
 glib::wrapper! {
     pub struct PipelineSnapshot(ObjectSubclass<imp::PipelineSnapshot>) @extends gst::Tracer, gst::Object;
+}
+
+impl PipelineSnapshot {
+    fn snapshot(&self) {
+        self.imp().snapshot()
+    }
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
