@@ -190,7 +190,47 @@ impl OriginalBufferRestore {
                 state.sinkpad_segment = Some(event);
                 true
             }
+            gst::EventView::Gap(e) => {
+                let s = e.structure().unwrap();
+
+                if let Ok(buffer) = s.get::<gst::Buffer>("original-buffer") {
+                    if let Ok(caps) = s.get::<gst::Caps>("original-caps") {
+                        let mut state = self.state.borrow_mut();
+                        if state.meta_caps.caps != caps {
+                            let meta_caps = &mut state.meta_caps;
+
+                            meta_caps.caps = caps.clone();
+                            meta_caps.vinfo = gst_video::VideoInfo::from_caps(&meta_caps.caps).ok();
+                            drop(state);
+                            if !self.src_pad.push_event(gst::event::Caps::new(&caps)) {
+                                return false;
+                            }
+                        }
+                    }
+
+                    if !self.push_pending_segment() {
+                        return false;
+                    }
+
+                    return self.src_pad.push(buffer).is_ok();
+                }
+                if let Ok(event) = s.get::<gst::Event>("original-gap") {
+                    if !self.push_pending_segment() {
+                        return false;
+                    }
+                    return self.src_pad.push_event(event);
+                }
+                gst::Pad::event_default(pad, parent, event)
+            }
             _ => gst::Pad::event_default(pad, parent, event),
+        }
+    }
+
+    fn push_pending_segment(&self) -> bool {
+        let segment_event = self.state.borrow_mut().sinkpad_segment.take();
+        match segment_event {
+            Some(event) => self.src_pad.push_event(event),
+            None => true,
         }
     }
 
@@ -298,9 +338,7 @@ impl OriginalBufferRestore {
             let _ = meta.transform(outbuf.make_mut(), &gst::meta::MetaTransformCopy::new(..));
         }
 
-        if let Some(event) = state.sinkpad_segment.take()
-            && !self.src_pad.push_event(event)
-        {
+        if !self.push_pending_segment() {
             return Err(gst::FlowError::Error);
         }
 

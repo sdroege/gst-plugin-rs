@@ -9339,6 +9339,22 @@
                         "presence": "always"
                     }
                 },
+                "properties": {
+                    "interval": {
+                        "blurb": "Time interval between two forwarded buffers, replaces buffers with GAP events under this minimum, accumulating slack",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    }
+                },
                 "rank": "none"
             }
         },

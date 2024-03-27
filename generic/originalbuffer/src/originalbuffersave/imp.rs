@@ -7,18 +7,33 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use atomic_refcell::AtomicRefCell;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use std::sync::{LazyLock, RwLock};
 
 use crate::originalbuffermeta::OriginalBufferMeta;
+
+#[derive(Default)]
+struct State {
+    last_running_time: Option<gst::ClockTime>,
+    caps: Option<gst::Caps>,
+    segment: gst::FormattedSegment<gst::GenericFormattedValue>,
+}
+
+#[derive(Default)]
+struct Props {
+    interval: gst::ClockTime,
+}
 
 pub struct OriginalBufferSave {
     src_pad: gst::Pad,
     sink_pad: gst::Pad,
+    state: AtomicRefCell<State>,
+    props: RwLock<Props>,
 }
 
-use std::sync::LazyLock;
 #[allow(dead_code)]
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -46,6 +61,13 @@ impl ObjectSubclass for OriginalBufferSave {
                     |obj| obj.sink_chain(pad, buffer),
                 )
             })
+            .event_function(|pad, parent, event| {
+                OriginalBufferSave::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |obj| obj.sink_event(pad, parent, event),
+                )
+            })
             .query_function(|pad, parent, query| {
                 OriginalBufferSave::catch_panic_pad_function(
                     parent,
@@ -66,7 +88,12 @@ impl ObjectSubclass for OriginalBufferSave {
             })
             .build();
 
-        Self { src_pad, sink_pad }
+        Self {
+            src_pad,
+            sink_pad,
+            state: Default::default(),
+            props: Default::default(),
+        }
     }
 }
 
@@ -78,8 +105,40 @@ impl ObjectImpl for OriginalBufferSave {
         obj.add_pad(&self.sink_pad).unwrap();
         obj.add_pad(&self.src_pad).unwrap();
     }
-}
 
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
+            vec![
+                glib::ParamSpecUInt64::builder("interval")
+                    .nick("Interval")
+                    .blurb("Time interval between two forwarded buffers, replaces buffers with GAP events under this minimum, accumulating slack")
+		    .minimum(0)
+		    .maximum(u64::MAX)
+                    .default_value(0)
+		    .mutable_playing()
+                    .build()
+            ]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        match pspec.name() {
+            "interval" => {
+                self.props.write().unwrap().interval = value.get().expect("type checked upstream");
+            }
+            _ => unimplemented!(),
+        };
+    }
+
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.name() {
+            "interval" => self.props.read().unwrap().interval.to_value(),
+            _ => unimplemented!(),
+        }
+    }
+}
 impl GstObjectImpl for OriginalBufferSave {}
 
 impl ElementImpl for OriginalBufferSave {
@@ -119,6 +178,20 @@ impl ElementImpl for OriginalBufferSave {
 
         PAD_TEMPLATES.as_ref()
     }
+
+    fn change_state(
+        &self,
+        transition: gst::StateChange,
+    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
+        if transition == gst::StateChange::PausedToReady {
+            let mut state = self.state.borrow_mut();
+            state.last_running_time = None;
+            state.caps = None;
+            state.segment.reset();
+        }
+
+        self.parent_change_state(transition)
+    }
 }
 
 impl OriginalBufferSave {
@@ -138,13 +211,92 @@ impl OriginalBufferSave {
         }
     }
 
+    fn check_interval(&self, inbuf: &gst::Buffer) -> Result<Option<gst::Caps>, gst::Event> {
+        let mut state = self.state.borrow_mut();
+        let props = self.props.read().unwrap();
+
+        if props.interval == gst::ClockTime::ZERO {
+            gst::trace!(CAT, imp = self, "Interval is ZERO");
+            return Ok(state.caps.clone());
+        }
+
+        let Some(pts) = inbuf.pts() else {
+            gst::debug!(CAT, imp = self, "No  PTS in buffer");
+            return Ok(state.caps.clone());
+        };
+
+        let Some(segment) = state.segment.downcast_ref::<gst::ClockTime>() else {
+            gst::log!(CAT, imp = self, "Segment is not time");
+            return Ok(state.caps.clone());
+        };
+
+        let Some(rt) = segment.to_running_time(pts) else {
+            gst::warning!(CAT, imp = self, "Can't compute running time");
+            return Ok(state.caps.clone());
+        };
+
+        let Some(last_rt) = state.last_running_time else {
+            state.last_running_time = Some(rt);
+            return Ok(state.caps.clone());
+        };
+
+        if last_rt.saturating_add(props.interval) > rt {
+            gst::log!(
+                CAT,
+                imp = self,
+                "Dropping buffer and push GAP  pts: {} \
+		 duration: {} because last_rt:{} + \
+		 interval:{} >= rt:{}",
+                pts,
+                inbuf.duration().display(),
+                last_rt,
+                props.interval,
+                rt
+            );
+            let mut gap = gst::event::Gap::new(pts, inbuf.duration());
+            let s = gap.make_mut().structure_mut();
+            s.set("original-buffer", inbuf.copy());
+            if state.caps.is_some() {
+                s.set("original-caps", state.caps.clone());
+            }
+            return Err(gap);
+        } else {
+            let mut new_last_rt = last_rt.saturating_add(props.interval);
+            if new_last_rt < rt.saturating_sub(props.interval) {
+                new_last_rt = rt
+            }
+            state.last_running_time = Some(new_last_rt);
+            gst::log!(
+                CAT,
+                imp = self,
+                "Letting buffer with pts: {} through \
+		 because last_rt:{} + interval:{} < rt:{}, \
+		 updated last_rt to {}",
+                pts,
+                last_rt,
+                props.interval,
+                rt,
+                state.last_running_time.display()
+            );
+        }
+
+        Ok(state.caps.clone())
+    }
+
     fn sink_chain(
         &self,
-        pad: &gst::Pad,
+        _pad: &gst::Pad,
         inbuf: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let caps = match self.check_interval(&inbuf) {
+            Ok(caps) => caps,
+            Err(gap) => {
+                self.src_pad.push_event(gap);
+                return Ok(gst::FlowSuccess::Ok);
+            }
+        };
+
         let mut buf = inbuf.copy();
-        let caps = pad.current_caps();
 
         if let Some(mut meta) = buf.make_mut().meta_mut::<OriginalBufferMeta>() {
             meta.replace(inbuf, caps);
@@ -185,6 +337,40 @@ impl OriginalBufferSave {
         // intersection semantics as gsttee, which should be in a helper function.
 
         true
+    }
+
+    fn sink_event(
+        &self,
+        pad: &gst::Pad,
+        parent: Option<&impl IsA<gst::Object>>,
+        event: gst::Event,
+    ) -> bool {
+        match event.view() {
+            gst::EventView::Gap(e) => {
+                if let Some(s) = e.structure()
+                    && (s.has_field("original-buffer") || s.has_field("original-gap"))
+                {
+                    let (pts, duration) = e.get();
+                    let mut gap = gst::event::Gap::new(pts, duration);
+                    let s = gap.make_mut().structure_mut();
+                    s.set("original-gap", event);
+                    return self.src_pad.push_event(gap);
+                }
+            }
+            gst::EventView::FlushStop(_) => {
+                let mut state = self.state.borrow_mut();
+                state.last_running_time = None;
+                state.segment.reset();
+            }
+            gst::EventView::Caps(caps) => {
+                self.state.borrow_mut().caps = Some(caps.caps_owned());
+            }
+            gst::EventView::Segment(segment) => {
+                self.state.borrow_mut().segment = segment.segment().clone();
+            }
+            _ => (),
+        }
+        gst::Pad::event_default(pad, parent, event)
     }
 
     fn src_event(

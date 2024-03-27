@@ -21,6 +21,15 @@
  * `... ! originalbuffersave ! videoconvertscale ! video/x-raw, width=100, height=100 ! analysiselement ! originalbufferrestore ! ...`
  *
  * The originalbufferrestore element will "restore" the buffer that was entered to the "save" element, but will keep any metadata that was added later.
+ *
+ * When using the "interval" property, it will ensure that the
+ * interval between two buffers is at least that amount of time. This
+ * makes it possible to reduce the effective buffer rate (framerate)
+ * for the following elements, for example of a processing step takes
+ * a fixed amount of time, it will ensure that the pipeline is not
+ * overwhelmed. The "slack" is accumulated, so that if the incoming
+ * flow of buffers is just a little too fast, the buffer rate is not
+ * halved.
  */
 use gst::glib;
 use gst::prelude::*;
