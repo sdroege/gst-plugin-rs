@@ -78,11 +78,31 @@ impl ElementPtr {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
+#[repr(u32)]
+#[enum_type(name = "GstpipelineSnapshotCleanupMode")]
+#[non_exhaustive]
+pub enum CleanupMode {
+    #[enum_value(
+        name = "CleanupInitial: Remove all .dot files from folder when starting",
+        nick = "initial"
+    )]
+    Initial,
+    #[enum_value(
+        name = "CleanupAutomatic: cleanup .dot files before each snapshots",
+        nick = "automatic"
+    )]
+    Automatic,
+    #[enum_value(name = "None: Never remove any dot file", nick = "none")]
+    None,
+}
+
 #[derive(Debug)]
 struct Settings {
     dot_prefix: Option<String>,
     dot_ts: bool,
     dot_dir: Option<String>,
+    cleanup_mode: CleanupMode,
 }
 
 impl Default for Settings {
@@ -91,6 +111,7 @@ impl Default for Settings {
             dot_dir: None,
             dot_prefix: Some("pipeline-snapshot-".to_string()),
             dot_ts: true,
+            cleanup_mode: CleanupMode::None,
         }
     }
 }
@@ -133,6 +154,19 @@ impl Settings {
             gst::log!(CAT, imp = imp, "dot-ts = {}", dot_ts);
             self.dot_ts = dot_ts;
         }
+
+        if let Ok(cleanup_mod) = s.get::<String>("cleanup-mode") {
+            gst::log!(CAT, imp = imp, "cleanup-mode = {:?}", cleanup_mod);
+            self.cleanup_mode = match cleanup_mod.as_str() {
+                "initial" => CleanupMode::Initial,
+                "automatic" => CleanupMode::Automatic,
+                "none" => CleanupMode::None,
+                _ => {
+                    gst::warning!(CAT, imp = imp, "unknown cleanup-mode: {}", cleanup_mod);
+                    CleanupMode::None
+                }
+            };
+        }
     }
 }
 
@@ -142,6 +176,7 @@ pub struct PipelineSnapshot {
     #[property(name="dot-dir", get, set = Self::set_dot_dir, construct_only, type = String, member = dot_dir, blurb = "Directory where to place dot files")]
     #[property(name="dot-prefix", get, set, type = String, member = dot_prefix, blurb = "Prefix for dot files")]
     #[property(name="dot-ts", get, set, type = bool, member = dot_ts, blurb = "Add timestamp to dot files")]
+    #[property(name="cleanup-mode", get  = |s: &Self| s.settings.read().unwrap().cleanup_mode, set, type = CleanupMode, member = cleanup_mode, blurb = "Cleanup mode", builder(CleanupMode::None))]
     settings: RwLock<Settings>,
     pipelines: Arc<Mutex<HashMap<ElementPtr, glib::WeakRef<gst::Element>>>>,
     handles: Mutex<Option<Handles>>,
@@ -170,6 +205,11 @@ impl ObjectImpl for PipelineSnapshot {
         let mut settings = self.settings.write().unwrap();
         if let Some(params) = self.obj().property::<Option<String>>("params") {
             settings.update_from_params(self, params);
+        }
+
+        if settings.cleanup_mode == CleanupMode::Initial {
+            drop(settings);
+            self.cleanup_dots();
         }
 
         self.register_hook(TracerHook::ElementNew);
@@ -248,6 +288,10 @@ impl PipelineSnapshot {
             return;
         };
 
+        if matches!(settings.cleanup_mode, CleanupMode::Automatic) {
+            self.cleanup_dots();
+        }
+
         for pipeline in pipelines.into_iter() {
             let pipeline = pipeline.downcast::<gst::Pipeline>().unwrap();
             gst::debug!(CAT, imp = self, "dump {}", pipeline.name());
@@ -319,5 +363,42 @@ impl PipelineSnapshot {
     #[cfg(not(unix))]
     fn setup_signal(&self) -> anyhow::Result<()> {
         anyhow::bail!("only supported on UNIX system");
+    }
+
+    fn cleanup_dots(&self) {
+        let settings = self.settings.read().unwrap();
+        if let Some(dot_dir) = settings.dot_dir.as_ref() {
+            gst::info!(CAT, imp = self, "Cleaning up {}", dot_dir);
+            let entries = match std::fs::read_dir(dot_dir) {
+                Ok(entries) => entries,
+                Err(e) => {
+                    gst::warning!(CAT, imp = self, "Failed to read {}: {}", dot_dir, e);
+                    return;
+                }
+            };
+
+            for entry in entries {
+                let entry = match entry {
+                    Ok(e) => e,
+                    Err(e) => {
+                        gst::warning!(CAT, imp = self, "Failed to read entry: {}", e);
+                        continue;
+                    }
+                };
+
+                let path = entry.path();
+                if path.extension().map_or(false, |e| e == "dot") {
+                    if let Err(e) = std::fs::remove_file(&path) {
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "Failed to remove {}: {}",
+                            path.display(),
+                            e
+                        );
+                    }
+                }
+            }
+        }
     }
 }
