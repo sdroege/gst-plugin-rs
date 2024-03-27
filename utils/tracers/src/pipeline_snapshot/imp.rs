@@ -28,6 +28,7 @@
  * ```
  *
  * Parameters can be passed to configure the tracer:
+ * - `dot-dir` (string, default: None): directory where to place dot files (overriding `GST_DEBUG_DUMP_DOT_DIR`). Set to `xdg-cache` to use the XDG cache directory.
  * - `dot-prefix` (string, default: "pipeline-snapshot-"): when dumping pipelines to a `dot` file each file is named `$prefix$pipeline_name.dot`.
  * - `dot-ts` (boolean, default: "true"): if the current timestamp should be added as a prefix to each pipeline `dot` file.
  *
@@ -38,8 +39,9 @@
  * ```
  */
 use std::collections::HashMap;
+use std::io::Write;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use gst::glib;
 use gst::glib::translate::ToGlibPtr;
@@ -54,6 +56,8 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
         Some("pipeline snapshot tracer"),
     )
 });
+
+static START_TIME: LazyLock<gst::ClockTime> = LazyLock::new(gst::get_timestamp);
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct ElementPtr(std::ptr::NonNull<gst::ffi::GstElement>);
@@ -75,20 +79,36 @@ impl ElementPtr {
 
 #[derive(Debug)]
 struct Settings {
-    dot_prefix: String,
+    dot_prefix: Option<String>,
     dot_ts: bool,
+    dot_dir: Option<String>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            dot_prefix: "pipeline-snapshot-".to_string(),
+            dot_dir: None,
+            dot_prefix: Some("pipeline-snapshot-".to_string()),
             dot_ts: true,
         }
     }
 }
 
 impl Settings {
+    fn set_dot_dir(&mut self, dot_dir: Option<String>) {
+        if let Some(dot_dir) = dot_dir {
+            if dot_dir == "xdg-cache" {
+                let mut path = dirs::cache_dir().expect("Failed to find cache directory");
+                path.push("gstreamer-dots");
+                self.dot_dir = path.to_str().map(|s| s.to_string());
+            } else {
+                self.dot_dir = Some(dot_dir);
+            }
+        } else {
+            self.dot_dir = std::env::var("GST_DEBUG_DUMP_DOT_DIR").ok();
+        }
+    }
+
     fn update_from_params(&mut self, imp: &PipelineSnapshot, params: String) {
         let s = match gst::Structure::from_str(&format!("pipeline-snapshot,{params}")) {
             Ok(s) => s,
@@ -98,8 +118,13 @@ impl Settings {
             }
         };
 
+        if let Ok(dot_dir) = s.get("dot-dir") {
+            self.set_dot_dir(dot_dir);
+            gst::log!(CAT, imp: imp, "dot-dir = {:?}", self.dot_dir);
+        }
+
         if let Ok(dot_prefix) = s.get("dot-prefix") {
-            gst::log!(CAT, imp = imp, "dot-prefix = {}", dot_prefix);
+            gst::log!(CAT, imp = imp, "dot-prefix = {:?}", dot_prefix);
             self.dot_prefix = dot_prefix;
         }
 
@@ -131,6 +156,7 @@ impl ObjectSubclass for PipelineSnapshot {
 
 impl ObjectImpl for PipelineSnapshot {
     fn constructed(&self) {
+        let _ = START_TIME.as_ref();
         self.parent_constructed();
 
         let mut settings = Settings::default();
