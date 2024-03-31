@@ -816,6 +816,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
+name = "base64"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9475866fec1451be56a3c2400fd081ff546538961565ccb5b7142cbd22bc7a51"
+
+[[package]]
 name = "base64-serde"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1365,11 +1371,11 @@ dependencies = [
 
 [[package]]
 name = "dash-mpd"
-version = "0.15.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18c18f28b58beade78e0f61a846a63a122cb92c5f5ed6bad29d7ad13287c7526"
+checksum = "6cafa2c33eff2857e1a14c38aa9a432aa565a01e77804a541fce7aec3affb8f8"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.0",
  "base64-serde",
  "chrono",
  "fs-err",
@@ -4081,7 +4087,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c2a198fb6b0eada2a8df47933734e6d35d350665a33a3593d7164fa52c75c19"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.4",
 ]
 
 [[package]]
