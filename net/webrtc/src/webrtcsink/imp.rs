@@ -3400,7 +3400,7 @@ impl BaseWebRTCSink {
             let is_video = match sink_caps.structure(0).unwrap().name().as_str() {
                 "video/x-raw" => true,
                 "audio/x-raw" => false,
-                _ => unreachable!(),
+                _ => panic!("expected audio or video raw caps: {sink_caps}"),
             };
 
             codecs
