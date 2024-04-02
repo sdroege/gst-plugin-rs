@@ -2896,6 +2896,7 @@ dependencies = [
  "gst-plugin-webrtc-signalling-protocol",
  "gstreamer",
  "gstreamer-app",
+ "gstreamer-audio",
  "gstreamer-base",
  "gstreamer-rtp",
  "gstreamer-sdp",
@@ -3037,6 +3038,7 @@ dependencies = [
  "gstreamer-base",
  "libc",
  "once_cell",
+ "serde",
  "smallvec",
 ]
 

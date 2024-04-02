@@ -693,6 +693,12 @@ fn add_nv4l2enc_force_keyunit_workaround(enc: &gst::Element) {
 /// Default configuration for known encoders, can be disabled
 /// by returning True from an encoder-setup handler.
 fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
+    let audio_encoder = enc.is::<gst_audio::AudioEncoder>();
+    if audio_encoder {
+        // Chrome audio decoder expects perfect timestamps
+        enc.set_property("perfect-timestamp", true);
+    }
+
     if let Some(factory) = enc.factory() {
         match factory.name().as_str() {
             "vp8enc" | "vp9enc" => {

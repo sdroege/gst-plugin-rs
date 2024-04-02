@@ -11,6 +11,7 @@ rust-version.workspace = true
 [dependencies]
 gst = { workspace = true, features = ["v1_20", "serde"] }
 gst-app = { workspace = true, features = ["v1_20"] }
+gst-audio = { workspace = true, features = ["v1_20", "serde"] }
 gst-video = { workspace = true, features = ["v1_20", "serde"] }
 gst-webrtc = { workspace = true, features = ["v1_20"] }
 gst-sdp = { workspace = true, features = ["v1_20"] }
