@@ -61,6 +61,8 @@ rand = "0.8"
 once_cell.workspace = true
 
 [dev-dependencies]
+gst-net = { workspace = true, features = ["v1_20"] }
+gst-plugin-rtp = { path = "../rtp" }
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
 tracing-log = "0.2"
@@ -103,3 +105,9 @@ name = "webrtcsink-high-quality-tune"
 
 [[example]]
 name = "webrtcsink-custom-signaller"
+
+[[example]]
+name = "webrtc-precise-sync-send"
+
+[[example]]
+name = "webrtc-precise-sync-recv"

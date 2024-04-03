@@ -21,3 +21,89 @@ run an example client.
 
 An example of custom signaller implementation, see the corresponding
 [README](webrtcsink-custom-signaller/README.md) for more details on code and usage. 
+
+## WebRTC precise synchronization example
+
+This example demonstrates a sender / receiver setup which ensures precise
+synchronization of multiple streams in a single session.
+
+[RFC 6051]-style rapid synchronization of RTP streams is available as an option.
+Se the [Instantaneous RTP synchronization...] blog post for details about this
+mode and an example based on RTSP instead of WebRTC.
+
+[RFC 6051]: https://datatracker.ietf.org/doc/html/rfc6051
+[Instantaneous RTP synchronization...]: https://coaxion.net/blog/2022/05/instantaneous-rtp-synchronization-retrieval-of-absolute-sender-clock-times-with-gstreamer/
+
+### Signaller
+
+The example uses the default WebRTC signaller. Launch it using the following
+command:
+
+```shell
+cargo run --bin gst-webrtc-signalling-server
+```
+
+### Receiver
+
+The receiver awaits for new audio & video stream publishers and render the
+streams using auto sink elements. Launch it using the following command:
+
+```shell
+cargo r --example webrtc-precise-sync-recv
+```
+
+The default configuration should work for a local test. For a multi-host setup,
+see the available options:
+
+```shell
+cargo r --example webrtc-precise-sync-recv -- --help
+```
+
+E.g.: the following will force `avdec_h264` over hardware decoders, activate
+debug logs for the receiver and connect to the signalling server at the
+specified address:
+
+```shell
+GST_PLUGIN_FEATURE_RANK=avdec_h264:512 \
+WEBRTC_PRECISE_SYNC_RECV_LOG=debug \
+cargo r --example webrtc-precise-sync-recv -- --server 192.168.1.22
+```
+
+### Sender
+
+The sender publishes audio & video test streams. Launch it using the following
+command:
+
+```shell
+cargo r --example webrtc-precise-sync-send
+```
+
+The default configuration should work for a local test. For a multi-host setup,
+to set the number of audio / video streams, to enable rapid synchronization or
+to force the video encoder, see the available options:
+
+```shell
+cargo r --example webrtc-precise-sync-send -- --help
+```
+
+E.g.: the following will force H264 and `x264enc` over hardware encoders,
+activate debug logs for the sender and connect to the signalling server at the
+specified address:
+
+```shell
+GST_PLUGIN_FEATURE_RANK=264enc:512 \
+WEBRTC_PRECISE_SYNC_SEND_LOG=debug \
+cargo r --example webrtc-precise-sync-send -- \
+  --server 192.168.1.22 --video-caps video/x-h264
+```
+
+### The pipeline latency
+
+The `--pipeline-latency` argument configures a static latency of 1s by default.
+This needs to be higher than the sum of the sender latency and the receiver
+latency of the receiver with the highest latency. As this can't be known
+automatically and depends on many factors, this has to be known for the overall
+system and configured accordingly.
+
+The default configuration is on the safe side and favors synchronization over
+low latency. Depending on the use case, shorter or larger values should be used.
