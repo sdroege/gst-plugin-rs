@@ -651,6 +651,12 @@ impl ObjectImpl for Signaller {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
+                glib::ParamSpecBoolean::builder("manual-sdp-munging")
+                    .nick("Manual SDP munging")
+                    .blurb("Whether the signaller manages SDP munging itself")
+                    .default_value(false)
+                    .read_only()
+                    .build(),
                 glib::ParamSpecString::builder("address")
                     .nick("Address")
                     .blurb("Address of the signalling server")
@@ -721,6 +727,7 @@ impl ObjectImpl for Signaller {
 
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
+            "manual-sdp-munging" => false.to_value(),
             "address" => self.settings.lock().unwrap().address.to_value(),
             "cafile" => {
                 let settings = self.settings.lock().unwrap();

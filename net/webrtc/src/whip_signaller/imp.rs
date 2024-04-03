@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::signaller::{Signallable, SignallableImpl};
+use crate::signaller::{Signallable, SignallableExt, SignallableImpl};
 use crate::utils::{
     build_link_header, build_reqwest_client, parse_redirect_location, set_ice_servers, wait,
     wait_async, WaitError,
@@ -118,7 +118,7 @@ impl WhipClient {
                 self.raise_error("Local description is not set".to_string());
                 return;
             }
-            Some(offer) => offer,
+            Some(offer) => self.obj().munge_sdp("unique", &offer),
         };
 
         gst::debug!(
@@ -533,7 +533,14 @@ impl ObjectSubclass for WhipClient {
 impl ObjectImpl for WhipClient {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpecString::builder("whip-endpoint")
+            vec![
+                glib::ParamSpecBoolean::builder("manual-sdp-munging")
+                    .nick("Manual SDP munging")
+                    .blurb("Whether the signaller manages SDP munging itself")
+                    .default_value(false)
+                    .read_only()
+                    .build(),
+                glib::ParamSpecString::builder("whip-endpoint")
                     .nick("WHIP Endpoint")
                     .blurb("The WHIP server endpoint to POST SDP offer to.
                         e.g.: https://example.com/whip/endpoint/room1234")
@@ -590,6 +597,7 @@ impl ObjectImpl for WhipClient {
 
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
+            "manual-sdp-munging" => true.to_value(),
             "whip-endpoint" => {
                 let settings = self.settings.lock().unwrap();
                 settings.whip_endpoint.to_value()
@@ -1079,6 +1087,12 @@ impl ObjectImpl for WhipServer {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
+                glib::ParamSpecBoolean::builder("manual-sdp-munging")
+                    .nick("Manual SDP munging")
+                    .blurb("Whether the signaller manages SDP munging itself")
+                    .default_value(false)
+                    .read_only()
+                    .build(),
                 glib::ParamSpecString::builder("host-addr")
                     .nick("Host address")
                     .blurb("The the host address of the WHIP endpoint e.g., http://127.0.0.1:8080")
@@ -1141,6 +1155,7 @@ impl ObjectImpl for WhipServer {
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
         match pspec.name() {
+            "manual-sdp-munging" => false.to_value(),
             "host-addr" => settings.host_addr.to_string().to_value(),
             "stun-server" => settings.stun_server.to_value(),
             "turn-servers" => settings.turn_servers.to_value(),

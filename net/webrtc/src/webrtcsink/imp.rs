@@ -2169,7 +2169,17 @@ impl BaseWebRTCSink {
                 .emit_by_name::<()>("set-local-description", &[&offer, &None::<gst::Promise>]);
             drop(state);
 
-            signaller.send_sdp(session_id, &offer);
+            let maybe_munged_offer = if signaller
+                .has_property("manual-sdp-munging", Some(bool::static_type()))
+                && signaller.property("manual-sdp-munging")
+            {
+                // Don't munge, signaller will manage this
+                offer
+            } else {
+                // Use the default munging mechanism (signal registered by user)
+                signaller.munge_sdp(session_id, &offer)
+            };
+            signaller.send_sdp(session_id, &maybe_munged_offer);
         }
     }
 
@@ -2213,7 +2223,19 @@ impl BaseWebRTCSink {
             }
 
             drop(state);
-            signaller.send_sdp(&session_id, &answer);
+
+            let maybe_munged_answer = if signaller
+                .has_property("manual-sdp-munging", Some(bool::static_type()))
+                && signaller.property("manual-sdp-munging")
+            {
+                // Don't munge, signaller will manage this
+                answer
+            } else {
+                // Use the default munging mechanism (signal registered by user)
+                signaller.munge_sdp(session_id.as_str(), &answer)
+            };
+
+            signaller.send_sdp(&session_id, &maybe_munged_answer);
 
             self.on_remote_description_set(element, session_id)
         }

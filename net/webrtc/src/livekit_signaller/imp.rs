@@ -777,6 +777,12 @@ impl ObjectImpl for Signaller {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
+                glib::ParamSpecBoolean::builder("manual-sdp-munging")
+                    .nick("Manual SDP munging")
+                    .blurb("Whether the signaller manages SDP munging itself")
+                    .default_value(false)
+                    .read_only()
+                    .build(),
                 glib::ParamSpecString::builder("ws-url")
                     .nick("WebSocket URL")
                     .blurb("The URL of the websocket of the LiveKit server")
@@ -897,6 +903,7 @@ impl ObjectImpl for Signaller {
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
         match pspec.name() {
+            "manual-sdp-munging" => false.to_value(),
             "ws-url" => settings.wsurl.to_value(),
             "api-key" => settings.api_key.to_value(),
             "secret-key" => settings.secret_key.to_value(),

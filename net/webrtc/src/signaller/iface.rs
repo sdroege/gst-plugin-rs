@@ -58,6 +58,19 @@ impl prelude::ObjectInterface for Signallable {
         iface.end_session = Signallable::end_session;
     }
 
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![glib::ParamSpecBoolean::builder("manual-sdp-munging")
+                .nick("Manual SDP munging")
+                .blurb("Whether the signaller manages SDP munging itself")
+                .default_value(false)
+                .read_only()
+                .build()]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
     fn signals() -> &'static [Signal] {
         static SIGNALS: Lazy<Vec<Signal>> = Lazy::new(|| {
             vec![
@@ -310,6 +323,47 @@ impl prelude::ObjectInterface for Signallable {
                     .param_types([String::static_type(), gst::Element::static_type()])
                     .build(),
                 /**
+                 * GstRSWebRTCSignallableIface::munge-session-description:
+                 * @self: The object implementing #GstRSWebRTCSignallableIface
+                 * @session_id: Id of the session being described
+                 * @description: The WebRTC session description to modify
+                 *
+                 * For special-case handling, a callback can be registered to modify the session
+                 * description before the signaller sends it to the peer. Only the first connected
+                 * handler has any effect.
+                 *
+                 * Return: A modified session description
+                 */
+                Signal::builder("munge-session-description")
+                    .run_last()
+                    .param_types([
+                        str::static_type(),
+                        gst_webrtc::WebRTCSessionDescription::static_type(),
+                    ])
+                    .return_type::<gst_webrtc::WebRTCSessionDescription>()
+                    .class_handler(|_tokens, args| {
+                        let _ = args[0usize]
+                            .get::<&super::Signallable>()
+                            .unwrap_or_else(|e| {
+                                panic!("Wrong type for argument {}: {:?}", 0usize, e)
+                            });
+                        let _ = args[1usize].get::<&str>().unwrap_or_else(|e| {
+                            panic!("Wrong type for argument {}: {:?}", 1usize, e)
+                        });
+                        let desc = args[2usize]
+                            .get::<&gst_webrtc::WebRTCSessionDescription>()
+                            .unwrap_or_else(|e| {
+                                panic!("Wrong type for argument {}: {:?}", 2usize, e)
+                            });
+
+                        Some(desc.clone().into())
+                    })
+                    .accumulator(move |_hint, output, input| {
+                        *output = input.clone();
+                        false
+                    })
+                    .build(),
+                /**
                  * GstRSWebRTCSignallableIface::send-session-description:
                  * @self: The object implementing #GstRSWebRTCSignallableIface
                  * @session_id: Id of the session being described
@@ -499,6 +553,11 @@ pub trait SignallableImpl: object::ObjectImpl + Send + Sync + 'static {
 pub trait SignallableExt: 'static {
     fn start(&self);
     fn stop(&self);
+    fn munge_sdp(
+        &self,
+        session_id: &str,
+        sdp: &gst_webrtc::WebRTCSessionDescription,
+    ) -> gst_webrtc::WebRTCSessionDescription;
     fn send_sdp(&self, session_id: &str, sdp: &gst_webrtc::WebRTCSessionDescription);
     fn add_ice(
         &self,
@@ -517,6 +576,17 @@ impl<Obj: IsA<super::Signallable>> SignallableExt for Obj {
 
     fn stop(&self) {
         self.emit_by_name::<bool>("stop", &[]);
+    }
+
+    fn munge_sdp(
+        &self,
+        session_id: &str,
+        sdp: &gst_webrtc::WebRTCSessionDescription,
+    ) -> gst_webrtc::WebRTCSessionDescription {
+        self.emit_by_name::<gst_webrtc::WebRTCSessionDescription>(
+            "munge-session-description",
+            &[&session_id, sdp],
+        )
     }
 
     fn send_sdp(&self, session_id: &str, sdp: &gst_webrtc::WebRTCSessionDescription) {

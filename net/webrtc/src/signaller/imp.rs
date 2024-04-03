@@ -509,6 +509,12 @@ impl ObjectImpl for Signaller {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPS: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
+                glib::ParamSpecBoolean::builder("manual-sdp-munging")
+                    .nick("Manual SDP munging")
+                    .blurb("Whether the signaller manages SDP munging itself")
+                    .default_value(false)
+                    .read_only()
+                    .build(),
                 glib::ParamSpecString::builder("uri")
                     .nick("Signaller URI")
                     .blurb("URI for connecting to the signaller server")
@@ -604,6 +610,7 @@ impl ObjectImpl for Signaller {
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
         match pspec.name() {
+            "manual-sdp-munging" => false.to_value(),
             "uri" => settings.uri.to_string().to_value(),
             "producer-peer-id" => {
                 if !matches!(settings.role, WebRTCSignallerRole::Consumer) {

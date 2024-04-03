@@ -10015,6 +10015,20 @@
                         "return-type": "void",
                         "when": "last"
                     },
+                    "munge-session-description": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "GstWebRTCSessionDescription"
+                            }
+                        ],
+                        "return-type": "GstWebRTCSessionDescription",
+                        "when": "last"
+                    },
                     "producer-added": {
                         "args": [
                             {
