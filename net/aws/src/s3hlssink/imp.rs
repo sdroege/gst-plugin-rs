@@ -39,6 +39,7 @@ const S3_CHANNEL_SIZE: usize = 32;
 const S3_ACL_DEFAULT: ObjectCannedAcl = ObjectCannedAcl::Private;
 const DEFAULT_RETRY_ATTEMPTS: u32 = 5;
 const DEFAULT_TIMEOUT_IN_MSECS: u64 = 15000;
+const DEFAULT_FORCE_PATH_STYLE: bool = false;
 
 struct Settings {
     access_key: Option<String>,
@@ -57,6 +58,7 @@ struct Settings {
     video_sink: bool,
     config: Option<SdkConfig>,
     endpoint_uri: Option<String>,
+    force_path_style: bool,
 }
 
 impl Default for Settings {
@@ -79,6 +81,7 @@ impl Default for Settings {
             video_sink: false,
             config: None,
             endpoint_uri: None,
+            force_path_style: DEFAULT_FORCE_PATH_STYLE,
         }
     }
 }
@@ -376,6 +379,7 @@ impl S3HlsSink {
         let sdk_config = settings.config.as_ref().expect("SDK config must be set");
 
         let config_builder = config::Builder::from(sdk_config)
+            .force_path_style(settings.force_path_style)
             .region(settings.s3_region.clone())
             .retry_config(RetryConfig::standard().with_max_attempts(settings.retry_attempts));
 
@@ -529,6 +533,11 @@ impl ObjectImpl for S3HlsSink {
                     .blurb("The S3 endpoint URI to use")
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("force-path-style")
+                    .nick("Force path style")
+                    .blurb("Force client to use path-style addressing for buckets")
+                    .default_value(DEFAULT_FORCE_PATH_STYLE)
+                    .build(),
             ]
         });
 
@@ -586,6 +595,9 @@ impl ObjectImpl for S3HlsSink {
                     .get::<Option<String>>()
                     .expect("type checked upstream");
             }
+            "force-path-style" => {
+                settings.force_path_style = value.get::<bool>().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -606,6 +618,7 @@ impl ObjectImpl for S3HlsSink {
             "request-timeout" => (settings.request_timeout.as_millis() as u64).to_value(),
             "stats" => self.create_stats().to_value(),
             "endpoint-uri" => settings.endpoint_uri.to_value(),
+            "force-path-style" => settings.force_path_style.to_value(),
             _ => unimplemented!(),
         }
     }

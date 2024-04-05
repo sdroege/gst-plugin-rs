@@ -29,6 +29,7 @@ use gst_base::subclass::prelude::*;
 use crate::s3url::*;
 use crate::s3utils::{self, duration_from_millis, duration_to_millis, WaitError};
 
+const DEFAULT_FORCE_PATH_STYLE: bool = false;
 const DEFAULT_RETRY_ATTEMPTS: u32 = 5;
 const DEFAULT_REQUEST_TIMEOUT_MSEC: u64 = 15000;
 const DEFAULT_RETRY_DURATION_MSEC: u64 = 60_000;
@@ -53,6 +54,7 @@ struct Settings {
     retry_attempts: u32,
     request_timeout: Duration,
     endpoint_uri: Option<String>,
+    force_path_style: bool,
 }
 
 impl Default for Settings {
@@ -66,6 +68,7 @@ impl Default for Settings {
             retry_attempts: DEFAULT_RETRY_ATTEMPTS,
             request_timeout: duration,
             endpoint_uri: None,
+            force_path_style: DEFAULT_FORCE_PATH_STYLE,
         }
     }
 }
@@ -128,6 +131,7 @@ impl S3Src {
                 })?;
 
         let config_builder = config::Builder::from(&sdk_config)
+            .force_path_style(settings.force_path_style)
             .retry_config(RetryConfig::standard().with_max_attempts(settings.retry_attempts));
 
         let config = if let Some(ref uri) = settings.endpoint_uri {
@@ -316,6 +320,11 @@ impl ObjectImpl for S3Src {
                     .nick("S3 endpoint URI")
                     .blurb("The S3 endpoint URI to use")
                     .build(),
+                glib::ParamSpecBoolean::builder("force-path-style")
+                    .nick("Force path style")
+                    .blurb("Force client to use path-style addressing for buckets")
+                    .default_value(DEFAULT_FORCE_PATH_STYLE)
+                    .build(),
             ]
         });
 
@@ -365,6 +374,9 @@ impl ObjectImpl for S3Src {
                     .get::<Option<String>>()
                     .expect("type checked upstream");
             }
+            "force-path-style" => {
+                settings.force_path_style = value.get::<bool>().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -391,6 +403,7 @@ impl ObjectImpl for S3Src {
             }
             "retry-attempts" => settings.retry_attempts.to_value(),
             "endpoint-uri" => settings.endpoint_uri.to_value(),
+            "force-path-style" => settings.force_path_style.to_value(),
             _ => unimplemented!(),
         }
     }

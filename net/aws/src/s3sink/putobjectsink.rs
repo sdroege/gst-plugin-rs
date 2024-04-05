@@ -36,6 +36,7 @@ const DEFAULT_FLUSH_INTERVAL_BUFFERS: u64 = 1;
 const DEFAULT_FLUSH_INTERVAL_BYTES: u64 = 0;
 const DEFAULT_FLUSH_INTERVAL_TIME: gst::ClockTime = gst::ClockTime::from_nseconds(0);
 const DEFAULT_FLUSH_ON_ERROR: bool = false;
+const DEFAULT_FORCE_PATH_STYLE: bool = false;
 
 // General setting for create / abort requests
 const DEFAULT_REQUEST_TIMEOUT_MSEC: u64 = 15_000;
@@ -80,6 +81,7 @@ struct Settings {
     retry_attempts: u32,
     request_timeout: Duration,
     endpoint_uri: Option<String>,
+    force_path_style: bool,
     flush_interval_buffers: u64,
     flush_interval_bytes: u64,
     flush_interval_time: Option<gst::ClockTime>,
@@ -136,6 +138,7 @@ impl Default for Settings {
             retry_attempts: DEFAULT_RETRY_ATTEMPTS,
             request_timeout: Duration::from_millis(DEFAULT_REQUEST_TIMEOUT_MSEC),
             endpoint_uri: None,
+            force_path_style: DEFAULT_FORCE_PATH_STYLE,
             flush_interval_buffers: DEFAULT_FLUSH_INTERVAL_BUFFERS,
             flush_interval_bytes: DEFAULT_FLUSH_INTERVAL_BYTES,
             flush_interval_time: Some(DEFAULT_FLUSH_INTERVAL_TIME),
@@ -293,6 +296,7 @@ impl S3PutObjectSink {
                 })?;
 
         let config_builder = config::Builder::from(&sdk_config)
+            .force_path_style(settings.force_path_style)
             .retry_config(RetryConfig::standard().with_max_attempts(settings.retry_attempts));
 
         let config = if let Some(ref uri) = settings.endpoint_uri {
@@ -446,6 +450,11 @@ impl ObjectImpl for S3PutObjectSink {
                     .blurb("Whether to write out the data on error (like stopping without an EOS)")
                     .default_value(DEFAULT_FLUSH_ON_ERROR)
                     .build(),
+                glib::ParamSpecBoolean::builder("force-path-style")
+                    .nick("Force path style")
+                    .blurb("Force client to use path-style addressing for buckets")
+                    .default_value(DEFAULT_FORCE_PATH_STYLE)
+                    .build(),
             ]
         });
 
@@ -542,6 +551,9 @@ impl ObjectImpl for S3PutObjectSink {
             "flush-on-error" => {
                 settings.flush_on_error = value.get::<bool>().expect("type checked upstream");
             }
+            "force-path-style" => {
+                settings.force_path_style = value.get::<bool>().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -575,6 +587,7 @@ impl ObjectImpl for S3PutObjectSink {
             "flush-interval-bytes" => settings.flush_interval_bytes.to_value(),
             "flush-interval-time" => settings.flush_interval_time.to_value(),
             "flush-on-error" => settings.flush_on_error.to_value(),
+            "force-path-style" => settings.force_path_style.to_value(),
             _ => unimplemented!(),
         }
     }
