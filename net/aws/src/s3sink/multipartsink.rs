@@ -38,6 +38,7 @@ use crate::s3utils::{self, duration_from_millis, duration_to_millis, WaitError};
 
 use super::OnError;
 
+const DEFAULT_FORCE_PATH_STYLE: bool = false;
 const DEFAULT_RETRY_ATTEMPTS: u32 = 5;
 const DEFAULT_BUFFER_SIZE: u64 = 5 * 1024 * 1024;
 const DEFAULT_MULTIPART_UPLOAD_ON_ERROR: OnError = OnError::DoNothing;
@@ -114,6 +115,7 @@ struct Settings {
     multipart_upload_on_error: OnError,
     request_timeout: Duration,
     endpoint_uri: Option<String>,
+    force_path_style: bool,
 }
 
 impl Settings {
@@ -168,6 +170,7 @@ impl Default for Settings {
             multipart_upload_on_error: DEFAULT_MULTIPART_UPLOAD_ON_ERROR,
             request_timeout: Duration::from_millis(DEFAULT_REQUEST_TIMEOUT_MSEC),
             endpoint_uri: None,
+            force_path_style: DEFAULT_FORCE_PATH_STYLE,
         }
     }
 }
@@ -524,6 +527,7 @@ impl S3Sink {
                 })?;
 
         let config_builder = config::Builder::from(&sdk_config)
+            .force_path_style(settings.force_path_style)
             .retry_config(RetryConfig::standard().with_max_attempts(settings.retry_attempts));
 
         let config = if let Some(ref uri) = settings.endpoint_uri {
@@ -775,6 +779,11 @@ impl ObjectImpl for S3Sink {
                     .nick("content-disposition")
                     .blurb("Content-Disposition header to set for uploaded object")
                     .build(),
+                glib::ParamSpecBoolean::builder("force-path-style")
+                    .nick("Force path style")
+                    .blurb("Force client to use path-style addressing for buckets")
+                    .default_value(DEFAULT_FORCE_PATH_STYLE)
+                    .build(),
             ]
         });
 
@@ -888,6 +897,9 @@ impl ObjectImpl for S3Sink {
                     .get::<Option<String>>()
                     .expect("type checked upstream");
             }
+            "force-path-style" => {
+                settings.force_path_style = value.get::<bool>().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -929,6 +941,7 @@ impl ObjectImpl for S3Sink {
             "endpoint-uri" => settings.endpoint_uri.to_value(),
             "content-type" => settings.content_type.to_value(),
             "content-disposition" => settings.content_disposition.to_value(),
+            "force-path-style" => settings.force_path_style.to_value(),
             _ => unimplemented!(),
         }
     }

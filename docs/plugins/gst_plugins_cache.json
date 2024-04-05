@@ -79,6 +79,18 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "force-path-style": {
+                        "blurb": "Force client to use path-style addressing for buckets",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "hlssink": {
                         "blurb": "The underlying HLS sink being used",
                         "conditionally-available": false,
@@ -315,6 +327,18 @@
                         "type": "gboolean",
                         "writable": true
                     },
+                    "force-path-style": {
+                        "blurb": "Force client to use path-style addressing for buckets",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "key": {
                         "blurb": "The key of the file to write",
                         "conditionally-available": false,
@@ -527,6 +551,18 @@
                         "mutable": "null",
                         "readable": true,
                         "type": "gchararray",
+                        "writable": true
+                    },
+                    "force-path-style": {
+                        "blurb": "Force client to use path-style addressing for buckets",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
                         "writable": true
                     },
                     "key": {
@@ -745,6 +781,18 @@
                         "mutable": "null",
                         "readable": true,
                         "type": "gchararray",
+                        "writable": true
+                    },
+                    "force-path-style": {
+                        "blurb": "Force client to use path-style addressing for buckets",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
                         "writable": true
                     },
                     "request-timeout": {
