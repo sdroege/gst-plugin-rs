@@ -3930,7 +3930,7 @@ impl ObjectImpl for BaseWebRTCSink {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
             vec![
                 /**
-                 * RsBaseWebRTCSink::consumer-added:
+                 * GstBaseWebRTCSink::consumer-added:
                  * @consumer_id: Identifier of the consumer added
                  * @webrtcbin: The new webrtcbin
                  *
@@ -3941,7 +3941,7 @@ impl ObjectImpl for BaseWebRTCSink {
                     .param_types([String::static_type(), gst::Element::static_type()])
                     .build(),
                 /**
-                 * RsBaseWebRTCSink::consumer-pipeline-created:
+                 * GstBaseWebRTCSink::consumer-pipeline-created:
                  * @consumer_id: Identifier of the consumer
                  * @pipeline: The pipeline that was just created
                  *
@@ -3953,13 +3953,13 @@ impl ObjectImpl for BaseWebRTCSink {
                  * This provides access to the lower level components of webrtcsink, and
                  * no guarantee is made that its internals will remain stable, use with caution!
                  *
-                 * This is emitted *before* #RsBaseWebRTCSink::consumer-added .
+                 * This is emitted *before* #GstBaseWebRTCSink::consumer-added .
                  */
                 glib::subclass::Signal::builder("consumer-pipeline-created")
                     .param_types([String::static_type(), gst::Pipeline::static_type()])
                     .build(),
                 /**
-                 * RsBaseWebRTCSink::consumer_removed:
+                 * GstBaseWebRTCSink::consumer_removed:
                  * @consumer_id: Identifier of the consumer that was removed
                  * @webrtcbin: The webrtcbin connected to the newly removed consumer
                  *
@@ -3970,7 +3970,7 @@ impl ObjectImpl for BaseWebRTCSink {
                     .param_types([String::static_type(), gst::Element::static_type()])
                     .build(),
                 /**
-                 * RsBaseWebRTCSink::get_sessions:
+                 * GstBaseWebRTCSink::get_sessions:
                  *
                  * List all sessions (by ID).
                  */
@@ -3995,7 +3995,7 @@ impl ObjectImpl for BaseWebRTCSink {
                     .return_type::<Vec<String>>()
                     .build(),
                 /**
-                 * RsBaseWebRTCSink::encoder-setup:
+                 * GstBaseWebRTCSink::encoder-setup:
                  * @consumer_id: Identifier of the consumer, or "discovery"
                  *   when the encoder is used in a discovery pipeline.
                  * @pad_name: The name of the corresponding input pad
@@ -4034,7 +4034,7 @@ impl ObjectImpl for BaseWebRTCSink {
                     })
                     .build(),
                 /**
-                 * RsBaseWebRTCSink::payloader-setup:
+                 * GstBaseWebRTCSink::payloader-setup:
                  * @consumer_id: Identifier of the consumer, or "discovery"
                  *   when the payloader is used in a discovery pipeline.
                  * @pad_name: The name of the corresponding input pad
@@ -4071,7 +4071,7 @@ impl ObjectImpl for BaseWebRTCSink {
                     })
                     .build(),
                 /**
-                 * RsWebRTCSink::request-encoded-filter:
+                 * GstBaseWebRTCSink::request-encoded-filter:
                  * @consumer_id: Identifier of the consumer
                  * @pad_name: The name of the corresponding input pad
                  * @encoded_caps: The Caps of the encoded stream

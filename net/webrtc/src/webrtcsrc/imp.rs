@@ -224,7 +224,7 @@ impl ObjectImpl for BaseWebRTCSrc {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
             vec![
                 /**
-                 * BaseWebRTCSrc::request-encoded-filter:
+                 * GstBaseWebRTCSrc::request-encoded-filter:
                  * @producer_id: (nullable): Identifier of the producer
                  * @pad_name: The name of the output pad
                  * @allowed_caps: the allowed caps for the output pad
