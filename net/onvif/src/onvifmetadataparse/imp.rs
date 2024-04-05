@@ -153,6 +153,14 @@ impl Default for State {
     }
 }
 
+impl Drop for State {
+    fn drop(&mut self) {
+        if let Some(clock_wait) = self.clock_wait.take() {
+            clock_wait.unschedule();
+        }
+    }
+}
+
 pub struct OnvifMetadataParse {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
@@ -1595,14 +1603,18 @@ impl ElementImpl for OnvifMetadataParse {
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
 
-        if matches!(
-            transition,
-            gst::StateChange::PausedToReady | gst::StateChange::ReadyToPaused
-        ) {
+        if matches!(transition, gst::StateChange::ReadyToPaused) {
             let mut state = self.state.lock().unwrap();
             *state = State::default();
         }
 
-        self.parent_change_state(transition)
+        let res = self.parent_change_state(transition)?;
+
+        if matches!(transition, gst::StateChange::PausedToReady) {
+            let mut state = self.state.lock().unwrap();
+            *state = State::default();
+        }
+
+        Ok(res)
     }
 }
