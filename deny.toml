@@ -73,6 +73,9 @@ version = "0.11"
 [[bans.skip]]
 name = "zerocopy"
 version = "0.6"
+[[bans.skip]]
+name = "multimap"
+version = "0.8"
 
 # field-offset and nix depend on an older memoffset
 # https://github.com/Diggsey/rust-field-offset/pull/23
@@ -90,6 +93,9 @@ version = "0.1"
 [[bans.skip]]
 name = "base64"
 version = "0.13"
+[[bans.skip]]
+name = "base64"
+version = "0.21"
 
 # Various crates depend on an older version of socket2
 [[bans.skip]]
@@ -218,6 +224,12 @@ version = "0.3"
 [[bans.skip]]
 name = "reqwest"
 version = "0.11"
+[[bans.skip]]
+name = "rustls-pemfile"
+version = "1.0"
+[[bans.skip]]
+name = "winreg"
+version = "0.50"
 
 [sources]
 unknown-registry = "deny"
