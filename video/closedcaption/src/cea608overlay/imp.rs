@@ -161,7 +161,7 @@ impl Cea608Overlay {
                 };
                 match state.renderer.push_pair([triple[1], triple[2]]) {
                     Err(e) => {
-                        gst::warning!(CAT, imp: self, "Failed to parse incoming CEA-608: {e:?}");
+                        gst::warning!(CAT, imp: self, "Failed to parse incoming CEA-608 ({:x?}): {e:?}", [triple[1], triple[2]]);
                         continue;
                     }
                     Ok(true) => {
@@ -196,7 +196,7 @@ impl Cea608Overlay {
             };
             match state.renderer.push_pair([triple[1], triple[2]]) {
                 Err(e) => {
-                    gst::warning!(CAT, imp: self, "Failed to parse incoming CEA-608: {e:?}");
+                    gst::warning!(CAT, imp: self, "Failed to parse incoming CEA-608 ({:x?}): {e:?}", [triple[1], triple[2]]);
                     continue;
                 }
                 Ok(true) => {
@@ -253,7 +253,7 @@ impl Cea608Overlay {
                 for pair in data.chunks_exact(2) {
                     match state.renderer.push_pair([pair[0], pair[1]]) {
                         Err(e) => {
-                            gst::warning!(CAT, imp: self, "Failed to parse incoming CEA-608: {e:?}");
+                            gst::warning!(CAT, imp: self, "Failed to parse incoming CEA-608 ({:x?}): {e:?}", [pair[0], pair[1]]);
                             continue;
                         }
                         Ok(true) => {
