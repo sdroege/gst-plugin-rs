@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.12.4] - 2024-04-08
+### Fixed
+- aws: Use fixed behaviour version to ensure that updates to the AWS SDK don't
+  change any defaults configurations in unexpected ways.
+- onvifmetadataparse: Fix possible deadlock on shutdown.
+- webrtcsink: Set `perfect-timestamp=true` on audio encoders to work around
+  bugs in Chrome's audio decoders.
+- Various clippy warnings.
+
+### Changed
+- reqwest: Update to reqwest 0.12.
+- webrtchttp: Update to reqwest 0.12.
+
 ## [0.12.3] - 2024-03-21
 ### Fixed
 - gtk4paintablesink: Fix scaling of texture position.
@@ -384,7 +397,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.3...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.4...HEAD
+[0.12.4]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.3...0.12.4
 [0.12.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.2...0.12.3
 [0.12.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.1...0.12.2
 [0.12.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.0...0.12.1
