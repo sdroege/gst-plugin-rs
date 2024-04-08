@@ -50,6 +50,7 @@ trigger:
   stage: 'trigger'
   variables:
     GIT_STRATEGY: none
+  tags: [ 'placeholder-job' ]
   script:
     - echo "Trigger job done, now running the pipeline."
   rules:
@@ -287,6 +288,7 @@ test windows stable:
 rustfmt:
   extends: '.debian:12-stable'
   stage: "lint"
+  tags: [ 'placeholder-job' ]
   needs: []
   script:
     - cargo fmt --version
@@ -295,6 +297,7 @@ rustfmt:
 typos:
   extends: '.debian:12-stable'
   stage: "lint"
+  tags: [ 'placeholder-job' ]
   needs: []
   script:
     - typos
@@ -302,6 +305,7 @@ typos:
 gstwebrtc-api lint:
   image: node:lts
   stage: "lint"
+  tags: [ 'placeholder-job' ]
   needs: []
   script:
     - cd net/webrtc/gstwebrtc-api
@@ -311,6 +315,7 @@ gstwebrtc-api lint:
 check commits:
   extends: '.debian:12-stable'
   stage: "lint"
+  tags: [ 'placeholder-job' ]
   needs: []
   script:
     - ci-fairy check-commits --textwidth 0 --no-signed-off-by
