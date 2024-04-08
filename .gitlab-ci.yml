@@ -315,6 +315,7 @@ check commits:
   script:
     - ci-fairy check-commits --textwidth 0 --no-signed-off-by
     - ci/check-for-symlinks.sh
+    - ci/check-meson-version.sh
 
 clippy:
   extends: '.debian:12-stable'
