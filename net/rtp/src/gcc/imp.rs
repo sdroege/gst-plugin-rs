@@ -1096,7 +1096,9 @@ impl BandwidthEstimator {
 
             if !list.is_empty() {
                 if let Err(err) = bwe.imp().push_list(list) {
-                    gst::error!(CAT, obj: bwe, "pause task, reason: {err:?}");
+                    if err != gst::FlowError::Flushing {
+                        gst::error!(CAT, obj: bwe, "pause task, reason: {err:?}");
+                    }
                     pause()
                 }
             }
