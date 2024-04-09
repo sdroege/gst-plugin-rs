@@ -413,10 +413,11 @@ impl CongestionController {
         let fec_percentage = (fec_ratio * 50f64) as u32;
 
         for encoder in encoders.iter_mut() {
-            encoder.set_bitrate(element, target_bitrate);
-            encoder
-                .transceiver
-                .set_property("fec-percentage", fec_percentage);
+            if encoder.set_bitrate(element, target_bitrate).is_ok() {
+                encoder
+                    .transceiver
+                    .set_property("fec-percentage", fec_percentage);
+            }
         }
     }
 }

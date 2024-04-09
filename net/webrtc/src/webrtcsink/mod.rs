@@ -87,6 +87,8 @@ pub enum WebRTCSinkError {
         peer_id: String,
         details: String,
     },
+    #[error("Bitrate handling currently not supported for requested encoder")]
+    BitrateNotSupported,
 }
 
 impl Default for BaseWebRTCSink {

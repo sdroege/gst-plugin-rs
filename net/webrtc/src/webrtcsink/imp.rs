@@ -952,8 +952,24 @@ impl VideoEncoder {
         })
     }
 
-    fn bitrate(&self) -> i32 {
-        match self.factory_name.as_str() {
+    fn is_bitrate_supported(factory_name: &str) -> bool {
+        matches!(
+            factory_name,
+            "vp8enc"
+                | "vp9enc"
+                | "x264enc"
+                | "nvh264enc"
+                | "vaapih264enc"
+                | "vaapivp8enc"
+                | "qsvh264enc"
+                | "nvv4l2h264enc"
+                | "nvv4l2vp8enc"
+                | "nvv4l2vp9enc"
+        )
+    }
+
+    fn bitrate(&self) -> Result<i32, WebRTCSinkError> {
+        let bitrate = match self.factory_name.as_str() {
             "vp8enc" | "vp9enc" => self.element.property::<i32>("target-bitrate"),
             "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" | "qsvh264enc" => {
                 (self.element.property::<u32>("bitrate") * 1000) as i32
@@ -961,8 +977,10 @@ impl VideoEncoder {
             "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" => {
                 (self.element.property::<u32>("bitrate")) as i32
             }
-            factory => unimplemented!("Factory {} is currently not supported", factory),
-        }
+            _ => return Err(WebRTCSinkError::BitrateNotSupported),
+        };
+
+        Ok(bitrate)
     }
 
     fn scale_height_round_2(&self, height: i32) -> i32 {
@@ -979,16 +997,21 @@ impl VideoEncoder {
         (width + 1) & !1
     }
 
-    pub(crate) fn set_bitrate(&mut self, element: &super::BaseWebRTCSink, bitrate: i32) {
+    pub(crate) fn set_bitrate(
+        &mut self,
+        element: &super::BaseWebRTCSink,
+        bitrate: i32,
+    ) -> Result<(), WebRTCSinkError> {
         match self.factory_name.as_str() {
             "vp8enc" | "vp9enc" => self.element.set_property("target-bitrate", bitrate),
-            "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" | "qsvh264enc" => self
-                .element
-                .set_property("bitrate", (bitrate / 1000) as u32),
+            "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" | "qsvh264enc" => {
+                self.element
+                    .set_property("bitrate", (bitrate / 1000) as u32);
+            }
             "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" => {
                 self.element.set_property("bitrate", bitrate as u32)
             }
-            factory => unimplemented!("Factory {} is currently not supported", factory),
+            _ => return Err(WebRTCSinkError::BitrateNotSupported),
         }
 
         let current_caps = self.filter.property::<gst::Caps>("caps");
@@ -1052,11 +1075,13 @@ impl VideoEncoder {
 
             self.filter.set_property("caps", caps);
         }
+
+        Ok(())
     }
 
     fn gather_stats(&self) -> gst::Structure {
         gst::Structure::builder("application/x-webrtcsink-video-encoder-stats")
-            .field("bitrate", self.bitrate())
+            .field("bitrate", self.bitrate().unwrap_or(0i32))
             .field("mitigation-mode", self.mitigation_mode)
             .field("codec-name", self.codec_name.as_str())
             .field(
@@ -1339,19 +1364,21 @@ impl Session {
                     WebRTCSinkCongestionControl::Disabled => {
                         // If congestion control is disabled, we simply use the highest
                         // known "safe" value for the bitrate.
-                        enc.set_bitrate(element, self.cc_info.max_bitrate as i32);
+                        let _ = enc.set_bitrate(element, self.cc_info.max_bitrate as i32);
                         enc.transceiver.set_property("fec-percentage", 50u32);
                     }
                     WebRTCSinkCongestionControl::Homegrown => {
                         if let Some(congestion_controller) = self.congestion_controller.as_mut() {
-                            congestion_controller.target_bitrate_on_delay += enc.bitrate();
-                            congestion_controller.target_bitrate_on_loss =
-                                congestion_controller.target_bitrate_on_delay;
-                            enc.transceiver.set_property("fec-percentage", 0u32);
+                            if let Ok(bitrate) = enc.bitrate() {
+                                congestion_controller.target_bitrate_on_delay += bitrate;
+                                congestion_controller.target_bitrate_on_loss =
+                                    congestion_controller.target_bitrate_on_delay;
+                                enc.transceiver.set_property("fec-percentage", 0u32);
+                            }
                         } else {
                             /* If congestion control is disabled, we simply use the highest
                              * known "safe" value for the bitrate. */
-                            enc.set_bitrate(element, self.cc_info.max_bitrate as i32);
+                            let _ = enc.set_bitrate(element, self.cc_info.max_bitrate as i32);
                             enc.transceiver.set_property("fec-percentage", 50u32);
                         }
                     }
@@ -1497,6 +1524,7 @@ impl BaseWebRTCSink {
     fn configure_congestion_control(
         &self,
         payloader: &gst::Element,
+        codec: &Codec,
         extension_configuration_type: ExtensionConfigurationType,
     ) -> Result<(), Error> {
         if let ExtensionConfigurationType::Skip = extension_configuration_type {
@@ -1504,6 +1532,16 @@ impl BaseWebRTCSink {
         }
 
         let settings = self.settings.lock().unwrap();
+
+        if codec.is_video() {
+            if let Some(enc_name) = codec.encoder_name().as_deref() {
+                if !VideoEncoder::is_bitrate_supported(enc_name) {
+                    gst::error!(CAT, imp: self, "Bitrate handling is not supported yet for {enc_name}");
+
+                    return Ok(());
+                }
+            }
+        }
 
         if settings.cc_info.heuristic == WebRTCSinkCongestionControl::Disabled {
             return Ok(());
@@ -1620,7 +1658,7 @@ impl BaseWebRTCSink {
             payloader.set_property("ssrc", ssrc);
         }
 
-        self.configure_congestion_control(payloader, extension_configuration_type)
+        self.configure_congestion_control(payloader, codec, extension_configuration_type)
     }
 
     fn generate_ssrc(
@@ -2951,10 +2989,11 @@ impl BaseWebRTCSink {
             }
 
             for encoder in session.encoders.iter_mut() {
-                encoder.set_bitrate(element, encoders_bitrate);
-                encoder
-                    .transceiver
-                    .set_property("fec-percentage", (fec_percentage as u32).min(100));
+                if encoder.set_bitrate(element, encoders_bitrate).is_ok() {
+                    encoder
+                        .transceiver
+                        .set_property("fec-percentage", (fec_percentage as u32).min(100));
+                }
             }
         }
     }
