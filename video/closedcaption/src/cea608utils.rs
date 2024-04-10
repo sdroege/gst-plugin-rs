@@ -479,6 +479,11 @@ fn pango_foreground_color_from_608(color: Color) -> pango::AttrColor {
     pango::AttrColor::new_foreground(r, g, b)
 }
 
+// SAFETY: Required because `pango::Layout` is not `Send` but the whole `Cea608Renderer` needs to be.
+// We ensure that no additional references to the layout are ever created, which makes it safe
+// to send it to other threads as long as only a single thread uses it concurrently.
+unsafe impl Send for Cea608Renderer {}
+
 pub struct Cea608Renderer {
     frame: Cea608Frame,
     state: Cea608State,
