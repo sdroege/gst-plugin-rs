@@ -31,7 +31,11 @@ synchronization of multiple streams in a single session.
 Se the [Instantaneous RTP synchronization...] blog post for details about this
 mode and an example based on RTSP instead of WebRTC.
 
+The examples can also be used for [RFC 7273] NTP or PTP clock signalling and
+synchronization.
+
 [RFC 6051]: https://datatracker.ietf.org/doc/html/rfc6051
+[RFC 7273]: https://datatracker.ietf.org/doc/html/rfc7273
 [Instantaneous RTP synchronization...]: https://coaxion.net/blog/2022/05/instantaneous-rtp-synchronization-retrieval-of-absolute-sender-clock-times-with-gstreamer/
 
 ### Signaller
@@ -64,7 +68,7 @@ debug logs for the receiver and connect to the signalling server at the
 specified address:
 
 ```shell
-GST_PLUGIN_FEATURE_RANK=avdec_h264:512 \
+GST_PLUGIN_FEATURE_RANK=avdec_h264:MAX \
 WEBRTC_PRECISE_SYNC_RECV_LOG=debug \
 cargo r --example webrtc-precise-sync-recv -- --server 192.168.1.22
 ```
@@ -91,7 +95,7 @@ activate debug logs for the sender and connect to the signalling server at the
 specified address:
 
 ```shell
-GST_PLUGIN_FEATURE_RANK=264enc:512 \
+GST_PLUGIN_FEATURE_RANK=264enc:MAX \
 WEBRTC_PRECISE_SYNC_SEND_LOG=debug \
 cargo r --example webrtc-precise-sync-send -- \
   --server 192.168.1.22 --video-caps video/x-h264
@@ -107,3 +111,21 @@ system and configured accordingly.
 
 The default configuration is on the safe side and favors synchronization over
 low latency. Depending on the use case, shorter or larger values should be used.
+
+### RFC 7273 NTP or PTP clock signalling and synchronization
+
+For [RFC 7273] NTP or PTP clock signalling and synchronization, you can use
+commands such as:
+
+#### Receiver
+
+```shell
+cargo r --example webrtc-precise-sync-recv -- --expect-clock-signalling
+```
+
+#### Sender
+
+```shell
+cargo r --example webrtc-precise-sync-send -- --clock ntp --do-clock-signalling \
+  --video-streams 0 --audio-streams 2
+```

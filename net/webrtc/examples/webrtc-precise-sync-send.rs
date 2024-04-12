@@ -9,6 +9,28 @@ const VIDEO_PATTERNS: [&str; 3] = ["ball", "smpte", "snow"];
 
 #[derive(Debug, Default, Clone, clap::Parser)]
 struct Args {
+    #[clap(long, help = "Clock type", default_value = "ntp")]
+    pub clock: Clock,
+
+    #[clap(
+        long,
+        help = "Maximum duration in seconds to wait for clock synchronization",
+        default_value = "5"
+    )]
+    pub clock_sync_timeout: u64,
+
+    #[clap(
+        long,
+        help = "Enable RFC 7273 PTP or NTP clock & RTP/clock offset signalling"
+    )]
+    pub do_clock_signalling: bool,
+
+    #[clap(long, help = "NTP server host", default_value = "pool.ntp.org")]
+    pub ntp_server: String,
+
+    #[clap(long, help = "PTP domain", default_value = "0")]
+    pub ptp_domain: u32,
+
     #[clap(
         long,
         help = "Number of audio streams. Use 0 to disable audio",
@@ -29,16 +51,6 @@ struct Args {
     #[clap(long, help = "Use RFC 6051 64-bit NTP timestamp RTP header extension.")]
     pub enable_rapid_sync: bool,
 
-    #[clap(
-        long,
-        help = "Maximum duration in seconds to wait for clock synchronization",
-        default_value = "5"
-    )]
-    pub clock_sync_timeout: u64,
-
-    #[clap(long, help = "NTP server host", default_value = "pool.ntp.org")]
-    pub ntp_server: String,
-
     #[clap(long, help = "Signalling server host", default_value = "localhost")]
     pub server: String,
 
@@ -57,6 +69,43 @@ impl Args {
             "ws"
         }
     }
+
+    async fn get_synced_clock(&self) -> anyhow::Result<gst::Clock> {
+        debug!("Syncing to {:?}", self.clock);
+
+        // Create the requested clock and wait for synchronization.
+        let clock = match self.clock {
+            Clock::System => gst::SystemClock::obtain(),
+            Clock::Ntp => gst_net::NtpClock::new(None, &self.ntp_server, 123, gst::ClockTime::ZERO)
+                .upcast::<gst::Clock>(),
+            Clock::Ptp => {
+                gst_net::PtpClock::init(None, &[])?;
+                gst_net::PtpClock::new(None, self.ptp_domain)?.upcast()
+            }
+        };
+
+        let clock_sync_timeout = gst::ClockTime::from_seconds(self.clock_sync_timeout);
+        let clock =
+            tokio::task::spawn_blocking(move || -> Result<gst::Clock, gst::glib::BoolError> {
+                clock.wait_for_sync(clock_sync_timeout)?;
+                Ok(clock)
+            })
+            .await
+            .with_context(|| format!("Syncing to {:?}", self.clock))?
+            .with_context(|| format!("Syncing to {:?}", self.clock))?;
+
+        info!("Synced to {:?}", self.clock);
+
+        Ok(clock)
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
+pub enum Clock {
+    #[default]
+    Ntp,
+    Ptp,
+    System,
 }
 
 #[derive(Debug, Default)]
@@ -88,26 +137,9 @@ impl App {
     async fn prepare(&mut self) -> anyhow::Result<()> {
         debug!("Preparing");
 
-        debug!("Syncing to NTP clock {}", self.args.ntp_server);
-
-        // Create the NTP clock and wait for synchronization.
-        let clock = tokio::task::spawn_blocking({
-            let clock =
-                gst_net::NtpClock::new(None, &self.args.ntp_server, 123, gst::ClockTime::ZERO);
-            let clock_sync_timeout = gst::ClockTime::from_seconds(self.args.clock_sync_timeout);
-            move || -> anyhow::Result<gst_net::NtpClock> {
-                clock.wait_for_sync(clock_sync_timeout)?;
-
-                Ok(clock)
-            }
-        })
-        .await
-        .context("Syncing to NTP clock")??;
-
-        info!("Synced to NTP clock");
-
         self.pipeline = Some(gst::Pipeline::new());
-        self.pipeline().use_clock(Some(&clock));
+        self.pipeline()
+            .use_clock(Some(&self.args.get_synced_clock().await?));
 
         // Set the base time of the pipeline statically to zero so that running
         // time and clock time are the same and timeoverlay can be used to render
@@ -129,6 +161,7 @@ impl App {
             // * https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/497
             // * https://gitlab.freedesktop.org/gstreamer/gstreamer/-/issues/3301
             .property("do-fec", false)
+            .property("do-clock-signalling", self.args.do_clock_signalling)
             .build()
             .context("Creating webrtcsink")?;
 

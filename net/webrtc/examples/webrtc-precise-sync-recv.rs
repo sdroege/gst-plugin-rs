@@ -15,11 +15,8 @@ use gst_plugin_webrtc_protocol::{
 
 #[derive(Debug, Default, Clone, clap::Parser)]
 struct Args {
-    #[clap(long, help = "Pipeline latency (ms)", default_value = "1000")]
-    pub pipeline_latency: u64,
-
-    #[clap(long, help = "RTP jitterbuffer latency (ms)", default_value = "40")]
-    pub rtp_latency: u32,
+    #[clap(long, help = "Initial clock type", default_value = "ntp")]
+    pub clock: Clock,
 
     #[clap(
         long,
@@ -28,8 +25,23 @@ struct Args {
     )]
     pub clock_sync_timeout: u64,
 
+    #[clap(
+        long,
+        help = "Expect RFC 7273 PTP or NTP clock & RTP/clock offset signalling"
+    )]
+    pub expect_clock_signalling: bool,
+
     #[clap(long, help = "NTP server host", default_value = "pool.ntp.org")]
     pub ntp_server: String,
+
+    #[clap(long, help = "PTP domain", default_value = "0")]
+    pub ptp_domain: u32,
+
+    #[clap(long, help = "Pipeline latency (ms)", default_value = "1000")]
+    pub pipeline_latency: u64,
+
+    #[clap(long, help = "RTP jitterbuffer latency (ms)", default_value = "40")]
+    pub rtp_latency: u32,
 
     #[clap(long, help = "Signalling server host", default_value = "localhost")]
     pub server: String,
@@ -49,6 +61,43 @@ impl Args {
             "ws"
         }
     }
+
+    async fn get_synced_clock(&self) -> anyhow::Result<gst::Clock> {
+        debug!("Syncing to {:?}", self.clock);
+
+        // Create the requested clock and wait for synchronization.
+        let clock = match self.clock {
+            Clock::System => gst::SystemClock::obtain(),
+            Clock::Ntp => gst_net::NtpClock::new(None, &self.ntp_server, 123, gst::ClockTime::ZERO)
+                .upcast::<gst::Clock>(),
+            Clock::Ptp => {
+                gst_net::PtpClock::init(None, &[])?;
+                gst_net::PtpClock::new(None, self.ptp_domain)?.upcast()
+            }
+        };
+
+        let clock_sync_timeout = gst::ClockTime::from_seconds(self.clock_sync_timeout);
+        let clock =
+            tokio::task::spawn_blocking(move || -> Result<gst::Clock, gst::glib::BoolError> {
+                clock.wait_for_sync(clock_sync_timeout)?;
+                Ok(clock)
+            })
+            .await
+            .with_context(|| format!("Syncing to {:?}", self.clock))?
+            .with_context(|| format!("Syncing to {:?}", self.clock))?;
+
+        info!("Synced to {:?}", self.clock);
+
+        Ok(clock)
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
+pub enum Clock {
+    #[default]
+    Ntp,
+    Ptp,
+    System,
 }
 
 fn spawn_consumer(
@@ -66,6 +115,13 @@ fn spawn_consumer(
     let webrtcsrc = gst::ElementFactory::make("webrtcsrc")
         .build()
         .context("Creating webrtcsrc")?;
+
+    if args.expect_clock_signalling {
+        // Discard retransmission in RFC 7273 mode. See:
+        // * https://gitlab.freedesktop.org/gstreamer/gst-plugins-good/-/issues/914
+        // * https://gitlab.freedesktop.org/gstreamer/gstreamer/-/issues/1574
+        webrtcsrc.set_property("do-retransmission", false);
+    }
 
     bin.add(&webrtcsrc).context("Adding webrtcsrc")?;
 
@@ -91,7 +147,13 @@ fn spawn_consumer(
             // This requires that sender and receiver are synchronized to the same
             // clock.
             rtpbin.set_property_from_str("buffer-mode", "synced");
-            rtpbin.set_property("ntp-sync", true);
+
+            if cli_args.expect_clock_signalling {
+                // Synchronize incoming packets using signalled RFC 7273 clock.
+                rtpbin.set_property("rfc7273-sync", true);
+            } else if cli_args.clock == Clock::Ntp {
+                rtpbin.set_property("ntp-sync", true);
+            }
 
             // Don't bother updating inter-stream offsets if the difference to the previous
             // configuration is less than 1ms. The synchronization will have rounding errors
@@ -140,6 +202,8 @@ fn spawn_consumer(
                 audioresample.sync_state_with_parent().unwrap();
                 audioconvert.sync_state_with_parent().unwrap();
             } else if pad.name().starts_with("video") {
+                use std::sync::atomic::{AtomicBool, Ordering};
+
                 // Create a timeoverlay element to render the timestamps from
                 // the reference timestamp metadata on top of the video frames
                 // in the bottom left.
@@ -154,18 +218,30 @@ fn spawn_consumer(
                 let sinkpad = timeoverlay
                     .static_pad("video_sink")
                     .expect("Failed to get timeoverlay sinkpad");
+                let ref_ts_caps_set = AtomicBool::new(false);
                 sinkpad
-                    .add_probe(gst::PadProbeType::BUFFER, |_pad, info| {
+                    .add_probe(gst::PadProbeType::BUFFER, {
+                        let timeoverlay = timeoverlay.downgrade();
+                        move |_pad, info| {
                         if let Some(gst::PadProbeData::Buffer(ref buffer)) = info.data {
                             if let Some(meta) = buffer.meta::<gst::ReferenceTimestampMeta>() {
-                                trace!(timestamp = %meta.timestamp(), "Have sender clock time");
+                                if !ref_ts_caps_set.fetch_or(true, Ordering::SeqCst) {
+                                    if let Some(timeoverlay) = timeoverlay.upgrade() {
+                                        let reference = meta.reference();
+                                        timeoverlay.set_property("reference-timestamp-caps", reference.to_owned());
+
+                                        info!(%reference, timestamp = %meta.timestamp(), "Have sender clock time");
+                                    }
+                                } else {
+                                    trace!(timestamp = %meta.timestamp(), "Have sender clock time");
+                                }
                             } else {
                                 trace!("Have no sender clock time");
                             }
                         }
 
                         gst::PadProbeReturn::Ok
-                    })
+                    }})
                     .expect("Failed to add timeoverlay pad probe");
 
                 let videoconvert = gst::ElementFactory::make("videoconvert")
@@ -277,26 +353,9 @@ impl App {
             bail!("Missing elements:{}", missing_elements);
         }
 
-        debug!("Syncing to NTP clock {}", self.args.ntp_server);
-
-        // Create the NTP clock and wait for synchronization.
-        let clock = tokio::task::spawn_blocking({
-            let clock =
-                gst_net::NtpClock::new(None, &self.args.ntp_server, 123, gst::ClockTime::ZERO);
-            let clock_sync_timeout = gst::ClockTime::from_seconds(self.args.clock_sync_timeout);
-            move || -> anyhow::Result<gst_net::NtpClock> {
-                clock.wait_for_sync(clock_sync_timeout)?;
-
-                Ok(clock)
-            }
-        })
-        .await
-        .context("Syncing to NTP clock")??;
-
-        info!("Synced to NTP clock");
-
         self.pipeline = Some(gst::Pipeline::new());
-        self.pipeline().use_clock(Some(&clock));
+        self.pipeline()
+            .use_clock(Some(&self.args.get_synced_clock().await?));
 
         // Set the base time of the pipeline statically to zero so that running
         // time and clock time are the same. This easies debugging.

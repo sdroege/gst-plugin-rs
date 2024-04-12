@@ -61,6 +61,7 @@ const DEFAULT_CONGESTION_CONTROL: WebRTCSinkCongestionControl = if cfg!(feature 
 };
 const DEFAULT_DO_FEC: bool = true;
 const DEFAULT_DO_RETRANSMISSION: bool = true;
+const DEFAULT_DO_CLOCK_SIGNALLING: bool = false;
 const DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION: bool = false;
 const DEFAULT_ICE_TRANSPORT_POLICY: WebRTCICETransportPolicy = WebRTCICETransportPolicy::All;
 const DEFAULT_START_BITRATE: u32 = 2048000;
@@ -87,6 +88,7 @@ struct Settings {
     cc_info: CCInfo,
     do_fec: bool,
     do_retransmission: bool,
+    do_clock_signalling: bool,
     enable_data_channel_navigation: bool,
     meta: Option<gst::Structure>,
     ice_transport_policy: WebRTCICETransportPolicy,
@@ -517,6 +519,7 @@ impl Default for Settings {
             },
             do_fec: DEFAULT_DO_FEC,
             do_retransmission: DEFAULT_DO_RETRANSMISSION,
+            do_clock_signalling: DEFAULT_DO_CLOCK_SIGNALLING,
             enable_data_channel_navigation: DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION,
             meta: None,
             ice_transport_policy: DEFAULT_ICE_TRANSPORT_POLICY,
@@ -1298,12 +1301,29 @@ impl Session {
             element.emit_by_name::<bool>("encoder-setup", &[&self.peer_id, &stream_name, &enc]);
         }
 
+        let sdp = self.sdp.as_ref().unwrap();
+        let sdp_media = sdp.media(webrtc_pad.media_idx).unwrap();
+
+        let mut global_caps = gst::Caps::new_empty_simple("application/x-unknown");
+
+        sdp.attributes_to_caps(global_caps.get_mut().unwrap())
+            .unwrap();
+        sdp_media
+            .attributes_to_caps(global_caps.get_mut().unwrap())
+            .unwrap();
+
+        let caps = sdp_media
+            .caps_from_media(payload)
+            .unwrap()
+            .intersect(&global_caps);
+
         element.imp().configure_payloader(
             &self.peer_id,
             stream_name,
             &payloader,
             &codec,
             Some(webrtc_pad.ssrc),
+            Some(&caps),
             ExtensionConfigurationType::Skip,
         )?;
 
@@ -1319,21 +1339,6 @@ impl Session {
             .property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
         transceiver.set_property("codec-preferences", None::<gst::Caps>);
 
-        let mut global_caps = gst::Caps::new_empty_simple("application/x-unknown");
-
-        let sdp = self.sdp.as_ref().unwrap();
-        let sdp_media = sdp.media(webrtc_pad.media_idx).unwrap();
-
-        sdp.attributes_to_caps(global_caps.get_mut().unwrap())
-            .unwrap();
-        sdp_media
-            .attributes_to_caps(global_caps.get_mut().unwrap())
-            .unwrap();
-
-        let caps = sdp_media
-            .caps_from_media(payload)
-            .unwrap()
-            .intersect(&global_caps);
         let s = caps.structure(0).unwrap();
         let mut filtered_s = gst::Structure::new_empty("application/x-rtp");
 
@@ -1635,6 +1640,7 @@ impl BaseWebRTCSink {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn configure_payloader(
         &self,
         peer_id: &str,
@@ -1642,6 +1648,7 @@ impl BaseWebRTCSink {
         payloader: &gst::Element,
         codec: &Codec,
         ssrc: Option<u32>,
+        caps: Option<&gst::Caps>,
         extension_configuration_type: ExtensionConfigurationType,
     ) -> Result<(), Error> {
         self.obj()
@@ -1656,6 +1663,41 @@ impl BaseWebRTCSink {
 
         if let Some(ssrc) = ssrc {
             payloader.set_property("ssrc", ssrc);
+        }
+
+        if self.settings.lock().unwrap().do_clock_signalling {
+            if let Some(caps) = caps {
+                let clock = self
+                    .obj()
+                    .clock()
+                    .expect("element added & pipeline Playing");
+
+                if clock.is::<gst_net::NtpClock>() || clock.is::<gst_net::PtpClock>() {
+                    // RFC 7273 defines the "mediaclk:direct" attribute as the RTP timestamp
+                    // value at the clock's epoch (time of origin). It was initialised to
+                    // 0 in the SDP offer.
+                    //
+                    // Let's set the payloader's offset so the RTP timestamps
+                    // are generated accordingly.
+                    let clock_rate =
+                        caps.structure(0)
+                            .unwrap()
+                            .get::<i32>("clock-rate")
+                            .context("Setting payloader offset")? as u64;
+                    let basetime = self
+                        .obj()
+                        .base_time()
+                        .expect("element added & pipeline Playing");
+                    let Some(rtp_basetime) = basetime
+                        .nseconds()
+                        .mul_div_ceil(clock_rate, *gst::ClockTime::SECOND)
+                    else {
+                        anyhow::bail!("Failed to compute RTP base time. clock-rate: {clock_rate}");
+                    };
+
+                    payloader.set_property("timestamp-offset", (rtp_basetime & 0xffff_ffff) as u32);
+                }
+            }
         }
 
         self.configure_congestion_control(payloader, codec, extension_configuration_type)
@@ -1777,6 +1819,58 @@ impl BaseWebRTCSink {
         } else {
             let payloader_caps_mut = payloader_caps.make_mut();
             payloader_caps_mut.set("ssrc", ssrc);
+
+            if element.imp().settings.lock().unwrap().do_clock_signalling {
+                // Add RFC7273 attributes when using an NTP or PTP clock
+                let clock = element.clock().expect("element added and pipeline playing");
+
+                let ts_refclk = if clock.is::<gst_net::NtpClock>() {
+                    gst::debug!(CAT, obj: element, "Found NTP clock");
+
+                    let addr = clock.property::<String>("address");
+                    let port = clock.property::<i32>("port");
+
+                    Some(if port == 123 {
+                        format!("ntp={addr}")
+                    } else {
+                        format!("ntp={addr}:{port}")
+                    })
+                } else if clock.is::<gst_net::PtpClock>() {
+                    gst::debug!(CAT, obj: element, "Found PTP clock");
+
+                    let clock_id = clock.property::<u64>("grandmaster-clock-id");
+                    let domain = clock.property::<u32>("domain");
+
+                    Some(format!(
+                        "ptp=IEEE1588-2008:{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}{}",
+                        (clock_id >> 56) & 0xff,
+                        (clock_id >> 48) & 0xff,
+                        (clock_id >> 40) & 0xff,
+                        (clock_id >> 32) & 0xff,
+                        (clock_id >> 24) & 0xff,
+                        (clock_id >> 16) & 0xff,
+                        (clock_id >> 8) & 0xff,
+                        clock_id & 0xff,
+                        if domain == 0 {
+                            "".to_string()
+                        } else {
+                            format!(":{domain}")
+                        },
+                    ))
+                } else {
+                    None
+                };
+
+                if let Some(ts_refclk) = ts_refclk.as_deref() {
+                    payloader_caps_mut.set("ts-refclk", Some(ts_refclk));
+                    // Set the offset to 0, we will adjust the payloader offsets
+                    // when the payloaders are available.
+                    payloader_caps_mut.set("mediaclk", Some("direct=0"));
+                } else {
+                    payloader_caps_mut.set("ts-refclk", Some("local"));
+                    payloader_caps_mut.set("mediaclk", Some("sender"));
+                }
+            }
 
             gst::info!(
                 CAT,
@@ -3283,6 +3377,7 @@ impl BaseWebRTCSink {
             &payloader,
             &codec,
             None,
+            None,
             extension_configuration_type,
         )?;
 
@@ -3807,6 +3902,12 @@ impl ObjectImpl for BaseWebRTCSink {
                     .default_value(DEFAULT_DO_RETRANSMISSION)
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("do-clock-signalling")
+                    .nick("Do clock signalling")
+                    .blurb("Whether PTP or NTP clock & RTP/clock offset should be signalled according to RFC 7273")
+                    .default_value(DEFAULT_DO_CLOCK_SIGNALLING)
+                    .mutable_ready()
+                    .build(),
                 glib::ParamSpecBoolean::builder("enable-data-channel-navigation")
                     .nick("Enable data channel navigation")
                     .blurb("Enable navigation events through a dedicated WebRTCDataChannel")
@@ -3884,6 +3985,10 @@ impl ObjectImpl for BaseWebRTCSink {
                 let mut settings = self.settings.lock().unwrap();
                 settings.do_retransmission = value.get::<bool>().expect("type checked upstream");
             }
+            "do-clock-signalling" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.do_clock_signalling = value.get::<bool>().expect("type checked upstream");
+            }
             "enable-data-channel-navigation" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.enable_data_channel_navigation =
@@ -3946,6 +4051,10 @@ impl ObjectImpl for BaseWebRTCSink {
             "do-retransmission" => {
                 let settings = self.settings.lock().unwrap();
                 settings.do_retransmission.to_value()
+            }
+            "do-clock-signalling" => {
+                let settings = self.settings.lock().unwrap();
+                settings.do_clock_signalling.to_value()
             }
             "enable-data-channel-navigation" => {
                 let settings = self.settings.lock().unwrap();

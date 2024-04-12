@@ -13,6 +13,7 @@ gst = { workspace = true, features = ["v1_20", "serde"] }
 gst-app = { workspace = true, features = ["v1_20"] }
 gst-audio = { workspace = true, features = ["v1_20", "serde"] }
 gst-video = { workspace = true, features = ["v1_20", "serde"] }
+gst-net = { workspace = true, features = ["v1_20"] }
 gst-webrtc = { workspace = true, features = ["v1_20"] }
 gst-sdp = { workspace = true, features = ["v1_20"] }
 gst-rtp = { workspace = true, features = ["v1_20"] }
@@ -61,7 +62,6 @@ rand = "0.8"
 once_cell.workspace = true
 
 [dev-dependencies]
-gst-net = { workspace = true, features = ["v1_20"] }
 gst-plugin-rtp = { path = "../rtp" }
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
