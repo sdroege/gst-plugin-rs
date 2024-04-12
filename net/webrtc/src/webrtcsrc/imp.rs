@@ -2,11 +2,9 @@
 
 use gst::prelude::*;
 
-use crate::livekit_signaller::LiveKitSignaller;
 use crate::signaller::{prelude::*, Signallable, Signaller};
 use crate::utils::{Codec, Codecs, NavigationEvent, AUDIO_CAPS, RTP_CAPS, VIDEO_CAPS};
 use crate::webrtcsrc::WebRTCSrcPad;
-use crate::whip_signaller::WhipServerSignaller;
 use anyhow::{Context, Error};
 use gst::glib;
 use gst::subclass::prelude::*;
@@ -1255,92 +1253,108 @@ impl ObjectSubclass for WebRTCSrc {
     type Interfaces = (gst::URIHandler,);
 }
 
-#[derive(Default)]
-pub struct WhipServerSrc {}
+#[cfg(feature = "whip")]
+pub(super) mod whip {
+    use super::*;
+    use crate::whip_signaller::WhipServerSignaller;
 
-impl ObjectImpl for WhipServerSrc {
-    fn constructed(&self) {
-        self.parent_constructed();
-        let element = self.obj();
-        let ws = element.upcast_ref::<super::BaseWebRTCSrc>().imp();
+    #[derive(Default)]
+    pub struct WhipServerSrc {}
 
-        let _ = ws.set_signaller(WhipServerSignaller::default().upcast());
+    impl ObjectImpl for WhipServerSrc {
+        fn constructed(&self) {
+            self.parent_constructed();
+            let element = self.obj();
+            let ws = element
+                .upcast_ref::<crate::webrtcsrc::BaseWebRTCSrc>()
+                .imp();
 
-        let settings = ws.settings.lock().unwrap();
-        element
-            .bind_property("stun-server", &settings.signaller, "stun-server")
-            .build();
-        element
-            .bind_property("turn-servers", &settings.signaller, "turn-servers")
-            .build();
+            let _ = ws.set_signaller(WhipServerSignaller::default().upcast());
+
+            let settings = ws.settings.lock().unwrap();
+            element
+                .bind_property("stun-server", &settings.signaller, "stun-server")
+                .build();
+            element
+                .bind_property("turn-servers", &settings.signaller, "turn-servers")
+                .build();
+        }
+    }
+
+    impl GstObjectImpl for WhipServerSrc {}
+
+    impl BinImpl for WhipServerSrc {}
+
+    impl ElementImpl for WhipServerSrc {
+        fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+            static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+                gst::subclass::ElementMetadata::new(
+                    "WhipServerSrc",
+                    "Source/Network/WebRTC",
+                    "WebRTC source element using WHIP Server as the signaller",
+                    "Taruntej Kanakamalla <taruntej@asymptotic.io>",
+                )
+            });
+
+            Some(&*ELEMENT_METADATA)
+        }
+    }
+
+    impl BaseWebRTCSrcImpl for WhipServerSrc {}
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for WhipServerSrc {
+        const NAME: &'static str = "GstWhipServerSrc";
+        type Type = crate::webrtcsrc::WhipServerSrc;
+        type ParentType = crate::webrtcsrc::BaseWebRTCSrc;
     }
 }
 
-impl GstObjectImpl for WhipServerSrc {}
+#[cfg(feature = "livekit")]
+pub(super) mod livekit {
+    use super::*;
+    use crate::livekit_signaller::LiveKitSignaller;
 
-impl BinImpl for WhipServerSrc {}
+    #[derive(Default)]
+    pub struct LiveKitWebRTCSrc;
 
-impl ElementImpl for WhipServerSrc {
-    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
-            gst::subclass::ElementMetadata::new(
-                "WhipServerSrc",
-                "Source/Network/WebRTC",
-                "WebRTC source element using WHIP Server as the signaller",
-                "Taruntej Kanakamalla <taruntej@asymptotic.io>",
-            )
-        });
+    impl ObjectImpl for LiveKitWebRTCSrc {
+        fn constructed(&self) {
+            self.parent_constructed();
+            let element = self.obj();
+            let ws = element
+                .upcast_ref::<crate::webrtcsrc::BaseWebRTCSrc>()
+                .imp();
 
-        Some(&*ELEMENT_METADATA)
+            let _ = ws.set_signaller(LiveKitSignaller::new_consumer().upcast());
+        }
     }
-}
 
-impl BaseWebRTCSrcImpl for WhipServerSrc {}
+    impl GstObjectImpl for LiveKitWebRTCSrc {}
 
-#[glib::object_subclass]
-impl ObjectSubclass for WhipServerSrc {
-    const NAME: &'static str = "GstWhipServerSrc";
-    type Type = super::WhipServerSrc;
-    type ParentType = super::BaseWebRTCSrc;
-}
+    impl BinImpl for LiveKitWebRTCSrc {}
 
-#[derive(Default)]
-pub struct LiveKitWebRTCSrc;
+    impl ElementImpl for LiveKitWebRTCSrc {
+        fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+            static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+                gst::subclass::ElementMetadata::new(
+                    "LiveKitWebRTCSrc",
+                    "Source/Network/WebRTC",
+                    "WebRTC source with LiveKit signaller",
+                    "Jordan Yelloz <jordan.yelloz@collabora.com>",
+                )
+            });
 
-impl ObjectImpl for LiveKitWebRTCSrc {
-    fn constructed(&self) {
-        self.parent_constructed();
-        let element = self.obj();
-        let ws = element.upcast_ref::<super::BaseWebRTCSrc>().imp();
-
-        let _ = ws.set_signaller(LiveKitSignaller::new_consumer().upcast());
+            Some(&*ELEMENT_METADATA)
+        }
     }
-}
 
-impl GstObjectImpl for LiveKitWebRTCSrc {}
+    impl BaseWebRTCSrcImpl for LiveKitWebRTCSrc {}
 
-impl BinImpl for LiveKitWebRTCSrc {}
-
-impl ElementImpl for LiveKitWebRTCSrc {
-    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
-            gst::subclass::ElementMetadata::new(
-                "LiveKitWebRTCSrc",
-                "Source/Network/WebRTC",
-                "WebRTC source with LiveKit signaller",
-                "Jordan Yelloz <jordan.yelloz@collabora.com>",
-            )
-        });
-
-        Some(&*ELEMENT_METADATA)
+    #[glib::object_subclass]
+    impl ObjectSubclass for LiveKitWebRTCSrc {
+        const NAME: &'static str = "GstLiveKitWebRTCSrc";
+        type Type = crate::webrtcsrc::LiveKitWebRTCSrc;
+        type ParentType = crate::webrtcsrc::BaseWebRTCSrc;
     }
-}
-
-impl BaseWebRTCSrcImpl for LiveKitWebRTCSrc {}
-
-#[glib::object_subclass]
-impl ObjectSubclass for LiveKitWebRTCSrc {
-    const NAME: &'static str = "GstLiveKitWebRTCSrc";
-    type Type = super::LiveKitWebRTCSrc;
-    type ParentType = super::BaseWebRTCSrc;
 }

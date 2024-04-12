@@ -104,7 +104,9 @@ use crate::RUNTIME;
 use futures::future;
 use futures::prelude::*;
 use gst::ErrorMessage;
+#[cfg(feature = "whip")]
 use reqwest::header::HeaderMap;
+#[cfg(feature = "whip")]
 use reqwest::redirect::Policy;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -237,6 +239,7 @@ where
     res
 }
 
+#[cfg(feature = "whip")]
 pub fn parse_redirect_location(
     headermap: &HeaderMap,
     old_url: &reqwest::Url,
@@ -277,11 +280,13 @@ pub fn parse_redirect_location(
     }
 }
 
+#[cfg(feature = "whip")]
 pub fn build_reqwest_client(pol: Policy) -> reqwest::Client {
     let client_builder = reqwest::Client::builder();
     client_builder.redirect(pol).build().unwrap()
 }
 
+#[cfg(feature = "whip")]
 pub fn set_ice_servers(
     webrtcbin: &gst::Element,
     headermap: &HeaderMap,

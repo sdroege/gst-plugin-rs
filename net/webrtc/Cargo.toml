@@ -22,6 +22,7 @@ gst-base.workspace = true
 uuid = { version = "1", features = ["v4"] }
 
 anyhow = "1"
+chrono = "0.4"
 thiserror = "1"
 futures = "0.3"
 tokio = { version = "1", features = ["fs", "macros", "rt-multi-thread", "time"] }
@@ -33,33 +34,31 @@ serde_json = "1"
 fastrand = "2.0"
 gst_plugin_webrtc_protocol = { path="protocol", package = "gst-plugin-webrtc-signalling-protocol" }
 human_bytes = "0.4"
+once_cell.workspace = true
+rand = "0.8"
 url = "2"
 
-aws-config = "1.0"
-aws-types = "1.0"
-aws-credential-types = "1.0"
-aws-sigv4 = "1.0"
-aws-smithy-http = { version = "0.60", features = [ "rt-tokio" ] }
-aws-smithy-types = "1.0"
-aws-sdk-kinesisvideo = "1.0"
-aws-sdk-kinesisvideosignaling = "1.0"
-http = "1.0"
-chrono = "0.4"
-data-encoding = "2.3.3"
-url-escape = "0.1.1"
-regex = "1"
+aws-config = { version = "1.0", optional = true }
+aws-types = { version = "1.0", optional = true }
+aws-credential-types = { version = "1.0", optional = true }
+aws-sigv4 = { version = "1.0", optional = true }
+aws-smithy-http = { version = "0.60", features = [ "rt-tokio" ], optional = true }
+aws-smithy-types = { version = "1.0", optional = true }
+aws-sdk-kinesisvideo = { version =  "1.0", optional = true }
+aws-sdk-kinesisvideosignaling = { version = "1.0", optional = true }
+http = { version = "1.0", optional = true }
+data-encoding = {version = "2.3.3", optional = true }
+url-escape = { version = "0.1.1", optional = true }
 
-reqwest = { version = "0.11", features = ["default-tls"] }
+reqwest = { version = "0.11", features = ["default-tls"], optional = true }
 parse_link_header = {version = "0.3", features = ["url"]}
-async-recursion = "1.0.0"
+async-recursion = { version = "1.0.0", optional = true }
 
-livekit-protocol = { version = "0.3" }
-livekit-api = { version = "0.3", default-features = false, features = ["signal-client", "access-token", "native-tls"] }
+livekit-protocol = { version = "0.3", optional = true }
+livekit-api = { version = "0.3", default-features = false, features = ["signal-client", "access-token", "native-tls"], optional = true }
 
-warp = "0.3"
-crossbeam-channel = "0.5"
-rand = "0.8"
-once_cell.workspace = true
+warp = {version = "0.3", optional = true }
+crossbeam-channel = { version = "0.5", optional = true }
 
 [dev-dependencies]
 gst-plugin-rtp = { path = "../rtp" }
@@ -67,6 +66,7 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
 tracing-log = "0.2"
 clap = { version = "4", features = ["derive"] }
+regex = "1"
 
 [lib]
 name = "gstrswebrtc"
@@ -77,11 +77,18 @@ path = "src/lib.rs"
 gst-plugin-version-helper.workspace = true
 
 [features]
-default = ["v1_22"]
+default = ["v1_22", "aws", "janus", "livekit", "whip"]
 static = []
 capi = []
 v1_22 = ["gst/v1_22", "gst-app/v1_22", "gst-video/v1_22", "gst-webrtc/v1_22", "gst-sdp/v1_22", "gst-rtp/v1_22"]
 doc = []
+
+aws = ["dep:aws-config", "dep:aws-types", "dep:aws-credential-types", "dep:aws-sigv4",
+       "dep:aws-smithy-http", "dep:aws-smithy-types", "dep:aws-sdk-kinesisvideo",
+       "dep:aws-sdk-kinesisvideosignaling", "dep:data-encoding", "dep:http", "dep:url-escape"]
+janus = ["dep:http"]
+livekit = ["dep:livekit-protocol", "dep:livekit-api"]
+whip = ["dep:async-recursion", "dep:crossbeam-channel", "dep:reqwest", "dep:warp"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

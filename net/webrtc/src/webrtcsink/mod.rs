@@ -53,20 +53,24 @@ glib::wrapper! {
     pub struct WebRTCSink(ObjectSubclass<imp::WebRTCSink>) @extends BaseWebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
 }
 
+#[cfg(feature = "aws")]
 glib::wrapper! {
-    pub struct AwsKvsWebRTCSink(ObjectSubclass<imp::AwsKvsWebRTCSink>) @extends BaseWebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
+    pub struct AwsKvsWebRTCSink(ObjectSubclass<imp::aws::AwsKvsWebRTCSink>) @extends BaseWebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
 }
 
+#[cfg(feature = "whip")]
 glib::wrapper! {
-    pub struct WhipWebRTCSink(ObjectSubclass<imp::WhipWebRTCSink>) @extends BaseWebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
+    pub struct WhipWebRTCSink(ObjectSubclass<imp::whip::WhipWebRTCSink>) @extends BaseWebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
 }
 
+#[cfg(feature = "livekit")]
 glib::wrapper! {
-    pub struct LiveKitWebRTCSink(ObjectSubclass<imp::LiveKitWebRTCSink>) @extends BaseWebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
+    pub struct LiveKitWebRTCSink(ObjectSubclass<imp::livekit::LiveKitWebRTCSink>) @extends BaseWebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
 }
 
+#[cfg(feature = "janus")]
 glib::wrapper! {
-    pub struct JanusVRWebRTCSink(ObjectSubclass<imp::JanusVRWebRTCSink>) @extends BaseWebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
+    pub struct JanusVRWebRTCSink(ObjectSubclass<imp::janus::JanusVRWebRTCSink>) @extends BaseWebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -140,24 +144,28 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         gst::Rank::NONE,
         WebRTCSink::static_type(),
     )?;
+    #[cfg(feature = "aws")]
     gst::Element::register(
         Some(plugin),
         "awskvswebrtcsink",
         gst::Rank::NONE,
         AwsKvsWebRTCSink::static_type(),
     )?;
+    #[cfg(feature = "whip")]
     gst::Element::register(
         Some(plugin),
         "whipclientsink",
         gst::Rank::NONE,
         WhipWebRTCSink::static_type(),
     )?;
+    #[cfg(feature = "livekit")]
     gst::Element::register(
         Some(plugin),
         "livekitwebrtcsink",
         gst::Rank::NONE,
         LiveKitWebRTCSink::static_type(),
     )?;
+    #[cfg(feature = "janus")]
     /**
      * element-janusvrwebrtcsink:
      *

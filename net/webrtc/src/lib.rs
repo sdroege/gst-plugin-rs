@@ -14,13 +14,17 @@ use gst::glib;
 use once_cell::sync::Lazy;
 use tokio::runtime;
 
+#[cfg(feature = "aws")]
 mod aws_kvs_signaller;
+#[cfg(feature = "janus")]
 mod janusvr_signaller;
+#[cfg(feature = "livekit")]
 mod livekit_signaller;
 pub mod signaller;
 pub mod utils;
 pub mod webrtcsink;
 pub mod webrtcsrc;
+#[cfg(feature = "whip")]
 mod whip_signaller;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {

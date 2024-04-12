@@ -49,12 +49,14 @@ glib::wrapper! {
     pub struct WebRTCSrc(ObjectSubclass<imp::WebRTCSrc>) @extends BaseWebRTCSrc, gst::Bin, gst::Element, gst::Object, @implements gst::URIHandler, gst::ChildProxy;
 }
 
+#[cfg(feature = "whip")]
 glib::wrapper! {
-    pub struct WhipServerSrc(ObjectSubclass<imp::WhipServerSrc>) @extends BaseWebRTCSrc, gst::Bin, gst::Element, gst::Object, @implements gst::URIHandler, gst::ChildProxy;
+    pub struct WhipServerSrc(ObjectSubclass<imp::whip::WhipServerSrc>) @extends BaseWebRTCSrc, gst::Bin, gst::Element, gst::Object, @implements gst::URIHandler, gst::ChildProxy;
 }
 
+#[cfg(feature = "livekit")]
 glib::wrapper! {
-    pub struct LiveKitWebRTCSrc(ObjectSubclass<imp::LiveKitWebRTCSrc>) @extends BaseWebRTCSrc, gst::Bin, gst::Element, gst::Object, gst::ChildProxy;
+    pub struct LiveKitWebRTCSrc(ObjectSubclass<imp::livekit::LiveKitWebRTCSrc>) @extends BaseWebRTCSrc, gst::Bin, gst::Element, gst::Object, gst::ChildProxy;
 }
 
 glib::wrapper! {
@@ -73,6 +75,7 @@ pub fn register(plugin: Option<&gst::Plugin>) -> Result<(), glib::BoolError> {
         WebRTCSrc::static_type(),
     )?;
 
+    #[cfg(feature = "whip")]
     gst::Element::register(
         plugin,
         "whipserversrc",
@@ -80,6 +83,7 @@ pub fn register(plugin: Option<&gst::Plugin>) -> Result<(), glib::BoolError> {
         WhipServerSrc::static_type(),
     )?;
 
+    #[cfg(feature = "livekit")]
     /**
      * element-livekitwebrtcsrc:
      *

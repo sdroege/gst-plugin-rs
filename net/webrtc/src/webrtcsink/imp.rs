@@ -23,11 +23,7 @@ use super::homegrown_cc::CongestionController;
 use super::{
     WebRTCSinkCongestionControl, WebRTCSinkError, WebRTCSinkMitigationMode, WebRTCSinkPad,
 };
-use crate::aws_kvs_signaller::AwsKvsSignaller;
-use crate::janusvr_signaller::{JanusVRSignallerStr, JanusVRSignallerU64};
-use crate::livekit_signaller::LiveKitSignaller;
 use crate::signaller::{prelude::*, Signallable, Signaller, WebRTCSignallerRole};
-use crate::whip_signaller::WhipClientSignaller;
 use crate::{utils, RUNTIME};
 use std::collections::{BTreeMap, HashSet};
 
@@ -4521,187 +4517,219 @@ impl ObjectSubclass for WebRTCSink {
     type ParentType = super::BaseWebRTCSink;
 }
 
-#[derive(Default)]
-pub struct AwsKvsWebRTCSink {}
+#[cfg(feature = "aws")]
+pub(super) mod aws {
+    use super::*;
+    use crate::aws_kvs_signaller::AwsKvsSignaller;
 
-impl ObjectImpl for AwsKvsWebRTCSink {
-    fn constructed(&self) {
-        let element = self.obj();
-        let ws = element.upcast_ref::<super::BaseWebRTCSink>().imp();
+    #[derive(Default)]
+    pub struct AwsKvsWebRTCSink {}
 
-        let _ = ws.set_signaller(AwsKvsSignaller::default().upcast());
-    }
-}
+    impl ObjectImpl for AwsKvsWebRTCSink {
+        fn constructed(&self) {
+            let element = self.obj();
+            let ws = element
+                .upcast_ref::<crate::webrtcsink::BaseWebRTCSink>()
+                .imp();
 
-impl GstObjectImpl for AwsKvsWebRTCSink {}
-
-impl ElementImpl for AwsKvsWebRTCSink {
-    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
-            gst::subclass::ElementMetadata::new(
-                "AwsKvsWebRTCSink",
-                "Sink/Network/WebRTC",
-                "WebRTC sink with kinesis video streams signaller",
-                "Mathieu Duponchelle <mathieu@centricular.com>",
-            )
-        });
-
-        Some(&*ELEMENT_METADATA)
-    }
-}
-
-impl BinImpl for AwsKvsWebRTCSink {}
-
-impl BaseWebRTCSinkImpl for AwsKvsWebRTCSink {}
-
-#[glib::object_subclass]
-impl ObjectSubclass for AwsKvsWebRTCSink {
-    const NAME: &'static str = "GstAwsKvsWebRTCSink";
-    type Type = super::AwsKvsWebRTCSink;
-    type ParentType = super::BaseWebRTCSink;
-}
-
-#[derive(Default)]
-pub struct WhipWebRTCSink {}
-
-impl ObjectImpl for WhipWebRTCSink {
-    fn constructed(&self) {
-        let element = self.obj();
-        let ws = element.upcast_ref::<super::BaseWebRTCSink>().imp();
-
-        let _ = ws.set_signaller(WhipClientSignaller::default().upcast());
-    }
-}
-
-impl GstObjectImpl for WhipWebRTCSink {}
-
-impl ElementImpl for WhipWebRTCSink {
-    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
-            gst::subclass::ElementMetadata::new(
-                "WhipWebRTCSink",
-                "Sink/Network/WebRTC",
-                "WebRTC sink with WHIP client signaller",
-                "Taruntej Kanakamalla <taruntej@asymptotic.io>",
-            )
-        });
-
-        Some(&*ELEMENT_METADATA)
-    }
-}
-
-impl BinImpl for WhipWebRTCSink {}
-
-impl BaseWebRTCSinkImpl for WhipWebRTCSink {}
-
-#[glib::object_subclass]
-impl ObjectSubclass for WhipWebRTCSink {
-    const NAME: &'static str = "GstWhipWebRTCSink";
-    type Type = super::WhipWebRTCSink;
-    type ParentType = super::BaseWebRTCSink;
-}
-
-#[derive(Default)]
-pub struct LiveKitWebRTCSink {}
-
-impl ObjectImpl for LiveKitWebRTCSink {
-    fn constructed(&self) {
-        let element = self.obj();
-        let ws = element.upcast_ref::<super::BaseWebRTCSink>().imp();
-
-        let _ = ws.set_signaller(LiveKitSignaller::new_producer().upcast());
-    }
-}
-
-impl GstObjectImpl for LiveKitWebRTCSink {}
-
-impl ElementImpl for LiveKitWebRTCSink {
-    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
-            gst::subclass::ElementMetadata::new(
-                "LiveKitWebRTCSink",
-                "Sink/Network/WebRTC",
-                "WebRTC sink with LiveKit signaller",
-                "Olivier Crête <olivier.crete@collabora.com>",
-            )
-        });
-
-        Some(&*ELEMENT_METADATA)
-    }
-}
-
-impl BinImpl for LiveKitWebRTCSink {}
-
-impl BaseWebRTCSinkImpl for LiveKitWebRTCSink {}
-
-#[glib::object_subclass]
-impl ObjectSubclass for LiveKitWebRTCSink {
-    const NAME: &'static str = "GstLiveKitWebRTCSink";
-    type Type = super::LiveKitWebRTCSink;
-    type ParentType = super::BaseWebRTCSink;
-}
-
-#[derive(Debug, Clone, Default)]
-struct JanusSettings {
-    use_string_ids: bool,
-}
-
-#[derive(Default, glib::Properties)]
-#[properties(wrapper_type = super::JanusVRWebRTCSink)]
-pub struct JanusVRWebRTCSink {
-    /**
-     * GstJanusVRWebRTCSink:use-string-ids:
-     *
-     * By default Janus uses `u64` ids to identitify the room, the feed, etc.
-     * But it can be changed to strings using the `strings_ids` option in `janus.plugin.videoroom.jcfg`.
-     * In such case, `janusvrwebrtcsink` has to be created using `use-string-ids=true` so its signaller
-     * uses the right types for such ids and properties.
-     *
-     * Since: plugins-rs-0.13.0
-     */
-    #[property(name="use-string-ids", get, construct_only, type = bool, member = use_string_ids, blurb = "Use strings instead of u64 for Janus IDs, see strings_ids config option in janus.plugin.videoroom.jcfg")]
-    settings: Mutex<JanusSettings>,
-}
-
-#[glib::derived_properties]
-impl ObjectImpl for JanusVRWebRTCSink {
-    fn constructed(&self) {
-        let settings = self.settings.lock().unwrap();
-        let element = self.obj();
-        let ws = element.upcast_ref::<super::BaseWebRTCSink>().imp();
-
-        if settings.use_string_ids {
-            let _ = ws.set_signaller(JanusVRSignallerStr::default().upcast());
-        } else {
-            let _ = ws.set_signaller(JanusVRSignallerU64::default().upcast());
+            let _ = ws.set_signaller(AwsKvsSignaller::default().upcast());
         }
     }
-}
 
-impl GstObjectImpl for JanusVRWebRTCSink {}
+    impl GstObjectImpl for AwsKvsWebRTCSink {}
 
-impl ElementImpl for JanusVRWebRTCSink {
-    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
-            gst::subclass::ElementMetadata::new(
-                "JanusVRWebRTCSink",
-                "Sink/Network/WebRTC",
-                "WebRTC sink with Janus Video Room signaller",
-                "Eva Pace <epace@igalia.com>",
-            )
-        });
+    impl ElementImpl for AwsKvsWebRTCSink {
+        fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+            static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+                gst::subclass::ElementMetadata::new(
+                    "AwsKvsWebRTCSink",
+                    "Sink/Network/WebRTC",
+                    "WebRTC sink with kinesis video streams signaller",
+                    "Mathieu Duponchelle <mathieu@centricular.com>",
+                )
+            });
 
-        Some(&*ELEMENT_METADATA)
+            Some(&*ELEMENT_METADATA)
+        }
+    }
+
+    impl BinImpl for AwsKvsWebRTCSink {}
+
+    impl BaseWebRTCSinkImpl for AwsKvsWebRTCSink {}
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for AwsKvsWebRTCSink {
+        const NAME: &'static str = "GstAwsKvsWebRTCSink";
+        type Type = crate::webrtcsink::AwsKvsWebRTCSink;
+        type ParentType = crate::webrtcsink::BaseWebRTCSink;
     }
 }
 
-impl BinImpl for JanusVRWebRTCSink {}
+#[cfg(feature = "whip")]
+pub(super) mod whip {
+    use super::*;
+    use crate::whip_signaller::WhipClientSignaller;
 
-impl BaseWebRTCSinkImpl for JanusVRWebRTCSink {}
+    #[derive(Default)]
+    pub struct WhipWebRTCSink {}
 
-#[glib::object_subclass]
-impl ObjectSubclass for JanusVRWebRTCSink {
-    const NAME: &'static str = "GstJanusVRWebRTCSink";
-    type Type = super::JanusVRWebRTCSink;
-    type ParentType = super::BaseWebRTCSink;
+    impl ObjectImpl for WhipWebRTCSink {
+        fn constructed(&self) {
+            let element = self.obj();
+            let ws = element
+                .upcast_ref::<crate::webrtcsink::BaseWebRTCSink>()
+                .imp();
+
+            let _ = ws.set_signaller(WhipClientSignaller::default().upcast());
+        }
+    }
+
+    impl GstObjectImpl for WhipWebRTCSink {}
+
+    impl ElementImpl for WhipWebRTCSink {
+        fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+            static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+                gst::subclass::ElementMetadata::new(
+                    "WhipWebRTCSink",
+                    "Sink/Network/WebRTC",
+                    "WebRTC sink with WHIP client signaller",
+                    "Taruntej Kanakamalla <taruntej@asymptotic.io>",
+                )
+            });
+
+            Some(&*ELEMENT_METADATA)
+        }
+    }
+
+    impl BinImpl for WhipWebRTCSink {}
+
+    impl BaseWebRTCSinkImpl for WhipWebRTCSink {}
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for WhipWebRTCSink {
+        const NAME: &'static str = "GstWhipWebRTCSink";
+        type Type = crate::webrtcsink::WhipWebRTCSink;
+        type ParentType = crate::webrtcsink::BaseWebRTCSink;
+    }
+}
+
+#[cfg(feature = "livekit")]
+pub(super) mod livekit {
+    use super::*;
+    use crate::livekit_signaller::LiveKitSignaller;
+
+    #[derive(Default)]
+    pub struct LiveKitWebRTCSink {}
+
+    impl ObjectImpl for LiveKitWebRTCSink {
+        fn constructed(&self) {
+            let element = self.obj();
+            let ws = element
+                .upcast_ref::<crate::webrtcsink::BaseWebRTCSink>()
+                .imp();
+
+            let _ = ws.set_signaller(LiveKitSignaller::new_producer().upcast());
+        }
+    }
+
+    impl GstObjectImpl for LiveKitWebRTCSink {}
+
+    impl ElementImpl for LiveKitWebRTCSink {
+        fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+            static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+                gst::subclass::ElementMetadata::new(
+                    "LiveKitWebRTCSink",
+                    "Sink/Network/WebRTC",
+                    "WebRTC sink with LiveKit signaller",
+                    "Olivier Crête <olivier.crete@collabora.com>",
+                )
+            });
+
+            Some(&*ELEMENT_METADATA)
+        }
+    }
+
+    impl BinImpl for LiveKitWebRTCSink {}
+
+    impl BaseWebRTCSinkImpl for LiveKitWebRTCSink {}
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for LiveKitWebRTCSink {
+        const NAME: &'static str = "GstLiveKitWebRTCSink";
+        type Type = crate::webrtcsink::LiveKitWebRTCSink;
+        type ParentType = crate::webrtcsink::BaseWebRTCSink;
+    }
+}
+
+#[cfg(feature = "janus")]
+pub(super) mod janus {
+    use super::*;
+    use crate::janusvr_signaller::{JanusVRSignallerStr, JanusVRSignallerU64};
+
+    #[derive(Debug, Clone, Default)]
+    struct JanusSettings {
+        use_string_ids: bool,
+    }
+
+    #[derive(Default, glib::Properties)]
+    #[properties(wrapper_type = crate::webrtcsink::JanusVRWebRTCSink)]
+    pub struct JanusVRWebRTCSink {
+        /**
+         * GstJanusVRWebRTCSink:use-string-ids:
+         *
+         * By default Janus uses `u64` ids to identitify the room, the feed, etc.
+         * But it can be changed to strings using the `strings_ids` option in `janus.plugin.videoroom.jcfg`.
+         * In such case, `janusvrwebrtcsink` has to be created using `use-string-ids=true` so its signaller
+         * uses the right types for such ids and properties.
+         *
+         * Since: plugins-rs-0.13.0
+         */
+        #[property(name="use-string-ids", get, construct_only, type = bool, member = use_string_ids, blurb = "Use strings instead of u64 for Janus IDs, see strings_ids config option in janus.plugin.videoroom.jcfg")]
+        settings: Mutex<JanusSettings>,
+    }
+
+    #[glib::derived_properties]
+    impl ObjectImpl for JanusVRWebRTCSink {
+        fn constructed(&self) {
+            let settings = self.settings.lock().unwrap();
+            let element = self.obj();
+            let ws = element
+                .upcast_ref::<crate::webrtcsink::BaseWebRTCSink>()
+                .imp();
+
+            if settings.use_string_ids {
+                let _ = ws.set_signaller(JanusVRSignallerStr::default().upcast());
+            } else {
+                let _ = ws.set_signaller(JanusVRSignallerU64::default().upcast());
+            }
+        }
+    }
+
+    impl GstObjectImpl for JanusVRWebRTCSink {}
+
+    impl ElementImpl for JanusVRWebRTCSink {
+        fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+            static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+                gst::subclass::ElementMetadata::new(
+                    "JanusVRWebRTCSink",
+                    "Sink/Network/WebRTC",
+                    "WebRTC sink with Janus Video Room signaller",
+                    "Eva Pace <epace@igalia.com>",
+                )
+            });
+
+            Some(&*ELEMENT_METADATA)
+        }
+    }
+
+    impl BinImpl for JanusVRWebRTCSink {}
+
+    impl BaseWebRTCSinkImpl for JanusVRWebRTCSink {}
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for JanusVRWebRTCSink {
+        const NAME: &'static str = "GstJanusVRWebRTCSink";
+        type Type = crate::webrtcsink::JanusVRWebRTCSink;
+        type ParentType = crate::webrtcsink::BaseWebRTCSink;
+    }
 }
