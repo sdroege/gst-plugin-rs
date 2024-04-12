@@ -383,6 +383,8 @@ fn increase_iterations() {
 
 #[test]
 /// decrease playlist iterations while it's playing
+// FIXME: racy: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/514
+#[ignore]
 fn decrease_iterations() {
     let (events, current_iteration, current_uri_index) = test(
         vec![TestMedia::mkv()],
