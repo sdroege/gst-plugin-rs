@@ -15,6 +15,7 @@ use gst_base::subclass::prelude::*;
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
+use crate::mp4mux::obu::read_seq_header_obu_bytes;
 use once_cell::sync::Lazy;
 
 use super::boxes;
@@ -135,6 +136,8 @@ struct Stream {
 
     /// In ONVIF mode, the mapping between running time and UTC time (UNIX)
     running_time_utc_time_mapping: Option<(gst::Signed<gst::ClockTime>, gst::ClockTime)>,
+
+    extra_header_data: Option<Vec<u8>>,
 }
 
 #[derive(Default)]
@@ -548,6 +551,22 @@ impl MP4Mux {
 
                     *duration = Some(dur);
 
+                    // If the stream is AV1, we need  to parse the SequenceHeader OBU to include in the
+                    // extra data of the 'av1C' box. It makes the stream playable in some browsers.
+                    let s = stream.caps.structure(0).unwrap();
+                    if !buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
+                        && s.name().as_str() == "video/x-av1"
+                    {
+                        let buf_map = buffer.map_readable().map_err(|_| {
+                            gst::error!(CAT, obj: stream.sinkpad, "Failed to map buffer");
+                            gst::FlowError::Error
+                        })?;
+                        stream.extra_header_data = read_seq_header_obu_bytes(buf_map.as_slice()).map_err(|_| {
+                            gst::error!(CAT, obj: stream.sinkpad, "Failed to parse AV1 SequenceHeader OBU");
+                            gst::FlowError::Error
+                        })?;
+                    }
+
                     return Ok(());
                 }
                 None => {
@@ -957,6 +976,7 @@ impl MP4Mux {
                 earliest_pts: None,
                 end_pts: None,
                 running_time_utc_time_mapping: None,
+                extra_header_data: None,
             });
         }
 
@@ -1321,7 +1341,15 @@ impl AggregatorImpl for MP4Mux {
 
             // ... and then create the ftyp box plus mdat box header so we can start outputting
             // actual data
-            let ftyp = boxes::create_ftyp(self.obj().class().as_ref().variant).map_err(|err| {
+            let ftyp = boxes::create_ftyp(
+                self.obj().class().as_ref().variant,
+                &state
+                    .streams
+                    .iter()
+                    .map(|s| s.caps.as_ref())
+                    .collect::<Vec<_>>(),
+            )
+            .map_err(|err| {
                 gst::error!(CAT, imp: self, "Failed to create ftyp box: {err}");
                 gst::FlowError::Error
             })?;
@@ -1380,6 +1408,7 @@ impl AggregatorImpl for MP4Mux {
                     earliest_pts,
                     end_pts,
                     chunks: stream.chunks,
+                    extra_header_data: stream.extra_header_data.clone(),
                 });
             }
 

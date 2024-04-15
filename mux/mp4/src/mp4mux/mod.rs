@@ -11,6 +11,7 @@ use gst::prelude::*;
 
 mod boxes;
 mod imp;
+mod obu;
 
 glib::wrapper! {
     pub(crate) struct MP4MuxPad(ObjectSubclass<imp::MP4MuxPad>) @extends gst_base::AggregatorPad, gst::Pad, gst::Object;
@@ -126,6 +127,9 @@ pub(crate) struct Stream {
 
     /// All the chunks stored for this stream
     chunks: Vec<Chunk>,
+
+    // More data to be included in the fragmented stream header
+    extra_header_data: Option<Vec<u8>>,
 }
 
 #[derive(Debug)]
