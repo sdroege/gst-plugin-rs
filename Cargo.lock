@@ -2373,6 +2373,7 @@ name = "gst-plugin-fmp4"
 version = "0.12.5"
 dependencies = [
  "anyhow",
+ "bitstream-io",
  "chrono",
  "dash-mpd",
  "gst-plugin-version-helper",
@@ -2523,6 +2524,7 @@ name = "gst-plugin-mp4"
 version = "0.12.5"
 dependencies = [
  "anyhow",
+ "bitstream-io",
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-audio",

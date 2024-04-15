@@ -152,3 +152,23 @@ fn test_roundtrip_vp9_flac() {
         pipeline.into_completion();
     })
 }
+
+#[test]
+fn test_roundtrip_av1_aac() {
+    init();
+    test_basic_with("av1enc ! av1parse", "avenc_aac ! aacparse", |location| {
+        let Ok(pipeline) = gst::parse::launch(
+            "filesrc name=src ! qtdemux name=demux \
+             demux.audio_0 ! queue ! avdec_aac ! fakesink \
+             demux.video_0 ! queue ! av1dec ! fakesink",
+        ) else {
+            panic!("could not build decoding pipeline")
+        };
+        let pipeline = Pipeline(pipeline.downcast::<gst::Pipeline>().unwrap());
+        pipeline
+            .by_name("src")
+            .unwrap()
+            .set_property("location", location.display().to_string());
+        pipeline.into_completion();
+    })
+}

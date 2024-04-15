@@ -237,6 +237,26 @@ fn test_buffer_flags_single_vp9_stream_iso() {
 }
 
 #[test]
+fn test_buffer_flags_single_av1_stream_cmaf() {
+    init();
+
+    let caps = gst::Caps::builder("video/x-av1")
+        .field("width", 1920i32)
+        .field("height", 1080i32)
+        .field("framerate", gst::Fraction::new(30, 1))
+        .field("profile", "main")
+        .field("tier", "main")
+        .field("level", "4.1")
+        .field("chroma-format", "4:2:0")
+        .field("bit-depth-luma", 8u32)
+        .field("bit-depth-chroma", 8u32)
+        .field("colorimetry", "bt709")
+        .build();
+
+    test_buffer_flags_single_stream(true, false, caps);
+}
+
+#[test]
 fn test_buffer_flags_multi_stream() {
     init();
 

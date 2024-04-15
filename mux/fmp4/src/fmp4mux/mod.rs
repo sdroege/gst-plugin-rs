@@ -12,6 +12,8 @@ use gst::prelude::*;
 mod boxes;
 mod imp;
 
+mod obu;
+
 glib::wrapper! {
     pub(crate) struct FMP4MuxPad(ObjectSubclass<imp::FMP4MuxPad>) @extends gst_base::AggregatorPad, gst::Pad, gst::Object;
 }
@@ -102,6 +104,9 @@ pub(crate) struct HeaderStream {
 
     /// Pre-defined trak timescale if not 0.
     trak_timescale: u32,
+
+    // More data to be included in the fragmented stream header
+    extra_header_data: Option<Vec<u8>>,
 }
 
 #[derive(Debug)]

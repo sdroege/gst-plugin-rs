@@ -16,6 +16,7 @@ use std::collections::VecDeque;
 use std::mem;
 use std::sync::Mutex;
 
+use crate::fmp4mux::obu::read_seq_header_obu_bytes;
 use once_cell::sync::Lazy;
 
 use super::boxes;
@@ -224,6 +225,8 @@ struct Stream {
 
     /// Mapping between running time and UTC time in ONVIF mode.
     running_time_utc_time_mapping: Option<(gst::Signed<gst::ClockTime>, gst::ClockTime)>,
+
+    extra_header_data: Option<Vec<u8>>,
 }
 
 #[derive(Default)]
@@ -799,6 +802,22 @@ impl FMP4Mux {
                 dts.display(),
                 stream.dts_offset.display(),
             );
+
+            // If the stream is AV1, we need  to parse the SequenceHeader OBU to include in the
+            // extra data of the 'av1C' box. It makes the stream playable in some browsers.
+            let s = stream.caps.structure(0).unwrap();
+            if !buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
+                && s.name().as_str() == "video/x-av1"
+            {
+                let buf_map = buffer.map_readable().map_err(|_| {
+                    gst::error!(CAT, obj: stream.sinkpad, "Failed to map buffer");
+                    gst::FlowError::Error
+                })?;
+                stream.extra_header_data = read_seq_header_obu_bytes(buf_map.as_slice()).map_err(|_| {
+                    gst::error!(CAT, obj: stream.sinkpad, "Failed to parse AV1 SequenceHeader OBU");
+                    gst::FlowError::Error
+                })?;
+            }
 
             let gop = Gop {
                 start_pts: pts,
@@ -2632,6 +2651,7 @@ impl FMP4Mux {
                 dts_offset: None,
                 current_position: gst::ClockTime::ZERO,
                 running_time_utc_time_mapping: None,
+                extra_header_data: None,
             });
         }
 
@@ -2699,6 +2719,7 @@ impl FMP4Mux {
                 trak_timescale: s.sinkpad.imp().settings.lock().unwrap().trak_timescale,
                 delta_frames: s.delta_frames,
                 caps: s.caps.clone(),
+                extra_header_data: s.extra_header_data.clone(),
             })
             .collect::<Vec<_>>();
 
@@ -3570,6 +3591,19 @@ impl ElementImpl for CMAFMux {
                     gst::Structure::builder("video/x-h264")
                         .field("stream-format", gst::List::new(["avc", "avc3"]))
                         .field("alignment", "au")
+                        .field("width", gst::IntRange::new(1, u16::MAX as i32))
+                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
+                        .build(),
+                    gst::Structure::builder("video/x-av1")
+                        .field("stream-format", "obu-stream")
+                        .field("alignment", "tu")
+                        .field("profile", gst::List::new(["main", "high", "professional"]))
+                        .field(
+                            "chroma-format",
+                            gst::List::new(["4:0:0", "4:2:0", "4:2:2", "4:4:4"]),
+                        )
+                        .field("bit-depth-luma", gst::List::new([8u32, 10u32, 12u32]))
+                        .field("bit-depth-chroma", gst::List::new([8u32, 10u32, 12u32]))
                         .field("width", gst::IntRange::new(1, u16::MAX as i32))
                         .field("height", gst::IntRange::new(1, u16::MAX as i32))
                         .build(),
