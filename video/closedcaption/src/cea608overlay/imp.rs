@@ -529,6 +529,9 @@ impl ElementImpl for Cea608Overlay {
                     -1 => None,
                     val => Some(val as u8),
                 };
+                state
+                    .renderer
+                    .set_black_background(settings.black_background);
             }
             _ => (),
         }
