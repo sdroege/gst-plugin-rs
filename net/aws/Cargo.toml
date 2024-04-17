@@ -32,6 +32,8 @@ serde_derive = "1"
 serde_json = "1"
 url = "2"
 once_cell.workspace = true
+gst-video = { workspace = true, features = ["v1_22"] }
+sprintf = "0.2"
 
 [dev-dependencies]
 chrono = { version = "0.4", features = [ "alloc" ] }

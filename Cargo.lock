@@ -2302,12 +2302,14 @@ dependencies = [
  "gstreamer-audio",
  "gstreamer-base",
  "gstreamer-check",
+ "gstreamer-video",
  "once_cell",
  "percent-encoding",
  "rand",
  "serde",
  "serde_derive",
  "serde_json",
+ "sprintf 0.2.1",
  "test-with",
  "tokio",
  "url",
@@ -2542,7 +2544,7 @@ dependencies = [
  "gstreamer-video",
  "m3u8-rs",
  "once_cell",
- "sprintf",
+ "sprintf 0.1.4",
 ]
 
 [[package]]
@@ -6616,6 +6618,15 @@ name = "sprintf"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c0cdea5a20a06e7c57f627094e7b1618e5665592cd88f2d45fa4014e348db58"
+
+[[package]]
+name = "sprintf"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2819cb5194dfe9e6d102f4519a9fb9dc7106d2879b71b4fd4d4677f1175bd39"
+dependencies = [
+ "thiserror",
+]
 
 [[package]]
 name = "static_assertions"

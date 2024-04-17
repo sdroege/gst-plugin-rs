@@ -398,6 +398,32 @@
                         "type": "GstStructure",
                         "writable": true
                     },
+                    "min-keyframe-distance": {
+                        "blurb": "Minimum distance between keyframes to start a new file",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "10000000000",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "next-file": {
+                        "blurb": "When to start new file",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "next-buffer (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstS3PutObjectSinkNextFile",
+                        "writable": true
+                    },
                     "region": {
                         "blurb": "An AWS region (e.g. eu-west-2).",
                         "conditionally-available": false,
@@ -1252,6 +1278,41 @@
                         "desc": "Tag: flag words without changing them",
                         "name": "tag",
                         "value": "2"
+                    }
+                ]
+            },
+            "GstS3PutObjectSinkNextFile": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "New file for each buffer",
+                        "name": "next-buffer",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "New file after each discontinuity",
+                        "name": "next-discont",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "New file at each key frame",
+                        "name": "next-key-frame",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "New file after a force key unit event",
+                        "name": "next-key-unit-event",
+                        "value": "3"
+                    },
+                    {
+                        "desc": "New file when the configured maximum file size would be exceeded with the next buffer or buffer list",
+                        "name": "next-max-size",
+                        "value": "4"
+                    },
+                    {
+                        "desc": "New file when the configured maximum duration would be exceeded with the next buffer or buffer list",
+                        "name": "next-max-duration",
+                        "value": "5"
                     }
                 ]
             },
