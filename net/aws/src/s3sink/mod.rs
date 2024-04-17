@@ -16,6 +16,33 @@ mod putobjectsink;
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]
+#[enum_type(name = "GstS3PutObjectSinkNextFile")]
+pub(crate) enum NextFile {
+    #[enum_value(name = "New file for each buffer", nick = "next-buffer")]
+    Buffer,
+    #[enum_value(name = "New file after each discontinuity", nick = "next-discont")]
+    Discont,
+    #[enum_value(name = "New file at each key frame", nick = "next-key-frame")]
+    KeyFrame,
+    #[enum_value(
+        name = "New file after a force key unit event",
+        nick = "next-key-unit-event"
+    )]
+    KeyUnitEvent,
+    #[enum_value(
+        name = "New file when the configured maximum file size would be exceeded with the next buffer or buffer list",
+        nick = "next-max-size"
+    )]
+    MaxSize,
+    #[enum_value(
+        name = "New file when the configured maximum duration would be exceeded with the next buffer or buffer list",
+        nick = "next-max-duration"
+    )]
+    MaxDuration,
+}
+
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
+#[repr(u32)]
 #[enum_type(name = "GstS3SinkOnError")]
 pub(crate) enum OnError {
     #[enum_value(name = "Abort: Abort multipart upload on error.", nick = "abort")]
