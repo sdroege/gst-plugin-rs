@@ -24,6 +24,8 @@ pub mod signaller;
 pub mod utils;
 pub mod webrtcsink;
 pub mod webrtcsrc;
+#[cfg(feature = "whep")]
+mod whep_signaller;
 #[cfg(feature = "whip")]
 mod whip_signaller;
 

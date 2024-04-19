@@ -67,6 +67,8 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
 tracing-log = "0.2"
 
+bytes = "1"
+
 [dev-dependencies]
 gst-plugin-rtp = { path = "../rtp" }
 tokio = { version = "1", features = ["signal"] }
@@ -82,7 +84,7 @@ path = "src/lib.rs"
 gst-plugin-version-helper.workspace = true
 
 [features]
-default = ["janus", "whip", "web_server"]
+default = ["janus", "whip", "web_server", "whep"]
 static = []
 capi = []
 doc = []
@@ -94,6 +96,7 @@ janus = ["dep:http"]
 livekit = ["dep:livekit-protocol", "dep:livekit-api"]
 whip = ["dep:async-recursion", "dep:reqwest", "dep:warp", "dep:ctrlc"]
 web_server = ["dep:warp"]
+whep = ["dep:async-recursion", "dep:reqwest", "dep:warp"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

@@ -3576,6 +3576,7 @@ dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "aws-types",
+ "bytes",
  "chrono",
  "clap",
  "ctrlc",

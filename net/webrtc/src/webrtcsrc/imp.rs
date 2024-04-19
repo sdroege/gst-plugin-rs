@@ -2662,3 +2662,58 @@ pub(super) mod janus {
         }
     }
 }
+
+#[cfg(feature = "whep")]
+pub(super) mod whep {
+    use super::*;
+    use crate::whep_signaller::WhepClientSignaller;
+
+    #[derive(Default)]
+    pub struct WhepClientSrc {}
+
+    impl ObjectImpl for WhepClientSrc {
+        fn constructed(&self) {
+            self.parent_constructed();
+            let element = self.obj();
+            let ws = element
+                .upcast_ref::<crate::webrtcsrc::BaseWebRTCSrc>()
+                .imp();
+
+            let _ = ws.set_signaller(WhepClientSignaller::default().upcast());
+
+            let obj = &*self.obj();
+
+            obj.set_suppressed_flags(gst::ElementFlags::SINK | gst::ElementFlags::SOURCE);
+            obj.set_element_flags(gst::ElementFlags::SOURCE);
+        }
+    }
+
+    impl GstObjectImpl for WhepClientSrc {}
+
+    impl BinImpl for WhepClientSrc {}
+
+    impl ElementImpl for WhepClientSrc {
+        fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+            static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> =
+                LazyLock::new(|| {
+                    gst::subclass::ElementMetadata::new(
+                        "WhepClientSrc",
+                        "Source/Network/WebRTC",
+                        "WebRTC source element using WHEP Client as the signaller",
+                        "Sanchayan Maity <sanchayan@asymptotic.io>",
+                    )
+                });
+
+            Some(&*ELEMENT_METADATA)
+        }
+    }
+
+    impl BaseWebRTCSrcImpl for WhepClientSrc {}
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for WhepClientSrc {
+        const NAME: &'static str = "GstWhepClientSrc";
+        type Type = crate::webrtcsrc::WhepClientSrc;
+        type ParentType = crate::webrtcsrc::BaseWebRTCSrc;
+    }
+}
