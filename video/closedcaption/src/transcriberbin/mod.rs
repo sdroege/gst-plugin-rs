@@ -30,7 +30,15 @@ enum MuxMethod {
 }
 
 glib::wrapper! {
-    pub struct TranscriberBin(ObjectSubclass<imp::TranscriberBin>) @extends gst::Bin, gst::Element, gst::Object;
+    pub struct TranscriberBin(ObjectSubclass<imp::TranscriberBin>) @extends gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy;
+}
+
+glib::wrapper! {
+    pub struct TranscriberSinkPad(ObjectSubclass<imp::TranscriberSinkPad>) @extends gst::GhostPad, gst::ProxyPad, gst::Pad, gst::Object;
+}
+
+glib::wrapper! {
+    pub struct TranscriberSrcPad(ObjectSubclass<imp::TranscriberSrcPad>) @extends gst::GhostPad, gst::ProxyPad, gst::Pad, gst::Object;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
@@ -38,6 +46,8 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     {
         CaptionSource::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
         MuxMethod::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        TranscriberSinkPad::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        TranscriberSrcPad::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }
 
     gst::Element::register(
