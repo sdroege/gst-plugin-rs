@@ -17,6 +17,7 @@ gst = { workspace = true, features = ["v1_16"] }
 gst-base.workspace = true
 gst-video.workspace = true
 gst-gl = { workspace = true, features = ["v1_16"], optional = true }
+gst-allocators = { workspace = true, features = ["v1_24"], optional = true }
 
 gst-gl-wayland = { workspace = true, features = ["v1_16"], optional = true }
 gst-gl-x11 = { workspace = true, features = ["v1_16"], optional = true }
@@ -50,6 +51,7 @@ wayland = ["gtk/v4_6", "gdk-wayland", "gst-gl", "gst-gl-wayland"]
 x11glx = ["gtk/v4_6", "gdk-x11", "gst-gl", "gst-gl-x11"]
 x11egl = ["gtk/v4_6", "gdk-x11", "gst-gl", "gst-gl-egl"]
 winegl = ["gdk-win32/egl", "gst-gl-egl"]
+dmabuf = ["gst-allocators", "wayland", "gtk_v4_14", "gst-video/v1_24"]
 capi = []
 doc = ["gst/v1_18"]
 gtk_v4_10 = ["gtk/v4_10"]

@@ -1,7 +1,7 @@
 //
 // Copyright (C) 2021 Bilal Elmoussaoui <bil.elmoussaoui@gmail.com>
 // Copyright (C) 2021 Jordan Petridis <jordan@centricular.com>
-// Copyright (C) 2021 Sebastian Dröge <sebastian@centricular.com>
+// Copyright (C) 2021-2024 Sebastian Dröge <sebastian@centricular.com>
 //
 // This Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at
@@ -62,7 +62,7 @@ pub(crate) static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 pub struct PaintableSink {
     paintable: Mutex<Option<ThreadGuard<Paintable>>>,
     window: Mutex<Option<ThreadGuard<gtk::Window>>>,
-    info: Mutex<Option<gst_video::VideoInfo>>,
+    info: Mutex<Option<super::frame::VideoInfo>>,
     sender: Mutex<Option<async_channel::Sender<SinkEvent>>>,
     pending_frame: Mutex<Option<Frame>>,
     cached_caps: Mutex<Option<gst::Caps>>,
@@ -163,53 +163,99 @@ impl ElementImpl for PaintableSink {
             {
                 let caps = caps.get_mut().unwrap();
 
+                #[cfg(all(target_os = "linux", feature = "dmabuf"))]
+                {
+                    for features in [
+                        [
+                            gst_allocators::CAPS_FEATURE_MEMORY_DMABUF,
+                            gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION,
+                        ]
+                        .as_slice(),
+                        [gst_allocators::CAPS_FEATURE_MEMORY_DMABUF].as_slice(),
+                    ] {
+                        let c = gst_video::VideoCapsBuilder::new()
+                            .format(gst_video::VideoFormat::DmaDrm)
+                            .features(features.iter().copied())
+                            .build();
+                        caps.append(c);
+                    }
+                }
+
                 for features in [
-                    None,
                     #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
                     Some(gst::CapsFeatures::new([
-                        "memory:GLMemory",
-                        "meta:GstVideoOverlayComposition",
+                        gst_gl::CAPS_FEATURE_MEMORY_GL_MEMORY,
+                        gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION,
                     ])),
                     #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
-                    Some(gst::CapsFeatures::new(["memory:GLMemory"])),
+                    Some(gst::CapsFeatures::new([
+                        gst_gl::CAPS_FEATURE_MEMORY_GL_MEMORY,
+                    ])),
                     Some(gst::CapsFeatures::new([
                         "memory:SystemMemory",
-                        "meta:GstVideoOverlayComposition",
+                        gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION,
                     ])),
-                    Some(gst::CapsFeatures::new(["meta:GstVideoOverlayComposition"])),
+                    Some(gst::CapsFeatures::new([
+                        gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION,
+                    ])),
+                    None,
                 ] {
-                    const GL_FORMATS: &[gst_video::VideoFormat] =
-                        &[gst_video::VideoFormat::Rgba, gst_video::VideoFormat::Rgb];
-                    const NON_GL_FORMATS: &[gst_video::VideoFormat] = &[
-                        gst_video::VideoFormat::Bgra,
-                        gst_video::VideoFormat::Argb,
-                        gst_video::VideoFormat::Rgba,
-                        gst_video::VideoFormat::Abgr,
-                        gst_video::VideoFormat::Rgb,
-                        gst_video::VideoFormat::Bgr,
-                    ];
-
-                    let formats = if features
-                        .as_ref()
-                        .is_some_and(|features| features.contains("memory:GLMemory"))
+                    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
                     {
-                        GL_FORMATS
-                    } else {
-                        NON_GL_FORMATS
-                    };
+                        const GL_FORMATS: &[gst_video::VideoFormat] =
+                            &[gst_video::VideoFormat::Rgba, gst_video::VideoFormat::Rgb];
+                        const NON_GL_FORMATS: &[gst_video::VideoFormat] = &[
+                            gst_video::VideoFormat::Bgra,
+                            gst_video::VideoFormat::Argb,
+                            gst_video::VideoFormat::Rgba,
+                            gst_video::VideoFormat::Abgr,
+                            gst_video::VideoFormat::Rgb,
+                            gst_video::VideoFormat::Bgr,
+                        ];
 
-                    let mut c = gst_video::video_make_raw_caps(formats).build();
+                        let formats = if features.as_ref().is_some_and(|features| {
+                            features.contains(gst_gl::CAPS_FEATURE_MEMORY_GL_MEMORY)
+                        }) {
+                            GL_FORMATS
+                        } else {
+                            NON_GL_FORMATS
+                        };
 
-                    if let Some(features) = features {
-                        let c = c.get_mut().unwrap();
+                        let mut c = gst_video::video_make_raw_caps(formats).build();
 
-                        if features.contains("memory:GLMemory") {
-                            c.set("texture-target", "2D")
+                        if let Some(features) = features {
+                            let c = c.get_mut().unwrap();
+
+                            if features.contains(gst_gl::CAPS_FEATURE_MEMORY_GL_MEMORY) {
+                                c.set("texture-target", "2D")
+                            }
+                            c.set_features_simple(Some(features));
                         }
-                        c.set_features_simple(Some(features));
+                        caps.append(c);
                     }
+                    #[cfg(not(any(
+                        target_os = "macos",
+                        target_os = "windows",
+                        feature = "gst-gl"
+                    )))]
+                    {
+                        const FORMATS: &[gst_video::VideoFormat] = &[
+                            gst_video::VideoFormat::Bgra,
+                            gst_video::VideoFormat::Argb,
+                            gst_video::VideoFormat::Rgba,
+                            gst_video::VideoFormat::Abgr,
+                            gst_video::VideoFormat::Rgb,
+                            gst_video::VideoFormat::Bgr,
+                        ];
 
-                    caps.append(c);
+                        let mut c = gst_video::video_make_raw_caps(FORMATS).build();
+
+                        if let Some(features) = features {
+                            let c = c.get_mut().unwrap();
+                            c.set_features_simple(Some(features));
+                        }
+                        caps.append(c);
+                    }
                 }
             }
 
@@ -361,8 +407,21 @@ impl BaseSinkImpl for PaintableSink {
     fn set_caps(&self, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
         gst::debug!(CAT, imp: self, "Setting caps {caps:?}");
 
-        let video_info = gst_video::VideoInfo::from_caps(caps)
-            .map_err(|_| gst::loggable_error!(CAT, "Invalid caps"))?;
+        #[allow(unused_mut)]
+        let mut video_info = None;
+        #[cfg(all(target_os = "linux", feature = "dmabuf"))]
+        {
+            if let Ok(info) = gst_video::VideoInfoDmaDrm::from_caps(caps) {
+                video_info = Some(info.into());
+            }
+        }
+
+        let video_info = match video_info {
+            Some(info) => info,
+            None => gst_video::VideoInfo::from_caps(caps)
+                .map_err(|_| gst::loggable_error!(CAT, "Invalid caps"))?
+                .into(),
+        };
 
         self.info.lock().unwrap().replace(video_info);
 
@@ -516,10 +575,11 @@ impl PaintableSink {
 
         match action {
             SinkEvent::FrameChanged => {
+                let Some(frame) = self.pending_frame() else {
+                    return glib::ControlFlow::Continue;
+                };
                 gst::trace!(CAT, imp: self, "Frame changed");
-                paintable
-                    .get_ref()
-                    .handle_frame_changed(self.pending_frame())
+                paintable.get_ref().handle_frame_changed(&self.obj(), frame);
             }
         }
 
@@ -530,13 +590,59 @@ impl PaintableSink {
         #[allow(unused_mut)]
         let mut tmp_caps = Self::pad_templates()[0].caps().clone();
 
+        #[cfg(all(target_os = "linux", feature = "dmabuf"))]
+        {
+            let formats = utils::invoke_on_main_thread(move || {
+                let Some(display) = gdk::Display::default() else {
+                    return vec![];
+                };
+                let dmabuf_formats = display.dmabuf_formats();
+
+                let mut formats = vec![];
+                let n_formats = dmabuf_formats.n_formats();
+                for i in 0..n_formats {
+                    let (fourcc, modifier) = dmabuf_formats.format(i);
+
+                    if fourcc == 0 || modifier == (u64::MAX >> 8) {
+                        continue;
+                    }
+
+                    formats.push(gst_video::dma_drm_fourcc_to_string(fourcc, modifier));
+                }
+
+                formats
+            });
+
+            if formats.is_empty() {
+                // Filter out dmabufs caps from the template pads if we have no supported formats
+                if !matches!(&*GL_CONTEXT.lock().unwrap(), GLContext::Initialized { .. }) {
+                    tmp_caps = tmp_caps
+                        .iter_with_features()
+                        .filter(|(_, features)| {
+                            !features.contains(gst_allocators::CAPS_FEATURE_MEMORY_DMABUF)
+                        })
+                        .map(|(s, c)| (s.to_owned(), c.to_owned()))
+                        .collect::<gst::Caps>();
+                }
+            } else {
+                let tmp_caps = tmp_caps.make_mut();
+                for (s, f) in tmp_caps.iter_with_features_mut() {
+                    if f.contains(gst_allocators::CAPS_FEATURE_MEMORY_DMABUF) {
+                        s.set("drm-format", gst::List::new(&formats));
+                    }
+                }
+            }
+        }
+
         #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
         {
             // Filter out GL caps from the template pads if we have no context
             if !matches!(&*GL_CONTEXT.lock().unwrap(), GLContext::Initialized { .. }) {
                 tmp_caps = tmp_caps
                     .iter_with_features()
-                    .filter(|(_, features)| !features.contains("memory:GLMemory"))
+                    .filter(|(_, features)| {
+                        !features.contains(gst_gl::CAPS_FEATURE_MEMORY_GL_MEMORY)
+                    })
                     .map(|(s, c)| (s.to_owned(), c.to_owned()))
                     .collect::<gst::Caps>();
             }
@@ -564,7 +670,17 @@ impl PaintableSink {
             let window = gtk::Window::new();
             let picture = gtk::Picture::new();
             picture.set_paintable(Some(&paintable));
-            window.set_child(Some(&picture));
+
+            #[cfg(feature = "gtk_v4_14")]
+            {
+                let offload = gtk::GraphicsOffload::new(Some(&picture));
+                offload.set_enabled(gtk::GraphicsOffloadEnabled::Enabled);
+                window.set_child(Some(&offload));
+            }
+            #[cfg(not(feature = "gtk_v4_14"))]
+            {
+                window.set_child(Some(&picture));
+            }
             window.set_default_size(640, 480);
 
             window.connect_close_request({

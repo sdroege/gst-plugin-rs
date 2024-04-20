@@ -14,7 +14,61 @@ use gst_video::prelude::*;
 #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
 use gst_gl::prelude::*;
 use gtk::{gdk, glib};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    ops,
+};
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum VideoInfo {
+    VideoInfo(gst_video::VideoInfo),
+    #[cfg(all(target_os = "linux", feature = "dmabuf"))]
+    DmaDrm(gst_video::VideoInfoDmaDrm),
+}
+
+impl From<gst_video::VideoInfo> for VideoInfo {
+    fn from(v: gst_video::VideoInfo) -> Self {
+        VideoInfo::VideoInfo(v)
+    }
+}
+
+#[cfg(all(target_os = "linux", feature = "dmabuf"))]
+impl From<gst_video::VideoInfoDmaDrm> for VideoInfo {
+    fn from(v: gst_video::VideoInfoDmaDrm) -> Self {
+        VideoInfo::DmaDrm(v)
+    }
+}
+
+impl ops::Deref for VideoInfo {
+    type Target = gst_video::VideoInfo;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            VideoInfo::VideoInfo(info) => info,
+            #[cfg(all(target_os = "linux", feature = "dmabuf"))]
+            VideoInfo::DmaDrm(info) => info,
+        }
+    }
+}
+
+impl VideoInfo {
+    #[cfg(all(target_os = "linux", feature = "dmabuf"))]
+    fn dma_drm(&self) -> Option<&gst_video::VideoInfoDmaDrm> {
+        match self {
+            VideoInfo::VideoInfo(..) => None,
+            VideoInfo::DmaDrm(info) => Some(info),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum TextureCacheId {
+    Memory(usize),
+    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
+    GL(usize),
+    #[cfg(all(target_os = "linux", feature = "dmabuf"))]
+    DmaBuf([i32; 4]),
+}
 
 #[derive(Debug)]
 enum MappedFrame {
@@ -24,6 +78,17 @@ enum MappedFrame {
         frame: gst_gl::GLVideoFrame<gst_gl::gl_video_frame::Readable>,
         wrapped_context: gst_gl::GLContext,
     },
+    #[cfg(all(target_os = "linux", feature = "dmabuf"))]
+    DmaBuf {
+        buffer: gst::Buffer,
+        info: gst_video::VideoInfoDmaDrm,
+        n_planes: u32,
+        fds: [i32; 4],
+        offsets: [usize; 4],
+        strides: [usize; 4],
+        width: u32,
+        height: u32,
+    },
 }
 
 impl MappedFrame {
@@ -32,6 +97,8 @@ impl MappedFrame {
             MappedFrame::SysMem(frame) => frame.buffer(),
             #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             MappedFrame::GL { frame, .. } => frame.buffer(),
+            #[cfg(all(target_os = "linux", feature = "dmabuf"))]
+            MappedFrame::DmaBuf { buffer, .. } => buffer,
         }
     }
 
@@ -40,6 +107,8 @@ impl MappedFrame {
             MappedFrame::SysMem(frame) => frame.width(),
             #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             MappedFrame::GL { frame, .. } => frame.width(),
+            #[cfg(all(target_os = "linux", feature = "dmabuf"))]
+            MappedFrame::DmaBuf { info, .. } => info.width(),
         }
     }
 
@@ -48,6 +117,8 @@ impl MappedFrame {
             MappedFrame::SysMem(frame) => frame.height(),
             #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             MappedFrame::GL { frame, .. } => frame.height(),
+            #[cfg(all(target_os = "linux", feature = "dmabuf"))]
+            MappedFrame::DmaBuf { info, .. } => info.height(),
         }
     }
 
@@ -56,6 +127,8 @@ impl MappedFrame {
             MappedFrame::SysMem(frame) => frame.format_info(),
             #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             MappedFrame::GL { frame, .. } => frame.format_info(),
+            #[cfg(all(target_os = "linux", feature = "dmabuf"))]
+            MappedFrame::DmaBuf { info, .. } => info.format_info(),
         }
     }
 }
@@ -108,16 +181,16 @@ fn video_format_to_memory_format(f: gst_video::VideoFormat) -> gdk::MemoryFormat
 
 fn video_frame_to_memory_texture(
     frame: gst_video::VideoFrame<gst_video::video_frame::Readable>,
-    cached_textures: &mut HashMap<usize, gdk::Texture>,
-    used_textures: &mut HashSet<usize>,
+    cached_textures: &mut HashMap<TextureCacheId, gdk::Texture>,
+    used_textures: &mut HashSet<TextureCacheId>,
 ) -> (gdk::Texture, f64) {
-    let texture_id = frame.plane_data(0).unwrap().as_ptr() as usize;
+    let ptr = frame.plane_data(0).unwrap().as_ptr() as usize;
 
     let pixel_aspect_ratio =
         (frame.info().par().numer() as f64) / (frame.info().par().denom() as f64);
 
-    if let Some(texture) = cached_textures.get(&texture_id) {
-        used_textures.insert(texture_id);
+    if let Some(texture) = cached_textures.get(&TextureCacheId::Memory(ptr)) {
+        used_textures.insert(TextureCacheId::Memory(ptr));
         return (texture.clone(), pixel_aspect_ratio);
     }
 
@@ -135,8 +208,8 @@ fn video_frame_to_memory_texture(
     )
     .upcast::<gdk::Texture>();
 
-    cached_textures.insert(texture_id, texture.clone());
-    used_textures.insert(texture_id);
+    cached_textures.insert(TextureCacheId::Memory(ptr), texture.clone());
+    used_textures.insert(TextureCacheId::Memory(ptr));
 
     (texture, pixel_aspect_ratio)
 }
@@ -144,8 +217,8 @@ fn video_frame_to_memory_texture(
 #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
 fn video_frame_to_gl_texture(
     frame: gst_gl::GLVideoFrame<gst_gl::gl_video_frame::Readable>,
-    cached_textures: &mut HashMap<usize, gdk::Texture>,
-    used_textures: &mut HashSet<usize>,
+    cached_textures: &mut HashMap<TextureCacheId, gdk::Texture>,
+    used_textures: &mut HashSet<TextureCacheId>,
     gdk_context: &gdk::GLContext,
     #[allow(unused)] wrapped_context: &gst_gl::GLContext,
 ) -> (gdk::Texture, f64) {
@@ -154,8 +227,8 @@ fn video_frame_to_gl_texture(
     let pixel_aspect_ratio =
         (frame.info().par().numer() as f64) / (frame.info().par().denom() as f64);
 
-    if let Some(texture) = cached_textures.get(&(texture_id)) {
-        used_textures.insert(texture_id);
+    if let Some(texture) = cached_textures.get(&TextureCacheId::GL(texture_id)) {
+        used_textures.insert(TextureCacheId::GL(texture_id));
         return (texture.clone(), pixel_aspect_ratio);
     }
 
@@ -237,18 +310,64 @@ fn video_frame_to_gl_texture(
         .upcast::<gdk::Texture>()
     };
 
-    cached_textures.insert(texture_id, texture.clone());
-    used_textures.insert(texture_id);
+    cached_textures.insert(TextureCacheId::GL(texture_id), texture.clone());
+    used_textures.insert(TextureCacheId::GL(texture_id));
 
     (texture, pixel_aspect_ratio)
+}
+
+#[cfg(all(target_os = "linux", feature = "dmabuf"))]
+#[allow(clippy::too_many_arguments)]
+fn video_frame_to_dmabuf_texture(
+    buffer: gst::Buffer,
+    cached_textures: &mut HashMap<TextureCacheId, gdk::Texture>,
+    used_textures: &mut HashSet<TextureCacheId>,
+    info: &gst_video::VideoInfoDmaDrm,
+    n_planes: u32,
+    fds: &[i32; 4],
+    offsets: &[usize; 4],
+    strides: &[usize; 4],
+    width: u32,
+    height: u32,
+) -> Result<(gdk::Texture, f64), glib::Error> {
+    let pixel_aspect_ratio = (info.par().numer() as f64) / (info.par().denom() as f64);
+
+    if let Some(texture) = cached_textures.get(&TextureCacheId::DmaBuf(*fds)) {
+        used_textures.insert(TextureCacheId::DmaBuf(*fds));
+        return Ok((texture.clone(), pixel_aspect_ratio));
+    }
+
+    let builder = gdk::DmabufTextureBuilder::new();
+    builder.set_display(&gdk::Display::default().unwrap());
+    builder.set_fourcc(info.fourcc());
+    builder.set_modifier(info.modifier());
+    builder.set_width(width);
+    builder.set_height(height);
+    builder.set_n_planes(n_planes);
+    for plane in 0..(n_planes as usize) {
+        builder.set_fd(plane as u32, fds[plane]);
+        builder.set_offset(plane as u32, offsets[plane] as u32);
+        builder.set_stride(plane as u32, strides[plane] as u32);
+    }
+
+    let texture = unsafe {
+        builder.build_with_release_func(move || {
+            drop(buffer);
+        })?
+    };
+
+    cached_textures.insert(TextureCacheId::DmaBuf(*fds), texture.clone());
+    used_textures.insert(TextureCacheId::DmaBuf(*fds));
+
+    Ok((texture, pixel_aspect_ratio))
 }
 
 impl Frame {
     pub(crate) fn into_textures(
         self,
         #[allow(unused_variables)] gdk_context: Option<&gdk::GLContext>,
-        cached_textures: &mut HashMap<usize, gdk::Texture>,
-    ) -> Vec<Texture> {
+        cached_textures: &mut HashMap<TextureCacheId, gdk::Texture>,
+    ) -> Result<Vec<Texture>, glib::Error> {
         let mut textures = Vec::with_capacity(1 + self.overlays.len());
         let mut used_textures = HashSet::with_capacity(1 + self.overlays.len());
 
@@ -278,6 +397,28 @@ impl Frame {
                     &wrapped_context,
                 )
             }
+            #[cfg(all(target_os = "linux", feature = "dmabuf"))]
+            MappedFrame::DmaBuf {
+                buffer,
+                info,
+                n_planes,
+                fds,
+                offsets,
+                strides,
+                width,
+                height,
+            } => video_frame_to_dmabuf_texture(
+                buffer,
+                cached_textures,
+                &mut used_textures,
+                &info,
+                n_planes,
+                &fds,
+                &offsets,
+                &strides,
+                width,
+                height,
+            )?,
         };
 
         textures.push(Texture {
@@ -309,14 +450,14 @@ impl Frame {
         // Remove textures that were not used this time
         cached_textures.retain(|id, _| used_textures.contains(id));
 
-        textures
+        Ok(textures)
     }
 }
 
 impl Frame {
     pub(crate) fn new(
         buffer: &gst::Buffer,
-        info: &gst_video::VideoInfo,
+        info: &VideoInfo,
         #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))] wrapped_context: Option<
             &gst_gl::GLContext,
         >,
@@ -327,77 +468,125 @@ impl Frame {
         // Empty buffers get filtered out in show_frame
         debug_assert!(buffer.n_memory() > 0);
 
-        let mut frame;
+        #[allow(unused_mut)]
+        let mut frame = None;
 
-        #[cfg(not(any(target_os = "macos", target_os = "windows", feature = "gst-gl")))]
+        #[cfg(all(target_os = "linux", feature = "dmabuf"))]
         {
-            frame = Self {
-                frame: MappedFrame::SysMem(
+            // Check we received a buffer with dmabuf memory and if so do some checks before
+            // passing it onwards
+            if frame.is_none()
+                && buffer
+                    .peek_memory(0)
+                    .is_memory_type::<gst_allocators::DmaBufMemory>()
+            {
+                if let Some((vmeta, info)) =
+                    Option::zip(buffer.meta::<gst_video::VideoMeta>(), info.dma_drm())
+                {
+                    let mut fds = [-1i32; 4];
+                    let mut offsets = [0; 4];
+                    let mut strides = [0; 4];
+                    let n_planes = vmeta.n_planes() as usize;
+
+                    let vmeta_offsets = vmeta.offset();
+                    let vmeta_strides = vmeta.stride();
+
+                    for plane in 0..n_planes {
+                        let Some((range, skip)) =
+                            buffer.find_memory(vmeta_offsets[plane]..(vmeta_offsets[plane] + 1))
+                        else {
+                            break;
+                        };
+
+                        let mem = buffer.peek_memory(range.start);
+                        let Some(mem) = mem.downcast_memory_ref::<gst_allocators::DmaBufMemory>()
+                        else {
+                            break;
+                        };
+
+                        let fd = mem.fd();
+                        fds[plane] = fd;
+                        offsets[plane] = mem.offset() + skip;
+                        strides[plane] = vmeta_strides[plane] as usize;
+                    }
+
+                    // All fds valid?
+                    if fds[0..n_planes].iter().all(|fd| *fd != -1) {
+                        frame = Some(MappedFrame::DmaBuf {
+                            buffer: buffer.clone(),
+                            info: info.clone(),
+                            n_planes: n_planes as u32,
+                            fds,
+                            offsets,
+                            strides,
+                            width: vmeta.width(),
+                            height: vmeta.height(),
+                        });
+                    }
+                }
+            }
+            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
+            {
+                if frame.is_none() {
+                    // Check we received a buffer with GL memory and if the context of that memory
+                    // can share with the wrapped context around the GDK GL context.
+                    //
+                    // If not it has to be uploaded to the GPU.
+                    let memory_ctx = buffer
+                        .peek_memory(0)
+                        .downcast_memory_ref::<gst_gl::GLBaseMemory>()
+                        .and_then(|m| {
+                            let ctx = m.context();
+                            if wrapped_context
+                                .map_or(false, |wrapped_context| wrapped_context.can_share(ctx))
+                            {
+                                Some(ctx)
+                            } else {
+                                None
+                            }
+                        });
+
+                    if let Some(memory_ctx) = memory_ctx {
+                        // If there is no GLSyncMeta yet then we need to add one here now, which requires
+                        // obtaining a writable buffer.
+                        let mapped_frame = if buffer.meta::<gst_gl::GLSyncMeta>().is_some() {
+                            gst_gl::GLVideoFrame::from_buffer_readable(buffer.clone(), info)
+                                .map_err(|_| gst::FlowError::Error)?
+                        } else {
+                            let mut buffer = buffer.clone();
+                            {
+                                let buffer = buffer.make_mut();
+                                gst_gl::GLSyncMeta::add(buffer, memory_ctx);
+                            }
+                            gst_gl::GLVideoFrame::from_buffer_readable(buffer, info)
+                                .map_err(|_| gst::FlowError::Error)?
+                        };
+
+                        // Now that it's guaranteed that there is a sync meta and the frame is mapped, set
+                        // a sync point so we can ensure that the texture is ready later when making use of
+                        // it as gdk::GLTexture.
+                        let meta = mapped_frame.buffer().meta::<gst_gl::GLSyncMeta>().unwrap();
+                        meta.set_sync_point(memory_ctx);
+
+                        frame = Some(MappedFrame::GL {
+                            frame: mapped_frame,
+                            wrapped_context: wrapped_context.unwrap().clone(),
+                        });
+                    }
+                }
+            }
+        }
+
+        let mut frame = Self {
+            frame: match frame {
+                Some(frame) => frame,
+                None => MappedFrame::SysMem(
                     gst_video::VideoFrame::from_buffer_readable(buffer.clone(), info)
                         .map_err(|_| gst::FlowError::Error)?,
                 ),
-                overlays: vec![],
-            };
-        }
-        #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
-        {
-            // Check we received a buffer with GL memory and if the context of that memory
-            // can share with the wrapped context around the GDK GL context.
-            //
-            // If not it has to be uploaded to the GPU.
-            let memory_ctx = buffer
-                .peek_memory(0)
-                .downcast_memory_ref::<gst_gl::GLBaseMemory>()
-                .and_then(|m| {
-                    let ctx = m.context();
-                    if wrapped_context
-                        .map_or(false, |wrapped_context| wrapped_context.can_share(ctx))
-                    {
-                        Some(ctx)
-                    } else {
-                        None
-                    }
-                });
-
-            if let Some(memory_ctx) = memory_ctx {
-                // If there is no GLSyncMeta yet then we need to add one here now, which requires
-                // obtaining a writable buffer.
-                let mapped_frame = if buffer.meta::<gst_gl::GLSyncMeta>().is_some() {
-                    gst_gl::GLVideoFrame::from_buffer_readable(buffer.clone(), info)
-                        .map_err(|_| gst::FlowError::Error)?
-                } else {
-                    let mut buffer = buffer.clone();
-                    {
-                        let buffer = buffer.make_mut();
-                        gst_gl::GLSyncMeta::add(buffer, memory_ctx);
-                    }
-                    gst_gl::GLVideoFrame::from_buffer_readable(buffer, info)
-                        .map_err(|_| gst::FlowError::Error)?
-                };
-
-                // Now that it's guaranteed that there is a sync meta and the frame is mapped, set
-                // a sync point so we can ensure that the texture is ready later when making use of
-                // it as gdk::GLTexture.
-                let meta = mapped_frame.buffer().meta::<gst_gl::GLSyncMeta>().unwrap();
-                meta.set_sync_point(memory_ctx);
-
-                frame = Self {
-                    frame: MappedFrame::GL {
-                        frame: mapped_frame,
-                        wrapped_context: wrapped_context.unwrap().clone(),
-                    },
-                    overlays: vec![],
-                };
-            } else {
-                frame = Self {
-                    frame: MappedFrame::SysMem(
-                        gst_video::VideoFrame::from_buffer_readable(buffer.clone(), info)
-                            .map_err(|_| gst::FlowError::Error)?,
-                    ),
-                    overlays: vec![],
-                };
-            }
-        }
+            },
+            overlays: vec![],
+        };
 
         frame.overlays = frame
             .frame

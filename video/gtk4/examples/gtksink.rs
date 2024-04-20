@@ -6,13 +6,6 @@ use gtk::{gdk, gio, glib};
 use std::cell::RefCell;
 
 fn create_ui(app: &gtk::Application) {
-    let window = gtk::ApplicationWindow::new(app);
-    window.set_default_size(640, 480);
-
-    let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    let picture = gtk::Picture::new();
-    let label = gtk::Label::new(Some("Position: 00:00:00"));
-
     let pipeline = gst::Pipeline::new();
 
     let overlay = gst::ElementFactory::make("clockoverlay")
@@ -64,8 +57,26 @@ fn create_ui(app: &gtk::Application) {
     src.link_filtered(&overlay, &caps).unwrap();
     overlay.link(&sink).unwrap();
 
+    let window = gtk::ApplicationWindow::new(app);
+    window.set_default_size(640, 480);
+
+    let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
+
+    let picture = gtk::Picture::new();
     picture.set_paintable(Some(&paintable));
-    vbox.append(&picture);
+
+    #[cfg(feature = "gtk_v4_14")]
+    {
+        let offload = gtk::GraphicsOffload::new(Some(&picture));
+        offload.set_enabled(gtk::GraphicsOffloadEnabled::Enabled);
+        vbox.append(&offload);
+    }
+    #[cfg(not(feature = "gtk_v4_14"))]
+    {
+        vbox.append(&picture);
+    }
+
+    let label = gtk::Label::new(Some("Position: 00:00:00"));
     vbox.append(&label);
 
     window.set_child(Some(&vbox));
