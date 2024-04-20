@@ -31,7 +31,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 #[derive(Debug)]
 pub struct Paintable {
     paintables: RefCell<Vec<Texture>>,
-    cached_textures: RefCell<HashMap<usize, gdk::Texture>>,
+    cached_textures: RefCell<HashMap<super::super::frame::TextureCacheId, gdk::Texture>>,
     gl_context: RefCell<Option<gdk::GLContext>>,
     background_color: Cell<gdk::RGBA>,
     #[cfg(feature = "gtk_v4_10")]
@@ -197,12 +197,14 @@ impl PaintableImpl for Paintable {
                         ((frame_height as f64 * scale_y) - (frame_height as f64 * scale_x)) / 2.0;
                     scale_y = scale_x;
                 }
-            }
 
-            snapshot.append_color(
-                &background_color,
-                &graphene::Rect::new(0f32, 0f32, width as f32, height as f32),
-            );
+                if !background_color.is_clear() {
+                    snapshot.append_color(
+                        &background_color,
+                        &graphene::Rect::new(0f32, 0f32, width as f32, height as f32),
+                    );
+                }
+            }
 
             snapshot.translate(&graphene::Point::new(trans_x as f32, trans_y as f32));
 
@@ -331,34 +333,44 @@ impl PaintableImpl for Paintable {
 }
 
 impl Paintable {
-    pub(super) fn handle_frame_changed(&self, frame: Option<Frame>) {
+    pub(super) fn handle_frame_changed(&self, sink: &crate::PaintableSink, frame: Frame) {
         let context = self.gl_context.borrow();
-        if let Some(frame) = frame {
-            gst::trace!(CAT, imp: self, "Received new frame");
 
-            let new_paintables =
-                frame.into_textures(context.as_ref(), &mut self.cached_textures.borrow_mut());
-            let new_size = new_paintables
-                .first()
-                .map(|p| (f32::round(p.width) as u32, f32::round(p.height) as u32))
-                .unwrap();
+        gst::trace!(CAT, imp: self, "Received new frame");
 
-            let old_paintables = self.paintables.replace(new_paintables);
-            let old_size = old_paintables
-                .first()
-                .map(|p| (f32::round(p.width) as u32, f32::round(p.height) as u32));
+        let new_paintables =
+            match frame.into_textures(context.as_ref(), &mut self.cached_textures.borrow_mut()) {
+                Ok(textures) => textures,
+                Err(err) => {
+                    gst::element_error!(
+                        sink,
+                        gst::ResourceError::Failed,
+                        ["Failed to transform frame into textures: {err}"]
+                    );
+                    return;
+                }
+            };
 
-            if Some(new_size) != old_size {
-                gst::debug!(
-                    CAT,
-                    imp: self,
-                    "Size changed from {old_size:?} to {new_size:?}",
-                );
-                self.obj().invalidate_size();
-            }
+        let new_size = new_paintables
+            .first()
+            .map(|p| (f32::round(p.width) as u32, f32::round(p.height) as u32))
+            .unwrap();
 
-            self.obj().invalidate_contents();
+        let old_paintables = self.paintables.replace(new_paintables);
+        let old_size = old_paintables
+            .first()
+            .map(|p| (f32::round(p.width) as u32, f32::round(p.height) as u32));
+
+        if Some(new_size) != old_size {
+            gst::debug!(
+                CAT,
+                imp: self,
+                "Size changed from {old_size:?} to {new_size:?}",
+            );
+            self.obj().invalidate_size();
         }
+
+        self.obj().invalidate_contents();
     }
 
     pub(super) fn handle_flush_frames(&self) {
