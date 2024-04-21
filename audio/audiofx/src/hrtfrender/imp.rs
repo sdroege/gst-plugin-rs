@@ -649,7 +649,7 @@ impl BaseTransformImpl for HrtfRender {
 
                 if direction == gst::PadDirection::Sink {
                     s.set("channels", 2);
-                    s.set("channel-mask", 0x3);
+                    s.set("channel-mask", gst::Bitmask(0x3));
                 } else {
                     let settings = self.settings.lock().unwrap();
                     if let Some(objs) = &settings.spatial_objects {
