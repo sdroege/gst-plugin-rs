@@ -134,7 +134,7 @@ impl Dav1dDec {
         let matrix = match pic.matrix_coefficients() {
             pixel::MatrixCoefficients::Identity => gst_video::VideoColorMatrix::Rgb,
             pixel::MatrixCoefficients::BT709 => gst_video::VideoColorMatrix::Bt709,
-            pixel::MatrixCoefficients::Unspecified => gst_video::VideoColorMatrix::Unknown,
+            pixel::MatrixCoefficients::Unspecified => gst_video::VideoColorMatrix::Bt709,
             pixel::MatrixCoefficients::BT470M => gst_video::VideoColorMatrix::Fcc,
             pixel::MatrixCoefficients::BT470BG => gst_video::VideoColorMatrix::Bt601,
             pixel::MatrixCoefficients::ST240M => gst_video::VideoColorMatrix::Smpte240m,
@@ -149,7 +149,7 @@ impl Dav1dDec {
 
         let transfer = match pic.transfer_characteristic() {
             pixel::TransferCharacteristic::BT1886 => gst_video::VideoTransferFunction::Bt709,
-            pixel::TransferCharacteristic::Unspecified => gst_video::VideoTransferFunction::Unknown,
+            pixel::TransferCharacteristic::Unspecified => gst_video::VideoTransferFunction::Bt709,
             pixel::TransferCharacteristic::BT470M => gst_video::VideoTransferFunction::Bt709,
             pixel::TransferCharacteristic::BT470BG => gst_video::VideoTransferFunction::Gamma28,
             pixel::TransferCharacteristic::ST170M => gst_video::VideoTransferFunction::Bt601,
@@ -180,7 +180,7 @@ impl Dav1dDec {
 
         let primaries = match pic.color_primaries() {
             pixel::ColorPrimaries::BT709 => gst_video::VideoColorPrimaries::Bt709,
-            pixel::ColorPrimaries::Unspecified => gst_video::VideoColorPrimaries::Unknown,
+            pixel::ColorPrimaries::Unspecified => gst_video::VideoColorPrimaries::Bt709,
             pixel::ColorPrimaries::BT470M => gst_video::VideoColorPrimaries::Bt470m,
             pixel::ColorPrimaries::BT470BG => gst_video::VideoColorPrimaries::Bt470bg,
             pixel::ColorPrimaries::ST240M => gst_video::VideoColorPrimaries::Smpte240m,
