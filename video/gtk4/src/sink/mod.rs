@@ -22,7 +22,8 @@ enum SinkEvent {
 
 glib::wrapper! {
     pub struct PaintableSink(ObjectSubclass<imp::PaintableSink>)
-        @extends gst_video::VideoSink, gst_base::BaseSink, gst::Element, gst::Object;
+        @extends gst_video::VideoSink, gst_base::BaseSink, gst::Element, gst::Object,
+        @implements gst::ChildProxy;
 }
 
 impl PaintableSink {

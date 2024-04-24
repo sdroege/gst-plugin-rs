@@ -2405,6 +2405,9 @@
                     "GInitiallyUnowned",
                     "GObject"
                 ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
                 "klass": "Sink/Video",
                 "long-name": "GTK 4 Paintable Sink",
                 "pad-templates": {
