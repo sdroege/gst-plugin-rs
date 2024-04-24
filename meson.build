@@ -304,6 +304,23 @@ if get_option('gtk4').allowed()
       gtk4_features += 'winegl'
     endif
   endif
+
+  gst_allocators_dep = dependency('gstreamer-allocators-1.0', version: '>=1.24', required: false)
+  gtk_dep = dependency('gtk4', version: '>=4.6', required: get_option('gtk4'))
+  if gtk_dep.found()
+    if host_system == 'linux' and gtk_dep.version().version_compare('>=4.14') and gst_allocators_dep.found()
+      gtk4_features += 'dmabuf'
+    endif
+
+    if gtk_dep.version().version_compare('>=4.14')
+      gtk4_features += 'gtk_v4_14'
+    elif gtk_dep.version().version_compare('>=4.12')
+      gtk4_features += 'gtk_v4_12'
+    elif gtk_dep.version().version_compare('>=4.10')
+      gtk4_features += 'gtk_v4_10'
+    endif
+  endif
+
   plugins += {
     'gtk4': {
       'library': 'libgstgtk4',
