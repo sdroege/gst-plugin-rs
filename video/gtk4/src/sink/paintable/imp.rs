@@ -37,6 +37,7 @@ pub struct Paintable {
     #[cfg(feature = "gtk_v4_10")]
     scaling_filter: Cell<gsk::ScalingFilter>,
     use_scaling_filter: Cell<bool>,
+    force_aspect_ratio: Cell<bool>,
     #[cfg(not(feature = "gtk_v4_10"))]
     premult_shader: gsk::GLShader,
 }
@@ -51,6 +52,7 @@ impl Default for Paintable {
             #[cfg(feature = "gtk_v4_10")]
             scaling_filter: Cell::new(gsk::ScalingFilter::Linear),
             use_scaling_filter: Cell::new(false),
+            force_aspect_ratio: Cell::new(false),
             #[cfg(not(feature = "gtk_v4_10"))]
             premult_shader: gsk::GLShader::from_bytes(&glib::Bytes::from_static(include_bytes!(
                 "premult.glsl"
@@ -94,6 +96,11 @@ impl ObjectImpl for Paintable {
                     .blurb("Use selected scaling filter or GTK default for rendering")
                     .default_value(false)
                     .build(),
+                glib::ParamSpecBoolean::builder("force-aspect-ratio")
+                    .nick("Force Aspect Ratio")
+                    .blurb("When enabled, scaling will respect original aspect ratio")
+                    .default_value(true)
+                    .build(),
             ]
         });
 
@@ -117,6 +124,7 @@ impl ObjectImpl for Paintable {
             "scaling-filter" => self.scaling_filter.get().to_value(),
             #[cfg(feature = "gtk_v4_10")]
             "use-scaling-filter" => self.use_scaling_filter.get().to_value(),
+            "force-aspect-ratio" => self.force_aspect_ratio.get().to_value(),
             _ => unimplemented!(),
         }
     }
@@ -139,6 +147,7 @@ impl ObjectImpl for Paintable {
             "scaling-filter" => self.scaling_filter.set(value.get().unwrap()),
             #[cfg(feature = "gtk_v4_10")]
             "use-scaling-filter" => self.use_scaling_filter.set(value.get().unwrap()),
+            "force-aspect-ratio" => self.force_aspect_ratio.set(value.get().unwrap()),
             _ => unimplemented!(),
         }
     }
@@ -173,6 +182,7 @@ impl PaintableImpl for Paintable {
         let snapshot = snapshot.downcast_ref::<gtk::Snapshot>().unwrap();
 
         let background_color = self.background_color.get();
+        let force_aspect_ratio = self.force_aspect_ratio.get();
         let paintables = self.paintables.borrow();
 
         if !paintables.is_empty() {
@@ -186,23 +196,25 @@ impl PaintableImpl for Paintable {
             let mut trans_x = 0.0;
             let mut trans_y = 0.0;
 
-            // TODO: Property for keeping aspect ratio or not
-            if (scale_x - scale_y).abs() > f64::EPSILON {
-                if scale_x > scale_y {
-                    trans_x =
-                        ((frame_width as f64 * scale_x) - (frame_width as f64 * scale_y)) / 2.0;
-                    scale_x = scale_y;
-                } else {
-                    trans_y =
-                        ((frame_height as f64 * scale_y) - (frame_height as f64 * scale_x)) / 2.0;
-                    scale_y = scale_x;
-                }
+            if force_aspect_ratio {
+                if (scale_x - scale_y).abs() > f64::EPSILON {
+                    if scale_x > scale_y {
+                        trans_x =
+                            ((frame_width as f64 * scale_x) - (frame_width as f64 * scale_y)) / 2.0;
+                        scale_x = scale_y;
+                    } else {
+                        trans_y = ((frame_height as f64 * scale_y)
+                            - (frame_height as f64 * scale_x))
+                            / 2.0;
+                        scale_y = scale_x;
+                    }
 
-                if !background_color.is_clear() {
-                    snapshot.append_color(
-                        &background_color,
-                        &graphene::Rect::new(0f32, 0f32, width as f32, height as f32),
-                    );
+                    if !background_color.is_clear() {
+                        snapshot.append_color(
+                            &background_color,
+                            &graphene::Rect::new(0f32, 0f32, width as f32, height as f32),
+                        );
+                    }
                 }
             }
 
