@@ -39,6 +39,12 @@ pub enum MPEG4AudioParserError {
 
     #[error("Wrong frame size. Required {required}, available {available}")]
     WrongFrameSize { required: usize, available: usize },
+
+    #[error("Unsupported Profile {profile}")]
+    UnsupportedProfile { profile: String },
+
+    #[error("Unsupported Level {level} for Profile {profile}")]
+    UnsupportedLevel { level: String, profile: String },
 }
 
 impl MPEG4AudioParserError {
@@ -165,6 +171,73 @@ impl FromBitStream for AudioSpecificConfig {
             channel_conf,
             frame_len,
         })
+    }
+}
+
+/// audioProfileLevelIndication - ISO/IEC 14496-3 (2009) table 1.14
+pub struct ProfileLevel {
+    pub profile: String,
+    pub level: String,
+    pub id: u8,
+}
+
+impl ProfileLevel {
+    pub fn from_caps(s: &gst::StructureRef) -> anyhow::Result<ProfileLevel> {
+        // Note: could use an AudioSpecificConfig based approach
+        //       similar to what is done in gst_codec_utils_aac_get_level
+        //       from gst-plugins-base/gst-libs/gst/pbutils/codec-utils.c
+
+        use MPEG4AudioParserError::*;
+
+        let profile = s.get::<String>("profile").context("profile")?;
+        let level = s.get::<String>("level").context("level")?;
+
+        let id = match profile.to_lowercase().as_str() {
+            "lc" => {
+                // Assumed to be AAC Profile in table 1.14
+                match level.as_str() {
+                    "1" => 0x28,
+                    "2" => 0x29,
+                    "4" => 0x2a,
+                    "5" => 0x2b,
+                    _ => Err(UnsupportedLevel {
+                        level: level.clone(),
+                        profile: profile.clone(),
+                    })?,
+                }
+            }
+            "he-aac" | "he-aac-v1" => {
+                // High Efficiency AAC Profile in table 1.14
+                match level.as_str() {
+                    "2" => 0x2c,
+                    "3" => 0x2d,
+                    "4" => 0x2e,
+                    "5" => 0x2f,
+                    _ => Err(UnsupportedLevel {
+                        level: level.clone(),
+                        profile: profile.clone(),
+                    })?,
+                }
+            }
+            "he-aac-v2" => {
+                // High Efficiency AAC v2 Profile in table 1.14
+                match level.as_str() {
+                    "2" => 0x30,
+                    "3" => 0x31,
+                    "4" => 0x32,
+                    "5" => 0x33,
+                    _ => Err(UnsupportedLevel {
+                        level: level.clone(),
+                        profile: profile.clone(),
+                    })?,
+                }
+            }
+            _ => Err(UnsupportedProfile {
+                profile: profile.clone(),
+            })?,
+        };
+
+        Ok(ProfileLevel { profile, level, id })
     }
 }
 

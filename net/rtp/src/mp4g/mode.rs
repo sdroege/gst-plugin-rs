@@ -1,5 +1,7 @@
 //! MPEG-4 Generic mode.
 
+use gst::caps::NoFeature;
+
 use std::str::FromStr;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
@@ -62,6 +64,16 @@ impl ModeConfig {
         }
 
         Some(self.max_displacement)
+    }
+
+    /// Returns the max length in bits of the AU headers
+    pub fn max_header_bit_len(&self) -> usize {
+        self.size_len as usize
+            + std::cmp::max(self.index_len, self.index_delta_len) as usize
+            + self.cts_delta_len as usize
+            + self.dts_delta_len as usize
+            + if self.random_access_indication { 1 } else { 0 }
+            + self.stream_state_indication as usize
     }
 
     pub fn from_caps(s: &gst::StructureRef) -> anyhow::Result<Self> {
@@ -137,5 +149,51 @@ impl ModeConfig {
                     .context(field)?),
             },
         }
+    }
+
+    pub fn add_to_caps(
+        &self,
+        builder: gst::caps::Builder<NoFeature>,
+    ) -> Result<gst::caps::Builder<NoFeature>, ModeError> {
+        use ModeError::*;
+
+        if self.size_len != 0 && self.constant_size != 0 {
+            Err(BothAuSizeLenAndConstantSize)?;
+        }
+
+        if self.size_len == 0 && self.constant_size == 0 {
+            Err(NeitherAuSizeLenNorConstantSize)?;
+        }
+
+        if self.index_len > 0 && self.index_delta_len == 0 {
+            Err(MandatoryIndexDeltaLength)?;
+        }
+
+        if self.stream_state_indication > 0 {
+            panic!("AU Header Stream State not supported");
+        }
+
+        Ok(builder
+            .field("sizelength", self.size_len as i32)
+            .field("indexlength", self.index_len as i32)
+            .field("indexdeltalength", self.index_delta_len as i32)
+            .field("ctsdeltalength", self.cts_delta_len as i32)
+            .field("dtsdeltalength", self.dts_delta_len as i32)
+            .field(
+                "randomaccessindication",
+                if self.random_access_indication {
+                    1u8
+                } else {
+                    0u8
+                },
+            )
+            .field("streamstateindication", self.stream_state_indication as i32)
+            .field(
+                "auxiliarydatasizelength",
+                self.auxiliary_data_size_len as i32,
+            )
+            .field("constantsize", self.constant_size as i32)
+            .field("constantduration", self.constant_duration as i32)
+            .field("maxdisplacement", self.max_displacement as i32))
     }
 }

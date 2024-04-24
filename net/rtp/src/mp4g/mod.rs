@@ -5,6 +5,10 @@ mod header;
 pub use header::{AuHeader, AuHeaderContext};
 mod mode;
 pub use mode::ModeConfig;
+pub mod pay;
+
+#[cfg(test)]
+mod tests;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum Mpeg4GenericError {

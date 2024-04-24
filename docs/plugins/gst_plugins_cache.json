@@ -7003,6 +7003,60 @@
                 },
                 "rank": "marginal"
             },
+            "rtpmp4gpay2": {
+                "author": "François Laignel <francois centricular com>",
+                "description": "Payload an MPEG-4 Generic elementary stream into RTP packets (RFC 3640)",
+                "hierarchy": [
+                    "GstRtpMpeg4GenericPay",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Payloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/mpeg:\n    mpegversion: 4\n   systemstream: false\naudio/mpeg:\n    mpegversion: 4\n  stream-format: raw\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n          media: { (string)audio, (string)video }\n     clock-rate: [ 1, 2147483647 ]\n  encoding-name: MPEG4-GENERIC\n     streamtype: { (string)4, (string)5 }\n           mode: { (string)generic, (string)AAC-lbr, (string)AAC-hbr, (string)aac-hbr }\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "aggregate-mode": {
+                        "blurb": "Whether to send out AUs immediately or aggregate them until a packet is full.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "auto (-1)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstRtpMpeg4GenericPayAggregateMode",
+                        "writable": true
+                    },
+                    "max-ptime": {
+                        "blurb": "Maximum duration of the packet data in ns (-1 = unlimited up to MTU)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "18446744073709551615",
+                        "max": "9223372036854775807",
+                        "min": "-1",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gint64",
+                        "writable": true
+                    }
+                },
+                "rank": "marginal"
+            },
             "rtppcmadepay2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Depayload A-law from RTP packets (RFC 3551)",
@@ -7771,6 +7825,26 @@
                         "when": "last"
                     }
                 }
+            },
+            "GstRtpMpeg4GenericPayAggregateMode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Automatic: zero-latency if upstream is live, otherwise aggregate elementary streams until packet is full.",
+                        "name": "auto",
+                        "value": "-1"
+                    },
+                    {
+                        "desc": "Zero Latency: always send out elementary streams right away, do not wait for more elementary streams to fill a packet.",
+                        "name": "zero-latency",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Aggregate: collect elementary streams until we have a full packet or the max-ptime limit is hit (if set).",
+                        "name": "aggregate",
+                        "value": "1"
+                    }
+                ]
             },
             "GstRtpPcmauDepay2": {
                 "hierarchy": [
