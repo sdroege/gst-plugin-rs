@@ -16,6 +16,9 @@
  */
 use gst::glib;
 
+#[macro_use]
+mod utils;
+
 mod gcc;
 
 mod audio_discont;
@@ -26,14 +29,13 @@ mod basepay;
 mod av1;
 mod mp2t;
 mod mp4a;
+mod mp4g;
 mod pcmau;
 mod vp8;
 mod vp9;
 
 #[cfg(test)]
 mod tests;
-
-mod utils;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gcc::register(plugin)?;
@@ -58,6 +60,8 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
     mp4a::depay::register(plugin)?;
     mp4a::pay::register(plugin)?;
+
+    mp4g::depay::register(plugin)?;
 
     pcmau::depay::register(plugin)?;
     pcmau::pay::register(plugin)?;

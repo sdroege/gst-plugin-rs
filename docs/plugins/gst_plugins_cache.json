@@ -6977,6 +6977,32 @@
                 },
                 "rank": "marginal"
             },
+            "rtpmp4gdepay2": {
+                "author": "François Laignel <francois centricular com>",
+                "description": "Depayload MPEG-4 Generic elementary streams from RTP packets (RFC 3640)",
+                "hierarchy": [
+                    "GstRtpMpeg4GenericDepay",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: { (string)audio, (string)video }\n     clock-rate: [ 1, 2147483647 ]\n  encoding-name: MPEG4-GENERIC\n           mode: { (string)generic, (string)AAC-lbr, (string)AAC-hbr, (string)aac-hbr }\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/mpeg:\n    mpegversion: 4\n   systemstream: false\naudio/mpeg:\n    mpegversion: 4\n  stream-format: raw\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
             "rtppcmadepay2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Depayload A-law from RTP packets (RFC 3551)",

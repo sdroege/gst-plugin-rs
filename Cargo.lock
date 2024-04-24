@@ -2719,6 +2719,7 @@ dependencies = [
  "once_cell",
  "rand",
  "rtp-types",
+ "slab",
  "smallvec",
  "thiserror",
  "time",
