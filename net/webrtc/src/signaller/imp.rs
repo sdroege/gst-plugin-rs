@@ -24,6 +24,8 @@ use url::Url;
 
 use super::CAT;
 
+const DEFAULT_INSECURE_TLS: bool = false;
+
 #[derive(Debug, Eq, PartialEq, Clone, Copy, glib::Enum, Default)]
 #[repr(u32)]
 #[enum_type(name = "GstRSWebRTCSignallerRole")]
@@ -40,6 +42,7 @@ pub struct Settings {
     cafile: Option<String>,
     role: WebRTCSignallerRole,
     headers: Option<gst::Structure>,
+    insecure_tls: bool,
 }
 
 impl Default for Settings {
@@ -50,6 +53,7 @@ impl Default for Settings {
             cafile: Default::default(),
             role: Default::default(),
             headers: None,
+            insecure_tls: DEFAULT_INSECURE_TLS,
         }
     }
 }
@@ -107,23 +111,36 @@ impl Signaller {
     }
 
     async fn connect(&self) -> Result<(), Error> {
-        let obj = self.obj();
+        let (cafile, insecure_tls, role) = {
+            let settings = self.settings.lock().unwrap();
+            (
+                settings.cafile.clone(),
+                settings.insecure_tls,
+                settings.role,
+            )
+        };
 
-        let role = self.settings.lock().unwrap().role;
         if let super::WebRTCSignallerRole::Consumer = role {
             self.producer_peer_id()
                 .ok_or_else(|| anyhow!("No target producer peer id set"))?;
         }
 
-        let connector = if let Some(path) = obj.property::<Option<String>>("cafile") {
+        let mut connector_builder = tokio_native_tls::native_tls::TlsConnector::builder();
+
+        if let Some(path) = cafile {
             let cert = tokio::fs::read_to_string(&path).await?;
             let cert = tokio_native_tls::native_tls::Certificate::from_pem(cert.as_bytes())?;
-            let mut connector_builder = tokio_native_tls::native_tls::TlsConnector::builder();
-            let connector = connector_builder.add_root_certificate(cert).build()?;
-            Some(tokio_native_tls::TlsConnector::from(connector))
-        } else {
-            None
-        };
+            connector_builder.add_root_certificate(cert);
+        }
+
+        if insecure_tls {
+            connector_builder.danger_accept_invalid_certs(true);
+            gst::warning!(CAT, imp: self, "insecure tls connections are allowed");
+        }
+
+        let connector = Some(tokio_native_tls::TlsConnector::from(
+            connector_builder.build()?,
+        ));
 
         let mut uri = self.uri();
         uri.set_query(None);
@@ -522,6 +539,17 @@ impl ObjectImpl for Signaller {
                     .blurb("HTTP headers sent during the connection handshake")
                     .flags(glib::ParamFlags::READWRITE)
                     .build(),
+                /**
+                 * GstWebRTCSignaller::insecure-tls:
+                 *
+                 * Enables insecure TLS connections. Disabled by default.
+                 */
+                glib::ParamSpecBoolean::builder("insecure-tls")
+                    .nick("Insecure TLS")
+                    .blurb("Whether insecure TLS connections are allowed")
+                    .default_value(DEFAULT_INSECURE_TLS)
+                    .flags(glib::ParamFlags::READWRITE)
+                    .build(),
             ]
         });
 
@@ -565,6 +593,10 @@ impl ObjectImpl for Signaller {
                     .get::<Option<gst::Structure>>()
                     .expect("type checked upstream")
             }
+            "insecure-tls" => {
+                self.settings.lock().unwrap().insecure_tls =
+                    value.get::<bool>().expect("type checked upstream")
+            }
             _ => unimplemented!(),
         }
     }
@@ -588,6 +620,7 @@ impl ObjectImpl for Signaller {
             "role" => settings.role.to_value(),
             "client-id" => self.state.lock().unwrap().client_id.to_value(),
             "headers" => settings.headers.to_value(),
+            "insecure-tls" => settings.insecure_tls.to_value(),
             _ => unimplemented!(),
         }
     }
