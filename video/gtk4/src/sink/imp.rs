@@ -82,6 +82,7 @@ impl ObjectSubclass for PaintableSink {
     const NAME: &'static str = "GstGtk4PaintableSink";
     type Type = super::PaintableSink;
     type ParentType = gst_video::VideoSink;
+    type Interfaces = (gst::ChildProxy,);
 }
 
 impl ObjectImpl for PaintableSink {
@@ -110,12 +111,14 @@ impl ObjectImpl for PaintableSink {
                     return None::<&gdk::Paintable>.to_value();
                 }
 
-                let mut paintable = self.paintable.lock().unwrap();
-                if paintable.is_none() {
-                    self.create_paintable(&mut paintable);
+                let mut paintable_guard = self.paintable.lock().unwrap();
+                let mut created = false;
+                if paintable_guard.is_none() {
+                    created = true;
+                    self.create_paintable(&mut paintable_guard);
                 }
 
-                let paintable = match &*paintable {
+                let paintable = match &*paintable_guard {
                     Some(ref paintable) => paintable,
                     None => {
                         gst::error!(CAT, imp: self, "Failed to create paintable");
@@ -124,16 +127,31 @@ impl ObjectImpl for PaintableSink {
                 };
 
                 // Getter must be called from the main thread
-                if paintable.is_owner() {
-                    paintable.get_ref().to_value()
-                } else {
+                if !paintable.is_owner() {
                     gst::error!(
                         CAT,
                         imp: self,
                         "Can't retrieve Paintable from non-main thread"
                     );
-                    None::<&gdk::Paintable>.to_value()
+                    return None::<&gdk::Paintable>.to_value();
                 }
+
+                let paintable = paintable.get_ref().clone();
+                drop(paintable_guard);
+
+                if created {
+                    let self_ = self.to_owned();
+                    glib::MainContext::default().invoke(move || {
+                        let paintable_guard = self_.paintable.lock().unwrap();
+                        if let Some(paintable) = &*paintable_guard {
+                            let paintable_clone = paintable.get_ref().clone();
+                            drop(paintable_guard);
+                            self_.obj().child_added(&paintable_clone, "paintable");
+                        }
+                    });
+                }
+
+                paintable.to_value()
             }
             _ => unimplemented!(),
         }
@@ -290,18 +308,31 @@ impl ElementImpl for PaintableSink {
                     }
                 }
 
-                let mut paintable = self.paintable.lock().unwrap();
-
-                if paintable.is_none() {
-                    self.create_paintable(&mut paintable);
+                let mut paintable_guard = self.paintable.lock().unwrap();
+                let mut created = false;
+                if paintable_guard.is_none() {
+                    created = true;
+                    self.create_paintable(&mut paintable_guard);
                 }
 
-                if paintable.is_none() {
+                if paintable_guard.is_none() {
                     gst::error!(CAT, imp: self, "Failed to create paintable");
                     return Err(gst::StateChangeError);
                 }
 
-                drop(paintable);
+                drop(paintable_guard);
+
+                if created {
+                    let self_ = self.to_owned();
+                    glib::MainContext::default().invoke(move || {
+                        let paintable_guard = self_.paintable.lock().unwrap();
+                        if let Some(paintable) = &*paintable_guard {
+                            let paintable_clone = paintable.get_ref().clone();
+                            drop(paintable_guard);
+                            self_.obj().child_added(&paintable_clone, "paintable");
+                        }
+                    });
+                }
 
                 // Notify the pipeline about the GL display and wrapped context so that any other
                 // elements in the pipeline ideally use the same / create GL contexts that are
@@ -1186,6 +1217,36 @@ impl PaintableSink {
             };
 
             Some((gst_display, wrapped_context))
+        }
+    }
+}
+
+impl ChildProxyImpl for PaintableSink {
+    fn child_by_index(&self, index: u32) -> Option<glib::Object> {
+        if index != 0 {
+            return None;
+        }
+
+        let paintable = self.paintable.lock().unwrap();
+        paintable
+            .as_ref()
+            .filter(|p| p.is_owner())
+            .map(|p| p.get_ref().upcast_ref::<glib::Object>().clone())
+    }
+
+    fn child_by_name(&self, name: &str) -> Option<glib::Object> {
+        if name == "paintable" {
+            return self.child_by_index(0);
+        }
+        None
+    }
+
+    fn children_count(&self) -> u32 {
+        let paintable = self.paintable.lock().unwrap();
+        if paintable.is_some() {
+            1
+        } else {
+            0
         }
     }
 }
