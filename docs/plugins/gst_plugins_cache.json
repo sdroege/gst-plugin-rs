@@ -6951,6 +6951,32 @@
                 },
                 "rank": "marginal"
             },
+            "rtpmp4apay2": {
+                "author": "François Laignel <francois centricular com>",
+                "description": "Payload an MPEG-4 Audio bitstream (e.g. AAC) into RTP packets (RFC 3016)",
+                "hierarchy": [
+                    "GstRtpMpeg4AudioPay",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Payloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/mpeg:\n    mpegversion: 4\n         framed: true\n  stream-format: raw\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n          media: audio\n        payload: [ 96, 127 ]\n     clock-rate: [ 1, 2147483647 ]\n  encoding-name: MP4A-LATM\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
             "rtppcmadepay2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Depayload A-law from RTP packets (RFC 3551)",

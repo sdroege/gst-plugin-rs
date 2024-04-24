@@ -57,6 +57,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     mp2t::pay::register(plugin)?;
 
     mp4a::depay::register(plugin)?;
+    mp4a::pay::register(plugin)?;
 
     pcmau::depay::register(plugin)?;
     pcmau::pay::register(plugin)?;

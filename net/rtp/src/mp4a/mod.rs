@@ -4,4 +4,8 @@ const DEFAULT_CLOCK_RATE: u32 = 90000;
 const ENCODING_NAME: &str = "MP4A-LATM";
 
 pub mod depay;
-mod parsers;
+pub mod parsers;
+pub mod pay;
+
+#[cfg(test)]
+mod tests;
