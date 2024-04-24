@@ -185,42 +185,63 @@ impl PaintableImpl for Paintable {
         let force_aspect_ratio = self.force_aspect_ratio.get();
         let paintables = self.paintables.borrow();
 
-        if !paintables.is_empty() {
-            gst::trace!(CAT, imp: self, "Snapshotting frame");
+        let Some(first_paintable) = paintables.first() else {
+            gst::trace!(CAT, imp: self, "Snapshotting black frame");
+            snapshot.append_color(
+                &background_color,
+                &graphene::Rect::new(0f32, 0f32, width as f32, height as f32),
+            );
 
-            let (frame_width, frame_height) =
-                paintables.first().map(|p| (p.width, p.height)).unwrap();
+            return;
+        };
 
-            let mut scale_x = width / frame_width as f64;
-            let mut scale_y = height / frame_height as f64;
+        gst::trace!(CAT, imp: self, "Snapshotting frame");
+
+        // The first paintable is the actual video frame and defines the overall size.
+        //
+        // Based on its size relative to the snapshot width/height, all other paintables are
+        // scaled accordingly.
+        let (frame_width, frame_height) = (first_paintable.width, first_paintable.height);
+
+        let mut scale_x = width / frame_width as f64;
+        let mut scale_y = height / frame_height as f64;
+
+        // Usually the caller makes sure that the aspect ratio is preserved. To enforce this here
+        // optionally, we scale the frame equally in both directions and center it. In addition the
+        // background color is drawn behind the frame to fill the gaps.
+        //
+        // This is not done by default for performance reasons and usually would draw a <1px
+        // background.
+        if force_aspect_ratio {
             let mut trans_x = 0.0;
             let mut trans_y = 0.0;
 
-            if force_aspect_ratio {
-                if (scale_x - scale_y).abs() > f64::EPSILON {
-                    if scale_x > scale_y {
-                        trans_x =
-                            ((frame_width as f64 * scale_x) - (frame_width as f64 * scale_y)) / 2.0;
-                        scale_x = scale_y;
-                    } else {
-                        trans_y = ((frame_height as f64 * scale_y)
-                            - (frame_height as f64 * scale_x))
-                            / 2.0;
-                        scale_y = scale_x;
-                    }
-
-                    if !background_color.is_clear() {
-                        snapshot.append_color(
-                            &background_color,
-                            &graphene::Rect::new(0f32, 0f32, width as f32, height as f32),
-                        );
-                    }
+            if (scale_x - scale_y).abs() > f64::EPSILON {
+                if scale_x > scale_y {
+                    trans_x = (width - (frame_width as f64 * scale_y)) / 2.0;
+                    scale_x = scale_y;
+                } else {
+                    trans_y = (height - (frame_height as f64 * scale_x)) / 2.0;
+                    scale_y = scale_x;
                 }
             }
 
+            if !background_color.is_clear() && (trans_x > f64::EPSILON || trans_y > f64::EPSILON) {
+                snapshot.append_color(
+                    &background_color,
+                    &graphene::Rect::new(0f32, 0f32, width as f32, height as f32),
+                );
+            }
             snapshot.translate(&graphene::Point::new(trans_x as f32, trans_y as f32));
+        }
 
-            for Texture {
+        // Make immutable
+        let scale_x = scale_x;
+        let scale_y = scale_y;
+
+        for (
+            idx,
+            Texture {
                 texture,
                 x,
                 y,
@@ -228,118 +249,116 @@ impl PaintableImpl for Paintable {
                 height: paintable_height,
                 global_alpha,
                 has_alpha,
-            } in &*paintables
+            },
+        ) in paintables.iter().enumerate()
+        {
+            snapshot.push_opacity(*global_alpha as f64);
+
+            let bounds = if !force_aspect_ratio && idx == 0 {
+                // While this should end up with width again, be explicit in this case to avoid
+                // rounding errors and fill the whole area with the video frame.
+                graphene::Rect::new(0.0, 0.0, width as f32, height as f32)
+            } else {
+                // Scale texture position and size with the same scale factor as the main video
+                // frame, and make sure to not render outside (0, 0, width, height).
+                let x = f32::clamp(*x * scale_x as f32, 0.0, width as f32);
+                let y = f32::clamp(*y * scale_y as f32, 0.0, height as f32);
+                let texture_width = f32::min(*paintable_width * scale_x as f32, width as f32);
+                let texture_height = f32::min(*paintable_height * scale_y as f32, height as f32);
+                graphene::Rect::new(x, y, texture_width, texture_height)
+            };
+
+            // Only premultiply GL textures that expect to be in premultiplied RGBA format.
+            //
+            // For GTK 4.14 or newer we use the correct format directly when building the
+            // texture, but only if a GLES3+ context is used. In that case the NGL renderer is
+            // used by GTK, which supports non-premultiplied formats correctly and fast.
+            //
+            // For GTK 4.10-4.12, or 4.14 and newer if a GLES2 context is used, we use a
+            // self-mask to pre-multiply the alpha.
+            //
+            // For GTK before 4.10, we use a GL shader and hope that it works.
+            #[cfg(feature = "gtk_v4_10")]
             {
-                snapshot.push_opacity(*global_alpha as f64);
-
-                let texture_width = *paintable_width * scale_x as f32;
-                let texture_height = *paintable_height * scale_y as f32;
-                let x = *x * scale_x as f32;
-                let y = *y * scale_y as f32;
-                let bounds = graphene::Rect::new(x, y, texture_width, texture_height);
-
-                // Only premultiply GL textures that expect to be in premultiplied RGBA format.
-                //
-                // For GTK 4.14 or newer we use the correct format directly when building the
-                // texture, but only if a GLES3+ context is used. In that case the NGL renderer is
-                // used by GTK, which supports non-premultiplied formats correctly and fast.
-                //
-                // For GTK 4.10-4.12, or 4.14 and newer if a GLES2 context is used, we use a
-                // self-mask to pre-multiply the alpha.
-                //
-                // For GTK before 4.10, we use a GL shader and hope that it works.
-                #[cfg(feature = "gtk_v4_10")]
-                {
-                    let context_requires_premult = {
-                        #[cfg(feature = "gtk_v4_14")]
-                        {
-                            self.gl_context.borrow().as_ref().map_or(false, |context| {
-                                context.api() != gdk::GLAPI::GLES || context.version().0 < 3
-                            })
-                        }
-
-                        #[cfg(not(feature = "gtk_v4_14"))]
-                        {
-                            true
-                        }
-                    };
-
-                    let do_premult =
-                        context_requires_premult && texture.is::<gdk::GLTexture>() && *has_alpha;
-                    if do_premult {
-                        snapshot.push_mask(gsk::MaskMode::Alpha);
-                        if self.use_scaling_filter.get() {
-                            #[cfg(feature = "gtk_v4_10")]
-                            snapshot.append_scaled_texture(
-                                texture,
-                                self.scaling_filter.get(),
-                                &bounds,
-                            );
-                        } else {
-                            snapshot.append_texture(texture, &bounds);
-                        }
-                        snapshot.pop(); // pop mask
-
-                        // color matrix to set alpha of the source to 1.0 as it was
-                        // already applied via the mask just above.
-                        snapshot.push_color_matrix(
-                            &graphene::Matrix::from_float({
-                                [
-                                    1.0, 0.0, 0.0, 0.0, //
-                                    0.0, 1.0, 0.0, 0.0, //
-                                    0.0, 0.0, 1.0, 0.0, //
-                                    0.0, 0.0, 0.0, 0.0,
-                                ]
-                            }),
-                            &graphene::Vec4::new(0.0, 0.0, 0.0, 1.0),
-                        );
+                let context_requires_premult = {
+                    #[cfg(feature = "gtk_v4_14")]
+                    {
+                        self.gl_context.borrow().as_ref().map_or(false, |context| {
+                            context.api() != gdk::GLAPI::GLES || context.version().0 < 3
+                        })
                     }
 
+                    #[cfg(not(feature = "gtk_v4_14"))]
+                    {
+                        true
+                    }
+                };
+
+                let do_premult =
+                    context_requires_premult && texture.is::<gdk::GLTexture>() && *has_alpha;
+                if do_premult {
+                    snapshot.push_mask(gsk::MaskMode::Alpha);
                     if self.use_scaling_filter.get() {
                         #[cfg(feature = "gtk_v4_10")]
                         snapshot.append_scaled_texture(texture, self.scaling_filter.get(), &bounds);
                     } else {
                         snapshot.append_texture(texture, &bounds);
                     }
+                    snapshot.pop(); // pop mask
 
-                    if do_premult {
-                        snapshot.pop(); // pop color matrix
-                        snapshot.pop(); // pop mask 2
-                    }
-                }
-                #[cfg(not(feature = "gtk_v4_10"))]
-                {
-                    let do_premult =
-                        texture.is::<gdk::GLTexture>() && *has_alpha && gtk::micro_version() < 13;
-                    if do_premult {
-                        snapshot.push_gl_shader(
-                            &self.premult_shader,
-                            &bounds,
-                            gsk::ShaderArgsBuilder::new(&self.premult_shader, None).to_args(),
-                        );
-                    }
-
-                    if self.use_scaling_filter.get() {
-                        #[cfg(feature = "gtk_v4_10")]
-                        snapshot.append_scaled_texture(texture, self.scaling_filter.get(), &bounds);
-                    } else {
-                        snapshot.append_texture(texture, &bounds);
-                    }
-
-                    if do_premult {
-                        snapshot.gl_shader_pop_texture(); // pop texture appended above from the shader
-                        snapshot.pop(); // pop shader
-                    }
+                    // color matrix to set alpha of the source to 1.0 as it was
+                    // already applied via the mask just above.
+                    snapshot.push_color_matrix(
+                        &graphene::Matrix::from_float({
+                            [
+                                1.0, 0.0, 0.0, 0.0, //
+                                0.0, 1.0, 0.0, 0.0, //
+                                0.0, 0.0, 1.0, 0.0, //
+                                0.0, 0.0, 0.0, 0.0,
+                            ]
+                        }),
+                        &graphene::Vec4::new(0.0, 0.0, 0.0, 1.0),
+                    );
                 }
 
-                snapshot.pop(); // pop opacity
+                if self.use_scaling_filter.get() {
+                    #[cfg(feature = "gtk_v4_10")]
+                    snapshot.append_scaled_texture(texture, self.scaling_filter.get(), &bounds);
+                } else {
+                    snapshot.append_texture(texture, &bounds);
+                }
+
+                if do_premult {
+                    snapshot.pop(); // pop color matrix
+                    snapshot.pop(); // pop mask 2
+                }
             }
-        } else {
-            gst::trace!(CAT, imp: self, "Snapshotting black frame");
-            snapshot.append_color(
-                &background_color,
-                &graphene::Rect::new(0f32, 0f32, width as f32, height as f32),
-            );
+            #[cfg(not(feature = "gtk_v4_10"))]
+            {
+                let do_premult =
+                    texture.is::<gdk::GLTexture>() && *has_alpha && gtk::micro_version() < 13;
+                if do_premult {
+                    snapshot.push_gl_shader(
+                        &self.premult_shader,
+                        &bounds,
+                        gsk::ShaderArgsBuilder::new(&self.premult_shader, None).to_args(),
+                    );
+                }
+
+                if self.use_scaling_filter.get() {
+                    #[cfg(feature = "gtk_v4_10")]
+                    snapshot.append_scaled_texture(texture, self.scaling_filter.get(), &bounds);
+                } else {
+                    snapshot.append_texture(texture, &bounds);
+                }
+
+                if do_premult {
+                    snapshot.gl_shader_pop_texture(); // pop texture appended above from the shader
+                    snapshot.pop(); // pop shader
+                }
+            }
+
+            snapshot.pop(); // pop opacity
         }
     }
 }
