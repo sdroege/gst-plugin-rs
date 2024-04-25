@@ -26,6 +26,7 @@ use std::{
     fmt::Debug,
     mem,
     sync::Mutex,
+    time::Instant,
 };
 use time::Duration;
 
@@ -268,7 +269,7 @@ struct Detector {
     last_received_packets: BTreeMap<u64, Packet>, // Order by seqnums, front is the newest, back is the oldest
 
     // Last loss update
-    last_loss_update: Option<time::Instant>,
+    last_loss_update: Option<Instant>,
     // Moving average of the packet loss
     loss_average: f64,
 
@@ -280,13 +281,13 @@ struct Detector {
 
     // Threshold fields
     threshold: Duration,
-    last_threshold_update: Option<time::Instant>,
+    last_threshold_update: Option<Instant>,
     num_deltas: i64,
 
     // Overuse related fields
     increasing_counter: u32,
     last_overuse_estimate: Duration,
-    last_use_detector_update: time::Instant,
+    last_use_detector_update: Instant,
     increasing_duration: Duration,
 
     // round-trip-time estimations
@@ -337,7 +338,7 @@ impl Detector {
             last_threshold_update: None,
             num_deltas: 0,
 
-            last_use_detector_update: time::Instant::now(),
+            last_use_detector_update: Instant::now(),
             increasing_counter: 0,
             last_overuse_estimate: Duration::ZERO,
             increasing_duration: Duration::ZERO,
@@ -519,11 +520,14 @@ impl Detector {
     }
 
     fn compute_loss_average(&mut self, loss_fraction: f64) {
-        let now = time::Instant::now();
+        let now = Instant::now();
 
         if let Some(ref last_update) = self.last_loss_update {
             self.loss_average = loss_fraction
-                + (-(now - *last_update).whole_milliseconds() as f64).exp()
+                + (-Duration::try_from(now - *last_update)
+                    .unwrap()
+                    .whole_milliseconds() as f64)
+                    .exp()
                     * (self.loss_average - loss_fraction);
         }
 
@@ -588,7 +592,7 @@ impl Detector {
         const K_D: f64 = 0.00018; // Table1. Coefficient for the adaptive threshold
         const MAX_TIME_DELTA: Duration = Duration::milliseconds(100);
 
-        let now = time::Instant::now();
+        let now = Instant::now();
         if self.last_threshold_update.is_none() {
             self.last_threshold_update = Some(now);
         }
@@ -604,7 +608,9 @@ impl Detector {
         } else {
             K_U
         };
-        let time_delta = (now - self.last_threshold_update.unwrap()).min(MAX_TIME_DELTA);
+        let time_delta = Duration::try_from(now - self.last_threshold_update.unwrap())
+            .unwrap()
+            .min(MAX_TIME_DELTA);
         let d = abs_estimate - self.threshold;
         let add = k * d.whole_milliseconds() as f64 * time_delta.whole_milliseconds() as f64;
 
@@ -616,7 +622,7 @@ impl Detector {
     fn overuse_filter(&mut self) {
         let (th_usage, estimate) = self.compare_threshold();
 
-        let now = time::Instant::now();
+        let now = Instant::now();
         let delta = now - self.last_use_detector_update;
         self.last_use_detector_update = now;
         match th_usage {
@@ -695,14 +701,14 @@ struct State {
 
     /// Used in additive mode to track last control time, influences
     /// calculation of added value according to gcc section 5.5
-    last_increase_on_delay: Option<time::Instant>,
-    last_decrease_on_delay: time::Instant,
+    last_increase_on_delay: Option<Instant>,
+    last_decrease_on_delay: Instant,
 
     /// Bitrate target based on loss for all video streams.
     target_bitrate_on_loss: Bitrate,
 
-    last_increase_on_loss: time::Instant,
-    last_decrease_on_loss: time::Instant,
+    last_increase_on_loss: Instant,
+    last_decrease_on_loss: Instant,
 
     /// Exponential moving average, updated when bitrate is
     /// decreased
@@ -723,7 +729,7 @@ struct State {
     budget_offset: i64,
 
     flow_return: Result<gst::FlowSuccess, gst::FlowError>,
-    last_push: time::Instant,
+    last_push: Instant,
 }
 
 impl Default for State {
@@ -731,11 +737,11 @@ impl Default for State {
         Self {
             target_bitrate_on_delay: DEFAULT_ESTIMATED_BITRATE,
             target_bitrate_on_loss: DEFAULT_ESTIMATED_BITRATE,
-            last_increase_on_loss: time::Instant::now(),
-            last_decrease_on_loss: time::Instant::now(),
+            last_increase_on_loss: Instant::now(),
+            last_decrease_on_loss: Instant::now(),
             ema: Default::default(),
             last_increase_on_delay: None,
-            last_decrease_on_delay: time::Instant::now(),
+            last_decrease_on_delay: Instant::now(),
             min_bitrate: DEFAULT_MIN_BITRATE,
             max_bitrate: DEFAULT_MAX_BITRATE,
             detector: Detector::new(),
@@ -744,7 +750,7 @@ impl Default for State {
             last_control_op: BandwidthEstimationOp::Increase("Initial increase".into()),
             flow_return: Err(gst::FlowError::Flushing),
             clock_entry: None,
-            last_push: time::Instant::now(),
+            last_push: Instant::now(),
             budget_offset: 0,
         }
     }
@@ -753,8 +759,8 @@ impl Default for State {
 impl State {
     // 4. sending engine implementing a "leaky bucket"
     fn create_buffer_list(&mut self, bwe: &super::BandwidthEstimator) -> BufferList {
-        let now = time::Instant::now();
-        let elapsed = now - self.last_push;
+        let now = Instant::now();
+        let elapsed = Duration::try_from(now - self.last_push).unwrap();
         let mut budget = (elapsed.whole_nanoseconds() as i64)
             .mul_div_round(
                 self.estimated_bitrate as i64,
@@ -803,7 +809,7 @@ impl State {
     }
 
     fn compute_increased_rate(&mut self, bwe: &super::BandwidthEstimator) -> Option<Bitrate> {
-        let now = time::Instant::now();
+        let now = Instant::now();
         let target_bitrate = self.target_bitrate_on_delay as f64;
         let effective_bitrate = self.detector.effective_bitrate();
         let time_since_last_update_ms = match self.last_increase_on_delay {
@@ -813,7 +819,7 @@ impl State {
                     return None;
                 }
 
-                (now - prev).whole_milliseconds() as f64
+                Duration::try_from(now - prev).unwrap().whole_milliseconds() as f64
             }
         };
 
@@ -950,7 +956,7 @@ impl State {
 
     fn loss_control(&mut self, bwe: &super::BandwidthEstimator) -> bool {
         let loss_ratio = self.detector.loss_ratio();
-        let now = time::Instant::now();
+        let now = Instant::now();
 
         if loss_ratio > LOSS_DECREASE_THRESHOLD
             && (now - self.last_decrease_on_loss) > LOSS_UPDATE_INTERVAL
@@ -993,7 +999,7 @@ impl State {
                 _ => (),
             },
             NetworkUsage::Over => {
-                let now = time::Instant::now();
+                let now = Instant::now();
                 if now - self.last_decrease_on_delay > DELAY_UPDATE_INTERVAL {
                     let effective_bitrate = self.detector.effective_bitrate();
                     let target =
