@@ -713,6 +713,9 @@ impl PaintableSink {
                 window.set_child(Some(&picture));
             }
             window.set_default_size(640, 480);
+            if std::env::var("GST_GTK4_WINDOW_FULLSCREEN").as_deref() == Ok("1") {
+                window.set_fullscreened(true);
+            }
 
             window.connect_close_request({
                 let self_ = self_.clone();
