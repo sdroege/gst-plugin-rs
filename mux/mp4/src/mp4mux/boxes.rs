@@ -459,7 +459,6 @@ fn write_mdia(
 fn language_code(lang: impl std::borrow::Borrow<[u8; 3]>) -> u16 {
     let lang = lang.borrow();
 
-    // TODO: Need to relax this once we get the language code from tags
     assert!(lang.iter().all(u8::is_ascii_lowercase));
 
     (((lang[0] as u16 - 0x60) & 0x1F) << 10)
@@ -469,7 +468,7 @@ fn language_code(lang: impl std::borrow::Borrow<[u8; 3]>) -> u16 {
 
 fn write_mdhd(
     v: &mut Vec<u8>,
-    _header: &super::Header,
+    header: &super::Header,
     stream: &super::Stream,
     creation_time: u64,
 ) -> Result<(), Error> {
@@ -492,8 +491,11 @@ fn write_mdhd(
     v.extend(duration.to_be_bytes());
 
     // Language as ISO-639-2/T
-    // TODO: get actual language from the tags
-    v.extend(language_code(b"und").to_be_bytes());
+    if let Some(lang) = header.language_code {
+        v.extend(language_code(lang).to_be_bytes());
+    } else {
+        v.extend(language_code(b"und").to_be_bytes());
+    }
 
     // Pre-defined
     v.extend([0u8; 2]);

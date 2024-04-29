@@ -85,6 +85,7 @@ pub(crate) struct HeaderConfiguration {
 
     write_mehd: bool,
     duration: Option<gst::ClockTime>,
+    language_code: Option<[u8; 3]>,
 
     /// Start UTC time in ONVIF mode.
     /// Since Jan 1 1601 in 100ns units.

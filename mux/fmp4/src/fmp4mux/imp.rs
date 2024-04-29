@@ -250,6 +250,8 @@ struct State {
     end_pts: Option<gst::ClockTime>,
     /// Start DTS of the whole stream
     start_dts: Option<gst::ClockTime>,
+    /// Language code from tags
+    language_code: Option<[u8; 3]>,
 
     /// Start PTS of the current fragment
     fragment_start_pts: Option<gst::ClockTime>,
@@ -2707,6 +2709,7 @@ impl FMP4Mux {
             streams,
             write_mehd: settings.write_mehd,
             duration: if at_eos { duration } else { None },
+            language_code: state.language_code,
             start_utc_time: if variant == super::Variant::ONVIF {
                 state
                     .earliest_pts
@@ -3140,8 +3143,22 @@ impl AggregatorImpl for FMP4Mux {
 
                 self.parent_sink_event(aggregator_pad, event)
             }
-            EventView::Tag(_ev) => {
-                // TODO: Maybe store for putting into the headers of the next fragment?
+            EventView::Tag(ev) => {
+                if let Some(tag_value) = ev.tag().get::<gst::tags::LanguageCode>() {
+                    let lang = tag_value.get();
+                    gst::trace!(CAT, imp: self, "Received language code from tags: {:?}", lang);
+
+                    // Language as ISO-639-2/T
+                    if lang.len() == 3 && lang.chars().all(|c| c.is_ascii_lowercase()) {
+                        let mut state = self.state.lock().unwrap();
+
+                        let mut language_code: [u8; 3] = [0; 3];
+                        for (out, c) in Iterator::zip(language_code.iter_mut(), lang.chars()) {
+                            *out = c as u8;
+                        }
+                        state.language_code = Some(language_code);
+                    }
+                }
 
                 self.parent_sink_event(aggregator_pad, event)
             }
