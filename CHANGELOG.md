@@ -5,6 +5,20 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.12.5] - 2024-04-29
+### Fixed
+- hrtfrender: Use a bitmask instead of an int in the caps for the channel-mask.
+- rtpgccbwe: Don't log an error when pushing a buffer list fails while stopping.
+- webrtcsink: Don't panic in bitrate handling with unsupported encoders.
+- webrtcsink: Don't panic if unsupported input caps are used.
+- webrtcsrc: Allow a `None` producer-id in `request-encoded-filter` signal.
+
+### Added
+- aws: New property to support path-style addressing.
+- fmp4mux / mp4mux: Support FLAC instead (f)MP4.
+- gtk4: Support directly importing dmabufs with GTK 4.14.
+- gtk4: Add force-aspect-ratio property similar to other video sinks.
+
 ## [0.12.4] - 2024-04-08
 ### Fixed
 - aws: Use fixed behaviour version to ensure that updates to the AWS SDK don't
@@ -397,7 +411,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.4...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.5...HEAD
+[0.12.5]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.4...0.12.5
 [0.12.4]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.3...0.12.4
 [0.12.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.2...0.12.3
 [0.12.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.1...0.12.2
