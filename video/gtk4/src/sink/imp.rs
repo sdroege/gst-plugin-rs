@@ -297,6 +297,7 @@ impl ElementImpl for PaintableSink {
         match transition {
             gst::StateChange::NullToReady => {
                 let create_window = glib::program_name().as_deref() == Some("gst-launch-1.0")
+                    || glib::program_name().as_deref() == Some("gst-play-1.0")
                     || std::env::var("GST_GTK4_WINDOW").as_deref() == Ok("1");
 
                 if create_window {
