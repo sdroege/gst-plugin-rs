@@ -3083,6 +3083,7 @@ version = "0.14.0-alpha.1"
 dependencies = [
  "anyhow",
  "atomic_refcell",
+ "chrono",
  "dirs",
  "etherparse",
  "gst-plugin-version-helper",
@@ -3090,6 +3091,7 @@ dependencies = [
  "pcap-file",
  "regex",
  "signal-hook",
+ "walkdir",
 ]
 
 [[package]]
