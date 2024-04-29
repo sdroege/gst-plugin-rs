@@ -16,6 +16,11 @@ new features or more efficient processing can be opted in with the `gtk_v4_10`,
 sink is GTK 4.4 on Linux without GL support, and 4.6 on Windows and macOS, and
 on Linux with GL support.
 
+The sink will provides a simple test window when launched via `gst-launch-1.0`
+or `gst-play-1.0` or if the environment variable `GST_GTK4_WINDOW=1` is set.
+Setting `GST_GTK4_WINDOW_FULLSCREEN=1` will make the window launch in fullscreen
+mode.
+
 # Flatpak Integration
 
 To build and include the plugin in a Flatpak manifest, you can add the following snippet to your json manifest:
