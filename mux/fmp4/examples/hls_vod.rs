@@ -360,6 +360,10 @@ impl AudioStream {
             .property("samplesperbuffer", 4410)
             .property_from_str("wave", &self.wave)
             .build()?;
+        let taginject = gst::ElementFactory::make("taginject")
+            .property_from_str("tags", &format!("language-code={}", self.lang))
+            .property_from_str("scope", "stream")
+            .build()?;
         let raw_capsfilter = gst::ElementFactory::make("capsfilter")
             .property(
                 "caps",
@@ -374,9 +378,23 @@ impl AudioStream {
             .build()?;
         let appsink = gst_app::AppSink::builder().buffer_list(true).build();
 
-        pipeline.add_many([&src, &raw_capsfilter, &enc, &mux, appsink.upcast_ref()])?;
+        pipeline.add_many([
+            &src,
+            &taginject,
+            &raw_capsfilter,
+            &enc,
+            &mux,
+            appsink.upcast_ref(),
+        ])?;
 
-        gst::Element::link_many([&src, &raw_capsfilter, &enc, &mux, appsink.upcast_ref()])?;
+        gst::Element::link_many([
+            &src,
+            &taginject,
+            &raw_capsfilter,
+            &enc,
+            &mux,
+            appsink.upcast_ref(),
+        ])?;
 
         probe_encoder(state, enc);
 
@@ -416,7 +434,7 @@ fn main() -> Result<(), Error> {
             },
             AudioStream {
                 name: "audio_1".to_string(),
-                lang: "fre".to_string(),
+                lang: "fra".to_string(),
                 default: false,
                 wave: "white-noise".to_string(),
             },

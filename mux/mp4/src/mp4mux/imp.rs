@@ -153,6 +153,9 @@ struct State {
 
     /// Size of the `mdat` as written so far.
     mdat_size: u64,
+
+    /// Language code from tags
+    language_code: Option<[u8; 3]>,
 }
 
 #[derive(Default)]
@@ -1166,6 +1169,25 @@ impl AggregatorImpl for MP4Mux {
                 }
                 self.parent_sink_event_pre_queue(aggregator_pad, event)
             }
+            EventView::Tag(ev) => {
+                if let Some(tag_value) = ev.tag().get::<gst::tags::LanguageCode>() {
+                    let lang = tag_value.get();
+                    gst::trace!(CAT, imp: self, "Received language code from tags: {:?}", lang);
+
+                    // Language as ISO-639-2/T
+                    if lang.len() == 3 && lang.chars().all(|c| c.is_ascii_lowercase()) {
+                        let mut state = self.state.lock().unwrap();
+
+                        let mut language_code: [u8; 3] = [0; 3];
+                        for (out, c) in Iterator::zip(language_code.iter_mut(), lang.chars()) {
+                            *out = c as u8;
+                        }
+                        state.language_code = Some(language_code);
+                    }
+                }
+
+                self.parent_sink_event_pre_queue(aggregator_pad, event)
+            }
             _ => self.parent_sink_event_pre_queue(aggregator_pad, event),
         }
     }
@@ -1365,6 +1387,7 @@ impl AggregatorImpl for MP4Mux {
                 variant: self.obj().class().as_ref().variant,
                 movie_timescale: settings.movie_timescale,
                 streams,
+                language_code: state.language_code,
             })
             .map_err(|err| {
                 gst::error!(CAT, imp: self, "Failed to create moov box: {err}");

@@ -135,6 +135,7 @@ pub(crate) struct Header {
     /// Pre-defined movie timescale if not 0.
     movie_timescale: u32,
     streams: Vec<Stream>,
+    language_code: Option<[u8; 3]>,
 }
 
 #[allow(clippy::upper_case_acronyms)]
