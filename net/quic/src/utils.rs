@@ -16,7 +16,7 @@ use quinn::{ClientConfig, Endpoint, ServerConfig};
 use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
-use std::net::{AddrParseError, SocketAddr};
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -102,13 +102,19 @@ where
     res
 }
 
+pub fn make_socket_addr(addr: &str) -> Result<SocketAddr, WaitError> {
+    match addr.parse::<SocketAddr>() {
+        Ok(address) => Ok(address),
+        Err(e) => Err(WaitError::FutureError(gst::error_msg!(
+            gst::ResourceError::Failed,
+            ["Invalid address: {}", e]
+        ))),
+    }
+}
+
 /*
  * Following functions are taken from Quinn documentation/repository
  */
-pub fn make_socket_addr(addr: &str) -> Result<SocketAddr, AddrParseError> {
-    addr.parse::<SocketAddr>()
-}
-
 struct SkipServerVerification;
 
 impl SkipServerVerification {

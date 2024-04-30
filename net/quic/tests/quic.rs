@@ -35,7 +35,8 @@ fn test_send_receive_without_datagram() {
     let content = "Hello, world!\n".as_bytes();
 
     thread::spawn(move || {
-        let mut h1 = gst_check::Harness::new("quicsink");
+        let mut h1 = gst_check::Harness::new_empty();
+        h1.add_parse("quicsink secure-connection=false");
 
         h1.set_src_caps(gst::Caps::builder("text/plain").build());
 
@@ -50,7 +51,8 @@ fn test_send_receive_without_datagram() {
         drop(h1);
     });
 
-    let mut h2 = gst_check::Harness::new("quicsrc");
+    let mut h2 = gst_check::Harness::new_empty();
+    h2.add_parse("quicsrc secure-connection=false");
 
     h2.play();
 
@@ -77,8 +79,8 @@ fn test_send_receive_with_datagram() {
     // in the other test. We get a address already in use error otherwise.
     thread::spawn(move || {
         let mut h1 = gst_check::Harness::new_empty();
+        h1.add_parse("quicsrc use-datagram=true server-address=127.0.0.1 server-port=6000 secure-connection=false");
 
-        h1.add_parse(format!("quicsrc use-datagram=true server-address=127.0.0.1:6000").as_str());
         h1.play();
 
         let buf = h1.pull_until_eos().unwrap().unwrap();
@@ -94,8 +96,7 @@ fn test_send_receive_with_datagram() {
     });
 
     let mut h2 = gst_check::Harness::new_empty();
-
-    h2.add_parse(format!("quicsink use-datagram=true client-address=127.0.0.1:6001 server-address=127.0.0.1:6000").as_str());
+    h2.add_parse("quicsink use-datagram=true client-address=127.0.0.1 client-port=6001 server-address=127.0.0.1 server-port=6000 secure-connection=false");
 
     h2.set_src_caps(gst::Caps::builder("text/plain").build());
 

@@ -16,12 +16,14 @@ use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_base::subclass::prelude::*;
 use once_cell::sync::Lazy;
 use quinn::{Connection, SendStream};
-use std::net::SocketAddr;
 use std::sync::Mutex;
 
 static DEFAULT_SERVER_NAME: &str = "localhost";
-static DEFAULT_SERVER_ADDR: &str = "127.0.0.1:5000";
-static DEFAULT_CLIENT_ADDR: &str = "127.0.0.1:5001";
+static DEFAULT_SERVER_ADDR: &str = "127.0.0.1";
+static DEFAULT_SERVER_PORT: u16 = 5000;
+static DEFAULT_CLIENT_ADDR: &str = "127.0.0.1";
+static DEFAULT_CLIENT_PORT: u16 = 5001;
+
 /*
  * For QUIC transport parameters
  * <https://datatracker.ietf.org/doc/html/rfc9000#section-7.4>
@@ -52,8 +54,10 @@ enum State {
 
 #[derive(Clone, Debug)]
 struct Settings {
-    client_address: SocketAddr,
-    server_address: SocketAddr,
+    client_address: String,
+    client_port: u16,
+    server_address: String,
+    server_port: u16,
     server_name: String,
     alpns: Vec<String>,
     timeout: u32,
@@ -64,8 +68,10 @@ struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
-            client_address: DEFAULT_CLIENT_ADDR.parse::<SocketAddr>().unwrap(),
-            server_address: DEFAULT_SERVER_ADDR.parse::<SocketAddr>().unwrap(),
+            client_address: DEFAULT_CLIENT_ADDR.to_string(),
+            client_port: DEFAULT_CLIENT_PORT,
+            server_address: DEFAULT_SERVER_ADDR.to_string(),
+            server_port: DEFAULT_SERVER_PORT,
             server_name: DEFAULT_SERVER_NAME.to_string(),
             alpns: vec![DEFAULT_ALPN.to_string()],
             timeout: DEFAULT_TIMEOUT,
@@ -137,11 +143,25 @@ impl ObjectImpl for QuicSink {
                     .build(),
                 glib::ParamSpecString::builder("server-address")
                     .nick("QUIC server address")
-                    .blurb("Address of the QUIC server to connect to e.g. 127.0.0.1:5000")
+                    .blurb("Address of the QUIC server to connect to e.g. 127.0.0.1")
+                    .build(),
+                glib::ParamSpecUInt::builder("server-port")
+                    .nick("QUIC server port")
+                    .blurb("Port of the QUIC server to connect to e.g. 5000")
+                    .maximum(65535)
+                    .default_value(DEFAULT_SERVER_PORT as u32)
+                    .readwrite()
                     .build(),
                 glib::ParamSpecString::builder("client-address")
                     .nick("QUIC client address")
-                    .blurb("Address to be used by this QUIC client e.g. 127.0.0.1:5001")
+                    .blurb("Address to be used by this QUIC client e.g. 127.0.0.1")
+                    .build(),
+                glib::ParamSpecUInt::builder("client-port")
+                    .nick("QUIC client port")
+                    .blurb("Port to be used by this QUIC client e.g. 5001")
+                    .maximum(65535)
+                    .default_value(DEFAULT_CLIENT_PORT as u32)
+                    .readwrite()
                     .build(),
 		gst::ParamSpecArray::builder("alpn-protocols")
                     .nick("QUIC ALPN values")
@@ -172,43 +192,25 @@ impl ObjectImpl for QuicSink {
     }
 
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        let mut settings = self.settings.lock().unwrap();
+
         match pspec.name() {
             "server-name" => {
-                let mut settings = self.settings.lock().unwrap();
                 settings.server_name = value.get::<String>().expect("type checked upstream");
             }
             "server-address" => {
-                let addr = value.get::<String>().expect("type checked upstream");
-                let addr = make_socket_addr(&addr);
-                match addr {
-                    Ok(server_address) => {
-                        let mut settings = self.settings.lock().unwrap();
-                        settings.server_address = server_address;
-                    }
-                    Err(e) => gst::element_imp_error!(
-                        self,
-                        gst::ResourceError::Failed,
-                        ["Invalid server address: {}", e]
-                    ),
-                }
+                settings.server_address = value.get::<String>().expect("type checked upstream");
+            }
+            "server-port" => {
+                settings.server_port = value.get::<u32>().expect("type checked upstream") as u16;
             }
             "client-address" => {
-                let addr = value.get::<String>().expect("type checked upstream");
-                let addr = make_socket_addr(&addr);
-                match addr {
-                    Ok(client_address) => {
-                        let mut settings = self.settings.lock().unwrap();
-                        settings.client_address = client_address;
-                    }
-                    Err(e) => gst::element_imp_error!(
-                        self,
-                        gst::ResourceError::Failed,
-                        ["Invalid client address: {}", e]
-                    ),
-                }
+                settings.client_address = value.get::<String>().expect("type checked upstream");
+            }
+            "client-port" => {
+                settings.client_port = value.get::<u32>().expect("type checked upstream") as u16;
             }
             "alpn-protocols" => {
-                let mut settings = self.settings.lock().unwrap();
                 settings.alpns = value
                     .get::<gst::ArrayRef>()
                     .expect("type checked upstream")
@@ -222,15 +224,12 @@ impl ObjectImpl for QuicSink {
                     .collect::<Vec<_>>();
             }
             "timeout" => {
-                let mut settings = self.settings.lock().unwrap();
                 settings.timeout = value.get().expect("type checked upstream");
             }
             "secure-connection" => {
-                let mut settings = self.settings.lock().unwrap();
                 settings.secure_conn = value.get().expect("type checked upstream");
             }
             "use-datagram" => {
-                let mut settings = self.settings.lock().unwrap();
                 settings.use_datagram = value.get().expect("type checked upstream");
             }
             _ => unimplemented!(),
@@ -238,36 +237,27 @@ impl ObjectImpl for QuicSink {
     }
 
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        let settings = self.settings.lock().unwrap();
+
         match pspec.name() {
-            "server-name" => {
-                let settings = self.settings.lock().unwrap();
-                settings.server_name.to_value()
+            "server-name" => settings.server_name.to_value(),
+            "server-address" => settings.server_address.to_string().to_value(),
+            "server-port" => {
+                let port = settings.server_port as u32;
+                port.to_value()
             }
-            "server-address" => {
-                let settings = self.settings.lock().unwrap();
-                settings.server_address.to_string().to_value()
-            }
-            "client-address" => {
-                let settings = self.settings.lock().unwrap();
-                settings.client_address.to_string().to_value()
+            "client-address" => settings.client_address.to_string().to_value(),
+            "client-port" => {
+                let port = settings.client_port as u32;
+                port.to_value()
             }
             "alpn-protocols" => {
-                let settings = self.settings.lock().unwrap();
                 let alpns = settings.alpns.iter().map(|v| v.as_str());
                 gst::Array::new(alpns).to_value()
             }
-            "timeout" => {
-                let settings = self.settings.lock().unwrap();
-                settings.timeout.to_value()
-            }
-            "secure-connection" => {
-                let settings = self.settings.lock().unwrap();
-                settings.secure_conn.to_value()
-            }
-            "use-datagram" => {
-                let settings = self.settings.lock().unwrap();
-                settings.use_datagram.to_value()
-            }
+            "timeout" => settings.timeout.to_value(),
+            "secure-connection" => settings.secure_conn.to_value(),
+            "use-datagram" => settings.use_datagram.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -465,8 +455,14 @@ impl QuicSink {
 
         {
             let settings = self.settings.lock().unwrap();
-            client_addr = settings.client_address;
-            server_addr = settings.server_address;
+
+            client_addr = make_socket_addr(
+                format!("{}:{}", settings.client_address, settings.client_port).as_str(),
+            )?;
+            server_addr = make_socket_addr(
+                format!("{}:{}", settings.server_address, settings.server_port).as_str(),
+            )?;
+
             server_name = settings.server_name.clone();
             alpns = settings.alpns.clone();
             use_datagram = settings.use_datagram;

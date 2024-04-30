@@ -19,12 +19,13 @@ use gst_base::subclass::base_src::CreateSuccess;
 use gst_base::subclass::prelude::*;
 use once_cell::sync::Lazy;
 use quinn::{Connection, ConnectionError, RecvStream};
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
 static DEFAULT_SERVER_NAME: &str = "localhost";
-static DEFAULT_SERVER_ADDR: &str = "127.0.0.1:5000";
+static DEFAULT_SERVER_ADDR: &str = "127.0.0.1";
+static DEFAULT_SERVER_PORT: u16 = 5000;
+
 /*
  * For QUIC transport parameters
  * <https://datatracker.ietf.org/doc/html/rfc9000#section-7.4>
@@ -60,7 +61,8 @@ enum State {
 
 #[derive(Clone, Debug)]
 struct Settings {
-    server_address: SocketAddr,
+    server_address: String,
+    server_port: u16,
     server_name: String,
     alpns: Vec<String>,
     timeout: u32,
@@ -74,7 +76,8 @@ struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
-            server_address: DEFAULT_SERVER_ADDR.parse::<SocketAddr>().unwrap(),
+            server_address: DEFAULT_SERVER_ADDR.to_string(),
+            server_port: DEFAULT_SERVER_PORT,
             server_name: DEFAULT_SERVER_NAME.to_string(),
             alpns: vec![DEFAULT_ALPN.to_string()],
             timeout: DEFAULT_TIMEOUT,
@@ -176,7 +179,14 @@ impl ObjectImpl for QuicSrc {
                     .build(),
                 glib::ParamSpecString::builder("server-address")
                     .nick("QUIC server address")
-                    .blurb("Address of the QUIC server to connect to e.g. 127.0.0.1:5000")
+                    .blurb("Address of the QUIC server e.g. 127.0.0.1")
+                    .build(),
+                glib::ParamSpecUInt::builder("server-port")
+                    .nick("QUIC server port")
+                    .blurb("Port of the QUIC server e.g. 5000")
+                    .maximum(65535)
+                    .default_value(DEFAULT_SERVER_PORT as u32)
+                    .readwrite()
                     .build(),
 		gst::ParamSpecArray::builder("alpn-protocols")
                     .nick("QUIC ALPN values")
@@ -219,28 +229,19 @@ impl ObjectImpl for QuicSrc {
     }
 
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        let mut settings = self.settings.lock().unwrap();
+
         match pspec.name() {
             "server-name" => {
-                let mut settings = self.settings.lock().unwrap();
                 settings.server_name = value.get::<String>().expect("type checked upstream");
             }
             "server-address" => {
-                let addr = value.get::<String>().expect("type checked upstream");
-                let addr = make_socket_addr(&addr);
-                match addr {
-                    Ok(server_address) => {
-                        let mut settings = self.settings.lock().unwrap();
-                        settings.server_address = server_address;
-                    }
-                    Err(e) => gst::element_imp_error!(
-                        self,
-                        gst::ResourceError::Failed,
-                        ["Invalid server address: {}", e]
-                    ),
-                }
+                settings.server_address = value.get::<String>().expect("type checked upstream");
+            }
+            "server-port" => {
+                settings.server_port = value.get::<u32>().expect("type checked upstream") as u16;
             }
             "alpn-protocols" => {
-                let mut settings = self.settings.lock().unwrap();
                 settings.alpns = value
                     .get::<gst::ArrayRef>()
                     .expect("type checked upstream")
@@ -254,7 +255,6 @@ impl ObjectImpl for QuicSrc {
                     .collect::<Vec<String>>()
             }
             "caps" => {
-                let mut settings = self.settings.lock().unwrap();
                 settings.caps = value
                     .get::<Option<gst::Caps>>()
                     .expect("type checked upstream")
@@ -264,24 +264,19 @@ impl ObjectImpl for QuicSrc {
                 srcpad.mark_reconfigure();
             }
             "timeout" => {
-                let mut settings = self.settings.lock().unwrap();
                 settings.timeout = value.get().expect("type checked upstream");
             }
             "secure-connection" => {
-                let mut settings = self.settings.lock().unwrap();
                 settings.secure_conn = value.get().expect("type checked upstream");
             }
             "certificate-path" => {
                 let value: String = value.get().unwrap();
-                let mut settings = self.settings.lock().unwrap();
                 settings.certificate_path = Some(value.into());
             }
             "use-datagram" => {
-                let mut settings = self.settings.lock().unwrap();
                 settings.use_datagram = value.get().expect("type checked upstream");
             }
             "private-key-type" => {
-                let mut settings = self.settings.lock().unwrap();
                 settings.private_key_type = value
                     .get::<QuicPrivateKeyType>()
                     .expect("type checked upstream");
@@ -291,45 +286,28 @@ impl ObjectImpl for QuicSrc {
     }
 
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        let settings = self.settings.lock().unwrap();
+
         match pspec.name() {
-            "server-name" => {
-                let settings = self.settings.lock().unwrap();
-                settings.server_name.to_value()
-            }
-            "server-address" => {
-                let settings = self.settings.lock().unwrap();
-                settings.server_address.to_string().to_value()
+            "server-name" => settings.server_name.to_value(),
+            "server-address" => settings.server_address.to_string().to_value(),
+            "server-port" => {
+                let port = settings.server_port as u32;
+                port.to_value()
             }
             "alpn-protocols" => {
-                let settings = self.settings.lock().unwrap();
                 let alpns = settings.alpns.iter().map(|v| v.as_str());
                 gst::Array::new(alpns).to_value()
             }
-            "caps" => {
-                let settings = self.settings.lock().unwrap();
-                settings.caps.to_value()
-            }
-            "timeout" => {
-                let settings = self.settings.lock().unwrap();
-                settings.timeout.to_value()
-            }
-            "secure-connection" => {
-                let settings = self.settings.lock().unwrap();
-                settings.secure_conn.to_value()
-            }
+            "caps" => settings.caps.to_value(),
+            "timeout" => settings.timeout.to_value(),
+            "secure-connection" => settings.secure_conn.to_value(),
             "certificate-path" => {
-                let settings = self.settings.lock().unwrap();
                 let certpath = settings.certificate_path.as_ref();
                 certpath.and_then(|file| file.to_str()).to_value()
             }
-            "use-datagram" => {
-                let settings = self.settings.lock().unwrap();
-                settings.use_datagram.to_value()
-            }
-            "private-key-type" => {
-                let settings = self.settings.lock().unwrap();
-                settings.private_key_type.to_value()
-            }
+            "use-datagram" => settings.use_datagram.to_value(),
+            "private-key-type" => settings.private_key_type.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -563,7 +541,11 @@ impl QuicSrc {
 
         {
             let settings = self.settings.lock().unwrap();
-            server_addr = settings.server_address;
+
+            server_addr = make_socket_addr(
+                format!("{}:{}", settings.server_address, settings.server_port).as_str(),
+            )?;
+
             server_name = settings.server_name.clone();
             alpns = settings.alpns.clone();
             use_datagram = settings.use_datagram;
