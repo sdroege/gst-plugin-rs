@@ -14,13 +14,13 @@
  * Since: plugins-rs-0.11.0
  */
 use gst::glib;
-mod quicsink;
-mod quicsrc;
+mod quinnquicsink;
+mod quinnquicsrc;
 mod utils;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    quicsink::register(plugin)?;
-    quicsrc::register(plugin)?;
+    quinnquicsink::register(plugin)?;
+    quinnquicsrc::register(plugin)?;
 
     Ok(())
 }

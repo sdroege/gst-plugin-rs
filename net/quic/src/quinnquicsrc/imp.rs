@@ -41,9 +41,9 @@ const DEFAULT_SECURE_CONNECTION: bool = true;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "quicsrc",
+        "quinnquicsrc",
         gst::DebugColorFlags::empty(),
-        Some("QUIC Source"),
+        Some("Quinn QUIC Source"),
     )
 });
 
@@ -90,13 +90,13 @@ impl Default for Settings {
     }
 }
 
-pub struct QuicSrc {
+pub struct QuinnQuicSrc {
     settings: Mutex<Settings>,
     state: Mutex<State>,
     canceller: Mutex<Option<future::AbortHandle>>,
 }
 
-impl Default for QuicSrc {
+impl Default for QuinnQuicSrc {
     fn default() -> Self {
         Self {
             settings: Mutex::new(Settings::default()),
@@ -106,15 +106,15 @@ impl Default for QuicSrc {
     }
 }
 
-impl GstObjectImpl for QuicSrc {}
+impl GstObjectImpl for QuinnQuicSrc {}
 
-impl ElementImpl for QuicSrc {
+impl ElementImpl for QuinnQuicSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
             #[cfg(feature = "doc")]
             QuicPrivateKeyType::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
             gst::subclass::ElementMetadata::new(
-                "QUIC Source",
+                "Quinn QUIC Source",
                 "Source/Network/QUIC",
                 "Receive data over the network via QUIC",
                 "Sanchayan Maity <sanchayan@asymptotic.io>",
@@ -164,7 +164,7 @@ impl ElementImpl for QuicSrc {
     }
 }
 
-impl ObjectImpl for QuicSrc {
+impl ObjectImpl for QuinnQuicSrc {
     fn constructed(&self) {
         self.parent_constructed();
         self.obj().set_format(gst::Format::Bytes);
@@ -314,13 +314,13 @@ impl ObjectImpl for QuicSrc {
 }
 
 #[glib::object_subclass]
-impl ObjectSubclass for QuicSrc {
-    const NAME: &'static str = "GstQUICSrc";
-    type Type = super::QuicSrc;
+impl ObjectSubclass for QuinnQuicSrc {
+    const NAME: &'static str = "GstQuinnQUICSrc";
+    type Type = super::QuinnQuicSrc;
     type ParentType = gst_base::BaseSrc;
 }
 
-impl BaseSrcImpl for QuicSrc {
+impl BaseSrcImpl for QuinnQuicSrc {
     fn is_seekable(&self) -> bool {
         false
     }
@@ -458,7 +458,7 @@ impl BaseSrcImpl for QuicSrc {
     }
 }
 
-impl QuicSrc {
+impl QuinnQuicSrc {
     fn get(&self, _offset: u64, length: u64) -> Result<Bytes, Option<gst::ErrorMessage>> {
         let settings = self.settings.lock().unwrap();
         let timeout = settings.timeout;

@@ -37,7 +37,11 @@ const DEFAULT_TIMEOUT: u32 = 15;
 const DEFAULT_SECURE_CONNECTION: bool = true;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
-    gst::DebugCategory::new("quicsink", gst::DebugColorFlags::empty(), Some("QUIC Sink"))
+    gst::DebugCategory::new(
+        "quinnquicsink",
+        gst::DebugColorFlags::empty(),
+        Some("Quinn QUIC Sink"),
+    )
 });
 
 struct Started {
@@ -81,13 +85,13 @@ impl Default for Settings {
     }
 }
 
-pub struct QuicSink {
+pub struct QuinnQuicSink {
     settings: Mutex<Settings>,
     state: Mutex<State>,
     canceller: Mutex<Option<future::AbortHandle>>,
 }
 
-impl Default for QuicSink {
+impl Default for QuinnQuicSink {
     fn default() -> Self {
         Self {
             settings: Mutex::new(Settings::default()),
@@ -97,13 +101,13 @@ impl Default for QuicSink {
     }
 }
 
-impl GstObjectImpl for QuicSink {}
+impl GstObjectImpl for QuinnQuicSink {}
 
-impl ElementImpl for QuicSink {
+impl ElementImpl for QuinnQuicSink {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
             gst::subclass::ElementMetadata::new(
-                "QUIC Sink",
+                "Quinn QUIC Sink",
                 "Source/Network/QUIC",
                 "Send data over the network via QUIC",
                 "Sanchayan Maity <sanchayan@asymptotic.io>",
@@ -129,7 +133,7 @@ impl ElementImpl for QuicSink {
     }
 }
 
-impl ObjectImpl for QuicSink {
+impl ObjectImpl for QuinnQuicSink {
     fn constructed(&self) {
         self.parent_constructed();
     }
@@ -264,13 +268,13 @@ impl ObjectImpl for QuicSink {
 }
 
 #[glib::object_subclass]
-impl ObjectSubclass for QuicSink {
-    const NAME: &'static str = "GstQUICSink";
-    type Type = super::QuicSink;
+impl ObjectSubclass for QuinnQuicSink {
+    const NAME: &'static str = "GstQuinnQUICSink";
+    type Type = super::QuinnQuicSink;
     type ParentType = gst_base::BaseSink;
 }
 
-impl BaseSinkImpl for QuicSink {
+impl BaseSinkImpl for QuinnQuicSink {
     fn start(&self) -> Result<(), gst::ErrorMessage> {
         let settings = self.settings.lock().unwrap();
         let timeout = settings.timeout;
@@ -392,7 +396,7 @@ impl BaseSinkImpl for QuicSink {
     }
 }
 
-impl QuicSink {
+impl QuinnQuicSink {
     fn send_buffer(&self, src: &[u8]) -> Result<(), Option<gst::ErrorMessage>> {
         let settings = self.settings.lock().unwrap();
         let timeout = settings.timeout;

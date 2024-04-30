@@ -7,7 +7,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::quicsrc::QuicPrivateKeyType;
+use crate::quinnquicsrc::QuicPrivateKeyType;
 use futures::future;
 use futures::prelude::*;
 use gst::ErrorMessage;
