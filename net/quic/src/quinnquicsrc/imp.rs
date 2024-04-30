@@ -34,7 +34,7 @@ static DEFAULT_SERVER_PORT: u16 = 5000;
  * Other well-known values are listed in the at IANA registry at
  * <https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids>.
  */
-const DEFAULT_ALPN: &str = "h3";
+const DEFAULT_ALPN: &str = "gst-quinn";
 const DEFAULT_TIMEOUT: u32 = 15;
 const DEFAULT_PRIVATE_KEY_TYPE: QuicPrivateKeyType = QuicPrivateKeyType::Pkcs8;
 const DEFAULT_SECURE_CONNECTION: bool = true;
