@@ -16,6 +16,7 @@ use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_base::subclass::prelude::*;
 use once_cell::sync::Lazy;
 use quinn::{Connection, SendStream};
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 static DEFAULT_SERVER_NAME: &str = "localhost";
@@ -67,6 +68,7 @@ struct Settings {
     timeout: u32,
     secure_conn: bool,
     use_datagram: bool,
+    certificate_path: Option<PathBuf>,
 }
 
 impl Default for Settings {
@@ -81,6 +83,7 @@ impl Default for Settings {
             timeout: DEFAULT_TIMEOUT,
             secure_conn: DEFAULT_SECURE_CONNECTION,
             use_datagram: false,
+            certificate_path: None,
         }
     }
 }
@@ -130,6 +133,30 @@ impl ElementImpl for QuinnQuicSink {
         });
 
         PAD_TEMPLATES.as_ref()
+    }
+
+    fn change_state(
+        &self,
+        transition: gst::StateChange,
+    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
+        if transition == gst::StateChange::NullToReady {
+            let settings = self.settings.lock().unwrap();
+
+            /*
+             * Fail the state change if a secure connection was requested but
+             * no certificate path was provided.
+             */
+            if settings.secure_conn && settings.certificate_path.is_none() {
+                gst::error!(
+                    CAT,
+                    imp: self,
+                    "Certificate path not provided for secure connection"
+                );
+                return Err(gst::StateChangeError);
+            }
+        }
+
+        self.parent_change_state(transition)
     }
 }
 
@@ -184,6 +211,10 @@ impl ObjectImpl for QuinnQuicSink {
                     .blurb("Use certificates for QUIC connection. False: Insecure connection, True: Secure connection.")
                     .default_value(DEFAULT_SECURE_CONNECTION)
                     .build(),
+                glib::ParamSpecString::builder("certificate-path")
+                    .nick("Certificate Path")
+                    .blurb("Path where the certificate files cert.pem and privkey.pem are stored")
+                    .build(),
                 glib::ParamSpecBoolean::builder("use-datagram")
                     .nick("Use datagram")
                     .blurb("Use datagram for lower latency, unreliable messaging")
@@ -233,6 +264,10 @@ impl ObjectImpl for QuinnQuicSink {
             "secure-connection" => {
                 settings.secure_conn = value.get().expect("type checked upstream");
             }
+            "certificate-path" => {
+                let value: String = value.get().unwrap();
+                settings.certificate_path = Some(value.into());
+            }
             "use-datagram" => {
                 settings.use_datagram = value.get().expect("type checked upstream");
             }
@@ -261,6 +296,10 @@ impl ObjectImpl for QuinnQuicSink {
             }
             "timeout" => settings.timeout.to_value(),
             "secure-connection" => settings.secure_conn.to_value(),
+            "certificate-path" => {
+                let certpath = settings.certificate_path.as_ref();
+                certpath.and_then(|file| file.to_str()).to_value()
+            }
             "use-datagram" => settings.use_datagram.to_value(),
             _ => unimplemented!(),
         }
@@ -456,6 +495,7 @@ impl QuinnQuicSink {
         let alpns;
         let use_datagram;
         let secure_conn;
+        let cert_path;
 
         {
             let settings = self.settings.lock().unwrap();
@@ -471,14 +511,16 @@ impl QuinnQuicSink {
             alpns = settings.alpns.clone();
             use_datagram = settings.use_datagram;
             secure_conn = settings.secure_conn;
+            cert_path = settings.certificate_path.clone();
         }
 
-        let endpoint = client_endpoint(client_addr, secure_conn, alpns).map_err(|err| {
-            WaitError::FutureError(gst::error_msg!(
-                gst::ResourceError::Failed,
-                ["Failed to configure endpoint: {}", err]
-            ))
-        })?;
+        let endpoint =
+            client_endpoint(client_addr, secure_conn, alpns, cert_path).map_err(|err| {
+                WaitError::FutureError(gst::error_msg!(
+                    gst::ResourceError::Failed,
+                    ["Failed to configure endpoint: {}", err]
+                ))
+            })?;
 
         let connection = endpoint
             .connect(server_addr, &server_name)

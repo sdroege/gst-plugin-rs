@@ -136,23 +136,38 @@ impl rustls::client::ServerCertVerifier for SkipServerVerification {
     }
 }
 
-fn configure_client(secure_conn: bool, alpns: Vec<String>) -> Result<ClientConfig, Box<dyn Error>> {
-    if secure_conn {
-        Ok(ClientConfig::with_native_roots())
+fn configure_client(
+    secure_conn: bool,
+    certificate_path: Option<PathBuf>,
+    alpns: Vec<String>,
+) -> Result<ClientConfig, Box<dyn Error>> {
+    let mut crypto = if secure_conn {
+        let (certs, key) = read_certs_from_file(certificate_path)?;
+        let mut cert_store = rustls::RootCertStore::empty();
+
+        for cert in &certs {
+            cert_store.add(cert)?;
+        }
+
+        rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(Arc::new(cert_store))
+            .with_client_auth_cert(certs, key)?
     } else {
-        let mut crypto = rustls::ClientConfig::builder()
+        rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
-            .with_no_client_auth();
-        let alpn_protocols: Vec<Vec<u8>> = alpns
-            .iter()
-            .map(|x| x.as_bytes().to_vec())
-            .collect::<Vec<_>>();
-        crypto.alpn_protocols = alpn_protocols;
-        crypto.key_log = Arc::new(rustls::KeyLogFile::new());
+            .with_no_client_auth()
+    };
 
-        Ok(ClientConfig::new(Arc::new(crypto)))
-    }
+    let alpn_protocols: Vec<Vec<u8>> = alpns
+        .iter()
+        .map(|x| x.as_bytes().to_vec())
+        .collect::<Vec<_>>();
+    crypto.alpn_protocols = alpn_protocols;
+    crypto.key_log = Arc::new(rustls::KeyLogFile::new());
+
+    Ok(ClientConfig::new(Arc::new(crypto)))
 }
 
 fn read_certs_from_file(
@@ -213,8 +228,8 @@ fn configure_server(
     certificate_path: Option<PathBuf>,
     alpns: Vec<String>,
 ) -> Result<(ServerConfig, Vec<rustls::Certificate>), Box<dyn Error>> {
-    let (cert, key) = if secure_conn {
-        read_certs_from_file(certificate_path).unwrap()
+    let (certs, key) = if secure_conn {
+        read_certs_from_file(certificate_path)?
     } else {
         let cert = rcgen::generate_simple_self_signed(vec![server_name.into()]).unwrap();
         let cert_der = cert.serialize_der().unwrap();
@@ -225,13 +240,24 @@ fn configure_server(
         (cert_chain, priv_key)
     };
 
-    let mut crypto = rustls::ServerConfig::builder()
-        .with_safe_default_cipher_suites()
-        .with_safe_default_kx_groups()
-        .with_protocol_versions(&[&rustls::version::TLS13])
-        .unwrap()
-        .with_no_client_auth()
-        .with_single_cert(cert.clone(), key)?;
+    let mut crypto = if secure_conn {
+        let mut cert_store = rustls::RootCertStore::empty();
+        for cert in &certs {
+            cert_store.add(cert)?;
+        }
+
+        let auth_client = rustls::server::AllowAnyAuthenticatedClient::new(cert_store);
+        rustls::ServerConfig::builder()
+            .with_safe_defaults()
+            .with_client_cert_verifier(Arc::new(auth_client))
+            .with_single_cert(certs.clone(), key)
+    } else {
+        rustls::ServerConfig::builder()
+            .with_safe_defaults()
+            .with_no_client_auth()
+            .with_single_cert(certs.clone(), key)
+    }?;
+
     let alpn_protocols: Vec<Vec<u8>> = alpns
         .iter()
         .map(|x| x.as_bytes().to_vec())
@@ -245,7 +271,7 @@ fn configure_server(
         .max_concurrent_bidi_streams(0_u8.into())
         .max_concurrent_uni_streams(1_u8.into());
 
-    Ok((server_config, cert))
+    Ok((server_config, certs))
 }
 
 pub fn server_endpoint(
@@ -264,9 +290,10 @@ pub fn server_endpoint(
 pub fn client_endpoint(
     client_addr: SocketAddr,
     secure_conn: bool,
-    alpn: Vec<String>,
+    alpns: Vec<String>,
+    certificate_path: Option<PathBuf>,
 ) -> Result<Endpoint, Box<dyn Error>> {
-    let client_cfg = configure_client(secure_conn, alpn)?;
+    let client_cfg = configure_client(secure_conn, certificate_path, alpns)?;
     let mut endpoint = Endpoint::client(client_addr)?;
 
     endpoint.set_default_client_config(client_cfg);
