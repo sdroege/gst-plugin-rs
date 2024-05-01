@@ -7,7 +7,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::quinnquicsrc::QuicPrivateKeyType;
 use futures::future;
 use futures::prelude::*;
 use gst::ErrorMessage;
@@ -158,7 +157,6 @@ fn configure_client(secure_conn: bool, alpns: Vec<String>) -> Result<ClientConfi
 
 fn read_certs_from_file(
     certificate_path: Option<PathBuf>,
-    private_key_type: QuicPrivateKeyType,
 ) -> Result<(Vec<rustls::Certificate>, rustls::PrivateKey), Box<dyn Error>> {
     /*
      * NOTE:
@@ -192,19 +190,18 @@ fn read_certs_from_file(
     let key: rustls::PrivateKey = {
         let key_file = File::open(key_file.as_path())?;
         let mut key_file_rdr = BufReader::new(key_file);
-        let mut key_vec;
 
-        // If the file starts with "BEGIN RSA PRIVATE KEY"
-        if let QuicPrivateKeyType::Rsa = private_key_type {
-            key_vec = rustls_pemfile::rsa_private_keys(&mut key_file_rdr)?;
-        } else {
-            // If the file starts with "BEGIN PRIVATE KEY"
-            key_vec = rustls_pemfile::pkcs8_private_keys(&mut key_file_rdr)?;
+        let keys_iter = rustls_pemfile::read_all(&mut key_file_rdr)?;
+        let key_item = keys_iter
+            .into_iter()
+            .next()
+            .ok_or("Certificate should have at least one private key")?;
+
+        match key_item {
+            rustls_pemfile::Item::RSAKey(key) => rustls::PrivateKey(key),
+            rustls_pemfile::Item::PKCS8Key(key) => rustls::PrivateKey(key),
+            _ => unimplemented!(),
         }
-
-        assert_eq!(key_vec.len(), 1);
-
-        rustls::PrivateKey(key_vec.remove(0))
     };
 
     Ok((certs, key))
@@ -215,10 +212,9 @@ fn configure_server(
     secure_conn: bool,
     certificate_path: Option<PathBuf>,
     alpns: Vec<String>,
-    private_key_type: QuicPrivateKeyType,
 ) -> Result<(ServerConfig, Vec<rustls::Certificate>), Box<dyn Error>> {
     let (cert, key) = if secure_conn {
-        read_certs_from_file(certificate_path, private_key_type).unwrap()
+        read_certs_from_file(certificate_path).unwrap()
     } else {
         let cert = rcgen::generate_simple_self_signed(vec![server_name.into()]).unwrap();
         let cert_der = cert.serialize_der().unwrap();
@@ -258,15 +254,8 @@ pub fn server_endpoint(
     secure_conn: bool,
     alpns: Vec<String>,
     certificate_path: Option<PathBuf>,
-    private_key_type: QuicPrivateKeyType,
 ) -> Result<Endpoint, Box<dyn Error>> {
-    let (server_config, _) = configure_server(
-        server_name,
-        secure_conn,
-        certificate_path,
-        alpns,
-        private_key_type,
-    )?;
+    let (server_config, _) = configure_server(server_name, secure_conn, certificate_path, alpns)?;
     let endpoint = Endpoint::server(server_config, server_addr)?;
 
     Ok(endpoint)

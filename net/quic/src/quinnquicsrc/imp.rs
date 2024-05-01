@@ -7,7 +7,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use super::QuicPrivateKeyType;
 use crate::utils::{
     make_socket_addr, server_endpoint, wait, WaitError, CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG,
 };
@@ -36,7 +35,6 @@ static DEFAULT_SERVER_PORT: u16 = 5000;
  */
 const DEFAULT_ALPN: &str = "gst-quinn";
 const DEFAULT_TIMEOUT: u32 = 15;
-const DEFAULT_PRIVATE_KEY_TYPE: QuicPrivateKeyType = QuicPrivateKeyType::Pkcs8;
 const DEFAULT_SECURE_CONNECTION: bool = true;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -70,7 +68,6 @@ struct Settings {
     caps: gst::Caps,
     use_datagram: bool,
     certificate_path: Option<PathBuf>,
-    private_key_type: QuicPrivateKeyType,
 }
 
 impl Default for Settings {
@@ -85,7 +82,6 @@ impl Default for Settings {
             caps: gst::Caps::new_any(),
             use_datagram: false,
             certificate_path: None,
-            private_key_type: DEFAULT_PRIVATE_KEY_TYPE,
         }
     }
 }
@@ -111,8 +107,6 @@ impl GstObjectImpl for QuinnQuicSrc {}
 impl ElementImpl for QuinnQuicSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
-            #[cfg(feature = "doc")]
-            QuicPrivateKeyType::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
             gst::subclass::ElementMetadata::new(
                 "Quinn QUIC Source",
                 "Source/Network/QUIC",
@@ -218,10 +212,6 @@ impl ObjectImpl for QuinnQuicSrc {
                     .blurb("Use datagram for lower latency, unreliable messaging")
                     .default_value(false)
                     .build(),
-                glib::ParamSpecEnum::builder_with_default::<QuicPrivateKeyType>("private-key-type", DEFAULT_PRIVATE_KEY_TYPE)
-                    .nick("Whether PKCS8 or RSA key type is considered for private key")
-                    .blurb("Read given private key as PKCS8 or RSA")
-                    .build(),
             ]
         });
 
@@ -276,11 +266,6 @@ impl ObjectImpl for QuinnQuicSrc {
             "use-datagram" => {
                 settings.use_datagram = value.get().expect("type checked upstream");
             }
-            "private-key-type" => {
-                settings.private_key_type = value
-                    .get::<QuicPrivateKeyType>()
-                    .expect("type checked upstream");
-            }
             _ => unimplemented!(),
         }
     }
@@ -307,7 +292,6 @@ impl ObjectImpl for QuinnQuicSrc {
                 certpath.and_then(|file| file.to_str()).to_value()
             }
             "use-datagram" => settings.use_datagram.to_value(),
-            "private-key-type" => settings.private_key_type.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -537,7 +521,6 @@ impl QuinnQuicSrc {
         let use_datagram;
         let secure_conn;
         let cert_path;
-        let private_key_type;
 
         {
             let settings = self.settings.lock().unwrap();
@@ -551,23 +534,15 @@ impl QuinnQuicSrc {
             use_datagram = settings.use_datagram;
             secure_conn = settings.secure_conn;
             cert_path = settings.certificate_path.clone();
-            private_key_type = settings.private_key_type;
         }
 
-        let endpoint = server_endpoint(
-            server_addr,
-            &server_name,
-            secure_conn,
-            alpns,
-            cert_path,
-            private_key_type,
-        )
-        .map_err(|err| {
-            WaitError::FutureError(gst::error_msg!(
-                gst::ResourceError::Failed,
-                ["Failed to configure endpoint: {}", err]
-            ))
-        })?;
+        let endpoint = server_endpoint(server_addr, &server_name, secure_conn, alpns, cert_path)
+            .map_err(|err| {
+                WaitError::FutureError(gst::error_msg!(
+                    gst::ResourceError::Failed,
+                    ["Failed to configure endpoint: {}", err]
+                ))
+            })?;
 
         let incoming_conn = endpoint.accept().await.unwrap();
 

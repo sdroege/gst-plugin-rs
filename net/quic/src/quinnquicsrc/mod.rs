@@ -12,16 +12,6 @@ use gst::prelude::*;
 
 mod imp;
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
-#[repr(u32)]
-#[enum_type(name = "GstQuicPrivateKeyType")]
-pub enum QuicPrivateKeyType {
-    #[enum_value(name = "PKCS8: PKCS #8 Private Key.", nick = "pkcs8")]
-    Pkcs8,
-    #[enum_value(name = "RSA: RSA Private Key.", nick = "rsa")]
-    Rsa,
-}
-
 glib::wrapper! {
     pub struct QuinnQuicSrc(ObjectSubclass<imp::QuinnQuicSrc>) @extends gst_base::BaseSrc, gst::Element, gst::Object;
 }
