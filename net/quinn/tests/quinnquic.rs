@@ -17,7 +17,7 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
-        gstquic::plugin_register_static().expect("QUIC source sink send receive tests");
+        gstquinn::plugin_register_static().expect("QUIC source sink send receive tests");
     });
 }
 

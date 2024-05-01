@@ -205,6 +205,7 @@ plugins = {
     'extra-deps': {'cairo-gobject': []},
   },
   'gopbuffer': {'library': 'libgstgopbuffer'},
+  'quinn': {'library': 'libgstquinn'},
 }
 
 if get_option('examples').allowed()

@@ -9,9 +9,9 @@
 #![allow(clippy::non_send_fields_in_send_ty, unused_doc_comments)]
 
 /**
- * plugin-quic:
+ * plugin-quinn:
  *
- * Since: plugins-rs-0.11.0
+ * Since: plugins-rs-0.13.0
  */
 use gst::glib;
 mod quinnquicsink;
@@ -26,7 +26,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 gst::plugin_define!(
-    quic,
+    quinn,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
     concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),

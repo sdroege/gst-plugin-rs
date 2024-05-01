@@ -1,5 +1,5 @@
 [package]
-name = "gst-plugin-quic"
+name = "gst-plugin-quinn"
 version.workspace = true
 authors = ["Sanchayan Maity <sanchayan@asymptotic.io"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
@@ -28,7 +28,7 @@ gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org
 serial_test = "3"
 
 [lib]
-name = "gstquic"
+name = "gstquinn"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 required-features = ["tls-rustls"]

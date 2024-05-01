@@ -2642,7 +2642,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gst-plugin-quic"
+name = "gst-plugin-quinn"
 version = "0.13.0-alpha.1"
 dependencies = [
  "bytes",
