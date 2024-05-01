@@ -3889,6 +3889,324 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "quinn": {
+        "description": "GStreamer Plugin for QUIC",
+        "elements": {
+            "quinnquicsink": {
+                "author": "Sanchayan Maity <sanchayan@asymptotic.io>",
+                "description": "Send data over the network via QUIC",
+                "hierarchy": [
+                    "GstQuinnQUICSink",
+                    "GstBaseSink",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Source/Network/QUIC",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "alpn-protocols": {
+                        "blurb": "QUIC connection Application-Layer Protocol Negotiation (ALPN) values",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": true
+                    },
+                    "certificate-file": {
+                        "blurb": "Path to certificate chain in single file",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "client-address": {
+                        "blurb": "Address to be used by this QUIC client e.g. 127.0.0.1",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "127.0.0.1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "client-port": {
+                        "blurb": "Port to be used by this QUIC client e.g. 5001",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "5001",
+                        "max": "65535",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "private-key-file": {
+                        "blurb": "Path to a PKCS8 or RSA private key file",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "secure-connection": {
+                        "blurb": "Use certificates for QUIC connection. False: Insecure connection, True: Secure connection.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "server-address": {
+                        "blurb": "Address of the QUIC server to connect to e.g. 127.0.0.1",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "127.0.0.1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "server-name": {
+                        "blurb": "Name of the QUIC server which is in server certificate",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "localhost",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "server-port": {
+                        "blurb": "Port of the QUIC server to connect to e.g. 5000",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "5000",
+                        "max": "65535",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "timeout": {
+                        "blurb": "Value in seconds to timeout QUIC endpoint requests (0 = No timeout).",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "15",
+                        "max": "3600",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "use-datagram": {
+                        "blurb": "Use datagram for lower latency, unreliable messaging",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                },
+                "rank": "marginal"
+            },
+            "quinnquicsrc": {
+                "author": "Sanchayan Maity <sanchayan@asymptotic.io>",
+                "description": "Receive data over the network via QUIC",
+                "hierarchy": [
+                    "GstQuinnQUICSrc",
+                    "GstBaseSrc",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Source/Network/QUIC",
+                "pad-templates": {
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "alpn-protocols": {
+                        "blurb": "QUIC connection Application-Layer Protocol Negotiation (ALPN) values",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": true
+                    },
+                    "caps": {
+                        "blurb": "The caps of the source pad",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "ANY",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstCaps",
+                        "writable": true
+                    },
+                    "certificate-file": {
+                        "blurb": "Path to certificate chain in single file",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "private-key-file": {
+                        "blurb": "Path to a PKCS8 or RSA private key file",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "secure-connection": {
+                        "blurb": "Use certificates for QUIC connection. False: Insecure connection, True: Secure connection.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "server-address": {
+                        "blurb": "Address of the QUIC server e.g. 127.0.0.1",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "127.0.0.1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "server-name": {
+                        "blurb": "Name of the QUIC server which is in server certificate",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "localhost",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "server-port": {
+                        "blurb": "Port of the QUIC server e.g. 5000",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "5000",
+                        "max": "65535",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "timeout": {
+                        "blurb": "Value in seconds to timeout QUIC endpoint requests (0 = No timeout).",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "15",
+                        "max": "3600",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "use-datagram": {
+                        "blurb": "Use datagram for lower latency, unreliable messaging",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                },
+                "rank": "marginal"
+            }
+        },
+        "filename": "gstquinn",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-quinn",
+        "source": "gst-plugin-quinn",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "raptorq": {
         "description": "GStreamer RaptorQ FEC Plugin",
         "elements": {
