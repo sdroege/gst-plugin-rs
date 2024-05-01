@@ -138,11 +138,12 @@ impl rustls::client::ServerCertVerifier for SkipServerVerification {
 
 fn configure_client(
     secure_conn: bool,
-    certificate_path: Option<PathBuf>,
+    certificate_file: Option<PathBuf>,
+    private_key_file: Option<PathBuf>,
     alpns: Vec<String>,
 ) -> Result<ClientConfig, Box<dyn Error>> {
     let mut crypto = if secure_conn {
-        let (certs, key) = read_certs_from_file(certificate_path)?;
+        let (certs, key) = read_certs_from_file(certificate_file, private_key_file)?;
         let mut cert_store = rustls::RootCertStore::empty();
 
         for cert in &certs {
@@ -171,7 +172,8 @@ fn configure_client(
 }
 
 fn read_certs_from_file(
-    certificate_path: Option<PathBuf>,
+    certificate_file: Option<PathBuf>,
+    private_key_file: Option<PathBuf>,
 ) -> Result<(Vec<rustls::Certificate>, rustls::PrivateKey), Box<dyn Error>> {
     /*
      * NOTE:
@@ -187,13 +189,10 @@ fn read_certs_from_file(
      * chain in a single file. For example, this is the case of modern day
      * Apache and nginx.
      */
-    let cert_file = certificate_path
+    let cert_file = certificate_file
         .clone()
-        .expect("Expected path to certificates be valid")
-        .join("fullchain.pem");
-    let key_file = certificate_path
-        .expect("Expected path to certificates be valid")
-        .join("privkey.pem");
+        .expect("Expected path to certificates be valid");
+    let key_file = private_key_file.expect("Expected path to certificates be valid");
 
     let certs: Vec<rustls::Certificate> = {
         let cert_file = File::open(cert_file.as_path())?;
@@ -225,11 +224,12 @@ fn read_certs_from_file(
 fn configure_server(
     server_name: &str,
     secure_conn: bool,
-    certificate_path: Option<PathBuf>,
+    certificate_file: Option<PathBuf>,
+    private_key_file: Option<PathBuf>,
     alpns: Vec<String>,
 ) -> Result<(ServerConfig, Vec<rustls::Certificate>), Box<dyn Error>> {
     let (certs, key) = if secure_conn {
-        read_certs_from_file(certificate_path)?
+        read_certs_from_file(certificate_file, private_key_file)?
     } else {
         let cert = rcgen::generate_simple_self_signed(vec![server_name.into()]).unwrap();
         let cert_der = cert.serialize_der().unwrap();
@@ -279,9 +279,16 @@ pub fn server_endpoint(
     server_name: &str,
     secure_conn: bool,
     alpns: Vec<String>,
-    certificate_path: Option<PathBuf>,
+    certificate_file: Option<PathBuf>,
+    private_key_file: Option<PathBuf>,
 ) -> Result<Endpoint, Box<dyn Error>> {
-    let (server_config, _) = configure_server(server_name, secure_conn, certificate_path, alpns)?;
+    let (server_config, _) = configure_server(
+        server_name,
+        secure_conn,
+        certificate_file,
+        private_key_file,
+        alpns,
+    )?;
     let endpoint = Endpoint::server(server_config, server_addr)?;
 
     Ok(endpoint)
@@ -291,9 +298,10 @@ pub fn client_endpoint(
     client_addr: SocketAddr,
     secure_conn: bool,
     alpns: Vec<String>,
-    certificate_path: Option<PathBuf>,
+    certificate_file: Option<PathBuf>,
+    private_key_file: Option<PathBuf>,
 ) -> Result<Endpoint, Box<dyn Error>> {
-    let client_cfg = configure_client(secure_conn, certificate_path, alpns)?;
+    let client_cfg = configure_client(secure_conn, certificate_file, private_key_file, alpns)?;
     let mut endpoint = Endpoint::client(client_addr)?;
 
     endpoint.set_default_client_config(client_cfg);
