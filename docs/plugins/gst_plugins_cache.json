@@ -3896,7 +3896,7 @@
                 "author": "Sanchayan Maity <sanchayan@asymptotic.io>",
                 "description": "Send data over the network via QUIC",
                 "hierarchy": [
-                    "GstQuinnQUICSink",
+                    "GstQuinnQuicSink",
                     "GstBaseSink",
                     "GstElement",
                     "GstObject",
@@ -4056,7 +4056,7 @@
                 "author": "Sanchayan Maity <sanchayan@asymptotic.io>",
                 "description": "Receive data over the network via QUIC",
                 "hierarchy": [
-                    "GstQuinnQUICSrc",
+                    "GstQuinnQuicSrc",
                     "GstBaseSrc",
                     "GstElement",
                     "GstObject",

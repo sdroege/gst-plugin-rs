@@ -315,7 +315,7 @@ impl ObjectImpl for QuinnQuicSrc {
 
 #[glib::object_subclass]
 impl ObjectSubclass for QuinnQuicSrc {
-    const NAME: &'static str = "GstQuinnQUICSrc";
+    const NAME: &'static str = "GstQuinnQuicSrc";
     type Type = super::QuinnQuicSrc;
     type ParentType = gst_base::BaseSrc;
 }
