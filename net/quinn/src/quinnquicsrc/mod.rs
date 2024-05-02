@@ -7,6 +7,19 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+/**
+ * element-quinnquicsrc:
+ * @short-description: Receive data over the network via QUIC
+ *
+ * ## Example receiver pipeline
+ * ```bash
+ * gst-launch-1.0 -v -e quinnquicsrc caps=audio/x-opus server-name="quic.net" \
+ * certificate-file="certificates/fullchain.pem" private-key-file="certificates/privkey.pem" \
+ * server-address="127.0.0.1" server-port=6000 ! opusparse ! opusdec ! \
+ * audio/x-raw,format=S16LE,rate=48000,channels=2,layout=interleaved ! \
+ * audioconvert ! autoaudiosink
+ * ```
+ */
 use gst::glib;
 use gst::prelude::*;
 

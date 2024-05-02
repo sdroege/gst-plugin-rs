@@ -7,6 +7,19 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+/**
+ * element-quinnquicsink:
+ * @short-description: Send data over the network via QUIC
+ *
+ * ## Example sender pipeline
+ * ```bash
+ * gst-launch-1.0 -v -e audiotestsrc num-buffers=512 ! \
+ * audio/x-raw,format=S16LE,rate=48000,channels=2,layout=interleaved ! opusenc ! \
+ * quinnquicsink server-name="quic.net" client-address="127.0.0.1" client-port=6001 \
+ * server-address="127.0.0.1" server-port=6000 certificate-file="certificates/fullchain.pem" \
+ * private-key-file="certificates/privkey.pem"
+ * ```
+ */
 use gst::glib;
 use gst::prelude::*;
 
