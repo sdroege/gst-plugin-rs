@@ -226,6 +226,18 @@ version = "1.0"
 name = "winreg"
 version = "0.50"
 
+# quinn depends on old rustls
+# https://github.com/quinn-rs/quinn/commit/a85a4c12eec180b035328cf5f6286ce83edc9a47
+[[bans.skip]]
+name = "ring"
+version = "0.16"
+[[bans.skip]]
+name = "spin"
+version = "0.5"
+[[bans.skip]]
+name = "untrusted"
+version = "0.7"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
