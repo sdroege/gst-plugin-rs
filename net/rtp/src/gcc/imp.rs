@@ -1187,14 +1187,36 @@ impl ObjectSubclass for BandwidthEstimator {
 
                                 // The list of packets could be empty once parsed
                                 if !packets.is_empty() {
+                                    let mut logged_bitrates = None;
+
                                     let bitrate_changed = {
                                         let mut state = this.state.lock().unwrap();
 
                                         state.detector.update(&mut packets);
                                         let bitrate_updated_by_delay = state.delay_control(&bwe);
                                         let bitrate_updated_by_loss = state.loss_control(&bwe);
-                                        bitrate_updated_by_delay || bitrate_updated_by_loss
+                                        let bitrate_changed = bitrate_updated_by_delay || bitrate_updated_by_loss;
+
+                                        if bitrate_changed {
+                                            // So we don't have to hold the state mutex while logging.
+                                            logged_bitrates = Some((
+                                                state.target_bitrate_on_delay,
+                                                state.target_bitrate_on_loss,
+                                            ));
+                                        }
+
+                                        bitrate_changed
                                     };
+
+                                    if let Some(bitrates) = logged_bitrates {
+                                        gst::log!(
+                                            CAT,
+                                            obj: bwe,
+                                            "target bitrate on delay: {}ps - target bitrate on loss: {}ps",
+                                            human_kbits(bitrates.0),
+                                            human_kbits(bitrates.1),
+                                        );
+                                    }
 
                                     if bitrate_changed {
                                         bwe.notify("estimated-bitrate")
