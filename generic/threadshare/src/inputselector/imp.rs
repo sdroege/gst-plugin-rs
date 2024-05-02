@@ -417,8 +417,8 @@ impl ObjectImpl for InputSelector {
                 let pads = self.pads.lock().unwrap();
                 let mut old_pad = None;
                 if let Some(ref pad) = pad {
-                    if pads.sink_pads.get(pad).is_some() {
-                        old_pad = state.active_sinkpad.clone();
+                    if pads.sink_pads.contains_key(pad) {
+                        old_pad.clone_from(&state.active_sinkpad);
                         state.active_sinkpad = Some(pad.clone());
                         state.switched_pad = true;
                     }

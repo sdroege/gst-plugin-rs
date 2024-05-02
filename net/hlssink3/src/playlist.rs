@@ -59,7 +59,7 @@ impl Playlist {
                 while self.inner.segments.len() > max_playlist_length {
                     let to_remove = self.inner.segments.remove(0);
                     if self.inner.segments[0].map.is_none() {
-                        self.inner.segments[0].map = to_remove.map.clone()
+                        self.inner.segments[0].map.clone_from(&to_remove.map)
                     }
                 }
             } else if self.inner.segments.len() > max_playlist_length {

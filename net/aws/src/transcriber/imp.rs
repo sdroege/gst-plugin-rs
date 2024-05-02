@@ -534,13 +534,14 @@ impl Transcriber {
     fn prepare(&self) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, imp: self, "Preparing");
 
-        let (access_key, secret_access_key, session_token);
-        {
+        let (access_key, secret_access_key, session_token) = {
             let settings = self.settings.lock().unwrap();
-            access_key = settings.access_key.to_owned();
-            secret_access_key = settings.secret_access_key.to_owned();
-            session_token = settings.session_token.to_owned();
-        }
+            (
+                settings.access_key.clone(),
+                settings.secret_access_key.clone(),
+                settings.session_token.clone(),
+            )
+        };
 
         gst::info!(CAT, imp: self, "Loading aws config...");
         let _enter_guard = RUNTIME.enter();

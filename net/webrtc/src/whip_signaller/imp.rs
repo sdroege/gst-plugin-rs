@@ -668,11 +668,6 @@ impl Default for WhipServer {
     }
 }
 
-#[derive(Debug)]
-struct InternalError;
-
-impl warp::reject::Reject for InternalError {}
-
 impl WhipServer {
     pub fn on_webrtcbin_ready(&self) -> RustClosure {
         glib::closure!(|signaller: &super::WhipServerSignaller,
