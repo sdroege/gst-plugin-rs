@@ -33,6 +33,9 @@ You will find the following plugins in this repository:
 
     - `onvif`: Various elements for parsing, RTP (de)payloading, overlaying of ONVIF timed metadata.
 
+    - `quinn`: Transfer data over the network using QUIC
+      - `quinnquicsink`/`quinnquicsrc`: Send and receive data using QUIC
+
     - `raptorq`: Encoder/decoder element for RaptorQ RTP FEC mechanism.
 
     - `reqwest`: An HTTP source element based on the [reqwest](https://github.com/seanmonstar/reqwest) library.
