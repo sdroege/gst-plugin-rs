@@ -646,8 +646,9 @@ impl Detector {
         }
         gst::log!(
             CAT,
-            "{:?} - self.estimate {} - estimate: {} - th: {} - inc_dur: {} - inc_cnt: {}",
+            "{:?} - measure: {} - estimate: {} - amp_est: {} - th: {} - inc_dur: {} - inc_cnt: {}",
             th_usage,
+            self.measure,
             self.estimate,
             amplified_estimate,
             self.threshold,
