@@ -48,19 +48,8 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 // Table1. Time limit in milliseconds  between packet bursts which  identifies a group
 const BURST_TIME: Duration = Duration::milliseconds(5);
 
-// Table1. Coefficient used for the measured noise variance
-//  [0.1,0.001]
-const CHI: f64 = 0.01;
-const ONE_MINUS_CHI: f64 = 1. - CHI;
-
-// Table1. State noise covariance matrix
-const Q: f64 = 0.001;
-
 // Table1. Initial value for the adaptive threshold
 const INITIAL_DEL_VAR_TH: Duration = Duration::microseconds(12500);
-
-// Table1. Initial value of the system error covariance
-const INITIAL_ERROR_COVARIANCE: f64 = 0.1;
 
 // Table1. Time required to trigger an overuse signal
 const OVERUSE_TIME_TH: Duration = Duration::milliseconds(10);
@@ -261,10 +250,53 @@ enum NetworkUsage {
     Under,
 }
 
+/// Simple abstraction over an estimator that allows different estimator
+/// implementations, and allows them to be changed at runtime.
+trait EstimatorImpl: Send {
+    /// Update the estimator.
+    fn update(&mut self, prev_group: &PacketGroup, group: &PacketGroup);
+
+    /// Get the estimate that will be compared against the dynamic delay
+    /// threshold of GCC. Note that this value will be multiplied by a dynamic
+    /// factor before being compared against the threshold.
+    fn estimate(&self) -> Duration;
+
+    /// Get the most recent measurement used as input to the estimator.
+    /// Typically this will be the most recent inter-group delay variation.
+    fn measure(&self) -> Duration;
+}
+
+mod kalman_estimator;
+use kalman_estimator::KalmanEstimator;
+
+mod linear_regression_estimator;
+use linear_regression_estimator::LinearRegressionEstimator;
+
+/// An enum will all known estimators. The active estimator can be changed at
+/// runtime through the "estimator" property.
+#[derive(Debug, Default, Copy, Clone, glib::Enum)]
+#[repr(i32)]
+#[enum_type(name = "GstRtpGCCBwEEstimator")]
+pub enum Estimator {
+    #[default]
+    #[enum_value(name = "Use Kalman filter")]
+    Kalman = 0,
+    #[enum_value(name = "Use linear regression slope")]
+    LinearRegression = 1,
+}
+
+impl Estimator {
+    fn to_impl(self) -> Box<dyn EstimatorImpl> {
+        match self {
+            Estimator::Kalman => Box::<KalmanEstimator>::default(),
+            Estimator::LinearRegression => Box::<LinearRegressionEstimator>::default(),
+        }
+    }
+}
+
 struct Detector {
     group: PacketGroup,              // Packet group that is being filled
     prev_group: Option<PacketGroup>, // Group that is ready to be used once "group" is filled
-    measure: Duration,               // Delay variation measure
 
     last_received_packets: BTreeMap<u64, Packet>, // Order by seqnums, front is the newest, back is the oldest
 
@@ -273,11 +305,8 @@ struct Detector {
     // Moving average of the packet loss
     loss_average: f64,
 
-    // Kalman filter fields
-    gain: f64,
-    measurement_uncertainty: f64, // var_v_hat(i-1)
-    estimate_error: f64,          // e(i-1)
-    estimate: Duration,           // m_hat(i-1)
+    // Estimator fields
+    estimator_impl: Box<dyn EstimatorImpl>,
 
     // Threshold fields
     threshold: Duration,
@@ -308,8 +337,8 @@ impl Debug for Detector {
             "Network Usage: {:?}. Effective bitrate: {}ps - Measure: {} Estimate: {} threshold {} - overuse_estimate {}",
             self.usage,
             human_kbits(self.effective_bitrate()),
-            self.measure,
-            self.estimate,
+            self.estimator_impl.measure(),
+            self.estimator_impl.estimate(),
             self.threshold,
             self.last_overuse_estimate,
         )
@@ -317,11 +346,10 @@ impl Debug for Detector {
 }
 
 impl Detector {
-    fn new() -> Self {
+    fn new(estimator: Estimator) -> Self {
         Detector {
             group: Default::default(),
             prev_group: Default::default(),
-            measure: Duration::ZERO,
 
             /* Smallish value to hold PACKETS_RECEIVED_WINDOW packets */
             last_received_packets: BTreeMap::new(),
@@ -329,10 +357,7 @@ impl Detector {
             last_loss_update: None,
             loss_average: 0.,
 
-            gain: 0.,
-            measurement_uncertainty: 0.,
-            estimate_error: INITIAL_ERROR_COVARIANCE,
-            estimate: Duration::ZERO,
+            estimator_impl: estimator.to_impl(),
 
             threshold: INITIAL_DEL_VAR_TH,
             last_threshold_update: None,
@@ -503,7 +528,7 @@ impl Detector {
                 );
                 if let Some(prev_group) = mem::replace(&mut self.prev_group, Some(group.clone())) {
                     // 5.3 Arrival-time filter
-                    self.kalman_estimate(&prev_group, &group);
+                    self.estimator_impl.update(&prev_group, &group);
                     // 5.4 Over-use detector
                     self.overuse_filter();
                 }
@@ -534,32 +559,6 @@ impl Detector {
         self.last_loss_update = Some(now);
     }
 
-    fn kalman_estimate(&mut self, prev_group: &PacketGroup, group: &PacketGroup) {
-        self.measure = group.inter_delay_variation(prev_group);
-
-        let z = self.measure - self.estimate;
-        let zms = z.whole_microseconds() as f64 / 1000.0;
-
-        // This doesn't exactly follows the spec as we should compute and
-        // use f_max here, no implementation we have found actually uses it.
-        let alpha = ONE_MINUS_CHI.powf(30.0 / (1000. * 5. * 1_000_000.));
-        let root = self.measurement_uncertainty.sqrt();
-        let root3 = 3. * root;
-
-        if zms > root3 {
-            self.measurement_uncertainty =
-                (alpha * self.measurement_uncertainty + (1. - alpha) * root3.powf(2.)).max(1.);
-        } else {
-            self.measurement_uncertainty =
-                (alpha * self.measurement_uncertainty + (1. - alpha) * zms.powf(2.)).max(1.);
-        }
-
-        let estimate_uncertainty = self.estimate_error + Q;
-        self.gain = estimate_uncertainty / (estimate_uncertainty + self.measurement_uncertainty);
-        self.estimate += Duration::nanoseconds((self.gain * zms * 1_000_000.) as i64);
-        self.estimate_error = (1. - self.gain) * estimate_uncertainty;
-    }
-
     fn compare_threshold(&mut self) -> (NetworkUsage, Duration) {
         // FIXME: It is unclear where that factor is coming from but all
         // implementations we found have it (libwebrtc, pion, jitsi...), and the
@@ -568,11 +567,12 @@ impl Detector {
 
         self.num_deltas += 1;
         if self.num_deltas < 2 {
-            return (NetworkUsage::Normal, self.estimate);
+            return (NetworkUsage::Normal, self.estimator_impl.estimate());
         }
 
         let amplified_estimate = Duration::nanoseconds(
-            self.estimate.whole_nanoseconds() as i64 * i64::min(self.num_deltas, MAX_DELTAS),
+            self.estimator_impl.estimate().whole_nanoseconds() as i64
+                * i64::min(self.num_deltas, MAX_DELTAS),
         );
         let usage = if amplified_estimate > self.threshold {
             NetworkUsage::Over
@@ -648,8 +648,8 @@ impl Detector {
             CAT,
             "{:?} - measure: {} - estimate: {} - amp_est: {} - th: {} - inc_dur: {} - inc_cnt: {}",
             th_usage,
-            self.measure,
-            self.estimate,
+            self.estimator_impl.measure(),
+            self.estimator_impl.estimate(),
             amplified_estimate,
             self.threshold,
             self.increasing_duration,
@@ -720,6 +720,7 @@ struct State {
     min_bitrate: Bitrate,
     max_bitrate: Bitrate,
 
+    estimator: Estimator,
     detector: Detector,
 
     clock_entry: Option<gst::SingleShotClockId>,
@@ -735,6 +736,7 @@ struct State {
 
 impl Default for State {
     fn default() -> Self {
+        let estimator = Estimator::default();
         Self {
             target_bitrate_on_delay: DEFAULT_ESTIMATED_BITRATE,
             target_bitrate_on_loss: DEFAULT_ESTIMATED_BITRATE,
@@ -745,7 +747,8 @@ impl Default for State {
             last_decrease_on_delay: Instant::now(),
             min_bitrate: DEFAULT_MIN_BITRATE,
             max_bitrate: DEFAULT_MAX_BITRATE,
-            detector: Detector::new(),
+            estimator,
+            detector: Detector::new(estimator),
             buffers: Default::default(),
             estimated_bitrate: DEFAULT_ESTIMATED_BITRATE,
             last_control_op: BandwidthEstimationOp::Increase("Initial increase".into()),
@@ -1300,6 +1303,11 @@ impl ObjectImpl for BandwidthEstimator {
                     .default_value(DEFAULT_MAX_BITRATE)
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecEnum::builder_with_default("estimator", Estimator::default())
+                    .nick("Estimator")
+                    .blurb("How to calculate the delay estimate that will be compared against the dynamic delay threshold.")
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -1323,6 +1331,11 @@ impl ObjectImpl for BandwidthEstimator {
                 state.target_bitrate_on_loss = bitrate;
                 state.estimated_bitrate = bitrate;
             }
+            "estimator" => {
+                let mut state = self.state.lock().unwrap();
+                state.estimator = value.get().unwrap();
+                state.detector.estimator_impl = state.estimator.to_impl()
+            }
             _ => unimplemented!(),
         }
     }
@@ -1340,6 +1353,10 @@ impl ObjectImpl for BandwidthEstimator {
             "estimated-bitrate" => {
                 let state = self.state.lock().unwrap();
                 state.estimated_bitrate.to_value()
+            }
+            "estimator" => {
+                let state = self.state.lock().unwrap();
+                state.estimator.to_value()
             }
             _ => unimplemented!(),
         }

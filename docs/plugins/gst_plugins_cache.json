@@ -7158,6 +7158,18 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "estimator": {
+                        "blurb": "How to calculate the delay estimate that will be compared against the dynamic delay threshold.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "kalman (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstRtpGCCBwEEstimator",
+                        "writable": true
+                    },
                     "max-bitrate": {
                         "blurb": "Maximum bitrate to use (in bit/sec) when computing it through the bandwidth estimation algorithm",
                         "conditionally-available": false,
@@ -8209,6 +8221,21 @@
                         "when": "last"
                     }
                 }
+            },
+            "GstRtpGCCBwEEstimator": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Use Kalman filter",
+                        "name": "kalman",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Use linear regression slope",
+                        "name": "linear-regression",
+                        "value": "1"
+                    }
+                ]
             },
             "GstRtpMpeg4GenericPayAggregateMode": {
                 "kind": "enum",
