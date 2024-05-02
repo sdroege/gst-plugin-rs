@@ -1322,7 +1322,7 @@ impl Window {
             height as u32,
             gst_video::VideoOverlayFormatFlags::PREMULTIPLIED_ALPHA,
         ));
-        self.rectangle = ret.clone();
+        self.rectangle.clone_from(&ret);
         ret
     }
 }

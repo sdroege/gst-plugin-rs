@@ -100,6 +100,7 @@ pub trait RtpBaseDepay2Ext: IsA<RtpBaseDepay2> {
     }
 
     /// Finish currently pending buffers and push them downstream in a single buffer list.
+    #[allow(unused)]
     fn finish_pending_buffers(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
         self.upcast_ref::<RtpBaseDepay2>()
             .imp()

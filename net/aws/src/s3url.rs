@@ -25,9 +25,10 @@ const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').ad
 const PATH: &AsciiSet = &FRAGMENT.add(b'#').add(b'?').add(b'{').add(b'}');
 const PATH_SEGMENT: &AsciiSet = &PATH.add(b'/').add(b'%');
 
-impl ToString for GstS3Url {
-    fn to_string(&self) -> String {
-        format!(
+impl std::fmt::Display for GstS3Url {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
             "s3://{}/{}/{}{}",
             self.region,
             self.bucket,

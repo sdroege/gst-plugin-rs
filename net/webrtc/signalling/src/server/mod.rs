@@ -44,14 +44,10 @@ impl Server {
         I: for<'a> Deserialize<'a>,
         O: Serialize + std::fmt::Debug + Send + Sync,
         Factory: FnOnce(Pin<Box<dyn Stream<Item = (String, Option<I>)> + Send>>) -> St,
-        St: Stream<Item = (String, O)>,
+        St: Stream<Item = (String, O)> + Send + Unpin + 'static,
     >(
         factory: Factory,
-    ) -> Self
-    where
-        O: Serialize + std::fmt::Debug,
-        St: Send + Unpin + 'static,
-    {
+    ) -> Self {
         let (tx, rx) = mpsc::channel::<(String, Option<String>)>(1000);
         let mut handler = factory(Box::pin(rx.filter_map(|(peer_id, msg)| async move {
             if let Some(msg) = msg {
@@ -119,10 +115,10 @@ impl Server {
     }
 
     #[instrument(level = "debug", skip(self, stream))]
-    pub async fn accept_async<S: 'static>(&mut self, stream: S) -> Result<String, ServerError>
-    where
-        S: AsyncRead + AsyncWrite + Unpin + Send,
-    {
+    pub async fn accept_async<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
+        &mut self,
+        stream: S,
+    ) -> Result<String, ServerError> {
         let ws = match async_tungstenite::tokio::accept_async(stream).await {
             Ok(ws) => ws,
             Err(err) => {

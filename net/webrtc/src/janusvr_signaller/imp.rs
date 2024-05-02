@@ -606,7 +606,7 @@ impl Signaller {
                 return;
             }
 
-            state.room_id = settings.room_id.clone();
+            state.room_id.clone_from(&settings.room_id);
 
             (
                 state.transaction_id.clone().unwrap(),

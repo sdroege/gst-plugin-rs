@@ -11,6 +11,7 @@
 pub use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::io;
 
+#[allow(unused)]
 pub trait ReadBytesExtShort: io::Read {
     fn read_u16le(&mut self) -> io::Result<u16> {
         self.read_u16::<LittleEndian>()
@@ -76,6 +77,7 @@ pub trait ReadBytesExtShort: io::Read {
 
 impl<T> ReadBytesExtShort for T where T: ReadBytesExt {}
 
+#[allow(unused)]
 pub trait WriteBytesExtShort: WriteBytesExt {
     fn write_u16le(&mut self, n: u16) -> io::Result<()> {
         self.write_u16::<LittleEndian>(n)

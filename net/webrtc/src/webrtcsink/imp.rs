@@ -3006,7 +3006,7 @@ impl BaseWebRTCSink {
             if let Some(congestion_controller) = session.congestion_controller.as_mut() {
                 congestion_controller.loss_control(element, stats, &mut session.encoders);
             }
-            session.stats = stats.to_owned();
+            stats.clone_into(&mut session.stats);
         }
     }
 

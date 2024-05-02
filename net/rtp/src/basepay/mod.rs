@@ -101,6 +101,7 @@ pub trait RtpBasePay2Ext: IsA<RtpBasePay2> {
     }
 
     /// Returns a reference to the src pad.
+    #[allow(unused)]
     fn src_pad(&self) -> &gst::Pad {
         self.upcast_ref::<RtpBasePay2>().imp().src_pad()
     }
