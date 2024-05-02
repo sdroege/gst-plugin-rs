@@ -571,20 +571,20 @@ impl Detector {
             return (NetworkUsage::Normal, self.estimate);
         }
 
-        let t = Duration::nanoseconds(
+        let amplified_estimate = Duration::nanoseconds(
             self.estimate.whole_nanoseconds() as i64 * i64::min(self.num_deltas, MAX_DELTAS),
         );
-        let usage = if t > self.threshold {
+        let usage = if amplified_estimate > self.threshold {
             NetworkUsage::Over
-        } else if t.whole_nanoseconds() < -self.threshold.whole_nanoseconds() {
+        } else if amplified_estimate.whole_nanoseconds() < -self.threshold.whole_nanoseconds() {
             NetworkUsage::Under
         } else {
             NetworkUsage::Normal
         };
 
-        self.update_threshold(&t);
+        self.update_threshold(&amplified_estimate);
 
-        (usage, t)
+        (usage, amplified_estimate)
     }
 
     fn update_threshold(&mut self, estimate: &Duration) {
@@ -620,7 +620,7 @@ impl Detector {
     }
 
     fn overuse_filter(&mut self) {
-        let (th_usage, estimate) = self.compare_threshold();
+        let (th_usage, amplified_estimate) = self.compare_threshold();
 
         let now = Instant::now();
         let delta = now - self.last_use_detector_update;
@@ -632,7 +632,7 @@ impl Detector {
 
                 if self.increasing_duration > OVERUSE_TIME_TH
                     && self.increasing_counter > 1
-                    && estimate > self.last_overuse_estimate
+                    && amplified_estimate > self.last_overuse_estimate
                 {
                     self.usage = NetworkUsage::Over;
                 }
@@ -649,12 +649,12 @@ impl Detector {
             "{:?} - self.estimate {} - estimate: {} - th: {} - inc_dur: {} - inc_cnt: {}",
             th_usage,
             self.estimate,
-            estimate,
+            amplified_estimate,
             self.threshold,
             self.increasing_duration,
             self.increasing_counter,
         );
-        self.last_overuse_estimate = estimate;
+        self.last_overuse_estimate = amplified_estimate;
     }
 }
 
