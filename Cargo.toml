@@ -88,6 +88,7 @@ default-members = [
     "net/webrtc/protocol",
     "net/webrtc/signalling",
     "net/ndi",
+    "net/quinn",
 
     "text/ahead",
     "text/json",
