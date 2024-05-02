@@ -942,7 +942,7 @@ impl State {
         gst::info!(
             CAT,
             obj: bwe,
-            "{controller_type:?}: {}ps => {}ps ({:?}) - effective bitrate: {}",
+            "{controller_type:?}: {}ps => {}ps ({:?}) - effective bitrate: {}ps",
             human_kbits(prev_bitrate),
             human_kbits(target_bitrate),
             self.last_control_op,
