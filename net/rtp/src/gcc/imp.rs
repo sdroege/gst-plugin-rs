@@ -879,8 +879,9 @@ impl State {
                 gst::log!(
                     CAT,
                     obj: bwe,
-                    "Increasing == received_max rate: {}ps",
-                    human_kbits(received_max)
+                    "Increasing == received_max rate: {}ps - effective bitrate: {}ps",
+                    human_kbits(received_max),
+                    human_kbits(effective_bitrate),
                 );
 
                 self.last_control_op = BandwidthEstimationOp::Increase(format!(
@@ -892,8 +893,9 @@ impl State {
                 gst::log!(
                     CAT,
                     obj: bwe,
-                    "Rate < target, returning {}ps",
-                    human_kbits(self.target_bitrate_on_delay)
+                    "Rate < target, returning {}ps - effective bitrate: {}ps",
+                    human_kbits(self.target_bitrate_on_delay),
+                    human_kbits(effective_bitrate),
                 );
 
                 None
@@ -901,9 +903,10 @@ impl State {
                 gst::log!(
                     CAT,
                     obj: bwe,
-                    "Increase mult {eta}x{}ps={}ps",
+                    "Increase mult {eta}x{}ps={}ps - effective bitrate: {}ps",
                     human_kbits(self.target_bitrate_on_delay),
-                    human_kbits(rate)
+                    human_kbits(rate),
+                    human_kbits(effective_bitrate),
                 );
 
                 self.last_control_op =
