@@ -4,3 +4,7 @@ pub mod depay;
 pub mod pay;
 
 mod klv_utils;
+
+#[allow(clippy::module_inception)]
+#[cfg(test)]
+mod tests;
