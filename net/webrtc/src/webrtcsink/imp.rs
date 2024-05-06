@@ -3527,6 +3527,15 @@ impl BaseWebRTCSink {
         } else {
             let sink_caps = discovery_info.caps.clone();
 
+            if codecs.is_empty() {
+                return Err(anyhow!(
+                    "No codec available for encoding stream {}, \
+                                   check the webrtcsink logs and verify that \
+                                   the rtp plugin is available",
+                    name
+                ));
+            }
+
             let is_video = match sink_caps.structure(0).unwrap().name().as_str() {
                 "video/x-raw" => true,
                 "audio/x-raw" => false,
