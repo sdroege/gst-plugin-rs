@@ -2458,7 +2458,7 @@
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
     "gtk4": {
-        "description": "GStreamer GTK 4 Sink element and Paintable widget",
+        "description": "GStreamer GTK 4 sink element",
         "elements": {
             "gtk4paintablesink": {
                 "author": "Bilal Elmoussaoui <bil.elmoussaoui@gmail.com>, Jordan Petridis <jordan@centricular.com>, Sebastian Dröge <sebastian@centricular.com>",
