@@ -18,10 +18,7 @@ use std::{
     collections::{BTreeMap, VecDeque},
     num::Wrapping,
     ops::{Bound, RangeBounds},
-    sync::{
-        atomic::{self, AtomicU64},
-        Mutex,
-    },
+    sync::Mutex,
 };
 
 use super::PacketToBufferRelation;
@@ -184,10 +181,9 @@ pub struct RtpBasePay2 {
     settings: Mutex<Settings>,
     stats: Mutex<Option<Stats>>,
 
-    /// If set to a different value than `u64::MAX` then there
-    /// was an SSRC collision and we should switch to the provided
-    /// SSRC here.
-    ssrc_collision: AtomicU64,
+    /// If Some then there was an SSRC collision and we should switch to the
+    /// provided SSRC here.
+    ssrc_collision: Mutex<Option<u32>>,
     /// Currently configured header extensions
     extensions: Mutex<BTreeMap<u8, gst_rtp::RTPHeaderExtension>>,
 }
@@ -841,6 +837,13 @@ impl RtpBasePay2 {
     pub(super) fn src_pad(&self) -> &gst::Pad {
         &self.src_pad
     }
+
+    /// Helper so we don't manually have to set ssrc_collision to None if there
+    /// is Some collision to handle.
+    fn take_ssrc_collision(&self) -> Option<u32> {
+        let mut ssrc_collision = self.ssrc_collision.lock().unwrap();
+        ssrc_collision.take()
+    }
 }
 
 /// Default virtual method implementations.
@@ -1196,8 +1199,10 @@ impl RtpBasePay2 {
             }
         };
 
-        self.ssrc_collision
-            .store(new_ssrc as u64, atomic::Ordering::SeqCst);
+        {
+            let mut ssrc_collision = self.ssrc_collision.lock().unwrap();
+            *ssrc_collision = Some(new_ssrc);
+        }
     }
 
     fn src_event_default(&self, event: gst::Event) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -1450,9 +1455,8 @@ impl RtpBasePay2 {
             }
         }
 
-        let ssrc_collision = self.ssrc_collision.load(atomic::Ordering::SeqCst);
-        if ssrc_collision != u64::MAX {
-            let new_ssrc = ssrc_collision as u32;
+        if let Some(ssrc_collision) = self.take_ssrc_collision() {
+            let new_ssrc = ssrc_collision;
             let stream = state.stream.as_mut().unwrap();
             gst::debug!(
                 CAT,
@@ -1462,8 +1466,6 @@ impl RtpBasePay2 {
                 new_ssrc,
             );
             stream.ssrc = new_ssrc;
-            self.ssrc_collision
-                .store(u64::MAX, atomic::Ordering::SeqCst);
 
             if let Some(ref src_caps) = state.negotiated_src_caps {
                 let mut src_caps = src_caps.copy();
@@ -1733,7 +1735,7 @@ impl ObjectSubclass for RtpBasePay2 {
             state: AtomicRefCell::default(),
             settings: Mutex::default(),
             stats: Mutex::default(),
-            ssrc_collision: AtomicU64::new(u64::MAX),
+            ssrc_collision: Mutex::new(None),
             extensions: Mutex::default(),
         }
     }
