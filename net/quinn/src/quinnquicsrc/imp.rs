@@ -17,7 +17,7 @@ use gst_base::prelude::*;
 use gst_base::subclass::base_src::CreateSuccess;
 use gst_base::subclass::prelude::*;
 use once_cell::sync::Lazy;
-use quinn::{Connection, ConnectionError, RecvStream};
+use quinn::{Connection, ConnectionError, ReadError, RecvStream};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -485,8 +485,14 @@ impl QuinnQuicSrc {
                 match conn.read_datagram().await {
                     Ok(bytes) => Ok(bytes),
                     Err(err) => match err {
-                        ConnectionError::ApplicationClosed(_)
-                        | ConnectionError::ConnectionClosed(_) => Ok(Bytes::new()),
+                        ConnectionError::ApplicationClosed(ac) => {
+                            gst::info!(CAT, imp: self, "Application closed connection, {}", ac);
+                            Ok(Bytes::new())
+                        }
+                        ConnectionError::ConnectionClosed(cc) => {
+                            gst::info!(CAT, imp: self, "Transport closed connection, {}", cc);
+                            Ok(Bytes::new())
+                        }
                         _ => Err(WaitError::FutureError(gst::error_msg!(
                             gst::ResourceError::Failed,
                             ["Datagram read error: {}", err]
@@ -499,10 +505,30 @@ impl QuinnQuicSrc {
                 match recv.read_chunk(length as usize, true).await {
                     Ok(Some(chunk)) => Ok(chunk.bytes),
                     Ok(None) => Ok(Bytes::new()),
-                    Err(err) => Err(WaitError::FutureError(gst::error_msg!(
-                        gst::ResourceError::Failed,
-                        ["Stream read error: {}", err]
-                    ))),
+                    Err(err) => match err {
+                        ReadError::ConnectionLost(conn_err) => match conn_err {
+                            ConnectionError::ConnectionClosed(cc) => {
+                                gst::info!(CAT, imp: self, "Transport closed connection, {}", cc);
+                                Ok(Bytes::new())
+                            }
+                            ConnectionError::ApplicationClosed(ac) => {
+                                gst::info!(CAT, imp: self, "Application closed connection, {}", ac);
+                                Ok(Bytes::new())
+                            }
+                            _ => Err(WaitError::FutureError(gst::error_msg!(
+                                gst::ResourceError::Failed,
+                                ["Stream read error: {}", conn_err]
+                            ))),
+                        },
+                        ReadError::ClosedStream => {
+                            gst::info!(CAT, imp: self, "Stream closed");
+                            Ok(Bytes::new())
+                        }
+                        _ => Err(WaitError::FutureError(gst::error_msg!(
+                            gst::ResourceError::Failed,
+                            ["Stream read error: {}", err]
+                        ))),
+                    },
                 }
             }
         };
