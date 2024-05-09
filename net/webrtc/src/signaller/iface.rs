@@ -155,7 +155,7 @@ impl prelude::ObjectInterface for Signallable {
                  *
                  * The signaller requests a meta about the peer using it
                  *
-                 * Return: The metadata about the peer represented by the signaller
+                 * Returns: The metadata about the peer represented by the signaller
                  */
                 Signal::builder("request-meta")
                     .return_type::<Option<gst::Structure>>()
@@ -332,7 +332,7 @@ impl prelude::ObjectInterface for Signallable {
                  * description before the signaller sends it to the peer. Only the first connected
                  * handler has any effect.
                  *
-                 * Return: A modified session description
+                 * Returns: A modified session description
                  */
                 Signal::builder("munge-session-description")
                     .run_last()
