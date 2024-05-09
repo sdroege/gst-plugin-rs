@@ -377,7 +377,6 @@ impl BaseSinkImpl for QuinnQuicSink {
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         let settings = self.settings.lock().unwrap();
-        let timeout = settings.timeout;
         let use_datagram = settings.use_datagram;
         drop(settings);
 
@@ -385,30 +384,14 @@ impl BaseSinkImpl for QuinnQuicSink {
 
         if let State::Started(ref mut state) = *state {
             let connection = &state.connection;
-            let mut close_msg = CONNECTION_CLOSE_MSG.to_string();
+            let close_msg = CONNECTION_CLOSE_MSG.to_string();
 
             if !use_datagram {
                 let send = &mut state.stream.as_mut().unwrap();
 
                 // Shutdown stream gracefully
-                match wait(&self.canceller, send.finish(), timeout) {
-                    Ok(r) => {
-                        if let Err(e) = r {
-                            close_msg = format!("Stream finish request error: {}", e);
-                            gst::error!(CAT, imp: self, "{}", close_msg);
-                        }
-                    }
-                    Err(e) => match e {
-                        WaitError::FutureAborted => {
-                            close_msg = "Stream finish request aborted".to_string();
-                            gst::warning!(CAT, imp: self, "{}", close_msg);
-                        }
-                        WaitError::FutureError(e) => {
-                            close_msg = format!("Stream finish request future error: {}", e);
-                            gst::error!(CAT, imp: self, "{}", close_msg);
-                        }
-                    },
-                };
+                // This may fail, but the error is harmless.
+                let _ = send.finish();
             }
 
             connection.close(CONNECTION_CLOSE_CODE.into(), close_msg.as_bytes());

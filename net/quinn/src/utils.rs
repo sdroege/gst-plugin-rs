@@ -11,7 +11,10 @@ use futures::future;
 use futures::prelude::*;
 use gst::ErrorMessage;
 use once_cell::sync::Lazy;
-use quinn::{ClientConfig, Endpoint, ServerConfig};
+use quinn::{
+    crypto::rustls::QuicClientConfig, crypto::rustls::QuicServerConfig, ClientConfig, Endpoint,
+    ServerConfig,
+};
 use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
@@ -114,6 +117,7 @@ pub fn make_socket_addr(addr: &str) -> Result<SocketAddr, WaitError> {
 /*
  * Following functions are taken from Quinn documentation/repository
  */
+#[derive(Debug)]
 struct SkipServerVerification;
 
 impl SkipServerVerification {
@@ -122,17 +126,52 @@ impl SkipServerVerification {
     }
 }
 
-impl rustls::client::ServerCertVerifier for SkipServerVerification {
+impl rustls::client::danger::ServerCertVerifier for SkipServerVerification {
     fn verify_server_cert(
         &self,
-        _end_entity: &rustls::Certificate,
-        _intermediates: &[rustls::Certificate],
-        _server_name: &rustls::ServerName,
-        _scts: &mut dyn Iterator<Item = &[u8]>,
+        _end_entity: &rustls_pki_types::CertificateDer,
+        _intermediates: &[rustls_pki_types::CertificateDer],
+        _server_name: &rustls::pki_types::ServerName,
         _ocsp_response: &[u8],
-        _now: std::time::SystemTime,
-    ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
-        Ok(rustls::client::ServerCertVerified::assertion())
+        _now: rustls::pki_types::UnixTime,
+    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::danger::ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _: &[u8],
+        _: &rustls_pki_types::CertificateDer<'_>,
+        _: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        _: &[u8],
+        _: &rustls_pki_types::CertificateDer<'_>,
+        _: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        vec![
+            rustls::SignatureScheme::RSA_PKCS1_SHA1,
+            rustls::SignatureScheme::ECDSA_SHA1_Legacy,
+            rustls::SignatureScheme::RSA_PKCS1_SHA256,
+            rustls::SignatureScheme::ECDSA_NISTP256_SHA256,
+            rustls::SignatureScheme::RSA_PKCS1_SHA384,
+            rustls::SignatureScheme::ECDSA_NISTP384_SHA384,
+            rustls::SignatureScheme::RSA_PKCS1_SHA512,
+            rustls::SignatureScheme::ECDSA_NISTP521_SHA512,
+            rustls::SignatureScheme::RSA_PSS_SHA256,
+            rustls::SignatureScheme::RSA_PSS_SHA384,
+            rustls::SignatureScheme::RSA_PSS_SHA512,
+            rustls::SignatureScheme::ED25519,
+            rustls::SignatureScheme::ED448,
+        ]
     }
 }
 
@@ -145,18 +184,14 @@ fn configure_client(
     let mut crypto = if secure_conn {
         let (certs, key) = read_certs_from_file(certificate_file, private_key_file)?;
         let mut cert_store = rustls::RootCertStore::empty();
-
-        for cert in &certs {
-            cert_store.add(cert)?;
-        }
+        cert_store.add_parsable_certificates(certs.clone());
 
         rustls::ClientConfig::builder()
-            .with_safe_defaults()
             .with_root_certificates(Arc::new(cert_store))
             .with_client_auth_cert(certs, key)?
     } else {
         rustls::ClientConfig::builder()
-            .with_safe_defaults()
+            .dangerous()
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_no_client_auth()
     };
@@ -168,13 +203,21 @@ fn configure_client(
     crypto.alpn_protocols = alpn_protocols;
     crypto.key_log = Arc::new(rustls::KeyLogFile::new());
 
-    Ok(ClientConfig::new(Arc::new(crypto)))
+    Ok(ClientConfig::new(Arc::new(QuicClientConfig::try_from(
+        crypto,
+    )?)))
 }
 
 fn read_certs_from_file(
     certificate_file: Option<PathBuf>,
     private_key_file: Option<PathBuf>,
-) -> Result<(Vec<rustls::Certificate>, rustls::PrivateKey), Box<dyn Error>> {
+) -> Result<
+    (
+        Vec<rustls_pki_types::CertificateDer<'static>>,
+        rustls_pki_types::PrivateKeyDer<'static>,
+    ),
+    Box<dyn Error>,
+> {
     /*
      * NOTE:
      *
@@ -194,26 +237,27 @@ fn read_certs_from_file(
         .expect("Expected path to certificates be valid");
     let key_file = private_key_file.expect("Expected path to certificates be valid");
 
-    let certs: Vec<rustls::Certificate> = {
+    let certs: Vec<rustls_pki_types::CertificateDer<'static>> = {
         let cert_file = File::open(cert_file.as_path())?;
         let mut cert_file_rdr = BufReader::new(cert_file);
-        let cert_vec = rustls_pemfile::certs(&mut cert_file_rdr)?;
-        cert_vec.into_iter().map(rustls::Certificate).collect()
+        let cert_vec = rustls_pemfile::certs(&mut cert_file_rdr);
+        cert_vec.into_iter().map(|c| c.unwrap()).collect()
     };
 
-    let key: rustls::PrivateKey = {
+    let key: rustls_pki_types::PrivateKeyDer<'static> = {
         let key_file = File::open(key_file.as_path())?;
         let mut key_file_rdr = BufReader::new(key_file);
 
-        let keys_iter = rustls_pemfile::read_all(&mut key_file_rdr)?;
+        let keys_iter = rustls_pemfile::read_all(&mut key_file_rdr);
         let key_item = keys_iter
             .into_iter()
+            .map(|c| c.unwrap())
             .next()
             .ok_or("Certificate should have at least one private key")?;
 
         match key_item {
-            rustls_pemfile::Item::RSAKey(key) => rustls::PrivateKey(key),
-            rustls_pemfile::Item::PKCS8Key(key) => rustls::PrivateKey(key),
+            rustls_pemfile::Item::Pkcs1Key(key) => rustls_pki_types::PrivateKeyDer::from(key),
+            rustls_pemfile::Item::Pkcs8Key(key) => rustls_pki_types::PrivateKeyDer::from(key),
             _ => unimplemented!(),
         }
     };
@@ -227,33 +271,31 @@ fn configure_server(
     certificate_file: Option<PathBuf>,
     private_key_file: Option<PathBuf>,
     alpns: Vec<String>,
-) -> Result<(ServerConfig, Vec<rustls::Certificate>), Box<dyn Error>> {
+) -> Result<(ServerConfig, Vec<rustls_pki_types::CertificateDer>), Box<dyn Error>> {
     let (certs, key) = if secure_conn {
         read_certs_from_file(certificate_file, private_key_file)?
     } else {
-        let cert = rcgen::generate_simple_self_signed(vec![server_name.into()]).unwrap();
-        let cert_der = cert.serialize_der().unwrap();
-        let priv_key = cert.serialize_private_key_der();
-        let priv_key = rustls::PrivateKey(priv_key);
-        let cert_chain = vec![rustls::Certificate(cert_der)];
+        let rcgen::CertifiedKey { cert: _, key_pair } =
+            rcgen::generate_simple_self_signed(vec![server_name.into()]).unwrap();
+        let cert_der = key_pair.serialize_der();
+        let priv_key = rustls_pki_types::PrivateKeyDer::try_from(cert_der.clone()).unwrap();
+        let cert_chain = vec![rustls_pki_types::CertificateDer::from(cert_der)];
 
         (cert_chain, priv_key)
     };
 
     let mut crypto = if secure_conn {
         let mut cert_store = rustls::RootCertStore::empty();
-        for cert in &certs {
-            cert_store.add(cert)?;
-        }
+        cert_store.add_parsable_certificates(certs.clone());
 
-        let auth_client = rustls::server::AllowAnyAuthenticatedClient::new(cert_store);
+        let auth_client = rustls::server::WebPkiClientVerifier::builder(Arc::new(cert_store))
+            .build()
+            .unwrap();
         rustls::ServerConfig::builder()
-            .with_safe_defaults()
-            .with_client_cert_verifier(Arc::new(auth_client))
+            .with_client_cert_verifier(auth_client)
             .with_single_cert(certs.clone(), key)
     } else {
         rustls::ServerConfig::builder()
-            .with_safe_defaults()
             .with_no_client_auth()
             .with_single_cert(certs.clone(), key)
     }?;
@@ -264,7 +306,8 @@ fn configure_server(
         .collect::<Vec<_>>();
     crypto.alpn_protocols = alpn_protocols;
     crypto.key_log = Arc::new(rustls::KeyLogFile::new());
-    let mut server_config = ServerConfig::with_crypto(Arc::new(crypto));
+    let mut server_config =
+        ServerConfig::with_crypto(Arc::new(QuicServerConfig::try_from(crypto)?));
 
     Arc::get_mut(&mut server_config.transport)
         .unwrap()

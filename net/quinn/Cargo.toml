@@ -16,10 +16,11 @@ gst-base.workspace = true
 once_cell.workspace = true
 tokio = { version = "1.36.0", default-features = false, features = ["time", "rt-multi-thread"] }
 futures = "0.3.30"
-quinn = "0.10.2"
-rustls = { version = "0.21.8", default-features = false, features = ["dangerous_configuration", "quic"] }
-rustls-pemfile = "1.0.3"
-rcgen = "0.12.1"
+quinn = { version = "0.11", default-features = true, features = ["ring"]}
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"]}
+rustls-pemfile = "2"
+rustls-pki-types = "1"
+rcgen = "0.13"
 bytes = "1.5.0"
 thiserror = "1"
 
