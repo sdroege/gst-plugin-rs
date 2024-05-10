@@ -761,13 +761,31 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
                 enc.set_property("disable-hrd-conformance", true);
                 enc.set_property_from_str("rate-control", "cbr");
             }
+            "nvav1enc" => {
+                enc.set_property("bitrate", start_bitrate / 1000);
+                enc.set_property("gop-size", -1i32);
+                enc.set_property_from_str("rc-mode", "cbr");
+                enc.set_property("zerolatency", true);
+            }
+            "av1enc" => {
+                enc.set_property("target-bitrate", start_bitrate / 1000);
+                enc.set_property_from_str("end-usage", "cbr");
+                enc.set_property("keyframe-max-dist", i32::MAX);
+                enc.set_property_from_str("usage-profile", "real-time");
+            }
+            "rav1enc" => {
+                enc.set_property("bitrate", start_bitrate);
+                enc.set_property("low-latency", true);
+                enc.set_property("max-key-frame-interval", 715827882);
+                enc.set_property("speed-preset", 10);
+            }
             _ => (),
         }
     }
 }
 
 /// Default configuration for known payloaders, can be disabled
-/// by returning True from an payloader-setup handler.
+/// by returning True from a payloader-setup handler.
 fn configure_payloader(pay: &gst::Element) {
     pay.set_property("mtu", 1200_u32);
 
@@ -965,16 +983,19 @@ impl VideoEncoder {
                 | "nvv4l2h264enc"
                 | "nvv4l2vp8enc"
                 | "nvv4l2vp9enc"
+                | "nvav1enc"
+                | "av1enc"
+                | "rav1enc"
         )
     }
 
     fn bitrate(&self) -> Result<i32, WebRTCSinkError> {
         let bitrate = match self.factory_name.as_str() {
             "vp8enc" | "vp9enc" => self.element.property::<i32>("target-bitrate"),
-            "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" | "qsvh264enc" => {
-                (self.element.property::<u32>("bitrate") * 1000) as i32
-            }
-            "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" => {
+            "av1enc" => (self.element.property::<u32>("target-bitrate") * 1000) as i32,
+            "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" | "qsvh264enc"
+            | "nvav1enc" => (self.element.property::<u32>("bitrate") * 1000) as i32,
+            "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" | "rav1enc" => {
                 (self.element.property::<u32>("bitrate")) as i32
             }
             _ => return Err(WebRTCSinkError::BitrateNotSupported),
@@ -1004,11 +1025,15 @@ impl VideoEncoder {
     ) -> Result<(), WebRTCSinkError> {
         match self.factory_name.as_str() {
             "vp8enc" | "vp9enc" => self.element.set_property("target-bitrate", bitrate),
-            "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" | "qsvh264enc" => {
+            "av1enc" => self
+                .element
+                .set_property("target-bitrate", (bitrate / 1000) as u32),
+            "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" | "qsvh264enc"
+            | "nvav1enc" => {
                 self.element
                     .set_property("bitrate", (bitrate / 1000) as u32);
             }
-            "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" => {
+            "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" | "rav1enc" => {
                 self.element.set_property("bitrate", bitrate as u32)
             }
             _ => return Err(WebRTCSinkError::BitrateNotSupported),
@@ -1655,7 +1680,21 @@ impl BaseWebRTCSink {
         );
 
         if let Some(ssrc) = ssrc {
-            payloader.set_property("ssrc", ssrc);
+            if let Some(pspec) = payloader.find_property("ssrc") {
+                match pspec.value_type() {
+                    glib::Type::I64 => {
+                        payloader.set_property("ssrc", ssrc as i64);
+                    }
+                    glib::Type::U32 => {
+                        payloader.set_property("ssrc", ssrc);
+                    }
+                    _ => {
+                        gst::warning!(CAT, imp: self, "Unsupported ssrc type (expected i64 or u32)");
+                    }
+                }
+            } else {
+                gst::warning!(CAT, imp: self, "Failed to find 'ssrc' property on payloader");
+            }
         }
 
         self.configure_congestion_control(payloader, codec, extension_configuration_type)
