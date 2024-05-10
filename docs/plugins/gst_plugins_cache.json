@@ -3961,6 +3961,20 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "keep-alive-interval": {
+                        "blurb": "Keeps QUIC connection alive by periodically pinging the server. Value set in ms, 0 disables this feature",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
                     "private-key-file": {
                         "blurb": "Path to a PKCS8 or RSA private key file",
                         "conditionally-available": false,

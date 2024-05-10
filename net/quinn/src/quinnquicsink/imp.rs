@@ -66,6 +66,7 @@ struct Settings {
     server_name: String,
     alpns: Vec<String>,
     timeout: u32,
+    keep_alive_interval: u64,
     secure_conn: bool,
     use_datagram: bool,
     certificate_file: Option<PathBuf>,
@@ -82,6 +83,7 @@ impl Default for Settings {
             server_name: DEFAULT_SERVER_NAME.to_string(),
             alpns: vec![DEFAULT_ALPN.to_string()],
             timeout: DEFAULT_TIMEOUT,
+            keep_alive_interval: 0,
             secure_conn: DEFAULT_SECURE_CONNECTION,
             use_datagram: false,
             certificate_file: None,
@@ -210,6 +212,12 @@ impl ObjectImpl for QuinnQuicSink {
                     .default_value(DEFAULT_TIMEOUT)
                     .readwrite()
                     .build(),
+		glib::ParamSpecUInt64::builder("keep-alive-interval")
+                    .nick("QUIC connection keep alive interval in ms")
+                    .blurb("Keeps QUIC connection alive by periodically pinging the server. Value set in ms, 0 disables this feature")
+		    .default_value(0)
+                    .readwrite()
+                    .build(),
                 glib::ParamSpecBoolean::builder("secure-connection")
                     .nick("Use secure connection")
                     .blurb("Use certificates for QUIC connection. False: Insecure connection, True: Secure connection.")
@@ -269,6 +277,9 @@ impl ObjectImpl for QuinnQuicSink {
             "timeout" => {
                 settings.timeout = value.get().expect("type checked upstream");
             }
+            "keep-alive-interval" => {
+                settings.keep_alive_interval = value.get().expect("type checked upstream");
+            }
             "secure-connection" => {
                 settings.secure_conn = value.get().expect("type checked upstream");
             }
@@ -307,6 +318,7 @@ impl ObjectImpl for QuinnQuicSink {
                 gst::Array::new(alpns).to_value()
             }
             "timeout" => settings.timeout.to_value(),
+            "keep-alive-interval" => settings.keep_alive_interval.to_value(),
             "secure-connection" => settings.secure_conn.to_value(),
             "certificate-file" => {
                 let certfile = settings.certificate_file.as_ref();
@@ -512,6 +524,7 @@ impl QuinnQuicSink {
         let server_name;
         let alpns;
         let use_datagram;
+        let keep_alive_interval;
         let secure_conn;
         let cert_file;
         let private_key_file;
@@ -529,20 +542,26 @@ impl QuinnQuicSink {
             server_name = settings.server_name.clone();
             alpns = settings.alpns.clone();
             use_datagram = settings.use_datagram;
+            keep_alive_interval = settings.keep_alive_interval;
             secure_conn = settings.secure_conn;
             cert_file = settings.certificate_file.clone();
             private_key_file = settings.private_key_file.clone();
         }
 
-        let endpoint =
-            client_endpoint(client_addr, secure_conn, alpns, cert_file, private_key_file).map_err(
-                |err| {
-                    WaitError::FutureError(gst::error_msg!(
-                        gst::ResourceError::Failed,
-                        ["Failed to configure endpoint: {}", err]
-                    ))
-                },
-            )?;
+        let endpoint = client_endpoint(
+            client_addr,
+            secure_conn,
+            alpns,
+            cert_file,
+            private_key_file,
+            keep_alive_interval,
+        )
+        .map_err(|err| {
+            WaitError::FutureError(gst::error_msg!(
+                gst::ResourceError::Failed,
+                ["Failed to configure endpoint: {}", err]
+            ))
+        })?;
 
         let connection = endpoint
             .connect(server_addr, &server_name)

@@ -13,7 +13,7 @@ use gst::ErrorMessage;
 use once_cell::sync::Lazy;
 use quinn::{
     crypto::rustls::QuicClientConfig, crypto::rustls::QuicServerConfig, ClientConfig, Endpoint,
-    ServerConfig,
+    ServerConfig, TransportConfig,
 };
 use std::error::Error;
 use std::fs::File;
@@ -180,6 +180,7 @@ fn configure_client(
     certificate_file: Option<PathBuf>,
     private_key_file: Option<PathBuf>,
     alpns: Vec<String>,
+    keep_alive_interval_ms: u64,
 ) -> Result<ClientConfig, Box<dyn Error>> {
     let mut crypto = if secure_conn {
         let (certs, key) = read_certs_from_file(certificate_file, private_key_file)?;
@@ -203,9 +204,15 @@ fn configure_client(
     crypto.alpn_protocols = alpn_protocols;
     crypto.key_log = Arc::new(rustls::KeyLogFile::new());
 
-    Ok(ClientConfig::new(Arc::new(QuicClientConfig::try_from(
-        crypto,
-    )?)))
+    let mut client_config = ClientConfig::new(Arc::new(QuicClientConfig::try_from(crypto)?));
+
+    if keep_alive_interval_ms > 0 {
+        let mut transport_config = TransportConfig::default();
+        transport_config.keep_alive_interval(Some(Duration::from_millis(keep_alive_interval_ms)));
+        client_config.transport_config(Arc::new(transport_config));
+    }
+
+    Ok(client_config)
 }
 
 fn read_certs_from_file(
@@ -343,8 +350,15 @@ pub fn client_endpoint(
     alpns: Vec<String>,
     certificate_file: Option<PathBuf>,
     private_key_file: Option<PathBuf>,
+    keep_alive_interval_ms: u64,
 ) -> Result<Endpoint, Box<dyn Error>> {
-    let client_cfg = configure_client(secure_conn, certificate_file, private_key_file, alpns)?;
+    let client_cfg = configure_client(
+        secure_conn,
+        certificate_file,
+        private_key_file,
+        alpns,
+        keep_alive_interval_ms,
+    )?;
     let mut endpoint = Endpoint::client(client_addr)?;
 
     endpoint.set_default_client_config(client_cfg);
