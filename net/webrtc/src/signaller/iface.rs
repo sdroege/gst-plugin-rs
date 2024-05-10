@@ -6,7 +6,7 @@ use once_cell::sync::Lazy;
 
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct Signallable {
+pub struct SignallableInterface {
     _parent: glib::gobject_ffi::GTypeInterface,
     pub start: fn(&super::Signallable),
     pub stop: fn(&super::Signallable),
@@ -14,6 +14,12 @@ pub struct Signallable {
     pub add_ice: fn(&super::Signallable, &str, &str, u32, Option<String>),
     pub end_session: fn(&super::Signallable, &str),
 }
+
+unsafe impl InterfaceStruct for SignallableInterface {
+    type Type = Signallable;
+}
+
+pub enum Signallable {}
 
 impl Signallable {
     fn request_meta(_iface: &super::Signallable) -> Option<gst::Structure> {
@@ -39,16 +45,17 @@ impl Signallable {
 }
 
 #[glib::object_interface]
-unsafe impl prelude::ObjectInterface for Signallable {
+impl prelude::ObjectInterface for Signallable {
     const NAME: &'static ::std::primitive::str = "GstRSWebRTCSignallableIface";
+    type Interface = SignallableInterface;
     type Prerequisites = (glib::Object,);
 
-    fn interface_init(&mut self) {
-        self.start = Signallable::start;
-        self.stop = Signallable::stop;
-        self.send_sdp = Signallable::send_sdp;
-        self.add_ice = Signallable::add_ice;
-        self.end_session = Signallable::end_session;
+    fn interface_init(iface: &mut SignallableInterface) {
+        iface.start = Signallable::start;
+        iface.stop = Signallable::stop;
+        iface.send_sdp = Signallable::send_sdp;
+        iface.add_ice = Signallable::add_ice;
+        iface.end_session = Signallable::end_session;
     }
 
     fn signals() -> &'static [Signal] {
