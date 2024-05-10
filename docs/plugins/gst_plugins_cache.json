@@ -8800,7 +8800,7 @@
                         "type": "GstWebRTCSinkPad"
                     },
                     "video_%%u": {
-                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n\nvideo/x-raw(memory:D3D11Memory):\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\n",
+                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n\nvideo/x-raw(memory:D3D11Memory):\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\nvideo/x-av1:\n",
                         "direction": "sink",
                         "presence": "request",
                         "type": "GstWebRTCSinkPad"
@@ -8833,7 +8833,7 @@
                         "type": "GstWebRTCSinkPad"
                     },
                     "video_%%u": {
-                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n\nvideo/x-raw(memory:D3D11Memory):\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\n",
+                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n\nvideo/x-raw(memory:D3D11Memory):\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\nvideo/x-av1:\n",
                         "direction": "sink",
                         "presence": "request",
                         "type": "GstWebRTCSinkPad"
@@ -8880,7 +8880,7 @@
                         "type": "GstWebRTCSinkPad"
                     },
                     "video_%%u": {
-                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n\nvideo/x-raw(memory:D3D11Memory):\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\n",
+                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n\nvideo/x-raw(memory:D3D11Memory):\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\nvideo/x-av1:\n",
                         "direction": "sink",
                         "presence": "request",
                         "type": "GstWebRTCSinkPad"
@@ -8912,7 +8912,7 @@
                         "type": "GstWebRTCSrcPad"
                     },
                     "video_%%u": {
-                        "caps": "video/x-raw(ANY):\napplication/x-rtp:\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\n",
+                        "caps": "video/x-raw(ANY):\napplication/x-rtp:\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\nvideo/x-av1:\n",
                         "direction": "src",
                         "presence": "sometimes",
                         "type": "GstWebRTCSrcPad"
@@ -8945,7 +8945,7 @@
                         "type": "GstWebRTCSinkPad"
                     },
                     "video_%%u": {
-                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n\nvideo/x-raw(memory:D3D11Memory):\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\n",
+                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n\nvideo/x-raw(memory:D3D11Memory):\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\nvideo/x-av1:\n",
                         "direction": "sink",
                         "presence": "request",
                         "type": "GstWebRTCSinkPad"
@@ -8979,7 +8979,7 @@
                         "type": "GstWebRTCSrcPad"
                     },
                     "video_%%u": {
-                        "caps": "video/x-raw(ANY):\napplication/x-rtp:\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\n",
+                        "caps": "video/x-raw(ANY):\napplication/x-rtp:\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\nvideo/x-av1:\n",
                         "direction": "src",
                         "presence": "sometimes",
                         "type": "GstWebRTCSrcPad"
@@ -9012,7 +9012,7 @@
                         "type": "GstWebRTCSinkPad"
                     },
                     "video_%%u": {
-                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n\nvideo/x-raw(memory:D3D11Memory):\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\n",
+                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n\nvideo/x-raw(memory:D3D11Memory):\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\nvideo/x-av1:\n",
                         "direction": "sink",
                         "presence": "request",
                         "type": "GstWebRTCSinkPad"
@@ -9044,7 +9044,7 @@
                         "type": "GstWebRTCSrcPad"
                     },
                     "video_%%u": {
-                        "caps": "video/x-raw(ANY):\napplication/x-rtp:\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\n",
+                        "caps": "video/x-raw(ANY):\napplication/x-rtp:\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\nvideo/x-av1:\n",
                         "direction": "src",
                         "presence": "sometimes",
                         "type": "GstWebRTCSrcPad"
@@ -9260,7 +9260,7 @@
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
-                        "default": "video/x-vp8; video/x-h264; video/x-vp9; video/x-h265",
+                        "default": "video/x-vp8; video/x-h264; video/x-vp9; video/x-h265; video/x-av1",
                         "mutable": "ready",
                         "readable": true,
                         "type": "GstCaps",
@@ -9467,7 +9467,7 @@
                         "writable": true
                     },
                     "video-codecs": {
-                        "blurb": "Names of video codecs to be be used during the SDP negotiation. Valid values: [VP8, H264, VP9, H265]",
+                        "blurb": "Names of video codecs to be be used during the SDP negotiation. Valid values: [VP8, H264, VP9, H265, AV1]",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,

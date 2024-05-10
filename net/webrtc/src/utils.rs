@@ -680,6 +680,7 @@ impl Codec {
         match self.name.as_str() {
             "H264" => make_element("h264parse", None),
             "H265" => make_element("h265parse", None),
+            "AV1" => make_element("av1parse", None),
             _ => return Ok(None),
         }
         .map(Some)
@@ -723,6 +724,7 @@ pub static VP8_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::new_empty_simple(
 pub static VP9_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::new_empty_simple("video/x-vp9"));
 pub static H264_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::new_empty_simple("video/x-h264"));
 pub static H265_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::new_empty_simple("video/x-h265"));
+pub static AV1_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::new_empty_simple("video/x-av1"));
 
 pub static RTP_CAPS: Lazy<gst::Caps> =
     Lazy::new(|| gst::Caps::new_empty_simple("application/x-rtp"));
@@ -810,6 +812,14 @@ static CODECS: Lazy<Codecs> = Lazy::new(|| {
             "H265",
             gst::StreamType::VIDEO,
             &H265_CAPS,
+            &decoders,
+            &encoders,
+            &payloaders,
+        ),
+        Codec::new(
+            "AV1",
+            gst::StreamType::VIDEO,
+            &AV1_CAPS,
             &decoders,
             &encoders,
             &payloaders,
