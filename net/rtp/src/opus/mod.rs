@@ -2,3 +2,7 @@
 
 pub mod depay;
 pub mod pay;
+
+#[allow(clippy::module_inception)]
+#[cfg(test)]
+mod tests;
