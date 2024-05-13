@@ -117,7 +117,7 @@ impl ElementImpl for QuinnQuicSrc {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let sink_pad_template = gst::PadTemplate::new(
+            let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,
                 gst::PadPresence::Always,
@@ -125,7 +125,7 @@ impl ElementImpl for QuinnQuicSrc {
             )
             .unwrap();
 
-            vec![sink_pad_template]
+            vec![src_pad_template]
         });
 
         PAD_TEMPLATES.as_ref()
