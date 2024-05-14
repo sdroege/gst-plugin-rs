@@ -179,19 +179,18 @@ fn main() -> Result<(), Error> {
                 // Write the whole segment timeline out here, compressing multiple segments with
                 // the same duration to a repeated segment.
                 let mut segments = vec![];
-                let mut write_segment =
-                    |start: gst::ClockTime, duration: gst::ClockTime, repeat: usize| {
-                        let mut s = dash_mpd::S {
-                            t: Some(start.mseconds()),
-                            d: duration.mseconds(),
-                            ..Default::default()
-                        };
-                        if repeat > 0 {
-                            s.r = Some(repeat as i64);
-                        }
-
-                        segments.push(s);
+                let mut write_segment = |start: gst::ClockTime, duration: u64, repeat: usize| {
+                    let mut s = dash_mpd::S {
+                        t: Some(start.mseconds()),
+                        d: duration,
+                        ..Default::default()
                     };
+                    if repeat > 0 {
+                        s.r = Some(repeat as i64);
+                    }
+
+                    segments.push(s);
+                };
 
                 let mut start = None;
                 let mut num_segments = 0;
@@ -201,15 +200,15 @@ fn main() -> Result<(), Error> {
                         start = Some(segment.start_time);
                     }
                     if last_duration.is_none() {
-                        last_duration = Some(segment.duration);
+                        last_duration = Some(segment.duration.mseconds());
                     }
 
                     // If the duration of this segment is different from the previous one then we
                     // have to write out the segment now.
-                    if last_duration != Some(segment.duration) {
+                    if last_duration != Some(segment.duration.mseconds()) {
                         write_segment(start.unwrap(), last_duration.unwrap(), num_segments - 1);
                         start = Some(segment.start_time);
-                        last_duration = Some(segment.duration);
+                        last_duration = Some(segment.duration.mseconds());
                         num_segments = 1;
                     } else {
                         num_segments += 1;
