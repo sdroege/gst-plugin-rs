@@ -9,6 +9,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::tests::{run_test_pipeline, ExpectedBuffer, ExpectedPacket, Source};
+use gst_check::Harness;
 
 fn init() {
     use std::sync::Once;
@@ -235,4 +236,43 @@ fn test_opus_pay_depay() {
         expected_pay,
         expected_depay,
     );
+}
+
+// test_opus_depay_pay
+//
+// Check basic depayloader ! payloader compatibility
+//
+#[test]
+fn test_opus_depay_pay() {
+    // gst-launch-1.0 audiotestsrc
+    //  ! opusenc bitrate-type=vbr frame-size=2
+    //  ! rtpopuspay ! fakesink dump=true
+    const OPUS_RTP_BUFFER: &[u8] = &[
+        0x80, 0xe0, 0x6c, 0xd6, 0x5f, 0x7a, 0xdd, 0xae, 0xa6, 0x79, 0xe0, 0xc9, 0xe0, 0xff, 0xfe,
+    ];
+
+    init();
+
+    let mut h = Harness::new_parse("rtpopusdepay2 ! rtpopuspay2");
+
+    let input_caps = gst::Caps::builder("application/x-rtp")
+        .field("media", "audio")
+        .field("encoding-name", "OPUS")
+        .field("clock-rate", 48000i32)
+        .field("payload", 96i32)
+        .build();
+
+    h.set_src_caps(input_caps);
+
+    let input_buffer = make_buffer(
+        OPUS_RTP_BUFFER,
+        gst::ClockTime::ZERO,
+        gst::ClockTime::from_mseconds(20),
+        gst::BufferFlags::DISCONT,
+    );
+
+    h.push(input_buffer)
+        .expect("Got error flow when pushing buffer");
+
+    let _output_buffer = h.pull().expect("Didn't get output buffer");
 }
