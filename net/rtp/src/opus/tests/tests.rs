@@ -20,6 +20,22 @@ fn init() {
     });
 }
 
+fn make_buffer(
+    data: &'static [u8],
+    pts: gst::ClockTime,
+    duration: gst::ClockTime,
+    flags: gst::BufferFlags,
+) -> gst::Buffer {
+    let mut buf = gst::Buffer::from_slice(data);
+
+    let buf_ref = buf.get_mut().unwrap();
+    buf_ref.set_pts(pts);
+    buf_ref.set_duration(duration);
+    buf_ref.set_flags(flags);
+
+    buf
+}
+
 // test_opus_pay_dtx
 //
 // Make sure payloader drops any DTX packets by the encoder (if so requested via the property)
@@ -31,22 +47,6 @@ fn test_opus_pay_dtx() {
     //  ! fakesink silent=false dump=true
     const OPUS_BUFFER_SILENCE: &[u8] = &[0xf8, 0xff, 0xfe];
     const OPUS_BUFFER_SILENCE_DTX: &[u8] = &[0xf8];
-
-    fn make_buffer(
-        data: &'static [u8],
-        pts: gst::ClockTime,
-        duration: gst::ClockTime,
-        flags: gst::BufferFlags,
-    ) -> gst::Buffer {
-        let mut buf = gst::Buffer::from_slice(data);
-
-        let buf_ref = buf.get_mut().unwrap();
-        buf_ref.set_pts(pts);
-        buf_ref.set_duration(duration);
-        buf_ref.set_flags(flags);
-
-        buf
-    }
 
     init();
 
@@ -138,4 +138,101 @@ fn test_opus_pay_dtx() {
             expected_depay,
         );
     }
+}
+
+// test_opus_pay_depay
+//
+// Check basic payloading/depayloading
+//
+#[test]
+fn test_opus_pay_depay() {
+    // gst-launch-1.0 audiotestsrc ! opusenc ! multifilesink
+    const OPUS_BUFFERS: &[&[u8]] = &[
+        include_bytes!("audiotestsrc-1ch-48kHz-000.opus").as_slice(),
+        include_bytes!("audiotestsrc-1ch-48kHz-001.opus").as_slice(),
+        include_bytes!("audiotestsrc-1ch-48kHz-002.opus").as_slice(),
+    ];
+
+    init();
+
+    let input_caps = gst::Caps::builder("audio/x-opus")
+        .field("rate", 48000i32)
+        .field("channels", 1i32)
+        .field("channel-mapping-family", 0i32)
+        .field("stream-count", 1i32)
+        .field("coupled-count", 0i32)
+        .build();
+
+    let input_buffers = vec![
+        make_buffer(
+            OPUS_BUFFERS[0],
+            gst::ClockTime::ZERO,
+            gst::ClockTime::from_mseconds(20), // Note: no ClippingMeta for lead-in here unlike opusenc
+            gst::BufferFlags::DISCONT,
+        ),
+        make_buffer(
+            OPUS_BUFFERS[1],
+            gst::ClockTime::from_mseconds(20),
+            gst::ClockTime::from_mseconds(20),
+            gst::BufferFlags::empty(),
+        ),
+        make_buffer(
+            OPUS_BUFFERS[2],
+            gst::ClockTime::from_mseconds(40),
+            gst::ClockTime::from_mseconds(20),
+            gst::BufferFlags::empty(),
+        ),
+    ];
+
+    // TODO: check durations?
+    let expected_pay = vec![
+        vec![ExpectedPacket::builder()
+            .pts(gst::ClockTime::ZERO)
+            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
+            .pt(96)
+            .rtp_time(0)
+            .marker_bit(true)
+            .build()],
+        vec![ExpectedPacket::builder()
+            .pts(gst::ClockTime::from_mseconds(20))
+            .flags(gst::BufferFlags::empty())
+            .pt(96)
+            .rtp_time(960)
+            .marker_bit(false)
+            .build()],
+        vec![ExpectedPacket::builder()
+            .pts(gst::ClockTime::from_mseconds(40))
+            .flags(gst::BufferFlags::empty())
+            .pt(96)
+            .rtp_time(960 + 960)
+            .marker_bit(false)
+            .build()],
+    ];
+
+    // TODO: check durations?
+    let expected_depay = vec![
+        vec![ExpectedBuffer::builder()
+            .pts(gst::ClockTime::ZERO)
+            .size(253)
+            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
+            .build()],
+        vec![ExpectedBuffer::builder()
+            .pts(gst::ClockTime::from_mseconds(20))
+            .size(168)
+            .flags(gst::BufferFlags::empty())
+            .build()],
+        vec![ExpectedBuffer::builder()
+            .pts(gst::ClockTime::from_mseconds(40))
+            .size(166)
+            .flags(gst::BufferFlags::empty())
+            .build()],
+    ];
+
+    run_test_pipeline(
+        Source::Buffers(input_caps, input_buffers),
+        "rtpopuspay2",
+        "rtpopusdepay2",
+        expected_pay,
+        expected_depay,
+    );
 }
