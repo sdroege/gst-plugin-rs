@@ -678,6 +678,7 @@ impl Codec {
 
     pub fn build_parser(&self) -> Result<Option<gst::Element>, Error> {
         match self.name.as_str() {
+            "VP9" => make_element("vp9parse", None),
             "H264" => make_element("h264parse", None),
             "H265" => make_element("h265parse", None),
             "AV1" => make_element("av1parse", None),
