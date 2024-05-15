@@ -6,7 +6,11 @@
 // <https://mozilla.org/MPL/2.0/>.
 //
 // SPDX-License-Identifier: MPL-2.0
-#![allow(clippy::non_send_fields_in_send_ty, unused_doc_comments)]
+#![allow(
+    clippy::non_send_fields_in_send_ty,
+    unused_doc_comments,
+    unused_imports
+)]
 
 /**
  * plugin-quinn:
@@ -14,11 +18,17 @@
  * Since: plugins-rs-0.13.0
  */
 use gst::glib;
+use gst::prelude::*;
+mod common;
 mod quinnquicsink;
 mod quinnquicsrc;
 mod utils;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "doc")]
+    {
+        common::QuinnQuicRole::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    }
     quinnquicsink::register(plugin)?;
     quinnquicsrc::register(plugin)?;
 

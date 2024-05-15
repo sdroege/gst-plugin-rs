@@ -79,7 +79,9 @@ fn test_send_receive_with_datagram() {
     // in the other test. We get a address already in use error otherwise.
     thread::spawn(move || {
         let mut h1 = gst_check::Harness::new_empty();
-        h1.add_parse("quinnquicsrc use-datagram=true server-address=127.0.0.1 server-port=6000 secure-connection=false");
+        h1.add_parse(
+            "quinnquicsrc use-datagram=true address=127.0.0.1 port=6000 secure-connection=false",
+        );
 
         h1.play();
 
@@ -96,7 +98,7 @@ fn test_send_receive_with_datagram() {
     });
 
     let mut h2 = gst_check::Harness::new_empty();
-    h2.add_parse("quinnquicsink use-datagram=true client-address=127.0.0.1 client-port=6001 server-address=127.0.0.1 server-port=6000 secure-connection=false");
+    h2.add_parse("quinnquicsink use-datagram=true bind-address=127.0.0.1 bind-port=6001 address=127.0.0.1 port=6000 secure-connection=false");
 
     h2.set_src_caps(gst::Caps::builder("text/plain").build());
 

@@ -7,8 +7,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use crate::common::*;
 use crate::utils::{
-    make_socket_addr, server_endpoint, wait, WaitError, CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG,
+    client_endpoint, make_socket_addr, server_endpoint, wait, WaitError, CONNECTION_CLOSE_CODE,
+    CONNECTION_CLOSE_MSG,
 };
 use bytes::Bytes;
 use futures::future;
@@ -21,21 +23,7 @@ use quinn::{Connection, ConnectionError, ReadError, RecvStream};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-static DEFAULT_SERVER_NAME: &str = "localhost";
-static DEFAULT_SERVER_ADDR: &str = "127.0.0.1";
-static DEFAULT_SERVER_PORT: u16 = 5000;
-
-/*
- * For QUIC transport parameters
- * <https://datatracker.ietf.org/doc/html/rfc9000#section-7.4>
- *
- * A HTTP client might specify "http/1.1" and/or "h2" or "h3".
- * Other well-known values are listed in the at IANA registry at
- * <https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids>.
- */
-const DEFAULT_ALPN: &str = "gst-quinn";
-const DEFAULT_TIMEOUT: u32 = 15;
-const DEFAULT_SECURE_CONNECTION: bool = true;
+const DEFAULT_ROLE: QuinnQuicRole = QuinnQuicRole::Server;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -59,11 +47,15 @@ enum State {
 
 #[derive(Clone, Debug)]
 struct Settings {
-    server_address: String,
-    server_port: u16,
+    address: String,
+    port: u16,
     server_name: String,
+    bind_address: String,
+    bind_port: u16,
     alpns: Vec<String>,
+    role: QuinnQuicRole,
     timeout: u32,
+    keep_alive_interval: u64,
     secure_conn: bool,
     caps: gst::Caps,
     use_datagram: bool,
@@ -74,11 +66,15 @@ struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
-            server_address: DEFAULT_SERVER_ADDR.to_string(),
-            server_port: DEFAULT_SERVER_PORT,
+            address: DEFAULT_ADDR.to_string(),
+            port: DEFAULT_PORT,
             server_name: DEFAULT_SERVER_NAME.to_string(),
+            bind_address: DEFAULT_BIND_ADDR.to_string(),
+            bind_port: DEFAULT_BIND_PORT,
             alpns: vec![DEFAULT_ALPN.to_string()],
+            role: DEFAULT_ROLE,
             timeout: DEFAULT_TIMEOUT,
+            keep_alive_interval: 0,
             secure_conn: DEFAULT_SECURE_CONNECTION,
             caps: gst::Caps::new_any(),
             use_datagram: false,
@@ -173,17 +169,28 @@ impl ObjectImpl for QuinnQuicSrc {
             vec![
                 glib::ParamSpecString::builder("server-name")
                     .nick("QUIC server name")
-                    .blurb("Name of the QUIC server which is in server certificate")
+                    .blurb("Name of the QUIC server which is in server certificate in case of server role")
                     .build(),
-                glib::ParamSpecString::builder("server-address")
+                glib::ParamSpecString::builder("address")
                     .nick("QUIC server address")
                     .blurb("Address of the QUIC server e.g. 127.0.0.1")
                     .build(),
-                glib::ParamSpecUInt::builder("server-port")
+                glib::ParamSpecUInt::builder("port")
                     .nick("QUIC server port")
                     .blurb("Port of the QUIC server e.g. 5000")
                     .maximum(65535)
-                    .default_value(DEFAULT_SERVER_PORT as u32)
+                    .default_value(DEFAULT_PORT as u32)
+                    .readwrite()
+                    .build(),
+                glib::ParamSpecString::builder("bind-address")
+                    .nick("QUIC client bind address")
+                    .blurb("Address to bind QUIC client e.g. 0.0.0.0")
+                    .build(),
+                glib::ParamSpecUInt::builder("bind-port")
+                    .nick("QUIC client port")
+                    .blurb("Port to bind QUIC client e.g. 5001")
+                    .maximum(65535)
+                    .default_value(DEFAULT_BIND_PORT as u32)
                     .readwrite()
                     .build(),
 		gst::ParamSpecArray::builder("alpn-protocols")
@@ -191,11 +198,21 @@ impl ObjectImpl for QuinnQuicSrc {
                     .blurb("QUIC connection Application-Layer Protocol Negotiation (ALPN) values")
                     .element_spec(&glib::ParamSpecString::builder("alpn-protocol").build())
                     .build(),
+		glib::ParamSpecEnum::builder_with_default("role", DEFAULT_ROLE)
+                    .nick("QUIC role")
+                    .blurb("QUIC connection role to use.")
+		    .build(),
                 glib::ParamSpecUInt::builder("timeout")
                     .nick("Timeout")
                     .blurb("Value in seconds to timeout QUIC endpoint requests (0 = No timeout).")
                     .maximum(3600)
                     .default_value(DEFAULT_TIMEOUT)
+                    .readwrite()
+                    .build(),
+		glib::ParamSpecUInt64::builder("keep-alive-interval")
+                    .nick("QUIC connection keep alive interval in ms")
+                    .blurb("Keeps QUIC connection alive by periodically pinging the server. Value set in ms, 0 disables this feature")
+		    .default_value(0)
                     .readwrite()
                     .build(),
                 glib::ParamSpecBoolean::builder("secure-connection")
@@ -233,11 +250,17 @@ impl ObjectImpl for QuinnQuicSrc {
             "server-name" => {
                 settings.server_name = value.get::<String>().expect("type checked upstream");
             }
-            "server-address" => {
-                settings.server_address = value.get::<String>().expect("type checked upstream");
+            "address" => {
+                settings.address = value.get::<String>().expect("type checked upstream");
             }
-            "server-port" => {
-                settings.server_port = value.get::<u32>().expect("type checked upstream") as u16;
+            "port" => {
+                settings.port = value.get::<u32>().expect("type checked upstream") as u16;
+            }
+            "bind-address" => {
+                settings.bind_address = value.get::<String>().expect("type checked upstream");
+            }
+            "bind-port" => {
+                settings.bind_port = value.get::<u32>().expect("type checked upstream") as u16;
             }
             "alpn-protocols" => {
                 settings.alpns = value
@@ -252,6 +275,9 @@ impl ObjectImpl for QuinnQuicSrc {
                     })
                     .collect::<Vec<String>>()
             }
+            "role" => {
+                settings.role = value.get::<QuinnQuicRole>().expect("type checked upstream");
+            }
             "caps" => {
                 settings.caps = value
                     .get::<Option<gst::Caps>>()
@@ -263,6 +289,9 @@ impl ObjectImpl for QuinnQuicSrc {
             }
             "timeout" => {
                 settings.timeout = value.get().expect("type checked upstream");
+            }
+            "keep-alive-interval" => {
+                settings.keep_alive_interval = value.get().expect("type checked upstream");
             }
             "secure-connection" => {
                 settings.secure_conn = value.get().expect("type checked upstream");
@@ -287,17 +316,24 @@ impl ObjectImpl for QuinnQuicSrc {
 
         match pspec.name() {
             "server-name" => settings.server_name.to_value(),
-            "server-address" => settings.server_address.to_string().to_value(),
-            "server-port" => {
-                let port = settings.server_port as u32;
+            "address" => settings.address.to_string().to_value(),
+            "port" => {
+                let port = settings.port as u32;
+                port.to_value()
+            }
+            "bind-address" => settings.bind_address.to_string().to_value(),
+            "bind-port" => {
+                let port = settings.bind_port as u32;
                 port.to_value()
             }
             "alpn-protocols" => {
                 let alpns = settings.alpns.iter().map(|v| v.as_str());
                 gst::Array::new(alpns).to_value()
             }
+            "role" => settings.role.to_value(),
             "caps" => settings.caps.to_value(),
             "timeout" => settings.timeout.to_value(),
+            "keep-alive-interval" => settings.keep_alive_interval.to_value(),
             "secure-connection" => settings.secure_conn.to_value(),
             "certificate-file" => {
                 let certfile = settings.certificate_file.as_ref();
@@ -336,7 +372,7 @@ impl BaseSrcImpl for QuinnQuicSrc {
             unreachable!("QuicSrc already started");
         }
 
-        match wait(&self.canceller, self.wait_for_connection(), timeout) {
+        match wait(&self.canceller, self.init_connection(), timeout) {
             Ok(Ok((c, s))) => {
                 *state = State::Started(Started {
                     connection: c,
@@ -556,11 +592,14 @@ impl QuinnQuicSrc {
         };
     }
 
-    async fn wait_for_connection(&self) -> Result<(Connection, Option<RecvStream>), WaitError> {
+    async fn init_connection(&self) -> Result<(Connection, Option<RecvStream>), WaitError> {
         let server_addr;
         let server_name;
+        let client_addr;
         let alpns;
+        let role;
         let use_datagram;
+        let keep_alive_interval;
         let secure_conn;
         let cert_file;
         let private_key_file;
@@ -568,41 +607,79 @@ impl QuinnQuicSrc {
         {
             let settings = self.settings.lock().unwrap();
 
-            server_addr = make_socket_addr(
-                format!("{}:{}", settings.server_address, settings.server_port).as_str(),
+            client_addr = make_socket_addr(
+                format!("{}:{}", settings.bind_address, settings.bind_port).as_str(),
             )?;
+
+            server_addr =
+                make_socket_addr(format!("{}:{}", settings.address, settings.port).as_str())?;
 
             server_name = settings.server_name.clone();
             alpns = settings.alpns.clone();
+            role = settings.role;
             use_datagram = settings.use_datagram;
+            keep_alive_interval = settings.keep_alive_interval;
             secure_conn = settings.secure_conn;
             cert_file = settings.certificate_file.clone();
             private_key_file = settings.private_key_file.clone();
         }
 
-        let endpoint = server_endpoint(
-            server_addr,
-            &server_name,
-            secure_conn,
-            alpns,
-            cert_file,
-            private_key_file,
-        )
-        .map_err(|err| {
-            WaitError::FutureError(gst::error_msg!(
-                gst::ResourceError::Failed,
-                ["Failed to configure endpoint: {}", err]
-            ))
-        })?;
+        let connection;
 
-        let incoming_conn = endpoint.accept().await.unwrap();
+        match role {
+            QuinnQuicRole::Server => {
+                let endpoint = server_endpoint(
+                    server_addr,
+                    &server_name,
+                    secure_conn,
+                    alpns,
+                    cert_file,
+                    private_key_file,
+                )
+                .map_err(|err| {
+                    WaitError::FutureError(gst::error_msg!(
+                        gst::ResourceError::Failed,
+                        ["Failed to configure endpoint: {}", err]
+                    ))
+                })?;
 
-        let connection = incoming_conn.await.map_err(|err| {
-            WaitError::FutureError(gst::error_msg!(
-                gst::ResourceError::Failed,
-                ["Connection error: {}", err]
-            ))
-        })?;
+                let incoming_conn = endpoint.accept().await.unwrap();
+
+                connection = incoming_conn.await.map_err(|err| {
+                    WaitError::FutureError(gst::error_msg!(
+                        gst::ResourceError::Failed,
+                        ["Connection error: {}", err]
+                    ))
+                })?;
+            }
+            QuinnQuicRole::Client => {
+                let endpoint = client_endpoint(
+                    client_addr,
+                    secure_conn,
+                    alpns,
+                    cert_file,
+                    private_key_file,
+                    keep_alive_interval,
+                )
+                .map_err(|err| {
+                    WaitError::FutureError(gst::error_msg!(
+                        gst::ResourceError::Failed,
+                        ["Failed to configure endpoint: {}", err]
+                    ))
+                })?;
+
+                connection = endpoint
+                    .connect(server_addr, &server_name)
+                    .unwrap()
+                    .await
+                    .map_err(|err| {
+                        WaitError::FutureError(gst::error_msg!(
+                            gst::ResourceError::Failed,
+                            ["Connection error: {}", err]
+                        ))
+                    })?;
+            }
+        }
 
         let stream = if !use_datagram {
             let res = connection.accept_uni().await.map_err(|err| {

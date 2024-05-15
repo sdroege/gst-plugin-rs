@@ -15,8 +15,8 @@
  * ```bash
  * gst-launch-1.0 -v -e audiotestsrc num-buffers=512 ! \
  * audio/x-raw,format=S16LE,rate=48000,channels=2,layout=interleaved ! opusenc ! \
- * quinnquicsink server-name="quic.net" client-address="127.0.0.1" client-port=6001 \
- * server-address="127.0.0.1" server-port=6000 certificate-file="certificates/fullchain.pem" \
+ * quinnquicsink server-name="quic.net" bind-address="127.0.0.1" bind-port=6001 \
+ * address="127.0.0.1" port=6000 certificate-file="certificates/fullchain.pem" \
  * private-key-file="certificates/privkey.pem"
  * ```
  */

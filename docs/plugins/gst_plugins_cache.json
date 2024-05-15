@@ -3984,6 +3984,18 @@
                     }
                 },
                 "properties": {
+                    "address": {
+                        "blurb": "Address of the QUIC server e.g. 127.0.0.1",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "127.0.0.1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "alpn-protocols": {
                         "blurb": "QUIC connection Application-Layer Protocol Negotiation (ALPN) values",
                         "conditionally-available": false,
@@ -3993,6 +4005,32 @@
                         "mutable": "null",
                         "readable": true,
                         "type": "GstValueArray",
+                        "writable": true
+                    },
+                    "bind-address": {
+                        "blurb": "Address to bind QUIC client e.g. 0.0.0.0",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0.0.0.0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "bind-port": {
+                        "blurb": "Port to bind QUIC client e.g. 5001",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "65535",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
                         "writable": true
                     },
                     "certificate-file": {
@@ -4047,6 +4085,20 @@
                         "type": "guint64",
                         "writable": true
                     },
+                    "port": {
+                        "blurb": "Port of the QUIC server e.g. 5000",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "5000",
+                        "max": "65535",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
                     "private-key-file": {
                         "blurb": "Path to a PKCS8 or RSA private key file",
                         "conditionally-available": false,
@@ -4057,6 +4109,18 @@
                         "mutable": "null",
                         "readable": true,
                         "type": "gchararray",
+                        "writable": true
+                    },
+                    "role": {
+                        "blurb": "QUIC connection role to use.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "client (1)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstQuinnQuicRole",
                         "writable": true
                     },
                     "secure-connection": {
@@ -4084,7 +4148,7 @@
                         "writable": true
                     },
                     "server-name": {
-                        "blurb": "Name of the QUIC server which is in server certificate",
+                        "blurb": "Name of the QUIC server which is in server certificate in case of server role",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -4158,6 +4222,18 @@
                     }
                 },
                 "properties": {
+                    "address": {
+                        "blurb": "Address of the QUIC server e.g. 127.0.0.1",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "127.0.0.1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "alpn-protocols": {
                         "blurb": "QUIC connection Application-Layer Protocol Negotiation (ALPN) values",
                         "conditionally-available": false,
@@ -4167,6 +4243,32 @@
                         "mutable": "null",
                         "readable": true,
                         "type": "GstValueArray",
+                        "writable": true
+                    },
+                    "bind-address": {
+                        "blurb": "Address to bind QUIC client e.g. 0.0.0.0",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0.0.0.0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "bind-port": {
+                        "blurb": "Port to bind QUIC client e.g. 5001",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "65535",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
                         "writable": true
                     },
                     "caps": {
@@ -4193,6 +4295,34 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "keep-alive-interval": {
+                        "blurb": "Keeps QUIC connection alive by periodically pinging the server. Value set in ms, 0 disables this feature",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "port": {
+                        "blurb": "Port of the QUIC server e.g. 5000",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "5000",
+                        "max": "65535",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
                     "private-key-file": {
                         "blurb": "Path to a PKCS8 or RSA private key file",
                         "conditionally-available": false,
@@ -4203,6 +4333,18 @@
                         "mutable": "null",
                         "readable": true,
                         "type": "gchararray",
+                        "writable": true
+                    },
+                    "role": {
+                        "blurb": "QUIC connection role to use.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "server (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstQuinnQuicRole",
                         "writable": true
                     },
                     "secure-connection": {
@@ -4230,7 +4372,7 @@
                         "writable": true
                     },
                     "server-name": {
-                        "blurb": "Name of the QUIC server which is in server certificate",
+                        "blurb": "Name of the QUIC server which is in server certificate in case of server role",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -4287,7 +4429,23 @@
         },
         "filename": "gstquinn",
         "license": "MPL",
-        "other-types": {},
+        "other-types": {
+            "GstQuinnQuicRole": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Server: Act as QUIC server.",
+                        "name": "server",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Client: Act as QUIC client.",
+                        "name": "client",
+                        "value": "1"
+                    }
+                ]
+            }
+        },
         "package": "gst-plugin-quinn",
         "source": "gst-plugin-quinn",
         "tracers": {},
