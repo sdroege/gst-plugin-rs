@@ -8,7 +8,9 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::tests::{run_test_pipeline, ExpectedBuffer, ExpectedPacket, Source};
+use crate::tests::{
+    run_test_pipeline, run_test_pipeline_full, ExpectedBuffer, ExpectedPacket, Source,
+};
 use gst::prelude::*;
 use gst_check::Harness;
 
@@ -429,4 +431,105 @@ fn test_opus_payloader_get_caps() {
     }
 
     // Not testing MULTIOPUS, OPUS preference order, doesn't seem very interesting in practice.
+}
+
+// test_opus_pay_depay_multichannel
+//
+// Check basic payloading/depayloading with multichannel audio (MULTIOPUS extension)
+//
+#[test]
+fn test_opus_pay_depay_multichannel() {
+    // gst-launch-1.0 audiotestsrc wave=ticks ! audio/x-raw,channels=6 ! opusenc ! multifilesink
+    const OPUS_BUFFERS: &[&[u8]] = &[
+        include_bytes!("audiotestsrc-6ch-48kHz-000.opus").as_slice(),
+        include_bytes!("audiotestsrc-6ch-48kHz-001.opus").as_slice(),
+        include_bytes!("audiotestsrc-6ch-48kHz-002.opus").as_slice(),
+    ];
+
+    init();
+
+    let input_caps = gst::Caps::builder("audio/x-opus")
+        .field("rate", 48000i32)
+        .field("channels", 6i32)
+        .field("channel-mapping-family", 1i32)
+        .field("stream-count", 4i32)
+        .field("coupled-count", 2i32)
+        .field("channel-mapping", gst::Array::new([0i32, 4, 1, 2, 3, 5]))
+        .build();
+
+    let input_buffers = vec![
+        make_buffer(
+            OPUS_BUFFERS[0],
+            gst::ClockTime::ZERO,
+            gst::ClockTime::from_mseconds(20), // Note: no ClippingMeta for lead-in here unlike opusenc
+            gst::BufferFlags::DISCONT,
+        ),
+        make_buffer(
+            OPUS_BUFFERS[1],
+            gst::ClockTime::from_mseconds(20),
+            gst::ClockTime::from_mseconds(20),
+            gst::BufferFlags::empty(),
+        ),
+        make_buffer(
+            OPUS_BUFFERS[2],
+            gst::ClockTime::from_mseconds(40),
+            gst::ClockTime::from_mseconds(20),
+            gst::BufferFlags::empty(),
+        ),
+    ];
+
+    // TODO: check durations?
+    let expected_pay = vec![
+        vec![ExpectedPacket::builder()
+            .pts(gst::ClockTime::ZERO)
+            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
+            .pt(96)
+            .rtp_time(0)
+            .marker_bit(true)
+            .build()],
+        vec![ExpectedPacket::builder()
+            .pts(gst::ClockTime::from_mseconds(20))
+            .flags(gst::BufferFlags::empty())
+            .pt(96)
+            .rtp_time(960)
+            .marker_bit(false)
+            .build()],
+        vec![ExpectedPacket::builder()
+            .pts(gst::ClockTime::from_mseconds(40))
+            .flags(gst::BufferFlags::empty())
+            .pt(96)
+            .rtp_time(960 + 960)
+            .marker_bit(false)
+            .build()],
+    ];
+
+    // TODO: check durations?
+    let expected_depay = vec![
+        vec![ExpectedBuffer::builder()
+            .pts(gst::ClockTime::ZERO)
+            .size(143)
+            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
+            .build()],
+        vec![ExpectedBuffer::builder()
+            .pts(gst::ClockTime::from_mseconds(20))
+            .size(129)
+            .flags(gst::BufferFlags::empty())
+            .build()],
+        vec![ExpectedBuffer::builder()
+            .pts(gst::ClockTime::from_mseconds(40))
+            .size(133)
+            .flags(gst::BufferFlags::empty())
+            .build()],
+    ];
+
+    let expected_depay_caps = input_caps.clone();
+
+    run_test_pipeline_full(
+        Source::Buffers(input_caps, input_buffers),
+        "rtpopuspay2",
+        "rtpopusdepay2",
+        expected_pay,
+        expected_depay,
+        Some(expected_depay_caps),
+    );
 }
