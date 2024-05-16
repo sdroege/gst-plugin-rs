@@ -9,6 +9,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::tests::{run_test_pipeline, ExpectedBuffer, ExpectedPacket, Source};
+use gst::prelude::*;
 use gst_check::Harness;
 
 fn init() {
@@ -275,4 +276,157 @@ fn test_opus_depay_pay() {
         .expect("Got error flow when pushing buffer");
 
     let _output_buffer = h.pull().expect("Didn't get output buffer");
+}
+
+// test_opus_payloader_get_caps
+//
+// Check that a caps query on payloader sink pad reflects downstream RTP caps requirements.
+//
+#[test]
+fn test_opus_payloader_get_caps() {
+    init();
+
+    fn get_allowed_opus_caps_for_rtp_caps_string(recv_caps_str: &str) -> gst::Caps {
+        let src = gst::ElementFactory::make("appsrc").build().unwrap();
+        let pay = gst::ElementFactory::make("rtpopuspay2").build().unwrap();
+        let sink = gst::ElementFactory::make("appsink").build().unwrap();
+
+        sink.set_property_from_str("caps", recv_caps_str);
+
+        gst::Element::link_many([&src, &pay, &sink]).unwrap();
+
+        let pad = src.static_pad("src").unwrap();
+
+        pad.allowed_caps().unwrap()
+    }
+
+    fn get_allowed_opus_caps_for_rtp_caps(flavour: &str, recv_props: &str) -> gst::Caps {
+        get_allowed_opus_caps_for_rtp_caps_string(&format!(
+            "application/x-rtp, encoding-name={flavour}, {recv_props}"
+        ))
+    }
+
+    let stereo_caps = gst::Caps::builder("audio/x-opus")
+        .field("channels", 2i32)
+        .build();
+
+    let mono_caps = gst::Caps::builder("audio/x-opus")
+        .field("channels", 1i32)
+        .build();
+
+    // "stereo" is just a hint from receiver that sender can use to avoid unnecessary processing,
+    // but it doesn't signal a hard requirement. So both mono and stereo should always be allowed
+    // as input, but the channel preference should be relayed in the first caps structure.
+    {
+        let allowed_opus_caps = get_allowed_opus_caps_for_rtp_caps("OPUS", "stereo=(string)0");
+
+        eprintln!("OPUS stereo=0 => {:?}", allowed_opus_caps);
+
+        assert_eq!(allowed_opus_caps.size(), 2);
+
+        // First caps structure should have channels=1 for receiver preference stereo=0
+        let s = allowed_opus_caps.structure(0).unwrap();
+        assert_eq!(s.get::<i32>("channels"), Ok(1));
+
+        // ... but stereo should still be allowed
+        assert!(allowed_opus_caps.can_intersect(&stereo_caps));
+
+        // Make sure it's channel-mapping-family=0
+        for i in 0..2 {
+            let s = allowed_opus_caps.structure(i).unwrap();
+            assert!(s.has_name("audio/x-opus"));
+            assert_eq!(s.get::<i32>("channel-mapping-family"), Ok(0));
+        }
+    }
+
+    {
+        let allowed_opus_caps = get_allowed_opus_caps_for_rtp_caps("OPUS", "stereo=(string)1");
+
+        eprintln!("OPUS stereo=1 => {:?}", allowed_opus_caps);
+
+        assert_eq!(allowed_opus_caps.size(), 2);
+
+        // First caps structure should have channels=2 for receiver preference stereo=1
+        let s = allowed_opus_caps.structure(0).unwrap();
+        assert_eq!(s.get::<i32>("channels"), Ok(2));
+
+        // ... but mono should still be allowed
+        assert!(allowed_opus_caps.can_intersect(&mono_caps));
+
+        // Make sure it's channel-mapping-family=0
+        for i in 0..2 {
+            let s = allowed_opus_caps.structure(i).unwrap();
+            assert!(s.has_name("audio/x-opus"));
+            assert_eq!(s.get::<i32>("channel-mapping-family"), Ok(0));
+        }
+    }
+
+    // Make sure that with MULTIOPUS flavour the stereo hint is ignored entirely
+    for stereo_str in &[
+        &"stereo=(string)0",
+        &"stereo=(string)1",
+        &"description=none", // no stereo attribute present
+    ] {
+        let allowed_opus_caps = get_allowed_opus_caps_for_rtp_caps("MULTIOPUS", stereo_str);
+
+        eprintln!("MULTIOPUS {stereo_str} => {allowed_opus_caps:?}");
+
+        assert_eq!(allowed_opus_caps.size(), 1);
+
+        // Neither mono nor stereo should be allowed for MULTIOPUS
+        let mono_stereo_caps = gst::Caps::builder("audio/x-opus")
+            .field("channels", gst::IntRange::new(1, 2))
+            .build();
+        assert!(!allowed_opus_caps.can_intersect(&mono_stereo_caps));
+
+        // Make sure it's channel-mapping-family=1
+        let s = allowed_opus_caps.structure(0).unwrap();
+        assert!(s.has_name("audio/x-opus"));
+        assert_eq!(s.get::<i32>("channel-mapping-family"), Ok(1));
+        assert_eq!(
+            s.get::<gst::IntRange::<i32>>("channels"),
+            Ok(gst::IntRange::new(3, 255))
+        );
+    }
+
+    // If receiver supports both OPUS and MULTIOPUS ..
+    {
+        let allowed_opus_caps = get_allowed_opus_caps_for_rtp_caps_string(
+            "\
+            application/x-rtp, encoding-name=OPUS, stereo=(string)0; \
+            application/x-rtp, encoding-name=MULTIOPUS",
+        );
+
+        eprintln!("OPUS,stereo=0; MULTIOPUS => {allowed_opus_caps:?}");
+
+        // Mono should be in there of course
+        assert!(allowed_opus_caps.can_intersect(&mono_caps));
+
+        // Make sure mono is the first structure to indicate preference as per receiver caps
+        let s = allowed_opus_caps.structure(0).unwrap();
+        assert_eq!(s.get::<i32>("channels"), Ok(1));
+
+        // Stereo should still be allowed, since stereo=0 is just a hint
+        assert!(allowed_opus_caps.can_intersect(&stereo_caps));
+
+        // Multichannel of course
+        let multich_caps = gst::Caps::builder("audio/x-opus")
+            .field("channel-mapping-family", 1i32)
+            .field("channels", gst::IntRange::new(3, 255))
+            .build();
+
+        assert!(allowed_opus_caps.can_intersect(&multich_caps));
+
+        // Make sure it's channel-mapping-family=0 in the first two structs
+        for i in 0..3 {
+            let s = allowed_opus_caps.structure(i).unwrap();
+            assert!(s.has_name("audio/x-opus"));
+            assert_eq!(
+                s.get::<i32>("channel-mapping-family"),
+                if i < 2 { Ok(0) } else { Ok(1) }
+            );
+        }
+    }
+
+    // Not testing MULTIOPUS, OPUS preference order, doesn't seem very interesting in practice.
 }

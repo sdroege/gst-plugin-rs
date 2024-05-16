@@ -369,22 +369,28 @@ impl RtpBasePay2Impl for RtpOpusPay {
 
                 if s.get::<i32>("channel-mapping-family") == Ok(0) {
                     let peer_s = peer_caps.structure(0).unwrap();
-                    let pref_chans = peer_s.get::<&str>("sprop-stereo")
+
+                    gst::trace!(CAT, imp: self, "Peer preference structure: {peer_s}");
+
+                    let pref_chans = peer_s.get::<&str>("stereo")
                         .ok()
                         .and_then(|params| params.trim().parse::<i32>().ok())
                         .map(|v| match v {
                             0 => 1, // mono
                             1 => 2, // stereo
                             _ => {
-                                gst::warning!(CAT, imp: self, "Unexpected sprop-stereo value {v} in input caps {s}");
+                                gst::warning!(CAT, imp: self, "Unexpected stereo value {v} in peer caps {s}");
                                 2 // default is stereo
                             }
                         });
 
                     if let Some(pref_chans) = pref_chans {
-                        let mut pref_s = peer_s.to_owned();
-                        pref_s.set("channels", pref_chans);
-                        let mut pref_caps = gst::Caps::builder_full().structure(pref_s).build();
+                        gst::trace!(CAT, imp: self, "Peer preference: channels={pref_chans}");
+
+                        let mut pref_caps = gst::Caps::builder("audio/x-opus")
+                            .field("channel-mapping-family", 0i32)
+                            .field("channels", pref_chans)
+                            .build();
                         pref_caps.merge(ret_caps);
                         ret_caps = pref_caps;
                     }
