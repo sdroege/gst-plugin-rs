@@ -533,3 +533,58 @@ fn test_opus_pay_depay_multichannel() {
         Some(expected_depay_caps),
     );
 }
+
+// test_opus_depay_pay_multichannel
+//
+// Check basic depayloader ! payloader compatibility, MULTIOPUS edition
+//
+#[test]
+fn test_opus_depay_pay_multichannel() {
+    // gst-launch-1.0 audiotestsrc wave=silence
+    //  ! audio/x-raw,channels=6
+    //  ! opusenc frame-size=5
+    //  ! rtpopuspay ! fakesink dump=true
+    const OPUS_RTP_BUFFER: &[u8] = include_bytes!("audiotestsrc-6ch-48kHz-5ms-000.rtp").as_slice();
+
+    init();
+
+    let mut h = Harness::new_parse("rtpopusdepay2 ! rtpopuspay2");
+
+    let input_caps = gst::Caps::builder("application/x-rtp")
+        .field("media", "audio")
+        .field("encoding-name", "MULTIOPUS")
+        .field("clock-rate", 48000i32)
+        .field("payload", 96i32)
+        .field("num_streams", "4")
+        .field("coupled_streams", "2")
+        .field("encoding-params", "6")
+        .field("sprop-maxcapturerate", "48000")
+        .field("channel_mapping", "0,4,1,2,3,5")
+        .build();
+
+    let expected_output_caps = input_caps.clone();
+
+    h.set_src_caps(input_caps);
+
+    let input_buffer = make_buffer(
+        OPUS_RTP_BUFFER,
+        gst::ClockTime::ZERO,
+        gst::ClockTime::from_mseconds(5),
+        gst::BufferFlags::DISCONT,
+    );
+
+    h.push(input_buffer)
+        .expect("Got error flow when pushing buffer");
+
+    let _output_buffer = h.pull().expect("Didn't get output buffer");
+
+    let output_caps = h
+        .srcpad()
+        .expect("harness srcpad")
+        .current_caps()
+        .expect("output caps");
+
+    eprintln!("Output caps: {output_caps}");
+
+    assert!(output_caps.can_intersect(&expected_output_caps));
+}
