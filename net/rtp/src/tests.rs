@@ -189,6 +189,17 @@ pub fn run_test_pipeline(
     expected_pay: Vec<Vec<ExpectedPacket>>,
     expected_depay: Vec<Vec<ExpectedBuffer>>,
 ) {
+    run_test_pipeline_full(src, pay, depay, expected_pay, expected_depay, None);
+}
+
+pub fn run_test_pipeline_full(
+    src: Source,
+    pay: &str,
+    depay: &str,
+    expected_pay: Vec<Vec<ExpectedPacket>>,
+    expected_depay: Vec<Vec<ExpectedBuffer>>,
+    expected_depay_caps: Option<gst::Caps>,
+) {
     let pipeline = Pipeline(gst::Pipeline::new());
 
     // Return if the pipelines can't be built: this likely means that encoders are missing
@@ -447,6 +458,12 @@ pub fn run_test_pipeline(
         expected_depay.len(),
         depay_samples.len()
     );
+
+    if let Some(expected_depay_caps) = expected_depay_caps {
+        if let Some(first_depay_sample) = depay_samples.first() {
+            assert_eq!(expected_depay_caps, *first_depay_sample.caps().unwrap());
+        }
+    }
 
     for (i, (expected_list, sample)) in
         Iterator::zip(expected_depay.into_iter(), depay_samples.into_iter()).enumerate()
