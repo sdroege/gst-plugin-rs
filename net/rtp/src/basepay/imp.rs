@@ -897,21 +897,28 @@ impl RtpBasePay2 {
 
         let mut extensions = self.extensions.lock().unwrap();
         let mut extensions_changed = false;
-        for (ext_id, uri) in caps_extensions {
-            if let Some(extension) = extensions.get(&ext_id) {
-                if extension.uri().as_deref() == Some(&uri) {
-                    // Same extension, nothing to do here, we will update it with the new caps
-                    // later
-                    continue;
+        for (ext_id, uri) in &caps_extensions {
+            if let Some(extension) = extensions.get(ext_id) {
+                if extension.uri().as_deref() == Some(uri) {
+                    // Same extension, update it with the new caps in case the attributes changed
+                    if extension.set_attributes_from_caps(src_caps) {
+                        continue;
+                    }
+
+                    // Try to get a new one for this extension ID instead
+                    gst::warning!(CAT, imp: self, "Failed to configure extension {ext_id} from caps {src_caps}");
+                    extensions_changed |= true;
+                    extensions.remove(ext_id);
+                } else {
+                    gst::debug!(
+                        CAT,
+                        imp: self,
+                        "Extension ID {ext_id} changed from {:?} to {uri}",
+                        extension.uri(),
+                    );
+                    extensions_changed |= true;
+                    extensions.remove(ext_id);
                 }
-                gst::debug!(
-                    CAT,
-                    imp: self,
-                    "Extension ID {ext_id} changed from {:?} to {uri}",
-                    extension.uri(),
-                );
-                extensions_changed |= true;
-                extensions.remove(&ext_id);
             }
 
             gst::debug!(CAT, imp: self, "Requesting extension {uri} for ID {ext_id}");
@@ -919,7 +926,7 @@ impl RtpBasePay2 {
                 .obj()
                 .emit_by_name::<Option<gst_rtp::RTPHeaderExtension>>(
                     "request-extension",
-                    &[&(ext_id as u32), &uri],
+                    &[&(*ext_id as u32), &uri],
                 );
 
             let Some(ext) = ext else {
@@ -927,23 +934,23 @@ impl RtpBasePay2 {
                 continue;
             };
 
-            if ext.id() != ext_id as u32 {
+            if ext.id() != *ext_id as u32 {
                 gst::warning!(CAT, imp: self, "Created extension has wrong ID");
                 continue;
             }
 
-            extensions.insert(ext_id, ext);
+            if !ext.set_attributes_from_caps(src_caps) {
+                gst::warning!(CAT, imp: self, "Failed to configure extension {ext_id} from caps {src_caps}");
+                continue;
+            }
+
+            extensions.insert(*ext_id, ext);
             extensions_changed |= true;
         }
 
         let sink_caps = state.sink_caps.as_ref().unwrap();
         let mut to_remove = vec![];
         for (ext_id, ext) in extensions.iter() {
-            if !ext.set_attributes_from_caps(src_caps) {
-                gst::warning!(CAT, imp: self, "Failed to configure extension {ext_id} from caps {src_caps}");
-                to_remove.push(*ext_id);
-            }
-
             if !ext.set_non_rtp_sink_caps(sink_caps) {
                 gst::warning!(CAT, imp: self, "Failed to configure extension {ext_id} from sink caps {sink_caps}");
                 to_remove.push(*ext_id);
@@ -954,18 +961,13 @@ impl RtpBasePay2 {
             extensions_changed |= true;
         }
 
-        // First remove all header extension related fields from the caps,
-        // then add them again correctly from the actually selected extensions.
+        // Add extension information for all actually selected extensions to the caps.
+        //
+        // This will override the values for extensions that are already represented in the caps
+        // but will leave extensions in the caps that couldn't be configured above and are not in
+        // the extensions list anymore. This is necessary so that the created caps stay compatible.
         {
             let caps = src_caps.make_mut();
-            let s = caps.structure_mut(0).unwrap();
-            s.filter_map_in_place(|field, value| {
-                if field.as_str().starts_with("extmap-") {
-                    None
-                } else {
-                    Some(value)
-                }
-            });
             for (_, ext) in extensions.iter() {
                 ext.set_caps_from_attributes(caps);
             }
