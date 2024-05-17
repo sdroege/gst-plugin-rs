@@ -60,9 +60,9 @@ pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
         .or_else(|_| {
             let (name, endpoint) = host.split_once('+').ok_or(())?;
             let name =
-                base32::decode(base32::Alphabet::RFC4648 { padding: true }, name).ok_or(())?;
+                base32::decode(base32::Alphabet::Rfc4648 { padding: true }, name).ok_or(())?;
             let endpoint =
-                base32::decode(base32::Alphabet::RFC4648 { padding: true }, endpoint).ok_or(())?;
+                base32::decode(base32::Alphabet::Rfc4648 { padding: true }, endpoint).ok_or(())?;
             let name = String::from_utf8(name).map_err(|_| ())?;
             let endpoint = String::from_utf8(endpoint).map_err(|_| ())?;
             Ok(format!("{name}{endpoint}"))
