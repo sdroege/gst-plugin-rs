@@ -1448,21 +1448,28 @@ impl RtpBaseDepay2 {
 
         let mut extensions = self.extensions.lock().unwrap();
         let mut extensions_changed = false;
-        for (ext_id, uri) in caps_extensions {
-            if let Some(extension) = extensions.get(&ext_id) {
-                if extension.uri().as_deref() == Some(&uri) {
-                    // Same extension, nothing to do here, we will update it with the new caps
-                    // later
-                    continue;
+        for (ext_id, uri) in &caps_extensions {
+            if let Some(extension) = extensions.get(ext_id) {
+                if extension.uri().as_deref() == Some(uri) {
+                    // Same extension, update it with the new caps in case the attributes changed
+                    if extension.set_attributes_from_caps(sink_caps) {
+                        continue;
+                    }
+
+                    // Try to get a new one for this extension ID instead
+                    gst::warning!(CAT, imp: self, "Failed to configure extension {ext_id} from caps {sink_caps}");
+                    extensions_changed |= true;
+                    extensions.remove(ext_id);
+                } else {
+                    gst::debug!(
+                        CAT,
+                        imp: self,
+                        "Extension ID {ext_id} changed from {:?} to {uri}",
+                        extension.uri(),
+                    );
+                    extensions_changed |= true;
+                    extensions.remove(ext_id);
                 }
-                gst::debug!(
-                    CAT,
-                    imp: self,
-                    "Extension ID {ext_id} changed from {:?} to {uri}",
-                    extension.uri(),
-                );
-                extensions_changed |= true;
-                extensions.remove(&ext_id);
             }
 
             gst::debug!(CAT, imp: self, "Requesting extension {uri} for ID {ext_id}");
@@ -1470,7 +1477,7 @@ impl RtpBaseDepay2 {
                 .obj()
                 .emit_by_name::<Option<gst_rtp::RTPHeaderExtension>>(
                     "request-extension",
-                    &[&(ext_id as u32), &uri],
+                    &[&(*ext_id as u32), &uri],
                 );
 
             let Some(ext) = ext else {
@@ -1478,26 +1485,29 @@ impl RtpBaseDepay2 {
                 continue;
             };
 
-            if ext.id() != ext_id as u32 {
+            if ext.id() != *ext_id as u32 {
                 gst::warning!(CAT, imp: self, "Created extension has wrong ID");
                 continue;
             }
 
-            extensions.insert(ext_id, ext);
+            if !ext.set_attributes_from_caps(sink_caps) {
+                gst::warning!(CAT, imp: self, "Failed to configure extension {ext_id} from caps {sink_caps}");
+                continue;
+            }
+
+            extensions.insert(*ext_id, ext);
             extensions_changed |= true;
         }
 
-        let mut to_remove = vec![];
-        for (ext_id, ext) in extensions.iter() {
-            if !ext.set_attributes_from_caps(sink_caps) {
-                gst::warning!(CAT, imp: self, "Failed to configure extension {ext_id} from caps {sink_caps}");
-                to_remove.push(*ext_id);
+        // Remove all extensions that are not in the caps
+        extensions.retain(|ext_id, _| {
+            if !caps_extensions.contains_key(ext_id) {
+                extensions_changed = true;
+                false
+            } else {
+                true
             }
-        }
-        for ext_id in to_remove {
-            extensions.remove(&ext_id);
-            extensions_changed |= true;
-        }
+        });
         drop(extensions);
 
         if extensions_changed {
