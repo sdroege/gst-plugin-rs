@@ -445,8 +445,8 @@ pub fn run_test_pipeline_full(
                 "Buffer {} of payload buffer list {} has unexpected RTP timestamp {:?} instead of {:?}",
                 j,
                 i,
-                rtp_packet.timestamp(),
-                expected_timestamp,
+                rtp_packet.timestamp().wrapping_sub(initial_timestamp),
+                expected_timestamp.wrapping_sub(initial_timestamp),
             );
         }
     }
