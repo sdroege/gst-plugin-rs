@@ -25,6 +25,8 @@ pub struct ExpectedPacket {
     pub pt: u8,
     pub rtp_time: u32,
     pub marker: bool,
+    /// Whether to drop the packet instead of forwarding it to the depayloader
+    pub drop: bool,
 }
 
 impl ExpectedPacket {
@@ -38,6 +40,7 @@ impl ExpectedPacket {
     /// * pt: 96
     /// * rtp_time: 0
     /// * marker: true
+    /// * drop: false
     pub fn builder() -> ExpectedPacketBuilder {
         ExpectedPacketBuilder(ExpectedPacket {
             pts: gst::ClockTime::ZERO,
@@ -46,6 +49,7 @@ impl ExpectedPacket {
             pt: 96,
             rtp_time: 0,
             marker: true,
+            drop: false,
         })
     }
 }
@@ -79,6 +83,11 @@ impl ExpectedPacketBuilder {
 
     pub fn marker_bit(mut self, marker: bool) -> Self {
         self.0.marker = marker;
+        self
+    }
+
+    pub fn drop(mut self, drop: bool) -> Self {
+        self.0.drop = drop;
         self
     }
 
@@ -249,6 +258,7 @@ pub fn run_test_pipeline_full(
         .add_probe(
             gst::PadProbeType::BUFFER | gst::PadProbeType::BUFFER_LIST,
             {
+                let expected_pay_iter = Mutex::new(expected_pay.clone().into_iter());
                 let pay_samples = pay_samples.clone();
                 move |pad, info| {
                     let segment_event = pad.sticky_event::<gst::event::Segment>(0).unwrap();
@@ -267,7 +277,61 @@ pub fn run_test_pipeline_full(
 
                     pay_samples.lock().unwrap().push(sample_builder.build());
 
-                    gst::PadProbeReturn::Ok
+                    // Check if we need to drop anything
+                    let expected_packets = expected_pay_iter
+                        .lock()
+                        .unwrap()
+                        .next()
+                        .expect("Expected packets?!");
+
+                    let drop_count = expected_packets
+                        .iter()
+                        .filter(|exp_pkt| exp_pkt.drop)
+                        .count();
+
+                    let probe_return = if drop_count > 0 {
+                        match info.mask
+                            & (gst::PadProbeType::BUFFER | gst::PadProbeType::BUFFER_LIST)
+                        {
+                            gst::PadProbeType::BUFFER => {
+                                assert_eq!(expected_packets.len(), 1);
+                                gst::PadProbeReturn::Drop
+                            }
+                            gst::PadProbeType::BUFFER_LIST => {
+                                let list = info.buffer_list_mut().unwrap();
+                                if drop_count == list.len() {
+                                    gst::PadProbeReturn::Drop
+                                } else {
+                                    assert_eq!(expected_packets.len(), list.len());
+
+                                    // Copy buffers we want to keep into a new buffer list ..
+                                    let decimated_list = list
+                                        .iter()
+                                        .enumerate()
+                                        .filter_map(|(n, buf)| {
+                                            let keep = !expected_packets[n].drop;
+                                            keep.then_some(buf.to_owned())
+                                        })
+                                        .collect::<gst::BufferList>();
+
+                                    // .. and install that into the PadProbeInfo
+                                    *list = decimated_list;
+
+                                    assert_eq!(expected_packets.len(), list.len() + drop_count);
+
+                                    gst::PadProbeReturn::Ok
+                                }
+                            }
+                            _ => unreachable!(
+                                "Expected only buffer or buffer list!, mask={:?}",
+                                info.mask
+                            ),
+                        }
+                    } else {
+                        gst::PadProbeReturn::Ok
+                    };
+
+                    probe_return
                 }
             },
         )
