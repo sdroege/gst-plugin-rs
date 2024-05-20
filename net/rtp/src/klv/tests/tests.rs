@@ -230,3 +230,87 @@ fn test_klv_pay_depay_fragmented() {
         Some(expected_output_caps),
     );
 }
+
+// test_klv_pay_depay_with_packet_loss
+//
+// Check basic payloading/depayloading with some packet loss
+//
+#[test]
+fn test_klv_pay_depay_with_packet_loss() {
+    let klv_packets = parse_klv_packets(KLV_DATA).unwrap();
+
+    init();
+
+    let input_caps = gst::Caps::builder("meta/x-klv")
+        .field("parsed", true)
+        .build();
+
+    let mut input_buffers = vec![];
+
+    for (i, klv) in klv_packets.iter().enumerate() {
+        input_buffers.push(make_buffer(
+            klv,
+            gst::ClockTime::from_seconds(i as u64),
+            gst::ClockTime::NONE,
+            if i == 0 {
+                gst::BufferFlags::DISCONT
+            } else {
+                gst::BufferFlags::empty()
+            },
+        ));
+    }
+
+    let mut expected_pay = vec![];
+
+    for (i, _klv) in klv_packets.iter().enumerate() {
+        let expected_flags = match i {
+            0 => gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER,
+            _ => gst::BufferFlags::MARKER,
+        };
+        expected_pay.push(vec![ExpectedPacket::builder()
+            .pts(gst::ClockTime::from_seconds(i as u64))
+            .flags(expected_flags)
+            .pt(96)
+            .rtp_time(i as u32 * 90_000)
+            .marker_bit(true)
+            .drop(i == 0 || i == 2) // Drop 1st and 3rd packet
+            .build()]);
+    }
+
+    let mut expected_depay = vec![];
+
+    // 1st and 3rd packet should have been dropped
+    for (i, _klv) in klv_packets
+        .into_iter()
+        .enumerate()
+        .filter(|&(i, _)| i != 0 && i != 2)
+    {
+        println!("i = {i}");
+        let expected_flags = match i {
+            0 | 2 => unreachable!(),
+            1 | 3 => gst::BufferFlags::DISCONT, // Depayloader will add DISCONT flag on first packet and on discontinuities
+            _ => gst::BufferFlags::empty(),
+        };
+        let expected_size = match i {
+            0..=4 => 163,
+            5 => 162,
+            _ => unreachable!(),
+        };
+        expected_depay.push(vec![ExpectedBuffer::builder()
+            .pts(gst::ClockTime::from_seconds(i as u64))
+            .size(expected_size)
+            .flags(expected_flags)
+            .build()]);
+    }
+
+    let expected_output_caps = input_caps.clone();
+
+    run_test_pipeline_full(
+        Source::Buffers(input_caps, input_buffers),
+        "rtpklvpay2",
+        "rtpklvdepay2",
+        expected_pay,
+        expected_depay,
+        Some(expected_output_caps),
+    );
+}
