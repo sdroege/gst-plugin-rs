@@ -35,9 +35,11 @@ use std::time::Duration;
 use std::u16;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{Async, Context, PadSrc, Task};
+use crate::runtime::{task, Async, Context, PadSrc, Task, TaskState};
 
 use crate::socket::{wrap_socket, GioSocketWrapper, Socket, SocketError, SocketRead};
+use futures::channel::mpsc::{channel, Receiver, Sender};
+use futures::pin_mut;
 
 const DEFAULT_ADDRESS: Option<&str> = Some("0.0.0.0");
 const DEFAULT_PORT: i32 = 5004;
@@ -49,6 +51,11 @@ const DEFAULT_USED_SOCKET: Option<GioSocketWrapper> = None;
 const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: Duration = Duration::ZERO;
 const DEFAULT_RETRIEVE_SENDER_ADDRESS: bool = true;
+
+#[derive(Debug, Default)]
+struct State {
+    event_sender: Option<Sender<gst::Event>>,
+}
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -182,16 +189,18 @@ struct UdpSrcTask {
     retrieve_sender_address: bool,
     need_initial_events: bool,
     need_segment: bool,
+    event_receiver: Receiver<gst::Event>,
 }
 
 impl UdpSrcTask {
-    fn new(element: super::UdpSrc) -> Self {
+    fn new(element: super::UdpSrc, event_receiver: Receiver<gst::Event>) -> Self {
         UdpSrcTask {
             element,
             socket: None,
             retrieve_sender_address: DEFAULT_RETRIEVE_SENDER_ADDRESS,
             need_initial_events: true,
             need_segment: true,
+            event_receiver,
         }
     }
 }
@@ -423,44 +432,69 @@ impl TaskImpl for UdpSrcTask {
 
     fn try_next(&mut self) -> BoxFuture<'_, Result<gst::Buffer, gst::FlowError>> {
         async move {
-            self.socket
-                .as_mut()
-                .unwrap()
-                .try_next()
-                .await
-                .map(|(mut buffer, saddr)| {
-                    if let Some(saddr) = saddr {
-                        if self.retrieve_sender_address {
-                            NetAddressMeta::add(
-                                buffer.get_mut().unwrap(),
-                                &gio::InetSocketAddress::from(saddr),
-                            );
+            let event_fut = self.event_receiver.next().fuse();
+            let socket_fut = self.socket.as_mut().unwrap().try_next().fuse();
+
+            pin_mut!(event_fut);
+            pin_mut!(socket_fut);
+
+            futures::select! {
+                event_res = event_fut => match event_res {
+                    Some(event) => {
+                        gst::debug!(CAT, obj: self.element, "Handling element level event {event:?}");
+
+                        match event.view() {
+                            gst::EventView::Eos(_) => Err(gst::FlowError::Eos),
+                            ev => {
+                                gst::error!(CAT, obj: self.element, "Unexpected event {ev:?} on channel");
+                                Err(gst::FlowError::Error)
+                            }
                         }
                     }
-                    buffer
-                })
-                .map_err(|err| {
-                    gst::error!(CAT, obj: self.element, "Got error {:?}", err);
-                    match err {
-                        SocketError::Gst(err) => {
-                            gst::element_error!(
-                                self.element,
-                                gst::StreamError::Failed,
-                                ("Internal data stream error"),
-                                ["streaming stopped, reason {}", err]
-                            );
-                        }
-                        SocketError::Io(err) => {
-                            gst::element_error!(
-                                self.element,
-                                gst::StreamError::Failed,
-                                ("I/O error"),
-                                ["streaming stopped, I/O error {}", err]
-                            );
-                        }
+                    None => {
+                        gst::error!(CAT, obj: self.element, "Unexpected return on event channel");
+                        Err(gst::FlowError::Error)
                     }
-                    gst::FlowError::Error
-                })
+                },
+                socket_res = socket_fut => match socket_res {
+                    Ok((mut buffer, saddr)) => {
+                        if let Some(saddr) = saddr {
+                            if self.retrieve_sender_address {
+                                NetAddressMeta::add(
+                                    buffer.get_mut().unwrap(),
+                                    &gio::InetSocketAddress::from(saddr),
+                                );
+                            }
+                        }
+
+                        Ok(buffer)
+                    },
+                    Err(err) => {
+                        gst::error!(CAT, obj: self.element, "Got error {err:#}");
+
+                        match err {
+                            SocketError::Gst(err) => {
+                                gst::element_error!(
+                                    self.element,
+                                    gst::StreamError::Failed,
+                                    ("Internal data stream error"),
+                                    ["streaming stopped, reason {err}"]
+                                );
+                            }
+                            SocketError::Io(err) => {
+                                gst::element_error!(
+                                    self.element,
+                                    gst::StreamError::Failed,
+                                    ("I/O error"),
+                                    ["streaming stopped, I/O error {err}"]
+                                );
+                            }
+                        }
+
+                        Err(gst::FlowError::Error)
+                    }
+                },
+            }
         }
         .boxed()
     }
@@ -544,6 +578,40 @@ impl TaskImpl for UdpSrcTask {
         }
         .boxed()
     }
+
+    fn handle_loop_error(&mut self, err: gst::FlowError) -> BoxFuture<'_, task::Trigger> {
+        async move {
+            match err {
+                gst::FlowError::Flushing => {
+                    gst::debug!(CAT, obj: self.element, "Flushing");
+
+                    task::Trigger::FlushStart
+                }
+                gst::FlowError::Eos => {
+                    gst::debug!(CAT, obj: self.element, "EOS");
+                    self.element
+                        .imp()
+                        .src_pad
+                        .push_event(gst::event::Eos::new())
+                        .await;
+
+                    task::Trigger::Stop
+                }
+                err => {
+                    gst::error!(CAT, obj: self.element, "Got error {err}");
+                    gst::element_error!(
+                        &self.element,
+                        gst::StreamError::Failed,
+                        ("Internal data stream error"),
+                        ["streaming stopped, reason {}", err]
+                    );
+
+                    task::Trigger::Error
+                }
+            }
+        }
+        .boxed()
+    }
 }
 
 pub struct UdpSrc {
@@ -551,6 +619,7 @@ pub struct UdpSrc {
     task: Task,
     configured_caps: Mutex<Option<gst::Caps>>,
     settings: Mutex<Settings>,
+    state: Mutex<State>,
 }
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -575,10 +644,16 @@ impl UdpSrc {
             })?;
         drop(settings);
 
+        let (sender, receiver) = channel(1);
+
         *self.configured_caps.lock().unwrap() = None;
         self.task
-            .prepare(UdpSrcTask::new(self.obj().clone()), context)
+            .prepare(UdpSrcTask::new(self.obj().clone(), receiver), context)
             .block_on()?;
+
+        let mut state = self.state.lock().unwrap();
+        state.event_sender = Some(sender);
+        drop(state);
 
         gst::debug!(CAT, imp: self, "Prepared");
 
@@ -611,6 +686,10 @@ impl UdpSrc {
         gst::debug!(CAT, imp: self, "Paused");
         Ok(())
     }
+
+    fn state(&self) -> TaskState {
+        self.task.state()
+    }
 }
 
 #[glib::object_subclass]
@@ -628,6 +707,7 @@ impl ObjectSubclass for UdpSrc {
             task: Task::default(),
             configured_caps: Default::default(),
             settings: Default::default(),
+            state: Default::default(),
         }
     }
 }
@@ -857,5 +937,32 @@ impl ElementImpl for UdpSrc {
         }
 
         Ok(success)
+    }
+
+    fn send_event(&self, event: gst::Event) -> bool {
+        use gst::EventView;
+
+        gst::debug!(CAT, imp: self, "Handling element level event {event:?}");
+
+        match event.view() {
+            EventView::Eos(_) => {
+                if self.state() != TaskState::Started {
+                    if let Err(err) = self.start() {
+                        gst::error!(CAT, imp: self, "Failed to start task thread {err:?}");
+                    }
+                }
+
+                if self.state() == TaskState::Started {
+                    let mut state = self.state.lock().unwrap();
+
+                    if let Some(event_tx) = state.event_sender.as_mut() {
+                        return event_tx.try_send(event.clone()).is_ok();
+                    }
+                }
+
+                false
+            }
+            _ => self.parent_send_event(event),
+        }
     }
 }
