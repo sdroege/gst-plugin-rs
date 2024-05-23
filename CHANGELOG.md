@@ -5,6 +5,26 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.12.6] - 2024-05-23
+### Fixed
+- Various Rust 1.78 clippy warnings.
+- gtk4paintablesink: Fix plugin description.
+
+### Added
+- fmp4mux / mp4mux: Add support for adding AV1 header OBUs into the MP4
+  headers.
+- fmp4mux / mp4mux: Take track language from the tags if provided.
+- gtk4paintablesink: Add GST_GTK4_WINDOW_FULLSCREEN environment variable to
+  create a fullscreen window for debugging purposes.
+- gtk4paintablesink: Also create a window automatically when called from
+  gst-play-1.0.
+- webrtc: Add support for insecure TLS connections.
+- webrtcsink: Add VP9 parser after the encoder.
+
+### Changed
+- webrtcsink: Improve error when no discovery pipeline runs.
+- rtpgccbwe: Improve debug output in various places.
+
 ## [0.12.5] - 2024-04-29
 ### Fixed
 - hrtfrender: Use a bitmask instead of an int in the caps for the channel-mask.
@@ -411,7 +431,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.5...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.6...HEAD
+[0.12.6]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.5...0.12.6
 [0.12.5]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.4...0.12.5
 [0.12.4]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.3...0.12.4
 [0.12.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.2...0.12.3
