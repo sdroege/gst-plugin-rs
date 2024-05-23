@@ -35,7 +35,7 @@ def on_activate(app):
         sink.add(gtksink)
         convert.link(gtksink)
 
-        sink.add_pad(Gst.GhostPad.new('sink', gtksink.get_static_pad('sink')))
+        sink.add_pad(Gst.GhostPad.new('sink', convert.get_static_pad('sink')))
 
     pipeline.add(src)
     pipeline.add(overlay)
