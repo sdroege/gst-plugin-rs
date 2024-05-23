@@ -1320,7 +1320,8 @@ impl RtpBaseDepay2 {
                 pt,
                 ext_seqnum,
                 ext_rtptime,
-            })
+            });
+            state.last_used_ext_seqnum = None;
         }
 
         // Remember the initial PTS/rtp_time mapping if old-style RTSP caps are used.
