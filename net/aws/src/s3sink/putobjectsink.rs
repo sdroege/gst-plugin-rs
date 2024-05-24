@@ -72,8 +72,11 @@ struct Settings {
     region: Region,
     bucket: Option<String>,
     key: Option<String>,
+    cache_control: Option<String>,
     content_type: Option<String>,
     content_disposition: Option<String>,
+    content_encoding: Option<String>,
+    content_language: Option<String>,
     access_key: Option<String>,
     secret_access_key: Option<String>,
     session_token: Option<String>,
@@ -129,8 +132,11 @@ impl Default for Settings {
             region: Region::new("us-west-2"),
             bucket: None,
             key: None,
+            cache_control: None,
             content_type: None,
             content_disposition: None,
+            content_encoding: None,
+            content_language: None,
             access_key: None,
             secret_access_key: None,
             session_token: None,
@@ -231,6 +237,11 @@ impl S3PutObjectSink {
 
         let bucket = Some(url.as_ref().unwrap().bucket.to_owned());
         let key = Some(url.as_ref().unwrap().object.to_owned());
+        let cache_control = settings.cache_control.clone();
+        let content_type = settings.content_type.clone();
+        let content_disposition = settings.content_disposition.clone();
+        let content_encoding = settings.content_encoding.clone();
+        let content_language = settings.content_language.clone();
         let metadata = settings.to_metadata(self);
 
         let client = &state.client;
@@ -239,6 +250,11 @@ impl S3PutObjectSink {
             .put_object()
             .set_body(body)
             .set_bucket(bucket)
+            .set_cache_control(cache_control)
+            .set_content_disposition(content_disposition)
+            .set_content_encoding(content_encoding)
+            .set_content_type(content_type)
+            .set_content_language(content_language)
             .set_key(key)
             .set_metadata(metadata)
     }
@@ -422,6 +438,10 @@ impl ObjectImpl for S3PutObjectSink {
                     .nick("S3 endpoint URI")
                     .blurb("The S3 endpoint URI to use")
                     .build(),
+                glib::ParamSpecString::builder("cache-control")
+                    .nick("cache-control")
+                    .blurb("Cache-Control header to set for uploaded object")
+                    .build(),
                 glib::ParamSpecString::builder("content-type")
                     .nick("content-type")
                     .blurb("Content-Type header to set for uploaded object")
@@ -429,6 +449,14 @@ impl ObjectImpl for S3PutObjectSink {
                 glib::ParamSpecString::builder("content-disposition")
                     .nick("content-disposition")
                     .blurb("Content-Disposition header to set for uploaded object")
+                    .build(),
+                glib::ParamSpecString::builder("content-encoding")
+                    .nick("content-encoding")
+                    .blurb("Content-Encoding header to set for uploaded object")
+                    .build(),
+                glib::ParamSpecString::builder("content-language")
+                    .nick("content-language")
+                    .blurb("Content-Language header to set for uploaded object")
                     .build(),
                 glib::ParamSpecUInt64::builder("flush-interval-buffers")
                     .nick("Flush interval in buffers")
@@ -526,6 +554,11 @@ impl ObjectImpl for S3PutObjectSink {
                     let _ = self.set_uri(Some(&settings.to_uri()));
                 }
             }
+            "cache-control" => {
+                settings.cache_control = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream");
+            }
             "content-type" => {
                 settings.content_type = value
                     .get::<Option<String>>()
@@ -533,6 +566,16 @@ impl ObjectImpl for S3PutObjectSink {
             }
             "content-disposition" => {
                 settings.content_disposition = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream");
+            }
+            "content-encoding" => {
+                settings.content_encoding = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream");
+            }
+            "content-language" => {
+                settings.content_language = value
                     .get::<Option<String>>()
                     .expect("type checked upstream");
             }
@@ -581,8 +624,11 @@ impl ObjectImpl for S3PutObjectSink {
             "retry-attempts" => settings.retry_attempts.to_value(),
             "request-timeout" => duration_to_millis(Some(settings.request_timeout)).to_value(),
             "endpoint-uri" => settings.endpoint_uri.to_value(),
+            "cache-control" => settings.cache_control.to_value(),
             "content-type" => settings.content_type.to_value(),
             "content-disposition" => settings.content_disposition.to_value(),
+            "content-encoding" => settings.content_encoding.to_value(),
+            "content-language" => settings.content_language.to_value(),
             "flush-interval-buffers" => settings.flush_interval_buffers.to_value(),
             "flush-interval-bytes" => settings.flush_interval_bytes.to_value(),
             "flush-interval-time" => settings.flush_interval_time.to_value(),

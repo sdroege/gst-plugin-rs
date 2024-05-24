@@ -237,8 +237,44 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "cache-control": {
+                        "blurb": "Cache-Control header to set for uploaded object",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "content-disposition": {
                         "blurb": "Content-Disposition header to set for uploaded object",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "content-encoding": {
+                        "blurb": "Content-Encoding header to set for uploaded object",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "content-language": {
+                        "blurb": "Content-Language header to set for uploaded object",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -489,6 +525,18 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "cache-control": {
+                        "blurb": "Cache-Control header to set for uploaded object",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "complete-upload-request-timeout": {
                         "blurb": "Timeout for the complete multipart upload request (in ms, set to -1 for infinity) (Deprecated. Use request-timeout.)",
                         "conditionally-available": false,
@@ -519,6 +567,30 @@
                     },
                     "content-disposition": {
                         "blurb": "Content-Disposition header to set for uploaded object",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "content-encoding": {
+                        "blurb": "Content-Encoding header to set for uploaded object",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "content-language": {
+                        "blurb": "Content-Language header to set for uploaded object",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,

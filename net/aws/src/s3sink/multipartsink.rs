@@ -104,8 +104,11 @@ struct Settings {
     region: Region,
     bucket: Option<String>,
     key: Option<String>,
+    cache_control: Option<String>,
     content_type: Option<String>,
     content_disposition: Option<String>,
+    content_encoding: Option<String>,
+    content_language: Option<String>,
     buffer_size: u64,
     access_key: Option<String>,
     secret_access_key: Option<String>,
@@ -159,8 +162,11 @@ impl Default for Settings {
             region: Region::new("us-west-2"),
             bucket: None,
             key: None,
+            cache_control: None,
             content_type: None,
             content_disposition: None,
+            content_encoding: None,
+            content_language: None,
             access_key: None,
             secret_access_key: None,
             session_token: None,
@@ -358,16 +364,22 @@ impl S3Sink {
     ) -> CreateMultipartUploadFluentBuilder {
         let bucket = Some(url.bucket.clone());
         let key = Some(url.object.clone());
+        let cache_control = settings.cache_control.clone();
         let content_type = settings.content_type.clone();
         let content_disposition = settings.content_disposition.clone();
+        let content_encoding = settings.content_encoding.clone();
+        let content_language = settings.content_language.clone();
         let metadata = settings.to_metadata(self);
 
         client
             .create_multipart_upload()
             .set_bucket(bucket)
             .set_key(key)
+            .set_cache_control(cache_control)
             .set_content_type(content_type)
             .set_content_disposition(content_disposition)
+            .set_content_encoding(content_encoding)
+            .set_content_language(content_language)
             .set_metadata(metadata)
     }
 
@@ -771,6 +783,10 @@ impl ObjectImpl for S3Sink {
                     .nick("S3 endpoint URI")
                     .blurb("The S3 endpoint URI to use")
                     .build(),
+                glib::ParamSpecString::builder("cache-control")
+                    .nick("cache-control")
+                    .blurb("Cache-Control header to set for uploaded object")
+                    .build(),
                 glib::ParamSpecString::builder("content-type")
                     .nick("content-type")
                     .blurb("Content-Type header to set for uploaded object")
@@ -778,6 +794,14 @@ impl ObjectImpl for S3Sink {
                 glib::ParamSpecString::builder("content-disposition")
                     .nick("content-disposition")
                     .blurb("Content-Disposition header to set for uploaded object")
+                    .build(),
+                glib::ParamSpecString::builder("content-encoding")
+                    .nick("content-encoding")
+                    .blurb("Content-Encoding header to set for uploaded object")
+                    .build(),
+                glib::ParamSpecString::builder("content-language")
+                    .nick("content-language")
+                    .blurb("Content-Language header to set for uploaded object")
                     .build(),
                 glib::ParamSpecBoolean::builder("force-path-style")
                     .nick("Force path style")
@@ -887,6 +911,11 @@ impl ObjectImpl for S3Sink {
                     let _ = self.set_uri(Some(&settings.to_uri()));
                 }
             }
+            "cache-control" => {
+                settings.cache_control = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream");
+            }
             "content-type" => {
                 settings.content_type = value
                     .get::<Option<String>>()
@@ -894,6 +923,16 @@ impl ObjectImpl for S3Sink {
             }
             "content-disposition" => {
                 settings.content_disposition = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream");
+            }
+            "content-encoding" => {
+                settings.content_encoding = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream");
+            }
+            "content-language" => {
+                settings.content_language = value
                     .get::<Option<String>>()
                     .expect("type checked upstream");
             }
@@ -939,8 +978,11 @@ impl ObjectImpl for S3Sink {
                 (settings.retry_attempts as i64 * request_timeout).to_value()
             }
             "endpoint-uri" => settings.endpoint_uri.to_value(),
+            "cache-control" => settings.cache_control.to_value(),
             "content-type" => settings.content_type.to_value(),
             "content-disposition" => settings.content_disposition.to_value(),
+            "content-encoding" => settings.content_encoding.to_value(),
+            "content-language" => settings.content_language.to_value(),
             "force-path-style" => settings.force_path_style.to_value(),
             _ => unimplemented!(),
         }
