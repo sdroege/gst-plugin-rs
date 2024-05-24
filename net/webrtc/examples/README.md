@@ -129,3 +129,65 @@ cargo r --example webrtc-precise-sync-recv -- --expect-clock-signalling
 cargo r --example webrtc-precise-sync-send -- --clock ntp --do-clock-signalling \
   --video-streams 0 --audio-streams 2
 ```
+
+## Android
+
+### `webrtcsrc` based Android application
+
+An Android demonstration application which retrieves available producers from
+the signaller and renders audio and video streams.
+
+**Important**: in order to ease testing, this demonstration application enables
+unencrypted network communication. See `app/src/main/AndroidManifest.xml` for
+details.
+
+#### Build the application
+
+* Download the latest Android prebuilt binaries from:
+  https://gstreamer.freedesktop.org/download/
+* Uncompress / untar the package, e.g. under `/opt/android/`.
+* Define the `GSTREAMER_ROOT_ANDROID` environment variable with the
+  directory chosen at previous step.
+* Install a recent version of Android Studio (tested with 2023.3.1.18).
+* Open the project from the folder `android/webrtcsrc`.
+* Have Android Studio download and install the required SDK & NDK.
+* Click the build button or build and run on the target device.
+* The resulting `apk` is generated under:
+  `android/webrtcsrc/app/build/outputs/apk/debug`.
+
+For more details, refer to:
+* https://gstreamer.freedesktop.org/documentation/installing/for-android-development.html
+
+Once the SDK & NDK are installed, you can use `gradlew` to build and install
+the apk (make sure the device is visible from adb):
+
+```shell
+# From the android/webrtcsrc directory
+./gradlew installDebug
+```
+
+#### Install the application
+
+Prerequisites: activate developer mode on the target device.
+
+There are several ways to install the application:
+
+* The easiest is to click the run button in Android Studio.
+* You can also install the `apk` using `adb`.
+
+Depending on your host OS, you might need to define `udev` rules. See:
+https://github.com/M0Rf30/android-udev-rules
+
+#### Setup
+
+1. Run the Signaller from the `gst-plugins-rs` root directory:
+   ```shell
+   cargo run --bin gst-webrtc-signalling-server
+   ```
+2. In the Android app, tap the 3 dots button -> Settings and edit the Signaller
+   URI.
+3. Add a producer, e.g. using `gst-launch` & `webrtcsink` or run:
+   ```shell
+   cargo r --example webrtc-precise-sync-send
+   ```
+4. Click the `Refresh` button on the Producer List view of the app.

@@ -1,0 +1,6 @@
+# Generated:
+androidmedia/
+# Note that gstreamer_android will generate (and overwrite) GStreamer.java
+# during native code and libraries compilation.
+# We keep it in git for dependent code to be able to refere to it if they are
+# compiled before native code.
