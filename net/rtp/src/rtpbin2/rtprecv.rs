@@ -643,9 +643,14 @@ impl RtpRecv {
 
         let now = Instant::now();
         let mut buffers_to_push = vec![];
+        let mut ssrc_collision = vec![];
         loop {
             match session_inner.session.handle_recv(&rtp, addr, now) {
-                RecvReply::SsrcCollision(_ssrc) => (), // TODO: handle ssrc collision
+                RecvReply::SsrcCollision(ssrc) => {
+                    if !ssrc_collision.iter().any(|&needle| needle == ssrc) {
+                        ssrc_collision.push(ssrc);
+                    }
+                }
                 RecvReply::NewSsrc(ssrc, _pt) => {
                     drop(session_inner);
                     internal_session
@@ -711,7 +716,24 @@ impl RtpRecv {
             }
         }
 
+        let send_rtp_sink = session_inner.rtp_send_sinkpad.clone();
+
         drop(session_inner);
+
+        if let Some(pad) = send_rtp_sink {
+            // XXX: Another option is to have us rewrite ssrc's instead of asking upstream to do
+            // so.
+            for ssrc in ssrc_collision {
+                pad.send_event(
+                    gst::event::CustomUpstream::builder(
+                        gst::Structure::builder("GstRTPCollision")
+                            .field("ssrc", ssrc)
+                            .build(),
+                    )
+                    .build(),
+                );
+            }
+        }
 
         for mut held in buffers_to_push {
             // TODO: handle other processing
@@ -821,7 +843,20 @@ impl RtpRecv {
                         .config
                         .emit_by_name::<()>("new-ssrc", &[&ssrc]);
                 }
-                RtcpRecvReply::SsrcCollision(_ssrc) => (), // TODO: handle ssrc collision
+                RtcpRecvReply::SsrcCollision(ssrc) => {
+                    if let Some(pad) = rtp_send_sinkpad.as_ref() {
+                        // XXX: Another option is to have us rewrite ssrc's instead of asking
+                        // upstream to do so.
+                        pad.send_event(
+                            gst::event::CustomUpstream::builder(
+                                gst::Structure::builder("GstRTPCollision")
+                                    .field("ssrc", ssrc)
+                                    .build(),
+                            )
+                            .build(),
+                        );
+                    }
+                }
                 RtcpRecvReply::TimerReconsideration => {
                     let state = self.state.lock().unwrap();
                     let session = state.session_by_id(id).unwrap();

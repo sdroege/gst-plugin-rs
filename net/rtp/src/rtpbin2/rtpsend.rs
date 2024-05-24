@@ -320,14 +320,20 @@ impl RtpSend {
         };
 
         let srcpad = session.rtp_send_srcpad.clone().unwrap();
+        let sinkpad = session.rtp_send_sinkpad.clone().unwrap();
         let session = session.internal_session.clone();
         let mut session_inner = session.inner.lock().unwrap();
         drop(state);
 
         let now = Instant::now();
+        let mut ssrc_collision = vec![];
         loop {
             match session_inner.session.handle_send(&rtp, now) {
-                SendReply::SsrcCollision(_ssrc) => (), // TODO: handle ssrc collision
+                SendReply::SsrcCollision(ssrc) => {
+                    if !ssrc_collision.iter().any(|&needle| needle == ssrc) {
+                        ssrc_collision.push(ssrc);
+                    }
+                }
                 SendReply::NewSsrc(ssrc, _pt) => {
                     drop(session_inner);
                     session.config.emit_by_name::<()>("new-ssrc", &[&ssrc]);
@@ -340,6 +346,20 @@ impl RtpSend {
         // TODO: handle other processing
         drop(mapped);
         drop(session_inner);
+
+        for ssrc in ssrc_collision {
+            // XXX: Another option is to have us rewrite ssrc's instead of asking upstream to do
+            // so.
+            sinkpad.send_event(
+                gst::event::CustomUpstream::builder(
+                    gst::Structure::builder("GstRTPCollision")
+                        .field("ssrc", ssrc)
+                        .build(),
+                )
+                .build(),
+            );
+        }
+
         srcpad.push(buffer)
     }
 
