@@ -37,7 +37,7 @@ use crate::basepay::{RtpBasePay2Ext, RtpBasePay2Impl};
 use crate::klv::klv_utils;
 
 #[derive(Default)]
-pub struct RtpKlvPay {}
+pub struct RtpKlvPay;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
