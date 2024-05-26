@@ -152,15 +152,21 @@ impl RtpBasePay2Impl for RtpKlvPay {
             Ok(unit_len) => unit_len,
             Err(err) => {
                 // Also post warning message?
-                gst::warning!(CAT, imp: self, "Input doesn't look like a KLV unit, ignoring. {err:?}");
+                gst::warning!(
+                    CAT,
+                    imp: self,
+                    "Input doesn't look like a KLV unit, ignoring. {err:?}",
+                );
                 return Ok(gst::FlowSuccess::Ok);
             }
         };
 
         if unit_len != data.len() {
-            gst::error!(CAT, imp: self,
+            gst::error!(
+                CAT,
+                imp: self,
                 "Input is not properly framed: KLV unit of size {unit_len} but buffer is {} bytes",
-                data.len()
+                data.len(),
             );
 
             if unit_len > data.len() {
