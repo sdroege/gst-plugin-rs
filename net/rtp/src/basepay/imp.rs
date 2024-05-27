@@ -2036,35 +2036,6 @@ impl ElementImpl for RtpBasePay2 {
                     .timestamp_offset
                     .unwrap_or_else(|| rng.gen::<u32>());
                 let seqnum_offset = settings.seqnum_offset.unwrap_or_else(|| rng.gen::<u16>());
-
-                // Need to check pt against template caps if it's a non-dynamic PT
-                if pt < 96 {
-                    let mut pt_found = false;
-
-                    let templ_caps = self.src_pad.pad_template_caps();
-                    for s in templ_caps.iter() {
-                        let Ok(allowed_pt) = s.value("payload") else {
-                            continue;
-                        };
-
-                        if allowed_pt.can_intersect(&(pt as i32).to_value()) {
-                            pt_found = true;
-                            break;
-                        }
-                    }
-
-                    if !pt_found {
-                        gst::error!(
-                            CAT,
-                            imp: self,
-                            "Unsupported static payload type {pt}, not found in template caps {templ_caps}",
-                        );
-                        // We would now return NotNegotiated the next time a buffer is tried to be sent
-                        // downstream.
-                        return Err(gst::StateChangeError);
-                    }
-                }
-
                 let stream = Stream {
                     pt,
                     ssrc,

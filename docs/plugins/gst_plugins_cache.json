@@ -7184,7 +7184,7 @@
                         "presence": "always"
                     },
                     "src": {
-                        "caps": "application/x-rtp:\n          media: video\n        payload: [ 96, 127 ]\n     clock-rate: 90000\n  encoding-name: AV1\n",
+                        "caps": "application/x-rtp:\n          media: video\n     clock-rate: 90000\n  encoding-name: AV1\n",
                         "direction": "src",
                         "presence": "always"
                     }
@@ -7490,7 +7490,7 @@
                         "presence": "always"
                     },
                     "src": {
-                        "caps": "application/x-rtp:\n          media: audio\n        payload: [ 96, 127 ]\n     clock-rate: [ 1, 2147483647 ]\n  encoding-name: MP4A-LATM\n",
+                        "caps": "application/x-rtp:\n          media: audio\n     clock-rate: [ 1, 2147483647 ]\n  encoding-name: MP4A-LATM\n",
                         "direction": "src",
                         "presence": "always"
                     }
@@ -7691,7 +7691,7 @@
                         "presence": "always"
                     },
                     "src": {
-                        "caps": "application/x-rtp:\n          media: audio\n        payload: 8\n     clock-rate: 8000\napplication/x-rtp:\n          media: audio\n        payload: [ 96, 127 ]\n  encoding-name: PCMA\n     clock-rate: [ 1, 2147483647 ]\n",
+                        "caps": "application/x-rtp:\n          media: audio\n        payload: 8\n     clock-rate: 8000\napplication/x-rtp:\n          media: audio\n  encoding-name: PCMA\n     clock-rate: [ 1, 2147483647 ]\n",
                         "direction": "src",
                         "presence": "always"
                     }
@@ -7746,7 +7746,7 @@
                         "presence": "always"
                     },
                     "src": {
-                        "caps": "application/x-rtp:\n          media: audio\n        payload: 0\n     clock-rate: 8000\napplication/x-rtp:\n          media: audio\n        payload: [ 96, 127 ]\n  encoding-name: PCMU\n     clock-rate: [ 1, 2147483647 ]\n",
+                        "caps": "application/x-rtp:\n          media: audio\n        payload: 0\n     clock-rate: 8000\napplication/x-rtp:\n          media: audio\n  encoding-name: PCMU\n     clock-rate: [ 1, 2147483647 ]\n",
                         "direction": "src",
                         "presence": "always"
                     }
@@ -7824,7 +7824,7 @@
                         "presence": "always"
                     },
                     "src": {
-                        "caps": "application/x-rtp:\n          media: video\n        payload: [ 96, 127 ]\n     clock-rate: 90000\n  encoding-name: { (string)VP8, (string)VP8-DRAFT-IETF-01 }\n",
+                        "caps": "application/x-rtp:\n          media: video\n     clock-rate: 90000\n  encoding-name: { (string)VP8, (string)VP8-DRAFT-IETF-01 }\n",
                         "direction": "src",
                         "presence": "always"
                     }
@@ -7956,7 +7956,7 @@
                         "presence": "always"
                     },
                     "src": {
-                        "caps": "application/x-rtp:\n          media: video\n        payload: [ 96, 127 ]\n     clock-rate: 90000\n  encoding-name: { (string)VP9, (string)VP9-DRAFT-IETF-01 }\n",
+                        "caps": "application/x-rtp:\n          media: video\n     clock-rate: 90000\n  encoding-name: { (string)VP9, (string)VP9-DRAFT-IETF-01 }\n",
                         "direction": "src",
                         "presence": "always"
                     }

@@ -95,7 +95,6 @@ impl ElementImpl for RtpMpeg4AudioPay {
                 gst::PadPresence::Always,
                 &gst::Caps::builder("application/x-rtp")
                     .field("media", "audio")
-                    .field("payload", gst::IntRange::new(96i32, 127i32))
                     .field("clock-rate", gst::IntRange::new(1i32, i32::MAX))
                     .field("encoding-name", ENCODING_NAME)
                     /* All optional parameters

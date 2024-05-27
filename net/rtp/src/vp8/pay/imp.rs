@@ -197,7 +197,6 @@ impl ElementImpl for RtpVp8Pay {
                 gst::PadPresence::Always,
                 &gst::Caps::builder("application/x-rtp")
                     .field("media", "video")
-                    .field("payload", gst::IntRange::new(96, 127))
                     .field("clock-rate", 90_000i32)
                     .field(
                         "encoding-name",

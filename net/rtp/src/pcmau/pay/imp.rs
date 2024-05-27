@@ -168,7 +168,6 @@ impl ElementImpl for RtpPcmaPay {
                     .structure(
                         gst::Structure::builder("application/x-rtp")
                             .field("media", "audio")
-                            .field("payload", gst::IntRange::new(96i32, 127i32))
                             .field("encoding-name", "PCMA")
                             .field("clock-rate", gst::IntRange::new(1, i32::MAX))
                             .build(),
@@ -271,7 +270,6 @@ impl ElementImpl for RtpPcmuPay {
                     .structure(
                         gst::Structure::builder("application/x-rtp")
                             .field("media", "audio")
-                            .field("payload", gst::IntRange::new(96i32, 127i32))
                             .field("encoding-name", "PCMU")
                             .field("clock-rate", gst::IntRange::new(1, i32::MAX))
                             .build(),
