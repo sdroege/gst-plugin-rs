@@ -103,6 +103,8 @@ pub struct ExpectedBuffer {
     pub pts: Option<gst::ClockTime>,
     /// If not set then it is asserted that the depayloaded buffer also has no DTS.
     pub dts: Option<gst::ClockTime>,
+    /// If set, the duration will be checked against the one on the depayloaded buffer
+    pub duration: Option<gst::ClockTime>,
     /// If not set the size will not be checked.
     pub size: Option<usize>,
     pub flags: gst::BufferFlags,
@@ -115,12 +117,14 @@ impl ExpectedBuffer {
     ///
     /// * pts: None
     /// * dts: None
+    /// * duration: None
     /// * size: None => not checked
     /// * flags: gst::BufferFlags::empty()
     pub fn builder() -> ExpectedBufferBuilder {
         ExpectedBufferBuilder(ExpectedBuffer {
             pts: None,
             dts: None,
+            duration: None,
             size: None,
             flags: gst::BufferFlags::empty(),
         })
@@ -142,6 +146,11 @@ impl ExpectedBufferBuilder {
 
     pub fn dts(mut self, dts: gst::ClockTime) -> Self {
         self.0.dts = Some(dts);
+        self
+    }
+
+    pub fn duration(mut self, duration: gst::ClockTime) -> Self {
+        self.0.duration = Some(duration);
         self
     }
 
@@ -282,7 +291,7 @@ pub fn run_test_pipeline_full(
                         .lock()
                         .unwrap()
                         .next()
-                        .expect("Expected packets?!");
+                        .expect("Not enough expected packets?!");
 
                     let drop_count = expected_packets
                         .iter()
@@ -573,6 +582,18 @@ pub fn run_test_pipeline_full(
                 buffer_pts.display(),
                 expected_buffer.pts.display(),
             );
+
+            if let Some(expected_duration) = expected_buffer.duration {
+                assert_eq!(
+                    buffer.duration(),
+                    Some(expected_duration),
+                    "Buffer {} of payload buffer list {} has unexpected duration {:?} instead of {:?}",
+                    j,
+                    i,
+                    buffer.duration(),
+                    expected_duration,
+                );
+            }
 
             if let Some(expected_size) = expected_buffer.size {
                 assert_eq!(
