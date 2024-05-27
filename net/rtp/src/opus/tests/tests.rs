@@ -9,7 +9,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::tests::{
-    run_test_pipeline, run_test_pipeline_full, ExpectedBuffer, ExpectedPacket, Source,
+    run_test_pipeline, run_test_pipeline_full, ExpectedBuffer, ExpectedPacket, Liveness, Source,
 };
 use gst::prelude::*;
 use gst_check::Harness;
@@ -531,6 +531,7 @@ fn test_opus_pay_depay_multichannel() {
         expected_pay,
         expected_depay,
         Some(expected_depay_caps),
+        Liveness::NonLive,
     );
 }
 

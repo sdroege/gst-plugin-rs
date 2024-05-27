@@ -9,7 +9,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::klv::klv_utils::*;
-use crate::tests::{run_test_pipeline_full, ExpectedBuffer, ExpectedPacket, Source};
+use crate::tests::{run_test_pipeline_full, ExpectedBuffer, ExpectedPacket, Liveness, Source};
 
 fn init() {
     use std::sync::Once;
@@ -129,6 +129,7 @@ fn test_klv_pay_depay() {
         expected_pay,
         expected_depay,
         Some(expected_output_caps),
+        Liveness::NonLive,
     );
 }
 
@@ -228,6 +229,7 @@ fn test_klv_pay_depay_fragmented() {
         expected_pay,
         expected_depay,
         Some(expected_output_caps),
+        Liveness::NonLive,
     );
 }
 
@@ -312,6 +314,7 @@ fn test_klv_pay_depay_with_packet_loss() {
         expected_pay,
         expected_depay,
         Some(expected_output_caps),
+        Liveness::NonLive,
     );
 }
 
@@ -434,6 +437,7 @@ fn test_klv_pay_depay_fragmented_with_packet_loss() {
             expected_pay,
             expected_depay,
             Some(expected_output_caps),
+            Liveness::NonLive,
         );
     }
 

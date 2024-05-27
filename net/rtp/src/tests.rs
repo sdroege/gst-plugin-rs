@@ -207,7 +207,21 @@ pub fn run_test_pipeline(
     expected_pay: Vec<Vec<ExpectedPacket>>,
     expected_depay: Vec<Vec<ExpectedBuffer>>,
 ) {
-    run_test_pipeline_full(src, pay, depay, expected_pay, expected_depay, None);
+    run_test_pipeline_full(
+        src,
+        pay,
+        depay,
+        expected_pay,
+        expected_depay,
+        None,
+        Liveness::NonLive,
+    );
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Liveness {
+    Live(i64),
+    NonLive,
 }
 
 pub fn run_test_pipeline_full(
@@ -217,6 +231,7 @@ pub fn run_test_pipeline_full(
     expected_pay: Vec<Vec<ExpectedPacket>>,
     expected_depay: Vec<Vec<ExpectedBuffer>>,
     expected_depay_caps: Option<gst::Caps>,
+    liveness: Liveness,
 ) {
     let pipeline = Pipeline(gst::Pipeline::new());
 
@@ -224,6 +239,7 @@ pub fn run_test_pipeline_full(
 
     let src = match src {
         Source::Bin(src) => {
+            assert_eq!(liveness, Liveness::NonLive);
             let Ok(src) = gst::parse::bin_from_description_with_name(src, true, "rtptestsrc")
             else {
                 return;
@@ -233,9 +249,15 @@ pub fn run_test_pipeline_full(
         }
         Source::Buffers(caps, buffers) => {
             let mut buffers = buffers.into_iter();
+            let (live, min_latency) = match liveness {
+                Liveness::NonLive => (false, -1i64),
+                Liveness::Live(min_latency) => (true, min_latency),
+            };
             let appsrc = gst_app::AppSrc::builder()
                 .format(gst::Format::Time)
                 .caps(&caps)
+                .is_live(live)
+                .min_latency(min_latency)
                 .callbacks(
                     gst_app::AppSrcCallbacks::builder()
                         .need_data(move |appsrc, _offset| {
