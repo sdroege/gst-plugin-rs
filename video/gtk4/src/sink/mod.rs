@@ -38,7 +38,7 @@
 use gtk::glib;
 use gtk::glib::prelude::*;
 
-mod frame;
+pub(super) mod frame;
 pub(super) mod imp;
 pub(super) mod paintable;
 

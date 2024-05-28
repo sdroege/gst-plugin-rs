@@ -72,11 +72,15 @@ pub enum TextureCacheId {
 
 #[derive(Debug)]
 enum MappedFrame {
-    SysMem(gst_video::VideoFrame<gst_video::video_frame::Readable>),
+    SysMem {
+        frame: gst_video::VideoFrame<gst_video::video_frame::Readable>,
+        orientation: Orientation,
+    },
     #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
     GL {
         frame: gst_gl::GLVideoFrame<gst_gl::gl_video_frame::Readable>,
         wrapped_context: gst_gl::GLContext,
+        orientation: Orientation,
     },
     #[cfg(all(target_os = "linux", feature = "dmabuf"))]
     DmaBuf {
@@ -88,13 +92,14 @@ enum MappedFrame {
         strides: [usize; 4],
         width: u32,
         height: u32,
+        orientation: Orientation,
     },
 }
 
 impl MappedFrame {
     fn buffer(&self) -> &gst::BufferRef {
         match self {
-            MappedFrame::SysMem(frame) => frame.buffer(),
+            MappedFrame::SysMem { frame, .. } => frame.buffer(),
             #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             MappedFrame::GL { frame, .. } => frame.buffer(),
             #[cfg(all(target_os = "linux", feature = "dmabuf"))]
@@ -104,7 +109,7 @@ impl MappedFrame {
 
     fn width(&self) -> u32 {
         match self {
-            MappedFrame::SysMem(frame) => frame.width(),
+            MappedFrame::SysMem { frame, .. } => frame.width(),
             #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             MappedFrame::GL { frame, .. } => frame.width(),
             #[cfg(all(target_os = "linux", feature = "dmabuf"))]
@@ -114,7 +119,7 @@ impl MappedFrame {
 
     fn height(&self) -> u32 {
         match self {
-            MappedFrame::SysMem(frame) => frame.height(),
+            MappedFrame::SysMem { frame, .. } => frame.height(),
             #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             MappedFrame::GL { frame, .. } => frame.height(),
             #[cfg(all(target_os = "linux", feature = "dmabuf"))]
@@ -124,11 +129,21 @@ impl MappedFrame {
 
     fn format_info(&self) -> gst_video::VideoFormatInfo {
         match self {
-            MappedFrame::SysMem(frame) => frame.format_info(),
+            MappedFrame::SysMem { frame, .. } => frame.format_info(),
             #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             MappedFrame::GL { frame, .. } => frame.format_info(),
             #[cfg(all(target_os = "linux", feature = "dmabuf"))]
             MappedFrame::DmaBuf { info, .. } => info.format_info(),
+        }
+    }
+
+    fn orientation(&self) -> Orientation {
+        match self {
+            MappedFrame::SysMem { orientation, .. } => *orientation,
+            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
+            MappedFrame::GL { orientation, .. } => *orientation,
+            #[cfg(all(target_os = "linux", feature = "dmabuf"))]
+            MappedFrame::DmaBuf { orientation, .. } => *orientation,
         }
     }
 }
@@ -137,6 +152,52 @@ impl MappedFrame {
 pub(crate) struct Frame {
     frame: MappedFrame,
     overlays: Vec<Overlay>,
+}
+
+#[derive(Debug, Default, glib::Enum, PartialEq, Eq, Copy, Clone)]
+#[repr(C)]
+#[enum_type(name = "GstGtk4PaintableSinkOrientation")]
+pub enum Orientation {
+    #[default]
+    Auto,
+    Rotate0,
+    Rotate90,
+    Rotate180,
+    Rotate270,
+    FlipRotate0,
+    FlipRotate90,
+    FlipRotate180,
+    FlipRotate270,
+}
+
+impl Orientation {
+    pub fn from_tags(tags: &gst::TagListRef) -> Option<Orientation> {
+        let orientation = tags
+            .generic("image-orientation")
+            .and_then(|v| v.get::<String>().ok())?;
+
+        Some(match orientation.as_str() {
+            "rotate-0" => Orientation::Rotate0,
+            "rotate-90" => Orientation::Rotate90,
+            "rotate-180" => Orientation::Rotate180,
+            "rotate-270" => Orientation::Rotate270,
+            "flip-rotate-0" => Orientation::FlipRotate0,
+            "flip-rotate-90" => Orientation::FlipRotate90,
+            "flip-rotate-180" => Orientation::FlipRotate180,
+            "flip-rotate-270" => Orientation::FlipRotate270,
+            _ => return None,
+        })
+    }
+
+    pub fn is_flip_width_height(self) -> bool {
+        matches!(
+            self,
+            Orientation::Rotate90
+                | Orientation::Rotate270
+                | Orientation::FlipRotate90
+                | Orientation::FlipRotate270
+        )
+    }
 }
 
 #[derive(Debug)]
@@ -158,6 +219,7 @@ pub(crate) struct Texture {
     pub height: f32,
     pub global_alpha: f32,
     pub has_alpha: bool,
+    pub orientation: Orientation,
 }
 
 struct FrameWrapper(gst_video::VideoFrame<gst_video::video_frame::Readable>);
@@ -374,14 +436,16 @@ impl Frame {
         let width = self.frame.width();
         let height = self.frame.height();
         let has_alpha = self.frame.format_info().has_alpha();
+        let orientation = self.frame.orientation();
         let (texture, pixel_aspect_ratio) = match self.frame {
-            MappedFrame::SysMem(frame) => {
+            MappedFrame::SysMem { frame, .. } => {
                 video_frame_to_memory_texture(frame, cached_textures, &mut used_textures)
             }
             #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             MappedFrame::GL {
                 frame,
                 wrapped_context,
+                ..
             } => {
                 let Some(gdk_context) = gdk_context else {
                     // This will fail badly if the video frame was actually mapped as GL texture
@@ -407,6 +471,7 @@ impl Frame {
                 strides,
                 width,
                 height,
+                ..
             } => video_frame_to_dmabuf_texture(
                 buffer,
                 cached_textures,
@@ -429,6 +494,7 @@ impl Frame {
             height: height as f32,
             global_alpha: 1.0,
             has_alpha,
+            orientation,
         });
 
         for overlay in self.overlays {
@@ -444,6 +510,7 @@ impl Frame {
                 height: overlay.height as f32,
                 global_alpha: overlay.global_alpha,
                 has_alpha,
+                orientation: Orientation::Rotate0,
             });
         }
 
@@ -458,6 +525,7 @@ impl Frame {
     pub(crate) fn new(
         buffer: &gst::Buffer,
         info: &VideoInfo,
+        orientation: Orientation,
         #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))] wrapped_context: Option<
             &gst_gl::GLContext,
         >,
@@ -521,6 +589,7 @@ impl Frame {
                             strides,
                             width: vmeta.width(),
                             height: vmeta.height(),
+                            orientation,
                         });
                     }
                 }
@@ -571,6 +640,7 @@ impl Frame {
                         frame = Some(MappedFrame::GL {
                             frame: mapped_frame,
                             wrapped_context: wrapped_context.unwrap().clone(),
+                            orientation,
                         });
                     }
                 }
@@ -580,10 +650,11 @@ impl Frame {
         let mut frame = Self {
             frame: match frame {
                 Some(frame) => frame,
-                None => MappedFrame::SysMem(
-                    gst_video::VideoFrame::from_buffer_readable(buffer.clone(), info)
+                None => MappedFrame::SysMem {
+                    frame: gst_video::VideoFrame::from_buffer_readable(buffer.clone(), info)
                         .map_err(|_| gst::FlowError::Error)?,
-                ),
+                    orientation,
+                },
             },
             overlays: vec![],
         };

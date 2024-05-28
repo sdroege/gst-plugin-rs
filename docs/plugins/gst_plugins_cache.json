@@ -2622,6 +2622,18 @@
                         "type": "GdkGLContext",
                         "writable": true
                     },
+                    "orientation": {
+                        "blurb": "Orientation of the video frames",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "auto (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstGtk4PaintableSinkOrientation",
+                        "writable": true
+                    },
                     "scaling-filter": {
                         "blurb": "Scaling filter to use for rendering",
                         "conditionally-available": false,
@@ -2647,6 +2659,56 @@
                         "writable": true
                     }
                 }
+            },
+            "GstGtk4PaintableSinkOrientation": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Auto",
+                        "name": "auto",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Rotate0",
+                        "name": "rotate0",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Rotate90",
+                        "name": "rotate90",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "Rotate180",
+                        "name": "rotate180",
+                        "value": "3"
+                    },
+                    {
+                        "desc": "Rotate270",
+                        "name": "rotate270",
+                        "value": "4"
+                    },
+                    {
+                        "desc": "FlipRotate0",
+                        "name": "flip-rotate0",
+                        "value": "5"
+                    },
+                    {
+                        "desc": "FlipRotate90",
+                        "name": "flip-rotate90",
+                        "value": "6"
+                    },
+                    {
+                        "desc": "FlipRotate180",
+                        "name": "flip-rotate180",
+                        "value": "7"
+                    },
+                    {
+                        "desc": "FlipRotate270",
+                        "name": "flip-rotate270",
+                        "value": "8"
+                    }
+                ]
             }
         },
         "package": "gst-plugin-gtk4",

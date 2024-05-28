@@ -9,7 +9,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use super::SinkEvent;
+use super::{frame, SinkEvent};
 use crate::sink::frame::Frame;
 use crate::sink::paintable::Paintable;
 
@@ -58,11 +58,29 @@ pub(crate) static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
+struct StreamConfig {
+    info: Option<super::frame::VideoInfo>,
+    /// Orientation from a global scope tag
+    global_orientation: frame::Orientation,
+    /// Orientation from a stream scope tag
+    stream_orientation: Option<frame::Orientation>,
+}
+
+impl Default for StreamConfig {
+    fn default() -> Self {
+        StreamConfig {
+            info: None,
+            global_orientation: frame::Orientation::Rotate0,
+            stream_orientation: None,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct PaintableSink {
     paintable: Mutex<Option<ThreadGuard<Paintable>>>,
     window: Mutex<Option<ThreadGuard<gtk::Window>>>,
-    info: Mutex<Option<super::frame::VideoInfo>>,
+    config: Mutex<StreamConfig>,
     sender: Mutex<Option<async_channel::Sender<SinkEvent>>>,
     pending_frame: Mutex<Option<Frame>>,
     cached_caps: Mutex<Option<gst::Caps>>,
@@ -376,7 +394,7 @@ impl ElementImpl for PaintableSink {
 
         match transition {
             gst::StateChange::PausedToReady => {
-                let _ = self.info.lock().unwrap().take();
+                *self.config.lock().unwrap() = StreamConfig::default();
                 let _ = self.pending_frame.lock().unwrap().take();
 
                 // Flush frames from the GDK paintable but don't wait
@@ -455,7 +473,7 @@ impl BaseSinkImpl for PaintableSink {
                 .into(),
         };
 
-        self.info.lock().unwrap().replace(video_info);
+        self.config.lock().unwrap().info = Some(video_info);
 
         Ok(())
     }
@@ -526,6 +544,31 @@ impl BaseSinkImpl for PaintableSink {
             _ => BaseSinkImplExt::parent_query(self, query),
         }
     }
+
+    fn event(&self, event: gst::Event) -> bool {
+        match event.view() {
+            gst::EventView::StreamStart(_) => {
+                let mut config = self.config.lock().unwrap();
+                config.global_orientation = frame::Orientation::Rotate0;
+                config.stream_orientation = None;
+            }
+            gst::EventView::Tag(ev) => {
+                let mut config = self.config.lock().unwrap();
+                let tags = ev.tag();
+                let scope = tags.scope();
+                let orientation = frame::Orientation::from_tags(tags);
+
+                if scope == gst::TagScope::Global {
+                    config.global_orientation = orientation.unwrap_or(frame::Orientation::Rotate0);
+                } else {
+                    config.stream_orientation = orientation;
+                }
+            }
+            _ => (),
+        }
+
+        self.parent_event(event)
+    }
 }
 
 impl VideoSinkImpl for PaintableSink {
@@ -542,11 +585,14 @@ impl VideoSinkImpl for PaintableSink {
             return Ok(gst::FlowSuccess::Ok);
         };
 
-        let info = self.info.lock().unwrap();
-        let info = info.as_ref().ok_or_else(|| {
+        let config = self.config.lock().unwrap();
+        let info = config.info.as_ref().ok_or_else(|| {
             gst::error!(CAT, imp: self, "Received no caps yet");
             gst::FlowError::NotNegotiated
         })?;
+        let orientation = config
+            .stream_orientation
+            .unwrap_or(config.global_orientation);
 
         let wrapped_context = {
             #[cfg(not(any(target_os = "macos", target_os = "windows", feature = "gst-gl")))]
@@ -566,10 +612,11 @@ impl VideoSinkImpl for PaintableSink {
                 }
             }
         };
-        let frame = Frame::new(buffer, info, wrapped_context.as_ref()).map_err(|err| {
-            gst::error!(CAT, imp: self, "Failed to map video frame");
-            err
-        })?;
+        let frame =
+            Frame::new(buffer, info, orientation, wrapped_context.as_ref()).map_err(|err| {
+                gst::error!(CAT, imp: self, "Failed to map video frame");
+                err
+            })?;
         self.pending_frame.lock().unwrap().replace(frame);
 
         let sender = self.sender.lock().unwrap();

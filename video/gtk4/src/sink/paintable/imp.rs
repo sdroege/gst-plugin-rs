@@ -13,7 +13,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib, graphene, gsk};
 
-use crate::sink::frame::{Frame, Texture};
+use crate::sink::frame::{self, Frame, Texture};
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -38,6 +38,7 @@ pub struct Paintable {
     scaling_filter: Cell<gsk::ScalingFilter>,
     use_scaling_filter: Cell<bool>,
     force_aspect_ratio: Cell<bool>,
+    orientation: Cell<frame::Orientation>,
     #[cfg(not(feature = "gtk_v4_10"))]
     premult_shader: gsk::GLShader,
 }
@@ -53,6 +54,7 @@ impl Default for Paintable {
             scaling_filter: Cell::new(gsk::ScalingFilter::Linear),
             use_scaling_filter: Cell::new(false),
             force_aspect_ratio: Cell::new(false),
+            orientation: Cell::new(frame::Orientation::Auto),
             #[cfg(not(feature = "gtk_v4_10"))]
             premult_shader: gsk::GLShader::from_bytes(&glib::Bytes::from_static(include_bytes!(
                 "premult.glsl"
@@ -101,6 +103,10 @@ impl ObjectImpl for Paintable {
                     .blurb("When enabled, scaling will respect original aspect ratio")
                     .default_value(false)
                     .build(),
+                glib::ParamSpecEnum::builder::<frame::Orientation>("orientation")
+                    .nick("Orientation")
+                    .blurb("Orientation of the video frames")
+                    .build(),
             ]
         });
 
@@ -125,6 +131,7 @@ impl ObjectImpl for Paintable {
             #[cfg(feature = "gtk_v4_10")]
             "use-scaling-filter" => self.use_scaling_filter.get().to_value(),
             "force-aspect-ratio" => self.force_aspect_ratio.get().to_value(),
+            "orientation" => self.orientation.get().to_value(),
             _ => unimplemented!(),
         }
     }
@@ -148,6 +155,7 @@ impl ObjectImpl for Paintable {
             #[cfg(feature = "gtk_v4_10")]
             "use-scaling-filter" => self.use_scaling_filter.set(value.get().unwrap()),
             "force-aspect-ratio" => self.force_aspect_ratio.set(value.get().unwrap()),
+            "orientation" => self.orientation.set(value.get().unwrap()),
             _ => unimplemented!(),
         }
     }
@@ -156,7 +164,14 @@ impl ObjectImpl for Paintable {
 impl PaintableImpl for Paintable {
     fn intrinsic_height(&self) -> i32 {
         if let Some(paintable) = self.paintables.borrow().first() {
-            f32::round(paintable.height) as i32
+            if self
+                .effective_orientation(paintable.orientation)
+                .is_flip_width_height()
+            {
+                f32::round(paintable.width) as i32
+            } else {
+                f32::round(paintable.height) as i32
+            }
         } else {
             0
         }
@@ -164,7 +179,14 @@ impl PaintableImpl for Paintable {
 
     fn intrinsic_width(&self) -> i32 {
         if let Some(paintable) = self.paintables.borrow().first() {
-            f32::round(paintable.width) as i32
+            if self
+                .effective_orientation(paintable.orientation)
+                .is_flip_width_height()
+            {
+                f32::round(paintable.height) as i32
+            } else {
+                f32::round(paintable.width) as i32
+            }
         } else {
             0
         }
@@ -172,7 +194,14 @@ impl PaintableImpl for Paintable {
 
     fn intrinsic_aspect_ratio(&self) -> f64 {
         if let Some(paintable) = self.paintables.borrow().first() {
-            paintable.width as f64 / paintable.height as f64
+            if self
+                .effective_orientation(paintable.orientation)
+                .is_flip_width_height()
+            {
+                paintable.height as f64 / paintable.width as f64
+            } else {
+                paintable.width as f64 / paintable.height as f64
+            }
         } else {
             0.0
         }
@@ -180,7 +209,6 @@ impl PaintableImpl for Paintable {
 
     fn snapshot(&self, snapshot: &gdk::Snapshot, width: f64, height: f64) {
         let snapshot = snapshot.downcast_ref::<gtk::Snapshot>().unwrap();
-
         let background_color = self.background_color.get();
         let force_aspect_ratio = self.force_aspect_ratio.get();
         let paintables = self.paintables.borrow();
@@ -201,8 +229,72 @@ impl PaintableImpl for Paintable {
         //
         // Based on its size relative to the snapshot width/height, all other paintables are
         // scaled accordingly.
-        let (frame_width, frame_height) = (first_paintable.width, first_paintable.height);
+        //
+        // We also only consider the orientation of the first paintable for now and rotate all
+        // overlays consistently with that to follow the behaviour of glvideoflip.
+        let effective_orientation = self.effective_orientation(first_paintable.orientation);
 
+        // First do the rotation around the center of the whole snapshot area
+        if effective_orientation != frame::Orientation::Rotate0 {
+            snapshot.translate(&graphene::Point::new(
+                width as f32 / 2.0,
+                height as f32 / 2.0,
+            ));
+        }
+        match effective_orientation {
+            frame::Orientation::Rotate0 => {}
+            frame::Orientation::Rotate90 => {
+                snapshot.rotate(90.0);
+            }
+            frame::Orientation::Rotate180 => {
+                snapshot.rotate(180.0);
+            }
+            frame::Orientation::Rotate270 => {
+                snapshot.rotate(270.0);
+            }
+            frame::Orientation::FlipRotate0 => {
+                snapshot.rotate_3d(180.0, &gtk::graphene::Vec3::y_axis());
+            }
+            frame::Orientation::FlipRotate90 => {
+                snapshot.rotate(90.0);
+                snapshot.rotate_3d(180.0, &gtk::graphene::Vec3::y_axis());
+            }
+            frame::Orientation::FlipRotate180 => {
+                snapshot.rotate(180.0);
+                snapshot.rotate_3d(180.0, &gtk::graphene::Vec3::y_axis());
+            }
+            frame::Orientation::FlipRotate270 => {
+                snapshot.rotate(270.0);
+                snapshot.rotate_3d(180.0, &gtk::graphene::Vec3::y_axis());
+            }
+            frame::Orientation::Auto => unreachable!(),
+        }
+        if effective_orientation != frame::Orientation::Rotate0 {
+            if effective_orientation.is_flip_width_height() {
+                snapshot.translate(&graphene::Point::new(
+                    -height as f32 / 2.0,
+                    -width as f32 / 2.0,
+                ));
+            } else {
+                snapshot.translate(&graphene::Point::new(
+                    -width as f32 / 2.0,
+                    -height as f32 / 2.0,
+                ));
+            }
+        }
+
+        // The rotation is applied now and we're back at the origin at this point
+
+        // Width / height of the overall frame that we're drawing. This has to be flipped
+        // if a 90/270 degree rotation is applied.
+        let (frame_width, frame_height) = if effective_orientation.is_flip_width_height() {
+            (first_paintable.height, first_paintable.width)
+        } else {
+            (first_paintable.width, first_paintable.height)
+        };
+
+        // Amount of scaling that has to be applied to the main frame and all overlays to fill the
+        // available area
         let mut scale_x = width / frame_width as f64;
         let mut scale_y = height / frame_height as f64;
 
@@ -227,13 +319,25 @@ impl PaintableImpl for Paintable {
             }
 
             if !background_color.is_clear() && (trans_x > f64::EPSILON || trans_y > f64::EPSILON) {
+                // Clamping for the bounds below has to be flipped over for 90/270 degree rotations.
+                let (width, height) = if effective_orientation.is_flip_width_height() {
+                    (height, width)
+                } else {
+                    (width, height)
+                };
+
                 snapshot.append_color(
                     &background_color,
                     &graphene::Rect::new(0f32, 0f32, width as f32, height as f32),
                 );
             }
+            if effective_orientation.is_flip_width_height() {
+                std::mem::swap(&mut trans_x, &mut trans_y);
+            }
             snapshot.translate(&graphene::Point::new(trans_x as f32, trans_y as f32));
         }
+
+        // At this point we're at the origin of the area into which the actual video frame is drawn
 
         // Make immutable
         let scale_x = scale_x;
@@ -249,10 +353,18 @@ impl PaintableImpl for Paintable {
                 height: paintable_height,
                 global_alpha,
                 has_alpha,
+                orientation: _orientation,
             },
         ) in paintables.iter().enumerate()
         {
             snapshot.push_opacity(*global_alpha as f64);
+
+            // Clamping for the bounds below has to be flipped over for 90/270 degree rotations.
+            let (width, height) = if effective_orientation.is_flip_width_height() {
+                (height, width)
+            } else {
+                (width, height)
+            };
 
             let bounds = if !force_aspect_ratio && idx == 0 {
                 // While this should end up with width again, be explicit in this case to avoid
@@ -261,11 +373,32 @@ impl PaintableImpl for Paintable {
             } else {
                 // Scale texture position and size with the same scale factor as the main video
                 // frame, and make sure to not render outside (0, 0, width, height).
-                let x = f32::clamp(*x * scale_x as f32, 0.0, width as f32);
-                let y = f32::clamp(*y * scale_y as f32, 0.0, height as f32);
-                let texture_width = f32::min(*paintable_width * scale_x as f32, width as f32);
-                let texture_height = f32::min(*paintable_height * scale_y as f32, height as f32);
-                graphene::Rect::new(x, y, texture_width, texture_height)
+                let (rect_x, rect_y) = if effective_orientation.is_flip_width_height() {
+                    (
+                        f32::clamp(*y * scale_y as f32, 0.0, width as f32),
+                        f32::clamp(*x * scale_x as f32, 0.0, height as f32),
+                    )
+                } else {
+                    (
+                        f32::clamp(*x * scale_x as f32, 0.0, width as f32),
+                        f32::clamp(*y * scale_y as f32, 0.0, height as f32),
+                    )
+                };
+
+                let (texture_width, texture_height) =
+                    if effective_orientation.is_flip_width_height() {
+                        (
+                            f32::min(*paintable_width * scale_y as f32, width as f32),
+                            f32::min(*paintable_height * scale_x as f32, height as f32),
+                        )
+                    } else {
+                        (
+                            f32::min(*paintable_width * scale_x as f32, width as f32),
+                            f32::min(*paintable_height * scale_y as f32, height as f32),
+                        )
+                    };
+
+                graphene::Rect::new(rect_x, rect_y, texture_width, texture_height)
             };
 
             // Only premultiply GL textures that expect to be in premultiplied RGBA format.
@@ -364,6 +497,19 @@ impl PaintableImpl for Paintable {
 }
 
 impl Paintable {
+    fn effective_orientation(
+        &self,
+        paintable_orientation: frame::Orientation,
+    ) -> frame::Orientation {
+        let orientation = self.orientation.get();
+        if orientation != frame::Orientation::Auto {
+            return orientation;
+        }
+
+        assert_ne!(paintable_orientation, frame::Orientation::Auto);
+        paintable_orientation
+    }
+
     pub(super) fn handle_frame_changed(&self, sink: &crate::PaintableSink, frame: Frame) {
         let context = self.gl_context.borrow();
 

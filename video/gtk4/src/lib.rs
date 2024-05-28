@@ -19,6 +19,7 @@ use gst::glib;
 
 mod sink;
 mod utils;
+pub use sink::frame::Orientation;
 pub use sink::paintable::Paintable;
 pub use sink::PaintableSink;
 
@@ -28,6 +29,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         use gst::prelude::*;
 
         sink::paintable::Paintable::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        sink::frame::Orientation::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }
 
     #[cfg(not(feature = "gtk_v4_10"))]
