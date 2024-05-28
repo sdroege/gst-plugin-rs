@@ -6152,7 +6152,7 @@
                     "translation-languages": {
                         "blurb": "A map of language codes to caption channels, e.g. translation-languages=\"languages, transcript={CC1, 708_1}, fr={708_2, CC3}\" will map the French translation to CC1/service 1 and the original transcript to CC3/service 2",
                         "conditionally-available": false,
-                        "construct": false,
+                        "construct": true,
                         "construct-only": false,
                         "controllable": false,
                         "default": "languages, transcript=(string)cc1;",

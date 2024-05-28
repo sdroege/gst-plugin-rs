@@ -1248,6 +1248,7 @@ impl ObjectImpl for TranscriberBin {
                 glib::ParamSpecBoxed::builder::<gst::Structure>("translation-languages")
                     .nick("Translation languages")
                     .blurb("A map of language codes to caption channels, e.g. translation-languages=\"languages, transcript={CC1, 708_1}, fr={708_2, CC3}\" will map the French translation to CC1/service 1 and the original transcript to CC3/service 2")
+                    .construct()
                     .mutable_playing()
                     .build(),
                 glib::ParamSpecUInt::builder("translate-latency")
@@ -1754,11 +1755,7 @@ struct TranscriberSinkPadSettings {
 impl Default for TranscriberSinkPadSettings {
     fn default() -> Self {
         Self {
-            translation_languages: Some(
-                gst::Structure::builder("languages")
-                    .field("transcript", "cc1")
-                    .build(),
-            ),
+            translation_languages: None,
             language_code: String::from(DEFAULT_INPUT_LANG_CODE),
             mode: DEFAULT_MODE,
         }
@@ -1857,19 +1854,20 @@ impl ObjectImpl for TranscriberSinkPad {
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "translation-languages" => {
-                if let Some(this) = self.obj().parent().and_downcast::<super::TranscriberBin>() {
-                    let mut settings = self.settings.lock().unwrap();
-                    settings.translation_languages = value
-                        .get::<Option<gst::Structure>>()
-                        .expect("type checked upstream");
-                    gst::debug!(
-                        CAT,
-                        imp: self,
-                        "Updated translation-languages {:?}",
-                        settings.translation_languages
-                    );
-                    drop(settings);
+                let mut settings = self.settings.lock().unwrap();
+                settings.translation_languages = value
+                    .get::<Option<gst::Structure>>()
+                    .expect("type checked upstream");
+                gst::debug!(
+                    CAT,
+                    imp: self,
+                    "Updated translation-languages {:?}",
+                    settings.translation_languages
+                );
 
+                drop(settings);
+
+                if let Some(this) = self.obj().parent().and_downcast::<super::TranscriberBin>() {
                     this.imp().update_languages(&self.obj(), false);
                 }
             }
