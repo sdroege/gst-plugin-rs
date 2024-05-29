@@ -479,7 +479,8 @@ impl TextToCea708 {
                             || self.pen_location.column > 31
                         {
                             self.pen_location.column = self.origin_column as u8;
-                            self.service_writer.push_codes(&[Code::CR]);
+
+                            self.open_line(chunk, Some(true));
                         }
                     } else if self.pen_location.column > 31 {
                         if chars.peek().is_some() {
