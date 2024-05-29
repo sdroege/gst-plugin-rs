@@ -300,7 +300,9 @@ impl TranscriberBin {
             channel.link_transcriber(&pad_state.transcriber)?;
 
             let srcpad =
-                gst::GhostPad::with_target(&channel.bin.static_pad("src").unwrap()).unwrap();
+                gst::GhostPad::builder_with_target(&channel.bin.static_pad("src").unwrap()).unwrap()
+                .name(format!("src_{}", channel.language))
+                .build();
 
             pad_state.transcription_bin.add_pad(&srcpad)?;
             if state.ccmux.static_pad(&channel.ccmux_pad_name).is_none() {
