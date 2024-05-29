@@ -27,7 +27,7 @@ log = "0.4"
 once_cell.workspace = true
 rand = { version = "0.8", default-features = false, features = ["std", "std_rng" ] }
 rtp-types = { version = "0.1" }
-rtcp-types = { git = "https://github.com/ystreet/rtcp-types", version = "0.0" }
+rtcp-types = { version = "0.1" }
 slab = "0.4.9"
 smallvec = { version = "1.11", features = ["union", "write", "const_generics", "const_new"] }
 thiserror = "1"
