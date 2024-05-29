@@ -4240,8 +4240,8 @@ impl ObjectImpl for BaseWebRTCSink {
                         );
 
                         let this = element.imp();
-                        let settings = this.settings.lock().unwrap();
-                        configure_encoder(&enc, settings.cc_info.start_bitrate);
+                        let start_bitrate = this.settings.lock().unwrap().cc_info.start_bitrate;
+                        configure_encoder(&enc, start_bitrate);
 
                         // Return false here so that latter handlers get called
                         Some(false.to_value())
