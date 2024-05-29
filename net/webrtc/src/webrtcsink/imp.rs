@@ -771,7 +771,7 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
                 enc.set_property("target-bitrate", start_bitrate / 1000);
                 enc.set_property_from_str("end-usage", "cbr");
                 enc.set_property("keyframe-max-dist", i32::MAX);
-                enc.set_property_from_str("usage-profile", "real-time");
+                enc.set_property_from_str("usage-profile", "realtime");
             }
             "rav1enc" => {
                 enc.set_property("bitrate", start_bitrate);
