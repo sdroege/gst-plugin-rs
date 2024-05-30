@@ -4,3 +4,7 @@ pub mod depay;
 pub mod pay;
 
 mod mpeg_audio_utils;
+
+#[allow(clippy::module_inception)]
+#[cfg(test)]
+mod tests;
