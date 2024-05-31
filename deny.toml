@@ -76,6 +76,9 @@ version = "0.6"
 [[bans.skip]]
 name = "multimap"
 version = "0.8"
+[[bans.skip]]
+name = "nix"
+version = "0.23"
 
 # field-offset and nix depend on an older memoffset
 # https://github.com/Diggsey/rust-field-offset/pull/23
