@@ -598,7 +598,6 @@ impl ElementImpl for RTPAv1Pay {
                 gst::PadPresence::Always,
                 &gst::Caps::builder("application/x-rtp")
                     .field("media", "video")
-                    .field("payload", gst::IntRange::new(96, 127))
                     .field("clock-rate", CLOCK_RATE as i32)
                     .field("encoding-name", "AV1")
                     .build(),
