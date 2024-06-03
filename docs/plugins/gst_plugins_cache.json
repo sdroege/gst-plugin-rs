@@ -3680,6 +3680,267 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "hlsmultivariantsink": {
+        "description": "GStreamer HLS (HTTP Live Streaming) multi-variant sink Plugin",
+        "elements": {
+            "hlsmultivariantsink": {
+                "author": "Sanchayan Maity <sanchayan@asymptotic.io>",
+                "description": "HTTP Live Streaming sink",
+                "hierarchy": [
+                    "GstHlsMultivariantSink",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
+                "klass": "Sink/Muxer",
+                "pad-templates": {
+                    "audio_%%u": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "HlsMultivariantSinkPad"
+                    },
+                    "video_%%u": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "HlsMultivariantSinkPad"
+                    }
+                },
+                "properties": {
+                    "max-files": {
+                        "blurb": "Maximum number of files to keep on disk. Once the maximum is reached, old files start to be deleted to make room for new ones.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "10",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "multivariant-playlist-location": {
+                        "blurb": "Location of the multivariant playlist file to write",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "multivariant.m3u8",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "muxer-type": {
+                        "blurb": "The muxer to use, cmafmux or mpegtsmux, accordingly selects hlssink3 or hlscmafsink",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "cmaf (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstHlsMultivariantSinkMuxerType",
+                        "writable": true
+                    },
+                    "playlist-length": {
+                        "blurb": "Length of HLS playlist. To allow players to conform to section 6.3.3 of the HLS specification, this should be at least 3. If set to 0, the playlist will be infinite.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "5",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "playlist-type": {
+                        "blurb": "The type of the playlist to use. When VOD type is set, the playlist will be live until the pipeline ends execution.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "unspecified (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstHlsMultivariantSinkPlaylistType",
+                        "writable": true
+                    },
+                    "send-keyframe-requests": {
+                        "blurb": "Send keyframe requests to ensure correct fragmentation. If this is disabled then the input must have keyframes in regular intervals.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "target-duration": {
+                        "blurb": "The target duration in seconds of a segment/file. (0 - disabled, useful for management of segment duration by the streaming server)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "15",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                },
+                "rank": "none",
+                "signals": {
+                    "delete-fragment": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "gboolean",
+                        "when": "last"
+                    },
+                    "get-fragment-stream": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "GOutputStream",
+                        "when": "last"
+                    },
+                    "get-init-stream": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "GOutputStream",
+                        "when": "last"
+                    },
+                    "get-multivariant-playlist-stream": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "GOutputStream",
+                        "when": "last"
+                    },
+                    "get-playlist-stream": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "GOutputStream",
+                        "when": "last"
+                    }
+                }
+            }
+        },
+        "filename": "gsthlsmultivariantsink",
+        "license": "MPL",
+        "other-types": {
+            "GstHlsMultivariantSinkMuxerType": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "cmaf",
+                        "name": "cmaf",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "mpegts",
+                        "name": "mpegts",
+                        "value": "1"
+                    }
+                ]
+            },
+            "GstHlsMultivariantSinkPlaylistType": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Unspecified: The tag `#EXT-X-PLAYLIST-TYPE` won't be present in the playlist during the pipeline processing.",
+                        "name": "unspecified",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Event: No segments will be removed from the playlist. At the end of the processing, the tag `#EXT-X-ENDLIST` is added to the playlist. The tag `#EXT-X-PLAYLIST-TYPE:EVENT` will be present in the playlist.",
+                        "name": "event",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Vod: The playlist behaves like the `event` option (a live event), but at the end of the processing, the playlist will be set to `#EXT-X-PLAYLIST-TYPE:VOD`.",
+                        "name": "vod",
+                        "value": "2"
+                    }
+                ]
+            },
+            "HlsMultivariantSinkPad": {
+                "hierarchy": [
+                    "HlsMultivariantSinkPad",
+                    "GstGhostPad",
+                    "GstProxyPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "alternate-rendition": {
+                        "blurb": "Alternate Rendition",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "variant-stream, is-i-frame=(boolean)false, uri=(string)\"\", bandwidth=(guint64)0, codecs=(string)NULL, audio=(string)NULL, video=(string)NULL;",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": true
+                    },
+                    "variant": {
+                        "blurb": "Variant Stream",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "variant-stream, is-i-frame=(boolean)false, uri=(string)\"\", bandwidth=(guint64)0, codecs=(string)NULL, audio=(string)NULL, video=(string)NULL;",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": true
+                    }
+                }
+            }
+        },
+        "package": "gst-plugin-hlsmultivariantsink",
+        "source": "gst-plugin-hlsmultivariantsink",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "hlssink3": {
         "description": "GStreamer HLS (HTTP Live Streaming) Plugin",
         "elements": {

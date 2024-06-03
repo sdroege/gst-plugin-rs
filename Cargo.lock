@@ -918,6 +918,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1be3f42a67d6d345ecd59f675f3f012d6974981560836e938c22b424b85ce1be"
 
 [[package]]
+name = "bitreader"
+version = "0.3.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "886559b1e163d56c765bc3a985febb4eee8009f625244511d8ee3c432e08c066"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
 name = "bitstream-io"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1331,6 +1340,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a97769d94ddab943e4510d138150169a2758b5ef3eb191a9ee688de3e23ef7b3"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "cros-codecs"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "277a30a0ddadfa014380ee30cc60330d260369855417c492fa94421d7c7e9229"
+dependencies = [
+ "anyhow",
+ "bitreader",
+ "byteorder",
+ "bytes",
+ "crc32fast",
+ "enumn",
+ "log",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -1781,6 +1806,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75030f3c4f45dafd7586dd6780965a8c7e8e285a5ecb86713e63a79c5b2766f3"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "enumn"
+version = "0.1.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f9ed6b3789237c8a0c1c505af1c7eb2c560df6186f01b098c3a1064ea532f38"
+dependencies = [
+ "proc-macro2",
+ "quote 1.0.38",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -2686,6 +2722,27 @@ dependencies = [
  "gstreamer-video",
  "gtk4",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "gst-plugin-hlsmultivariantsink"
+version = "0.14.0-alpha.1"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "cros-codecs",
+ "gio",
+ "gst-plugin-fmp4",
+ "gst-plugin-hlssink3",
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "gstreamer-app",
+ "gstreamer-audio",
+ "gstreamer-check",
+ "gstreamer-pbutils",
+ "gstreamer-video",
+ "m3u8-rs",
+ "sprintf",
 ]
 
 [[package]]

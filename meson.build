@@ -151,6 +151,7 @@ plugins = {
     'extra-deps': {'openssl': ['>=1.1']},
   },
   'mpegtslive': {'library': 'libgstmpegtslive'},
+  'hlsmultivariantsink': {'library': 'libgsthlsmultivariantsink'},
   'hlssink3': {'library': 'libgsthlssink3'},
   'ndi': {'library': 'libgstndi'},
   'onvif': {
