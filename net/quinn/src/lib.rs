@@ -20,6 +20,7 @@
 use gst::glib;
 use gst::prelude::*;
 mod common;
+pub mod quinnquicmeta;
 mod quinnquicsink;
 mod quinnquicsrc;
 mod utils;

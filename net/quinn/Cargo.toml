@@ -11,6 +11,7 @@ rust-version.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+glib.workspace = true
 gst.workspace = true
 gst-base.workspace = true
 tokio = { version = "1.36.0", default-features = false, features = ["time", "rt-multi-thread"] }
