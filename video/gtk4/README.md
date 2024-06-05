@@ -31,46 +31,40 @@ To build and include the plugin in a Flatpak manifest, you can add the following
         "org.freedesktop.Sdk.Extension.rust-stable"
     ],
     "build-options": {
-        "env": {
-            "CARGO_HOME": "/run/build/cargo-c/cargo"
-        },
         "append-path": "/usr/lib/sdk/rust-stable/bin",
     },
     "modules": [
-        {
-            "name": "cargo-c",
-            "buildsystem": "simple",
-            "build-commands": [
-                "cargo install cargo-c --root /app"
-            ],
-            "build-options": {
-                "build-args": [
-                    "--share=network"
-                ]
-            },
-            "cleanup": [
-                "*"
-            ]
-        },
         {
             "name": "gst-plugins-rs",
             "buildsystem": "simple",
             "sources": [
                 {
-                    "type": "git",
-                    "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs",
-                    "branch": "0.12"
-                }
+                    "type": "archive",
+                    "url": "https://crates.io/api/v1/crates/gst-plugin-gtk4/0.12.5/download",
+                    "dest-filename": "gst-plugin-gtk4-0.12.5.tar.gz",
+                    "sha256": "56e483cb1452f056ae94ccd5f63bdec697e04c87b30d89eb30c3f934042e1022"
+                },
+                "gst-plugin-gtk4-sources.json"
             ],
             "build-options": {
-                "build-args": [
-                    "--share=network"
-                ]
+                "env": {
+                    "CARGO_HOME": "/run/build/gst-plugin-gtk4/cargo"
+                }
             },
             "build-commands": [
-                "cargo cinstall -p gst-plugin-gtk4 --prefix=/app"
+                "cargo cinstall --offline --release --library-type=cdylib --prefix=/app"
             ]
         }
     ]
 }
+```
+
+To generate the additional file `gst-plugin-gtk4-sources.json` which will contain links to all the Cargo dependencies for the plugin to avoid making network requests while building, you need to use the `flatpak-cargo-generator` tool from [flatpak-builder-tools](https://github.com/flatpak/flatpak-builder-tools):
+
+```sh
+wget https://crates.io/api/v1/crates/gst-plugin-gtk4/0.12.5/download
+tar -xf download
+sha256sum download # update the sha256 in the Flatpak manifest
+cd gst-plugin-gtk4-0.12.5/
+/path/to/flatpak-cargo-generator Cargo.lock -o gst-plugin-gtk4-sources.json
 ```
