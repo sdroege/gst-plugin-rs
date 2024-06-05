@@ -300,9 +300,10 @@ impl TranscriberBin {
             channel.link_transcriber(&pad_state.transcriber)?;
 
             let srcpad =
-                gst::GhostPad::builder_with_target(&channel.bin.static_pad("src").unwrap()).unwrap()
-                .name(format!("src_{}", channel.language))
-                .build();
+                gst::GhostPad::builder_with_target(&channel.bin.static_pad("src").unwrap())
+                    .unwrap()
+                    .name(format!("src_{}", channel.language))
+                    .build();
 
             pad_state.transcription_bin.add_pad(&srcpad)?;
             if state.ccmux.static_pad(&channel.ccmux_pad_name).is_none() {
@@ -1898,35 +1899,37 @@ impl ObjectImpl for TranscriberSinkPad {
                 }
             }
             "language-code" => {
+                let mut settings = self.settings.lock().unwrap();
+
+                let old_code = settings.language_code.clone();
+                let new_code = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream")
+                    .unwrap_or_else(|| String::from(DEFAULT_INPUT_LANG_CODE));
+                settings.language_code.clone_from(&new_code);
                 if let Some(this) = self.obj().parent().and_downcast::<super::TranscriberBin>() {
-                    let code = value
-                        .get::<Option<String>>()
-                        .expect("type checked upstream")
-                        .unwrap_or_else(|| String::from(DEFAULT_INPUT_LANG_CODE));
-                    let mut settings = self.settings.lock().unwrap();
-                    if settings.language_code != code {
+                    drop(settings);
+                    if new_code != old_code {
                         gst::debug!(
                             CAT,
                             imp: self,
-                            "Updating language code {} -> {code}",
-                            settings.language_code,
+                            "Updating language code {old_code} -> {new_code}",
                         );
-
-                        settings.language_code = code;
-                        drop(settings);
 
                         this.imp().update_languages(&self.obj(), true)
                     }
                 }
             }
             "transcriber" => {
+                let mut ps = self.state.lock().unwrap();
+                let pad_state = ps.as_mut().unwrap();
+                let old_transcriber = pad_state.transcriber.clone();
+                let new_transcriber: gst::Element = value.get().expect("type checked upstream");
+                pad_state.transcriber = new_transcriber.clone();
+
                 if let Some(this) = self.obj().parent().and_downcast::<super::TranscriberBin>() {
                     let mut s = this.imp().state.lock().unwrap();
-                    let mut ps = self.state.lock().unwrap();
-                    let pad_state = ps.as_mut().unwrap();
-                    let old_transcriber = pad_state.transcriber.clone();
-                    pad_state.transcriber = value.get().expect("type checked upstream");
-                    if old_transcriber != pad_state.transcriber {
+                    if old_transcriber != new_transcriber {
                         if let Some(ref mut state) = s.as_mut() {
                             match this
                                 .imp()
