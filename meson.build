@@ -305,7 +305,8 @@ if get_option('gtk4').allowed()
   gst_allocators_dep = dependency('gstreamer-allocators-1.0', version: '>=1.24', required: false)
   gtk_dep = dependency('gtk4', version: '>=4.6', required: get_option('gtk4'))
   if gtk_dep.found()
-    if host_system == 'linux' and gtk_dep.version().version_compare('>=4.14') and gst_allocators_dep.found()
+    if host_system == 'linux' and gtk_dep.version().version_compare('>=4.14') and \
+        gst_allocators_dep.found() and 'wayland' in gtk4_features
       gtk4_features += 'dmabuf'
     endif
 
