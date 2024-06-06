@@ -86,7 +86,7 @@ if get_option('tests').allowed()
   deps += [['gstreamer-check-1.0', 'gstreamer', 'gst_check_dep', 'gst_check']]
 endif
 if get_option('gtk4').allowed()
-  deps += [['gstreamer-gl-1.0', 'gst-plugins-base', 'gst_gl_dep', 'gstgl', get_option('gtk4')]]
+  deps += [['gstreamer-gl-1.0', 'gst-plugins-base', 'gstgl_dep', 'gstgl', get_option('gtk4')]]
 endif
 if get_option('threadshare').allowed() or get_option('rtsp').allowed()
   deps += [['gstreamer-net-1.0', 'gstreamer', 'gst_net_dep', 'gst_net']]
@@ -284,8 +284,8 @@ endif
 
 if get_option('gtk4').allowed()
   gtk4_features = []
-  gl_winsys = gst_gl_dep.get_variable('gl_winsys').split()
-  gl_platforms = gst_gl_dep.get_variable('gl_platforms').split()
+  gl_winsys = gstgl_dep.get_variable('gl_winsys').split()
+  gl_platforms = gstgl_dep.get_variable('gl_platforms').split()
   if 'wayland' in gl_winsys
     gtk4_features += 'wayland'
   endif
