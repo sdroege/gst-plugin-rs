@@ -312,18 +312,21 @@ if examples_opt.allowed() and 'gtk4' in plugins
   plugins += {
     'fallbackswitch': {
       'library': 'libgstfallbackswitch',
-      'examples': ['gtk-fallbackswitch'],
-      'features': ['gtk', 'gio', 'gst-plugin-gtk4'],
+      'examples_features': {
+        'gtk-fallbackswitch': ['gtk', 'gio', 'gst-plugin-gtk4'],
+      },
     },
     'livesync': {
       'library': 'libgstlivesync',
-      'examples': ['gtk-livesync'],
-      'features': ['gtk', 'gio', 'gst-plugin-gtk4'],
+      'examples_features': {
+        'gtk-livesync': ['gtk', 'gio', 'gst-plugin-gtk4'],
+      }
     },
     'togglerecord': {
       'library': 'libgsttogglerecord',
-      'examples': ['gtk-recording'],
-      'features': ['gtk', 'gio', 'gst-plugin-gtk4'],
+      'examples_features': {
+        'gtk-recording': ['gtk', 'gio', 'gst-plugin-gtk4'],
+      }
     },
   }
 else
@@ -452,6 +455,26 @@ foreach plugin_name, details: plugins
   plugin_examples = details.get('examples', [])
   foreach example: plugin_examples
     examples += example
+  endforeach
+
+  plugin_examples_features = details.get('examples_features', {})
+  foreach example, examples_features: plugin_examples_features
+    example_deps_found = true
+    foreach feature: examples_features
+      if feature.startswith('gst-plugin') and not packages.contains(feature)
+        msg = f'@plugin_name@ example @example@ required feature @feature@ not found'
+        if plugin_opt.enabled() and examples_opt.enabled()
+          error(msg)
+        endif
+        message(msg + ', skipping')
+        example_deps_found = false
+        break
+      endif
+    endforeach
+    features += examples_features
+    if example_deps_found
+      examples += example
+    endif
   endforeach
 
   packages += f'gst-plugin-@plugin_name@'
