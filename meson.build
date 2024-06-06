@@ -316,16 +316,16 @@ if get_option('gtk4').allowed()
     elif gtk_dep.version().version_compare('>=4.10')
       gtk4_features += 'gtk_v4_10'
     endif
-  endif
 
-  plugins += {
-    'gtk4': {
-      'library': 'libgstgtk4',
-      'examples': ['gtksink'],
-      'extra-deps': {'gtk4': ['>=4.6']},
-      'features': gtk4_features,
-    },
-  }
+    plugins += {
+      'gtk4': {
+        'library': 'libgstgtk4',
+        'examples': ['gtksink'],
+        'extra-deps': {'gtk4': ['>=4.6']},
+        'features': gtk4_features,
+      },
+    }
+  endif
 endif
 
 # Process plugins list
