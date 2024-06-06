@@ -36,6 +36,7 @@ function Run-Tests {
     }
 
     $env:G_DEBUG="fatal_warnings"
+    $env:RUST_BACKTRACE="1"
     cargo test --no-fail-fast --color=always --workspace $local_exclude --all-targets $Features
 
     if (!$?) {
