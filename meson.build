@@ -448,6 +448,12 @@ foreach plugin_name, details: plugins
     continue
   endif
 
+  # Parse and enable examples
+  plugin_examples = details.get('examples', [])
+  foreach example: plugin_examples
+    examples += example
+  endforeach
+
   packages += f'gst-plugin-@plugin_name@'
   features += plugin_features
   extra_features = run_command('dependencies.py', meson.current_source_dir(), plugin_name,
