@@ -8,7 +8,7 @@
     clippy::missing_safety_doc
 )]
 
-use once_cell::sync::OnceCell;
+use once_cell::sync::{Lazy, OnceCell};
 
 #[cfg(unix)]
 use libloading::os::unix::{Library, Symbol};
@@ -16,15 +16,15 @@ use libloading::os::unix::{Library, Symbol};
 use libloading::os::windows::{Library, Symbol};
 
 #[cfg(all(target_arch = "x86_64", target_os = "windows"))]
-const LIBRARY_NAME: &str = "Processing.NDI.Lib.x64.dll";
+const LIBRARY_NAMES: &[&str] = &["Processing.NDI.Lib.x64.dll"];
 #[cfg(all(target_arch = "x86", target_os = "windows"))]
-const LIBRARY_NAME: &str = "Processing.NDI.Lib.x86.dll";
+const LIBRARY_NAMES: &[&str] = &["Processing.NDI.Lib.x86.dll"];
 #[cfg(target_os = "linux")]
-const LIBRARY_NAME: &str = "libndi.so.5";
+const LIBRARY_NAMES: &[&str] = &["libndi.so.6", "libndi.so.5"];
 #[cfg(target_os = "macos")]
-const LIBRARY_NAME: &str = "libndi.dylib";
+const LIBRARY_NAMES: &[&str] = &["libndi.dylib"];
 #[cfg(all(unix, not(any(target_os = "linux", target_os = "macos"))))]
-const LIBRARY_NAME: &str = "libndi.so";
+const LIBRARY_NAMES: &[&str] = &["libndi.so"];
 
 #[allow(clippy::type_complexity)]
 struct FFI {
@@ -326,6 +326,9 @@ pub const NDIlib_compressed_packet_flags_keyframe: u32 = 1;
 #[cfg(feature = "advanced-sdk")]
 pub const NDIlib_compressed_packet_version_0: u32 = 44;
 
+static CAT: Lazy<gst::DebugCategory> =
+    Lazy::new(|| gst::DebugCategory::new("ndi", gst::DebugColorFlags::empty(), Some("NewTek NDI")));
+
 static FFI: OnceCell<FFI> = OnceCell::new();
 
 pub fn load() -> Result<(), glib::BoolError> {
@@ -335,17 +338,47 @@ pub fn load() -> Result<(), glib::BoolError> {
         use std::env;
         use std::path;
 
-        let library_directory = env::var_os("NDI_RUNTIME_DIR_V5");
-        let library_path = if let Some(library_directory) = library_directory {
-            let mut path = path::PathBuf::from(library_directory);
-            path.push(LIBRARY_NAME);
-            path
-        } else {
-            path::PathBuf::from(LIBRARY_NAME)
-        };
+        const ENV_VARS: &[&str] = &["NDI_RUNTIME_DIR_V6", "NDI_RUNTIME_DIR_V5", ""];
 
-        let library = Library::new(library_path)
-            .map_err(|err| glib::bool_error!("Failed to load NDI SDK: {}", err))?;
+        let mut library = None;
+        'outer_loop: for env_var in ENV_VARS {
+            let library_directory = if !env_var.is_empty() {
+                let Some(library_directory) = env::var_os(env_var) else {
+                    continue;
+                };
+                Some(library_directory)
+            } else {
+                None
+            };
+
+            for library_name in LIBRARY_NAMES {
+                let library_path = if let Some(ref library_directory) = library_directory {
+                    let mut path = path::PathBuf::from(library_directory);
+                    path.push(library_name);
+                    path
+                } else {
+                    path::PathBuf::from(library_name)
+                };
+
+                match Library::new(&library_path) {
+                    Ok(lib) => {
+                        gst::log!(CAT, "Loaded NDI SDK from {}", library_path.display());
+                        library = Some(lib);
+                        break 'outer_loop;
+                    }
+                    Err(err) => {
+                        gst::log!(
+                            CAT,
+                            "Failed loading NDI SDK from {}: {err}",
+                            library_path.display()
+                        );
+                        continue;
+                    }
+                }
+            }
+        }
+
+        let library = library.ok_or_else(|| glib::bool_error!("Failed loading NDI SDK"))?;
 
         macro_rules! load_symbol {
             ($name:ident) => {{
