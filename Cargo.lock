@@ -264,9 +264,9 @@ dependencies = [
 
 [[package]]
 name = "async-tungstenite"
-version = "0.26.0"
+version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cf3e0ba34d3cf04731e376a1cf6c16c357396ab66da227bd283e74d49890b2a"
+checksum = "67824e7945b9a2bf2057a363ab01b103e3217962afe0f3b789e6df8b13ac0a86"
 dependencies = [
  "futures-io",
  "futures-util",
@@ -3837,7 +3837,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.7",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -7043,6 +7043,7 @@ dependencies = [
  "rand",
  "sha1",
  "thiserror",
+ "url",
  "utf-8",
 ]
 

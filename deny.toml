@@ -245,6 +245,14 @@ version = "0.6"
 name = "rustls-webpki"
 version = "0.101"
 
+# warp depends on an older version of tokio-tungstenite
+[[bans.skip]]
+name = "tokio-tungstenite"
+version = "0.21"
+[[bans.skip]]
+name = "tungstenite"
+version = "0.21"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
