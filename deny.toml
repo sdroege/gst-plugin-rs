@@ -231,6 +231,25 @@ version = "1.0"
 name = "winreg"
 version = "0.50"
 
+# The AWS SDK uses old versions of rustls and related crates
+[[bans.skip]]
+name = "rustls"
+version = "0.21"
+[[bans.skip]]
+name = "rustls-native-certs"
+version = "0.6"
+[[bans.skip]]
+name = "rustls-webpki"
+version = "0.101"
+
+# warp depends on an older version of tokio-tungstenite
+[[bans.skip]]
+name = "tokio-tungstenite"
+version = "0.21"
+[[bans.skip]]
+name = "tungstenite"
+version = "0.21"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
