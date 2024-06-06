@@ -390,51 +390,65 @@ endif
 
 foreach plugin_name, details: plugins
   plugin_opt = get_variable(f'@plugin_name@_option', get_option(plugin_name))
-  if plugin_opt.allowed()
-    plugin_deps_found = true
-    foreach dep_name, dep_ver: details.get('extra-deps', {})
-      if dep_ver.length() != 0
-        dep = dependency(dep_name, version: dep_ver, required: plugin_opt)
-      else
-        dep = dependency(dep_name, required: plugin_opt)
-      endif
-      deps_cache += {dep_name: dep}
-      if not dep.found()
-        plugin_deps_found = false
-        break
-      endif
-    endforeach
-    plugin_features = details.get('features', [])
-    if plugin_deps_found
-      # Validate gst-plugin features
-      foreach feature: plugin_features
-        if feature.startswith('gst-plugin') and not packages.contains(feature)
-          plugin_deps_found = false
-          break
-        endif
-      endforeach
-    endif
-    if plugin_deps_found
-      packages += f'gst-plugin-@plugin_name@'
-      features += plugin_features
-      extra_features = run_command('dependencies.py', meson.current_source_dir(), plugin_name,
-        '--feature', '--gst-version', gst_dep.version(), capture: true, check: true).stdout().strip()
-      if extra_features != ''
-        features += extra_features.split(',')
-      endif
+  if not plugin_opt.allowed()
+    debug(f'@plugin_name@ is disabled')
+    continue
+  endif
+  plugin_deps_found = true
 
-      lib = details.get('library')
-      # No 'lib' suffix with MSVC
-      if cc.get_argument_syntax() == 'msvc'
-        lib = lib.substring(3)
-      endif
-      if default_library in ['shared', 'both']
-        output += [lib + '.' + ext_dynamic]
-      endif
-      if default_library in ['static', 'both']
-        output += [lib + '.' + ext_static]
-      endif
+  # Check whether we have all needed deps
+  foreach dep_name, dep_ver: details.get('extra-deps', {})
+    if dep_ver.length() != 0
+      dep = dependency(dep_name, version: dep_ver, required: plugin_opt)
+    else
+      dep = dependency(dep_name, required: plugin_opt)
     endif
+    deps_cache += {dep_name: dep}
+    if not dep.found()
+      debug(f'@plugin_name@ dependency @dep_name@ @dep_ver@ not found, skipping')
+      plugin_deps_found = false
+      break
+    endif
+  endforeach
+  if not plugin_deps_found
+    continue
+  endif
+
+  # Validate gst-plugin features
+  plugin_features = details.get('features', [])
+  foreach feature: plugin_features
+    if feature.startswith('gst-plugin') and not packages.contains(feature)
+      msg = f'@plugin_name@ required feature @feature@ not found'
+      if plugin_opt.enabled()
+        error(msg)
+      endif
+      message(msg + ', skipping')
+      plugin_deps_found = false
+      break
+    endif
+  endforeach
+  if not plugin_deps_found
+    continue
+  endif
+
+  packages += f'gst-plugin-@plugin_name@'
+  features += plugin_features
+  extra_features = run_command('dependencies.py', meson.current_source_dir(), plugin_name,
+    '--feature', '--gst-version', gst_dep.version(), capture: true, check: true).stdout().strip()
+  if extra_features != ''
+    features += extra_features.split(',')
+  endif
+
+  lib = details.get('library')
+  # No 'lib' suffix with MSVC
+  if cc.get_argument_syntax() == 'msvc'
+    lib = lib.substring(3)
+  endif
+  if default_library in ['shared', 'both']
+    output += [lib + '.' + ext_dynamic]
+  endif
+  if default_library in ['static', 'both']
+    output += [lib + '.' + ext_static]
   endif
 endforeach
 
