@@ -1,7 +1,7 @@
 GStreamer NDI Plugin
 ====================
 
-*Compatible with NDI SDK 5.x*
+*Compatible with NDI SDK 6.x and 5.x*
 
 This is a plugin for the [GStreamer](https://gstreamer.freedesktop.org/)
 multimedia framework that allows GStreamer to receive or send an
@@ -16,8 +16,8 @@ sink element to provide an NDI source and a device provider for discovering
 NDI sources on the network.
 
 The plugin is loading the NDI SDK at runtime, either from the default library
-path or, if set, from the directory given by the `NDI_RUNTIME_DIR_V5`
-environment variable.
+path or, if set, from the directory given by the `NDI_RUNTIME_DIR_V6` or
+`NDI_RUNTIME_DIR_V5` environment variables.
 
 Some examples of how to use these elements from the command line:
 
