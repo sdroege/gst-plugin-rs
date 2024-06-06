@@ -86,7 +86,7 @@ if get_option('tests').allowed()
   deps += [['gstreamer-check-1.0', 'gstreamer', 'gst_check_dep', 'gst_check']]
 endif
 if get_option('gtk4').allowed()
-  deps += [['gstreamer-gl-1.0', 'gst-plugins-base', 'gst_gl_dep', 'gstgl']]
+  deps += [['gstreamer-gl-1.0', 'gst-plugins-base', 'gst_gl_dep', 'gstgl', get_option('gtk4')]]
 endif
 if get_option('threadshare').allowed() or get_option('rtsp').allowed()
   deps += [['gstreamer-net-1.0', 'gstreamer', 'gst_net_dep', 'gst_net']]
@@ -97,7 +97,7 @@ deps_cache += {'glib-2.0': glib_dep}
 
 foreach d: deps
   dep = dependency(d[0], version: gst_req,
-    fallback : [d[1], d[2]])
+    fallback : [d[1], d[2]], required: d.get(4, true))
   set_variable(d[2], dep)
   deps_cache += {d[0]: dep}
   if dep.type_name() == 'internal'
