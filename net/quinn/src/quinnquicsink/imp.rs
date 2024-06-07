@@ -7,11 +7,11 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::common::*;
 use crate::utils::{
     client_endpoint, make_socket_addr, server_endpoint, wait, WaitError, CONNECTION_CLOSE_CODE,
     CONNECTION_CLOSE_MSG,
 };
+use crate::{common::*, utils};
 use bytes::Bytes;
 use futures::future;
 use gst::{glib, prelude::*, subclass::prelude::*};
@@ -83,7 +83,7 @@ impl Default for Settings {
 pub struct QuinnQuicSink {
     settings: Mutex<Settings>,
     state: Mutex<State>,
-    canceller: Mutex<Option<future::AbortHandle>>,
+    canceller: Mutex<utils::Canceller>,
 }
 
 impl Default for QuinnQuicSink {
@@ -91,7 +91,7 @@ impl Default for QuinnQuicSink {
         Self {
             settings: Mutex::new(Settings::default()),
             state: Mutex::new(State::default()),
-            canceller: Mutex::new(None),
+            canceller: Mutex::new(utils::Canceller::default()),
         }
     }
 }
@@ -458,6 +458,20 @@ impl BaseSinkImpl for QuinnQuicSink {
                 }
             },
         }
+    }
+
+    fn unlock(&self) -> Result<(), gst::ErrorMessage> {
+        let mut canceller = self.canceller.lock().unwrap();
+        canceller.abort();
+        Ok(())
+    }
+
+    fn unlock_stop(&self) -> Result<(), gst::ErrorMessage> {
+        let mut canceller = self.canceller.lock().unwrap();
+        if matches!(&*canceller, utils::Canceller::Cancelled) {
+            *canceller = utils::Canceller::None;
+        }
+        Ok(())
     }
 }
 

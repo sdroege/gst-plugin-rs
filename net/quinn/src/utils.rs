@@ -45,8 +45,26 @@ pub static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
         .unwrap()
 });
 
+#[derive(Default)]
+pub enum Canceller {
+    #[default]
+    None,
+    Handle(future::AbortHandle),
+    Cancelled,
+}
+
+impl Canceller {
+    pub fn abort(&mut self) {
+        if let Canceller::Handle(ref canceller) = *self {
+            canceller.abort();
+        }
+
+        *self = Canceller::Cancelled;
+    }
+}
+
 pub fn wait<F, T>(
-    canceller: &Mutex<Option<future::AbortHandle>>,
+    canceller_mutex: &Mutex<Canceller>,
     future: F,
     timeout: u32,
 ) -> Result<T, WaitError>
@@ -54,18 +72,18 @@ where
     F: Send + Future<Output = T>,
     T: Send + 'static,
 {
-    let mut canceller_guard = canceller.lock().unwrap();
-    let (abort_handle, abort_registration) = future::AbortHandle::new_pair();
-
-    if canceller_guard.is_some() {
+    let mut canceller = canceller_mutex.lock().unwrap();
+    if matches!(*canceller, Canceller::Cancelled) {
+        return Err(WaitError::FutureAborted);
+    } else if matches!(*canceller, Canceller::Handle(..)) {
         return Err(WaitError::FutureError(gst::error_msg!(
             gst::ResourceError::Failed,
             ["Old Canceller should not exist"]
         )));
     }
-
-    canceller_guard.replace(abort_handle);
-    drop(canceller_guard);
+    let (abort_handle, abort_registration) = future::AbortHandle::new_pair();
+    *canceller = Canceller::Handle(abort_handle);
+    drop(canceller);
 
     let future = async {
         if timeout == 0 {
@@ -98,8 +116,11 @@ where
 
     let res = RUNTIME.block_on(future);
 
-    canceller_guard = canceller.lock().unwrap();
-    *canceller_guard = None;
+    let mut canceller = canceller_mutex.lock().unwrap();
+    if matches!(*canceller, Canceller::Cancelled) {
+        return Err(WaitError::FutureAborted);
+    }
+    *canceller = Canceller::None;
 
     res
 }

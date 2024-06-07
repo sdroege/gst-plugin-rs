@@ -7,11 +7,11 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::common::*;
 use crate::utils::{
-    client_endpoint, make_socket_addr, server_endpoint, wait, WaitError, CONNECTION_CLOSE_CODE,
-    CONNECTION_CLOSE_MSG,
+    client_endpoint, make_socket_addr, server_endpoint, wait, Canceller, WaitError,
+    CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG,
 };
+use crate::{common::*, utils};
 use bytes::Bytes;
 use futures::future;
 use gst::{glib, prelude::*, subclass::prelude::*};
@@ -87,7 +87,7 @@ impl Default for Settings {
 pub struct QuinnQuicSrc {
     settings: Mutex<Settings>,
     state: Mutex<State>,
-    canceller: Mutex<Option<future::AbortHandle>>,
+    canceller: Mutex<utils::Canceller>,
 }
 
 impl Default for QuinnQuicSrc {
@@ -95,7 +95,7 @@ impl Default for QuinnQuicSrc {
         Self {
             settings: Mutex::new(Settings::default()),
             state: Mutex::new(State::default()),
-            canceller: Mutex::new(None),
+            canceller: Mutex::new(utils::Canceller::default()),
         }
     }
 }
@@ -400,8 +400,6 @@ impl BaseSrcImpl for QuinnQuicSrc {
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
-        self.cancel();
-
         let mut state = self.state.lock().unwrap();
 
         if let State::Started(ref mut state) = *state {
@@ -466,7 +464,16 @@ impl BaseSrcImpl for QuinnQuicSrc {
     }
 
     fn unlock(&self) -> Result<(), gst::ErrorMessage> {
-        self.cancel();
+        let mut canceller = self.canceller.lock().unwrap();
+        canceller.abort();
+        Ok(())
+    }
+
+    fn unlock_stop(&self) -> Result<(), gst::ErrorMessage> {
+        let mut canceller = self.canceller.lock().unwrap();
+        if matches!(&*canceller, Canceller::Cancelled) {
+            *canceller = Canceller::None;
+        }
         Ok(())
     }
 
@@ -582,14 +589,6 @@ impl QuinnQuicSrc {
                 }
             },
         }
-    }
-
-    fn cancel(&self) {
-        let mut canceller = self.canceller.lock().unwrap();
-
-        if let Some(c) = canceller.take() {
-            c.abort()
-        };
     }
 
     async fn init_connection(&self) -> Result<(Connection, Option<RecvStream>), WaitError> {
