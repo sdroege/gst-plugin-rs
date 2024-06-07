@@ -26,7 +26,6 @@ use aws_sdk_s3::{
     Client,
 };
 
-use futures::future;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::convert::From;
@@ -186,8 +185,8 @@ pub struct S3Sink {
     url: Mutex<Option<GstS3Url>>,
     settings: Mutex<Settings>,
     state: Mutex<State>,
-    canceller: Mutex<Option<future::AbortHandle>>,
-    abort_multipart_canceller: Mutex<Option<future::AbortHandle>>,
+    canceller: Mutex<s3utils::Canceller>,
+    abort_multipart_canceller: Mutex<s3utils::Canceller>,
 }
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -616,19 +615,6 @@ impl S3Sink {
         }
 
         Ok(())
-    }
-
-    fn cancel(&self) {
-        let mut canceller = self.canceller.lock().unwrap();
-        let mut abort_canceller = self.abort_multipart_canceller.lock().unwrap();
-
-        if let Some(c) = abort_canceller.take() {
-            c.abort()
-        };
-
-        if let Some(c) = canceller.take() {
-            c.abort()
-        };
     }
 
     fn set_uri(self: &S3Sink, url_str: Option<&str>) -> Result<(), glib::Error> {
@@ -1103,8 +1089,18 @@ impl BaseSinkImpl for S3Sink {
     }
 
     fn unlock(&self) -> Result<(), gst::ErrorMessage> {
-        self.cancel();
+        let mut canceller = self.canceller.lock().unwrap();
+        let mut abort_canceller = self.abort_multipart_canceller.lock().unwrap();
+        canceller.abort();
+        abort_canceller.abort();
+        Ok(())
+    }
 
+    fn unlock_stop(&self) -> Result<(), gst::ErrorMessage> {
+        let mut canceller = self.canceller.lock().unwrap();
+        let mut abort_canceller = self.abort_multipart_canceller.lock().unwrap();
+        *canceller = s3utils::Canceller::None;
+        *abort_canceller = s3utils::Canceller::None;
         Ok(())
     }
 
