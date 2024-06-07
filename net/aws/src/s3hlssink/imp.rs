@@ -8,7 +8,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use futures::future;
 use once_cell::sync::Lazy;
 use std::io::Write;
 use std::str::FromStr;
@@ -90,7 +89,7 @@ pub struct S3HlsSink {
     settings: Mutex<Settings>,
     state: Mutex<State>,
     hlssink: gst::Element,
-    canceller: Mutex<Option<future::AbortHandle>>,
+    canceller: Mutex<s3utils::Canceller>,
 }
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -459,7 +458,7 @@ impl ObjectSubclass for S3HlsSink {
             settings: Mutex::new(Settings::default()),
             state: Mutex::new(State::Stopped),
             hlssink,
-            canceller: Mutex::new(None),
+            canceller: Mutex::new(s3utils::Canceller::default()),
         }
     }
 }
@@ -803,10 +802,19 @@ impl ElementImpl for S3HlsSink {
         PAD_TEMPLATES.as_ref()
     }
 
+    #[allow(clippy::single_match)]
     fn change_state(
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
+        match transition {
+            gst::StateChange::PausedToReady => {
+                let mut canceller = self.canceller.lock().unwrap();
+                canceller.abort();
+            }
+            _ => (),
+        }
+
         let ret = self.parent_change_state(transition)?;
         /*
          * The settings lock must not be taken before the parent state change.
@@ -848,6 +856,11 @@ impl ElementImpl for S3HlsSink {
                         gst::error!(CAT, imp: self, "Could not send pause request.");
                     }
                 }
+            }
+
+            gst::StateChange::PausedToReady => {
+                let mut canceller = self.canceller.lock().unwrap();
+                *canceller = s3utils::Canceller::None;
             }
 
             gst::StateChange::ReadyToNull => {

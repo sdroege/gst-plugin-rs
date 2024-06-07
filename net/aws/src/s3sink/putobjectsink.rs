@@ -21,7 +21,6 @@ use aws_sdk_s3::{
     Client,
 };
 
-use futures::future;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::convert::From;
@@ -152,7 +151,7 @@ pub struct S3PutObjectSink {
     url: Mutex<Option<GstS3Url>>,
     settings: Mutex<Settings>,
     state: Mutex<State>,
-    canceller: Mutex<Option<future::AbortHandle>>,
+    canceller: Mutex<s3utils::Canceller>,
 }
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -310,14 +309,6 @@ impl S3PutObjectSink {
         *state = State::Started(Started::new(client, Vec::new()));
 
         Ok(())
-    }
-
-    fn cancel(&self) {
-        let mut canceller = self.canceller.lock().unwrap();
-
-        if let Some(c) = canceller.take() {
-            c.abort()
-        };
     }
 
     fn set_uri(self: &S3PutObjectSink, url_str: Option<&str>) -> Result<(), glib::Error> {
@@ -710,8 +701,14 @@ impl BaseSinkImpl for S3PutObjectSink {
     }
 
     fn unlock(&self) -> Result<(), gst::ErrorMessage> {
-        self.cancel();
+        let mut canceller = self.canceller.lock().unwrap();
+        canceller.abort();
+        Ok(())
+    }
 
+    fn unlock_stop(&self) -> Result<(), gst::ErrorMessage> {
+        let mut canceller = self.canceller.lock().unwrap();
+        *canceller = s3utils::Canceller::None;
         Ok(())
     }
 

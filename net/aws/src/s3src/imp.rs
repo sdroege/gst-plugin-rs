@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use bytes::Bytes;
-use futures::future;
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -77,7 +76,7 @@ impl Default for Settings {
 pub struct S3Src {
     settings: Mutex<Settings>,
     state: Mutex<StreamingState>,
-    canceller: Mutex<Option<future::AbortHandle>>,
+    canceller: Mutex<s3utils::Canceller>,
 }
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -89,14 +88,6 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 impl S3Src {
-    fn cancel(&self) {
-        let mut canceller = self.canceller.lock().unwrap();
-
-        if let Some(c) = canceller.take() {
-            c.abort()
-        };
-    }
-
     fn connect(self: &S3Src, url: &GstS3Url) -> Result<Client, gst::ErrorMessage> {
         let settings = self.settings.lock().unwrap();
         let timeout_config = s3utils::timeout_config(settings.request_timeout);
@@ -521,9 +512,6 @@ impl BaseSrcImpl for S3Src {
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
-        // First, stop any asynchronous tasks if we're running, as they will have the state lock
-        self.cancel();
-
         let mut state = self.state.lock().unwrap();
 
         if let StreamingState::Stopped = *state {
@@ -587,7 +575,14 @@ impl BaseSrcImpl for S3Src {
     }
 
     fn unlock(&self) -> Result<(), gst::ErrorMessage> {
-        self.cancel();
+        let mut canceller = self.canceller.lock().unwrap();
+        canceller.abort();
+        Ok(())
+    }
+
+    fn unlock_stop(&self) -> Result<(), gst::ErrorMessage> {
+        let mut canceller = self.canceller.lock().unwrap();
+        *canceller = s3utils::Canceller::None;
         Ok(())
     }
 }

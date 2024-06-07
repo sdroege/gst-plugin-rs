@@ -51,21 +51,38 @@ impl<E: ProvideErrorMetadata + std::error::Error> fmt::Display for WaitError<E> 
     }
 }
 
-pub fn wait<F, T, E>(
-    canceller: &Mutex<Option<future::AbortHandle>>,
-    future: F,
-) -> Result<T, WaitError<E>>
+#[derive(Default)]
+pub enum Canceller {
+    #[default]
+    None,
+    Handle(future::AbortHandle),
+    Cancelled,
+}
+
+impl Canceller {
+    pub fn abort(&mut self) {
+        if let Canceller::Handle(ref canceller) = *self {
+            canceller.abort();
+        }
+
+        *self = Canceller::Cancelled;
+    }
+}
+
+pub fn wait<F, T, E>(canceller_mutex: &Mutex<Canceller>, future: F) -> Result<T, WaitError<E>>
 where
     F: Send + Future<Output = Result<T, E>>,
     F::Output: Send,
     T: Send,
     E: Send,
 {
-    let mut canceller_guard = canceller.lock().unwrap();
+    let mut canceller = canceller_mutex.lock().unwrap();
+    if matches!(*canceller, Canceller::Cancelled) {
+        return Err(WaitError::Cancelled);
+    }
     let (abort_handle, abort_registration) = future::AbortHandle::new_pair();
-
-    canceller_guard.replace(abort_handle);
-    drop(canceller_guard);
+    *canceller = Canceller::Handle(abort_handle);
+    drop(canceller);
 
     let abortable_future = future::Abortable::new(future, abort_registration);
 
@@ -86,17 +103,21 @@ where
     };
 
     /* Clear out the canceller */
-    canceller_guard = canceller.lock().unwrap();
-    *canceller_guard = None;
+    let mut canceller = canceller_mutex.lock().unwrap();
+    if matches!(*canceller, Canceller::Cancelled) {
+        return Err(WaitError::Cancelled);
+    }
+    *canceller = Canceller::None;
+    drop(canceller);
 
     res
 }
 
 pub fn wait_stream(
-    canceller: &Mutex<Option<future::AbortHandle>>,
+    canceller_mutex: &Mutex<Canceller>,
     stream: &mut ByteStream,
 ) -> Result<Bytes, WaitError<ByteStreamError>> {
-    wait(canceller, async move {
+    wait(canceller_mutex, async move {
         let mut collect = BytesMut::new();
 
         // Loop over the stream and collect till we're done
@@ -116,7 +137,7 @@ pub fn timeout_config(request_timeout: Duration) -> TimeoutConfig {
 }
 
 pub fn wait_config(
-    canceller: &Mutex<Option<future::AbortHandle>>,
+    canceller_mutex: &Mutex<Canceller>,
     region: Region,
     timeout_config: TimeoutConfig,
     credentials: Option<Credentials>,
@@ -136,11 +157,13 @@ pub fn wait_config(
             .load(),
     };
 
-    let mut canceller_guard = canceller.lock().unwrap();
+    let mut canceller = canceller_mutex.lock().unwrap();
+    if matches!(*canceller, Canceller::Cancelled) {
+        return Err(WaitError::Cancelled);
+    }
     let (abort_handle, abort_registration) = future::AbortHandle::new_pair();
-
-    canceller_guard.replace(abort_handle);
-    drop(canceller_guard);
+    *canceller = Canceller::Handle(abort_handle);
+    drop(canceller);
 
     let abortable_future = future::Abortable::new(config_future, abort_registration);
 
@@ -157,8 +180,12 @@ pub fn wait_config(
     };
 
     /* Clear out the canceller */
-    canceller_guard = canceller.lock().unwrap();
-    *canceller_guard = None;
+    let mut canceller = canceller_mutex.lock().unwrap();
+    if matches!(*canceller, Canceller::Cancelled) {
+        return Err(WaitError::Cancelled);
+    }
+    *canceller = Canceller::None;
+    drop(canceller);
 
     res
 }
