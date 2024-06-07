@@ -8,12 +8,11 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::utils::{
-    build_reqwest_client, parse_redirect_location, set_ice_servers, wait, wait_async, WaitError,
-    RUNTIME,
+    self, build_reqwest_client, parse_redirect_location, set_ice_servers, wait, wait_async,
+    WaitError, RUNTIME,
 };
 use crate::IceTransportPolicy;
 use async_recursion::async_recursion;
-use futures::future;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -76,7 +75,7 @@ pub struct WhipSink {
     settings: Mutex<Settings>,
     state: Mutex<State>,
     webrtcbin: gst::Element,
-    canceller: Mutex<Option<future::AbortHandle>>,
+    canceller: Mutex<utils::Canceller>,
 }
 
 impl Default for WhipSink {
@@ -89,7 +88,7 @@ impl Default for WhipSink {
             settings: Mutex::new(Settings::default()),
             state: Mutex::new(State::default()),
             webrtcbin,
-            canceller: Mutex::new(None),
+            canceller: Mutex::new(utils::Canceller::default()),
         }
     }
 }
@@ -146,55 +145,74 @@ impl ElementImpl for WhipSink {
         Some(sink_pad.upcast())
     }
 
+    #[allow(clippy::single_match)]
     fn change_state(
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        if transition == gst::StateChange::NullToReady {
-            /*
-             * Fail the state change if WHIP endpoint has not been set by the
-             * time ReadyToPaused transition happens. This prevents us from
-             * having to check this everywhere else.
-             */
-            let settings = self.settings.lock().unwrap();
+        match transition {
+            gst::StateChange::NullToReady => {
+                /*
+                 * Fail the state change if WHIP endpoint has not been set by the
+                 * time ReadyToPaused transition happens. This prevents us from
+                 * having to check this everywhere else.
+                 */
+                let settings = self.settings.lock().unwrap();
 
-            if settings.whip_endpoint.is_none() {
-                gst::error!(CAT, imp: self, "WHIP endpoint URL must be set");
-                return Err(gst::StateChangeError);
+                if settings.whip_endpoint.is_none() {
+                    gst::error!(CAT, imp: self, "WHIP endpoint URL must be set");
+                    return Err(gst::StateChangeError);
+                }
+
+                /*
+                 * Check if we have a valid URL. We can be assured any further URL
+                 * handling won't fail due to invalid URLs.
+                 */
+                if let Err(e) =
+                    reqwest::Url::parse(settings.whip_endpoint.as_ref().unwrap().as_str())
+                {
+                    gst::error!(
+                        CAT,
+                        imp: self,
+                        "WHIP endpoint URL could not be parsed: {}",
+                        e
+                    );
+
+                    return Err(gst::StateChangeError);
+                }
+                drop(settings);
             }
 
-            /*
-             * Check if we have a valid URL. We can be assured any further URL
-             * handling won't fail due to invalid URLs.
-             */
-            if let Err(e) = reqwest::Url::parse(settings.whip_endpoint.as_ref().unwrap().as_str()) {
-                gst::error!(
-                    CAT,
-                    imp: self,
-                    "WHIP endpoint URL could not be parsed: {}",
-                    e
-                );
-
-                return Err(gst::StateChangeError);
+            gst::StateChange::PausedToReady => {
+                // Interrupt requests in progress, if any
+                {
+                    let mut canceller = self.canceller.lock().unwrap();
+                    canceller.abort();
+                }
             }
-            drop(settings);
+            _ => (),
         }
 
-        if transition == gst::StateChange::PausedToReady {
-            // Interrupt requests in progress, if any
-            if let Some(canceller) = &*self.canceller.lock().unwrap() {
-                canceller.abort();
-            }
+        let res = self.parent_change_state(transition)?;
 
-            let state = self.state.lock().unwrap();
-            if let State::Running { .. } = *state {
-                // Release server-side resources
-                drop(state);
-                self.terminate_session();
+        match transition {
+            gst::StateChange::PausedToReady => {
+                {
+                    let mut canceller = self.canceller.lock().unwrap();
+                    *canceller = utils::Canceller::None;
+                }
+
+                let state = self.state.lock().unwrap();
+                if let State::Running { .. } = *state {
+                    // Release server-side resources
+                    drop(state);
+                    self.terminate_session();
+                }
             }
+            _ => (),
         }
 
-        self.parent_change_state(transition)
+        Ok(res)
     }
 }
 

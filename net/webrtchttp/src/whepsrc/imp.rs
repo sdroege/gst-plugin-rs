@@ -8,13 +8,12 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::utils::{
-    build_reqwest_client, parse_redirect_location, set_ice_servers, wait, wait_async, WaitError,
-    RUNTIME,
+    self, build_reqwest_client, parse_redirect_location, set_ice_servers, wait, wait_async,
+    WaitError, RUNTIME,
 };
 use crate::IceTransportPolicy;
 use async_recursion::async_recursion;
 use bytes::Bytes;
-use futures::future;
 use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_sdp::*;
 use gst_webrtc::*;
@@ -101,7 +100,7 @@ pub struct WhepSrc {
     settings: Mutex<Settings>,
     state: Mutex<State>,
     webrtcbin: gst::Element,
-    canceller: Mutex<Option<future::AbortHandle>>,
+    canceller: Mutex<utils::Canceller>,
     client: reqwest::Client,
 }
 
@@ -120,7 +119,7 @@ impl Default for WhepSrc {
             settings: Mutex::new(Settings::default()),
             state: Mutex::new(State::default()),
             webrtcbin,
-            canceller: Mutex::new(None),
+            canceller: Mutex::new(utils::Canceller::default()),
             client,
         }
     }
@@ -157,63 +156,80 @@ impl ElementImpl for WhepSrc {
         PAD_TEMPLATES.as_ref()
     }
 
+    #[allow(clippy::single_match)]
     fn change_state(
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        if transition == gst::StateChange::NullToReady {
-            /*
-             * Fail the state change if WHEP endpoint has not been set by the
-             * time ReadyToPaused transition happens. This prevents us from
-             * having to check this everywhere else.
-             */
-            let settings = self.settings.lock().unwrap();
+        match transition {
+            gst::StateChange::NullToReady => {
+                /*
+                 * Fail the state change if WHEP endpoint has not been set by the
+                 * time ReadyToPaused transition happens. This prevents us from
+                 * having to check this everywhere else.
+                 */
+                let settings = self.settings.lock().unwrap();
 
-            if settings.whep_endpoint.is_none() {
-                gst::error!(CAT, imp: self, "WHEP endpoint URL must be set");
-                return Err(gst::StateChangeError);
+                if settings.whep_endpoint.is_none() {
+                    gst::error!(CAT, imp: self, "WHEP endpoint URL must be set");
+                    return Err(gst::StateChangeError);
+                }
+
+                /*
+                 * Check if we have a valid URL. We can be assured any further URL
+                 * handling won't fail due to invalid URLs.
+                 */
+                if let Err(e) =
+                    reqwest::Url::parse(settings.whep_endpoint.as_ref().unwrap().as_str())
+                {
+                    gst::error!(
+                        CAT,
+                        imp: self,
+                        "WHEP endpoint URL could not be parsed: {}",
+                        e
+                    );
+                    return Err(gst::StateChangeError);
+                }
+
+                drop(settings);
             }
 
-            /*
-             * Check if we have a valid URL. We can be assured any further URL
-             * handling won't fail due to invalid URLs.
-             */
-            if let Err(e) = reqwest::Url::parse(settings.whep_endpoint.as_ref().unwrap().as_str()) {
-                gst::error!(
-                    CAT,
-                    imp: self,
-                    "WHEP endpoint URL could not be parsed: {}",
-                    e
-                );
-                return Err(gst::StateChangeError);
-            }
-
-            drop(settings);
-        }
-
-        if transition == gst::StateChange::PausedToReady {
-            if let Some(canceller) = &*self.canceller.lock().unwrap() {
+            gst::StateChange::PausedToReady => {
+                let mut canceller = self.canceller.lock().unwrap();
                 canceller.abort();
             }
-
-            let state = self.state.lock().unwrap();
-            if let State::Running { .. } = *state {
-                drop(state);
-                self.terminate_session();
-            }
-
-            for pad in self.obj().src_pads() {
-                gst::debug!(CAT, imp: self, "Removing pad: {}", pad.name());
-
-                // No need to deactivate pad here. Parent GstBin will deactivate
-                // the pad. Only remove the pad.
-                if let Err(e) = self.obj().remove_pad(&pad) {
-                    gst::error!(CAT, imp: self, "Failed to remove pad {}: {}", pad.name(), e);
-                }
-            }
+            _ => (),
         }
 
-        self.parent_change_state(transition)
+        let res = self.parent_change_state(transition)?;
+
+        match transition {
+            gst::StateChange::PausedToReady => {
+                {
+                    let mut canceller = self.canceller.lock().unwrap();
+                    *canceller = utils::Canceller::None;
+                }
+
+                let state = self.state.lock().unwrap();
+                if let State::Running { .. } = *state {
+                    drop(state);
+                    self.terminate_session();
+                }
+
+                for pad in self.obj().src_pads() {
+                    gst::debug!(CAT, imp: self, "Removing pad: {}", pad.name());
+
+                    // No need to deactivate pad here. Parent GstBin will deactivate
+                    // the pad. Only remove the pad.
+                    if let Err(e) = self.obj().remove_pad(&pad) {
+                        gst::error!(CAT, imp: self, "Failed to remove pad {}: {}", pad.name(), e);
+                    }
+                }
+            }
+            _ => (),
+        }
+
+        Ok(res)
     }
 }
 
