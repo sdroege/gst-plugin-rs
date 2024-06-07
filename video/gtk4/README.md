@@ -52,7 +52,7 @@ To build and include the plugin in a Flatpak manifest, you can add the following
                 }
             },
             "build-commands": [
-                "cargo cinstall --offline --release --library-type=cdylib --prefix=/app"
+                "cargo cinstall --offline --release --features=wayland,x11glx,x11egl,dmabuf --library-type=cdylib --prefix=/app"
             ]
         }
     ]
