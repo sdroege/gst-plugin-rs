@@ -475,7 +475,7 @@ impl HlsCmafSink {
 
             drop(map);
 
-            buffer_list.make_mut().remove(0, 1);
+            buffer_list.make_mut().remove(0..1);
             if buffer_list.is_empty() {
                 return Ok(gst::FlowSuccess::Ok);
             }

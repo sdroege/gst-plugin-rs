@@ -86,7 +86,7 @@ fn main() -> Result<(), Error> {
                     drop(map);
 
                     // Remove the header from the buffer list
-                    buffer_list.make_mut().remove(0, 1);
+                    buffer_list.make_mut().remove(0..1);
 
                     // If the list is now empty then it only contained the media header and nothing
                     // else.
