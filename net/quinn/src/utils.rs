@@ -258,8 +258,10 @@ fn configure_client(ep_config: &QuinnQuicEndpointConfig) -> Result<ClientConfig,
         transport_config
             .datagram_send_buffer_size(ep_config.transport_config.datagram_send_buffer_size);
         transport_config.max_concurrent_bidi_streams(0u32.into());
-        transport_config.max_concurrent_uni_streams(1u32.into());
+        transport_config
+            .max_concurrent_uni_streams(ep_config.transport_config.max_concurrent_uni_streams);
         transport_config.mtu_discovery_config(Some(mtu_config));
+        transport_config.send_window(ep_config.transport_config.send_window);
 
         transport_config
     };
@@ -393,7 +395,8 @@ fn configure_server(
         transport_config
             .datagram_send_buffer_size(ep_config.transport_config.datagram_send_buffer_size);
         transport_config.max_concurrent_bidi_streams(0u32.into());
-        transport_config.max_concurrent_uni_streams(1u32.into());
+        transport_config
+            .max_concurrent_uni_streams(ep_config.transport_config.max_concurrent_uni_streams);
         transport_config.mtu_discovery_config(Some(mtu_config));
 
         transport_config
