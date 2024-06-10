@@ -3586,6 +3586,69 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "mpegtslive": {
+        "description": "GStreamer MPEG-TS Live sources",
+        "elements": {
+            "mpegtslivesrc": {
+                "author": "Edward Hervey <edward@centricular.com>",
+                "description": "Wrap MPEG-TS sources and provide a live clock",
+                "hierarchy": [
+                    "GstMpegTsLiveSource",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
+                "klass": "Network",
+                "pad-templates": {
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "source": {
+                        "blurb": "Source element",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstElement",
+                        "writable": true
+                    },
+                    "window-size": {
+                        "blurb": "The size of the window used to calculate rate and offset",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "32",
+                        "max": "1024",
+                        "min": "2",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstmpegtslive",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-mpegtslive",
+        "source": "gst-plugin-mpegtslive",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "ndi": {
         "description": "GStreamer NewTek NDI Plugin",
         "elements": {

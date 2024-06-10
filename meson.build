@@ -145,6 +145,7 @@ plugins = {
     'library': 'libgstaws',
     'extra-deps': {'openssl': ['>=1.1']},
   },
+  'mpegtslive': {'library': 'libgstmpegtslive'},
   'hlssink3': {'library': 'libgsthlssink3'},
   'ndi': {'library': 'libgstndi'},
   'onvif': {

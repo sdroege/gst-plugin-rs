@@ -2628,6 +2628,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "gst-plugin-mpegtslive"
+version = "0.13.0-alpha.1"
+dependencies = [
+ "anyhow",
+ "bitstream-io",
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "once_cell",
+]
+
+[[package]]
 name = "gst-plugin-ndi"
 version = "0.13.0-alpha.1"
 dependencies = [

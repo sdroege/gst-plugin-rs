@@ -24,6 +24,7 @@ members = [
 
     "net/aws",
     "net/hlssink3",
+    "net/mpegtslive",
     "net/ndi",
     "net/onvif",
     "net/raptorq",
@@ -77,6 +78,7 @@ default-members = [
     "mux/mp4",
 
     "net/aws",
+    "net/mpegtslive",
     "net/hlssink3",
     "net/onvif",
     "net/raptorq",
