@@ -60,19 +60,6 @@ impl PacketInfo {
     }
 }
 
-static PACKETS_TEST_1: [PacketInfo; 2] = [
-    PacketInfo {
-        seq_no: 500,
-        rtp_ts: 20,
-        payload_len: 7,
-    },
-    PacketInfo {
-        seq_no: 501,
-        rtp_ts: 30,
-        payload_len: 23,
-    },
-];
-
 fn send_init() -> gst_check::Harness {
     init();
 
@@ -283,9 +270,7 @@ fn test_send_list_benchmark() {
     );
 }
 
-#[test]
-fn test_receive() {
-    init();
+fn receive_init() -> Arc<Mutex<gst_check::Harness>> {
     let id = next_element_counter();
 
     let elem = gst::ElementFactory::make("rtprecv")
@@ -311,7 +296,6 @@ fn test_receive() {
                 .add_element_src_pad(pad)
         });
     inner.play();
-
     let caps = Caps::builder("application/x-rtp")
         .field("media", "audio")
         .field("payload", TEST_PT as i32)
@@ -320,6 +304,16 @@ fn test_receive() {
         .build();
     inner.set_src_caps(caps);
 
+    drop(inner);
+
+    h
+}
+
+fn receive_push<I>(h: Arc<Mutex<gst_check::Harness>>, packets: I, buffer_list: bool)
+where
+    I: IntoIterator<Item = PacketInfo>,
+{
+    let inner = h.lock().unwrap();
     // Cannot push with harness lock as the 'pad-added' handler needs to add the newly created pad to
     // the harness and needs to also take the harness lock.  Workaround by pushing from the
     // internal harness pad directly.
@@ -331,21 +325,48 @@ fn test_receive() {
         .peer()
         .unwrap();
     drop(inner);
-    push_pad.push(generate_rtp_buffer(500, 20, 9)).unwrap();
-    push_pad.push(generate_rtp_buffer(501, 30, 11)).unwrap();
+
+    if buffer_list {
+        let mut list = gst::BufferList::new();
+        let list_mut = list.make_mut();
+        for packet in packets {
+            list_mut.add(packet.generate_buffer());
+        }
+        push_pad.push_list(list).unwrap();
+    } else {
+        for packet in packets {
+            push_pad.push(packet.generate_buffer()).unwrap();
+        }
+    }
+}
+
+fn receive_pull<I>(h: Arc<Mutex<gst_check::Harness>>, packets: I)
+where
+    I: IntoIterator<Item = PacketInfo>,
+{
     let mut inner = h.lock().unwrap();
+    for packet in packets {
+        let buffer = inner.pull().unwrap();
+        let mapped = buffer.map_readable().unwrap();
+        let rtp = rtp_types::RtpPacket::parse(&mapped).unwrap();
+        assert_eq!(rtp.sequence_number(), packet.seq_no);
+    }
+}
 
-    let buffer = inner.pull().unwrap();
-    let mapped = buffer.map_readable().unwrap();
-    let rtp = rtp_types::RtpPacket::parse(&mapped).unwrap();
-    assert_eq!(rtp.sequence_number(), 500);
+fn receive_check_stats<I>(h: Arc<Mutex<gst_check::Harness>>, packets: I)
+where
+    I: IntoIterator<Item = PacketInfo>,
+{
+    let mut n_packets = 0;
+    let mut n_bytes = 0;
+    for packet in packets {
+        n_packets += 1;
+        n_bytes += packet.payload_len;
+    }
 
-    let buffer = inner.pull().unwrap();
-    let mapped = buffer.map_readable().unwrap();
-    let rtp = rtp_types::RtpPacket::parse(&mapped).unwrap();
-    assert_eq!(rtp.sequence_number(), 501);
-
+    let inner = h.lock().unwrap();
     let stats = inner.element().unwrap().property::<gst::Structure>("stats");
+    drop(inner);
 
     let session_stats = stats.get::<gst::Structure>("0").unwrap();
     let source_stats = session_stats
@@ -367,12 +388,21 @@ fn test_receive() {
     );
     assert!(source_stats.get::<bool>("sender").unwrap());
     assert!(!source_stats.get::<bool>("local").unwrap());
-    assert_eq!(source_stats.get::<u64>("packets-received").unwrap(), 2);
-    assert_eq!(source_stats.get::<u64>("octets-received").unwrap(), 20);
+    assert_eq!(
+        source_stats.get::<u64>("packets-received").unwrap(),
+        n_packets
+    );
+    assert_eq!(
+        source_stats.get::<u64>("octets-received").unwrap(),
+        n_bytes as u64
+    );
     assert_eq!(jitterbuffer_stats.get::<u64>("num-late").unwrap(), 0);
     assert_eq!(jitterbuffer_stats.get::<u64>("num-lost").unwrap(), 0);
     assert_eq!(jitterbuffer_stats.get::<u64>("num-duplicates").unwrap(), 0);
-    assert_eq!(jitterbuffer_stats.get::<u64>("num-pushed").unwrap(), 2);
+    assert_eq!(
+        jitterbuffer_stats.get::<u64>("num-pushed").unwrap(),
+        n_packets
+    );
     assert_eq!(jitterbuffer_stats.get::<i32>("pt").unwrap(), TEST_PT as i32);
     assert_eq!(
         jitterbuffer_stats.get::<i32>("ssrc").unwrap(),
@@ -380,56 +410,46 @@ fn test_receive() {
     );
 }
 
+static PACKETS_TEST_1: [PacketInfo; 2] = [
+    PacketInfo {
+        seq_no: 500,
+        rtp_ts: 20,
+        payload_len: 13,
+    },
+    PacketInfo {
+        seq_no: 501,
+        rtp_ts: 30,
+        payload_len: 7,
+    },
+];
+
+#[test]
+fn test_receive() {
+    init();
+
+    let h = receive_init();
+    receive_push(h.clone(), PACKETS_TEST_1, false);
+    receive_pull(h.clone(), PACKETS_TEST_1);
+    receive_check_stats(h, PACKETS_TEST_1);
+}
+
+#[test]
+fn test_receive_list() {
+    init();
+
+    let h = receive_init();
+    receive_push(h.clone(), PACKETS_TEST_1, true);
+    receive_pull(h.clone(), PACKETS_TEST_1);
+    receive_check_stats(h, PACKETS_TEST_1);
+}
+
 #[test]
 fn test_receive_flush() {
     init();
-    let id = next_element_counter();
+    let h = receive_init();
 
-    let elem = gst::ElementFactory::make("rtprecv")
-        .property("rtp-id", id.to_string())
-        .build()
-        .unwrap();
-    let h = Arc::new(Mutex::new(Harness::with_element(
-        &elem,
-        Some("rtp_sink_0"),
-        None,
-    )));
-    let weak_h = Arc::downgrade(&h);
-    let mut inner = h.lock().unwrap();
-    inner
-        .element()
-        .unwrap()
-        .connect_pad_added(move |_elem, pad| {
-            weak_h
-                .upgrade()
-                .unwrap()
-                .lock()
-                .unwrap()
-                .add_element_src_pad(pad)
-        });
-    inner.play();
+    receive_push(h.clone(), PACKETS_TEST_1, false);
 
-    let caps = Caps::builder("application/x-rtp")
-        .field("media", "audio")
-        .field("payload", TEST_PT as i32)
-        .field("clock-rate", TEST_CLOCK_RATE as i32)
-        .field("encoding-name", "custom-test")
-        .build();
-    inner.set_src_caps(caps);
-
-    // Cannot push with harness lock as the 'pad-added' handler needs to add the newly created pad to
-    // the harness and needs to also take the harness lock.  Workaround by pushing from the
-    // internal harness pad directly.
-    let push_pad = inner
-        .element()
-        .unwrap()
-        .static_pad("rtp_sink_0")
-        .unwrap()
-        .peer()
-        .unwrap();
-    drop(inner);
-    push_pad.push(generate_rtp_buffer(500, 20, 9)).unwrap();
-    push_pad.push(generate_rtp_buffer(501, 30, 11)).unwrap();
     let mut inner = h.lock().unwrap();
     let seqnum = gst::Seqnum::next();
     inner.push_event(gst::event::FlushStart::builder().seqnum(seqnum).build());
@@ -445,4 +465,129 @@ fn test_receive_flush() {
         unreachable!();
     };
     assert_eq!(fs.seqnum(), seqnum);
+}
+
+#[test]
+fn test_receive_benchmark() {
+    init();
+    let clock = gst::SystemClock::obtain();
+    const N_PACKETS: usize = 1024 * 1024;
+    let mut packets = Vec::with_capacity(N_PACKETS);
+    for i in 0..N_PACKETS {
+        packets.push(
+            PacketInfo {
+                seq_no: (i % u16::MAX as usize) as u16,
+                rtp_ts: i as u32,
+                payload_len: 8,
+            }
+            .generate_buffer(),
+        )
+    }
+
+    let h = receive_init();
+    let inner = h.lock().unwrap();
+    let push_pad = inner
+        .element()
+        .unwrap()
+        .static_pad("rtp_sink_0")
+        .unwrap()
+        .peer()
+        .unwrap();
+    drop(inner);
+
+    let start = clock.time();
+
+    for packet in packets {
+        push_pad.push(packet).unwrap();
+    }
+
+    let pushed = clock.time();
+
+    let mut inner = h.lock().unwrap();
+    for i in 0..N_PACKETS {
+        let buffer = inner.pull().unwrap();
+        let mapped = buffer.map_readable().unwrap();
+        let rtp = rtp_types::RtpPacket::parse(&mapped).unwrap();
+        assert_eq!(rtp.sequence_number(), (i % u16::MAX as usize) as u16);
+    }
+
+    let end = clock.time();
+    drop(inner);
+
+    let test_time = end.opt_sub(start);
+    let pull_time = end.opt_sub(pushed);
+    let push_time = pushed.opt_sub(start);
+    println!(
+        "test took {} (push {}, pull {})",
+        test_time.display(),
+        push_time.display(),
+        pull_time.display()
+    );
+}
+
+#[test]
+fn test_receive_list_benchmark() {
+    init();
+    let clock = gst::SystemClock::obtain();
+    const N_PACKETS: usize = 32 * 1024;
+    const N_PUSHES: usize = 1024 / 32;
+    let h = receive_init();
+    let inner = h.lock().unwrap();
+
+    let push_pad = inner
+        .element()
+        .unwrap()
+        .static_pad("rtp_sink_0")
+        .unwrap()
+        .peer()
+        .unwrap();
+    drop(inner);
+
+    let mut lists = Vec::with_capacity(N_PUSHES);
+    for p in 0..N_PUSHES {
+        let mut list = gst::BufferList::new();
+        let list_mut = list.make_mut();
+        for i in 0..N_PACKETS {
+            list_mut.add(
+                PacketInfo {
+                    seq_no: ((p * N_PACKETS + i) % u16::MAX as usize) as u16,
+                    rtp_ts: (p * N_PACKETS + i) as u32,
+                    payload_len: 8,
+                }
+                .generate_buffer(),
+            );
+        }
+        lists.push(list);
+    }
+
+    let start = clock.time();
+
+    for list in lists {
+        push_pad.push_list(list).unwrap();
+    }
+
+    let pushed = clock.time();
+
+    let mut inner = h.lock().unwrap();
+    for p in 0..N_PUSHES {
+        for i in 0..N_PACKETS {
+            let buffer = inner.pull().unwrap();
+            let mapped = buffer.map_readable().unwrap();
+            let rtp = rtp_types::RtpPacket::parse(&mapped).unwrap();
+            assert_eq!(rtp.sequence_number(), ((p * N_PACKETS + i) % u16::MAX as usize) as u16);
+        }
+    }
+
+    let end = clock.time();
+    drop(inner);
+
+    let test_time = end.opt_sub(start);
+    let pull_time = end.opt_sub(pushed);
+    let push_time = pushed.opt_sub(start);
+    println!(
+        "test took {} (push {}, pull {})",
+        test_time.display(),
+        push_time.display(),
+        pull_time.display()
+    );
 }

@@ -118,8 +118,8 @@ impl Context {
         }
     }
 
-    pub fn clock_rate(&self, ssrc_val: u32) -> Option<u32> {
-        self.ssrcs.get(&ssrc_val).and_then(|ssrc| ssrc.clock_rate)
+    pub fn has_clock_rate(&self, ssrc_val: u32) -> bool {
+        self.ssrcs.contains_key(&ssrc_val)
     }
 
     fn disassociate(&mut self, ssrc_val: u32, cname: &str) {
