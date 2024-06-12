@@ -307,17 +307,14 @@ impl RtpSend {
         gst::Iterator::from_vec(vec![])
     }
 
-    fn rtp_send_sink_chain(
+    fn handle_buffer(
         &self,
-        id: usize,
+        sinkpad: &gst::Pad,
+        srcpad: &gst::Pad,
+        internal_session: &SharedSession,
         buffer: gst::Buffer,
+        now: Instant,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let state = self.state.lock().unwrap();
-        let Some(session) = state.session_by_id(id) else {
-            gst::error!(CAT, "No session?");
-            return Err(gst::FlowError::Error);
-        };
-
         let mapped = buffer.map_readable().map_err(|e| {
             gst::error!(CAT, imp: self, "Failed to map input buffer {e:?}");
             gst::FlowError::Error
@@ -330,14 +327,9 @@ impl RtpSend {
             }
         };
 
-        let srcpad = session.rtp_send_srcpad.clone().unwrap();
-        let sinkpad = session.rtp_send_sinkpad.clone().unwrap();
-        let session = session.internal_session.clone();
-        let mut session_inner = session.inner.lock().unwrap();
-        drop(state);
+        let mut session_inner = internal_session.inner.lock().unwrap();
 
-        let now = Instant::now();
-        let mut ssrc_collision = vec![];
+        let mut ssrc_collision: smallvec::SmallVec<[u32; 4]> = smallvec::SmallVec::new();
         loop {
             match session_inner.session.handle_send(&rtp, now) {
                 SendReply::SsrcCollision(ssrc) => {
@@ -347,8 +339,10 @@ impl RtpSend {
                 }
                 SendReply::NewSsrc(ssrc, _pt) => {
                     drop(session_inner);
-                    session.config.emit_by_name::<()>("new-ssrc", &[&ssrc]);
-                    session_inner = session.inner.lock().unwrap();
+                    internal_session
+                        .config
+                        .emit_by_name::<()>("new-ssrc", &[&ssrc]);
+                    session_inner = internal_session.inner.lock().unwrap();
                 }
                 SendReply::Passthrough => break,
                 SendReply::Drop => return Ok(gst::FlowSuccess::Ok),
@@ -374,7 +368,50 @@ impl RtpSend {
         srcpad.push(buffer)
     }
 
-    fn rtp_send_sink_event(&self, pad: &gst::Pad, event: gst::Event, id: usize) -> bool {
+    fn rtp_sink_chain_list(
+        &self,
+        pad: &gst::Pad,
+        id: usize,
+        list: gst::BufferList,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let state = self.state.lock().unwrap();
+        let Some(session) = state.session_by_id(id) else {
+            gst::error!(CAT, "No session?");
+            return Err(gst::FlowError::Error);
+        };
+
+        let srcpad = session.rtp_send_srcpad.clone().unwrap();
+        let internal_session = session.internal_session.clone();
+        drop(state);
+
+        let now = Instant::now();
+        for buffer in list.iter_owned() {
+            self.handle_buffer(pad, &srcpad, &internal_session, buffer, now)?;
+        }
+        Ok(gst::FlowSuccess::Ok)
+    }
+
+    fn rtp_sink_chain(
+        &self,
+        pad: &gst::Pad,
+        id: usize,
+        buffer: gst::Buffer,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let state = self.state.lock().unwrap();
+        let Some(session) = state.session_by_id(id) else {
+            gst::error!(CAT, "No session?");
+            return Err(gst::FlowError::Error);
+        };
+
+        let srcpad = session.rtp_send_srcpad.clone().unwrap();
+        let internal_session = session.internal_session.clone();
+        drop(state);
+
+        let now = Instant::now();
+        self.handle_buffer(pad, &srcpad, &internal_session, buffer, now)
+    }
+
+    fn rtp_sink_event(&self, pad: &gst::Pad, event: gst::Event, id: usize) -> bool {
         match event.view() {
             gst::EventView::Caps(caps) => {
                 if let Some((pt, clock_rate)) = pt_clock_rate_from_caps(caps.caps()) {
@@ -651,11 +688,18 @@ impl ElementImpl for RtpSend {
                     Vec<gst::Event>,
                 )> {
                     let sinkpad = gst::Pad::builder_from_template(templ)
-                        .chain_function(move |_pad, parent, buffer| {
+                        .chain_function(move |pad, parent, buffer| {
                             RtpSend::catch_panic_pad_function(
                                 parent,
                                 || Err(gst::FlowError::Error),
-                                |this| this.rtp_send_sink_chain(id, buffer),
+                                |this| this.rtp_sink_chain(pad, id, buffer),
+                            )
+                        })
+                        .chain_list_function(move |pad, parent, list| {
+                            RtpSend::catch_panic_pad_function(
+                                parent,
+                                || Err(gst::FlowError::Error),
+                                |this| this.rtp_sink_chain_list(pad, id, list),
                             )
                         })
                         .iterate_internal_links_function(|pad, parent| {
@@ -669,7 +713,7 @@ impl ElementImpl for RtpSend {
                             RtpSend::catch_panic_pad_function(
                                 parent,
                                 || false,
-                                |this| this.rtp_send_sink_event(pad, event, id),
+                                |this| this.rtp_sink_event(pad, event, id),
                             )
                         })
                         .flags(gst::PadFlags::PROXY_CAPS)

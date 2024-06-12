@@ -47,9 +47,35 @@ fn generate_rtp_buffer(seqno: u16, rtpts: u32, payload_len: usize) -> gst::Buffe
     gst::Buffer::from_mut_slice(data)
 }
 
-#[test]
-fn test_send() {
+#[derive(Debug, Copy, Clone)]
+struct PacketInfo {
+    seq_no: u16,
+    rtp_ts: u32,
+    payload_len: usize,
+}
+
+impl PacketInfo {
+    fn generate_buffer(&self) -> gst::Buffer {
+        generate_rtp_buffer(self.seq_no, self.rtp_ts, self.payload_len)
+    }
+}
+
+static PACKETS_TEST_1: [PacketInfo; 2] = [
+    PacketInfo {
+        seq_no: 500,
+        rtp_ts: 20,
+        payload_len: 7,
+    },
+    PacketInfo {
+        seq_no: 501,
+        rtp_ts: 30,
+        payload_len: 23,
+    },
+];
+
+fn send_init() -> gst_check::Harness {
     init();
+
     let id = next_element_counter();
 
     let elem = gst::ElementFactory::make("rtpsend")
@@ -67,19 +93,56 @@ fn test_send() {
         .build();
     h.set_src_caps(caps);
 
-    h.push(generate_rtp_buffer(500, 20, 9)).unwrap();
-    h.push(generate_rtp_buffer(501, 30, 11)).unwrap();
+    h
+}
 
-    let buffer = h.pull().unwrap();
-    let mapped = buffer.map_readable().unwrap();
-    let rtp = rtp_types::RtpPacket::parse(&mapped).unwrap();
-    assert_eq!(rtp.sequence_number(), 500);
+fn send_push<I>(h: &mut gst_check::Harness, packets: I, buffer_list: bool)
+where
+    I: IntoIterator<Item = PacketInfo>,
+{
+    if buffer_list {
+        let mut list = gst::BufferList::new();
+        let list_mut = list.make_mut();
+        for packet in packets {
+            list_mut.add(packet.generate_buffer());
+        }
+        let push_pad = h
+            .element()
+            .unwrap()
+            .static_pad("rtp_sink_0")
+            .unwrap()
+            .peer()
+            .unwrap();
+        push_pad.push_list(list).unwrap();
+    } else {
+        for packet in packets {
+            h.push(packet.generate_buffer()).unwrap();
+        }
+    }
+}
 
-    let buffer = h.pull().unwrap();
-    let mapped = buffer.map_readable().unwrap();
-    let rtp = rtp_types::RtpPacket::parse(&mapped).unwrap();
-    assert_eq!(rtp.sequence_number(), 501);
+fn send_pull<I>(h: &mut gst_check::Harness, packets: I)
+where
+    I: IntoIterator<Item = PacketInfo>,
+{
+    for packet in packets {
+        let buffer = h.pull().unwrap();
+        let mapped = buffer.map_readable().unwrap();
+        let rtp = rtp_types::RtpPacket::parse(&mapped).unwrap();
+        assert_eq!(rtp.sequence_number(), packet.seq_no);
+    }
+}
 
+fn send_check_stats<I>(h: &mut gst_check::Harness, packets: I)
+where
+    I: IntoIterator<Item = PacketInfo>,
+{
+    let mut n_packets = 0;
+    let mut n_bytes = 0;
+    for packet in packets {
+        n_packets += 1;
+        n_bytes += packet.payload_len;
+    }
     let stats = h.element().unwrap().property::<gst::Structure>("stats");
 
     let session_stats = stats.get::<gst::Structure>("0").unwrap();
@@ -93,8 +156,131 @@ fn test_send() {
     );
     assert!(source_stats.get::<bool>("sender").unwrap());
     assert!(source_stats.get::<bool>("local").unwrap());
-    assert_eq!(source_stats.get::<u64>("packets-sent").unwrap(), 2);
-    assert_eq!(source_stats.get::<u64>("octets-sent").unwrap(), 20);
+    assert_eq!(source_stats.get::<u64>("packets-sent").unwrap(), n_packets);
+    assert_eq!(
+        source_stats.get::<u64>("octets-sent").unwrap(),
+        n_bytes as u64
+    );
+}
+
+#[test]
+fn test_send() {
+    init();
+
+    let mut h = send_init();
+
+    send_push(&mut h, PACKETS_TEST_1, false);
+    send_pull(&mut h, PACKETS_TEST_1);
+    send_check_stats(&mut h, PACKETS_TEST_1);
+}
+
+#[test]
+fn test_send_list() {
+    let mut h = send_init();
+
+    send_push(&mut h, PACKETS_TEST_1, true);
+    send_pull(&mut h, PACKETS_TEST_1);
+    send_check_stats(&mut h, PACKETS_TEST_1);
+}
+
+#[test]
+fn test_send_benchmark() {
+    init();
+    let clock = gst::SystemClock::obtain();
+    const N_PACKETS: usize = 2 * 1024 * 1024;
+    let mut packets = Vec::with_capacity(N_PACKETS);
+    for i in 0..N_PACKETS {
+        packets.push(
+            PacketInfo {
+                seq_no: (i % u16::MAX as usize) as u16,
+                rtp_ts: i as u32,
+                payload_len: 8,
+            }
+            .generate_buffer(),
+        )
+    }
+
+    let mut h = send_init();
+
+    let start = clock.time();
+
+    for packet in packets {
+        h.push(packet).unwrap();
+    }
+
+    let pushed = clock.time();
+
+    for i in 0..N_PACKETS {
+        let buffer = h.pull().unwrap();
+        let mapped = buffer.map_readable().unwrap();
+        let rtp = rtp_types::RtpPacket::parse(&mapped).unwrap();
+        assert_eq!(rtp.sequence_number(), (i % u16::MAX as usize) as u16);
+    }
+
+    let end = clock.time();
+
+    let test_time = end.opt_sub(start);
+    let pull_time = end.opt_sub(pushed);
+    let push_time = pushed.opt_sub(start);
+    println!(
+        "test took {} (push {}, pull {})",
+        test_time.display(),
+        push_time.display(),
+        pull_time.display()
+    );
+}
+
+#[test]
+fn test_send_list_benchmark() {
+    init();
+    let clock = gst::SystemClock::obtain();
+    const N_PACKETS: usize = 2 * 1024 * 1024;
+    let mut list = gst::BufferList::new();
+    let list_mut = list.make_mut();
+    for i in 0..N_PACKETS {
+        list_mut.add(
+            PacketInfo {
+                seq_no: (i % u16::MAX as usize) as u16,
+                rtp_ts: i as u32,
+                payload_len: 8,
+            }
+            .generate_buffer(),
+        );
+    }
+    let mut h = send_init();
+
+    let push_pad = h
+        .element()
+        .unwrap()
+        .static_pad("rtp_sink_0")
+        .unwrap()
+        .peer()
+        .unwrap();
+
+    let start = clock.time();
+
+    push_pad.push_list(list).unwrap();
+
+    let pushed = clock.time();
+
+    for i in 0..N_PACKETS {
+        let buffer = h.pull().unwrap();
+        let mapped = buffer.map_readable().unwrap();
+        let rtp = rtp_types::RtpPacket::parse(&mapped).unwrap();
+        assert_eq!(rtp.sequence_number(), (i % u16::MAX as usize) as u16);
+    }
+
+    let end = clock.time();
+
+    let test_time = end.opt_sub(start);
+    let pull_time = end.opt_sub(pushed);
+    let push_time = pushed.opt_sub(start);
+    println!(
+        "test took {} (push {}, pull {})",
+        test_time.display(),
+        push_time.display(),
+        pull_time.display()
+    );
 }
 
 #[test]
