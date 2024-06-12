@@ -1352,8 +1352,10 @@ impl Session {
             "members {n}, RTCP bandwidth {rtcp_bw}, average RTCP size {}",
             self.average_rtcp_size
         );
-        let t_nanos = (compensation_ns
-            .mul_div_round(self.average_rtcp_size as u64 * n, rtcp_bw.max(1) as u64))
+        let t_nanos = (compensation_ns.mul_div_round(
+            self.average_rtcp_size as u64 * n.max(1),
+            rtcp_bw.max(1) as u64,
+        ))
         .unwrap()
         .max(min_rtcp_interval.as_nanos() as u64);
         trace!("deterministic rtcp interval {t_nanos}ns");
