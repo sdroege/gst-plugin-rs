@@ -362,7 +362,12 @@ pub(crate) struct ExtendedSeqnum {
 }
 
 impl ExtendedSeqnum {
-    /// Produces the next extended timestamp from a new RTP timestamp
+    /// The current extended sequence number
+    pub(crate) fn current(&self) -> Option<u64> {
+        self.last_ext
+    }
+
+    /// Produces the next extended sequence number from a new RTP sequence number
     pub(crate) fn next(&mut self, rtp_seqnum: u16) -> u64 {
         let ext = match self.last_ext {
             None => (1u64 << 16) + rtp_seqnum as u64,
