@@ -12,6 +12,7 @@ use gst::{glib, prelude::*, subclass::prelude::*};
 use std::{
     cmp::Ordering,
     io::{Cursor, Read, Seek, SeekFrom},
+    ops::RangeInclusive,
 };
 
 use bitstream_io::{BitReader, BitWriter};
@@ -170,14 +171,18 @@ impl crate::basedepay::RtpBaseDepay2Impl for RTPAv1Depay {
         &self,
         packet: &crate::basedepay::Packet,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let res = self.handle_rtp_packet(packet);
-
-        if let Err(err) = res {
-            gst::warning!(CAT, imp: self, "Failed to handle RTP packet: {err:?}");
-            self.reset(&mut self.state.borrow_mut());
+        match self.handle_rtp_packet(packet) {
+            Ok(Some((seqnums, buffer))) => self
+                .obj()
+                .queue_buffer(PacketToBufferRelation::Seqnums(seqnums), buffer),
+            Ok(None) => Ok(gst::FlowSuccess::Ok),
+            Err(err) => {
+                gst::warning!(CAT, imp: self, "Failed to handle RTP packet: {err:?}");
+                self.reset(&mut self.state.borrow_mut());
+                self.obj().drop_packets(..=packet.ext_seqnum());
+                Ok(gst::FlowSuccess::Ok)
+            }
         }
-
-        res
     }
 }
 
@@ -185,7 +190,7 @@ impl RTPAv1Depay {
     fn handle_rtp_packet(
         &self,
         packet: &crate::basedepay::Packet,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+    ) -> Result<Option<(RangeInclusive<u64>, gst::Buffer)>, gst::FlowError> {
         gst::trace!(
             CAT,
             imp: self,
@@ -390,15 +395,11 @@ impl RTPAv1Depay {
                 self.obj().drop_packets(..=packet.ext_seqnum());
             }
         }
-        drop(state);
 
         if let Some(buffer) = buffer {
-            self.obj().queue_buffer(
-                PacketToBufferRelation::Seqnums(start_ext_seqnum..=packet.ext_seqnum()),
-                buffer,
-            )
+            Ok(Some((start_ext_seqnum..=packet.ext_seqnum(), buffer)))
         } else {
-            Ok(gst::FlowSuccess::Ok)
+            Ok(None)
         }
     }
 
