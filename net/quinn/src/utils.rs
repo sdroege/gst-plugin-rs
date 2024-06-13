@@ -7,13 +7,14 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use crate::common::*;
 use futures::future;
 use futures::prelude::*;
 use gst::ErrorMessage;
 use once_cell::sync::Lazy;
 use quinn::{
-    crypto::rustls::QuicClientConfig, crypto::rustls::QuicServerConfig, ClientConfig, Endpoint,
-    ServerConfig, TransportConfig,
+    crypto::rustls::QuicClientConfig, crypto::rustls::QuicServerConfig, default_runtime,
+    ClientConfig, Endpoint, EndpointConfig, MtuDiscoveryConfig, ServerConfig, TransportConfig,
 };
 use std::error::Error;
 use std::fs::File;
@@ -27,6 +28,19 @@ use tokio::runtime;
 
 pub const CONNECTION_CLOSE_CODE: u32 = 0;
 pub const CONNECTION_CLOSE_MSG: &str = "Stopped";
+
+#[derive(Debug)]
+pub struct QuinnQuicEndpointConfig {
+    pub server_addr: SocketAddr,
+    pub server_name: String,
+    pub client_addr: SocketAddr,
+    pub secure_conn: bool,
+    pub alpns: Vec<String>,
+    pub certificate_file: Option<PathBuf>,
+    pub private_key_file: Option<PathBuf>,
+    pub keep_alive_interval: u64,
+    pub transport_config: QuinnQuicTransportConfig,
+}
 
 #[derive(Error, Debug)]
 pub enum WaitError {
@@ -196,15 +210,12 @@ impl rustls::client::danger::ServerCertVerifier for SkipServerVerification {
     }
 }
 
-fn configure_client(
-    secure_conn: bool,
-    certificate_file: Option<PathBuf>,
-    private_key_file: Option<PathBuf>,
-    alpns: Vec<String>,
-    keep_alive_interval_ms: u64,
-) -> Result<ClientConfig, Box<dyn Error>> {
-    let mut crypto = if secure_conn {
-        let (certs, key) = read_certs_from_file(certificate_file, private_key_file)?;
+fn configure_client(ep_config: &QuinnQuicEndpointConfig) -> Result<ClientConfig, Box<dyn Error>> {
+    let mut crypto = if ep_config.secure_conn {
+        let (certs, key) = read_certs_from_file(
+            ep_config.certificate_file.clone(),
+            ep_config.private_key_file.clone(),
+        )?;
         let mut cert_store = rustls::RootCertStore::empty();
         cert_store.add_parsable_certificates(certs.clone());
 
@@ -218,20 +229,41 @@ fn configure_client(
             .with_no_client_auth()
     };
 
-    let alpn_protocols: Vec<Vec<u8>> = alpns
+    let alpn_protocols: Vec<Vec<u8>> = ep_config
+        .alpns
         .iter()
         .map(|x| x.as_bytes().to_vec())
         .collect::<Vec<_>>();
     crypto.alpn_protocols = alpn_protocols;
     crypto.key_log = Arc::new(rustls::KeyLogFile::new());
 
-    let mut client_config = ClientConfig::new(Arc::new(QuicClientConfig::try_from(crypto)?));
-
-    if keep_alive_interval_ms > 0 {
+    let transport_config = {
+        let mtu_config = MtuDiscoveryConfig::default()
+            .upper_bound(ep_config.transport_config.upper_bound_mtu)
+            .to_owned();
         let mut transport_config = TransportConfig::default();
-        transport_config.keep_alive_interval(Some(Duration::from_millis(keep_alive_interval_ms)));
-        client_config.transport_config(Arc::new(transport_config));
-    }
+
+        if ep_config.keep_alive_interval > 0 {
+            transport_config
+                .keep_alive_interval(Some(Duration::from_millis(ep_config.keep_alive_interval)));
+        }
+        transport_config.initial_mtu(ep_config.transport_config.initial_mtu);
+        transport_config.min_mtu(ep_config.transport_config.min_mtu);
+        transport_config.datagram_receive_buffer_size(Some(
+            ep_config.transport_config.datagram_receive_buffer_size,
+        ));
+        transport_config
+            .datagram_send_buffer_size(ep_config.transport_config.datagram_send_buffer_size);
+        transport_config.max_concurrent_bidi_streams(0u32.into());
+        transport_config.max_concurrent_uni_streams(1u32.into());
+        transport_config.mtu_discovery_config(Some(mtu_config));
+
+        transport_config
+    };
+
+    let client_config = ClientConfig::new(Arc::new(QuicClientConfig::try_from(crypto)?))
+        .transport_config(Arc::new(transport_config))
+        .to_owned();
 
     Ok(client_config)
 }
@@ -294,17 +326,16 @@ fn read_certs_from_file(
 }
 
 fn configure_server(
-    server_name: &str,
-    secure_conn: bool,
-    certificate_file: Option<PathBuf>,
-    private_key_file: Option<PathBuf>,
-    alpns: Vec<String>,
+    ep_config: &QuinnQuicEndpointConfig,
 ) -> Result<(ServerConfig, Vec<rustls_pki_types::CertificateDer>), Box<dyn Error>> {
-    let (certs, key) = if secure_conn {
-        read_certs_from_file(certificate_file, private_key_file)?
+    let (certs, key) = if ep_config.secure_conn {
+        read_certs_from_file(
+            ep_config.certificate_file.clone(),
+            ep_config.private_key_file.clone(),
+        )?
     } else {
         let rcgen::CertifiedKey { cert: _, key_pair } =
-            rcgen::generate_simple_self_signed(vec![server_name.into()]).unwrap();
+            rcgen::generate_simple_self_signed(vec![ep_config.server_name.clone()]).unwrap();
         let cert_der = key_pair.serialize_der();
         let priv_key = rustls_pki_types::PrivateKeyDer::try_from(cert_der.clone()).unwrap();
         let cert_chain = vec![rustls_pki_types::CertificateDer::from(cert_der)];
@@ -312,7 +343,7 @@ fn configure_server(
         (cert_chain, priv_key)
     };
 
-    let mut crypto = if secure_conn {
+    let mut crypto = if ep_config.secure_conn {
         let mut cert_store = rustls::RootCertStore::empty();
         cert_store.add_parsable_certificates(certs.clone());
 
@@ -328,59 +359,58 @@ fn configure_server(
             .with_single_cert(certs.clone(), key)
     }?;
 
-    let alpn_protocols: Vec<Vec<u8>> = alpns
+    let alpn_protocols: Vec<Vec<u8>> = ep_config
+        .alpns
         .iter()
         .map(|x| x.as_bytes().to_vec())
         .collect::<Vec<_>>();
     crypto.alpn_protocols = alpn_protocols;
     crypto.key_log = Arc::new(rustls::KeyLogFile::new());
-    let mut server_config =
-        ServerConfig::with_crypto(Arc::new(QuicServerConfig::try_from(crypto)?));
 
-    Arc::get_mut(&mut server_config.transport)
-        .unwrap()
-        .max_concurrent_bidi_streams(0_u8.into())
-        .max_concurrent_uni_streams(1_u8.into());
+    let transport_config = {
+        let mtu_config = MtuDiscoveryConfig::default()
+            .upper_bound(ep_config.transport_config.upper_bound_mtu)
+            .to_owned();
+        let mut transport_config = TransportConfig::default();
+
+        transport_config.initial_mtu(ep_config.transport_config.initial_mtu);
+        transport_config.min_mtu(ep_config.transport_config.min_mtu);
+        transport_config.datagram_receive_buffer_size(Some(
+            ep_config.transport_config.datagram_receive_buffer_size,
+        ));
+        transport_config
+            .datagram_send_buffer_size(ep_config.transport_config.datagram_send_buffer_size);
+        transport_config.max_concurrent_bidi_streams(0u32.into());
+        transport_config.max_concurrent_uni_streams(1u32.into());
+        transport_config.mtu_discovery_config(Some(mtu_config));
+
+        transport_config
+    };
+
+    let server_config = ServerConfig::with_crypto(Arc::new(QuicServerConfig::try_from(crypto)?))
+        .transport_config(Arc::new(transport_config))
+        .to_owned();
 
     Ok((server_config, certs))
 }
 
-pub fn server_endpoint(
-    server_addr: SocketAddr,
-    server_name: &str,
-    secure_conn: bool,
-    alpns: Vec<String>,
-    certificate_file: Option<PathBuf>,
-    private_key_file: Option<PathBuf>,
-) -> Result<Endpoint, Box<dyn Error>> {
-    let (server_config, _) = configure_server(
-        server_name,
-        secure_conn,
-        certificate_file,
-        private_key_file,
-        alpns,
-    )?;
-    let endpoint = Endpoint::server(server_config, server_addr)?;
+pub fn server_endpoint(ep_config: &QuinnQuicEndpointConfig) -> Result<Endpoint, Box<dyn Error>> {
+    let (server_config, _) = configure_server(ep_config)?;
+    let socket = std::net::UdpSocket::bind(ep_config.server_addr)?;
+    let runtime = default_runtime()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "No async runtime found"))?;
+    let endpoint_config = EndpointConfig::default()
+        .max_udp_payload_size(ep_config.transport_config.max_udp_payload_size)
+        .unwrap()
+        .to_owned();
+    let endpoint = Endpoint::new(endpoint_config, Some(server_config), socket, runtime)?;
 
     Ok(endpoint)
 }
 
-pub fn client_endpoint(
-    client_addr: SocketAddr,
-    secure_conn: bool,
-    alpns: Vec<String>,
-    certificate_file: Option<PathBuf>,
-    private_key_file: Option<PathBuf>,
-    keep_alive_interval_ms: u64,
-) -> Result<Endpoint, Box<dyn Error>> {
-    let client_cfg = configure_client(
-        secure_conn,
-        certificate_file,
-        private_key_file,
-        alpns,
-        keep_alive_interval_ms,
-    )?;
-    let mut endpoint = Endpoint::client(client_addr)?;
+pub fn client_endpoint(ep_config: &QuinnQuicEndpointConfig) -> Result<Endpoint, Box<dyn Error>> {
+    let client_cfg = configure_client(ep_config)?;
+    let mut endpoint = Endpoint::client(ep_config.client_addr)?;
 
     endpoint.set_default_client_config(client_cfg);
 

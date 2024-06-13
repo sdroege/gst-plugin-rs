@@ -13,6 +13,13 @@ pub(crate) static DEFAULT_ADDR: &str = "127.0.0.1";
 pub(crate) static DEFAULT_PORT: u16 = 5000;
 pub(crate) static DEFAULT_BIND_ADDR: &str = "0.0.0.0";
 pub(crate) static DEFAULT_BIND_PORT: u16 = 0;
+pub(crate) static DEFAULT_INITIAL_MTU: u16 = 1200;
+pub(crate) static DEFAULT_MINIMUM_MTU: u16 = 1200;
+pub(crate) static DEFAULT_UPPER_BOUND_MTU: u16 = 1452;
+pub(crate) static DEFAULT_MAX_UPPER_BOUND_MTU: u16 = 65527;
+pub(crate) static DEFAULT_UDP_PAYLOAD_SIZE: u16 = 1452;
+pub(crate) static DEFAULT_MIN_UDP_PAYLOAD_SIZE: u16 = 1200;
+pub(crate) static DEFAULT_MAX_UDP_PAYLOAD_SIZE: u16 = 65527;
 
 /*
  * For QUIC transport parameters
@@ -35,4 +42,34 @@ pub enum QuinnQuicRole {
 
     #[enum_value(name = "Client: Act as QUIC client.", nick = "client")]
     Client,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct QuinnQuicTransportConfig {
+    pub datagram_receive_buffer_size: usize,
+    pub datagram_send_buffer_size: usize,
+    pub initial_mtu: u16,
+    pub max_udp_payload_size: u16,
+    pub min_mtu: u16,
+    pub upper_bound_mtu: u16,
+}
+
+impl Default for QuinnQuicTransportConfig {
+    fn default() -> Self {
+        // Copied from Quinn::TransportConfig defaults
+        const EXPECTED_RTT: u32 = 100; // ms
+        const MAX_STREAM_BANDWIDTH: u32 = 12500 * 1000; // bytes/s
+                                                        // Window size needed to avoid pipeline
+                                                        // stalls
+        const STREAM_RWND: u32 = MAX_STREAM_BANDWIDTH / 1000 * EXPECTED_RTT;
+
+        Self {
+            datagram_receive_buffer_size: STREAM_RWND as usize,
+            datagram_send_buffer_size: 1024 * 1024,
+            initial_mtu: DEFAULT_INITIAL_MTU,
+            max_udp_payload_size: DEFAULT_MAX_UDP_PAYLOAD_SIZE,
+            min_mtu: DEFAULT_MINIMUM_MTU,
+            upper_bound_mtu: DEFAULT_UPPER_BOUND_MTU,
+        }
+    }
 }

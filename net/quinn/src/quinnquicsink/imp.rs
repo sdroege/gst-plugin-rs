@@ -8,8 +8,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::utils::{
-    client_endpoint, make_socket_addr, server_endpoint, wait, WaitError, CONNECTION_CLOSE_CODE,
-    CONNECTION_CLOSE_MSG,
+    client_endpoint, make_socket_addr, server_endpoint, wait, QuinnQuicEndpointConfig, WaitError,
+    CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG,
 };
 use crate::{common::*, utils};
 use bytes::Bytes;
@@ -17,7 +17,7 @@ use futures::future;
 use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_base::subclass::prelude::*;
 use once_cell::sync::Lazy;
-use quinn::{Connection, SendStream};
+use quinn::{Connection, SendStream, TransportConfig};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -43,7 +43,7 @@ enum State {
     Started(Started),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct Settings {
     bind_address: String,
     bind_port: u16,
@@ -58,6 +58,7 @@ struct Settings {
     use_datagram: bool,
     certificate_file: Option<PathBuf>,
     private_key_file: Option<PathBuf>,
+    transport_config: QuinnQuicTransportConfig,
 }
 
 impl Default for Settings {
@@ -76,6 +77,7 @@ impl Default for Settings {
             use_datagram: false,
             certificate_file: None,
             private_key_file: None,
+            transport_config: QuinnQuicTransportConfig::default(),
         }
     }
 }
@@ -228,6 +230,40 @@ impl ObjectImpl for QuinnQuicSink {
                     .blurb("Use datagram for lower latency, unreliable messaging")
                     .default_value(false)
                     .build(),
+                glib::ParamSpecUInt::builder("initial-mtu")
+                    .nick("Initial MTU")
+                    .blurb("Initial value to be used as the maximum UDP payload size")
+                    .minimum(DEFAULT_INITIAL_MTU.into())
+                    .default_value(DEFAULT_INITIAL_MTU.into())
+                    .build(),
+                glib::ParamSpecUInt::builder("min-mtu")
+                    .nick("Minimum MTU")
+                    .blurb("Maximum UDP payload size guaranteed to be supported by the network, must be <= initial-mtu")
+                    .minimum(DEFAULT_MINIMUM_MTU.into())
+                    .default_value(DEFAULT_MINIMUM_MTU.into())
+                    .build(),
+                glib::ParamSpecUInt::builder("upper-bound-mtu")
+                    .nick("Upper bound MTU")
+                    .blurb("Upper bound to the max UDP payload size that MTU discovery will search for")
+                    .minimum(DEFAULT_UPPER_BOUND_MTU.into())
+                    .maximum(DEFAULT_MAX_UPPER_BOUND_MTU.into())
+                    .default_value(DEFAULT_UPPER_BOUND_MTU.into())
+                    .build(),
+                glib::ParamSpecUInt::builder("max-udp-payload-size")
+                    .nick("Maximum UDP payload size")
+                    .blurb("Maximum UDP payload size accepted from peers (excluding UDP and IP overhead)")
+                    .minimum(DEFAULT_MIN_UDP_PAYLOAD_SIZE.into())
+                    .maximum(DEFAULT_MAX_UDP_PAYLOAD_SIZE.into())
+                    .default_value(DEFAULT_UDP_PAYLOAD_SIZE.into())
+                    .build(),
+                glib::ParamSpecUInt64::builder("datagram-receive-buffer-size")
+                    .nick("Datagram Receiver Buffer Size")
+                    .blurb("Maximum number of incoming application datagram bytes to buffer")
+                    .build(),
+                glib::ParamSpecUInt64::builder("datagram-send-buffer-size")
+                    .nick("Datagram Send Buffer Size")
+                    .blurb("Maximum number of outgoing application datagram bytes to buffer")
+                    .build(),
             ]
         });
 
@@ -289,6 +325,32 @@ impl ObjectImpl for QuinnQuicSink {
             "use-datagram" => {
                 settings.use_datagram = value.get().expect("type checked upstream");
             }
+            "initial-mtu" => {
+                let value = value.get::<u32>().expect("type checked upstream");
+                settings.transport_config.initial_mtu =
+                    value.max(DEFAULT_INITIAL_MTU.into()) as u16;
+            }
+            "min-mtu" => {
+                let value = value.get::<u32>().expect("type checked upstream");
+                let initial_mtu = settings.transport_config.initial_mtu;
+                settings.transport_config.min_mtu = value.min(initial_mtu.into()) as u16;
+            }
+            "upper-bound-mtu" => {
+                let value = value.get::<u32>().expect("type checked upstream");
+                settings.transport_config.upper_bound_mtu = value as u16;
+            }
+            "max-udp-payload-size" => {
+                let value = value.get::<u32>().expect("type checked upstream");
+                settings.transport_config.max_udp_payload_size = value as u16;
+            }
+            "datagram-receive-buffer-size" => {
+                let value = value.get::<u64>().expect("type checked upstream");
+                settings.transport_config.datagram_receive_buffer_size = value as usize;
+            }
+            "datagram-send-buffer-size" => {
+                let value = value.get::<u64>().expect("type checked upstream");
+                settings.transport_config.datagram_send_buffer_size = value as usize;
+            }
             _ => unimplemented!(),
         }
     }
@@ -325,6 +387,18 @@ impl ObjectImpl for QuinnQuicSink {
                 privkey.and_then(|file| file.to_str()).to_value()
             }
             "use-datagram" => settings.use_datagram.to_value(),
+            "initial-mtu" => (settings.transport_config.initial_mtu as u32).to_value(),
+            "min-mtu" => (settings.transport_config.min_mtu as u32).to_value(),
+            "upper-bound-mtu" => (settings.transport_config.upper_bound_mtu as u32).to_value(),
+            "max-udp-payload-size" => {
+                (settings.transport_config.max_udp_payload_size as u32).to_value()
+            }
+            "datagram-receive-buffer-size" => {
+                (settings.transport_config.datagram_receive_buffer_size as u64).to_value()
+            }
+            "datagram-send-buffer-size" => {
+                (settings.transport_config.datagram_send_buffer_size as u64).to_value()
+            }
             _ => unimplemented!(),
         }
     }
@@ -503,7 +577,7 @@ impl QuinnQuicSink {
                     if src.len() > size {
                         return Err(Some(gst::error_msg!(
                             gst::ResourceError::Failed,
-                            ["Sending data failed, current max datagram size: {size}"]
+                            ["Sending data failed, current max datagram size: {size}, buffer size: {}", src.len()]
                         )));
                     }
 
@@ -545,93 +619,80 @@ impl QuinnQuicSink {
     }
 
     async fn init_connection(&self) -> Result<(Connection, Option<SendStream>), WaitError> {
-        let client_addr;
-        let server_addr;
-        let server_name;
-        let alpns;
-        let role;
-        let use_datagram;
-        let keep_alive_interval;
-        let secure_conn;
-        let cert_file;
-        let private_key_file;
-
-        {
+        let (role, use_datagram, endpoint_config) = {
             let settings = self.settings.lock().unwrap();
 
-            client_addr = make_socket_addr(
+            let client_addr = make_socket_addr(
                 format!("{}:{}", settings.bind_address, settings.bind_port).as_str(),
             )?;
 
-            server_addr =
+            let server_addr =
                 make_socket_addr(format!("{}:{}", settings.address, settings.port).as_str())?;
 
-            server_name = settings.server_name.clone();
-            alpns = settings.alpns.clone();
-            role = settings.role;
-            use_datagram = settings.use_datagram;
-            keep_alive_interval = settings.keep_alive_interval;
-            secure_conn = settings.secure_conn;
-            cert_file = settings.certificate_file.clone();
-            private_key_file = settings.private_key_file.clone();
-        }
+            let server_name = settings.server_name.clone();
+            let alpns = settings.alpns.clone();
+            let role = settings.role;
+            let use_datagram = settings.use_datagram;
+            let keep_alive_interval = settings.keep_alive_interval;
+            let secure_conn = settings.secure_conn;
+            let certificate_file = settings.certificate_file.clone();
+            let private_key_file = settings.private_key_file.clone();
+            let transport_config = settings.transport_config;
 
-        let connection;
-
-        match role {
-            QuinnQuicRole::Server => {
-                let endpoint = server_endpoint(
+            (
+                role,
+                use_datagram,
+                QuinnQuicEndpointConfig {
                     server_addr,
-                    &server_name,
+                    server_name,
+                    client_addr,
                     secure_conn,
                     alpns,
-                    cert_file,
+                    certificate_file,
                     private_key_file,
-                )
-                .map_err(|err| {
-                    WaitError::FutureError(gst::error_msg!(
-                        gst::ResourceError::Failed,
-                        ["Failed to configure endpoint: {}", err]
-                    ))
-                })?;
+                    keep_alive_interval,
+                    transport_config,
+                },
+            )
+        };
 
+        let endpoint = match role {
+            QuinnQuicRole::Server => server_endpoint(&endpoint_config).map_err(|err| {
+                WaitError::FutureError(gst::error_msg!(
+                    gst::ResourceError::Failed,
+                    ["Failed to configure endpoint: {}", err]
+                ))
+            })?,
+            QuinnQuicRole::Client => client_endpoint(&endpoint_config).map_err(|err| {
+                WaitError::FutureError(gst::error_msg!(
+                    gst::ResourceError::Failed,
+                    ["Failed to configure endpoint: {}", err]
+                ))
+            })?,
+        };
+
+        let connection = match role {
+            QuinnQuicRole::Server => {
                 let incoming_conn = endpoint.accept().await.unwrap();
 
-                connection = incoming_conn.await.map_err(|err| {
+                incoming_conn.await.map_err(|err| {
                     WaitError::FutureError(gst::error_msg!(
                         gst::ResourceError::Failed,
                         ["Connection error: {}", err]
                     ))
-                })?;
+                })?
             }
-            QuinnQuicRole::Client => {
-                let endpoint = client_endpoint(
-                    client_addr,
-                    secure_conn,
-                    alpns,
-                    cert_file,
-                    private_key_file,
-                    keep_alive_interval,
-                )
+            QuinnQuicRole::Client => endpoint
+                .connect(endpoint_config.server_addr, &endpoint_config.server_name)
+                .unwrap()
+                .await
                 .map_err(|err| {
                     WaitError::FutureError(gst::error_msg!(
                         gst::ResourceError::Failed,
-                        ["Failed to configure endpoint: {}", err]
+                        ["Connection error: {}", err]
                     ))
-                })?;
-
-                connection = endpoint
-                    .connect(server_addr, &server_name)
-                    .unwrap()
-                    .await
-                    .map_err(|err| {
-                        WaitError::FutureError(gst::error_msg!(
-                            gst::ResourceError::Failed,
-                            ["Connection error: {}", err]
-                        ))
-                    })?;
-            }
-        }
+                })?,
+        };
 
         let stream = if !use_datagram {
             let res = connection.open_uni().await.map_err(|err| {
