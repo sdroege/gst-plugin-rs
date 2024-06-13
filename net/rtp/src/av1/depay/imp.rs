@@ -222,6 +222,7 @@ impl RTPAv1Depay {
                     state.last_timestamp
                 );
                 self.reset(&mut state);
+                self.obj().drop_packets(..packet.ext_seqnum());
             }
 
             // the next temporal unit starts with a temporal delimiter OBU
@@ -241,6 +242,7 @@ impl RTPAv1Depay {
                 "invalid packet: dropping unclosed OBU fragment"
             );
             self.reset(&mut state);
+            self.obj().drop_packets(..packet.ext_seqnum());
         }
 
         // If we finish an OBU here, it will start with the ext seqnum of this packet
@@ -295,6 +297,9 @@ impl RTPAv1Depay {
                     .seek(SeekFrom::Current(element_size as i64))
                     .map_err(err_flow!(self, buf_read))?;
                 idx += 1;
+                if (reader.position() as usize) == reader.get_ref().len() {
+                    self.obj().drop_packets(..=packet.ext_seqnum());
+                }
                 continue;
             }
 
@@ -322,6 +327,9 @@ impl RTPAv1Depay {
                         remaining_slice.len(),
                     );
                     self.reset(&mut state);
+                    if ready_obus.is_empty() || ready_obus == TEMPORAL_DELIMITER {
+                        self.obj().drop_packets(..=packet.ext_seqnum());
+                    }
                     break;
                 }
                 self.translate_obus(
@@ -378,6 +386,9 @@ impl RTPAv1Depay {
                 )
             );
             self.reset(&mut state);
+            if buffer.is_none() {
+                self.obj().drop_packets(..=packet.ext_seqnum());
+            }
         }
         drop(state);
 
