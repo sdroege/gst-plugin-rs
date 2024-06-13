@@ -498,12 +498,28 @@ impl QuinnQuicSink {
         };
 
         if use_datagram {
-            match conn.send_datagram(Bytes::copy_from_slice(src)) {
-                Ok(_) => Ok(()),
-                Err(e) => Err(Some(gst::error_msg!(
-                    gst::ResourceError::Failed,
-                    ["Sending data failed: {}", e]
-                ))),
+            match conn.max_datagram_size() {
+                Some(size) => {
+                    if src.len() > size {
+                        return Err(Some(gst::error_msg!(
+                            gst::ResourceError::Failed,
+                            ["Sending data failed, current max datagram size: {size}"]
+                        )));
+                    }
+
+                    match conn.send_datagram(Bytes::copy_from_slice(src)) {
+                        Ok(_) => Ok(()),
+                        Err(e) => Err(Some(gst::error_msg!(
+                            gst::ResourceError::Failed,
+                            ["Sending data failed: {}", e]
+                        ))),
+                    }
+                }
+                /*
+                 * We check for datagram being unsupported by peer in
+                 * start/init_connection, so we should never reach here.
+                 */
+                None => unreachable!(),
             }
         } else {
             let send = &mut stream.as_mut().unwrap();
@@ -627,6 +643,18 @@ impl QuinnQuicSink {
 
             Some(res)
         } else {
+            match connection.max_datagram_size() {
+                Some(datagram_size) => {
+                    gst::info!(CAT, imp: self, "Datagram size reported by peer: {datagram_size}");
+                }
+                None => {
+                    return Err(WaitError::FutureError(gst::error_msg!(
+                        gst::ResourceError::Failed,
+                        ["Datagram unsupported by the peer"]
+                    )));
+                }
+            }
+
             None
         };
 

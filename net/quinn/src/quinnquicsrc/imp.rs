@@ -690,6 +690,18 @@ impl QuinnQuicSrc {
 
             Some(res)
         } else {
+            match connection.max_datagram_size() {
+                Some(datagram_size) => {
+                    gst::info!(CAT, imp: self, "Datagram size reported by peer: {datagram_size}");
+                }
+                None => {
+                    return Err(WaitError::FutureError(gst::error_msg!(
+                        gst::ResourceError::Failed,
+                        ["Datagram unsupported by the peer"]
+                    )));
+                }
+            }
+
             None
         };
 
