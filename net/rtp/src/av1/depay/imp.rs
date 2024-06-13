@@ -27,11 +27,8 @@ use crate::{
 
 use crate::basedepay::RtpBaseDepay2Ext;
 
-// TODO: handle internal size fields in RTP OBUs
-
 struct PendingFragment {
     ext_seqnum: u64,
-    obu: UnsizedObu,
     bytes: Vec<u8>,
 }
 
@@ -208,6 +205,8 @@ impl RTPAv1Depay {
             AggregationHeader::from(&byte)
         };
 
+        gst::trace!(CAT, imp: self, "Aggregation header {aggr_header:?}");
+
         // handle new temporal units
         if state.marked_packet || state.last_timestamp != Some(packet.ext_timestamp()) {
             if state.last_timestamp.is_some() && state.obu_fragment.is_some() {
@@ -251,7 +250,6 @@ impl RTPAv1Depay {
 
         if let Some(PendingFragment {
             ext_seqnum,
-            obu,
             ref mut bytes,
         }) = state.obu_fragment
         {
@@ -266,21 +264,15 @@ impl RTPAv1Depay {
                 .read_exact(&mut bytes[bytes_end..])
                 .map_err(err_flow!(self, buf_read))?;
 
-            // if this OBU is complete, it can be appended to the adapter
-            if !(is_last_obu && aggr_header.trailing_fragment) {
-                let full_obu = {
-                    let size = bytes.len() as u32 - obu.header_len;
-                    let leb_size = leb128_size(size) as u32;
-                    obu.as_sized(size, leb_size)
-                };
-
-                self.translate_obu(
-                    &mut Cursor::new(bytes.as_slice()),
-                    &full_obu,
+            // if this OBU is complete, it can be output
+            if !is_last_obu || !aggr_header.trailing_fragment {
+                let obu_fragment = state.obu_fragment.take().unwrap();
+                self.translate_obus(
+                    &mut state,
+                    &mut Cursor::new(&obu_fragment.bytes),
                     &mut ready_obus,
                 )?;
                 start_ext_seqnum = ext_seqnum;
-                state.obu_fragment = None;
             }
 
             idx += 1;
@@ -306,25 +298,6 @@ impl RTPAv1Depay {
                 continue;
             }
 
-            let header_pos = reader.position();
-            let mut bitreader = BitReader::endian(&mut reader, ENDIANNESS);
-            let obu = UnsizedObu::parse(&mut bitreader).map_err(err_flow!(self, obu_read))?;
-
-            reader
-                .seek(SeekFrom::Start(header_pos))
-                .map_err(err_flow!(self, buf_read))?;
-
-            state.found_valid_obu = true;
-
-            // ignore these OBU types
-            if matches!(obu.obu_type, ObuType::TemporalDelimiter | ObuType::TileList) {
-                reader
-                    .seek(SeekFrom::Current(element_size as i64))
-                    .map_err(err_flow!(self, buf_read))?;
-                idx += 1;
-                continue;
-            }
-
             // trailing OBU fragments are stored in the state
             if is_last_obu && aggr_header.trailing_fragment {
                 let bytes_left = reader.get_ref().len() - (reader.position() as usize);
@@ -335,19 +308,31 @@ impl RTPAv1Depay {
 
                 state.obu_fragment = Some(PendingFragment {
                     ext_seqnum: packet.ext_seqnum(),
-                    obu,
                     bytes,
                 });
             }
             // full OBUs elements are translated and appended to the ready OBUs
             else {
-                let full_obu = {
-                    let size = element_size - obu.header_len;
-                    let leb_size = leb128_size(size) as u32;
-                    obu.as_sized(size, leb_size)
-                };
+                let remaining_slice = &reader.get_ref()[reader.position() as usize..];
+                if remaining_slice.len() < element_size as usize {
+                    gst::error!(
+                        CAT,
+                        imp: self,
+                        "invalid packet: not enough data left for OBU {idx} (needed {element_size}, have {})",
+                        remaining_slice.len(),
+                    );
+                    self.reset(&mut state);
+                    break;
+                }
+                self.translate_obus(
+                    &mut state,
+                    &mut Cursor::new(&remaining_slice[..element_size as usize]),
+                    &mut ready_obus,
+                )?;
 
-                self.translate_obu(&mut reader, &full_obu, &mut ready_obus)?;
+                reader
+                    .seek(SeekFrom::Current(element_size as i64))
+                    .map_err(err_flow!(self, buf_read))?;
             }
 
             idx += 1;
@@ -452,7 +437,8 @@ impl RTPAv1Depay {
         Ok((element_size, is_last_obu))
     }
 
-    /// Using OBU data from an RTP packet, construct a buffer containing that OBU in AV1 bitstream format
+    /// Using a single OBU element from one or more RTP packets, construct a buffer containing that
+    /// OBU in AV1 bitstream format with size field
     fn translate_obu(
         &self,
         reader: &mut Cursor<&[u8]>,
@@ -491,6 +477,98 @@ impl RTPAv1Depay {
         reader
             .read_exact(&mut bytes[(obu.header_len + obu.leb_size) as usize..])
             .map_err(err_flow!(self, buf_read))?;
+
+        Ok(())
+    }
+
+    /// Using a complete payload unit from one or more RTP packets, construct a buffer containing
+    /// the contained OBU(s) in AV1 bitstream format with size field.
+    ///
+    /// Theoretically this should only contain a single OBU but Pion is sometimes putting multiple
+    /// OBUs into one payload unit and we can easily support this here despite it not being allowed
+    /// by the specification.
+    fn translate_obus(
+        &self,
+        state: &mut State,
+        reader: &mut Cursor<&[u8]>,
+        w: &mut Vec<u8>,
+    ) -> Result<(), gst::FlowError> {
+        let mut first = true;
+
+        while (reader.position() as usize) < reader.get_ref().len() {
+            let header_pos = reader.position();
+            let mut bitreader = BitReader::endian(&mut *reader, ENDIANNESS);
+            let obu = match UnsizedObu::parse(&mut bitreader).map_err(err_flow!(self, obu_read)) {
+                Ok(obu) => obu,
+                Err(err) => {
+                    if first {
+                        return Err(err);
+                    } else {
+                        gst::warning!(CAT, imp: self, "Trailing payload unit is not a valid OBU");
+                        return Ok(());
+                    }
+                }
+            };
+
+            reader
+                .seek(SeekFrom::Start(header_pos))
+                .map_err(err_flow!(self, buf_read))?;
+
+            gst::trace!(CAT, imp: self, "Handling OBU {obu:?}");
+
+            let remaining_slice = &reader.get_ref()[reader.position() as usize..];
+            let element_size = if let Some((size, leb_size)) = obu.size {
+                let size = (size + leb_size + obu.header_len) as usize;
+                if size > remaining_slice.len() {
+                    if first {
+                        gst::warning!(CAT, imp: self, "Payload unit starts with an incomplete OBU");
+                        return Err(gst::FlowError::Error);
+                    } else {
+                        gst::warning!(CAT, imp: self, "Trailing payload unit is an incomplete OBU");
+                        return Ok(());
+                    }
+                }
+
+                if !first {
+                    gst::debug!(CAT, imp: self, "Multiple OBUs in a single payload unit");
+                }
+                size
+            } else {
+                remaining_slice.len()
+            };
+
+            state.found_valid_obu = true;
+            first = false;
+
+            // ignore these OBU types
+            if matches!(obu.obu_type, ObuType::TemporalDelimiter | ObuType::TileList) {
+                gst::trace!(CAT, imp: self, "Dropping {:?} of size {element_size}", obu.obu_type);
+                reader
+                    .seek(SeekFrom::Current(element_size as i64))
+                    .map_err(err_flow!(self, buf_read))?;
+                continue;
+            }
+
+            let full_obu = {
+                if let Some((size, leb_size)) = obu.size {
+                    obu.as_sized(size, leb_size)
+                } else {
+                    let size = element_size as u32 - obu.header_len;
+                    let leb_size = leb128_size(size) as u32;
+                    obu.as_sized(size, leb_size)
+                }
+            };
+
+            self.translate_obu(
+                &mut Cursor::new(&remaining_slice[..element_size]),
+                &full_obu,
+                w,
+            )?;
+
+            reader
+                .seek(SeekFrom::Current(element_size as i64))
+                .map_err(err_flow!(self, buf_read))?;
+        }
 
         Ok(())
     }

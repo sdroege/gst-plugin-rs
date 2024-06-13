@@ -20,6 +20,8 @@ pub struct UnsizedObu {
     pub header_len: u32,
     /// indicates that only part of this OBU has been processed so far
     pub is_fragment: bool,
+    /// OBU size field, if existing
+    pub size: Option<(u32, u32)>,
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,13 +83,7 @@ impl UnsizedObu {
         let obu_type = reader.read::<u8>(4)?.into();
         let has_extension = reader.read_bit()?;
 
-        // make sure there is no size field
-        if reader.read_bit()? {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "did not expect size field",
-            ));
-        }
+        let has_size_field = reader.read_bit()?;
 
         // ignore the reserved bit
         let _ = reader.read_bit()?;
@@ -100,12 +96,19 @@ impl UnsizedObu {
 
         reader.byte_align();
 
+        let size = if has_size_field {
+            Some(parse_leb128(reader)?)
+        } else {
+            None
+        };
+
         Ok(Self {
             obu_type,
             has_extension,
             temporal_id,
             spatial_id,
             header_len: has_extension as u32 + 1,
+            size,
             is_fragment: false,
         })
     }
@@ -115,7 +118,7 @@ impl UnsizedObu {
         SizedObu {
             obu_type: self.obu_type,
             has_extension: self.has_extension,
-            has_size_field: false,
+            has_size_field: self.size.is_some(),
             temporal_id: self.temporal_id,
             spatial_id: self.spatial_id,
             size,
@@ -259,6 +262,7 @@ mod tests {
                     spatial_id: 0,
                     header_len: 1,
                     is_fragment: false,
+                    size: None,
                 },
                 vec![0b0001_0000],
             ),
@@ -283,6 +287,7 @@ mod tests {
                     spatial_id: 0,
                     header_len: 1,
                     is_fragment: false,
+                    size: None,
                 },
                 vec![0b0111_1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             ),
@@ -307,6 +312,7 @@ mod tests {
                     spatial_id: 3,
                     header_len: 2,
                     is_fragment: false,
+                    size: None,
                 },
                 vec![0b0011_0100, 0b1001_1000, 1, 2, 3, 4, 5],
             ),
