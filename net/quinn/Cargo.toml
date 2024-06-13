@@ -16,7 +16,7 @@ gst-base.workspace = true
 once_cell.workspace = true
 tokio = { version = "1.36.0", default-features = false, features = ["time", "rt-multi-thread"] }
 futures = "0.3.30"
-quinn = { version = "0.11", default-features = true, features = ["ring"]}
+quinn = { version = "0.11.2", default-features = true, features = ["ring"]}
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"]}
 rustls-pemfile = "2"
 rustls-pki-types = "1"
