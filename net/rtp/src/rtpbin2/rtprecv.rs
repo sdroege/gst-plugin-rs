@@ -119,12 +119,14 @@ impl futures::stream::Stream for JitterBufferStream {
                             if pending_item.is_some() {
                                 // but only after sending the previous pending item
                                 next_pending_item = Some(item);
-                                break
+                                break;
                             }
                         }
                         JitterBufferItem::Packet(ref packet) => {
                             match pending_item {
-                                Some(JitterBufferItem::Event(_) | JitterBufferItem::Query(_, _)) => unreachable!(),
+                                Some(
+                                    JitterBufferItem::Event(_) | JitterBufferItem::Query(_, _),
+                                ) => unreachable!(),
                                 Some(JitterBufferItem::Packet(pending_buffer)) => {
                                     let mut list = gst::BufferList::new();
                                     let list_mut = list.make_mut();
@@ -1862,6 +1864,7 @@ impl ElementImpl for RtpRecv {
         let mut state = self.state.lock().unwrap();
         let mut removed_pads = vec![];
         let mut removed_session_ids = vec![];
+        let mut removed_srcpads_session_ids = vec![];
         if let Some(&id) = state.pads_session_id_map.get(pad) {
             removed_pads.push(pad.clone());
             if let Some(session) = state.mut_session_by_id(id) {
@@ -1869,7 +1872,7 @@ impl ElementImpl for RtpRecv {
                     session.rtp_recv_sinkpad = None;
                     removed_pads.extend(session.rtp_recv_srcpads.iter().map(|r| r.pad.clone()));
                     session.recv_flow_combiner.lock().unwrap().clear();
-                    session.rtp_recv_srcpads.clear();
+                    removed_srcpads_session_ids.push(id);
                     session.recv_store.clear();
                 }
 
@@ -1881,6 +1884,10 @@ impl ElementImpl for RtpRecv {
                     removed_session_ids.push(session.internal_session.id);
                 }
             }
+        }
+
+        for pad in removed_pads.iter() {
+            state.pads_session_id_map.remove(pad);
         }
         drop(state);
 
@@ -1894,9 +1901,10 @@ impl ElementImpl for RtpRecv {
 
         {
             let mut state = self.state.lock().unwrap();
-
-            for pad in removed_pads.iter() {
-                state.pads_session_id_map.remove(pad);
+            for id in removed_srcpads_session_ids {
+                if let Some(session) = state.mut_session_by_id(id) {
+                    session.rtp_recv_srcpads.clear();
+                }
             }
             for id in removed_session_ids {
                 if let Some(session) = state.mut_session_by_id(id) {
