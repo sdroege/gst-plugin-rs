@@ -8,8 +8,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::utils::{
-    client_endpoint, make_socket_addr, server_endpoint, wait, Canceller, QuinnQuicEndpointConfig,
-    WaitError, CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG,
+    client_endpoint, get_stats, make_socket_addr, server_endpoint, wait, Canceller,
+    QuinnQuicEndpointConfig, WaitError, CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG,
 };
 use crate::{common::*, utils};
 use bytes::Bytes;
@@ -273,6 +273,11 @@ impl ObjectImpl for QuinnQuicSrc {
                     .nick("Datagram Send Buffer Size")
                     .blurb("Maximum number of outgoing application datagram bytes to buffer")
                     .build(),
+                glib::ParamSpecBoxed::builder::<gst::Structure>("stats")
+                    .nick("Connection statistics")
+                    .blurb("Connection statistics")
+                    .read_only()
+                    .build()
             ]
         });
 
@@ -417,6 +422,16 @@ impl ObjectImpl for QuinnQuicSrc {
             }
             "datagram-send-buffer-size" => {
                 (settings.transport_config.datagram_send_buffer_size as u64).to_value()
+            }
+            "stats" => {
+                let state = self.state.lock().unwrap();
+                match *state {
+                    State::Started(ref state) => {
+                        let connection = state.connection.clone();
+                        get_stats(Some(connection)).to_value()
+                    }
+                    State::Stopped => get_stats(None).to_value(),
+                }
             }
             _ => unimplemented!(),
         }

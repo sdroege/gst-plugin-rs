@@ -4243,6 +4243,18 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "stats": {
+                        "blurb": "Connection statistics",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "stats;",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": false
+                    },
                     "timeout": {
                         "blurb": "Value in seconds to timeout QUIC endpoint requests (0 = No timeout).",
                         "conditionally-available": false,
@@ -4550,6 +4562,18 @@
                         "readable": true,
                         "type": "guint",
                         "writable": true
+                    },
+                    "stats": {
+                        "blurb": "Connection statistics",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "stats;",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": false
                     },
                     "timeout": {
                         "blurb": "Value in seconds to timeout QUIC endpoint requests (0 = No timeout).",

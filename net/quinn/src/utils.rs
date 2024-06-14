@@ -14,8 +14,10 @@ use gst::ErrorMessage;
 use once_cell::sync::Lazy;
 use quinn::{
     crypto::rustls::QuicClientConfig, crypto::rustls::QuicServerConfig, default_runtime,
-    ClientConfig, Endpoint, EndpointConfig, MtuDiscoveryConfig, ServerConfig, TransportConfig,
+    ClientConfig, Connection, Endpoint, EndpointConfig, MtuDiscoveryConfig, ServerConfig,
+    TransportConfig,
 };
+use quinn_proto::{ConnectionStats, FrameStats, PathStats, UdpStats};
 use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
@@ -415,4 +417,73 @@ pub fn client_endpoint(ep_config: &QuinnQuicEndpointConfig) -> Result<Endpoint, 
     endpoint.set_default_client_config(client_cfg);
 
     Ok(endpoint)
+}
+
+pub fn get_stats(connection: Option<Connection>) -> gst::Structure {
+    match connection {
+        Some(conn) => {
+            // See quinn_proto::ConnectionStats
+            let stats = conn.stats();
+            let udp_stats = |udp: UdpStats, name: String| -> gst::Structure {
+                gst::Structure::builder(name)
+                    .field("datagrams", udp.datagrams)
+                    .field("bytes", udp.bytes)
+                    .field("ios", udp.ios)
+                    .build()
+            };
+            let frame_stats = |frame: FrameStats, name: String| -> gst::Structure {
+                gst::Structure::builder(name)
+                    .field("acks", frame.acks)
+                    .field("ack-frequency", frame.ack_frequency)
+                    .field("crypto", frame.crypto)
+                    .field("connection-close", frame.connection_close)
+                    .field("data-blocked", frame.data_blocked)
+                    .field("datagram", frame.datagram)
+                    .field("handshake-done", frame.handshake_done)
+                    .field("immediate-ack", frame.immediate_ack)
+                    .field("max-data", frame.max_data)
+                    .field("max-stream-data", frame.max_stream_data)
+                    .field("max-streams-bidi", frame.max_streams_bidi)
+                    .field("max-streams-uni", frame.max_streams_uni)
+                    .field("new-connection-id", frame.new_connection_id)
+                    .field("new-token", frame.new_token)
+                    .field("path-challenge", frame.path_challenge)
+                    .field("path-response", frame.path_response)
+                    .field("ping", frame.ping)
+                    .field("reset-stream", frame.reset_stream)
+                    .field("retire-connection-id", frame.retire_connection_id)
+                    .field("stream-data-blocked", frame.stream_data_blocked)
+                    .field("streams-blocked-bidi", frame.streams_blocked_bidi)
+                    .field("streams-blocked-uni", frame.streams_blocked_uni)
+                    .field("stop-sending", frame.stop_sending)
+                    .field("stream", frame.stream)
+                    .build()
+            };
+            let path_stats = gst::Structure::builder("path")
+                .field("cwnd", stats.path.cwnd)
+                .field("congestion-events", stats.path.congestion_events)
+                .field("lost-packets", stats.path.lost_packets)
+                .field("lost-bytes", stats.path.lost_bytes)
+                .field("sent-packets", stats.path.sent_packets)
+                .field("sent-plpmtud-probes", stats.path.sent_plpmtud_probes)
+                .field("lost-plpmtud-probes", stats.path.lost_plpmtud_probes)
+                .field("black-holes-detected", stats.path.black_holes_detected)
+                .build();
+
+            gst::Structure::builder("stats")
+                .field("udp-tx", udp_stats(stats.udp_tx, "udp-tx".to_string()))
+                .field("udp-rx", udp_stats(stats.udp_rx, "udp-rx".to_string()))
+                .field("path", path_stats)
+                .field(
+                    "frame-tx",
+                    frame_stats(stats.frame_tx, "frame-tx".to_string()),
+                )
+                .field(
+                    "frame-rx",
+                    frame_stats(stats.frame_rx, "frame-rx".to_string()),
+                )
+                .build()
+        }
+        None => gst::Structure::new_empty("stats"),
+    }
 }
