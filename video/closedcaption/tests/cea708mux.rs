@@ -6,8 +6,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::u8;
-
 use gst::prelude::*;
 use pretty_assertions::assert_eq;
 

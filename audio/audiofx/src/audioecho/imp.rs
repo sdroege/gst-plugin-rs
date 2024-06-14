@@ -11,8 +11,8 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_audio::subclass::prelude::*;
 
+use std::cmp;
 use std::sync::Mutex;
-use std::{cmp, u64};
 
 use byte_slice_cast::*;
 

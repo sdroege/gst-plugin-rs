@@ -323,7 +323,7 @@ impl Context {
                 .entry(cname.clone())
                 .or_insert_with(|| {
                     let mut cname_largest_delay = CnameLargestDelay {
-                        largest_delay: std::i64::MIN,
+                        largest_delay: i64::MIN,
                         all_sync: true,
                     };
 

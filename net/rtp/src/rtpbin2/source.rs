@@ -129,6 +129,7 @@ impl Source {
 #[derive(Debug)]
 pub struct ReceivedRb {
     pub rb: Rb,
+    #[allow(unused)]
     pub receive_time: Instant,
     pub receive_ntp_time: NtpTime,
 }

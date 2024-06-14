@@ -559,8 +559,8 @@ impl ElementImpl for TtToCea608 {
             .unwrap();
 
             let framerate = gst::FractionRange::new(
-                gst::Fraction::new(1, std::i32::MAX),
-                gst::Fraction::new(std::i32::MAX, 1),
+                gst::Fraction::new(1, i32::MAX),
+                gst::Fraction::new(i32::MAX, 1),
             );
 
             let caps = gst::Caps::builder("closedcaption/x-cea-608")

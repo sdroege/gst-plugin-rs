@@ -11,6 +11,7 @@ use anyhow::{bail, Context as _};
 use bitstream_io::{FromBitStream, FromBitStreamWith};
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct FrameHeader {
     pub profile: u8,
     pub show_existing_frame: bool,
@@ -86,6 +87,7 @@ impl FromBitStream for FrameHeader {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct KeyframeInfo {
     // sync code
     // color config
@@ -162,6 +164,7 @@ impl KeyframeInfo {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct ColorConfig {
     pub bit_depth: u8,
     pub color_space: u8,

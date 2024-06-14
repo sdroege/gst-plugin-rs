@@ -27,12 +27,10 @@ use gst_net::*;
 
 use once_cell::sync::Lazy;
 
-use std::i32;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::sync::Mutex;
 use std::time::Duration;
-use std::u16;
 
 use crate::runtime::prelude::*;
 use crate::runtime::{task, Async, Context, PadSrc, Task, TaskState};

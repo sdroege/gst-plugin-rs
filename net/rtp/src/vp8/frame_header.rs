@@ -19,6 +19,7 @@ use smallvec::SmallVec;
 use super::bool_decoder::BoolDecoder;
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct UncompressedFrameHeader {
     pub first_partition_size: u32,
     pub is_keyframe: bool,
@@ -83,6 +84,7 @@ impl FromByteStream for UncompressedFrameHeader {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct FrameHeader {
     pub color_space: Option<u8>,
     pub clamping_type: Option<u8>,
@@ -176,6 +178,7 @@ impl<'a> FromBitStreamWith<'a> for FrameHeader {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct UpdateSegmentation {
     pub segment_feature_data: Option<SegmentFeatureData>,
     pub mb_segmentation_map: Option<MbSegmentationMap>,
@@ -217,6 +220,7 @@ impl FromBitStream for UpdateSegmentation {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct SegmentFeatureData {
     pub segment_feature_mode: u8,
     pub quantizer_update: SmallVec<[Option<i8>; 4]>,
@@ -262,6 +266,7 @@ impl FromBitStream for SegmentFeatureData {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct MbSegmentationMap {
     pub segment_probs: SmallVec<[Option<u8>; 3]>,
 }
@@ -291,6 +296,7 @@ impl FromBitStream for MbSegmentationMap {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct MbLfAdjustments {
     pub ref_frame_delta_update: SmallVec<[Option<i8>; 4]>,
     pub mb_mode_delta_update: SmallVec<[Option<i8>; 4]>,
@@ -342,6 +348,7 @@ impl FromBitStream for MbLfAdjustments {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct FrameInfo {
     pub uncompressed_frame_header: UncompressedFrameHeader,
     pub frame_header: FrameHeader,

@@ -262,21 +262,21 @@ impl ObjectImpl for FallbackSrc {
                 glib::ParamSpecUInt64::builder("timeout")
                     .nick("Timeout")
                     .blurb("Timeout for switching to the fallback URI")
-                    .maximum(std::u64::MAX - 1)
+                    .maximum(u64::MAX - 1)
                     .default_value(5 * *gst::ClockTime::SECOND)
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecUInt64::builder("restart-timeout")
                     .nick("Timeout")
                     .blurb("Timeout for restarting an active source")
-                    .maximum(std::u64::MAX - 1)
+                    .maximum(u64::MAX - 1)
                     .default_value(5 * *gst::ClockTime::SECOND)
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecUInt64::builder("retry-timeout")
                     .nick("Retry Timeout")
                     .blurb("Timeout for stopping after repeated failure")
-                    .maximum(std::u64::MAX - 1)
+                    .maximum(u64::MAX - 1)
                     .default_value(60 * *gst::ClockTime::SECOND)
                     .mutable_ready()
                     .build(),
@@ -296,14 +296,14 @@ impl ObjectImpl for FallbackSrc {
                     .blurb("When the main source has a higher latency than the fallback source \
                      this allows to configure a minimum latency that would be configured \
                      if initially the fallback is enabled")
-                    .maximum(std::u64::MAX - 1)
+                    .maximum(u64::MAX - 1)
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecInt64::builder("buffer-duration")
                     .nick("Buffer Duration")
                     .blurb("Buffer duration when buffering streams (-1 default value)")
                     .minimum(-1)
-                    .maximum(std::i64::MAX - 1)
+                    .maximum(i64::MAX - 1)
                     .default_value(-1)
                     .mutable_ready()
                     .build(),

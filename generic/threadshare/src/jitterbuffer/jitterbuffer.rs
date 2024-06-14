@@ -91,7 +91,7 @@ impl RTPJitterBufferItem {
                     r#type: 0,
                     dts: dts.into().into_glib(),
                     pts: pts.into().into_glib(),
-                    seqnum: seqnum.map(|s| s as u32).unwrap_or(std::u32::MAX),
+                    seqnum: seqnum.map(|s| s as u32).unwrap_or(u32::MAX),
                     count: 1,
                     rtptime,
                 },
@@ -138,7 +138,7 @@ impl RTPJitterBufferItem {
     pub fn seqnum(&self) -> Option<u16> {
         unsafe {
             let item = self.0.as_ref().expect("Invalid wrapper");
-            if item.as_ref().seqnum == std::u32::MAX {
+            if item.as_ref().seqnum == u32::MAX {
                 None
             } else {
                 Some(item.as_ref().seqnum as u16)
@@ -306,7 +306,7 @@ impl RTPJitterBuffer {
             let pts = from_glib(pts.assume_init());
             let seqnum = seqnum.assume_init();
 
-            let seqnum = if seqnum == std::u32::MAX {
+            let seqnum = if seqnum == u32::MAX {
                 None
             } else {
                 Some(seqnum as u16)
@@ -339,7 +339,7 @@ impl RTPJitterBuffer {
                 (None, None)
             } else {
                 let seqnum = (*item).seqnum;
-                let seqnum = if seqnum == std::u32::MAX {
+                let seqnum = if seqnum == u32::MAX {
                     None
                 } else {
                     Some(seqnum as u16)

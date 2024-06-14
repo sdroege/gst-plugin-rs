@@ -16,7 +16,6 @@ use gst_video::subclass::prelude::*;
 
 use once_cell::sync::Lazy;
 
-use std::i32;
 use std::sync::{Mutex, MutexGuard};
 
 const DEFAULT_N_THREADS: u32 = 0;
@@ -645,7 +644,7 @@ impl ObjectImpl for Dav1dDec {
                     .nick("Maximum frame delay")
                     .blurb("Maximum delay in frames for the decoder (set to 1 for low latency, 0 to be equal to the number of logical cores. -1 to choose between these two based on pipeline liveness)")
                     .minimum(-1)
-                    .maximum(std::u32::MAX.into())
+                    .maximum(u32::MAX.into())
                     .default_value(DEFAULT_MAX_FRAME_DELAY)
                     .mutable_ready()
                     .build(),

@@ -135,13 +135,13 @@ impl ElementImpl for NdiSink {
                                 gst_video::VideoFormat::Rgbx.to_str(),
                             ]),
                         )
-                        .field("width", gst::IntRange::<i32>::new(1, std::i32::MAX))
-                        .field("height", gst::IntRange::<i32>::new(1, std::i32::MAX))
+                        .field("width", gst::IntRange::<i32>::new(1, i32::MAX))
+                        .field("height", gst::IntRange::<i32>::new(1, i32::MAX))
                         .field(
                             "framerate",
                             gst::FractionRange::new(
                                 gst::Fraction::new(0, 1),
-                                gst::Fraction::new(std::i32::MAX, 1),
+                                gst::Fraction::new(i32::MAX, 1),
                             ),
                         )
                         .build(),

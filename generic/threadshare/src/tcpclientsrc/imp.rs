@@ -31,8 +31,6 @@ use std::io;
 use std::net::{IpAddr, SocketAddr, TcpStream};
 use std::sync::Mutex;
 use std::time::Duration;
-use std::u16;
-use std::u32;
 
 use crate::runtime::prelude::*;
 use crate::runtime::task;

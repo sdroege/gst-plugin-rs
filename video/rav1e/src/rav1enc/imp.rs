@@ -292,7 +292,7 @@ impl ObjectImpl for Rav1Enc {
                 glib::ParamSpecUInt::builder("min-quantizer")
                     .nick("Min Quantizer")
                     .blurb("Min Quantizer")
-                    .maximum(std::u8::MAX as u32)
+                    .maximum(u8::MAX as u32)
                     .default_value(DEFAULT_MIN_QUANTIZER as u32)
                     .mutable_ready()
                     .build(),

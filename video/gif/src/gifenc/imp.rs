@@ -150,7 +150,7 @@ impl ObjectImpl for GifEnc {
                     .nick("Repeat")
                     .blurb("Repeat (-1 to loop forever, 0 .. n finite repetitions)")
                     .minimum(-1)
-                    .maximum(std::u16::MAX as i32)
+                    .maximum(u16::MAX as i32)
                     .default_value(DEFAULT_REPEAT)
                     .mutable_ready()
                     .build(),

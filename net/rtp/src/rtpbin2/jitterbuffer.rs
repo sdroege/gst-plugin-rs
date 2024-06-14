@@ -153,7 +153,7 @@ impl JitterBuffer {
         });
 
         // Maintain (and trim) our seqnum list for duplicate detection
-        while self.seqnums.len() >= std::u16::MAX as usize {
+        while self.seqnums.len() >= u16::MAX as usize {
             debug!("Trimming");
             self.seqnums.pop_first();
         }
@@ -436,8 +436,8 @@ mod tests {
         let packet = RtpPacket::parse(&rtp_data).unwrap();
         assert_eq!(jb.queue_packet(&packet, 0, now), QueueResult::Duplicate);
 
-        // We do accept future sequence numbers up to a distance of at least std::i16::MAX
-        let rtp_data = generate_rtp_packet(0x12345678, std::i16::MAX as u16 + 1, 0, 4);
+        // We do accept future sequence numbers up to a distance of at least i16::MAX
+        let rtp_data = generate_rtp_packet(0x12345678, i16::MAX as u16 + 1, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
         let QueueResult::Queued(id) = jb.queue_packet(&packet, 0, now) else {
             unreachable!()
