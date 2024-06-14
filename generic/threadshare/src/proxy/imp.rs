@@ -31,7 +31,6 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Weak};
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
-use std::{u32, u64};
 
 use crate::runtime::prelude::*;
 use crate::runtime::{Context, PadSink, PadSinkWeak, PadSrc, PadSrcWeak, Task};

@@ -19,7 +19,6 @@ use byte_slice_cast::*;
 
 use std::ops::Rem;
 use std::sync::Mutex;
-use std::u32;
 
 use num_traits::cast::NumCast;
 use num_traits::float::Float;

@@ -266,7 +266,7 @@ impl SinkHandler {
         inner.gap_packets.insert(GapPacket::new(buffer));
 
         if gap_packets_length > 0 {
-            let mut prev_gap_seq = std::u32::MAX;
+            let mut prev_gap_seq = u32::MAX;
             let mut all_consecutive = true;
 
             for gap_packet in inner.gap_packets.iter() {
@@ -279,7 +279,7 @@ impl SinkHandler {
 
                 all_consecutive = gap_packet.pt == pt;
 
-                if prev_gap_seq == std::u32::MAX {
+                if prev_gap_seq == u32::MAX {
                     prev_gap_seq = gap_packet.seq as u32;
                 } else if gst_rtp::compare_seqnum(gap_packet.seq, prev_gap_seq as u16) != -1 {
                     all_consecutive = false;

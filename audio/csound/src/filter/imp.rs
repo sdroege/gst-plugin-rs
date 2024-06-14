@@ -17,7 +17,6 @@ use gst_base::subclass::prelude::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use std::sync::Mutex;
-use std::{f64, i32};
 
 use byte_slice_cast::*;
 

@@ -18,7 +18,6 @@ use gst::subclass::prelude::*;
 
 use std::mem;
 use std::sync::Mutex;
-use std::u64;
 
 use byte_slice_cast::*;
 

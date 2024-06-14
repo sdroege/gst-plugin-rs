@@ -872,7 +872,7 @@ impl ElementImpl for RaptorqEnc {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
             let caps = gst::Caps::builder("application/x-rtp")
-                .field("clock-rate", gst::IntRange::new(0, std::i32::MAX))
+                .field("clock-rate", gst::IntRange::new(0, i32::MAX))
                 .build();
 
             let srcpad_template = gst::PadTemplate::new(

@@ -37,8 +37,6 @@ use std::collections::BTreeSet;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use std::u16;
-use std::u8;
 
 const DEFAULT_HOST: Option<&str> = Some("127.0.0.1");
 const DEFAULT_PORT: i32 = 5004;

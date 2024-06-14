@@ -27,7 +27,9 @@ pub enum Buffer {
     },
     Metadata {
         frame: MetadataFrame,
+        #[allow(unused)]
         receive_time_gst: gst::ClockTime,
+        #[allow(unused)]
         receive_time_real: gst::ClockTime,
     },
 }

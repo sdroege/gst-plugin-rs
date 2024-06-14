@@ -7,7 +7,6 @@ use gst_base::subclass::base_src::CreateSuccess;
 use gst_base::subclass::prelude::*;
 
 use std::sync::Mutex;
-use std::u32;
 
 use once_cell::sync::Lazy;
 

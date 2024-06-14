@@ -26,7 +26,6 @@ use once_cell::sync::Lazy;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
-use std::u32;
 
 static DATA_QUEUE_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(

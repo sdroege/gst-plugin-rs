@@ -107,7 +107,7 @@ fn setup_video_sink(pipeline: &gst::Pipeline, path: &Path, name: &str) -> Result
     let enc = gst::ElementFactory::make("x264enc")
         .property("bframes", 0u32)
         .property("bitrate", VIDEO_BITRATE / 1000u32)
-        .property("key-int-max", std::i32::MAX as u32)
+        .property("key-int-max", i32::MAX as u32)
         .property_from_str("tune", "zerolatency")
         .build()?;
     let h264_capsfilter = gst::ElementFactory::make("capsfilter")

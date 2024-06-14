@@ -12,7 +12,6 @@ use gst::subclass::prelude::*;
 use gst_audio::subclass::prelude::*;
 use gst_base::prelude::*;
 
-use std::i32;
 use std::sync::atomic;
 use std::sync::Mutex;
 

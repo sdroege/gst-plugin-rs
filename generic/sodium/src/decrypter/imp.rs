@@ -500,7 +500,7 @@ impl Decrypter {
         gst::debug!(CAT, obj: pad, "Stream Block index: {}", chunk_index);
 
         let pull_offset = offset - (chunk_index * block_size as u64);
-        assert!(pull_offset <= std::u32::MAX as u64);
+        assert!(pull_offset <= u32::MAX as u64);
         let pull_offset = pull_offset as u32;
 
         let pulled_buffer =

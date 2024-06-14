@@ -198,7 +198,7 @@ fn basic_two_channels() {
 
 #[test]
 fn silence() {
-    run_test("wave=silence", None, 1000, 1024, 1, std::f64::NEG_INFINITY);
+    run_test("wave=silence", None, 1000, 1024, 1, f64::NEG_INFINITY);
 }
 
 #[test]
@@ -228,7 +228,7 @@ fn below_threshold() {
         1000,
         1024,
         1,
-        std::f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
     );
 }
 

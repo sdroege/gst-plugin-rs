@@ -15,7 +15,6 @@ use crate::ccutils::{extract_cdp, ParseError, ParseErrorCode};
 use once_cell::sync::Lazy;
 
 use std::sync::Mutex;
-use std::u64;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(

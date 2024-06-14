@@ -226,8 +226,8 @@ pub enum NDIlib_frame_format_type_e {
     NDIlib_frame_format_type_field_1 = 3,
 }
 
-pub const NDIlib_send_timecode_synthesize: i64 = ::std::i64::MAX;
-pub const NDIlib_recv_timestamp_undefined: i64 = ::std::i64::MAX;
+pub const NDIlib_send_timecode_synthesize: i64 = i64::MAX;
+pub const NDIlib_recv_timestamp_undefined: i64 = i64::MAX;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]

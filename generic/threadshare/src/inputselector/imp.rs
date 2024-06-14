@@ -30,7 +30,6 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use std::u32;
 
 use crate::runtime::prelude::*;
 use crate::runtime::{self, PadSink, PadSrc};

@@ -30,7 +30,6 @@ use once_cell::sync::Lazy;
 use std::collections::VecDeque;
 use std::sync::Mutex;
 use std::time::Duration;
-use std::{u32, u64};
 
 use crate::runtime::prelude::*;
 use crate::runtime::{Context, PadSink, PadSrc, Task};

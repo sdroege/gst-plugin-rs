@@ -9,7 +9,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use std::u64;
 
 use futures::future;
 use futures::prelude::*;
@@ -539,6 +538,8 @@ impl ReqwestHttpSrc {
             .unwrap_or(false);
         let seekable = size.is_some() && accept_byte_ranges;
 
+        #[allow(clippy::manual_unwrap_or_default)]
+        // https://github.com/rust-lang/rust-clippy/issues/12928
         let position = if let Some((range_start, _)) = headers
             .typed_get::<ContentRange>()
             .and_then(|range| range.bytes_range())
