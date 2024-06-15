@@ -4099,6 +4099,18 @@
                         "type": "guint64",
                         "writable": true
                     },
+                    "drop-buffer-for-datagram": {
+                        "blurb": "Drop buffers when using datagram if buffer size > max datagram size",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "initial-mtu": {
                         "blurb": "Initial value to be used as the maximum UDP payload size",
                         "conditionally-available": false,

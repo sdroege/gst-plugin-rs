@@ -20,6 +20,7 @@ pub(crate) static DEFAULT_MAX_UPPER_BOUND_MTU: u16 = 65527;
 pub(crate) static DEFAULT_UDP_PAYLOAD_SIZE: u16 = 1452;
 pub(crate) static DEFAULT_MIN_UDP_PAYLOAD_SIZE: u16 = 1200;
 pub(crate) static DEFAULT_MAX_UDP_PAYLOAD_SIZE: u16 = 65527;
+pub(crate) static DEFAULT_DROP_BUFFER_FOR_DATAGRAM: bool = false;
 
 /*
  * For QUIC transport parameters

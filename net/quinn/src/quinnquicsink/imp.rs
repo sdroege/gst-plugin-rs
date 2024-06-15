@@ -59,6 +59,7 @@ struct Settings {
     certificate_file: Option<PathBuf>,
     private_key_file: Option<PathBuf>,
     transport_config: QuinnQuicTransportConfig,
+    drop_buffer_for_datagram: bool,
 }
 
 impl Default for Settings {
@@ -78,6 +79,7 @@ impl Default for Settings {
             certificate_file: None,
             private_key_file: None,
             transport_config: QuinnQuicTransportConfig::default(),
+            drop_buffer_for_datagram: DEFAULT_DROP_BUFFER_FOR_DATAGRAM,
         }
     }
 }
@@ -268,7 +270,12 @@ impl ObjectImpl for QuinnQuicSink {
                     .nick("Connection statistics")
                     .blurb("Connection statistics")
                     .read_only()
-                    .build()
+                    .build(),
+                glib::ParamSpecBoolean::builder("drop-buffer-for-datagram")
+                    .nick("Drop buffer for datagram")
+                    .blurb("Drop buffers when using datagram if buffer size > max datagram size")
+                    .default_value(DEFAULT_DROP_BUFFER_FOR_DATAGRAM)
+                    .build(),
             ]
         });
 
@@ -356,6 +363,9 @@ impl ObjectImpl for QuinnQuicSink {
                 let value = value.get::<u64>().expect("type checked upstream");
                 settings.transport_config.datagram_send_buffer_size = value as usize;
             }
+            "drop-buffer-for-datagram" => {
+                settings.drop_buffer_for_datagram = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -414,6 +424,7 @@ impl ObjectImpl for QuinnQuicSink {
                     State::Stopped => get_stats(None).to_value(),
                 }
             }
+            "drop-buffer-for-datagram" => settings.drop_buffer_for_datagram.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -569,6 +580,7 @@ impl QuinnQuicSink {
         let settings = self.settings.lock().unwrap();
         let timeout = settings.timeout;
         let use_datagram = settings.use_datagram;
+        let drop_buffer_for_datagram = settings.drop_buffer_for_datagram;
         drop(settings);
 
         let mut state = self.state.lock().unwrap();
@@ -590,10 +602,15 @@ impl QuinnQuicSink {
             match conn.max_datagram_size() {
                 Some(size) => {
                     if src.len() > size {
-                        return Err(Some(gst::error_msg!(
-                            gst::ResourceError::Failed,
-                            ["Sending data failed, current max datagram size: {size}, buffer size: {}", src.len()]
-                        )));
+                        if drop_buffer_for_datagram {
+                            gst::warning!(CAT, imp: self, "Buffer dropped, current max datagram size: {size} > buffer size: {}", src.len());
+                            return Ok(());
+                        } else {
+                            return Err(Some(gst::error_msg!(
+                                        gst::ResourceError::Failed,
+                                        ["Sending data failed, current max datagram size: {size}, buffer size: {}", src.len()]
+                            )));
+                        }
                     }
 
                     match conn.send_datagram(Bytes::copy_from_slice(src)) {
