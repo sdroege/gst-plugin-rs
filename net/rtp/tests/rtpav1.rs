@@ -35,7 +35,7 @@ fn test_depayloader() {
         ), ( // 2 OBUs, last is fragmented
             vec![
                 0b0110_0000,
-                0b0000_0110, 0b0111_1000, 1, 2, 3, 4, 5,
+                0b0000_0110, 0b0011_0000, 1, 2, 3, 4, 5,
                              0b0011_0000, 1, 2, 3,
             ],
             false,
@@ -64,7 +64,7 @@ fn test_depayloader() {
         ],
         vec![
             0b0001_0010, 0,
-            0b0111_1010, 0b0000_0101, 1, 2, 3, 4, 5,
+            0b0011_0010, 0b0000_0101, 1, 2, 3, 4, 5,
         ],
         vec![
             0b0011_0010, 0b0000_1010, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
@@ -115,15 +115,16 @@ fn test_payloader() {
     let test_buffers: [(u64, Vec<u8>); 3] = [
         (
             0,
-            vec![   // this should result in exactly 25 bytes for the RTP payload
+            vec![   // this should result in exactly 27 bytes for the RTP payload
                 0b0001_0010, 0,
+                0b0000_1010, 0,
                 0b0011_0010, 0b0000_1100, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
                 0b0011_0010, 0b0000_1001, 1, 2, 3, 4, 5, 6, 7, 8, 9,
             ],
         ), (
             0,
             vec![   // these all have to go in separate packets since their IDs mismatch
-                0b0111_1010, 0b0000_0100, 1, 2, 3, 4,
+                0b0011_0010, 0b0000_0100, 1, 2, 3, 4,
                 0b0011_0110, 0b0010_1000, 0b0000_0101, 1, 2, 3, 4, 5,
                 0b0011_0110, 0b0100_1000, 0b0000_0001, 1,
             ],
@@ -141,7 +142,8 @@ fn test_payloader() {
             false,  // marker bit
             0,      // relative RTP timestamp
             vec![   // payload bytes
-                0b0010_1000,
+                0b0011_1000,
+                0b0000_0001, 0b0000_1000,
                 0b0000_1101, 0b0011_0000, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
                              0b0011_0000, 1, 2, 3, 4, 5, 6, 7, 8, 9,
             ],
@@ -150,7 +152,7 @@ fn test_payloader() {
             0,
             vec![
                 0b0001_0000,
-                0b0111_1000, 1, 2, 3, 4,
+                0b0011_0000, 1, 2, 3, 4,
             ]
         ), (
             false,
@@ -183,7 +185,7 @@ fn test_payloader() {
         let pay = h.element().unwrap();
         pay.set_property(
             "mtu",
-            gst_rtp::calc_packet_len(25, 0, 0)
+            gst_rtp::calc_packet_len(27, 0, 0)
         );
     }
     h.play();
