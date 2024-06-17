@@ -361,8 +361,7 @@ outdated:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
   script:
     - cargo update --color=always
-    # env_logger is ignored because it requires Rust >= 1.71
-    - cargo outdated --color=always --root-deps-only --ignore env_logger --exit-code 1 -v
+    - cargo outdated --color=always --root-deps-only --exit-code 1 -v
 
 coverage:
   allow_failure: true
