@@ -35,6 +35,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 struct PacketOBUData {
     obu_count: usize,
     payload_size: u32,
+    start_of_coded_video_sequence: bool,
     last_obu_fragment_size: Option<u32>,
     omit_last_size_field: bool,
     ends_temporal_unit: bool,
@@ -45,6 +46,7 @@ impl Default for PacketOBUData {
         PacketOBUData {
             payload_size: 1, // 1 byte is used for the aggregation header
             omit_last_size_field: true,
+            start_of_coded_video_sequence: false,
             obu_count: 0,
             last_obu_fragment_size: None,
             ends_temporal_unit: false,
@@ -55,6 +57,7 @@ impl Default for PacketOBUData {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct ObuData {
     info: SizedObu,
+    keyframe: bool,
     bytes: Vec<u8>,
     offset: usize,
     id: u64,
@@ -70,10 +73,6 @@ struct State {
     /// left over from the previous RTP packet
     open_obu_fragment: bool,
 
-    /// Indicates the next constructed packet will be the first in its sequence
-    /// (Corresponds to `N` field in the aggregation header)
-    first_packet_in_seq: bool,
-
     /// If the input is TU or frame aligned.
     framed: bool,
 }
@@ -88,7 +87,6 @@ impl Default for State {
         Self {
             obus: VecDeque::new(),
             open_obu_fragment: false,
-            first_packet_in_seq: true,
             framed: false,
         }
     }
@@ -115,6 +113,7 @@ impl RTPAv1Pay {
         state: &mut State,
         id: u64,
         data: &[u8],
+        keyframe: bool,
         marker: bool,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut reader = Cursor::new(data);
@@ -147,6 +146,7 @@ impl RTPAv1Pay {
                     }
                     state.obus.push_back(ObuData {
                         info: obu,
+                        keyframe,
                         bytes: Vec::new(),
                         offset: 0,
                         id,
@@ -178,6 +178,7 @@ impl RTPAv1Pay {
 
                     state.obus.push_back(ObuData {
                         info: obu,
+                        keyframe,
                         bytes,
                         offset: 0,
                         id,
@@ -224,6 +225,11 @@ impl RTPAv1Pay {
         let mut pending_bytes = 0;
         let mut required_ids = None::<(u8, u8)>;
 
+        // Detect if this packet starts a keyframe and contains a sequence header, and if so
+        // set the N flag to indicate that this is the start of a new codec video sequence.
+        let mut contains_keyframe = false;
+        let mut contains_sequence_header = false;
+
         // figure out how many OBUs we can fit into this packet
         for (idx, obu) in state.obus.iter().enumerate() {
             // for OBUs with extension headers, spatial and temporal IDs must be equal
@@ -254,6 +260,8 @@ impl RTPAv1Pay {
                         );
                     }
 
+                    packet.start_of_coded_video_sequence =
+                        contains_keyframe && contains_sequence_header;
                     packet.ends_temporal_unit = true;
                     if packet.obu_count > 3 {
                         packet.payload_size += pending_bytes;
@@ -263,6 +271,7 @@ impl RTPAv1Pay {
                     return Some(packet);
                 }
 
+                contains_keyframe |= obu.keyframe;
                 continue;
             } else if packet.payload_size >= payload_limit
                 || (packet.obu_count > 0 && current.obu_type == ObuType::SequenceHeader)
@@ -272,6 +281,8 @@ impl RTPAv1Pay {
                     packet.payload_size += pending_bytes;
                     packet.omit_last_size_field = false;
                 }
+                packet.start_of_coded_video_sequence =
+                    contains_keyframe && contains_sequence_header;
                 packet.ends_temporal_unit = marker && idx == state.obus.len() - 1;
                 return Some(packet);
             }
@@ -280,6 +291,8 @@ impl RTPAv1Pay {
             if packet.payload_size + pending_bytes + current.full_size() <= payload_limit {
                 packet.obu_count += 1;
                 packet.payload_size += current.partial_size() + pending_bytes;
+                contains_keyframe |= obu.keyframe;
+                contains_sequence_header |= obu.info.obu_type == ObuType::SequenceHeader;
                 pending_bytes = current.leb_size;
             }
             // would it fit without the size field?
@@ -288,6 +301,10 @@ impl RTPAv1Pay {
             {
                 packet.obu_count += 1;
                 packet.payload_size += current.partial_size() + pending_bytes;
+                contains_keyframe |= obu.keyframe;
+                contains_sequence_header |= obu.info.obu_type == ObuType::SequenceHeader;
+                packet.start_of_coded_video_sequence =
+                    contains_keyframe && contains_sequence_header;
                 packet.ends_temporal_unit = marker && idx == state.obus.len() - 1;
 
                 return Some(packet);
@@ -311,10 +328,15 @@ impl RTPAv1Pay {
                         Some(payload_limit - packet.payload_size - pending_bytes - leb_size);
                     packet.payload_size = payload_limit;
                     packet.omit_last_size_field = leb_size == 0;
+                    contains_keyframe |= obu.keyframe;
+                    contains_sequence_header |= obu.info.obu_type == ObuType::SequenceHeader;
                 } else if packet.obu_count > 3 {
                     packet.ends_temporal_unit = marker && idx == state.obus.len() - 1;
                     packet.payload_size += pending_bytes;
                 }
+
+                packet.start_of_coded_video_sequence =
+                    contains_keyframe && contains_sequence_header;
 
                 return Some(packet);
             }
@@ -325,6 +347,7 @@ impl RTPAv1Pay {
                 packet.payload_size += pending_bytes;
                 packet.omit_last_size_field = false;
             }
+            packet.start_of_coded_video_sequence = contains_keyframe && contains_sequence_header;
             packet.ends_temporal_unit = true;
 
             Some(packet)
@@ -361,17 +384,15 @@ impl RTPAv1Pay {
             };
 
             let aggr_header: [u8; 1] = [
-                    (state.open_obu_fragment as u8) << 7 |                  // Z
-                    ((packet.last_obu_fragment_size.is_some()) as u8) << 6 |  // Y
-                    (w as u8) << 4 |                                        // W
-                    (state.first_packet_in_seq as u8) << 3                  // N
+                    (state.open_obu_fragment as u8) << 7 |                       // Z
+                    ((packet.last_obu_fragment_size.is_some()) as u8) << 6 |     // Y
+                    (w as u8) << 4 |                                             // W
+                    (packet.start_of_coded_video_sequence as u8) << 3 // N
                 ; 1];
 
             writer
                 .write(&aggr_header)
                 .map_err(err_flow!(self, aggr_header_write))?;
-
-            state.first_packet_in_seq = false;
         }
 
         let mut start_id = None;
@@ -598,9 +619,10 @@ impl crate::basepay::RtpBasePay2Impl for RTPAv1Pay {
             gst::FlowError::Error
         })?;
 
+        let keyframe = !buffer.flags().contains(gst::BufferFlags::DELTA_UNIT);
         // Does the buffer finished a full TU?
         let marker = buffer.flags().contains(gst::BufferFlags::MARKER) || state.framed;
-        let res = self.handle_new_obus(&mut state, id, map.as_slice(), marker)?;
+        let res = self.handle_new_obus(&mut state, id, map.as_slice(), keyframe, marker)?;
         drop(map);
         drop(state);
 
@@ -711,6 +733,7 @@ mod tests {
                                 size: 0,
                                 ..base_obu
                             },
+                            keyframe: true,
                             ..ObuData::default()
                         },
                         ObuData {
@@ -793,6 +816,7 @@ mod tests {
                 Some(PacketOBUData {
                     obu_count: 3,
                     payload_size: 18,
+                    start_of_coded_video_sequence: false,
                     last_obu_fragment_size: None,
                     omit_last_size_field: true,
                     ends_temporal_unit: true,
@@ -811,6 +835,7 @@ mod tests {
                 Some(PacketOBUData {
                     obu_count: 5,
                     payload_size: 36,
+                    start_of_coded_video_sequence: true,
                     last_obu_fragment_size: None,
                     omit_last_size_field: false,
                     ends_temporal_unit: true,
@@ -862,10 +887,6 @@ mod tests {
                 results[idx].1.obus.iter().cloned().collect::<Vec<_>>()
             );
             assert_eq!(state.open_obu_fragment, results[idx].1.open_obu_fragment);
-            assert_eq!(
-                state.first_packet_in_seq,
-                results[idx].1.first_packet_in_seq
-            );
         }
     }
 }
