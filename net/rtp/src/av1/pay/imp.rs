@@ -131,9 +131,7 @@ impl RTPAv1Pay {
                 ObuType::TileList | ObuType::Padding => {
                     gst::log!(CAT, imp: self, "ignoring {:?} OBU", obu.obu_type);
                     reader
-                        .seek(SeekFrom::Current(
-                            (obu.header_len + obu.leb_size + obu.size) as i64,
-                        ))
+                        .seek(SeekFrom::Current(obu.size as i64))
                         .map_err(err_flow!(self, buf_read))?;
                 }
 
