@@ -35,7 +35,7 @@ fn test_depayloader() {
         ), ( // 2 OBUs, last is fragmented
             vec![
                 0b0110_0000,
-                0b0000_0110, 0b0111_1000, 1, 2, 3, 4, 5,
+                0b0000_0110, 0b0011_0000, 1, 2, 3, 4, 5,
                              0b0011_0000, 1, 2, 3,
             ],
             gst::ClockTime::from_seconds(1),
@@ -68,7 +68,7 @@ fn test_depayloader() {
         ),
         (
             gst::ClockTime::from_seconds(1),
-            vec![0b0001_0010, 0, 0b0111_1010, 0b0000_0101, 1, 2, 3, 4, 5],
+            vec![0b0001_0010, 0, 0b0011_0010, 0b0000_0101, 1, 2, 3, 4, 5],
         ),
         (
             gst::ClockTime::from_seconds(1),

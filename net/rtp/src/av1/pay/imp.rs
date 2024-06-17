@@ -127,9 +127,9 @@ impl RTPAv1Pay {
             // tile lists and temporal delimiters should not be transmitted,
             // see section 5 of the RTP AV1 spec
             match obu.obu_type {
-                // completely ignore tile lists
-                ObuType::TileList => {
-                    gst::log!(CAT, imp: self, "ignoring tile list OBU");
+                // completely ignore tile lists and padding
+                ObuType::TileList | ObuType::Padding => {
+                    gst::log!(CAT, imp: self, "ignoring {:?} OBU", obu.obu_type);
                     reader
                         .seek(SeekFrom::Current(
                             (obu.header_len + obu.leb_size + obu.size) as i64,
@@ -656,7 +656,7 @@ mod tests {
                     obus: VecDeque::from(vec![
                         ObuData {
                             info: SizedObu {
-                                obu_type: ObuType::Padding,
+                                obu_type: ObuType::Frame,
                                 size: 3,
                                 ..base_obu
                             },
@@ -717,6 +717,14 @@ mod tests {
                         },
                         ObuData {
                             info: SizedObu {
+                                obu_type: ObuType::SequenceHeader,
+                                size: 0,
+                                ..base_obu
+                            },
+                            ..ObuData::default()
+                        },
+                        ObuData {
+                            info: SizedObu {
                                 obu_type: ObuType::Frame,
                                 size: 7,
                                 ..base_obu
@@ -726,7 +734,7 @@ mod tests {
                         },
                         ObuData {
                             info: SizedObu {
-                                obu_type: ObuType::Padding,
+                                obu_type: ObuType::Frame,
                                 size: 6,
                                 ..base_obu
                             },
@@ -803,8 +811,8 @@ mod tests {
             ),
             (
                 Some(PacketOBUData {
-                    obu_count: 4,
-                    payload_size: 34,
+                    obu_count: 5,
+                    payload_size: 36,
                     last_obu_fragment_size: None,
                     omit_last_size_field: false,
                     ends_temporal_unit: true,
@@ -849,7 +857,8 @@ mod tests {
                 state
                     .obus
                     .iter()
-                    .filter(|o| o.info.obu_type != ObuType::TemporalDelimiter)
+                    .filter(|o| o.info.obu_type != ObuType::TemporalDelimiter
+                        && o.info.obu_type != ObuType::Padding)
                     .cloned()
                     .collect::<Vec<_>>(),
                 results[idx].1.obus.iter().cloned().collect::<Vec<_>>()

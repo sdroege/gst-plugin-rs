@@ -553,7 +553,10 @@ impl RTPAv1Depay {
             first = false;
 
             // ignore these OBU types
-            if matches!(obu.obu_type, ObuType::TemporalDelimiter | ObuType::TileList) {
+            if matches!(
+                obu.obu_type,
+                ObuType::TemporalDelimiter | ObuType::TileList | ObuType::Padding
+            ) {
                 gst::trace!(CAT, imp: self, "Dropping {:?} of size {element_size}", obu.obu_type);
                 reader
                     .seek(SeekFrom::Current(element_size as i64))
