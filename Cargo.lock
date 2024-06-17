@@ -2844,6 +2844,7 @@ dependencies = [
 name = "gst-plugin-quinn"
 version = "0.14.0-alpha.1"
 dependencies = [
+ "async-channel",
  "bytes",
  "futures",
  "glib",

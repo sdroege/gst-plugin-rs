@@ -57,6 +57,8 @@ pub struct QuinnQuicTransportConfig {
     pub upper_bound_mtu: u16,
     pub max_concurrent_uni_streams: VarInt,
     pub send_window: u64,
+    pub stream_receive_window: VarInt,
+    pub receive_window: VarInt,
 }
 
 impl Default for QuinnQuicTransportConfig {
@@ -77,6 +79,8 @@ impl Default for QuinnQuicTransportConfig {
             upper_bound_mtu: DEFAULT_UPPER_BOUND_MTU,
             max_concurrent_uni_streams: DEFAULT_MAX_CONCURRENT_UNI_STREAMS,
             send_window: (8 * STREAM_RWND).into(),
+            stream_receive_window: STREAM_RWND.into(),
+            receive_window: VarInt::MAX,
         }
     }
 }

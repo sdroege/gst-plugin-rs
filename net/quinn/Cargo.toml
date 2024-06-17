@@ -13,8 +13,8 @@ rust-version.workspace = true
 [dependencies]
 glib.workspace = true
 gst.workspace = true
-gst-base.workspace = true
-tokio = { version = "1.36.0", default-features = false, features = ["time", "rt-multi-thread"] }
+gst-base = { workspace = true, features = ["v1_22"] }
+tokio = { version = "1.36.0", default-features = false, features = ["time", "rt-multi-thread", "macros"] }
 futures = "0.3.30"
 quinn = { version = "0.11.5", default-features = false, features = ["ring", "rustls", "runtime-tokio"] }
 quinn-proto ={ version = "0.11.8", default-features = false, features = ["rustls"] }
@@ -24,6 +24,7 @@ rustls-pki-types = "1"
 rcgen = "0.13"
 bytes = "1.5.0"
 thiserror = "2"
+async-channel = "2.3"
 
 [dev-dependencies]
 gst-check = { workspace = true, features = ["v1_20"] }

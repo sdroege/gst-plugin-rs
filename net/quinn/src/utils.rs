@@ -398,6 +398,8 @@ fn configure_server(
         transport_config
             .max_concurrent_uni_streams(ep_config.transport_config.max_concurrent_uni_streams);
         transport_config.mtu_discovery_config(Some(mtu_config));
+        transport_config.receive_window(ep_config.transport_config.receive_window);
+        transport_config.stream_receive_window(ep_config.transport_config.stream_receive_window);
 
         transport_config
     };
