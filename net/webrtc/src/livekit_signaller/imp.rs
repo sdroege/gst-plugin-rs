@@ -589,9 +589,7 @@ impl SignallableImpl for Signaller {
 
         let weak_imp = self.downgrade();
         RUNTIME.spawn(async move {
-            let imp = if let Some(imp) = weak_imp.upgrade() {
-                imp
-            } else {
+            let Some(imp) = weak_imp.upgrade() else {
                 return;
             };
 
@@ -634,35 +632,39 @@ impl SignallableImpl for Signaller {
                 }
             }
 
-            let weak_imp = imp.downgrade();
             imp.obj().connect_closure(
                 "webrtcbin-ready",
                 false,
-                glib::closure!(|_signaller: &super::LiveKitSignaller,
-                                _consumer_identifier: &str,
-                                webrtcbin: &gst::Element| {
-                    gst::info!(CAT, "Adding data channels");
-                    let reliable_channel = webrtcbin.emit_by_name::<gst_webrtc::WebRTCDataChannel>(
-                        "create-data-channel",
-                        &[
-                            &"_reliable",
-                            &gst::Structure::builder("config")
-                                .field("ordered", true)
-                                .build(),
-                        ],
-                    );
-                    let lossy_channel = webrtcbin.emit_by_name::<gst_webrtc::WebRTCDataChannel>(
-                        "create-data-channel",
-                        &[
-                            &"_lossy",
-                            &gst::Structure::builder("config")
-                                .field("ordered", true)
-                                .field("max-retransmits", 0)
-                                .build(),
-                        ],
-                    );
+                glib::closure!(
+                    #[watch(rename_to = obj)]
+                    imp.obj(),
+                    move |_signaller: &super::LiveKitSignaller,
+                          _consumer_identifier: &str,
+                          webrtcbin: &gst::Element| {
+                        let imp = obj.imp();
+                        gst::info!(CAT, "Adding data channels");
+                        let reliable_channel = webrtcbin
+                            .emit_by_name::<gst_webrtc::WebRTCDataChannel>(
+                                "create-data-channel",
+                                &[
+                                    &"_reliable",
+                                    &gst::Structure::builder("config")
+                                        .field("ordered", true)
+                                        .build(),
+                                ],
+                            );
+                        let lossy_channel = webrtcbin
+                            .emit_by_name::<gst_webrtc::WebRTCDataChannel>(
+                                "create-data-channel",
+                                &[
+                                    &"_lossy",
+                                    &gst::Structure::builder("config")
+                                        .field("ordered", true)
+                                        .field("max-retransmits", 0)
+                                        .build(),
+                                ],
+                            );
 
-                    if let Some(imp) = weak_imp.upgrade() {
                         let mut connection = imp.connection.lock().unwrap();
                         if let Some(connection) = connection.as_mut() {
                             connection.channels = Some(Channels {
@@ -671,7 +673,7 @@ impl SignallableImpl for Signaller {
                             });
                         }
                     }
-                }),
+                ),
             );
 
             let connection = Connection {

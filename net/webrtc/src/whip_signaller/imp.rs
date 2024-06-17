@@ -453,32 +453,34 @@ impl SignallableImpl for WhipClient {
             glib::closure!(|signaller: &super::WhipClientSignaller,
                             _consumer_identifier: &str,
                             webrtcbin: &gst::Element| {
-                let obj_weak = signaller.downgrade();
-                webrtcbin.connect_notify(Some("ice-gathering-state"), move |webrtcbin, _pspec| {
-                    let Some(obj) = obj_weak.upgrade() else {
-                        return;
-                    };
+                webrtcbin.connect_notify(
+                    Some("ice-gathering-state"),
+                    glib::clone!(
+                        #[weak]
+                        signaller,
+                        move |webrtcbin, _pspec| {
+                            let state = webrtcbin
+                                .property::<WebRTCICEGatheringState>("ice-gathering-state");
 
-                    let state =
-                        webrtcbin.property::<WebRTCICEGatheringState>("ice-gathering-state");
+                            match state {
+                                WebRTCICEGatheringState::Gathering => {
+                                    gst::info!(CAT, obj: signaller, "ICE gathering started");
+                                }
+                                WebRTCICEGatheringState::Complete => {
+                                    gst::info!(CAT, obj: signaller, "ICE gathering complete");
 
-                    match state {
-                        WebRTCICEGatheringState::Gathering => {
-                            gst::info!(CAT, obj: obj, "ICE gathering started");
-                        }
-                        WebRTCICEGatheringState::Complete => {
-                            gst::info!(CAT, obj: obj, "ICE gathering complete");
+                                    let webrtcbin = webrtcbin.clone();
 
-                            let webrtcbin = webrtcbin.clone();
-
-                            RUNTIME.spawn(async move {
+                                    RUNTIME.spawn(async move {
                                 /* Note that we check for a valid WHIP endpoint in change_state */
-                                obj.imp().send_offer(&webrtcbin).await
+                                signaller.imp().send_offer(&webrtcbin).await
                             });
+                                }
+                                _ => (),
+                            }
                         }
-                        _ => (),
-                    }
-                });
+                    ),
+                );
             }),
         );
 
@@ -657,50 +659,48 @@ impl WhipServer {
         glib::closure!(|signaller: &super::WhipServerSignaller,
                         _producer_identifier: &str,
                         webrtcbin: &gst::Element| {
-            let obj_weak = signaller.downgrade();
-            webrtcbin.connect_notify(Some("ice-gathering-state"), move |webrtcbin, _pspec| {
-                let obj = match obj_weak.upgrade() {
-                    Some(obj) => obj,
-                    None => return,
-                };
+            webrtcbin.connect_notify(
+                Some("ice-gathering-state"),
+                glib::clone!(
+                    #[weak]
+                    signaller,
+                    move |webrtcbin, _pspec| {
+                        let state =
+                            webrtcbin.property::<WebRTCICEGatheringState>("ice-gathering-state");
 
-                let state = webrtcbin.property::<WebRTCICEGatheringState>("ice-gathering-state");
-
-                match state {
-                    WebRTCICEGatheringState::Gathering => {
-                        gst::info!(CAT, obj: obj, "ICE gathering started");
-                    }
-                    WebRTCICEGatheringState::Complete => {
-                        gst::info!(CAT, obj: obj, "ICE gathering complete");
-                        let ans: Option<gst_sdp::SDPMessage>;
-                        let mut settings = obj.imp().settings.lock().unwrap();
-                        if let Some(answer_desc) = webrtcbin
-                            .property::<Option<WebRTCSessionDescription>>("local-description")
-                        {
-                            ans = Some(answer_desc.sdp().to_owned());
-                        } else {
-                            ans = None;
-                        }
-                        let tx = settings
-                            .sdp_answer
-                            .take()
-                            .expect("SDP answer Sender needs to be valid");
-
-                        let obj_weak = obj.downgrade();
-                        RUNTIME.spawn(async move {
-                            let obj = match obj_weak.upgrade() {
-                                Some(obj) => obj,
-                                None => return,
-                            };
-
-                            if let Err(e) = tx.send(ans).await {
-                                gst::error!(CAT, obj: obj, "Failed to send SDP {e}");
+                        match state {
+                            WebRTCICEGatheringState::Gathering => {
+                                gst::info!(CAT, obj: signaller, "ICE gathering started");
                             }
-                        });
+                            WebRTCICEGatheringState::Complete => {
+                                gst::info!(CAT, obj: signaller, "ICE gathering complete");
+                                let ans: Option<gst_sdp::SDPMessage>;
+                                let mut settings = signaller.imp().settings.lock().unwrap();
+                                if let Some(answer_desc) = webrtcbin
+                                    .property::<Option<WebRTCSessionDescription>>(
+                                        "local-description",
+                                    )
+                                {
+                                    ans = Some(answer_desc.sdp().to_owned());
+                                } else {
+                                    ans = None;
+                                }
+                                let tx = settings
+                                    .sdp_answer
+                                    .take()
+                                    .expect("SDP answer Sender needs to be valid");
+
+                                RUNTIME.spawn(glib::clone!(#[strong] signaller, async move {
+                                    if let Err(e) = tx.send(ans).await {
+                                        gst::error!(CAT, obj: signaller, "Failed to send SDP {e}");
+                                    }
+                                }));
+                            }
+                            _ => (),
+                        }
                     }
-                    _ => (),
-                }
-            });
+                ),
+            );
         })
     }
 
@@ -940,37 +940,29 @@ impl WhipServer {
 
         let prefix = warp::path(ROOT);
 
-        let self_weak = self.downgrade();
-
         // POST /endpoint
         let post_filter = warp::post()
             .and(warp::path(ENDPOINT_PATH))
             .and(warp::path::end())
             .and(warp::header::exact(CONTENT_TYPE.as_str(), CONTENT_SDP))
             .and(warp::body::bytes())
-            .and_then(move |body| {
-                let s = self_weak.upgrade();
-                async {
-                    let self_ = s.expect("Need to have the ObjectRef");
-                    self_.post_handler(body).await
-                }
-            });
-
-        let self_weak = self.downgrade();
+            .and_then(glib::clone!(
+                #[weak(rename_to = self_)]
+                self,
+                #[upgrade_or_panic]
+                move |body| async move { self_.post_handler(body).await }
+            ));
 
         // OPTIONS /endpoint
         let options_filter = warp::options()
             .and(warp::path(ENDPOINT_PATH))
             .and(warp::path::end())
-            .and_then(move || {
-                let s = self_weak.upgrade();
-                async {
-                    let self_ = s.expect("Need to have the ObjectRef");
-                    self_.options_handler().await
-                }
-            });
-
-        let self_weak = self.downgrade();
+            .and_then(glib::clone!(
+                #[weak(rename_to = self_)]
+                self,
+                #[upgrade_or_panic]
+                move || async move { self_.options_handler().await }
+            ));
 
         // PATCH /resource/:id
         let patch_filter = warp::patch()
@@ -981,28 +973,24 @@ impl WhipServer {
                 CONTENT_TYPE.as_str(),
                 CONTENT_TRICKLE_ICE,
             ))
-            .and_then(move |id| {
-                let s = self_weak.upgrade();
-                async {
-                    let self_ = s.expect("Need to have the ObjectRef");
-                    self_.patch_handler(id).await
-                }
-            });
-
-        let self_weak = self.downgrade();
+            .and_then(glib::clone!(
+                #[weak(rename_to = self_)]
+                self,
+                #[upgrade_or_panic]
+                move |id| async move { self_.patch_handler(id).await }
+            ));
 
         // DELETE /resource/:id
         let delete_filter = warp::delete()
             .and(warp::path(RESOURCE_PATH))
             .and(warp::path::param::<String>())
             .and(warp::path::end())
-            .and_then(move |id| {
-                let s = self_weak.upgrade();
-                async {
-                    let self_ = s.expect("Need to have the ObjectRef");
-                    self_.delete_handler(id).await
-                }
-            });
+            .and_then(glib::clone!(
+                #[weak(rename_to = self_)]
+                self,
+                #[upgrade_or_panic]
+                move |id| async move { self_.delete_handler(id).await }
+            ));
 
         let api = prefix
             .and(post_filter)

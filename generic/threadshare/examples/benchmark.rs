@@ -84,13 +84,16 @@ fn main() {
             .property("signal-handoffs", true)
             .build()
             .unwrap();
-        sink.connect(
+        sink.connect_closure(
             "handoff",
             true,
-            glib::clone!(@strong counter => move |_| {
-                let _ = counter.fetch_add(1, Ordering::SeqCst);
-                None
-            }),
+            glib::closure!(
+                #[strong]
+                counter,
+                move |_fakesink: &gst::Element, _buffer: &gst::Buffer, _pad: &gst::Pad| {
+                    let _ = counter.fetch_add(1, Ordering::SeqCst);
+                }
+            ),
         );
 
         let (source, context) = match source.as_str() {

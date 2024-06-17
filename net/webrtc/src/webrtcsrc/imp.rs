@@ -406,8 +406,13 @@ impl Session {
         }
 
         let ghostpad = gst::GhostPad::builder(gst::PadDirection::Src)
-            .proxy_pad_chain_function(glib::clone!(@weak element, @strong self.id as sess_id => @default-panic, move
-                |pad, parent, buffer| {
+            .proxy_pad_chain_function(glib::clone!(
+                #[weak]
+                element,
+                #[strong(rename_to = sess_id)]
+                self.id,
+                #[upgrade_or_panic]
+                move |pad, parent, buffer| {
                     let padret = gst::ProxyPad::chain_default(pad, parent, buffer);
                     let state = element.imp().state.lock().unwrap();
                     let Some(session) = state.sessions.get(&sess_id) else {
@@ -418,30 +423,44 @@ impl Session {
                     f
                 }
             ))
-            .proxy_pad_event_function(glib::clone!(@weak element , @weak webrtcbin_pad as webrtcpad, @strong self.id as sess_id => @default-panic, move |pad, parent, event| {
-                let event = if let gst::EventView::StreamStart(stream_start) = event.view() {
-                    let state = element.imp().state.lock().unwrap();
-                    if let Some(session) = state.sessions.get(&sess_id) {
-                        session.get_src_pad_from_webrtcbin_pad(&webrtcpad, &element)
-                        .map(|srcpad| {
-                            gst::event::StreamStart::builder(&srcpad.imp().stream_id())
-                                .seqnum(stream_start.seqnum())
-                                .group_id(stream_start.group_id().unwrap_or_else(gst::GroupId::next))
-                                .build()
-                        }).unwrap_or(event)
+            .proxy_pad_event_function(glib::clone!(
+                #[weak]
+                element,
+                #[weak(rename_to = webrtcpad)]
+                webrtcbin_pad,
+                #[strong(rename_to = sess_id)]
+                self.id,
+                #[upgrade_or_panic]
+                move |pad, parent, event| {
+                    let event = if let gst::EventView::StreamStart(stream_start) = event.view() {
+                        let state = element.imp().state.lock().unwrap();
+                        if let Some(session) = state.sessions.get(&sess_id) {
+                            session
+                                .get_src_pad_from_webrtcbin_pad(&webrtcpad, &element)
+                                .map(|srcpad| {
+                                    gst::event::StreamStart::builder(&srcpad.imp().stream_id())
+                                        .seqnum(stream_start.seqnum())
+                                        .group_id(
+                                            stream_start
+                                                .group_id()
+                                                .unwrap_or_else(gst::GroupId::next),
+                                        )
+                                        .build()
+                                })
+                                .unwrap_or(event)
+                        } else {
+                            gst::error!(CAT, obj: element , "session {sess_id:?} does not exist");
+                            event
+                        }
                     } else {
-                        gst::error!(CAT, obj: element , "session {sess_id:?} does not exist");
                         event
-                    }
-                } else {
-                    event
-                };
+                    };
 
-                gst::Pad::event_default(pad, parent, event)
-            }))
+                    gst::Pad::event_default(pad, parent, event)
+                }
+            ))
             .build();
 
-        let sess_id = self.id.clone();
         if element
             .imp()
             .settings
@@ -451,23 +470,34 @@ impl Session {
         {
             webrtcbin_pad.add_probe(
                 gst::PadProbeType::EVENT_UPSTREAM,
-                glib::clone!(@weak element => @default-panic, move |_pad, info| {
-                    let Some(ev) = info.event() else {
-                        return gst::PadProbeReturn::Ok;
-                    };
-                    if ev.type_() != gst::EventType::Navigation {
-                        return gst::PadProbeReturn::Ok;
-                    };
+                glib::clone!(
+                    #[weak]
+                    element,
+                    #[strong(rename_to = sess_id)]
+                    self.id,
+                    #[upgrade_or]
+                    gst::PadProbeReturn::Remove,
+                    move |_pad, info| {
+                        let Some(ev) = info.event() else {
+                            return gst::PadProbeReturn::Ok;
+                        };
+                        if ev.type_() != gst::EventType::Navigation {
+                            return gst::PadProbeReturn::Ok;
+                        };
 
-                    let mut state = element.imp().state.lock().unwrap();
-                    if let Some(session) = state.sessions.get_mut(&sess_id) {
-                        session.send_navigation_event(gst_video::NavigationEvent::parse(ev).unwrap(), &element);
-                    } else {
-                        gst::error!(CAT, obj: element , "session {sess_id:?} does not exist");
+                        let mut state = element.imp().state.lock().unwrap();
+                        if let Some(session) = state.sessions.get_mut(&sess_id) {
+                            session.send_navigation_event(
+                                gst_video::NavigationEvent::parse(ev).unwrap(),
+                                &element,
+                            );
+                        } else {
+                            gst::error!(CAT, obj: element , "session {sess_id:?} does not exist");
+                        }
+
+                        gst::PadProbeReturn::Ok
                     }
-
-                    gst::PadProbeReturn::Ok
-                }),
+                ),
             );
         }
 
@@ -502,15 +532,17 @@ impl Session {
                     .expect("decodebin3 needs to be present!");
                 bin.add(&decodebin).unwrap();
                 decodebin.sync_state_with_parent().unwrap();
-                decodebin.connect_pad_added(
-                    glib::clone!(@weak element as this, @weak ghostpad as ghostpad => move |_webrtcbin, pad| {
+                decodebin.connect_pad_added(glib::clone!(
+                    #[weak]
+                    ghostpad,
+                    move |_webrtcbin, pad| {
                         if pad.direction() == gst::PadDirection::Sink {
                             return;
                         }
 
                         ghostpad.set_target(Some(pad)).unwrap();
-                    }),
-                );
+                    }
+                ));
 
                 gst::debug!(CAT, obj: element, "Decoding for {}", srcpad.imp().stream_id());
 
@@ -684,20 +716,21 @@ impl Session {
 
         gst::info!(CAT, obj: element, "Set remote description");
 
-        let obj = element.clone();
-
-        let session_id = self.id.clone();
-        let promise =
-            gst::Promise::with_change_func(glib::clone!(@weak element as ele => move |reply| {
-                    let state = ele.imp().state.lock().unwrap();
-                    gst::info!(CAT, obj: ele, "got answer for session {session_id:?}");
-                    let Some(session) = state.sessions.get(&session_id) else {
-                        gst::error!(CAT, obj: ele , "no session {session_id:?}");
-                        return
-                    };
-                    session.on_answer_created(reply, &obj);
-                }
-            ));
+        let promise = gst::Promise::with_change_func(glib::clone!(
+            #[weak]
+            element,
+            #[strong(rename_to = session_id)]
+            self.id,
+            move |reply| {
+                let state = element.imp().state.lock().unwrap();
+                gst::info!(CAT, obj: element, "got answer for session {session_id:?}");
+                let Some(session) = state.sessions.get(&session_id) else {
+                    gst::error!(CAT, obj: element , "no session {session_id:?}");
+                    return;
+                };
+                session.on_answer_created(reply, &element);
+            }
+        ));
 
         // We cannot emit `create-answer` from here. The promise function
         // of the answer needs the state lock which is held by the caller
@@ -843,7 +876,7 @@ impl BaseWebRTCSrc {
             error: signaller.connect_closure(
                 "error",
                 false,
-                glib::closure!(@watch instance => move |
+                glib::closure!(#[watch] instance, move |
                 _signaller: glib::Object, error: String| {
                     gst::element_error!(
                         instance,
@@ -856,7 +889,7 @@ impl BaseWebRTCSrc {
             session_started: signaller.connect_closure(
                 "session-started",
                 false,
-                glib::closure!(@watch instance => move |
+                glib::closure!(#[watch] instance, move |
                         _signaller: glib::Object,
                         session_id: &str,
                         _peer_id: &str| {
@@ -869,7 +902,7 @@ impl BaseWebRTCSrc {
             session_ended: signaller.connect_closure(
                 "session-ended",
                 false,
-                glib::closure!(@watch instance => move |_signaler: glib::Object, session_id: &str|{
+                glib::closure!(#[watch] instance, move |_signaler: glib::Object, session_id: &str|{
                     let this = instance.imp();
                     let state = this.state.lock().unwrap();
                     let Some(session) = state.sessions.get(session_id) else {
@@ -900,7 +933,7 @@ impl BaseWebRTCSrc {
             request_meta: signaller.connect_closure(
                 "request-meta",
                 false,
-                glib::closure!(@watch instance => move |
+                glib::closure!(#[watch] instance, move |
                     _signaller: glib::Object| -> Option<gst::Structure> {
                     instance.imp().settings.lock().unwrap().meta.clone()
                 }),
@@ -909,7 +942,7 @@ impl BaseWebRTCSrc {
             session_description: signaller.connect_closure(
                 "session-description",
                 false,
-                glib::closure!(@watch instance => move |
+                glib::closure!(#[watch] instance, move |
                         _signaller: glib::Object,
                         session_id: &str,
                         desc: &gst_webrtc::WebRTCSessionDescription| {
@@ -934,7 +967,7 @@ impl BaseWebRTCSrc {
             handle_ice: signaller.connect_closure(
                 "handle-ice",
                 false,
-                glib::closure!(@watch instance => move |
+                glib::closure!(#[watch] instance, move |
                         _signaller: glib::Object,
                         session_id: &str,
                         sdp_m_line_index: u32,
@@ -1079,90 +1112,110 @@ impl BaseWebRTCSrc {
 
         let bin = gst::Bin::new();
 
-        bin.connect_pad_removed(
-            glib::clone!(@weak self as this, @to-owned session_id => move |_, pad|
+        bin.connect_pad_removed(glib::clone!(
+            #[weak(rename_to = this)]
+            self,
+            #[to_owned]
+            session_id,
+            move |_, pad| {
                 let mut state = this.state.lock().unwrap();
                 let Some(session) = state.sessions.get_mut(&session_id) else {
                     gst::warning!(CAT, imp: this, "session {session_id:?} not found");
-                    return
+                    return;
                 };
                 session.flow_combiner.lock().unwrap().remove_pad(pad);
-            ),
-        );
-        bin.connect_pad_added(
-            glib::clone!(@weak self as this, @to-owned session_id => move |_, pad|
+            }
+        ));
+        bin.connect_pad_added(glib::clone!(
+            #[weak(rename_to = this)]
+            self,
+            #[to_owned]
+            session_id,
+            move |_, pad| {
                 let mut state = this.state.lock().unwrap();
                 let Some(session) = state.sessions.get_mut(&session_id) else {
                     gst::warning!(CAT, imp: this, "session {session_id:?} not found");
-                    return
+                    return;
                 };
                 session.flow_combiner.lock().unwrap().add_pad(pad);
+            }
+        ));
 
-            ),
-        );
-
-        webrtcbin.connect_pad_added(
-            glib::clone!(@weak self as this, @weak bin, @to-owned session_id => move |_webrtcbin, pad| {
+        webrtcbin.connect_pad_added(glib::clone!(
+            #[weak(rename_to = this)]
+            self,
+            #[weak]
+            bin,
+            #[to_owned]
+            session_id,
+            move |_webrtcbin, pad| {
                 if pad.direction() == gst::PadDirection::Sink {
                     return;
                 }
                 let mut state = this.state.lock().unwrap();
                 let Some(session) = state.sessions.get_mut(&session_id) else {
                     gst::error!(CAT, imp: this, "session {session_id:?} not found");
-                    return
+                    return;
                 };
                 let bin_ghostpad = session.handle_webrtc_src_pad(&bin, pad, &this.obj());
                 drop(state);
                 bin.add_pad(&bin_ghostpad)
                     .expect("Adding ghostpad to the bin should always work");
-            }),
-        );
+            }
+        ));
 
-        webrtcbin.connect_pad_removed(
-            glib::clone!(@weak self as this, @weak bin, @to-owned session_id => move |_webrtcbin, pad| {
-                    let mut state = this.state.lock().unwrap();
-                    let Some(session) = state.sessions.get_mut(&session_id) else {
-                        gst::error!(CAT, imp: this, "session {session_id:?} not found");
-                        return
-                    };
-                    session.flow_combiner.lock().unwrap().remove_pad(pad);
-            }),
-        );
+        webrtcbin.connect_pad_removed(glib::clone!(
+            #[weak(rename_to = this)]
+            self,
+            #[to_owned]
+            session_id,
+            move |_webrtcbin, pad| {
+                let mut state = this.state.lock().unwrap();
+                let Some(session) = state.sessions.get_mut(&session_id) else {
+                    gst::error!(CAT, imp: this, "session {session_id:?} not found");
+                    return;
+                };
+                session.flow_combiner.lock().unwrap().remove_pad(pad);
+            }
+        ));
 
         webrtcbin.connect_closure(
             "on-ice-candidate",
             false,
-            glib::closure!(@weak-allow-none self as this, @to-owned session_id => move |
-                    _webrtcbin: gst::Bin,
-                    sdp_m_line_index: u32,
-                    candidate: String| {
-                if let Some(ele) =  this {
-                    let mut state = ele.state.lock().unwrap();
+            glib::closure!(
+                #[weak(rename_to = this)]
+                self,
+                #[to_owned]
+                session_id,
+                move |_webrtcbin: gst::Bin, sdp_m_line_index: u32, candidate: String| {
+                    let mut state = this.state.lock().unwrap();
                     let Some(session) = state.sessions.get_mut(&session_id) else {
-                        gst::error!(CAT, imp: ele, "session {session_id:?} not found");
-                        return
+                        gst::error!(CAT, imp: this, "session {session_id:?} not found");
+                        return;
                     };
-                    session.on_ice_candidate(sdp_m_line_index, candidate, &ele.obj());
+                    session.on_ice_candidate(sdp_m_line_index, candidate, &this.obj());
                 }
-            }),
+            ),
         );
 
         webrtcbin.connect_closure(
             "on-data-channel",
             false,
-            glib::closure!(@weak-allow-none self as this, @to-owned session_id => move |
-                    _webrtcbin: gst::Bin,
-                    data_channel: glib::Object| {
-                if let Some(ele) =  this {
-                    let mut state = ele.state.lock().unwrap();
+            glib::closure!(
+                #[weak(rename_to = this)]
+                self,
+                #[to_owned]
+                session_id,
+                move |_webrtcbin: gst::Bin, data_channel: glib::Object| {
+                    let mut state = this.state.lock().unwrap();
 
                     let Some(session) = state.sessions.get_mut(&session_id) else {
-                        gst::error!(CAT, imp: ele, "session {session_id:?} not found");
-                        return
+                        gst::error!(CAT, imp: this, "session {session_id:?} not found");
+                        return;
                     };
-                    session.on_data_channel(data_channel, &ele.obj());
+                    session.on_data_channel(data_channel, &this.obj());
                 }
-            }),
+            ),
         );
 
         bin.add(&webrtcbin).unwrap();

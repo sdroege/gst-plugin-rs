@@ -68,6 +68,7 @@ pub struct Signaller {
 struct State {
     /// Sender for the websocket messages
     websocket_sender: Option<mpsc::Sender<p::IncomingMessage>>,
+    connect_task_handle: Option<task::JoinHandle<()>>,
     send_task_handle: Option<task::JoinHandle<Result<(), Error>>>,
     receive_task_handle: Option<task::JoinHandle<()>>,
     producers: HashSet<String>,
@@ -173,8 +174,10 @@ impl Signaller {
         // 1000 is completely arbitrary, we simply don't want infinite piling
         // up of messages as with unbounded
         let (websocket_sender, mut websocket_receiver) = mpsc::channel::<p::IncomingMessage>(1000);
-        let send_task_handle =
-            RUNTIME.spawn(glib::clone!(@weak-allow-none self as this => async move {
+        let send_task_handle = RUNTIME.spawn(glib::clone!(
+            #[to_owned(rename_to = this)]
+            self,
+            async move {
                 let mut res = Ok(());
                 while let Some(msg) = websocket_receiver.next().await {
                     gst::log!(CAT, "Sending websocket message {:?}", msg);
@@ -183,21 +186,18 @@ impl Signaller {
                         .await;
 
                     if let Err(ref err) = res {
-                        this.as_ref().map_or_else(|| gst::error!(CAT, "Quitting send loop: {err}"),
-                            |this| gst::error!(CAT, imp: this, "Quitting send loop: {err}")
-                        );
+                        gst::error!(CAT, imp: this, "Quitting send loop: {err}");
                         break;
                     }
                 }
 
-                this.map_or_else(|| gst::debug!(CAT, "Done sending"),
-                    |this| gst::debug!(CAT, imp: this, "Done sending")
-                );
+                gst::debug!(CAT, imp: this, "Done sending");
 
                 let _ = ws_sink.close().await;
 
                 res.map_err(Into::into)
-            }));
+            }
+        ));
 
         let obj = self.obj();
         let meta =
@@ -207,23 +207,20 @@ impl Signaller {
                 None
             };
 
-        let receive_task_handle =
-            RUNTIME.spawn(glib::clone!(@weak-allow-none self as this => async move {
+        let receive_task_handle = RUNTIME.spawn(glib::clone!(
+            #[to_owned(rename_to = this)]
+            self,
+            async move {
                 while let Some(msg) = tokio_stream::StreamExt::next(&mut ws_stream).await {
-                    if let Some(ref this) = this {
-                        if let ControlFlow::Break(_) = this.handle_message(msg, &meta) {
-                            break;
-                        }
-                    } else {
+                    if let ControlFlow::Break(_) = this.handle_message(msg, &meta) {
                         break;
                     }
                 }
 
                 let msg = "Stopped websocket receiving";
-                this.map_or_else(|| gst::info!(CAT, "{msg}"),
-                    |this| gst::info!(CAT, imp: this, "{msg}")
-                );
-            }));
+                gst::info!(CAT, imp: this, "{msg}");
+            }
+        ));
 
         let mut state = self.state.lock().unwrap();
         state.websocket_sender = Some(websocket_sender);
@@ -297,11 +294,16 @@ impl Signaller {
     fn send(&self, msg: p::IncomingMessage) {
         let state = self.state.lock().unwrap();
         if let Some(mut sender) = state.websocket_sender.clone() {
-            RUNTIME.spawn(glib::clone!(@weak self as this => async move {
-                if let Err(err) = sender.send(msg).await {
-                    this.obj().emit_by_name::<()>("error", &[&format!("Error: {}", err)]);
+            RUNTIME.spawn(glib::clone!(
+                #[to_owned(rename_to = this)]
+                self,
+                async move {
+                    if let Err(err) = sender.send(msg).await {
+                        this.obj()
+                            .emit_by_name::<()>("error", &[&format!("Error: {}", err)]);
+                    }
                 }
-            }));
+            ));
         }
     }
 
@@ -636,17 +638,37 @@ impl ObjectImpl for Signaller {
 impl SignallableImpl for Signaller {
     fn start(&self) {
         gst::info!(CAT, imp: self, "Starting");
-        RUNTIME.spawn(glib::clone!(@weak self as this => async move {
-            if let Err(err) = this.connect().await {
-                this.obj().emit_by_name::<()>("error", &[&format!("Error receiving: {}", err)]);
+
+        let mut state = self.state.lock().unwrap();
+        let connect_task_handle = RUNTIME.spawn(glib::clone!(
+            #[to_owned(rename_to = this)]
+            self,
+            async move {
+                if let Err(err) = this.connect().await {
+                    this.obj()
+                        .emit_by_name::<()>("error", &[&format!("Error receiving: {}", err)]);
+                }
             }
-        }));
+        ));
+
+        state.connect_task_handle = Some(connect_task_handle);
     }
 
     fn stop(&self) {
         gst::info!(CAT, imp: self, "Stopping now");
 
         let mut state = self.state.lock().unwrap();
+
+        // First make sure the connect task is stopped if it is still
+        // running
+        let connect_task_handle = state.connect_task_handle.take();
+        if let Some(handle) = connect_task_handle {
+            RUNTIME.block_on(async move {
+                handle.abort();
+                let _ = handle.await;
+            });
+        }
+
         let send_task_handle = state.send_task_handle.take();
         let receive_task_handle = state.receive_task_handle.take();
         if let Some(mut sender) = state.websocket_sender.take() {
@@ -661,6 +683,7 @@ impl SignallableImpl for Signaller {
 
                 if let Some(handle) = receive_task_handle {
                     handle.abort();
+                    let _ = handle.await;
                 }
             });
         }
@@ -720,16 +743,21 @@ impl SignallableImpl for Signaller {
         let state = self.state.lock().unwrap();
         let session_id = session_id.to_string();
         if let Some(mut sender) = state.websocket_sender.clone() {
-            RUNTIME.spawn(glib::clone!(@weak self as this => async move {
-                if let Err(err) = sender
-                    .send(p::IncomingMessage::EndSession(p::EndSessionMessage {
-                        session_id,
-                    }))
-                    .await
-                {
-                    this.obj().emit_by_name::<()>("error", &[&format!("Error: {}", err)]);
+            RUNTIME.spawn(glib::clone!(
+                #[to_owned(rename_to = this)]
+                self,
+                async move {
+                    if let Err(err) = sender
+                        .send(p::IncomingMessage::EndSession(p::EndSessionMessage {
+                            session_id,
+                        }))
+                        .await
+                    {
+                        this.obj()
+                            .emit_by_name::<()>("error", &[&format!("Error: {}", err)]);
+                    }
                 }
-            }));
+            ));
         }
     }
 }

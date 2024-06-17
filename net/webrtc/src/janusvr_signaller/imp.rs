@@ -334,8 +334,10 @@ impl Signaller {
         // 1000 is completely arbitrary, we simply don't want infinite piling
         // up of messages as with unbounded
         let (ws_sender, mut ws_receiver) = mpsc::channel::<OutgoingMessage>(1000);
-        let send_task_handle =
-            RUNTIME.spawn(glib::clone!(@weak-allow-none self as this => async move {
+        let send_task_handle = RUNTIME.spawn(glib::clone!(
+            #[to_owned(rename_to = this)]
+            self,
+            async move {
                 let mut res = Ok(());
                 loop {
                     tokio::select! {
@@ -349,7 +351,6 @@ impl Signaller {
                             None => break,
                         },
                         _ = tokio::time::sleep(Duration::from_secs(10)) => {
-                            if let Some(ref this) = this {
                                 let (transaction, session_id, apisecret) = {
                                     let state = this.state.lock().unwrap();
                                     let settings = this.settings.lock().unwrap();
@@ -368,45 +369,37 @@ impl Signaller {
                                 res = ws_sink
                                     .send(WsMessage::Text(serde_json::to_string(&msg).unwrap()))
                                     .await;
-                            }
                         }
                     }
 
                     if let Err(ref err) = res {
-                        this.as_ref().map_or_else(|| gst::error!(CAT, "Quitting send task: {err}"),
-                            |this| gst::error!(CAT, imp: this, "Quitting send task: {err}")
-                        );
-
+                        gst::error!(CAT, imp: this, "Quitting send task: {err}");
                         break;
                     }
                 }
 
-                this.map_or_else(|| gst::debug!(CAT, "Done sending"),
-                    |this| gst::debug!(CAT, imp: this, "Done sending")
-                );
+                gst::debug!(CAT, imp: this, "Done sending");
 
                 let _ = ws_sink.close().await;
 
                 res.map_err(Into::into)
-            }));
+            }
+        ));
 
-        let recv_task_handle =
-            RUNTIME.spawn(glib::clone!(@weak-allow-none self as this => async move {
+        let recv_task_handle = RUNTIME.spawn(glib::clone!(
+            #[to_owned(rename_to = this)]
+            self,
+            async move {
                 while let Some(msg) = tokio_stream::StreamExt::next(&mut ws_stream).await {
-                    if let Some(ref this) = this {
-                        if let ControlFlow::Break(_) = this.handle_msg(msg) {
-                            break;
-                        }
-                    } else {
+                    if let ControlFlow::Break(_) = this.handle_msg(msg) {
                         break;
                     }
                 }
 
                 let msg = "Stopped websocket receiving";
-                this.map_or_else(|| gst::info!(CAT, "{msg}"),
-                    |this| gst::info!(CAT, imp: this, "{msg}")
-                );
-            }));
+                gst::info!(CAT, imp: this, "{msg}");
+            }
+        ));
 
         let mut state = self.state.lock().unwrap();
         state.ws_sender = Some(ws_sender);
@@ -531,11 +524,15 @@ impl Signaller {
     fn send(&self, msg: OutgoingMessage) {
         let state = self.state.lock().unwrap();
         if let Some(mut sender) = state.ws_sender.clone() {
-            RUNTIME.spawn(glib::clone!(@weak self as this => async move {
-                if let Err(err) = sender.send(msg).await {
-                    this.raise_error(err.to_string());
+            RUNTIME.spawn(glib::clone!(
+                #[to_owned(rename_to = this)]
+                self,
+                async move {
+                    if let Err(err) = sender.send(msg).await {
+                        this.raise_error(err.to_string());
+                    }
                 }
-            }));
+            ));
         }
     }
 
@@ -545,11 +542,11 @@ impl Signaller {
     fn send_blocking(&self, msg: OutgoingMessage) {
         let state = self.state.lock().unwrap();
         if let Some(mut sender) = state.ws_sender.clone() {
-            RUNTIME.block_on(glib::clone!(@weak self as this => async move {
+            RUNTIME.block_on(async {
                 if let Err(err) = sender.send(msg).await {
-                    this.raise_error(err.to_string());
+                    self.raise_error(err.to_string());
                 }
-            }));
+            });
         }
     }
 
