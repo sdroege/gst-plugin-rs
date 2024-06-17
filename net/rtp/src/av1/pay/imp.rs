@@ -67,7 +67,7 @@ struct ObuData {
     pts: Option<gst::ClockTime>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct State {
     /// Holds header information and raw bytes for all received OBUs,
     /// as well as DTS and PTS
@@ -89,18 +89,6 @@ struct State {
 #[derive(Debug, Default)]
 pub struct RTPAv1Pay {
     state: Mutex<State>,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            obus: VecDeque::new(),
-            open_obu_fragment: false,
-            last_dts: None,
-            last_pts: None,
-            framed: false,
-        }
-    }
 }
 
 impl RTPAv1Pay {
