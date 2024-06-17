@@ -91,6 +91,9 @@ version = "0.6"
 [[bans.skip]]
 name = "hermit-abi"
 version = "0.1"
+[[bans.skip]]
+name = "hermit-abi"
+version = "0.3"
 
 # Various crates depend on an older version of base64
 [[bans.skip]]
