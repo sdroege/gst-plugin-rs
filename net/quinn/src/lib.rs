@@ -20,6 +20,7 @@
 use gst::glib;
 use gst::prelude::*;
 mod common;
+mod quinnquicdemux;
 pub mod quinnquicmeta;
 mod quinnquicmux;
 pub mod quinnquicquery;
@@ -32,6 +33,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     {
         common::QuinnQuicRole::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }
+    quinnquicdemux::register(plugin)?;
     quinnquicmux::register(plugin)?;
     quinnquicsink::register(plugin)?;
     quinnquicsrc::register(plugin)?;
