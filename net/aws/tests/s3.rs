@@ -8,6 +8,11 @@
 // SPDX-License-Identifier: MPL-2.0
 //
 
+// Note: these tests need valid AWS credentials to run. To avoid failures on CI, we test for the
+// existence of AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables and skip the test
+// if those don't exist. That means that in local testing, other methods of providing credentials
+// (such as ~/.aws/credentials) will not work.
+
 // The test times out on Windows for some reason, skip until we figure out why
 #[cfg(not(target_os = "windows"))]
 #[cfg(test)]
@@ -173,57 +178,66 @@ mod tests {
         delete_object(region.clone(), &bucket, &key).await;
     }
 
-    #[ignore = "failing, needs investigation"]
+    #[test_with::env(AWS_ACCESS_KEY_ID)]
+    #[test_with::env(AWS_SECRET_ACCESS_KEY)]
     #[tokio::test]
     async fn test_s3_multipart_simple() {
         do_s3_multipart_test("s3-test").await;
     }
 
-    #[ignore = "failing, needs investigation"]
+    #[test_with::env(AWS_ACCESS_KEY_ID)]
+    #[test_with::env(AWS_SECRET_ACCESS_KEY)]
     #[tokio::test]
     async fn test_s3_multipart_whitespace() {
         do_s3_multipart_test("s3 test").await;
     }
 
-    #[ignore = "failing, needs investigation"]
+    #[test_with::env(AWS_ACCESS_KEY_ID)]
+    #[test_with::env(AWS_SECRET_ACCESS_KEY)]
     #[tokio::test]
     async fn test_s3_multipart_unicode() {
         do_s3_multipart_test("s3 🧪 😱").await;
     }
 
-    #[ignore = "failing, needs investigation"]
+    #[test_with::env(AWS_ACCESS_KEY_ID)]
+    #[test_with::env(AWS_SECRET_ACCESS_KEY)]
     #[tokio::test]
     async fn test_s3_put_object_simple() {
         do_s3_putobject_test("s3-put-object-test", None, None, None, true).await;
     }
 
-    #[ignore = "failing, needs investigation"]
+    #[test_with::env(AWS_ACCESS_KEY_ID)]
+    #[test_with::env(AWS_SECRET_ACCESS_KEY)]
     #[tokio::test]
     async fn test_s3_put_object_whitespace() {
         do_s3_putobject_test("s3 put object test", None, None, None, true).await;
     }
 
-    #[ignore = "failing, needs investigation"]
+    #[test_with::env(AWS_ACCESS_KEY_ID)]
+    #[test_with::env(AWS_SECRET_ACCESS_KEY)]
     #[tokio::test]
     async fn test_s3_put_object_unicode() {
         do_s3_putobject_test("s3 put object 🧪 😱", None, None, None, true).await;
     }
 
-    #[ignore = "failing, needs investigation"]
+    #[test_with::env(AWS_ACCESS_KEY_ID)]
+    #[test_with::env(AWS_SECRET_ACCESS_KEY)]
     #[tokio::test]
     async fn test_s3_put_object_flush_buffers() {
         // Awkward threshold as we push 5 buffers
         do_s3_putobject_test("s3-put-object-test fbuf", Some(2), None, None, true).await;
     }
 
-    #[ignore = "failing, needs investigation"]
+    #[test_with::env(AWS_ACCESS_KEY_ID)]
+    #[test_with::env(AWS_SECRET_ACCESS_KEY)]
     #[tokio::test]
     async fn test_s3_put_object_flush_bytes() {
         // Awkward threshold as we push 14 bytes per buffer
         do_s3_putobject_test("s3-put-object-test fbytes", None, Some(30), None, true).await;
     }
 
-    #[ignore = "failing, needs investigation"]
+    #[test_with::env(AWS_ACCESS_KEY_ID)]
+    #[test_with::env(AWS_SECRET_ACCESS_KEY)]
     #[tokio::test]
     async fn test_s3_put_object_flush_time() {
         do_s3_putobject_test(
@@ -237,7 +251,8 @@ mod tests {
         .await;
     }
 
-    #[ignore = "failing, needs investigation"]
+    #[test_with::env(AWS_ACCESS_KEY_ID)]
+    #[test_with::env(AWS_SECRET_ACCESS_KEY)]
     #[tokio::test]
     async fn test_s3_put_object_on_eos() {
         // Disable all flush thresholds, so only EOS causes a flush
@@ -251,7 +266,8 @@ mod tests {
         .await;
     }
 
-    #[ignore = "failing, needs investigation"]
+    #[test_with::env(AWS_ACCESS_KEY_ID)]
+    #[test_with::env(AWS_SECRET_ACCESS_KEY)]
     #[tokio::test]
     async fn test_s3_put_object_without_eos() {
         // Disable all flush thresholds, skip EOS, and cause a flush on error
