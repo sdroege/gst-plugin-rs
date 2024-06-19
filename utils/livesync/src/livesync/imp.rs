@@ -31,7 +31,7 @@ fn audio_info_from_caps(
     caps: &gst::CapsRef,
 ) -> Result<Option<gst_audio::AudioInfo>, glib::BoolError> {
     caps.structure(0)
-        .map_or(false, |s| s.has_name("audio/x-raw"))
+        .is_some_and(|s| s.has_name("audio/x-raw"))
         .then(|| gst_audio::AudioInfo::from_caps(caps))
         .transpose()
 }

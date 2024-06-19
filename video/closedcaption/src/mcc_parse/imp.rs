@@ -481,7 +481,7 @@ impl MccParse {
         if state
             .segment
             .start()
-            .map_or(false, |seg_start| nsecs >= seg_start)
+            .is_some_and(|seg_start| nsecs >= seg_start)
         {
             state.seeking = false;
             state.discont = true;

@@ -480,7 +480,7 @@ impl OnvifMetadataParse {
             // configured latency has passed.
             let queued_time = self.calculate_queued_time(&state);
 
-            if queued_time.map_or(false, |queued_time| queued_time >= state.configured_latency) {
+            if queued_time.is_some_and(|queued_time| queued_time >= state.configured_latency) {
                 gst::trace!(
                     CAT,
                     imp: self,
@@ -632,7 +632,7 @@ impl OnvifMetadataParse {
             let utc_time = *queued_frames.iter().next().unwrap().0;
 
             // Check if this frame should still be drained
-            if drain_utc_time.map_or(false, |drain_utc_time| drain_utc_time < utc_time) {
+            if drain_utc_time.is_some_and(|drain_utc_time| drain_utc_time < utc_time) {
                 break;
             }
 
@@ -728,7 +728,7 @@ impl OnvifMetadataParse {
                 let diff = position.saturating_sub(frame_pts);
                 if settings
                     .max_lateness
-                    .map_or(false, |max_lateness| diff > max_lateness)
+                    .is_some_and(|max_lateness| diff > max_lateness)
                 {
                     gst::warning!(
                         CAT,

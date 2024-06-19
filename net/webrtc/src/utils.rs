@@ -578,7 +578,7 @@ impl Codec {
                                 |encoding_names| {
                                     encoding_names.iter().any(|v| {
                                         v.get::<&str>()
-                                            .map_or(false, |encoding_name| encoding_name == codec)
+                                            .is_ok_and(|encoding_name| encoding_name == codec)
                                     })
                                 },
                             )
@@ -884,7 +884,7 @@ impl Codecs {
                             codec
                                 .encoding_info
                                 .as_ref()
-                                .map_or(false, |_| codec.caps.can_intersect(&caps))
+                                .is_some_and(|_| codec.caps.can_intersect(&caps))
                         })
                         .and_then(|codec| {
                             /* Assign a payload type to the codec */

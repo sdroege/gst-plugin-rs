@@ -354,7 +354,7 @@ impl NdiSrcDemux {
                         gst::info!(CAT, imp: self, "Allowed audio caps {allowed_caps:?}");
 
                         state.audio_non_interleaved = allowed_caps
-                            .map_or(false, |allowed_caps| allowed_caps.can_intersect(&caps));
+                            .is_some_and(|allowed_caps| allowed_caps.can_intersect(&caps));
 
                         gst::info!(
                             CAT,

@@ -369,7 +369,7 @@ impl SccParse {
                 num_bufs,
             );
 
-            if segment_start.map_or(false, |seg_start| stop_time > seg_start) {
+            if segment_start.is_some_and(|seg_start| stop_time > seg_start) {
                 state.seeking = false;
                 state.discont = true;
                 state.need_flush_stop = true;

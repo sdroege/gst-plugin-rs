@@ -1063,7 +1063,7 @@ impl FMP4Mux {
                     // previously drained a partial GOP because the GOP is ending too far after the
                     // planned fragment end.
                     if gop.start_pts > fragment_end_pts
-                        && !gop.buffers.first().map_or(false, |b| {
+                        && !gop.buffers.first().is_some_and(|b| {
                             b.buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
                         })
                     {
@@ -1144,7 +1144,7 @@ impl FMP4Mux {
                 if gop.end_pts >= chunk_end_pts
                     // only if there's another GOP or at least one further buffer
                     && (gop_idx > 0
-                        || last_pts.map_or(false, |last_pts| last_pts.saturating_sub(chunk_start_pts) > chunk_duration))
+                        || last_pts.is_some_and(|last_pts| last_pts.saturating_sub(chunk_start_pts) > chunk_duration))
                 {
                     gst::debug!(CAT, obj: stream.sinkpad, "Stream queued enough data for this chunk");
                     stream.chunk_filled = true;
@@ -1303,7 +1303,7 @@ impl FMP4Mux {
                 };
 
             let fku_time =
-                if current_position.map_or(false, |current_position| current_position > fku_time) {
+                if current_position.is_some_and(|current_position| current_position > fku_time) {
                     gst::warning!(
                         CAT,
                         obj: stream.sinkpad,
@@ -1856,14 +1856,14 @@ impl FMP4Mux {
                 .iter()
                 .find(|s| {
                     !s.sinkpad.is_eos()
-                        && s.queued_gops.back().map_or(false, |gop| {
+                        && s.queued_gops.back().is_some_and(|gop| {
                             gop.start_pts <= fragment_start_pts + settings.fragment_duration
                                 // In chunk mode we might've drained a partial GOP as a chunk after
                                 // the fragment end if the keyframe came too late. The GOP now
                                 // starts with a non-keyframe after the fragment end but is part of
                                 // the fragment: the fragment is extended after the end. Allow this
                                 // situation here.
-                                || gop.buffers.first().map_or(false, |b| {
+                                || gop.buffers.first().is_some_and(|b| {
                                     b.buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
                                 })
                         })
@@ -1934,7 +1934,7 @@ impl FMP4Mux {
                     // If nothing was dequeued for the first stream then this is OK if we're at
                     // EOS or this stream simply has only buffers after this chunk: we just
                     // consider the next stream as first stream then.
-                    let stream_after_chunk = stream.queued_gops.back().map_or(false, |gop| {
+                    let stream_after_chunk = stream.queued_gops.back().is_some_and(|gop| {
                         gop.start_pts
                             >= if fragment_filled {
                                 fragment_start_pts + settings.fragment_duration
@@ -2214,7 +2214,7 @@ impl FMP4Mux {
                 };
 
             let fku_time =
-                if current_position.map_or(false, |current_position| current_position > fku_time) {
+                if current_position.is_some_and(|current_position| current_position > fku_time) {
                     gst::warning!(
                         CAT,
                         obj: stream.sinkpad,

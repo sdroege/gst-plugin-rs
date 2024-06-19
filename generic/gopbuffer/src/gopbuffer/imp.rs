@@ -495,7 +495,7 @@ impl GopBuffer {
                 });
                 if newest_ts
                     .opt_saturating_sub(oldest_ts)
-                    .map_or(false, |diff| diff > gst::Signed::Positive(max_time))
+                    .is_some_and(|diff| diff > gst::Signed::Positive(max_time))
                 {
                     gst::warning!(CAT, obj: obj, "Stored data has overflowed the maximum allowed stored time {}, pushing oldest GOP", max_time.display());
                     gops_to_push.push(stream.oldest_gop().unwrap());

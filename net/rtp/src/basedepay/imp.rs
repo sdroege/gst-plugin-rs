@@ -281,7 +281,7 @@ impl RtpBaseDepay2 {
         while state
             .pending_packets
             .front()
-            .map_or(false, |p| p.ext_seqnum <= end)
+            .is_some_and(|p| p.ext_seqnum <= end)
         {
             let _ = state.pending_packets.pop_front();
         }
@@ -517,7 +517,7 @@ impl RtpBaseDepay2 {
         while state
             .pending_packets
             .front()
-            .map_or(false, |p| p.ext_seqnum < seqnum_start)
+            .is_some_and(|p| p.ext_seqnum < seqnum_start)
         {
             let p = state.pending_packets.pop_front().unwrap();
             gst::trace!(CAT, imp: self, "Dropping packet with extended seqnum {}", p.ext_seqnum);
@@ -577,9 +577,7 @@ impl RtpBaseDepay2 {
             }
         } else if state
             .last_used_ext_seqnum
-            .map_or(false, |last_used_ext_seqnum| {
-                seqnum_end <= last_used_ext_seqnum
-            })
+            .is_some_and(|last_used_ext_seqnum| seqnum_end <= last_used_ext_seqnum)
         {
             // If we have no timestamp offset and this is not the first time a buffer for this
             // packet is queued then unset the PTS. It's not going to be correct.
@@ -698,7 +696,7 @@ impl RtpBaseDepay2 {
                 let mut list = gst::BufferList::new_sized(num_buffers);
                 {
                     let list = list.get_mut().unwrap();
-                    while state.pending_buffers.front().map_or(false, |b| {
+                    while state.pending_buffers.front().is_some_and(|b| {
                         b.metadata_set && (b.buffer.pts() == pts || b.buffer.pts().is_none())
                     }) {
                         let buffer = state.pending_buffers.pop_front().unwrap().buffer;
@@ -1401,7 +1399,7 @@ impl RtpBaseDepay2 {
             while state
                 .pending_packets
                 .front()
-                .map_or(false, |b| b.ext_seqnum < last_used_ext_seqnum)
+                .is_some_and(|b| b.ext_seqnum < last_used_ext_seqnum)
             {
                 let _ = state.pending_packets.pop_front();
             }

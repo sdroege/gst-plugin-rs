@@ -682,7 +682,7 @@ impl ExponentialMovingAverage {
     }
 
     fn estimate_is_close(&self, value: Bitrate) -> bool {
-        self.average.map_or(false, |avg| {
+        self.average.is_some_and(|avg| {
             ((avg - STANDARD_DEVIATION_CLOSE_NUM * self.standard_dev)
                 ..(avg + STANDARD_DEVIATION_CLOSE_NUM * self.standard_dev))
                 .contains(&(value as f64))

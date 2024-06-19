@@ -538,7 +538,7 @@ impl Frame {
                         .and_then(|m| {
                             let ctx = m.context();
                             if wrapped_context
-                                .map_or(false, |wrapped_context| wrapped_context.can_share(ctx))
+                                .is_some_and(|wrapped_context| wrapped_context.can_share(ctx))
                             {
                                 Some(ctx)
                             } else {

@@ -497,7 +497,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpVp8Pay {
         // Drop VP8 custom meta, handle all other metas normally.
         if meta
             .try_as_custom_meta()
-            .map_or(false, |meta| meta.has_name("GstVP8Meta"))
+            .is_some_and(|meta| meta.has_name("GstVP8Meta"))
         {
             return;
         }

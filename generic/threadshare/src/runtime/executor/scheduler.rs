@@ -301,9 +301,7 @@ impl Scheduler {
                 .borrow()
                 .as_ref()
                 .and_then(HandleWeak::upgrade)
-                .map_or(false, |cur| {
-                    std::ptr::eq(self, Arc::as_ptr(&cur.0.scheduler))
-                })
+                .is_some_and(|cur| std::ptr::eq(self, Arc::as_ptr(&cur.0.scheduler)))
         })
     }
 }

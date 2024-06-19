@@ -708,7 +708,7 @@ impl ToggleRecord {
             gst::FlowError::Error
         })?;
 
-        if data.dts().map_or(false, |dts| dts != pts) {
+        if data.dts().is_some_and(|dts| dts != pts) {
             gst::element_imp_error!(
                 self,
                 gst::StreamError::Format,
@@ -848,9 +848,9 @@ impl ToggleRecord {
             // and possibly current_running_time_end at some point.
 
             if data.can_clip(&state)
-                && current_running_time.map_or(false, |cur_rt| cur_rt < last_recording_start)
+                && current_running_time.is_some_and(|cur_rt| cur_rt < last_recording_start)
                 && current_running_time_end
-                    .map_or(false, |cur_rt_end| cur_rt_end > last_recording_start)
+                    .is_some_and(|cur_rt_end| cur_rt_end > last_recording_start)
             {
                 // Otherwise if we're before the recording start but the end of the buffer is after
                 // the start and we can clip, clip the buffer and pass it onwards.
@@ -1028,11 +1028,11 @@ impl ToggleRecord {
 
                 // The start of our buffer must be before the last recording stop as
                 // otherwise we would be in Stopped state already
-                assert!(current_running_time.map_or(false, |cur_rt| cur_rt < last_recording_stop));
+                assert!(current_running_time.is_some_and(|cur_rt| cur_rt < last_recording_stop));
                 let current_running_time = current_running_time.expect("checked above");
 
                 if current_running_time_end
-                    .map_or(false, |cur_rt_end| cur_rt_end <= last_recording_stop)
+                    .is_some_and(|cur_rt_end| cur_rt_end <= last_recording_stop)
                 {
                     gst::log!(
                         CAT,
@@ -1045,7 +1045,7 @@ impl ToggleRecord {
                 } else if data.can_clip(&state)
                     && current_running_time < last_recording_stop
                     && current_running_time_end
-                        .map_or(false, |cur_rt_end| cur_rt_end > last_recording_stop)
+                        .is_some_and(|cur_rt_end| cur_rt_end > last_recording_stop)
                 {
                     gst::log!(
                         CAT,
@@ -1111,7 +1111,7 @@ impl ToggleRecord {
 
                 // The start of our buffer must be before the last recording start as
                 // otherwise we would be in Recording state already
-                assert!(current_running_time.map_or(false, |cur_rt| cur_rt < last_recording_start));
+                assert!(current_running_time.is_some_and(|cur_rt| cur_rt < last_recording_start));
                 let current_running_time = current_running_time.expect("checked_above");
 
                 if current_running_time >= last_recording_start {
@@ -1126,7 +1126,7 @@ impl ToggleRecord {
                 } else if data.can_clip(&state)
                     && current_running_time < last_recording_start
                     && current_running_time_end
-                        .map_or(false, |cur_rt_end| cur_rt_end > last_recording_start)
+                        .is_some_and(|cur_rt_end| cur_rt_end > last_recording_start)
                 {
                     gst::log!(
                         CAT,
@@ -1547,9 +1547,7 @@ impl ToggleRecord {
                 let mut state = stream.state.lock();
                 state.eos = false;
 
-                let main_is_eos = main_state
-                    .as_ref()
-                    .map_or(false, |main_state| main_state.eos);
+                let main_is_eos = main_state.as_ref().is_some_and(|main_state| main_state.eos);
 
                 if !main_is_eos {
                     let mut rec_state = self.state.lock();

@@ -274,7 +274,7 @@ impl RtpBasePay2 {
             return;
         }
 
-        while state.pending_buffers.front().map_or(false, |b| b.id <= end) {
+        while state.pending_buffers.front().is_some_and(|b| b.id <= end) {
             let _ = state.pending_buffers.pop_front();
         }
     }
@@ -374,7 +374,7 @@ impl RtpBasePay2 {
         while state
             .pending_buffers
             .front()
-            .map_or(false, |b| b.id < id_start)
+            .is_some_and(|b| b.id < id_start)
         {
             let b = state.pending_buffers.pop_front().unwrap();
             gst::trace!(CAT, imp: self, "Dropping buffer with id {}", b.id);
@@ -793,7 +793,7 @@ impl RtpBasePay2 {
                     while state
                         .pending_packets
                         .front()
-                        .map_or(false, |p| p.buffer.pts() == Some(pts))
+                        .is_some_and(|p| p.buffer.pts() == Some(pts))
                     {
                         let buffer = state.pending_packets.pop_front().unwrap().buffer;
                         gst::trace!(CAT, imp: self, "Finishing buffer {buffer:?}");
@@ -1027,7 +1027,7 @@ impl RtpBasePay2 {
 
         let clock_rate_changed = state
             .clock_rate
-            .map_or(false, |old_clock_rate| old_clock_rate != clock_rate);
+            .is_some_and(|old_clock_rate| old_clock_rate != clock_rate);
         state.negotiated_src_caps = Some(src_caps.clone());
         state.clock_rate = Some(clock_rate);
         self.stats.lock().unwrap().as_mut().unwrap().clock_rate = Some(clock_rate);
@@ -1526,7 +1526,7 @@ impl RtpBasePay2 {
         while state
             .pending_buffers
             .front()
-            .map_or(false, |b| b.id < state.last_used_buffer_id)
+            .is_some_and(|b| b.id < state.last_used_buffer_id)
         {
             let _ = state.pending_buffers.pop_front();
         }

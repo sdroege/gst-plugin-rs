@@ -1635,9 +1635,7 @@ impl TranslateSrcPad {
 
     #[inline]
     fn needs_translation(input_lang: &str, output_lang: Option<&str>) -> bool {
-        output_lang.map_or(false, |other| {
-            !input_lang.eq_ignore_ascii_case(other.as_ref())
-        })
+        output_lang.is_some_and(|other| !input_lang.eq_ignore_ascii_case(other.as_ref()))
     }
 
     #[inline]

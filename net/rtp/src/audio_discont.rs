@@ -39,7 +39,7 @@ impl AudioDiscont {
             return true;
         }
 
-        if self.last_rate.map_or(false, |last_rate| last_rate != rate) {
+        if self.last_rate.is_some_and(|last_rate| last_rate != rate) {
             self.discont_pending = true;
         }
         self.last_rate = Some(rate);

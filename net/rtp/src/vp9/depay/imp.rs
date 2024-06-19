@@ -299,9 +299,9 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
         // Any previously queued picture data needs to be drained now.
         if is_start_of_picture
             || state.last_timestamp != Some(packet.ext_timestamp())
-            || state.last_picture_id.map_or(false, |picture_id| {
-                Some(picture_id) != payload_descriptor.picture_id
-            })
+            || state
+                .last_picture_id
+                .is_some_and(|picture_id| Some(picture_id) != payload_descriptor.picture_id)
         {
             // Missed the marker packet for the last picture
             if state.current_picture_payload_descriptor.is_some() {
@@ -328,9 +328,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
             if last_keyframe_payloader_descriptor
                 .scalability_structure
                 .as_ref()
-                .map_or(false, |scalability_structure| {
-                    scalability_structure.num_spatial_layers > 1
-                })
+                .is_some_and(|scalability_structure| scalability_structure.num_spatial_layers > 1)
                 && !payload_descriptor.flexible_mode
                 && payload_descriptor.picture_id.is_none()
             {
@@ -376,7 +374,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
             && payload_descriptor
                 .layer_index
                 .as_ref()
-                .map_or(false, |layer_index| layer_index.temporal_layer_id != 0)
+                .is_some_and(|layer_index| layer_index.temporal_layer_id != 0)
         {
             gst::warning!(CAT, imp: self, "Temporal layer ID of non-inter-predicted frame must be 0");
             // TODO: Could potentially drain here?

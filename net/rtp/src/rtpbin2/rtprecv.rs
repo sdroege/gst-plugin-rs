@@ -594,9 +594,9 @@ impl RtpRecv {
             Err(e) => {
                 // If this is a valid RTCP packet then it was muxed with the RTP stream and can be
                 // handled just fine.
-                if rtcp_types::Compound::parse(&mapped).map_or(false, |mut rtcp| {
-                    rtcp.next().map_or(false, |rtcp| rtcp.is_ok())
-                }) {
+                if rtcp_types::Compound::parse(&mapped)
+                    .is_ok_and(|mut rtcp| rtcp.next().is_some_and(|rtcp| rtcp.is_ok()))
+                {
                     drop(mapped);
                     return Self::rtcp_recv_sink_chain(self, id, buffer);
                 }

@@ -472,7 +472,7 @@ impl SinkHandler {
             (Some(earliest_pts), Some(pts)) if pts < earliest_pts => true,
             (Some(earliest_pts), Some(pts)) if pts == earliest_pts => state
                 .earliest_seqnum
-                .map_or(false, |earliest_seqnum| seq > earliest_seqnum),
+                .is_some_and(|earliest_seqnum| seq > earliest_seqnum),
             _ => false,
         };
 
@@ -527,7 +527,7 @@ impl SinkHandler {
         if let Some((next_wakeup, _)) = next_wakeup {
             if let Some((previous_next_wakeup, ref abort_handle)) = state.wait_handle {
                 if previous_next_wakeup.is_none()
-                    || next_wakeup.map_or(false, |next| previous_next_wakeup.unwrap() > next)
+                    || next_wakeup.is_some_and(|next| previous_next_wakeup.unwrap() > next)
                 {
                     gst::debug!(
                         CAT,
@@ -1166,7 +1166,7 @@ impl TaskImpl for JitterBufferTask {
                             context_wait,
                         );
                         if let Some((Some(next_wakeup), _)) = next_wakeup {
-                            if now.map_or(false, |now| next_wakeup > now) {
+                            if now.is_some_and(|now| next_wakeup > now) {
                                 // Reschedule and wait a bit longer in the next iteration
                                 return Ok(());
                             }

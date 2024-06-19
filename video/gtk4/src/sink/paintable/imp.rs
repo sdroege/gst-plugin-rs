@@ -283,7 +283,7 @@ impl PaintableImpl for Paintable {
                 let context_requires_premult = {
                     #[cfg(feature = "gtk_v4_14")]
                     {
-                        self.gl_context.borrow().as_ref().map_or(false, |context| {
+                        self.gl_context.borrow().as_ref().is_some_and(|context| {
                             context.api() != gdk::GLAPI::GLES || context.version().0 < 3
                         })
                     }

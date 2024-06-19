@@ -569,7 +569,7 @@ impl FallbackSwitch {
 
         /* If we're already running behind, fire the timeout immediately */
         let now = clock.time();
-        if now.map_or(false, |now| wait_until <= now) {
+        if now.is_some_and(|now| wait_until <= now) {
             self.handle_timeout(state, settings);
             return true;
         }
@@ -780,7 +780,7 @@ impl FallbackSwitch {
                 state.upstream_latency + settings.latency,
             )
         } else if state.output_running_time.is_some()
-            && end_running_time.map_or(false, |end_running_time| {
+            && end_running_time.is_some_and(|end_running_time| {
                 end_running_time < state.output_running_time.unwrap()
             })
         {

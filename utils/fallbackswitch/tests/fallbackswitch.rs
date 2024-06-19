@@ -547,7 +547,7 @@ fn setup_pipeline(
         loop {
             while let Some(clock_id) = clock.peek_next_pending_id().and_then(|clock_id| {
                 // Process if the clock ID is in the past or now
-                if clock.time().map_or(false, |time| time >= clock_id.time()) {
+                if clock.time().is_some_and(|time| time >= clock_id.time()) {
                     Some(clock_id)
                 } else {
                     None
