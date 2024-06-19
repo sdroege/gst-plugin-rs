@@ -559,7 +559,7 @@ fn make_converter_for_video_caps(caps: &gst::Caps, codec: &Codec) -> Result<gst:
                 // corresponding converter
                 || codec
                 .encoder_factory()
-                .map_or(false, |factory| factory.name().starts_with("nvv4l2"))
+                .is_some_and(|factory| factory.name().starts_with("nvv4l2"))
             {
                 let queue = make_element("queue", None)?;
                 let nvconvert = if let Ok(nvconvert) = make_element("nvvideoconvert", None) {
@@ -788,15 +788,17 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
 fn configure_payloader(pay: &gst::Element) {
     pay.set_property("mtu", 1200_u32);
 
-    match pay.factory().unwrap().name().as_str() {
-        "rtpvp8pay" | "rtpvp9pay" => {
-            pay.set_property_from_str("picture-id-mode", "15-bit");
+    if let Some(factory) = pay.factory() {
+        match factory.name().as_str() {
+            "rtpvp8pay" | "rtpvp9pay" => {
+                pay.set_property_from_str("picture-id-mode", "15-bit");
+            }
+            "rtph264pay" | "rtph265pay" => {
+                pay.set_property_from_str("aggregate-mode", "zero-latency");
+                pay.set_property("config-interval", -1i32);
+            }
+            _ => (),
         }
-        "rtph264pay" | "rtph265pay" => {
-            pay.set_property_from_str("aggregate-mode", "zero-latency");
-            pay.set_property("config-interval", -1i32);
-        }
-        _ => (),
     }
 }
 
@@ -950,13 +952,7 @@ impl VideoEncoder {
     ) -> Option<Self> {
         let halved_framerate = video_info.fps().mul(gst::Fraction::new(1, 2));
         Some(Self {
-            factory_name: encoding_elements
-                .encoder
-                .as_ref()?
-                .factory()
-                .unwrap()
-                .name()
-                .into(),
+            factory_name: encoding_elements.encoder.as_ref()?.factory()?.name().into(),
             codec_name: codec_name.to_string(),
             element: encoding_elements.encoder.as_ref()?.clone(),
             filter: encoding_elements.raw_filter.as_ref()?.clone(),
@@ -2634,7 +2630,7 @@ impl BaseWebRTCSink {
                     glib::closure!(@watch element, @strong session_id
                             => move |_webrtcbin: gst::Element, _bin: gst::Bin, e: gst::Element| {
 
-                        if e.factory().map_or(false, |f| f.name() == "rtprtxsend") {
+                        if e.factory().is_some_and(|f| f.name() == "rtprtxsend") {
                             if e.has_property("stuffing-kbps", Some(i32::static_type())) {
                                 element.imp().set_rtptrxsend(element, &session_id, e);
                             } else {

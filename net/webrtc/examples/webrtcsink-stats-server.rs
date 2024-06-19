@@ -137,9 +137,8 @@ async fn run(args: Args) -> Result<(), Error> {
     ws.connect("encoder-setup", false, |values| {
         let encoder = values[3].get::<gst::Element>().unwrap();
 
-        info!("Encoder: {}", encoder.factory().unwrap().name());
-
         let configured = if let Some(factory) = encoder.factory() {
+            info!("Encoder: {}", factory.name());
             matches!(factory.name().as_str(), "does-not-exist")
         } else {
             false

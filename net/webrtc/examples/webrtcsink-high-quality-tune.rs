@@ -40,11 +40,12 @@ fn main() -> Result<(), Error> {
         pipeline.connect("deep-element-added", false, |values| {
             let element = values[2].get::<gst::Element>().unwrap();
 
-            if let Some(factory) = element.factory() {
-                if factory.name().as_str() == "videoscale" {
-                    println!("Tuning videoscale");
-                    element.set_property_from_str("method", "lanczos");
-                }
+            if element
+                .factory()
+                .is_some_and(|factory| factory.name() == "videoscale")
+            {
+                println!("Tuning videoscale");
+                element.set_property_from_str("method", "lanczos");
             }
 
             None
@@ -61,9 +62,9 @@ fn main() -> Result<(), Error> {
     webrtcsink.connect("encoder-setup", true, |values| {
         let encoder = values[3].get::<gst::Element>().unwrap();
 
-        println!("Encoder: {}", encoder.factory().unwrap().name());
-
         if let Some(factory) = encoder.factory() {
+            println!("Encoder: {}", factory.name());
+
             match factory.name().as_str() {
                 "x264enc" => {
                     println!("Applying extra configuration to x264enc");
