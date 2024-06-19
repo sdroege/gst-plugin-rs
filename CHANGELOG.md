@@ -5,6 +5,23 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.12.7] - 2024-06-19
+### Fixed
+- aws, spotifyaudiosrc, reqwesthttpsrc, webrtchttp: Fix race condition when unlocking
+- rtp: Allow any payload type for the AV1 RTP payloader/depayloader
+- rtp: Various fixes to the AV1 RTP payloader/depayloader to work correctly
+  with Chrome and Pion
+- meson: Various fixes to the meson-based build system around cargo
+- webrtcsink: Use correct property names for configuring `av1enc`
+- webrtcsink: Avoid lock poisoning when setting encoder properties
+
+### Added
+- ndi: Support for NDI SDK v6
+- webrtcsink: Support for AV1 via `nvav1enc`, `av1enc` or `rav1enc`
+
+### Changed
+- Update to async-tungstenite 0.26
+
 ## [0.12.6] - 2024-05-23
 ### Fixed
 - Various Rust 1.78 clippy warnings.
@@ -431,7 +448,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.6...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.7...HEAD
+[0.12.7]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.6...0.12.7
 [0.12.6]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.5...0.12.6
 [0.12.5]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.4...0.12.5
 [0.12.4]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.3...0.12.4
