@@ -1146,7 +1146,7 @@ impl ObjectImpl for WhipServer {
                     .default_value(DEFAULT_STUN_SERVER)
                     .build(),
                 gst::ParamSpecArray::builder("turn-servers")
-                    .nick("List of TURN Servers to user")
+                    .nick("List of TURN Servers to use")
                     .blurb("The TURN servers of the form <\"turn(s)://username:password@host:port\", \"turn(s)://username1:password1@host1:port1\">")
                     .element_spec(&glib::ParamSpecString::builder("turn-server")
                         .nick("TURN Server")
