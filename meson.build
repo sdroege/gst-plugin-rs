@@ -414,7 +414,12 @@ foreach plugin_name, details: plugins
     endif
     deps_cache += {dep_name: dep}
     if not dep.found()
-      debug(f'@plugin_name@ dependency @dep_name@ @dep_ver@ not found, skipping')
+      if dep_ver.length() != 0
+        dep_ver_msg = ' '.join(dep_ver)
+        debug(f'@plugin_name@ dependency @dep_name@ @dep_ver_msg@ not found, skipping')
+      else
+        debug(f'@plugin_name@ dependency @dep_name@ not found, skipping')
+      endif
       plugin_deps_found = false
       break
     endif
