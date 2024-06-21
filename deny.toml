@@ -256,6 +256,11 @@ version = "0.21"
 name = "tungstenite"
 version = "0.21"
 
+# various crates depend on an older version of system-deps
+[[bans.skip]]
+name = "system-deps"
+version = "6"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
