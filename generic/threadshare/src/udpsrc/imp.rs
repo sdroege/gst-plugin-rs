@@ -49,6 +49,7 @@ const DEFAULT_USED_SOCKET: Option<GioSocketWrapper> = None;
 const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: Duration = Duration::ZERO;
 const DEFAULT_RETRIEVE_SENDER_ADDRESS: bool = true;
+const DEFAULT_MULTICAST_LOOP: bool = true;
 
 #[derive(Debug, Default)]
 struct State {
@@ -67,6 +68,7 @@ struct Settings {
     context: String,
     context_wait: Duration,
     retrieve_sender_address: bool,
+    multicast_loop: bool,
 }
 
 impl Default for Settings {
@@ -82,6 +84,7 @@ impl Default for Settings {
             context: DEFAULT_CONTEXT.into(),
             context_wait: DEFAULT_CONTEXT_WAIT,
             retrieve_sender_address: DEFAULT_RETRIEVE_SENDER_ADDRESS,
+            multicast_loop: DEFAULT_MULTICAST_LOOP,
         }
     }
 }
@@ -257,7 +260,7 @@ impl TaskImpl for UdpSrcTask {
                 };
                 let port = settings.port;
 
-                // TODO: TTL, multicast loopback, etc
+                // TODO: TTL etc
                 let saddr = if addr.is_multicast() {
                     let bind_addr = if addr.is_ipv4() {
                         IpAddr::V4(Ipv4Addr::UNSPECIFIED)
@@ -346,6 +349,20 @@ impl TaskImpl for UdpSrcTask {
                                         ["Failed to join multicast group: {}", err]
                                     )
                                 })?;
+
+                            socket
+                                .as_ref()
+                                .set_multicast_loop_v4(settings.multicast_loop)
+                                .map_err(|err| {
+                                    gst::error_msg!(
+                                        gst::ResourceError::OpenWrite,
+                                        [
+                                            "Failed to set multicast loop to {}: {}",
+                                            settings.multicast_loop,
+                                            err
+                                        ]
+                                    )
+                                })?;
                         }
                         IpAddr::V6(addr) => {
                             socket.as_ref().join_multicast_v6(&addr, 0).map_err(|err| {
@@ -354,6 +371,20 @@ impl TaskImpl for UdpSrcTask {
                                     ["Failed to join multicast group: {}", err]
                                 )
                             })?;
+
+                            socket
+                                .as_ref()
+                                .set_multicast_loop_v6(settings.multicast_loop)
+                                .map_err(|err| {
+                                    gst::error_msg!(
+                                        gst::ResourceError::OpenWrite,
+                                        [
+                                            "Failed to set multicast loop to {}: {}",
+                                            settings.multicast_loop,
+                                            err
+                                        ]
+                                    )
+                                })?;
                         }
                     }
                 }
@@ -757,6 +788,11 @@ impl ObjectImpl for UdpSrc {
                     .blurb("Whether to retrieve the sender address and add it to buffers as meta. Disabling this might result in minor performance improvements in certain scenarios")
                     .default_value(DEFAULT_RETRIEVE_SENDER_ADDRESS)
                     .build(),
+                glib::ParamSpecBoolean::builder("loop")
+                    .nick("Loop")
+                    .blurb("Set the multicast loop parameter")
+                    .default_value(DEFAULT_MULTICAST_LOOP)
+                    .build(),
             ];
 
             #[cfg(not(windows))]
@@ -823,6 +859,9 @@ impl ObjectImpl for UdpSrc {
             "retrieve-sender-address" => {
                 settings.retrieve_sender_address = value.get().expect("type checked upstream");
             }
+            "loop" => {
+                settings.multicast_loop = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -848,6 +887,7 @@ impl ObjectImpl for UdpSrc {
             "context" => settings.context.to_value(),
             "context-wait" => (settings.context_wait.as_millis() as u32).to_value(),
             "retrieve-sender-address" => settings.retrieve_sender_address.to_value(),
+            "loop" => settings.multicast_loop.to_value(),
             _ => unimplemented!(),
         }
     }

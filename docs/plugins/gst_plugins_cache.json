@@ -12513,6 +12513,18 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "loop": {
+                        "blurb": "Set the multicast loop parameter",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "mtu": {
                         "blurb": "Maximum expected packet size. This directly defines the allocation size of the receive buffer pool",
                         "conditionally-available": false,
