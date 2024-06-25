@@ -132,10 +132,13 @@ version = "1.0"
 name = "hashbrown"
 version = "0.12"
 
-# various livekit dependencies depend on an old version of itertools
+# various livekit dependencies depend on an old version of itertools and sync_wrapper
 [[bans.skip]]
 name = "itertools"
 version = "0.11"
+[[bans.skip]]
+name = "sync_wrapper"
+version = "0.1"
 
 # various rav1e / dssim-core depend on an old version of itertools
 [[bans.skip]]
