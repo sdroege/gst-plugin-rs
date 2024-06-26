@@ -3271,6 +3271,18 @@
                         "readable": true,
                         "type": "gboolean",
                         "writable": true
+                    },
+                    "sync": {
+                        "blurb": "Synchronize buffers to the clock",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
                     }
                 },
                 "rank": "none"
