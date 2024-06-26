@@ -13,7 +13,6 @@ use std::time::Duration;
 
 use aws_sdk_s3::{
     config::{self, retry::RetryConfig, Credentials},
-    error::ProvideErrorMetadata,
     Client,
 };
 
@@ -177,10 +176,10 @@ impl S3Src {
         let head_object_future = head_object.send();
 
         let output =
-            s3utils::wait(&self.canceller, head_object_future).map_err(|err| match err {
-                WaitError::FutureError(err) => gst::error_msg!(
+            s3utils::wait(&self.canceller, head_object_future).map_err(|err| match &err {
+                WaitError::FutureError(_) => gst::error_msg!(
                     gst::ResourceError::NotFound,
-                    ["Failed to get HEAD object: {err}: {}", err.meta()]
+                    ["Failed to get HEAD object: {err}"]
                 ),
                 WaitError::Cancelled => {
                     gst::error_msg!(
@@ -236,10 +235,10 @@ impl S3Src {
         let get_object_future = get_object.send();
 
         let mut output =
-            s3utils::wait(&self.canceller, get_object_future).map_err(|err| match err {
-                WaitError::FutureError(err) => Some(gst::error_msg!(
+            s3utils::wait(&self.canceller, get_object_future).map_err(|err| match &err {
+                WaitError::FutureError(_) => Some(gst::error_msg!(
                     gst::ResourceError::Read,
-                    ["Could not read: {err}: {}", err.meta()]
+                    ["Could not read: {err}"]
                 )),
                 WaitError::Cancelled => None,
             })?;

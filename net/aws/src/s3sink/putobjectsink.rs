@@ -15,7 +15,6 @@ use gst_base::subclass::prelude::*;
 
 use aws_sdk_s3::{
     config::{self, retry::RetryConfig, Credentials, Region},
-    error::ProvideErrorMetadata,
     operation::put_object::builders::PutObjectFluentBuilder,
     primitives::ByteStream,
     Client,
@@ -208,10 +207,10 @@ impl S3PutObjectSink {
 
         let put_object_req_future = put_object_req.send();
         let _output =
-            s3utils::wait(&self.canceller, put_object_req_future).map_err(|err| match err {
-                WaitError::FutureError(err) => Some(gst::error_msg!(
+            s3utils::wait(&self.canceller, put_object_req_future).map_err(|err| match &err {
+                WaitError::FutureError(_) => Some(gst::error_msg!(
                     gst::ResourceError::OpenWrite,
-                    ["Failed to upload object: {err}: {}", err.meta()]
+                    ["Failed to upload object: {err}"]
                 )),
                 WaitError::Cancelled => None,
             })?;

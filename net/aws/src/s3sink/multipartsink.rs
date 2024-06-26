@@ -14,7 +14,6 @@ use gst_base::subclass::prelude::*;
 
 use aws_sdk_s3::{
     config::{self, retry::RetryConfig, Credentials, Region},
-    error::ProvideErrorMetadata,
     operation::{
         abort_multipart_upload::builders::AbortMultipartUploadFluentBuilder,
         complete_multipart_upload::builders::CompleteMultipartUploadFluentBuilder,
@@ -269,12 +268,12 @@ impl S3Sink {
 
         let upload_part_req_future = upload_part_req.send();
         let output =
-            s3utils::wait(&self.canceller, upload_part_req_future).map_err(|err| match err {
-                WaitError::FutureError(err) => {
+            s3utils::wait(&self.canceller, upload_part_req_future).map_err(|err| match &err {
+                WaitError::FutureError(_) => {
                     self.flush_multipart_upload(state);
                     Some(gst::error_msg!(
                         gst::ResourceError::OpenWrite,
-                        ["Failed to upload part: {err}: {}", err.meta()]
+                        ["Failed to upload part: {err}"]
                     ))
                 }
                 WaitError::Cancelled => None,
@@ -418,11 +417,11 @@ impl S3Sink {
 
         s3utils::wait(&self.abort_multipart_canceller, abort_req_future)
             .map(|_| ())
-            .map_err(|err| match err {
-                WaitError::FutureError(err) => {
+            .map_err(|err| match &err {
+                WaitError::FutureError(_) => {
                     gst::error_msg!(
                         gst::ResourceError::Write,
-                        ["Failed to abort multipart upload: {err}: {}", err.meta()]
+                        ["Failed to abort multipart upload: {err}"]
                     )
                 }
                 WaitError::Cancelled => {
@@ -443,10 +442,10 @@ impl S3Sink {
 
         s3utils::wait(&self.canceller, complete_req_future)
             .map(|_| ())
-            .map_err(|err| match err {
-                WaitError::FutureError(err) => gst::error_msg!(
+            .map_err(|err| match &err {
+                WaitError::FutureError(_) => gst::error_msg!(
                     gst::ResourceError::Write,
-                    ["Failed to complete multipart upload: {err}: {}", err.meta()]
+                    ["Failed to complete multipart upload: {err}"]
                 ),
                 WaitError::Cancelled => {
                     gst::error_msg!(
@@ -554,10 +553,10 @@ impl S3Sink {
         let create_multipart_req_future = create_multipart_req.send();
 
         let response = s3utils::wait(&self.canceller, create_multipart_req_future).map_err(
-            |err| match err {
-                WaitError::FutureError(err) => gst::error_msg!(
+            |err| match &err {
+                WaitError::FutureError(_) => gst::error_msg!(
                     gst::ResourceError::OpenWrite,
-                    ["Failed to create multipart upload: {err}: {}", err.meta()]
+                    ["Failed to create multipart upload: {err}"]
                 ),
                 WaitError::Cancelled => {
                     gst::error_msg!(
