@@ -9,7 +9,7 @@
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_s3::{
     config::{timeout::TimeoutConfig, Credentials, Region},
-    error::ProvideErrorMetadata,
+    error::{DisplayErrorContext, ProvideErrorMetadata},
     primitives::{ByteStream, ByteStreamError},
 };
 use aws_types::sdk_config::SdkConfig;
@@ -46,7 +46,9 @@ impl<E: ProvideErrorMetadata + std::error::Error> fmt::Display for WaitError<E> 
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             WaitError::Cancelled => f.write_str("Cancelled"),
-            WaitError::FutureError(err) => write!(f, "{err}: {}", err.meta()),
+            WaitError::FutureError(err) => {
+                write!(f, "{}: {}", DisplayErrorContext(&err), err.meta())
+            }
         }
     }
 }
