@@ -651,12 +651,9 @@ impl LiveSync {
             gst::EventView::Segment(e) => {
                 is_restart = true;
 
-                let segment = match e.segment().downcast_ref() {
-                    Some(s) => s,
-                    None => {
-                        gst::error!(CAT, imp: self, "Got non-TIME segment");
-                        return false;
-                    }
+                let Some(segment) = e.segment().downcast_ref() else {
+                    gst::error!(CAT, imp: self, "Got non-TIME segment");
+                    return false;
                 };
 
                 let mut state = self.state.lock();
@@ -1218,14 +1215,12 @@ impl LiveSync {
     }
 
     fn buffer_is_backwards(&self, state: &State, timestamp: Option<Timestamps>) -> BufferLateness {
-        let timestamp = match timestamp {
-            Some(t) => t,
-            None => return BufferLateness::OnTime,
+        let Some(timestamp) = timestamp else {
+            return BufferLateness::OnTime;
         };
 
-        let out_timestamp = match state.out_timestamp {
-            Some(t) => t,
-            None => return BufferLateness::OnTime,
+        let Some(out_timestamp) = state.out_timestamp else {
+            return BufferLateness::OnTime;
         };
 
         if timestamp.end > out_timestamp.end {
@@ -1246,9 +1241,8 @@ impl LiveSync {
             None => return BufferLateness::LateUnderThreshold,
         };
 
-        let in_timestamp = match state.in_timestamp {
-            Some(t) => t,
-            None => return BufferLateness::LateUnderThreshold,
+        let Some(in_timestamp) = state.in_timestamp else {
+            return BufferLateness::LateUnderThreshold;
         };
 
         if timestamp.start > in_timestamp.end + late_threshold {
@@ -1259,14 +1253,12 @@ impl LiveSync {
     }
 
     fn buffer_is_early(&self, state: &State, timestamp: Option<Timestamps>) -> bool {
-        let timestamp = match timestamp {
-            Some(t) => t,
-            None => return false,
+        let Some(timestamp) = timestamp else {
+            return false;
         };
 
-        let out_timestamp = match state.out_timestamp {
-            Some(t) => t,
-            None => return false,
+        let Some(out_timestamp) = state.out_timestamp else {
+            return false;
         };
 
         // When out_timestamp is set, we also have an out_buffer
