@@ -138,6 +138,8 @@ fn test_livesync(h: &mut gst_check::Harness, o: u64, singlesegment: bool) {
     h.push_from_src().unwrap();
     h.push_from_src().unwrap();
     assert_eq!(h.pull_event().unwrap().type_(), gst::EventType::StreamStart);
+    // Caps are only output once waiting for the first buffer has finished
+    h.crank_single_clock_wait().unwrap();
     assert_eq!(h.pull_event().unwrap().type_(), gst::EventType::Caps);
     assert_eq!(h.pull_event().unwrap().type_(), gst::EventType::Segment);
     assert_crank_pull(h, o, 0, 0, gst::BufferFlags::DISCONT, singlesegment);

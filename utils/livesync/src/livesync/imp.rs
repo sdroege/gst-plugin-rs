@@ -1053,7 +1053,16 @@ impl LiveSync {
             None => None,
 
             Some(Item::Buffer(buffer, timestamp, lateness)) => {
-                if self.buffer_is_early(&state, timestamp) {
+                // Synchronize on the first buffer with timestamps to not output it too early
+                if let Some(Timestamps { start, .. }) =
+                    state.out_timestamp.is_none().then_some(timestamp).flatten()
+                {
+                    state.out_timestamp = Some(Timestamps { start, end: start });
+                    state
+                        .queue
+                        .push_front(Item::Buffer(buffer, timestamp, lateness));
+                    return Ok(gst::FlowSuccess::Ok);
+                } else if self.buffer_is_early(&state, timestamp) {
                     // Try this buffer again on the next iteration
                     state
                         .queue
@@ -1261,8 +1270,11 @@ impl LiveSync {
             return false;
         };
 
-        // When out_timestamp is set, we also have an out_buffer
-        let slack = state.out_buffer.as_deref().unwrap().duration().unwrap();
+        // When out_timestamp is set, we also have an out_buffer unless it is the first buffer
+        let Some(ref out_buffer) = state.out_buffer else {
+            return false;
+        };
+        let slack = out_buffer.duration().unwrap();
 
         if timestamp.start < out_timestamp.end + slack {
             return false;
