@@ -1028,7 +1028,12 @@ impl URIHandlerImpl for S3Sink {
 
 impl BaseSinkImpl for S3Sink {
     fn start(&self) -> Result<(), gst::ErrorMessage> {
-        self.start()
+        let res = self.start();
+        if let Err(ref err) = res {
+            gst::error!(CAT, imp: self, "Failed to start: {err}");
+        }
+
+        res
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
