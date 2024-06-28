@@ -235,6 +235,10 @@ impl TranscriberBin {
     ) -> Result<(), Error> {
         gst::debug!(CAT, imp: self, "Linking input audio stream {pad_name}");
 
+        pad_state
+            .transcription_bin
+            .set_property("name", format!("transcription-bin-{}", pad_name));
+
         state
             .internal_bin
             .add_many([
@@ -1132,12 +1136,23 @@ impl TranscriberBin {
 }
 
 impl ChildProxyImpl for TranscriberBin {
-    fn child_by_index(&self, _index: u32) -> Option<glib::Object> {
-        None
+    fn child_by_index(&self, index: u32) -> Option<glib::Object> {
+        let parent_children_count = self.parent_children_count();
+
+        if index < parent_children_count {
+            self.parent_child_by_index(index)
+        } else {
+            self.obj()
+                .pads()
+                .into_iter()
+                .nth((index - parent_children_count) as usize)
+                .map(|p| p.upcast())
+        }
     }
 
     fn children_count(&self) -> u32 {
-        0
+        let object = self.obj();
+        self.parent_children_count() + object.num_pads() as u32
     }
 
     fn child_by_name(&self, name: &str) -> Option<glib::Object> {
@@ -1796,7 +1811,9 @@ impl TranscriberSinkPadState {
             transcription_bin: gst::Bin::new(),
             transcriber_resample: gst::ElementFactory::make("audioresample").build()?,
             transcriber_aconv: gst::ElementFactory::make("audioconvert").build()?,
-            transcriber: gst::ElementFactory::make("awstranscriber").build()?,
+            transcriber: gst::ElementFactory::make("awstranscriber")
+                .name("transcriber")
+                .build()?,
             queue_passthrough: gst::ElementFactory::make("queue").build()?,
             transcription_channels: HashMap::new(),
             srcpad_name: None,
