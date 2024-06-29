@@ -48,7 +48,7 @@ To build and include the plugin in a Flatpak manifest, you can add the following
             ],
             "build-options": {
                 "env": {
-                    "CARGO_HOME": "/run/build/gst-plugin-gtk4/cargo"
+                    "CARGO_HOME": "$FLATPAK_BUILDER_BUILDDIR/cargo"
                 }
             },
             "build-commands": [
