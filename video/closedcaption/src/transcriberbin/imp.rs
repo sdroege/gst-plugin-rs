@@ -875,7 +875,10 @@ impl TranscriberBin {
 
                 channel.link_transcriber(&pad_state.transcriber)?;
 
-                let srcpad = pad_state.transcription_bin.static_pad("src").unwrap();
+                let srcpad = pad_state
+                    .transcription_bin
+                    .static_pad(&format!("src_{}", channel.language))
+                    .unwrap();
 
                 srcpad
                     .downcast_ref::<gst::GhostPad>()
@@ -1545,9 +1548,14 @@ impl ElementImpl for TranscriberBin {
         let _ = pad_state.transcription_bin.set_state(gst::State::Null);
 
         if let Some(ref mut state) = s.as_mut() {
-            if let Some(srcpad) = pad_state.transcription_bin.static_pad("src") {
-                if let Some(peer) = srcpad.peer() {
-                    let _ = state.ccmux.remove_pad(&peer);
+            for channel in pad_state.transcription_channels.values() {
+                if let Some(srcpad) = pad_state
+                    .transcription_bin
+                    .static_pad(&format!("src_{}", channel.language))
+                {
+                    if let Some(peer) = srcpad.peer() {
+                        let _ = state.ccmux.remove_pad(&peer);
+                    }
                 }
             }
 
