@@ -753,7 +753,7 @@ impl State {
                 // amount of samples the last frame is short to reach the correct read position.
                 if next_frame_size < FRAME_SIZE {
                     self.limiter_buf_index += FRAME_SIZE - next_frame_size;
-                    if self.limiter_buf_index > self.limiter_buf.len() {
+                    if self.limiter_buf_index >= self.limiter_buf.len() {
                         self.limiter_buf_index -= self.limiter_buf.len();
                     }
                 }
