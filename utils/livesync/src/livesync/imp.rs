@@ -1295,10 +1295,14 @@ impl LiveSync {
         };
 
         // When out_timestamp is set, we also have an out_buffer unless it is the first buffer
-        let Some(ref out_buffer) = state.out_buffer else {
+        if state.out_buffer.is_none() {
             return false;
-        };
-        let slack = out_buffer.duration().unwrap();
+        }
+
+        // Use the duration we would insert as a gap filler in patch_output_buffer()
+        let slack = state.out_duration.map_or(DEFAULT_DURATION, |dur| {
+            dur.clamp(MINIMUM_DURATION, MAXIMUM_DURATION)
+        });
 
         if timestamp.start < out_timestamp.end + slack {
             return false;
