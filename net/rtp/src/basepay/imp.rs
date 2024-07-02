@@ -1833,7 +1833,7 @@ impl ObjectImpl for RtpBasePay2 {
                     .default_value(Settings::default().source_info)
                     .mutable_playing()
                     .build(),
-                glib::ParamSpecBoolean::builder("auto-header-extensions")
+                glib::ParamSpecBoolean::builder("auto-header-extension")
                     .nick("Automatic RTP Header Extensions")
                     .blurb("Whether RTP header extensions should be automatically enabled, if an implementation is available")
                     .default_value(Settings::default().auto_header_extensions)
@@ -1934,7 +1934,7 @@ impl ObjectImpl for RtpBasePay2 {
             "source-info" => {
                 self.settings.lock().unwrap().source_info = value.get().unwrap();
             }
-            "auto-header-extensions" => {
+            "auto-header-extension" => {
                 self.settings.lock().unwrap().auto_header_extensions = value.get().unwrap();
             }
             _ => unimplemented!(),
@@ -1994,7 +1994,7 @@ impl ObjectImpl for RtpBasePay2 {
                 .unwrap_or(0)
                 .to_value(),
             "source-info" => self.settings.lock().unwrap().source_info.to_value(),
-            "auto-header-extensions" => self
+            "auto-header-extension" => self
                 .settings
                 .lock()
                 .unwrap()

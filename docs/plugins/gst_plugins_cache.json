@@ -8882,7 +8882,7 @@
                 ],
                 "kind": "object",
                 "properties": {
-                    "auto-header-extensions": {
+                    "auto-header-extension": {
                         "blurb": "Whether RTP header extensions should be automatically enabled, if an implementation is available",
                         "conditionally-available": false,
                         "construct": false,
@@ -8988,7 +8988,7 @@
                 ],
                 "kind": "object",
                 "properties": {
-                    "auto-header-extensions": {
+                    "auto-header-extension": {
                         "blurb": "Whether RTP header extensions should be automatically enabled, if an implementation is available",
                         "conditionally-available": false,
                         "construct": false,
