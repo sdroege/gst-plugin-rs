@@ -227,7 +227,7 @@ fn find_pcr(slice: &[u8], imp: &MpegTsLiveSource) -> Result<Option<u64>> {
     };
     let mut buffer_pcr = None;
 
-    for chunk in slice[pos + 188..].chunks_exact(188) {
+    for chunk in slice[pos..].chunks_exact(188) {
         if chunk[0] != 0x47 {
             gst::error!(CAT, "Lost sync");
             break;
