@@ -413,7 +413,11 @@ impl S3HlsSink {
         };
 
         let mut state = self.state.lock().unwrap();
-        *state = State::Stopped
+        *state = State::Stopped;
+
+        let mut canceller = self.canceller.lock().unwrap();
+        canceller.abort();
+        *canceller = s3utils::Canceller::None;
     }
 
     fn create_stats(&self) -> gst::Structure {
@@ -802,19 +806,10 @@ impl ElementImpl for S3HlsSink {
         PAD_TEMPLATES.as_ref()
     }
 
-    #[allow(clippy::single_match)]
     fn change_state(
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        match transition {
-            gst::StateChange::PausedToReady => {
-                let mut canceller = self.canceller.lock().unwrap();
-                canceller.abort();
-            }
-            _ => (),
-        }
-
         let ret = self.parent_change_state(transition)?;
         /*
          * The settings lock must not be taken before the parent state change.
@@ -823,6 +818,13 @@ impl ElementImpl for S3HlsSink {
          */
         let settings = self.settings.lock().unwrap();
 
+        /*
+         * We do not call abort on the canceller in change_state here as
+         * that results in the final playlist and media segment uploads
+         * being aborted leaving the media segments and playlist in an
+         * unplayable state. All finalisation is carried out in `stop`
+         * which is called for ReadyToNull transition.
+         */
         match transition {
             gst::StateChange::ReadyToPaused => {
                 let mut state = self.state.lock().unwrap();
@@ -856,11 +858,6 @@ impl ElementImpl for S3HlsSink {
                         gst::error!(CAT, imp: self, "Could not send pause request.");
                     }
                 }
-            }
-
-            gst::StateChange::PausedToReady => {
-                let mut canceller = self.canceller.lock().unwrap();
-                *canceller = s3utils::Canceller::None;
             }
 
             gst::StateChange::ReadyToNull => {
