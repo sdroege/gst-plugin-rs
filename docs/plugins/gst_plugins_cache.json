@@ -10183,7 +10183,7 @@
                 "kind": "object",
                 "properties": {
                     "audio-caps": {
-                        "blurb": "Governs what audio codecs will be proposed",
+                        "blurb": "Governs what audio codecs will be proposed. Valid values: [audio/x-opus; audio/x-raw, format=(string)S24BE, layout=(string)interleaved, rate=(int)[ 1, 2147483647 ], channels=(int)[ 1, 2147483647 ]; audio/x-raw, format=(string)S16BE, layout=(string)interleaved, rate=(int)[ 1, 2147483647 ], channels=(int)[ 1, 2147483647 ]; audio/x-raw, format=(string)U8, layout=(string)interleaved, rate=(int)[ 1, 2147483647 ], channels=(int)[ 1, 2147483647 ]]",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -10366,7 +10366,7 @@
                         "writable": true
                     },
                     "video-caps": {
-                        "blurb": "Governs what video codecs will be proposed",
+                        "blurb": "Governs what video codecs will be proposed. Valid values: [video/x-vp8; video/x-h264; video/x-vp9; video/x-h265; video/x-av1; video/x-raw, format=(string){ RGB, RGBA, BGR, BGRA, AYUV, UYVY, I420, Y41B, UYVP }, width=(int)[ 1, 32767 ], height=(int)[ 1, 32767 ]]",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -10498,7 +10498,7 @@
                 "kind": "object",
                 "properties": {
                     "audio-codecs": {
-                        "blurb": "Names of audio codecs to be be used during the SDP negotiation. Valid values: [OPUS]",
+                        "blurb": "Names of audio codecs to be be used during the SDP negotiation. Valid values: [OPUS, L24, L16, L8]",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -10578,7 +10578,7 @@
                         "writable": true
                     },
                     "video-codecs": {
-                        "blurb": "Names of video codecs to be be used during the SDP negotiation. Valid values: [VP8, H264, VP9, H265, AV1]",
+                        "blurb": "Names of video codecs to be be used during the SDP negotiation. Valid values: [VP8, H264, VP9, H265, AV1, RAW]",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,

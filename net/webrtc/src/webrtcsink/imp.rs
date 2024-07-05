@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::utils::{cleanup_codec_caps, is_raw_caps, make_element, Codec, Codecs, NavigationEvent};
+use crate::utils::{
+    cleanup_codec_caps, has_raw_caps, make_element, Codec, Codecs, NavigationEvent,
+};
 use anyhow::Context;
 use gst::glib;
 use gst::prelude::*;
@@ -13,6 +15,7 @@ use gst_webrtc::{WebRTCDataChannel, WebRTCICETransportPolicy};
 use futures::prelude::*;
 
 use anyhow::{anyhow, Error};
+use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
@@ -513,12 +516,12 @@ impl Default for Settings {
 
         Self {
             video_caps: Codecs::video_codecs()
-                .into_iter()
-                .flat_map(|codec| codec.caps.iter().map(|s| s.to_owned()).collect::<Vec<_>>())
+                .filter(|codec| !codec.is_raw)
+                .flat_map(|codec| codec.caps.iter().map(ToOwned::to_owned))
                 .collect::<gst::Caps>(),
             audio_caps: Codecs::audio_codecs()
-                .into_iter()
-                .flat_map(|codec| codec.caps.iter().map(|s| s.to_owned()).collect::<Vec<_>>())
+                .filter(|codec| !codec.is_raw)
+                .flat_map(|codec| codec.caps.iter().map(ToOwned::to_owned))
                 .collect::<gst::Caps>(),
             stun_server: DEFAULT_STUN_SERVER.map(String::from),
             turn_servers: gst::Array::new(Vec::new() as Vec<glib::SendValue>),
@@ -884,7 +887,12 @@ impl PayloadChainBuilder {
             codec = self.codec,
         );
 
-        let needs_encoding = is_raw_caps(&self.input_caps);
+        let needs_encoding = if self.codec.is_raw {
+            !self.codec.caps.can_intersect(&self.input_caps)
+        } else {
+            has_raw_caps(&self.input_caps)
+        };
+
         let mut elements: Vec<gst::Element> = Vec::new();
 
         let (raw_filter, encoder) = if needs_encoding {
@@ -898,14 +906,20 @@ impl PayloadChainBuilder {
             let raw_filter = self.codec.raw_converter_filter()?;
             elements.push(raw_filter.clone());
 
-            let encoder = self
-                .codec
-                .build_encoder()
-                .expect("We should always have an encoder for negotiated codecs")?;
-            elements.push(encoder.clone());
-            elements.push(make_element("capsfilter", None)?);
+            let encoder = if self.codec.is_raw {
+                None
+            } else {
+                let encoder = self
+                    .codec
+                    .build_encoder()
+                    .expect("We should always have an encoder for negotiated codecs")?;
+                elements.push(encoder.clone());
+                elements.push(make_element("capsfilter", None)?);
 
-            (Some(raw_filter), Some(encoder))
+                Some(encoder)
+            };
+
+            (Some(raw_filter), encoder)
         } else {
             (None, None)
         };
@@ -3431,7 +3445,7 @@ impl BaseWebRTCSink {
     ) -> Result<gst::Structure, Error> {
         let pipe = PipelineWrapper(gst::Pipeline::default());
 
-        let has_raw_input = is_raw_caps(&input_caps);
+        let has_raw_input = has_raw_caps(&input_caps);
         let src = discovery_info.create_src();
         let mut elements = vec![src.clone().upcast::<gst::Element>()];
         let encoding_chain_src = if codec.is_video() && has_raw_input {
@@ -3616,29 +3630,7 @@ impl BaseWebRTCSink {
         output_caps: gst::Caps,
         codecs: &Codecs,
     ) -> Result<(), Error> {
-        let futs = if let Some(codec) = codecs.find_for_encoded_caps(&discovery_info.caps) {
-            let mut caps = discovery_info.caps.clone();
-
-            gst::info!(
-                CAT,
-                imp = self,
-                "Stream is already encoded with codec {}, still need to payload it",
-                codec.name
-            );
-
-            caps = cleanup_codec_caps(caps);
-
-            vec![self.run_discovery_pipeline(
-                &name,
-                &discovery_info,
-                codec,
-                caps,
-                &output_caps,
-                ExtensionConfigurationType::Auto,
-            )]
-        } else {
-            let sink_caps = discovery_info.caps.clone();
-
+        let futs = if has_raw_caps(&discovery_info.caps) {
             if codecs.is_empty() {
                 return Err(anyhow!(
                     "No codec available for encoding stream {}, \
@@ -3648,10 +3640,12 @@ impl BaseWebRTCSink {
                 ));
             }
 
+            let sink_caps = discovery_info.caps.clone();
+
             let is_video = match sink_caps.structure(0).unwrap().name().as_str() {
                 "video/x-raw" => true,
                 "audio/x-raw" => false,
-                _ => anyhow::bail!("Unsupported caps: {}", discovery_info.caps),
+                _ => anyhow::bail!("expected audio or video raw caps: {sink_caps}"),
             };
 
             codecs
@@ -3668,6 +3662,28 @@ impl BaseWebRTCSink {
                     )
                 })
                 .collect()
+        } else if let Some(codec) = codecs.find_for_payloadable_caps(&discovery_info.caps) {
+            let mut caps = discovery_info.caps.clone();
+
+            gst::info!(
+                CAT,
+                imp = self,
+                "Stream is already in the {} format, we still need to payload it",
+                codec.name
+            );
+
+            caps = cleanup_codec_caps(caps);
+
+            vec![self.run_discovery_pipeline(
+                &name,
+                &discovery_info,
+                codec,
+                caps,
+                &output_caps,
+                ExtensionConfigurationType::Auto,
+            )]
+        } else {
+            anyhow::bail!("Unsupported caps: {}", discovery_info.caps);
         };
 
         let mut payloader_caps = gst::Caps::new_empty();
@@ -3949,12 +3965,20 @@ impl ObjectImpl for BaseWebRTCSink {
             vec![
                 glib::ParamSpecBoxed::builder::<gst::Caps>("video-caps")
                     .nick("Video encoder caps")
-                    .blurb("Governs what video codecs will be proposed")
+                    .blurb(&format!("Governs what video codecs will be proposed. Valid values: [{}]",
+                        Codecs::video_codecs()
+                            .map(|c| c.caps.to_string())
+                            .join("; ")
+                    ))
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecBoxed::builder::<gst::Caps>("audio-caps")
                     .nick("Audio encoder caps")
-                    .blurb("Governs what audio codecs will be proposed")
+                    .blurb(&format!("Governs what audio codecs will be proposed. Valid values: [{}]",
+                        Codecs::audio_codecs()
+                            .map(|c| c.caps.to_string())
+                            .join("; ")
+                    ))
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecString::builder("stun-server")
@@ -4397,7 +4421,8 @@ impl ElementImpl for BaseWebRTCSink {
                     gst::CapsFeatures::new([D3D11_MEMORY_FEATURE]),
                 );
 
-            for codec in Codecs::video_codecs() {
+            // Ignore specific raw caps from Codecs: they are covered by video/x-raw & audio/x-raw
+            for codec in Codecs::video_codecs().filter(|codec| !codec.is_raw) {
                 caps_builder = caps_builder.structure(codec.caps.structure(0).unwrap().to_owned());
             }
 
@@ -4412,7 +4437,7 @@ impl ElementImpl for BaseWebRTCSink {
 
             let mut caps_builder =
                 gst::Caps::builder_full().structure(gst::Structure::builder("audio/x-raw").build());
-            for codec in Codecs::audio_codecs() {
+            for codec in Codecs::audio_codecs().filter(|codec| !codec.is_raw) {
                 caps_builder = caps_builder.structure(codec.caps.structure(0).unwrap().to_owned());
             }
             let audio_pad_template = gst::PadTemplate::with_gtype(

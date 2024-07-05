@@ -427,7 +427,7 @@ impl Clone for DecodingInfo {
 
 #[derive(Clone, Debug)]
 struct EncodingInfo {
-    encoder: gst::ElementFactory,
+    encoder: Option<gst::ElementFactory>,
     payloader: gst::ElementFactory,
     output_filter: Option<gst::Caps>,
 }
@@ -437,6 +437,7 @@ pub struct Codec {
     pub name: String,
     pub caps: gst::Caps,
     pub stream_type: gst::StreamType,
+    pub is_raw: bool,
 
     payload_type: Option<i32>,
     decoding_info: Option<DecodingInfo>,
@@ -449,16 +450,27 @@ impl Codec {
         stream_type: gst::StreamType,
         caps: &gst::Caps,
         decoders: &glib::List<gst::ElementFactory>,
+        depayloaders: &glib::List<gst::ElementFactory>,
         encoders: &glib::List<gst::ElementFactory>,
         payloaders: &glib::List<gst::ElementFactory>,
     ) -> Self {
         let has_decoder = Self::has_decoder_for_caps(caps, decoders);
+        let has_depayloader = Self::has_depayloader_for_codec(name, depayloaders);
+
+        let decoding_info = if has_depayloader && has_decoder {
+            Some(DecodingInfo {
+                has_decoder: AtomicBool::new(has_decoder),
+            })
+        } else {
+            None
+        };
+
         let encoder = Self::get_encoder_for_caps(caps, encoders);
         let payloader = Self::get_payloader_for_codec(name, payloaders);
 
         let encoding_info = if let (Some(encoder), Some(payloader)) = (encoder, payloader) {
             Some(EncodingInfo {
-                encoder,
+                encoder: Some(encoder),
                 payloader,
                 output_filter: None,
             })
@@ -470,12 +482,52 @@ impl Codec {
             caps: caps.clone(),
             stream_type,
             name: name.into(),
+            is_raw: false,
             payload_type: None,
+            decoding_info,
+            encoding_info,
+        }
+    }
 
-            decoding_info: Some(DecodingInfo {
-                has_decoder: AtomicBool::new(has_decoder),
-            }),
+    pub fn new_raw(
+        name: &str,
+        stream_type: gst::StreamType,
+        depayloaders: &glib::List<gst::ElementFactory>,
+        payloaders: &glib::List<gst::ElementFactory>,
+    ) -> Self {
+        let decoding_info = if Self::has_depayloader_for_codec(name, depayloaders) {
+            Some(DecodingInfo {
+                has_decoder: AtomicBool::new(false),
+            })
+        } else {
+            None
+        };
 
+        let payloader = Self::get_payloader_for_codec(name, payloaders);
+        let encoding_info = payloader.map(|payloader| EncodingInfo {
+            encoder: None,
+            payloader,
+            output_filter: None,
+        });
+
+        let mut caps = None;
+        if let Some(elem) = Codec::get_payloader_for_codec(name, payloaders) {
+            if let Some(tmpl) = elem
+                .static_pad_templates()
+                .iter()
+                .find(|template| template.direction() == gst::PadDirection::Sink)
+            {
+                caps = Some(tmpl.caps());
+            }
+        }
+
+        Self {
+            caps: caps.unwrap_or_else(gst::Caps::new_empty),
+            stream_type,
+            name: name.into(),
+            is_raw: true,
+            payload_type: None,
+            decoding_info,
             encoding_info,
         }
     }
@@ -488,31 +540,13 @@ impl Codec {
         self.payload_type = Some(pt);
     }
 
-    pub fn new_decoding(
-        name: &str,
-        stream_type: gst::StreamType,
-        caps: &gst::Caps,
-        decoders: &glib::List<gst::ElementFactory>,
-    ) -> Self {
-        let has_decoder = Self::has_decoder_for_caps(caps, decoders);
-
-        Self {
-            caps: caps.clone(),
-            stream_type,
-            name: name.into(),
-            payload_type: None,
-
-            decoding_info: Some(DecodingInfo {
-                has_decoder: AtomicBool::new(has_decoder),
-            }),
-
-            encoding_info: None,
-        }
-    }
-
-    pub fn has_decoder(&self) -> bool {
+    pub fn can_be_received(&self) -> bool {
         if self.decoding_info.is_none() {
             return false;
+        }
+
+        if self.is_raw {
+            return true;
         }
 
         let decoder_info = self.decoding_info.as_ref().unwrap();
@@ -599,6 +633,40 @@ impl Codec {
         })
     }
 
+    fn has_depayloader_for_codec(
+        codec: &str,
+        depayloaders: &glib::List<gst::ElementFactory>,
+    ) -> bool {
+        depayloaders.iter().any(|factory| {
+            factory.static_pad_templates().iter().any(|template| {
+                let template_caps = template.caps();
+
+                if template.direction() != gst::PadDirection::Sink {
+                    return false;
+                }
+
+                template_caps.iter().any(|s| {
+                    s.has_field("encoding-name")
+                        && s.get::<gst::List>("encoding-name").map_or_else(
+                            |_| {
+                                if let Ok(encoding_name) = s.get::<&str>("encoding-name") {
+                                    encoding_name == codec
+                                } else {
+                                    false
+                                }
+                            },
+                            |encoding_names| {
+                                encoding_names.iter().any(|v| {
+                                    v.get::<&str>()
+                                        .map_or(false, |encoding_name| encoding_name == codec)
+                                })
+                            },
+                        )
+                })
+            })
+        })
+    }
+
     pub fn is_video(&self) -> bool {
         matches!(self.stream_type, gst::StreamType::VIDEO)
     }
@@ -608,11 +676,13 @@ impl Codec {
     }
 
     pub fn build_encoder(&self) -> Option<Result<gst::Element, Error>> {
-        self.encoding_info.as_ref().map(|info| {
-            info.encoder
-                .create()
-                .build()
-                .with_context(|| format!("Creating encoder {}", info.encoder.name()))
+        self.encoding_info.as_ref().and_then(|info| {
+            info.encoder.as_ref().map(|encoder| {
+                encoder
+                    .create()
+                    .build()
+                    .with_context(|| format!("Creating encoder {}", encoder.name()))
+            })
         })
     }
 
@@ -655,13 +725,17 @@ impl Codec {
     }
 
     pub fn encoder_factory(&self) -> Option<gst::ElementFactory> {
-        self.encoding_info.as_ref().map(|info| info.encoder.clone())
+        self.encoding_info
+            .as_ref()
+            .and_then(|info| info.encoder.clone())
     }
 
     pub fn encoder_name(&self) -> Option<String> {
-        self.encoding_info
-            .as_ref()
-            .map(|info| info.encoder.name().to_string())
+        self.encoding_info.as_ref().and_then(|info| {
+            info.encoder
+                .as_ref()
+                .map(|encoder| encoder.name().to_string())
+        })
     }
 
     pub fn set_output_filter(&mut self, caps: gst::Caps) {
@@ -753,7 +827,7 @@ impl Codecs {
         Self(codecs.values().cloned().collect())
     }
 
-    pub fn find_for_encoded_caps(&self, caps: &gst::Caps) -> Option<Codec> {
+    pub fn find_for_payloadable_caps(&self, caps: &gst::Caps) -> Option<Codec> {
         self.iter()
             .find(|codec| codec.caps.can_intersect(caps) && codec.encoding_info.is_some())
             .cloned()
@@ -763,6 +837,11 @@ impl Codecs {
 static CODECS: Lazy<Codecs> = Lazy::new(|| {
     let decoders = gst::ElementFactory::factories_with_type(
         gst::ElementFactoryType::DECODER,
+        gst::Rank::MARGINAL,
+    );
+
+    let depayloaders = gst::ElementFactory::factories_with_type(
+        gst::ElementFactoryType::DEPAYLOADER,
         gst::Rank::MARGINAL,
     );
 
@@ -782,14 +861,19 @@ static CODECS: Lazy<Codecs> = Lazy::new(|| {
             gst::StreamType::AUDIO,
             &OPUS_CAPS,
             &decoders,
+            &depayloaders,
             &encoders,
             &payloaders,
         ),
+        Codec::new_raw("L24", gst::StreamType::AUDIO, &depayloaders, &payloaders),
+        Codec::new_raw("L16", gst::StreamType::AUDIO, &depayloaders, &payloaders),
+        Codec::new_raw("L8", gst::StreamType::AUDIO, &depayloaders, &payloaders),
         Codec::new(
             "VP8",
             gst::StreamType::VIDEO,
             &VP8_CAPS,
             &decoders,
+            &depayloaders,
             &encoders,
             &payloaders,
         ),
@@ -798,6 +882,7 @@ static CODECS: Lazy<Codecs> = Lazy::new(|| {
             gst::StreamType::VIDEO,
             &H264_CAPS,
             &decoders,
+            &depayloaders,
             &encoders,
             &payloaders,
         ),
@@ -806,6 +891,7 @@ static CODECS: Lazy<Codecs> = Lazy::new(|| {
             gst::StreamType::VIDEO,
             &VP9_CAPS,
             &decoders,
+            &depayloaders,
             &encoders,
             &payloaders,
         ),
@@ -814,6 +900,7 @@ static CODECS: Lazy<Codecs> = Lazy::new(|| {
             gst::StreamType::VIDEO,
             &H265_CAPS,
             &decoders,
+            &depayloaders,
             &encoders,
             &payloaders,
         ),
@@ -822,9 +909,11 @@ static CODECS: Lazy<Codecs> = Lazy::new(|| {
             gst::StreamType::VIDEO,
             &AV1_CAPS,
             &decoders,
+            &depayloaders,
             &encoders,
             &payloaders,
         ),
+        Codec::new_raw("RAW", gst::StreamType::VIDEO, &depayloaders, &payloaders),
     ])
 });
 
@@ -836,36 +925,16 @@ impl Codecs {
             .cloned()
     }
 
-    pub fn video_codecs() -> Vec<Codec> {
+    pub fn video_codecs<'a>() -> impl Iterator<Item = &'a Codec> {
         CODECS
             .iter()
             .filter(|codec| codec.stream_type == gst::StreamType::VIDEO)
-            .cloned()
-            .collect()
     }
 
-    pub fn audio_codecs() -> Vec<Codec> {
+    pub fn audio_codecs<'a>() -> impl Iterator<Item = &'a Codec> {
         CODECS
             .iter()
             .filter(|codec| codec.stream_type == gst::StreamType::AUDIO)
-            .cloned()
-            .collect()
-    }
-
-    pub fn video_codec_names() -> Vec<String> {
-        CODECS
-            .iter()
-            .filter(|codec| codec.stream_type == gst::StreamType::VIDEO)
-            .map(|codec| codec.name.clone())
-            .collect()
-    }
-
-    pub fn audio_codec_names() -> Vec<String> {
-        CODECS
-            .iter()
-            .filter(|codec| codec.stream_type == gst::StreamType::AUDIO)
-            .map(|codec| codec.name.clone())
-            .collect()
     }
 
     /// List all codecs that can be used for encoding the given caps and assign
@@ -909,9 +978,9 @@ impl Codecs {
     }
 }
 
-pub fn is_raw_caps(caps: &gst::Caps) -> bool {
-    assert!(caps.is_fixed());
-    ["video/x-raw", "audio/x-raw"].contains(&caps.structure(0).unwrap().name().as_str())
+pub fn has_raw_caps(caps: &gst::Caps) -> bool {
+    caps.iter()
+        .any(|s| ["video/x-raw", "audio/x-raw"].contains(&s.name().as_str()))
 }
 
 pub fn cleanup_codec_caps(mut caps: gst::Caps) -> gst::Caps {

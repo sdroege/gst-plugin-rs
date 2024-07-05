@@ -34,6 +34,13 @@ mode and an example based on RTSP instead of WebRTC.
 The examples can also be used for [RFC 7273] NTP or PTP clock signalling and
 synchronization.
 
+Finally, raw payloads (e.g. L24 audio) can be negotiated.
+
+Note: you can have your host act as an NTP server, which can help the examples
+with clock synchronization. For `chrony`, this can be configure by editing
+`/etc/chrony.conf` and uncommenting / editing the `allow` entry. The examples
+can then be launched with `--ntp-server _ip_address_`.
+
 [RFC 6051]: https://datatracker.ietf.org/doc/html/rfc6051
 [RFC 7273]: https://datatracker.ietf.org/doc/html/rfc7273
 [Instantaneous RTP synchronization...]: https://coaxion.net/blog/2022/05/instantaneous-rtp-synchronization-retrieval-of-absolute-sender-clock-times-with-gstreamer/
@@ -44,7 +51,7 @@ The example uses the default WebRTC signaller. Launch it using the following
 command:
 
 ```shell
-cargo run --bin gst-webrtc-signalling-server
+cargo run --bin gst-webrtc-signalling-server --no-default-features
 ```
 
 ### Receiver
@@ -53,14 +60,14 @@ The receiver awaits for new audio & video stream publishers and render the
 streams using auto sink elements. Launch it using the following command:
 
 ```shell
-cargo r --example webrtc-precise-sync-recv
+cargo r --example webrtc-precise-sync-recv --no-default-features
 ```
 
 The default configuration should work for a local test. For a multi-host setup,
 see the available options:
 
 ```shell
-cargo r --example webrtc-precise-sync-recv -- --help
+cargo r --example webrtc-precise-sync-recv --no-default-features -- --help
 ```
 
 E.g.: the following will force `avdec_h264` over hardware decoders, activate
@@ -70,7 +77,8 @@ specified address:
 ```shell
 GST_PLUGIN_FEATURE_RANK=avdec_h264:MAX \
 WEBRTC_PRECISE_SYNC_RECV_LOG=debug \
-cargo r --example webrtc-precise-sync-recv -- --server 192.168.1.22
+cargo r --example webrtc-precise-sync-recv --no-default-features -- \
+  --server 192.168.1.22
 ```
 
 ### Sender
@@ -79,7 +87,7 @@ The sender publishes audio & video test streams. Launch it using the following
 command:
 
 ```shell
-cargo r --example webrtc-precise-sync-send
+cargo r --example webrtc-precise-sync-send --no-default-features
 ```
 
 The default configuration should work for a local test. For a multi-host setup,
@@ -87,7 +95,7 @@ to set the number of audio / video streams, to enable rapid synchronization or
 to force the video encoder, see the available options:
 
 ```shell
-cargo r --example webrtc-precise-sync-send -- --help
+cargo r --example webrtc-precise-sync-send --no-default-features -- --help
 ```
 
 E.g.: the following will force H264 and `x264enc` over hardware encoders,
@@ -97,7 +105,7 @@ specified address:
 ```shell
 GST_PLUGIN_FEATURE_RANK=264enc:MAX \
 WEBRTC_PRECISE_SYNC_SEND_LOG=debug \
-cargo r --example webrtc-precise-sync-send -- \
+cargo r --example webrtc-precise-sync-send --no-default-features -- \
   --server 192.168.1.22 --video-caps video/x-h264
 ```
 
@@ -120,14 +128,47 @@ commands such as:
 #### Receiver
 
 ```shell
-cargo r --example webrtc-precise-sync-recv -- --expect-clock-signalling
+cargo r --example webrtc-precise-sync-recv --no-default-features -- \
+  --expect-clock-signalling
 ```
 
 #### Sender
 
 ```shell
-cargo r --example webrtc-precise-sync-send -- --clock ntp --do-clock-signalling \
+cargo r --example webrtc-precise-sync-send --no-default-features -- \
+  --clock ntp --do-clock-signalling \
   --video-streams 0 --audio-streams 2
+```
+
+### Raw payload
+
+The sender can be instructed to send raw payloads. Note that raw payloads
+are not activated by default and must be selected explicitly.
+
+This command will stream two stereo L24 streams:
+
+```shell
+cargo r --example webrtc-precise-sync-send --no-default-features -- \
+  --video-streams 0 \
+  --audio-streams 2 --audio-codecs L24
+```
+
+Launch the receiver with:
+
+```shell
+cargo r --example webrtc-precise-sync-recv --no-default-features -- \
+  --audio-codecs L24
+```
+
+This can be used to stream multiple RAW video streams using specific CAPS for
+the streams and allowing fallback to VP8 & OPUS if remote doesn't support raw
+payloads:
+
+```shell
+cargo r --example webrtc-precise-sync-send --no-default-features -- \
+  --video-streams 2 --audio-streams 1 \
+  --video-codecs RAW --video-codecs VP8 --video-caps video/x-raw,format=I420,width=400 \
+  --audio-codecs L24 --audio-codecs OPUS --audio-caps audio/x-raw,rate=48000,channels=2
 ```
 
 ## Android

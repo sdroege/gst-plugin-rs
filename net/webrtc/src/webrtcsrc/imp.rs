@@ -9,6 +9,7 @@ use anyhow::{Context, Error};
 use gst::glib;
 use gst::subclass::prelude::*;
 use gst_webrtc::WebRTCDataChannel;
+use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::borrow::BorrowMut;
 use std::collections::{HashMap, HashSet};
@@ -94,14 +95,18 @@ impl ObjectImpl for BaseWebRTCSrc {
                 gst::ParamSpecArray::builder("video-codecs")
                     .flags(glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY)
                     .blurb(&format!("Names of video codecs to be be used during the SDP negotiation. Valid values: [{}]",
-                        Codecs::video_codec_names().into_iter().collect::<Vec<String>>().join(", ")
+                        Codecs::video_codecs()
+                            .map(|c| c.name.as_str())
+                            .join(", ")
                     ))
                     .element_spec(&glib::ParamSpecString::builder("video-codec-name").build())
                     .build(),
                 gst::ParamSpecArray::builder("audio-codecs")
                     .flags(glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY)
                     .blurb(&format!("Names of audio codecs to be be used during the SDP negotiation. Valid values: [{}]",
-                        Codecs::audio_codec_names().into_iter().collect::<Vec<String>>().join(", ")
+                        Codecs::audio_codecs()
+                            .map(|c| c.name.as_str())
+                            .join(", ")
                     ))
                     .element_spec(&glib::ParamSpecString::builder("audio-codec-name").build())
                     .build(),
@@ -271,12 +276,12 @@ impl Default for Settings {
             signaller: signaller.upcast(),
             meta: Default::default(),
             audio_codecs: Codecs::audio_codecs()
-                .into_iter()
-                .filter(|codec| codec.has_decoder())
+                .filter(|codec| !codec.is_raw)
+                .cloned()
                 .collect(),
             video_codecs: Codecs::video_codecs()
-                .into_iter()
-                .filter(|codec| codec.has_decoder())
+                .filter(|codec| !codec.is_raw)
+                .cloned()
                 .collect(),
             enable_data_channel_navigation: DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION,
             do_retransmission: DEFAULT_DO_RETRANSMISSION,
@@ -630,7 +635,13 @@ impl Session {
             }
             srcpad.set_target(Some(&ghostpad)).unwrap();
         } else {
-            gst::debug!(CAT, obj = element, "Unused webrtcbin pad {webrtcbin_pad:?}");
+            gst::debug!(
+                CAT,
+                obj = element,
+                "Unused webrtcbin pad {} {:?}",
+                webrtcbin_pad.name(),
+                webrtcbin_pad.current_caps(),
+            );
         }
         ghostpad
     }
@@ -1326,11 +1337,13 @@ impl BaseWebRTCSrc {
 impl ElementImpl for BaseWebRTCSrc {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            // Ignore specific raw caps from Codecs: they are covered by VIDEO_CAPS & AUDIO_CAPS
+
             let mut video_caps_builder = gst::Caps::builder_full()
                 .structure_with_any_features(VIDEO_CAPS.structure(0).unwrap().to_owned())
                 .structure(RTP_CAPS.structure(0).unwrap().to_owned());
 
-            for codec in Codecs::video_codecs() {
+            for codec in Codecs::video_codecs().filter(|codec| !codec.is_raw) {
                 video_caps_builder =
                     video_caps_builder.structure(codec.caps.structure(0).unwrap().to_owned());
             }
@@ -1339,7 +1352,7 @@ impl ElementImpl for BaseWebRTCSrc {
                 .structure_with_any_features(AUDIO_CAPS.structure(0).unwrap().to_owned())
                 .structure(RTP_CAPS.structure(0).unwrap().to_owned());
 
-            for codec in Codecs::audio_codecs() {
+            for codec in Codecs::audio_codecs().filter(|codec| !codec.is_raw) {
                 audio_caps_builder =
                     audio_caps_builder.structure(codec.caps.structure(0).unwrap().to_owned());
             }

@@ -43,6 +43,18 @@ struct Args {
     #[clap(long, help = "RTP jitterbuffer latency (ms)", default_value = "40")]
     pub rtp_latency: u32,
 
+    #[clap(
+        long,
+        help = "Force accepted audio codecs. See 'webrtcsrc' 'audio-codecs' property (ex. 'OPUS'). Accepts several occurrences."
+    )]
+    pub audio_codecs: Vec<String>,
+
+    #[clap(
+        long,
+        help = "Force accepted video codecs. See 'webrtcsrc' 'video-codecs' property (ex. 'VP8'). Accepts several occurrences."
+    )]
+    pub video_codecs: Vec<String>,
+
     #[clap(long, help = "Signalling server host", default_value = "localhost")]
     pub server: String,
 
@@ -121,6 +133,14 @@ fn spawn_consumer(
         // * https://gitlab.freedesktop.org/gstreamer/gst-plugins-good/-/issues/914
         // * https://gitlab.freedesktop.org/gstreamer/gstreamer/-/issues/1574
         webrtcsrc.set_property("do-retransmission", false);
+    }
+
+    if !args.audio_codecs.is_empty() {
+        webrtcsrc.set_property("audio-codecs", gst::Array::new(&args.audio_codecs));
+    }
+
+    if !args.video_codecs.is_empty() {
+        webrtcsrc.set_property("video-codecs", gst::Array::new(&args.video_codecs));
     }
 
     bin.add(&webrtcsrc).context("Adding webrtcsrc")?;

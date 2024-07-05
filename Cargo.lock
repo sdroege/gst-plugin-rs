@@ -3051,6 +3051,7 @@ dependencies = [
  "gstreamer-webrtc",
  "http 1.1.0",
  "human_bytes",
+ "itertools 0.12.1",
  "livekit-api",
  "livekit-protocol",
  "once_cell",

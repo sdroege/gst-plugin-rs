@@ -1,7 +1,9 @@
-use anyhow::{bail, Context};
+use anyhow::{anyhow, bail, Context};
 use futures::prelude::*;
 use gst::prelude::*;
 use gst_rtp::prelude::*;
+use gstrswebrtc::utils::Codecs;
+use itertools::Itertools;
 use tracing::{debug, error, info};
 use url::Url;
 
@@ -45,7 +47,28 @@ struct Args {
     )]
     pub video_streams: usize,
 
-    #[clap(long, help = "Force video caps (ex. 'video/x-h264')")]
+    #[clap(
+        long,
+        help = "Audio codecs that will be proposed in the SDP (ex. 'L24', defaults to ['OPUS']). Accepts several occurrences."
+    )]
+    pub audio_codecs: Vec<String>,
+
+    #[clap(
+        long,
+        help = "Use specific audio caps (ex. 'audio/x-raw,rate=48000,channels=2')"
+    )]
+    pub audio_caps: Option<String>,
+
+    #[clap(
+        long,
+        help = "Video codecs that will be proposed in the SDP (ex. 'RAW', defaults to ['VP8', 'H264', 'VP9', 'H265']). Accepts several occurrences."
+    )]
+    pub video_codecs: Vec<String>,
+
+    #[clap(
+        long,
+        help = "Use specific video caps (ex. 'video/x-raw,format=I420,width=400')"
+    )]
     pub video_caps: Option<String>,
 
     #[clap(long, help = "Use RFC 6051 64-bit NTP timestamp RTP header extension.")]
@@ -135,6 +158,8 @@ impl App {
     }
 
     async fn prepare(&mut self) -> anyhow::Result<()> {
+        use std::str::FromStr;
+
         debug!("Preparing");
 
         self.pipeline = Some(gst::Pipeline::new());
@@ -217,6 +242,26 @@ impl App {
             });
         }
 
+        if !self.args.audio_codecs.is_empty() {
+            let mut audio_caps = gst::Caps::new_empty();
+            for codec in self.args.audio_codecs.iter() {
+                audio_caps.merge(
+                    Codecs::audio_codecs()
+                        .find(|c| &c.name == codec)
+                        .ok_or_else(|| {
+                            anyhow!(
+                                "Unknown audio codec {codec}. Valid values are: {}",
+                                Codecs::audio_codecs().map(|c| c.name.as_str()).join(", ")
+                            )
+                        })?
+                        .caps
+                        .clone(),
+                );
+            }
+
+            webrtcsink.set_property("audio-caps", audio_caps);
+        }
+
         for idx in 0..self.args.audio_streams {
             let audiosrc = gst::ElementFactory::make("audiotestsrc")
                 .property("is-live", true)
@@ -226,10 +271,64 @@ impl App {
                 .context("Creating audiotestsrc")?;
             self.pipeline().add(&audiosrc).context("Adding audiosrc")?;
 
-            audiosrc
-                .link_pads(None, &webrtcsink, Some("audio_%u"))
-                .context("Linking audiosrc")?;
+            if let Some(ref caps) = self.args.audio_caps {
+                audiosrc
+                    .link_pads_filtered(
+                        None,
+                        &webrtcsink,
+                        Some("audio_%u"),
+                        &gst::Caps::from_str(caps).context("Parsing audio caps")?,
+                    )
+                    .context("Linking audiosrc")?;
+            } else {
+                audiosrc
+                    .link_pads(None, &webrtcsink, Some("audio_%u"))
+                    .context("Linking audiosrc")?;
+            }
         }
+
+        if !self.args.video_codecs.is_empty() {
+            let mut video_caps = gst::Caps::new_empty();
+            for codec in self.args.video_codecs.iter() {
+                video_caps.merge(
+                    Codecs::video_codecs()
+                        .find(|c| &c.name == codec)
+                        .ok_or_else(|| {
+                            anyhow!(
+                                "Unknown video codec {codec}. Valid values are: {}",
+                                Codecs::video_codecs().map(|c| c.name.as_str()).join(", ")
+                            )
+                        })?
+                        .caps
+                        .clone(),
+                );
+            }
+
+            webrtcsink.set_property("video-caps", video_caps);
+        }
+
+        let raw_video_caps = {
+            let mut raw_video_caps = if let Some(ref video_caps) = self.args.video_caps {
+                gst::Caps::from_str(video_caps).context("Parsing video caps")?
+            } else {
+                gst::Caps::new_empty_simple("video/x-raw")
+            };
+
+            // If no width / height are specified, set something big enough
+            let caps_mut = raw_video_caps.make_mut();
+            let s = caps_mut.structure_mut(0).expect("created above");
+            match (s.get::<i32>("width").ok(), s.get::<i32>("height").ok()) {
+                (None, None) => {
+                    s.set("width", 800i32);
+                    s.set("height", 600i32);
+                }
+                (Some(width), None) => s.set("height", 3 * width / 4),
+                (None, Some(height)) => s.set("width", 4 * height / 3),
+                _ => (),
+            }
+
+            raw_video_caps
+        };
 
         for idx in 0..self.args.video_streams {
             let videosrc = gst::ElementFactory::make("videotestsrc")
@@ -247,22 +346,12 @@ impl App {
                 .expect("adding video elements");
 
             videosrc
-                .link_filtered(
-                    &video_overlay,
-                    &gst::Caps::builder("video/x-raw")
-                        .field("width", 800i32)
-                        .field("height", 600i32)
-                        .build(),
-                )
+                .link_filtered(&video_overlay, &raw_video_caps)
                 .context("Linking videosrc to timeoverlay")?;
 
             video_overlay
                 .link_pads(None, &webrtcsink, Some("video_%u"))
                 .context("Linking video overlay")?;
-        }
-
-        if let Some(ref video_caps) = self.args.video_caps {
-            webrtcsink.set_property("video-caps", &gst::Caps::builder(video_caps).build());
         }
 
         Ok(())
