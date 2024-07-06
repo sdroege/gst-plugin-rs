@@ -99,7 +99,7 @@ impl ObjectImpl for Paintable {
                 glib::ParamSpecBoolean::builder("force-aspect-ratio")
                     .nick("Force Aspect Ratio")
                     .blurb("When enabled, scaling will respect original aspect ratio")
-                    .default_value(true)
+                    .default_value(false)
                     .build(),
             ]
         });
