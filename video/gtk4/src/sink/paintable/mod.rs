@@ -22,7 +22,7 @@ glib::wrapper! {
 }
 
 impl Paintable {
-    pub fn new(context: Option<gdk::GLContext>) -> Self {
+    pub(crate) fn new(context: Option<gdk::GLContext>) -> Self {
         glib::Object::builder()
             .property("gl-context", context)
             .build()

@@ -89,7 +89,7 @@ impl ObjectImpl for PaintableSink {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecObject::builder::<gdk::Paintable>("paintable")
+                glib::ParamSpecObject::builder::<super::paintable::Paintable>("paintable")
                     .nick("Paintable")
                     .blurb("The Paintable the sink renders to")
                     .read_only()

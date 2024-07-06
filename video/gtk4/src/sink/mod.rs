@@ -40,7 +40,7 @@ use gtk::glib::prelude::*;
 
 mod frame;
 pub(super) mod imp;
-mod paintable;
+pub(super) mod paintable;
 
 enum SinkEvent {
     FrameChanged,

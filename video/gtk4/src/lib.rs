@@ -19,9 +19,17 @@ use gst::glib;
 
 mod sink;
 mod utils;
+pub use sink::paintable::Paintable;
 pub use sink::PaintableSink;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "doc")]
+    {
+        use gst::prelude::*;
+
+        sink::paintable::Paintable::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    }
+
     #[cfg(not(feature = "gtk_v4_10"))]
     {
         if gtk::micro_version() >= 13 {

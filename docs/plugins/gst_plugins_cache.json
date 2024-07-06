@@ -2565,7 +2565,7 @@
                         "controllable": false,
                         "mutable": "null",
                         "readable": true,
-                        "type": "GdkPaintable",
+                        "type": "GstGtk4Paintable",
                         "writable": false
                     }
                 },
@@ -2574,7 +2574,81 @@
         },
         "filename": "gstgtk4",
         "license": "MPL",
-        "other-types": {},
+        "other-types": {
+            "GstGtk4Paintable": {
+                "hierarchy": [
+                    "GstGtk4Paintable",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GdkPaintable"
+                ],
+                "kind": "object",
+                "properties": {
+                    "background-color": {
+                        "blurb": "Background color to render behind the video frame and in the borders",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "255",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "force-aspect-ratio": {
+                        "blurb": "When enabled, scaling will respect original aspect ratio",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "gl-context": {
+                        "blurb": "GL context to use for rendering",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": true,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GdkGLContext",
+                        "writable": true
+                    },
+                    "scaling-filter": {
+                        "blurb": "Scaling filter to use for rendering",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "linear (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GskScalingFilter",
+                        "writable": true
+                    },
+                    "use-scaling-filter": {
+                        "blurb": "Use selected scaling filter or GTK default for rendering",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                }
+            }
+        },
         "package": "gst-plugin-gtk4",
         "source": "gst-plugin-gtk4",
         "tracers": {},
