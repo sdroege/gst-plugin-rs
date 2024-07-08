@@ -155,7 +155,13 @@ impl ObjectImpl for Paintable {
             #[cfg(feature = "gtk_v4_10")]
             "use-scaling-filter" => self.use_scaling_filter.set(value.get().unwrap()),
             "force-aspect-ratio" => self.force_aspect_ratio.set(value.get().unwrap()),
-            "orientation" => self.orientation.set(value.get().unwrap()),
+            "orientation" => {
+                let new_orientation = value.get().unwrap();
+                if new_orientation != self.orientation.get() {
+                    self.orientation.set(new_orientation);
+                    self.obj().invalidate_size();
+                }
+            }
             _ => unimplemented!(),
         }
     }
@@ -528,15 +534,33 @@ impl Paintable {
                 }
             };
 
+        let flip_width_height = |(width, height, orientation): (u32, u32, frame::Orientation)| {
+            if orientation.is_flip_width_height() {
+                (height, width)
+            } else {
+                (width, height)
+            }
+        };
+
         let new_size = new_paintables
             .first()
-            .map(|p| (f32::round(p.width) as u32, f32::round(p.height) as u32))
+            .map(|p| {
+                flip_width_height((
+                    f32::round(p.width) as u32,
+                    f32::round(p.height) as u32,
+                    p.orientation,
+                ))
+            })
             .unwrap();
 
         let old_paintables = self.paintables.replace(new_paintables);
-        let old_size = old_paintables
-            .first()
-            .map(|p| (f32::round(p.width) as u32, f32::round(p.height) as u32));
+        let old_size = old_paintables.first().map(|p| {
+            flip_width_height((
+                f32::round(p.width) as u32,
+                f32::round(p.height) as u32,
+                p.orientation,
+            ))
+        });
 
         if Some(new_size) != old_size {
             gst::debug!(
