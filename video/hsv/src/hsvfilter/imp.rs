@@ -167,7 +167,7 @@ impl ObjectImpl for HsvFilter {
                 let hue_shift = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing hue-shift from {} to {}",
                     settings.hue_shift,
                     hue_shift
@@ -179,7 +179,7 @@ impl ObjectImpl for HsvFilter {
                 let saturation_mul = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing saturation-mul from {} to {}",
                     settings.saturation_mul,
                     saturation_mul
@@ -191,7 +191,7 @@ impl ObjectImpl for HsvFilter {
                 let saturation_off = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing saturation-off from {} to {}",
                     settings.saturation_off,
                     saturation_off
@@ -203,7 +203,7 @@ impl ObjectImpl for HsvFilter {
                 let value_mul = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing value-mul from {} to {}",
                     settings.value_mul,
                     value_mul
@@ -215,7 +215,7 @@ impl ObjectImpl for HsvFilter {
                 let value_off = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing value-off from {} to {}",
                     settings.value_off,
                     value_off

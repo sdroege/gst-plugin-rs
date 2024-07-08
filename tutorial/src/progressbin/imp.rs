@@ -108,7 +108,7 @@ impl ObjectImpl for ProgressBin {
                     .expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing output from {:?} to {:?}",
                     output_type,
                     new_output_type
@@ -235,7 +235,7 @@ impl BinImpl for ProgressBin {
                     match output_type {
                         ProgressBinOutput::Println => println!("progress: {percent:5.1}%"),
                         ProgressBinOutput::DebugCategory => {
-                            gst::info!(CAT, imp: self, "progress: {:5.1}%", percent);
+                            gst::info!(CAT, imp = self, "progress: {:5.1}%", percent);
                         }
                     };
                 }

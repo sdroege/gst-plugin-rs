@@ -271,7 +271,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpBaseAudioPay2 {
         id: u64,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let buffer = buffer.clone().into_mapped_buffer_readable().map_err(|_| {
-            gst::error!(CAT, imp: self, "Can't map buffer readable");
+            gst::error!(CAT, imp = self, "Can't map buffer readable");
             gst::FlowError::Error
         })?;
         let pts = buffer.buffer().pts().unwrap();
@@ -297,7 +297,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpBaseAudioPay2 {
 
         if discont {
             if state.audio_discont.base_pts().is_some() {
-                gst::debug!(CAT, imp: self, "Draining because of discontinuity");
+                gst::debug!(CAT, imp = self, "Draining because of discontinuity");
                 self.drain_packets(&settings, &mut state, true)?;
             }
 
@@ -373,7 +373,7 @@ impl RtpBaseAudioPay2 {
 
         gst::trace!(
             CAT,
-            imp: self,
+            imp = self,
             "min ptime {} (frames: {}), max ptime {} (frames: {}), ptime multiple {} (frames {})",
             settings.min_ptime,
             min_pframes,
@@ -426,7 +426,7 @@ impl RtpBaseAudioPay2 {
 
         gst::trace!(
             CAT,
-            imp: self,
+            imp = self,
             "Currently {} bytes queued, min packet size {min_packet_size}, max packet size {max_packet_size}, force {force}",
             state.queued_bytes,
         );
@@ -440,7 +440,7 @@ impl RtpBaseAudioPay2 {
 
             gst::trace!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Creating packet of size {packet_size} ({} frames), marker {}",
                 packet_size / bpf,
                 state.audio_discont.next_output_offset().is_none(),
@@ -502,7 +502,13 @@ impl RtpBaseAudioPay2 {
             state.audio_discont.process_output(packet_size / bpf);
         }
 
-        gst::trace!(CAT, imp: self, "Currently {} bytes / {} frames queued", state.queued_bytes, state.queued_bytes / bpf);
+        gst::trace!(
+            CAT,
+            imp = self,
+            "Currently {} bytes / {} frames queued",
+            state.queued_bytes,
+            state.queued_bytes / bpf
+        );
 
         Ok(gst::FlowSuccess::Ok)
     }

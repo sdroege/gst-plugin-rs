@@ -88,24 +88,24 @@ impl Settings {
         let s = match gst::Structure::from_str(&format!("buffer-lateness,{params}")) {
             Ok(s) => s,
             Err(err) => {
-                gst::warning!(CAT, imp: imp, "failed to parse tracer parameters: {}", err);
+                gst::warning!(CAT, imp = imp, "failed to parse tracer parameters: {}", err);
                 return;
             }
         };
 
         if let Ok(file) = s.get::<&str>("file") {
-            gst::log!(CAT, imp: imp, "file= {}", file);
+            gst::log!(CAT, imp = imp, "file= {}", file);
             self.file = PathBuf::from(file);
         }
 
         if let Ok(filter) = s.get::<&str>("include-filter") {
-            gst::log!(CAT, imp: imp, "include filter= {}", filter);
+            gst::log!(CAT, imp = imp, "include filter= {}", filter);
             let filter = match Regex::new(filter) {
                 Ok(filter) => Some(filter),
                 Err(err) => {
                     gst::error!(
                         CAT,
-                        imp: imp,
+                        imp = imp,
                         "Failed to compile include-filter regex: {}",
                         err
                     );
@@ -116,13 +116,13 @@ impl Settings {
         }
 
         if let Ok(filter) = s.get::<&str>("exclude-filter") {
-            gst::log!(CAT, imp: imp, "exclude filter= {}", filter);
+            gst::log!(CAT, imp = imp, "exclude filter= {}", filter);
             let filter = match Regex::new(filter) {
                 Ok(filter) => Some(filter),
                 Err(err) => {
                     gst::error!(
                         CAT,
-                        imp: imp,
+                        imp = imp,
                         "Failed to compile exclude-filter regex: {}",
                         err
                     );
@@ -194,14 +194,14 @@ impl ObjectImpl for BufferLateness {
         let mut file = match std::fs::File::create(&state.settings.file) {
             Ok(file) => file,
             Err(err) => {
-                gst::error!(CAT, imp: self, "Failed to create file: {err}");
+                gst::error!(CAT, imp = self, "Failed to create file: {err}");
                 return;
             }
         };
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Writing file {}",
             state.settings.file.display()
         );
@@ -218,7 +218,7 @@ impl ObjectImpl for BufferLateness {
         } in &state.log
         {
             if let Err(err) = writeln!(&mut file, "{timestamp},{element_name}:{pad_name},0x{ptr:08x},{buffer_clock_time},{pipeline_clock_time},{lateness},{min_latency}") {
-                gst::error!(CAT, imp: self, "Failed to write to file: {err}");
+                gst::error!(CAT, imp = self, "Failed to write to file: {err}");
                 return;
             }
         }
@@ -236,7 +236,7 @@ impl TracerImpl for BufferLateness {
         let ptr = pad.as_ptr() as usize;
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "new source pad: {} 0x{:08x}",
             pad.name(),
             ptr

@@ -10,14 +10,14 @@
 macro_rules! err_flow {
     ($imp:ident, read, $msg:literal) => {
         |err| {
-            gst::warning!(CAT, imp: $imp, $msg, err);
+            gst::warning!(CAT, imp = $imp, $msg, err);
             gst::element_imp_warning!($imp, gst::ResourceError::Read, [$msg, err]);
             gst::FlowError::Error
         }
     };
     ($imp:ident, write, $msg:literal) => {
         |err| {
-            gst::warning!(CAT, imp: $imp, $msg, err);
+            gst::warning!(CAT, imp = $imp, $msg, err);
             gst::element_imp_warning!($imp, gst::ResourceError::Write, [$msg, err]);
             gst::FlowError::Error
         }

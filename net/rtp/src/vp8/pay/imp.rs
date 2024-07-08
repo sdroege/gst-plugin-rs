@@ -242,7 +242,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpVp8Pay {
     }
 
     fn set_sink_caps(&self, caps: &gst::Caps) -> bool {
-        gst::debug!(CAT, imp: self, "received caps {caps:?}");
+        gst::debug!(CAT, imp = self, "received caps {caps:?}");
 
         let caps_builder = gst::Caps::builder("application/x-rtp")
             .field("media", "video")
@@ -280,7 +280,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpVp8Pay {
         let settings = self.settings.lock().unwrap();
         let max_payload_size = self.obj().max_payload_size();
 
-        gst::trace!(CAT, imp: self, "received buffer of size {}", buffer.size());
+        gst::trace!(CAT, imp = self, "received buffer of size {}", buffer.size());
 
         let map = buffer.map_readable().map_err(|_| {
             gst::element_imp_error!(
@@ -306,7 +306,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpVp8Pay {
         if meta.as_ref().map(|meta| meta.layer_id.is_some()) == Some(true)
             && state.temporal_layer_zero_index.is_none()
         {
-            gst::trace!(CAT, imp: self, "Detected stream with temporal scalability");
+            gst::trace!(CAT, imp = self, "Detected stream with temporal scalability");
             state.temporal_layer_zero_index = Some(0);
         }
 
@@ -314,12 +314,12 @@ impl crate::basepay::RtpBasePay2Impl for RtpVp8Pay {
         let partition_offsets = if state.temporal_layer_zero_index.is_none() {
             match FrameInfo::parse(&map) {
                 Ok(frame_info) => {
-                    gst::trace!(CAT, imp: self, "Parsed frame info {frame_info:?}");
+                    gst::trace!(CAT, imp = self, "Parsed frame info {frame_info:?}");
 
                     Some(frame_info.partition_offsets)
                 }
                 Err(err) => {
-                    gst::error!(CAT, imp: self, "Failed parsing frame info: {err}");
+                    gst::error!(CAT, imp = self, "Failed parsing frame info: {err}");
                     None
                 }
             }
@@ -354,14 +354,18 @@ impl crate::basepay::RtpBasePay2Impl for RtpVp8Pay {
             };
 
             let payload_descriptor_size = payload_descriptor.size().map_err(|err| {
-                gst::error!(CAT, imp: self, "Failed to write payload descriptor: {err:?}");
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Failed to write payload descriptor: {err:?}"
+                );
                 gst::FlowError::Error
             })?;
             let overhead = payload_descriptor_size;
             let payload_size = (max_payload_size as usize)
                 .checked_sub(overhead + 1)
                 .ok_or_else(|| {
-                    gst::error!(CAT, imp: self, "Too small MTU configured for stream");
+                    gst::error!(CAT, imp = self, "Too small MTU configured for stream");
                     gst::element_imp_error!(
                         self,
                         gst::LibraryError::Settings,
@@ -442,7 +446,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpVp8Pay {
 
             gst::trace!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Writing packet with payload descriptor {payload_descriptor:?} and payload size {payload_size} at offset {current_offset}",
             );
 
@@ -453,7 +457,11 @@ impl crate::basepay::RtpBasePay2Impl for RtpVp8Pay {
             let mut w = ByteWriter::endian(&mut payload_descriptor_buffer, BigEndian);
             w.build::<PayloadDescriptor>(&payload_descriptor)
                 .map_err(|err| {
-                    gst::error!(CAT, imp: self, "Failed to write payload descriptor: {err:?}");
+                    gst::error!(
+                        CAT,
+                        imp = self,
+                        "Failed to write payload descriptor: {err:?}"
+                    );
                     gst::FlowError::Error
                 })?;
             assert_eq!(payload_descriptor_buffer.len(), payload_descriptor_size);
@@ -478,7 +486,11 @@ impl crate::basepay::RtpBasePay2Impl for RtpVp8Pay {
         if meta.map_or(true, |meta| matches!(meta.layer_id, Some((0, _)))) {
             if let Some(ref mut temporal_layer_zero_index) = state.temporal_layer_zero_index {
                 *temporal_layer_zero_index = temporal_layer_zero_index.wrapping_add(1);
-                gst::trace!(CAT, imp: self, "Updated temporal layer zero index to {temporal_layer_zero_index}");
+                gst::trace!(
+                    CAT,
+                    imp = self,
+                    "Updated temporal layer zero index to {temporal_layer_zero_index}"
+                );
             }
         }
 

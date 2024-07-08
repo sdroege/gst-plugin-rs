@@ -227,7 +227,11 @@ impl SendSession {
                 RUNTIME.spawn_blocking(move || {
                     let buffer = gst::Buffer::from_mut_slice(data);
                     if let Err(e) = rtcp_srcpad.push(buffer) {
-                        gst::warning!(CAT, obj: rtcp_srcpad, "Failed to send rtcp data: flow return {e:?}");
+                        gst::warning!(
+                            CAT,
+                            obj = rtcp_srcpad,
+                            "Failed to send rtcp data: flow return {e:?}"
+                        );
                     }
                     drop(acquired);
                 });
@@ -316,13 +320,17 @@ impl RtpSend {
         now: Instant,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mapped = buffer.map_readable().map_err(|e| {
-            gst::error!(CAT, imp: self, "Failed to map input buffer {e:?}");
+            gst::error!(CAT, imp = self, "Failed to map input buffer {e:?}");
             gst::FlowError::Error
         })?;
         let rtp = match rtp_types::RtpPacket::parse(&mapped) {
             Ok(rtp) => rtp,
             Err(e) => {
-                gst::error!(CAT, imp: self, "Failed to parse input as valid rtp packet: {e:?}");
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Failed to parse input as valid rtp packet: {e:?}"
+                );
                 return Ok(gst::FlowSuccess::Ok);
             }
         };
@@ -422,7 +430,11 @@ impl RtpSend {
                         session.add_caps(caps.caps_owned());
                     }
                 } else {
-                    gst::warning!(CAT, obj: pad, "input caps are missing payload or clock-rate fields");
+                    gst::warning!(
+                        CAT,
+                        obj = pad,
+                        "input caps are missing payload or clock-rate fields"
+                    );
                 }
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }

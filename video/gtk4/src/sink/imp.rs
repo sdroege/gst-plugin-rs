@@ -125,7 +125,7 @@ impl ObjectImpl for PaintableSink {
                 // checking if GtkBin is registered to know if libgtk3.so is already present
                 // GtkBin was dropped for GTK4 https://gitlab.gnome.org/GNOME/gtk/-/commit/3c165b3b77
                 if glib::types::Type::from_name("GtkBin").is_some() {
-                    gst::error!(CAT, imp: self, "Skipping the creation of paintable to avoid segfault between GTK3 and GTK4");
+                    gst::error!(CAT, imp = self, "Skipping the creation of paintable to avoid segfault between GTK3 and GTK4");
                     return None::<&gdk::Paintable>.to_value();
                 }
 
@@ -139,7 +139,7 @@ impl ObjectImpl for PaintableSink {
                 let paintable = match &*paintable_guard {
                     Some(ref paintable) => paintable,
                     None => {
-                        gst::error!(CAT, imp: self, "Failed to create paintable");
+                        gst::error!(CAT, imp = self, "Failed to create paintable");
                         return None::<&gdk::Paintable>.to_value();
                     }
                 };
@@ -148,7 +148,7 @@ impl ObjectImpl for PaintableSink {
                 if !paintable.is_owner() {
                     gst::error!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Can't retrieve Paintable from non-main thread"
                     );
                     return None::<&gdk::Paintable>.to_value();
@@ -322,7 +322,7 @@ impl ElementImpl for PaintableSink {
                     let res = utils::invoke_on_main_thread(gtk::init);
 
                     if let Err(err) = res {
-                        gst::error!(CAT, imp: self, "Failed to create initialize GTK: {err}");
+                        gst::error!(CAT, imp = self, "Failed to create initialize GTK: {err}");
                         return Err(gst::StateChangeError);
                     }
                 }
@@ -335,7 +335,7 @@ impl ElementImpl for PaintableSink {
                 }
 
                 if paintable_guard.is_none() {
-                    gst::error!(CAT, imp: self, "Failed to create paintable");
+                    gst::error!(CAT, imp = self, "Failed to create paintable");
                     return Err(gst::StateChangeError);
                 }
 
@@ -438,24 +438,24 @@ impl BaseSinkImpl for PaintableSink {
             templ[0].caps().clone()
         });
 
-        gst::debug!(CAT, imp: self, "Advertising our own caps: {tmp_caps:?}");
+        gst::debug!(CAT, imp = self, "Advertising our own caps: {tmp_caps:?}");
 
         if let Some(filter_caps) = filter {
             gst::debug!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Intersecting with filter caps: {filter_caps:?}",
             );
 
             tmp_caps = filter_caps.intersect_with_mode(&tmp_caps, gst::CapsIntersectMode::First);
         };
 
-        gst::debug!(CAT, imp: self, "Returning caps: {tmp_caps:?}");
+        gst::debug!(CAT, imp = self, "Returning caps: {tmp_caps:?}");
         Some(tmp_caps)
     }
 
     fn set_caps(&self, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        gst::debug!(CAT, imp: self, "Setting caps {caps:?}");
+        gst::debug!(CAT, imp = self, "Setting caps {caps:?}");
 
         #[allow(unused_mut)]
         let mut video_info = None;
@@ -482,7 +482,7 @@ impl BaseSinkImpl for PaintableSink {
         &self,
         query: &mut gst::query::Allocation,
     ) -> Result<(), gst::LoggableError> {
-        gst::debug!(CAT, imp: self, "Proposing Allocation query");
+        gst::debug!(CAT, imp = self, "Proposing Allocation query");
 
         self.parent_propose_allocation(query)?;
 
@@ -508,7 +508,7 @@ impl BaseSinkImpl for PaintableSink {
     }
 
     fn query(&self, query: &mut gst::QueryRef) -> bool {
-        gst::log!(CAT, imp: self, "Handling query {:?}", query);
+        gst::log!(CAT, imp = self, "Handling query {:?}", query);
 
         match query.view_mut() {
             #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
@@ -573,13 +573,13 @@ impl BaseSinkImpl for PaintableSink {
 
 impl VideoSinkImpl for PaintableSink {
     fn show_frame(&self, buffer: &gst::Buffer) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::trace!(CAT, imp: self, "Rendering buffer {:?}", buffer);
+        gst::trace!(CAT, imp = self, "Rendering buffer {:?}", buffer);
 
         // Empty buffer, nothing to render
         if buffer.n_memory() == 0 {
             gst::trace!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Empty buffer, nothing to render. Returning."
             );
             return Ok(gst::FlowSuccess::Ok);
@@ -587,7 +587,7 @@ impl VideoSinkImpl for PaintableSink {
 
         let config = self.config.lock().unwrap();
         let info = config.info.as_ref().ok_or_else(|| {
-            gst::error!(CAT, imp: self, "Received no caps yet");
+            gst::error!(CAT, imp = self, "Received no caps yet");
             gst::FlowError::NotNegotiated
         })?;
         let orientation = config
@@ -614,24 +614,24 @@ impl VideoSinkImpl for PaintableSink {
         };
         let frame =
             Frame::new(buffer, info, orientation, wrapped_context.as_ref()).map_err(|err| {
-                gst::error!(CAT, imp: self, "Failed to map video frame");
+                gst::error!(CAT, imp = self, "Failed to map video frame");
                 err
             })?;
         self.pending_frame.lock().unwrap().replace(frame);
 
         let sender = self.sender.lock().unwrap();
         let sender = sender.as_ref().ok_or_else(|| {
-            gst::error!(CAT, imp: self, "Have no main thread sender");
+            gst::error!(CAT, imp = self, "Have no main thread sender");
             gst::FlowError::Flushing
         })?;
 
         match sender.try_send(SinkEvent::FrameChanged) {
             Ok(_) => (),
             Err(async_channel::TrySendError::Full(_)) => {
-                gst::warning!(CAT, imp: self, "Have too many pending frames");
+                gst::warning!(CAT, imp = self, "Have too many pending frames");
             }
             Err(async_channel::TrySendError::Closed(_)) => {
-                gst::error!(CAT, imp: self, "Have main thread receiver shut down");
+                gst::error!(CAT, imp = self, "Have main thread receiver shut down");
                 return Err(gst::FlowError::Flushing);
             }
         }
@@ -657,7 +657,7 @@ impl PaintableSink {
                 let Some(frame) = self.pending_frame() else {
                     return glib::ControlFlow::Continue;
                 };
-                gst::trace!(CAT, imp: self, "Frame changed");
+                gst::trace!(CAT, imp = self, "Frame changed");
                 paintable.get_ref().handle_frame_changed(&self.obj(), frame);
             }
         }
@@ -800,7 +800,7 @@ impl PaintableSink {
         &self,
         paintable_storage: &mut MutexGuard<Option<ThreadGuard<Paintable>>>,
     ) {
-        gst::debug!(CAT, imp: self, "Initializing paintable");
+        gst::debug!(CAT, imp = self, "Initializing paintable");
 
         // The channel for the SinkEvents
         let (sender, receiver) = async_channel::bounded(3);
@@ -845,7 +845,7 @@ impl PaintableSink {
 
     #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
     fn initialize_gl_context(&self) {
-        gst::debug!(CAT, imp: self, "Realizing GDK GL Context");
+        gst::debug!(CAT, imp = self, "Realizing GDK GL Context");
 
         let self_ = self.to_owned();
         utils::invoke_on_main_thread(move || {
@@ -855,11 +855,11 @@ impl PaintableSink {
 
     #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
     fn initialize_gl_context_main(&self) {
-        gst::debug!(CAT, imp: self, "Realizing GDK GL Context from main thread");
+        gst::debug!(CAT, imp = self, "Realizing GDK GL Context from main thread");
 
         let mut gl_context_guard = GL_CONTEXT.lock().unwrap();
         if !matches!(&*gl_context_guard, GLContext::Uninitialized) {
-            gst::debug!(CAT, imp: self, "Already initialized GL context before");
+            gst::debug!(CAT, imp = self, "Already initialized GL context before");
             return;
         }
         *gl_context_guard = GLContext::Unsupported;
@@ -880,14 +880,14 @@ impl PaintableSink {
         let gdk_display = match gdk::Display::default() {
             Some(display) => display,
             None => {
-                gst::warning!(CAT, imp: self, "Failed to retrieve GDK display");
+                gst::warning!(CAT, imp = self, "Failed to retrieve GDK display");
                 return;
             }
         };
         let gdk_context = match gdk_display.create_gl_context() {
             Ok(gdk_context) => gdk_context,
             Err(err) => {
-                gst::warning!(CAT, imp: self, "Failed to create GDK GL Context: {err}");
+                gst::warning!(CAT, imp = self, "Failed to create GDK GL Context: {err}");
                 return;
             }
         };
@@ -906,19 +906,19 @@ impl PaintableSink {
             #[cfg(all(windows, feature = "winegl"))]
             "GdkWin32GLContextEGL" => (),
             display => {
-                gst::error!(CAT, imp: self, "Unsupported GDK display {display} for GL");
+                gst::error!(CAT, imp = self, "Unsupported GDK display {display} for GL");
                 return;
             }
         }
 
-        gst::info!(CAT, imp: self, "Realizing GDK GL Context",);
+        gst::info!(CAT, imp = self, "Realizing GDK GL Context",);
 
         if let Err(err) = gdk_context.realize() {
-            gst::warning!(CAT, imp: self, "Failed to realize GDK GL Context: {err}");
+            gst::warning!(CAT, imp = self, "Failed to realize GDK GL Context: {err}");
             return;
         }
 
-        gst::info!(CAT, imp: self, "Successfully realized GDK GL Context");
+        gst::info!(CAT, imp = self, "Successfully realized GDK GL Context");
 
         gdk_context.make_current();
 
@@ -941,9 +941,9 @@ impl PaintableSink {
         };
         let (display, wrapped_context) = res.unwrap();
         match wrapped_context.activate(true) {
-            Ok(_) => gst::info!(CAT, imp: self, "Successfully activated GL Context"),
+            Ok(_) => gst::info!(CAT, imp = self, "Successfully activated GL Context"),
             Err(_) => {
-                gst::error!(CAT, imp: self, "Failed to activate GL context",);
+                gst::error!(CAT, imp = self, "Failed to activate GL context",);
                 return;
             }
         };
@@ -951,21 +951,21 @@ impl PaintableSink {
         if let Err(err) = wrapped_context.fill_info() {
             gst::error!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Failed to fill info on the GL Context: {err}",
             );
             // Deactivate the context upon failure
             if wrapped_context.activate(false).is_err() {
                 gst::error!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Failed to deactivate the context after failing fill info",
                 );
             }
             return;
         }
 
-        gst::info!(CAT, imp: self, "Successfully initialized GL Context");
+        gst::info!(CAT, imp = self, "Successfully initialized GL Context");
 
         *gl_context_guard = GLContext::Initialized {
             display,
@@ -981,7 +981,7 @@ impl PaintableSink {
     ) -> Option<(gst_gl::GLDisplay, gst_gl::GLContext)> {
         gst::info!(
             CAT,
-            imp: self,
+            imp = self,
             "Initializing GL for x11 EGL backend and display"
         );
 
@@ -990,7 +990,7 @@ impl PaintableSink {
         let gl_ctx = gst_gl::GLContext::current_gl_context(platform);
 
         if gl_ctx == 0 {
-            gst::error!(CAT, imp: self, "Failed to get handle from GdkGLContext");
+            gst::error!(CAT, imp = self, "Failed to get handle from GdkGLContext");
             return None;
         }
 
@@ -1002,7 +1002,7 @@ impl PaintableSink {
             let x11_display =
                 gdk_x11::ffi::gdk_x11_display_get_egl_display(display.to_glib_none().0);
             if x11_display.is_null() {
-                gst::error!(CAT, imp: self, "Failed to get EGL display");
+                gst::error!(CAT, imp = self, "Failed to get EGL display");
                 return None;
             }
 
@@ -1014,7 +1014,7 @@ impl PaintableSink {
                 gst_gl::GLContext::new_wrapped(&gst_display, gl_ctx, platform, gl_api);
             let wrapped_context = match wrapped_context {
                 None => {
-                    gst::error!(CAT, imp: self, "Failed to create wrapped GL context");
+                    gst::error!(CAT, imp = self, "Failed to create wrapped GL context");
                     return None;
                 }
                 Some(wrapped_context) => wrapped_context,
@@ -1031,7 +1031,7 @@ impl PaintableSink {
     ) -> Option<(gst_gl::GLDisplay, gst_gl::GLContext)> {
         gst::info!(
             CAT,
-            imp: self,
+            imp = self,
             "Initializing GL for x11 GLX backend and display"
         );
 
@@ -1040,7 +1040,7 @@ impl PaintableSink {
         let gl_ctx = gst_gl::GLContext::current_gl_context(platform);
 
         if gl_ctx == 0 {
-            gst::error!(CAT, imp: self, "Failed to get handle from GdkGLContext");
+            gst::error!(CAT, imp = self, "Failed to get handle from GdkGLContext");
             return None;
         }
 
@@ -1051,7 +1051,7 @@ impl PaintableSink {
             let display = display.downcast::<gdk_x11::X11Display>().unwrap();
             let x11_display = gdk_x11::ffi::gdk_x11_display_get_xdisplay(display.to_glib_none().0);
             if x11_display.is_null() {
-                gst::error!(CAT, imp: self, "Failed to get X11 display");
+                gst::error!(CAT, imp = self, "Failed to get X11 display");
                 return None;
             }
 
@@ -1063,7 +1063,7 @@ impl PaintableSink {
                 gst_gl::GLContext::new_wrapped(&gst_display, gl_ctx, platform, gl_api);
             let wrapped_context = match wrapped_context {
                 None => {
-                    gst::error!(CAT, imp: self, "Failed to create wrapped GL context");
+                    gst::error!(CAT, imp = self, "Failed to create wrapped GL context");
                     return None;
                 }
                 Some(wrapped_context) => wrapped_context,
@@ -1080,7 +1080,7 @@ impl PaintableSink {
     ) -> Option<(gst_gl::GLDisplay, gst_gl::GLContext)> {
         gst::info!(
             CAT,
-            imp: self,
+            imp = self,
             "Initializing GL for Wayland EGL backend and display"
         );
 
@@ -1089,7 +1089,7 @@ impl PaintableSink {
         let gl_ctx = gst_gl::GLContext::current_gl_context(platform);
 
         if gl_ctx == 0 {
-            gst::error!(CAT, imp: self, "Failed to get handle from GdkGLContext");
+            gst::error!(CAT, imp = self, "Failed to get handle from GdkGLContext");
             return None;
         }
 
@@ -1103,7 +1103,7 @@ impl PaintableSink {
             let wayland_display =
                 gdk_wayland::ffi::gdk_wayland_display_get_wl_display(display.to_glib_none().0);
             if wayland_display.is_null() {
-                gst::error!(CAT, imp: self, "Failed to get Wayland display");
+                gst::error!(CAT, imp = self, "Failed to get Wayland display");
                 return None;
             }
 
@@ -1117,7 +1117,7 @@ impl PaintableSink {
 
             let wrapped_context = match wrapped_context {
                 None => {
-                    gst::error!(CAT, imp: self, "Failed to create wrapped GL context");
+                    gst::error!(CAT, imp = self, "Failed to create wrapped GL context");
                     return None;
                 }
                 Some(wrapped_context) => wrapped_context,
@@ -1134,7 +1134,7 @@ impl PaintableSink {
     ) -> Option<(gst_gl::GLDisplay, gst_gl::GLContext)> {
         gst::info!(
             CAT,
-            imp: self,
+            imp = self,
             "Initializing GL for macOS backend and display"
         );
 
@@ -1143,7 +1143,7 @@ impl PaintableSink {
         let gl_ctx = gst_gl::GLContext::current_gl_context(platform);
 
         if gl_ctx == 0 {
-            gst::error!(CAT, imp: self, "Failed to get handle from GdkGLContext");
+            gst::error!(CAT, imp = self, "Failed to get handle from GdkGLContext");
             return None;
         }
 
@@ -1154,7 +1154,7 @@ impl PaintableSink {
 
             let wrapped_context = match wrapped_context {
                 None => {
-                    gst::error!(CAT, imp: self, "Failed to create wrapped GL context");
+                    gst::error!(CAT, imp = self, "Failed to create wrapped GL context");
                     return None;
                 }
                 Some(wrapped_context) => wrapped_context,
@@ -1172,7 +1172,7 @@ impl PaintableSink {
     ) -> Option<(gst_gl::GLDisplay, gst_gl::GLContext)> {
         gst::info!(
             CAT,
-            imp: self,
+            imp = self,
             "Initializing GL with for Windows WGL backend and display."
         );
 
@@ -1186,7 +1186,7 @@ impl PaintableSink {
         let gl_ctx = gst_gl::GLContext::current_gl_context(platform);
 
         if gl_ctx == 0 {
-            gst::error!(CAT, imp: self, "Failed to get handle from GdkGLContext",);
+            gst::error!(CAT, imp = self, "Failed to get handle from GdkGLContext",);
             return None;
         }
 
@@ -1195,7 +1195,7 @@ impl PaintableSink {
                 if let Some(display) = gst_gl::GLDisplay::with_type(gst_gl::GLDisplayType::WIN32) {
                     display
                 } else {
-                    gst::error!(CAT, imp: self, "Failed to get GL display");
+                    gst::error!(CAT, imp = self, "Failed to get GL display");
                     return None;
                 };
 
@@ -1205,7 +1205,7 @@ impl PaintableSink {
                 gst_gl::GLContext::new_wrapped(&gst_display, gl_ctx, platform, gl_api);
             let wrapped_context = match wrapped_context {
                 None => {
-                    gst::error!(CAT, imp: self, "Failed to create wrapped GL context");
+                    gst::error!(CAT, imp = self, "Failed to create wrapped GL context");
                     return None;
                 }
                 Some(wrapped_context) => wrapped_context,
@@ -1222,7 +1222,7 @@ impl PaintableSink {
     ) -> Option<(gst_gl::GLDisplay, gst_gl::GLContext)> {
         gst::info!(
             CAT,
-            imp: self,
+            imp = self,
             "Initializing GL with for Windows EGL backend and display."
         );
 
@@ -1232,7 +1232,7 @@ impl PaintableSink {
         let gl_ctx = gst_gl::GLContext::current_gl_context(platform);
 
         if gl_ctx == 0 {
-            gst::error!(CAT, imp: self, "Failed to get handle from GdkGLContext",);
+            gst::error!(CAT, imp = self, "Failed to get handle from GdkGLContext",);
             return None;
         }
 
@@ -1248,7 +1248,7 @@ impl PaintableSink {
             let gst_display =
                 gst_gl_egl::ffi::gst_gl_display_egl_from_gl_display(egl_display.cast());
             if gst_display.is_null() {
-                gst::error!(CAT, imp: self, "Failed to get EGL display");
+                gst::error!(CAT, imp = self, "Failed to get EGL display");
                 return None;
             }
             let gst_display =
@@ -1261,7 +1261,7 @@ impl PaintableSink {
 
             let wrapped_context = match wrapped_context {
                 None => {
-                    gst::error!(CAT, imp: self, "Failed to create wrapped GL context");
+                    gst::error!(CAT, imp = self, "Failed to create wrapped GL context");
                     return None;
                 }
                 Some(wrapped_context) => wrapped_context,

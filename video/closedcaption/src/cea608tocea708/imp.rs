@@ -356,7 +356,7 @@ impl State {
         if let Ok(Some(cea608)) = self.cea608.tracker[field as usize].decode(cc_data) {
             gst::trace!(
                 CAT,
-                imp: imp,
+                imp = imp,
                 "have field:{field} channel:{:?} {cea608:?}",
                 cea608.channel()
             );
@@ -495,17 +495,17 @@ impl Cea608ToCea708 {
         pad: &gst::Pad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, obj = pad, "Handling buffer {:?}", buffer);
 
         let mut state = self.state.borrow_mut();
 
         let buffer_pts = buffer.pts().ok_or_else(|| {
-            gst::error!(CAT, obj: pad, "Require timestamped buffers");
+            gst::error!(CAT, obj = pad, "Require timestamped buffers");
             gst::FlowError::Error
         })?;
 
         let data = buffer.map_readable().map_err(|_| {
-            gst::error!(CAT, obj: pad, "Can't map buffer readable");
+            gst::error!(CAT, obj = pad, "Can't map buffer readable");
 
             gst::FlowError::Error
         })?;
@@ -516,7 +516,7 @@ impl Cea608ToCea708 {
                 if data_len % 3 != 0 {
                     gst::warning!(
                         CAT,
-                        obj: pad,
+                        obj = pad,
                         "Invalid closed caption packet size, truncating"
                     );
                     data_len -= data_len % 3;
@@ -524,7 +524,7 @@ impl Cea608ToCea708 {
                 if data_len < 3 {
                     gst::warning!(
                         CAT,
-                        obj: pad,
+                        obj = pad,
                         "Invalid closed caption packet size, dropping"
                     );
                     return Ok(gst::FlowSuccess::Ok);
@@ -539,7 +539,7 @@ impl Cea608ToCea708 {
                 if data_len % 2 != 0 {
                     gst::warning!(
                         CAT,
-                        obj: pad,
+                        obj = pad,
                         "Invalid closed caption packet size, truncating"
                     );
                     data_len -= data_len % 3;
@@ -547,7 +547,7 @@ impl Cea608ToCea708 {
                 if data_len < 2 {
                     gst::warning!(
                         CAT,
-                        obj: pad,
+                        obj = pad,
                         "Invalid closed caption packet size, dropping"
                     );
                     return Ok(gst::FlowSuccess::Ok);
@@ -587,7 +587,7 @@ impl Cea608ToCea708 {
     fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Caps(event) => {
                 let mut state = self.state.borrow_mut();
@@ -603,7 +603,7 @@ impl Cea608ToCea708 {
                                 _ => {
                                     gst::error!(
                                         CAT,
-                                        imp: self,
+                                        imp = self,
                                         "unknown \'field\' value in caps, {caps:?}"
                                     );
                                     return false;
@@ -617,7 +617,7 @@ impl Cea608ToCea708 {
                     v => {
                         gst::error!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "unknown or missing \'format\' value {v:?} in caps, {caps:?}"
                         );
                         return false;
@@ -757,7 +757,7 @@ impl ElementImpl for Cea608ToCea708 {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {

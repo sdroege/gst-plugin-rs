@@ -148,7 +148,7 @@ impl Cea608Overlay {
             if cc_type == 0x00 || cc_type == 0x01 {
                 if state.selected_field.is_none() {
                     state.selected_field = Some(cc_type);
-                    gst::info!(CAT, imp: self, "Selected field {} automatically", cc_type);
+                    gst::info!(CAT, imp = self, "Selected field {} automatically", cc_type);
                 }
 
                 if Some(cc_type) != state.selected_field {
@@ -156,7 +156,12 @@ impl Cea608Overlay {
                 };
                 match state.renderer.push_pair([triple[1], triple[2]]) {
                     Err(e) => {
-                        gst::warning!(CAT, imp: self, "Failed to parse incoming CEA-608 ({:x?}): {e:?}", [triple[1], triple[2]]);
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "Failed to parse incoming CEA-608 ({:x?}): {e:?}",
+                            [triple[1], triple[2]]
+                        );
                         continue;
                     }
                     Ok(true) => {
@@ -183,7 +188,7 @@ impl Cea608Overlay {
             let cc_type = triple[0] & 0x01;
             if state.selected_field.is_none() {
                 state.selected_field = Some(cc_type);
-                gst::info!(CAT, imp: self, "Selected field {} automatically", cc_type);
+                gst::info!(CAT, imp = self, "Selected field {} automatically", cc_type);
             }
 
             if Some(cc_type) != state.selected_field {
@@ -191,7 +196,12 @@ impl Cea608Overlay {
             };
             match state.renderer.push_pair([triple[1], triple[2]]) {
                 Err(e) => {
-                    gst::warning!(CAT, imp: self, "Failed to parse incoming CEA-608 ({:x?}): {e:?}", [triple[1], triple[2]]);
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Failed to parse incoming CEA-608 ({:x?}): {e:?}",
+                        [triple[1], triple[2]]
+                    );
                     continue;
                 }
                 Ok(true) => {
@@ -214,10 +224,10 @@ impl Cea608Overlay {
         pad: &gst::Pad,
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, obj = pad, "Handling buffer {:?}", buffer);
 
         let pts = buffer.pts().ok_or_else(|| {
-            gst::error!(CAT, obj: pad, "Require timestamped buffers");
+            gst::error!(CAT, obj = pad, "Require timestamped buffers");
             gst::FlowError::Error
         })?;
 
@@ -248,7 +258,12 @@ impl Cea608Overlay {
                 for pair in data.chunks_exact(2) {
                     match state.renderer.push_pair([pair[0], pair[1]]) {
                         Err(e) => {
-                            gst::warning!(CAT, imp: self, "Failed to parse incoming CEA-608 ({:x?}): {e:?}", [pair[0], pair[1]]);
+                            gst::warning!(
+                                CAT,
+                                imp = self,
+                                "Failed to parse incoming CEA-608 ({:x?}): {e:?}",
+                                [pair[0], pair[1]]
+                            );
                             continue;
                         }
                         Ok(true) => {
@@ -267,7 +282,7 @@ impl Cea608Overlay {
         if let Some(timeout) = self.settings.lock().unwrap().timeout {
             if let Some(interval) = pts.opt_saturating_sub(state.last_cc_pts) {
                 if interval > timeout {
-                    gst::info!(CAT, imp: self, "Reached timeout, clearing overlay");
+                    gst::info!(CAT, imp = self, "Reached timeout, clearing overlay");
                     state.composition.take();
                     state.last_cc_pts.take();
                 }
@@ -286,7 +301,7 @@ impl Cea608Overlay {
                 .unwrap();
 
                 if composition.blend(&mut frame).is_err() {
-                    gst::error!(CAT, obj: pad, "Failed to blend composition");
+                    gst::error!(CAT, obj = pad, "Failed to blend composition");
                 }
             }
         }
@@ -298,7 +313,7 @@ impl Cea608Overlay {
     fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Caps(c) => {
                 let mut state = self.state.lock().unwrap();
@@ -517,7 +532,7 @@ impl ElementImpl for Cea608Overlay {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused | gst::StateChange::PausedToReady => {

@@ -341,7 +341,7 @@ impl HlsBaseSinkImpl for HlsCmafSink {}
 
 impl HlsCmafSink {
     fn start(&self, target_duration: u32, playlist_type: Option<MediaPlaylistType>) -> Playlist {
-        gst::info!(CAT, imp: self, "Starting");
+        gst::info!(CAT, imp = self, "Starting");
 
         let mut state = self.state.lock().unwrap();
         *state = HlsCmafSinkState::default();
@@ -369,11 +369,7 @@ impl HlsCmafSink {
         let location = match sprintf::sprintf!(&settings.init_location, state.init_idx) {
             Ok(location) => location,
             Err(err) => {
-                gst::error!(
-                    CAT,
-                    imp: self,
-                    "Couldn't build file name, err: {:?}", err,
-                );
+                gst::error!(CAT, imp = self, "Couldn't build file name, err: {:?}", err,);
                 return Err(String::from("Invalid init segment file pattern"));
             }
         };
@@ -448,7 +444,7 @@ impl HlsCmafSink {
             let mut stream = self.on_init_segment().map_err(|err| {
                 gst::error!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Couldn't get output stream for init segment, {err}",
                 );
                 gst::FlowError::Error
@@ -458,18 +454,14 @@ impl HlsCmafSink {
             stream.write(&map).map_err(|_| {
                 gst::error!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Couldn't write init segment to output stream",
                 );
                 gst::FlowError::Error
             })?;
 
             stream.flush().map_err(|_| {
-                gst::error!(
-                    CAT,
-                    imp: self,
-                    "Couldn't flush output stream",
-                );
+                gst::error!(CAT, imp = self, "Couldn't flush output stream",);
                 gst::FlowError::Error
             })?;
 
@@ -494,7 +486,7 @@ impl HlsCmafSink {
         let (mut stream, location) = self.on_new_fragment().map_err(|err| {
             gst::error!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Couldn't get output stream for segment, {err}",
             );
             gst::FlowError::Error
@@ -504,21 +496,13 @@ impl HlsCmafSink {
             let map = buffer.map_readable().unwrap();
 
             stream.write(&map).map_err(|_| {
-                gst::error!(
-                    CAT,
-                    imp: self,
-                    "Couldn't write segment to output stream",
-                );
+                gst::error!(CAT, imp = self, "Couldn't write segment to output stream",);
                 gst::FlowError::Error
             })?;
         }
 
         stream.flush().map_err(|_| {
-            gst::error!(
-                CAT,
-                imp: self,
-                "Couldn't flush output stream",
-            );
+            gst::error!(CAT, imp = self, "Couldn't flush output stream",);
             gst::FlowError::Error
         })?;
 

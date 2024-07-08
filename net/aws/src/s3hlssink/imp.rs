@@ -237,10 +237,10 @@ impl S3HlsSink {
             match rxc.try_recv() {
                 Ok(S3RequestControl::Continue) => (),
                 Ok(S3RequestControl::Pause) => {
-                    gst::debug!(CAT, imp: self, "Pausing S3 request thread.");
+                    gst::debug!(CAT, imp = self, "Pausing S3 request thread.");
                     match rxc.recv() {
                         Ok(S3RequestControl::Continue) => {
-                            gst::debug!(CAT, imp: self, "Continuing S3 request thread.")
+                            gst::debug!(CAT, imp = self, "Continuing S3 request thread.")
                         }
                         // We do not expect another pause request here.
                         Ok(S3RequestControl::Pause) => unreachable!(),
@@ -262,7 +262,7 @@ impl S3HlsSink {
                     let s3_acl = data.s3_acl;
                     let s3_data_len = data.s3_data.len();
 
-                    gst::debug!(CAT, imp: self, "Uploading key {}", s3_key);
+                    gst::debug!(CAT, imp = self, "Uploading key {}", s3_key);
 
                     let put_object_req = s3_client
                         .put_object()
@@ -277,7 +277,7 @@ impl S3HlsSink {
                         Err(err) => {
                             gst::error!(
                                 CAT,
-                                imp: self,
+                                imp = self,
                                 "Put object request for S3 key {} of data length {} failed with error {err}",
                                 s3_key,
                                 s3_data_len,
@@ -308,7 +308,7 @@ impl S3HlsSink {
                     let s3_bucket = data.s3_bucket.clone();
                     let s3_key = data.s3_key.clone();
 
-                    gst::debug!(CAT, imp: self, "Deleting key {}", s3_key);
+                    gst::debug!(CAT, imp = self, "Deleting key {}", s3_key);
 
                     let delete_object_req = s3_client
                         .delete_object()
@@ -320,7 +320,7 @@ impl S3HlsSink {
                     if let Err(err) = result {
                         gst::error!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "Delete object request for S3 key {} failed with error {err}",
                             s3_key,
                         );
@@ -334,14 +334,14 @@ impl S3HlsSink {
                 }
                 Ok(S3Request::Stop) => break,
                 Err(err) => {
-                    gst::error!(CAT, imp: self, "S3 channel error: {}", err);
+                    gst::error!(CAT, imp = self, "S3 channel error: {}", err);
                     element_imp_error!(self, gst::ResourceError::Write, ["S3 channel error"]);
                     break;
                 }
             }
         }
 
-        gst::info!(CAT, imp: self, "Exiting S3 request thread",);
+        gst::info!(CAT, imp = self, "Exiting S3 request thread",);
     }
 
     fn s3client_from_settings(&self) -> Client {
@@ -397,17 +397,22 @@ impl S3HlsSink {
         let s3_tx = settings.s3_tx.clone();
 
         if let (Some(handle), Some(tx)) = (s3_handle, s3_tx) {
-            gst::info!(CAT, imp: self, "Stopping S3 request thread");
+            gst::info!(CAT, imp = self, "Stopping S3 request thread");
             match tx.send(S3Request::Stop) {
                 Ok(_) => {
-                    gst::info!(CAT, imp: self, "Joining S3 request thread");
+                    gst::info!(CAT, imp = self, "Joining S3 request thread");
                     if let Err(err) = handle.join() {
-                        gst::error!(CAT, imp: self, "S3 upload thread failed to exit: {:?}", err);
+                        gst::error!(
+                            CAT,
+                            imp = self,
+                            "S3 upload thread failed to exit: {:?}",
+                            err
+                        );
                     }
                     drop(tx);
                 }
                 Err(err) => {
-                    gst::error!(CAT, imp: self, "Failed to stop S3 request thread: {}", err)
+                    gst::error!(CAT, imp = self, "Failed to stop S3 request thread: {}", err)
                 }
             };
         };
@@ -552,7 +557,7 @@ impl ObjectImpl for S3HlsSink {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Setting property '{}' to '{:?}'",
             pspec.name(),
             value
@@ -651,7 +656,7 @@ impl ObjectImpl for S3HlsSink {
         settings.s3_txc = Some(txc);
         drop(settings);
 
-        gst::info!(CAT, imp: self, "Constructed");
+        gst::info!(CAT, imp = self, "Constructed");
 
         self.hlssink.connect("get-playlist-stream", false, {
             let self_weak = self.downgrade();
@@ -674,7 +679,7 @@ impl ObjectImpl for S3HlsSink {
                     playlist_tx.clone(),
                 );
 
-                gst::debug!(CAT, imp: self_, "New upload for {}", s3_location);
+                gst::debug!(CAT, imp = self_, "New upload for {}", s3_location);
 
                 Some(
                     gio::WriteOutputStream::new(upload)
@@ -705,7 +710,7 @@ impl ObjectImpl for S3HlsSink {
                     fragment_tx.clone(),
                 );
 
-                gst::debug!(CAT, imp: self_, "New upload for {}", s3_location);
+                gst::debug!(CAT, imp = self_, "New upload for {}", s3_location);
 
                 Some(
                     gio::WriteOutputStream::new(upload)
@@ -732,7 +737,7 @@ impl ObjectImpl for S3HlsSink {
                     s3_location.to_string()
                 };
 
-                gst::debug!(CAT, imp: self_, "Deleting {}", s3_location);
+                gst::debug!(CAT, imp = self_, "Deleting {}", s3_location);
 
                 let delete = S3DeleteReq {
                     s3_client,
@@ -752,7 +757,7 @@ impl ObjectImpl for S3HlsSink {
                     if res.is_ok() {
                         Some(true.to_value())
                     } else {
-                        gst::error!(CAT, imp: self_, "Failed deleting {}", s3_location);
+                        gst::error!(CAT, imp = self_, "Failed deleting {}", s3_location);
                         element_imp_error!(
                             self_,
                             gst::ResourceError::Write,
@@ -839,11 +844,11 @@ impl ElementImpl for S3HlsSink {
                 if let Some(tx) = s3_txc {
                     gst::debug!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Sending continue request to S3 request thread."
                     );
                     if tx.send(S3RequestControl::Continue).is_err() {
-                        gst::error!(CAT, imp: self, "Could not send continue request.");
+                        gst::error!(CAT, imp = self, "Could not send continue request.");
                     }
                 }
             }
@@ -853,13 +858,13 @@ impl ElementImpl for S3HlsSink {
                 if let Some(tx) = s3_txc {
                     gst::debug!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Sending pause request to S3 request thread."
                     );
                     if settings.s3_upload_handle.is_some()
                         && tx.send(S3RequestControl::Pause).is_err()
                     {
-                        gst::error!(CAT, imp: self, "Could not send pause request.");
+                        gst::error!(CAT, imp = self, "Could not send pause request.");
                     }
                 }
             }
@@ -890,7 +895,7 @@ impl ElementImpl for S3HlsSink {
                 if settings.audio_sink {
                     gst::debug!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "requested_new_pad: audio pad is already set"
                     );
                     return None;
@@ -908,7 +913,7 @@ impl ElementImpl for S3HlsSink {
                 if settings.video_sink {
                     gst::debug!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "requested_new_pad: video pad is already set"
                     );
                     return None;
@@ -923,7 +928,7 @@ impl ElementImpl for S3HlsSink {
                 Some(sink_pad.upcast())
             }
             _ => {
-                gst::debug!(CAT, imp: self, "requested_new_pad is not audio or video");
+                gst::debug!(CAT, imp = self, "requested_new_pad is not audio or video");
                 None
             }
         }
@@ -945,7 +950,7 @@ impl BinImpl for S3HlsSink {
                      * unblock the S3 request thread from waiting for a Continue request
                      * on the control channel.
                      */
-                    gst::debug!(CAT, imp: self, "Got EOS, dropping control channel");
+                    gst::debug!(CAT, imp = self, "Got EOS, dropping control channel");
                     drop(txc);
                 }
                 drop(settings);

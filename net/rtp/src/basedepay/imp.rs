@@ -224,11 +224,11 @@ impl Ord for CapsOrd {
 #[allow(dead_code)]
 impl RtpBaseDepay2 {
     pub(super) fn set_src_caps(&self, src_caps: &gst::Caps) {
-        gst::debug!(CAT, imp: self, "Setting caps {src_caps:?}");
+        gst::debug!(CAT, imp = self, "Setting caps {src_caps:?}");
 
         let mut state = self.state.borrow_mut();
         if Some(src_caps) == state.src_caps.as_ref() {
-            gst::debug!(CAT, imp: self, "Setting same caps {src_caps:?} again");
+            gst::debug!(CAT, imp = self, "Setting same caps {src_caps:?} again");
             return;
         }
 
@@ -254,7 +254,12 @@ impl RtpBaseDepay2 {
     }
 
     pub(super) fn drop_packets(&self, ext_seqnum: impl RangeBounds<u64>) {
-        gst::trace!(CAT, imp: self, "Dropping packets up to ext seqnum {:?}", ext_seqnum.end_bound());
+        gst::trace!(
+            CAT,
+            imp = self,
+            "Dropping packets up to ext seqnum {:?}",
+            ext_seqnum.end_bound()
+        );
 
         let mut state = self.state.borrow_mut();
         state.discont_pending = true;
@@ -378,7 +383,11 @@ impl RtpBaseDepay2 {
                     0xBEDE => gst_rtp::RTPHeaderExtensionFlags::ONE_BYTE,
                     x if x >> 4 == 0x100 => gst_rtp::RTPHeaderExtensionFlags::TWO_BYTE,
                     _ => {
-                        gst::trace!(CAT, imp: self, "Unknown extension pattern {extension_pattern:04X}");
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "Unknown extension pattern {extension_pattern:04X}"
+                        );
                         continue;
                     }
                 };
@@ -425,7 +434,11 @@ impl RtpBaseDepay2 {
                         break;
                     }
 
-                    gst::trace!(CAT, imp: self, "Handling RTP header extension with id {id} and length {len}");
+                    gst::trace!(
+                        CAT,
+                        imp = self,
+                        "Handling RTP header extension with id {id} and length {len}"
+                    );
 
                     let (extension_data, remainder) = extensions_data.split_at(len);
                     extensions_data = remainder;
@@ -435,7 +448,11 @@ impl RtpBaseDepay2 {
                     };
 
                     if !extension.read(extension_flags, extension_data, buffer) {
-                        gst::warning!(CAT, imp: self, "Failed reading RTP header extension with id {id} and length {len}");
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "Failed reading RTP header extension with id {id} and length {len}"
+                        );
                         continue;
                     }
 
@@ -478,16 +495,24 @@ impl RtpBaseDepay2 {
             buffer_ref.set_dts(None);
         }
 
-        gst::trace!(CAT, imp: self, "Queueing buffer {buffer:?} for seqnum range {packet_to_buffer_relation:?}");
+        gst::trace!(
+            CAT,
+            imp = self,
+            "Queueing buffer {buffer:?} for seqnum range {packet_to_buffer_relation:?}"
+        );
 
         let mut state = self.state.borrow_mut();
         if state.src_caps.is_none() {
-            gst::error!(CAT, imp: self, "No source pad caps negotiated yet");
+            gst::error!(CAT, imp = self, "No source pad caps negotiated yet");
             return Err(gst::FlowError::NotNegotiated);
         }
 
         if matches!(packet_to_buffer_relation, PacketToBufferRelation::OutOfBand) {
-            gst::trace!(CAT, imp: self, "Keeping buffer without associated seqnums until next buffer or EOS");
+            gst::trace!(
+                CAT,
+                imp = self,
+                "Keeping buffer without associated seqnums until next buffer or EOS"
+            );
 
             state.pending_buffers.push_back(PendingBuffer {
                 metadata_set: false,
@@ -506,7 +531,7 @@ impl RtpBaseDepay2 {
         };
 
         if seqnums.is_empty() {
-            gst::error!(CAT, imp: self, "Empty packet ext seqnum range provided");
+            gst::error!(CAT, imp = self, "Empty packet ext seqnum range provided");
             return Err(gst::FlowError::Error);
         }
 
@@ -520,16 +545,29 @@ impl RtpBaseDepay2 {
             .is_some_and(|p| p.ext_seqnum < seqnum_start)
         {
             let p = state.pending_packets.pop_front().unwrap();
-            gst::trace!(CAT, imp: self, "Dropping packet with extended seqnum {}", p.ext_seqnum);
+            gst::trace!(
+                CAT,
+                imp = self,
+                "Dropping packet with extended seqnum {}",
+                p.ext_seqnum
+            );
         }
 
         if state.pending_packets.is_empty() {
-            gst::error!(CAT, imp: self, "Queueing buffers for future ext seqnums not allowed");
+            gst::error!(
+                CAT,
+                imp = self,
+                "Queueing buffers for future ext seqnums not allowed"
+            );
             return Err(gst::FlowError::Error);
         };
 
         if seqnum_end > state.pending_packets.back().unwrap().ext_seqnum {
-            gst::error!(CAT, imp: self, "Queueing buffers for future ext seqnums not allowed");
+            gst::error!(
+                CAT,
+                imp = self,
+                "Queueing buffers for future ext seqnums not allowed"
+            );
             return Err(gst::FlowError::Error);
         }
 
@@ -551,7 +589,12 @@ impl RtpBaseDepay2 {
                         if let Some(ts) = pts_signed.positive() {
                             pts = Some(ts);
                         } else {
-                            gst::warning!(CAT, imp: self, "Negative PTS {} calculated, not supported", pts_signed);
+                            gst::warning!(
+                                CAT,
+                                imp = self,
+                                "Negative PTS {} calculated, not supported",
+                                pts_signed
+                            );
                         }
                     }
                 }
@@ -561,7 +604,12 @@ impl RtpBaseDepay2 {
                         if let Some(ts) = pts_signed.positive() {
                             pts = Some(ts);
                         } else {
-                            gst::warning!(CAT, imp: self, "Negative PTS {} calculated, not supported", pts_signed);
+                            gst::warning!(
+                                CAT,
+                                imp = self,
+                                "Negative PTS {} calculated, not supported",
+                                pts_signed
+                            );
                         }
                     }
 
@@ -570,7 +618,12 @@ impl RtpBaseDepay2 {
                         if let Some(ts) = dts_signed.positive() {
                             dts = Some(ts);
                         } else {
-                            gst::warning!(CAT, imp: self, "Negative DTS {} calculated, not supported", dts_signed);
+                            gst::warning!(
+                                CAT,
+                                imp = self,
+                                "Negative DTS {} calculated, not supported",
+                                dts_signed
+                            );
                         }
                     }
                 }
@@ -623,7 +676,12 @@ impl RtpBaseDepay2 {
                     let extensions = self.extensions.lock().unwrap();
                     for extension in extensions.values() {
                         if !extension.update_non_rtp_src_caps(src_caps) {
-                            gst::error!(CAT, imp: self, "RTP header extension {} could not update caps", extension.name());
+                            gst::error!(
+                                CAT,
+                                imp = self,
+                                "RTP header extension {} could not update caps",
+                                extension.name()
+                            );
                             return Err(gst::FlowError::Error);
                         }
                     }
@@ -679,7 +737,7 @@ impl RtpBaseDepay2 {
 
             assert_ne!(num_buffers, 0);
 
-            gst::trace!(CAT, imp: self, "Flushing {num_buffers} buffers");
+            gst::trace!(CAT, imp = self, "Flushing {num_buffers} buffers");
 
             let segment_event = self.retrieve_pending_segment_event(&mut state);
 
@@ -690,7 +748,7 @@ impl RtpBaseDepay2 {
 
             let buffers = if num_buffers == 1 {
                 let buffer = state.pending_buffers.pop_front().unwrap().buffer;
-                gst::trace!(CAT, imp: self, "Finishing buffer {buffer:?}");
+                gst::trace!(CAT, imp = self, "Finishing buffer {buffer:?}");
                 BufferOrList::Buffer(buffer)
             } else {
                 let mut list = gst::BufferList::new_sized(num_buffers);
@@ -700,7 +758,7 @@ impl RtpBaseDepay2 {
                         b.metadata_set && (b.buffer.pts() == pts || b.buffer.pts().is_none())
                     }) {
                         let buffer = state.pending_buffers.pop_front().unwrap().buffer;
-                        gst::trace!(CAT, imp: self, "Finishing buffer {buffer:?}");
+                        gst::trace!(CAT, imp = self, "Finishing buffer {buffer:?}");
                         list.add(buffer);
                     }
                 }
@@ -721,9 +779,9 @@ impl RtpBaseDepay2 {
 
             if let Err(err) = res {
                 if ![gst::FlowError::Flushing, gst::FlowError::Eos].contains(&err) {
-                    gst::warning!(CAT, imp: self, "Failed pushing buffers: {err:?}");
+                    gst::warning!(CAT, imp = self, "Failed pushing buffers: {err:?}");
                 } else {
-                    gst::debug!(CAT, imp: self, "Failed pushing buffers: {err:?}");
+                    gst::debug!(CAT, imp = self, "Failed pushing buffers: {err:?}");
                 }
             }
 
@@ -782,7 +840,7 @@ impl RtpBaseDepay2 {
 
                 let state = self.state.borrow();
                 if state.sink_caps.is_none() {
-                    gst::warning!(CAT, imp: self, "Received segment before caps");
+                    gst::warning!(CAT, imp = self, "Received segment before caps");
                     return Err(gst::FlowError::NotNegotiated);
                 }
 
@@ -798,14 +856,14 @@ impl RtpBaseDepay2 {
                 drop(state);
 
                 if !same_segment {
-                    gst::debug!(CAT, imp: self, "Received segment {segment:?}");
+                    gst::debug!(CAT, imp = self, "Received segment {segment:?}");
 
                     if drain {
                         if let Err(err) = self.drain() {
                             // Just continue here. The depayloader is now flushed and can proceed below,
                             // and if there was a serious error downstream it will happen on the next
                             // buffer pushed downstream
-                            gst::debug!(CAT, imp: self, "Draining failed: {err:?}");
+                            gst::debug!(CAT, imp = self, "Draining failed: {err:?}");
                         }
                     }
 
@@ -814,7 +872,11 @@ impl RtpBaseDepay2 {
                         state.segment = Some((event.seqnum(), segment.clone()));
                         state.pending_segment = true;
                     } else {
-                        gst::error!(CAT, imp: self, "Segments in non-TIME format are not supported");
+                        gst::error!(
+                            CAT,
+                            imp = self,
+                            "Segments in non-TIME format are not supported"
+                        );
                         state.segment = None;
                         // FIXME: Forget everything here?
                         return Err(gst::FlowError::Error);
@@ -825,7 +887,7 @@ impl RtpBaseDepay2 {
             }
             gst::EventView::Eos(_) => {
                 if let Err(err) = self.drain() {
-                    gst::debug!(CAT, imp: self, "Draining on EOS failed: {err:?}");
+                    gst::debug!(CAT, imp = self, "Draining on EOS failed: {err:?}");
                 }
             }
             gst::EventView::FlushStop(_) => {
@@ -844,7 +906,7 @@ impl RtpBaseDepay2 {
             _ => (),
         }
 
-        gst::debug!(CAT, imp: self, "Forwarding event: {event:?}");
+        gst::debug!(CAT, imp = self, "Forwarding event: {event:?}");
         if self.src_pad.push_event(event) {
             Ok(gst::FlowSuccess::Ok)
         } else if self.src_pad.pad_flags().contains(gst::PadFlags::FLUSHING) {
@@ -883,7 +945,7 @@ impl RtpBaseDepay2 {
         if tags.len() > 1 {
             gst::trace!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Not copying meta {}: has multiple tags {tags:?}",
                 meta.api(),
             );
@@ -897,7 +959,7 @@ impl RtpBaseDepay2 {
             if !allowed_tags.iter().copied().any(|tag| tag == *meta_tag) {
                 gst::trace!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Not copying meta {}: tag '{meta_tag}' not allowed",
                     meta.api(),
                 );
@@ -905,10 +967,10 @@ impl RtpBaseDepay2 {
             }
         }
 
-        gst::trace!(CAT, imp: self, "Copying meta {}", meta.api());
+        gst::trace!(CAT, imp = self, "Copying meta {}", meta.api());
 
         if let Err(err) = meta.transform(out_buf, &gst::meta::MetaTransformCopy::new(false, ..)) {
-            gst::trace!(CAT, imp: self, "Could not copy meta {}: {err}", meta.api());
+            gst::trace!(CAT, imp = self, "Could not copy meta {}: {err}", meta.api());
         }
     }
 
@@ -942,7 +1004,7 @@ impl RtpBaseDepay2 {
         let Some(ext) = gst_rtp::RTPHeaderExtension::create_from_uri(uri) else {
             gst::debug!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Didn't find any extension implementing URI {uri}",
             );
             return None;
@@ -950,7 +1012,7 @@ impl RtpBaseDepay2 {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Automatically enabling extension {} for URI {uri}",
             ext.name(),
         );
@@ -968,7 +1030,7 @@ impl RtpBaseDepay2 {
         _pad: &gst::Pad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::trace!(CAT, imp: self, "Received buffer {buffer:?}");
+        gst::trace!(CAT, imp = self, "Received buffer {buffer:?}");
 
         let settings = self.settings.lock().unwrap().clone();
         self.handle_buffer(&settings, buffer)
@@ -979,7 +1041,7 @@ impl RtpBaseDepay2 {
         _pad: &gst::Pad,
         list: gst::BufferList,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::trace!(CAT, imp: self, "Received buffer list {list:?}");
+        gst::trace!(CAT, imp = self, "Received buffer list {list:?}");
 
         let settings = self.settings.lock().unwrap().clone();
         for buffer in list.iter_owned() {
@@ -994,7 +1056,7 @@ impl RtpBaseDepay2 {
         pad: &gst::Pad,
         event: gst::Event,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::debug!(CAT, obj: pad, "Received event: {event:?}");
+        gst::debug!(CAT, obj = pad, "Received event: {event:?}");
 
         let obj = self.obj();
         (obj.class().as_ref().sink_event)(&obj, event)
@@ -1005,21 +1067,21 @@ impl RtpBaseDepay2 {
         pad: &gst::Pad,
         event: gst::Event,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::debug!(CAT, obj: pad, "Received event: {event:?}");
+        gst::debug!(CAT, obj = pad, "Received event: {event:?}");
 
         let obj = self.obj();
         (obj.class().as_ref().src_event)(&obj, event)
     }
 
     fn sink_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
-        gst::trace!(CAT, obj: pad, "Received query: {query:?}");
+        gst::trace!(CAT, obj = pad, "Received query: {query:?}");
 
         let obj = self.obj();
         (obj.class().as_ref().sink_query)(&obj, query)
     }
 
     fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
-        gst::trace!(CAT, obj: pad, "Received query: {query:?}");
+        gst::trace!(CAT, obj = pad, "Received query: {query:?}");
 
         let obj = self.obj();
         (obj.class().as_ref().src_query)(&obj, query)
@@ -1056,7 +1118,7 @@ impl RtpBaseDepay2 {
                     if pts > gap {
                         gst::debug!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "Found gap of {}, adjusting start: {} = {} - {}",
                             gap.display(),
                             (pts - gap).display(),
@@ -1095,7 +1157,7 @@ impl RtpBaseDepay2 {
         state.pending_segment = false;
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Created segment event {segment:?} with seqnum {seqnum:?}",
         );
 
@@ -1110,7 +1172,7 @@ impl RtpBaseDepay2 {
         let mut state = self.state.borrow_mut();
 
         if state.sink_caps.is_none() {
-            gst::error!(CAT, imp: self, "No sink pad caps");
+            gst::error!(CAT, imp = self, "No sink pad caps");
             gst::element_imp_error!(
                 self,
                 gst::CoreError::Negotiation,
@@ -1142,13 +1204,21 @@ impl RtpBaseDepay2 {
 
             if let Some(rtp_diff) = rtp_diff {
                 if rtp_diff > gst::ClockTime::SECOND {
-                    gst::warning!(CAT, imp: self, "More than {rtp_diff} of RTP time queued, probably a bug in the subclass");
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "More than {rtp_diff} of RTP time queued, probably a bug in the subclass"
+                    );
                 }
             }
 
             if let Some(pts_diff) = pts_diff {
                 if pts_diff > gst::ClockTime::SECOND {
-                    gst::warning!(CAT, imp: self, "More than {pts_diff} of PTS time queued, probably a bug in the subclass");
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "More than {pts_diff} of PTS time queued, probably a bug in the subclass"
+                    );
                 }
             }
         }
@@ -1156,7 +1226,7 @@ impl RtpBaseDepay2 {
         let buffer = match buffer.into_mapped_buffer_readable() {
             Ok(buffer) => buffer,
             Err(_) => {
-                gst::error!(CAT, imp: self, "Failed to map buffer");
+                gst::error!(CAT, imp = self, "Failed to map buffer");
                 gst::element_imp_error!(self, gst::StreamError::Failed, ["Failed to map buffer"]);
                 return Err(gst::FlowError::Error);
             }
@@ -1166,7 +1236,7 @@ impl RtpBaseDepay2 {
         let packet = match rtp_types::RtpPacket::parse(&buffer) {
             Ok(packet) => packet,
             Err(err) => {
-                gst::warning!(CAT, imp: self, "Failed to parse RTP packet: {err:?}");
+                gst::warning!(CAT, imp = self, "Failed to parse RTP packet: {err:?}");
                 return Ok(gst::FlowSuccess::Ok);
             }
         };
@@ -1198,7 +1268,7 @@ impl RtpBaseDepay2 {
         // FIXME: Allow subclasses to decide not to flush on DISCONTs and handle the situation
         // themselves, e.g. to be able to continue reconstructing frames despite missing data.
         if buffer.buffer().flags().contains(gst::BufferFlags::DISCONT) {
-            gst::info!(CAT, imp: self, "Discont received");
+            gst::info!(CAT, imp = self, "Discont received");
             state.current_stream = None;
         }
 
@@ -1206,15 +1276,31 @@ impl RtpBaseDepay2 {
         // having a gap compared to the previous packet.
         if let Some(ref mut current_stream) = state.current_stream {
             if current_stream.ssrc != ssrc {
-                gst::info!(CAT, imp: self, "Stream SSRC changed from {:08x} to {:08x}", current_stream.ssrc, ssrc);
+                gst::info!(
+                    CAT,
+                    imp = self,
+                    "Stream SSRC changed from {:08x} to {:08x}",
+                    current_stream.ssrc,
+                    ssrc
+                );
                 state.current_stream = None;
             } else if current_stream.pt != pt {
-                gst::info!(CAT, imp: self, "Stream payload type changed from {} to {}", current_stream.pt, pt);
+                gst::info!(
+                    CAT,
+                    imp = self,
+                    "Stream payload type changed from {} to {}",
+                    current_stream.pt,
+                    pt
+                );
                 state.current_stream = None;
             } else {
                 let expected_seqnum = (current_stream.ext_seqnum + 1) & 0xffff;
                 if expected_seqnum != seqnum as u64 {
-                    gst::info!(CAT, imp: self, "Got seqnum {seqnum} but expected {expected_seqnum}");
+                    gst::info!(
+                        CAT,
+                        imp = self,
+                        "Got seqnum {seqnum} but expected {expected_seqnum}"
+                    );
 
                     let mut ext_seqnum = seqnum as u64 + (current_stream.ext_seqnum & !0xffff);
 
@@ -1236,13 +1322,13 @@ impl RtpBaseDepay2 {
                     };
 
                     if diff > 0 {
-                        gst::info!(CAT, imp: self, "{diff} missing packets or sender restart");
+                        gst::info!(CAT, imp = self, "{diff} missing packets or sender restart");
                         state.current_stream = None;
                     } else if diff >= -(settings.max_reorder as i32) {
-                        gst::info!(CAT, imp: self, "Got old packet, dropping");
+                        gst::info!(CAT, imp = self, "Got old packet, dropping");
                         return Ok(gst::FlowSuccess::Ok);
                     } else {
-                        gst::info!(CAT, imp: self, "Sender restart");
+                        gst::info!(CAT, imp = self, "Sender restart");
                         state.current_stream = None;
                     }
                 } else {
@@ -1271,7 +1357,7 @@ impl RtpBaseDepay2 {
                     current_stream.ext_rtptime = ext_rtptime;
                     gst::trace!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Handling packet with extended seqnum {} and extended RTP time {}",
                         current_stream.ext_seqnum,
                         current_stream.ext_rtptime,
@@ -1284,13 +1370,13 @@ impl RtpBaseDepay2 {
         let discont = state.current_stream.is_none();
         if discont && !state.pending_packets.is_empty() {
             drop(state);
-            gst::info!(CAT, imp: self, "Got discontinuity, draining");
+            gst::info!(CAT, imp = self, "Got discontinuity, draining");
 
             if let Err(err) = self.drain() {
                 if ![gst::FlowError::Flushing, gst::FlowError::Eos].contains(&err) {
-                    gst::warning!(CAT, imp: self, "Error while draining: {err:?}");
+                    gst::warning!(CAT, imp = self, "Error while draining: {err:?}");
                 } else {
-                    gst::debug!(CAT, imp: self, "Error while draining: {err:?}");
+                    gst::debug!(CAT, imp = self, "Error while draining: {err:?}");
                 }
                 return Err(err);
             }
@@ -1309,7 +1395,7 @@ impl RtpBaseDepay2 {
 
             gst::info!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Starting stream with SSRC {ssrc:08x} at extended seqnum {ext_seqnum} with extended RTP time {ext_rtptime}",
             );
 
@@ -1383,12 +1469,12 @@ impl RtpBaseDepay2 {
             },
         );
         if let Err(err) = res {
-            gst::error!(CAT, imp: self, "Failed handling packet: {err:?}");
+            gst::error!(CAT, imp = self, "Failed handling packet: {err:?}");
         } else {
             res = self.finish_pending_buffers();
 
             if let Err(err) = res {
-                gst::debug!(CAT, imp: self, "Failed finishing pending buffers: {err:?}");
+                gst::debug!(CAT, imp = self, "Failed finishing pending buffers: {err:?}");
             }
         }
 
@@ -1424,7 +1510,11 @@ impl RtpBaseDepay2 {
                 continue;
             };
             let Ok(ext_id) = ext_id.parse::<u8>() else {
-                gst::error!(CAT, imp: self, "Can't parse RTP header extension id from caps {sink_caps:?}");
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Can't parse RTP header extension id from caps {sink_caps:?}"
+                );
                 return Err(gst::FlowError::NotNegotiated);
             };
 
@@ -1434,11 +1524,15 @@ impl RtpBaseDepay2 {
                 if let Some(uri) = arr.get(1).and_then(|v| v.get::<String>().ok()) {
                     uri
                 } else {
-                    gst::error!(CAT, imp: self, "Couldn't get URI for RTP header extension id {ext_id} from caps {sink_caps:?}");
+                    gst::error!(CAT, imp = self, "Couldn't get URI for RTP header extension id {ext_id} from caps {sink_caps:?}");
                     return Err(gst::FlowError::NotNegotiated);
                 }
             } else {
-                gst::error!(CAT, imp: self, "Couldn't get URI for RTP header extension id {ext_id} from caps {sink_caps:?}");
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Couldn't get URI for RTP header extension id {ext_id} from caps {sink_caps:?}"
+                );
                 return Err(gst::FlowError::NotNegotiated);
             };
 
@@ -1456,13 +1550,17 @@ impl RtpBaseDepay2 {
                     }
 
                     // Try to get a new one for this extension ID instead
-                    gst::warning!(CAT, imp: self, "Failed to configure extension {ext_id} from caps {sink_caps}");
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Failed to configure extension {ext_id} from caps {sink_caps}"
+                    );
                     extensions_changed |= true;
                     extensions.remove(ext_id);
                 } else {
                     gst::debug!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Extension ID {ext_id} changed from {:?} to {uri}",
                         extension.uri(),
                     );
@@ -1471,7 +1569,11 @@ impl RtpBaseDepay2 {
                 }
             }
 
-            gst::debug!(CAT, imp: self, "Requesting extension {uri} for ID {ext_id}");
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Requesting extension {uri} for ID {ext_id}"
+            );
             let ext = self
                 .obj()
                 .emit_by_name::<Option<gst_rtp::RTPHeaderExtension>>(
@@ -1480,17 +1582,25 @@ impl RtpBaseDepay2 {
                 );
 
             let Some(ext) = ext else {
-                gst::warning!(CAT, imp: self, "Couldn't create extension for {uri} with ID {ext_id}");
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Couldn't create extension for {uri} with ID {ext_id}"
+                );
                 continue;
             };
 
             if ext.id() != *ext_id as u32 {
-                gst::warning!(CAT, imp: self, "Created extension has wrong ID");
+                gst::warning!(CAT, imp = self, "Created extension has wrong ID");
                 continue;
             }
 
             if !ext.set_attributes_from_caps(sink_caps) {
-                gst::warning!(CAT, imp: self, "Failed to configure extension {ext_id} from caps {sink_caps}");
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Failed to configure extension {ext_id} from caps {sink_caps}"
+                );
                 continue;
             }
 
@@ -1517,19 +1627,23 @@ impl RtpBaseDepay2 {
     }
 
     fn set_sink_caps(&self, sink_caps: gst::Caps) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::debug!(CAT, imp: self, "Received caps {sink_caps:?}");
+        gst::debug!(CAT, imp = self, "Received caps {sink_caps:?}");
 
         let s = sink_caps.structure(0).unwrap();
 
         if !s.has_name("application/x-rtp") {
-            gst::error!(CAT, imp: self, "Non-RTP caps {sink_caps:?} not supported");
+            gst::error!(CAT, imp = self, "Non-RTP caps {sink_caps:?} not supported");
             return Err(gst::FlowError::NotNegotiated);
         }
 
         let clock_rate = match s.get::<i32>("clock-rate") {
             Ok(clock_rate) if clock_rate > 0 => clock_rate,
             _ => {
-                gst::error!(CAT, imp: self, "RTP caps {sink_caps:?} without 'clock-rate'");
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "RTP caps {sink_caps:?} without 'clock-rate'"
+                );
                 return Err(gst::FlowError::NotNegotiated);
             }
         };
@@ -1558,14 +1672,14 @@ impl RtpBaseDepay2 {
                 // Just continue here. The depayloader is now flushed and can proceed below,
                 // and if there was a serious error downstream it will happen on the next
                 // buffer pushed downstream
-                gst::debug!(CAT, imp: self, "Draining failed: {err:?}");
+                gst::debug!(CAT, imp = self, "Draining failed: {err:?}");
             }
 
             let set_sink_caps_res = if (obj.class().as_ref().set_sink_caps)(&obj, &sink_caps) {
-                gst::debug!(CAT, imp: self, "Caps {sink_caps:?} accepted");
+                gst::debug!(CAT, imp = self, "Caps {sink_caps:?} accepted");
                 Ok(gst::FlowSuccess::Ok)
             } else {
-                gst::warning!(CAT, imp: self, "Caps {sink_caps:?} not accepted");
+                gst::warning!(CAT, imp = self, "Caps {sink_caps:?} not accepted");
                 Err(gst::FlowError::NotNegotiated)
             };
 
@@ -1613,9 +1727,9 @@ impl RtpBaseDepay2 {
         let obj = self.obj();
         if let Err(err) = (obj.class().as_ref().drain)(&obj) {
             if ![gst::FlowError::Flushing, gst::FlowError::Eos].contains(&err) {
-                gst::warning!(CAT, imp: self, "Draining failed: {err:?}");
+                gst::warning!(CAT, imp = self, "Draining failed: {err:?}");
             } else {
-                gst::debug!(CAT, imp: self, "Draining failed: {err:?}");
+                gst::debug!(CAT, imp = self, "Draining failed: {err:?}");
             }
             self.flush();
             return Err(err);
@@ -1912,7 +2026,7 @@ impl ElementImpl for RtpBaseDepay2 {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::debug!(CAT, imp: self, "Changing state: {transition}");
+        gst::debug!(CAT, imp = self, "Changing state: {transition}");
 
         if transition == gst::StateChange::ReadyToPaused {
             *self.state.borrow_mut() = State::default();

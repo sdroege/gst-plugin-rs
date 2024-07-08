@@ -373,12 +373,12 @@ impl Signaller {
                     }
 
                     if let Err(ref err) = res {
-                        gst::error!(CAT, imp: this, "Quitting send task: {err}");
+                        gst::error!(CAT, imp = this, "Quitting send task: {err}");
                         break;
                     }
                 }
 
-                gst::debug!(CAT, imp: this, "Done sending");
+                gst::debug!(CAT, imp = this, "Done sending");
 
                 let _ = ws_sink.close().await;
 
@@ -397,7 +397,7 @@ impl Signaller {
                 }
 
                 let msg = "Stopped websocket receiving";
-                gst::info!(CAT, imp: this, "{msg}");
+                gst::info!(CAT, imp = this, "{msg}");
             }
         ));
 
@@ -415,15 +415,15 @@ impl Signaller {
     ) -> ControlFlow<()> {
         match msg {
             Ok(WsMessage::Text(msg)) => {
-                gst::trace!(CAT, imp: self, "Received message {}", msg);
+                gst::trace!(CAT, imp = self, "Received message {}", msg);
                 if let Ok(reply) = serde_json::from_str::<JsonReply>(&msg) {
                     self.handle_reply(reply);
                 } else {
-                    gst::error!(CAT, imp: self, "Unknown message from server: {}", msg);
+                    gst::error!(CAT, imp = self, "Unknown message from server: {}", msg);
                 }
             }
             Ok(WsMessage::Close(reason)) => {
-                gst::info!(CAT, imp: self, "websocket connection closed: {:?}", reason);
+                gst::info!(CAT, imp = self, "websocket connection closed: {:?}", reason);
                 return ControlFlow::Break(());
             }
             Ok(_) => (),
@@ -438,16 +438,26 @@ impl Signaller {
     fn handle_reply(&self, reply: JsonReply) {
         match reply {
             JsonReply::WebRTCUp => {
-                gst::trace!(CAT, imp: self, "WebRTC streaming is working!");
+                gst::trace!(CAT, imp = self, "WebRTC streaming is working!");
             }
             JsonReply::Success(success) => {
                 if let Some(data) = success.data {
                     if success.session_id.is_none() {
-                        gst::trace!(CAT, imp: self, "Janus session {} was created successfully", data.id);
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "Janus session {} was created successfully",
+                            data.id
+                        );
                         self.set_session_id(data.id);
                         self.attach_plugin();
                     } else {
-                        gst::trace!(CAT, imp: self, "Attached to Janus Video Room plugin successfully, handle: {}", data.id);
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "Attached to Janus Video Room plugin successfully, handle: {}",
+                            data.id
+                        );
                         self.set_handle_id(data.id);
                         self.join_room();
                     }
@@ -475,7 +485,12 @@ impl Signaller {
                                 self.obj().notify("feed-id");
                             }
 
-                            gst::trace!(CAT, imp: self, "Joined room {:?} successfully", joined.room);
+                            gst::trace!(
+                                CAT,
+                                imp = self,
+                                "Joined room {:?} successfully",
+                                joined.room
+                            );
                             self.session_requested();
                         }
                         VideoRoomData::Event(room_event) => {
@@ -490,13 +505,18 @@ impl Signaller {
 
                             if let Some(jsep) = event.jsep {
                                 if jsep.r#type == "answer" {
-                                    gst::trace!(CAT, imp: self, "Session requested successfully");
+                                    gst::trace!(CAT, imp = self, "Session requested successfully");
                                     self.handle_answer(jsep.sdp);
                                 }
                             }
                         }
                         VideoRoomData::Destroyed(room_destroyed) => {
-                            gst::trace!(CAT, imp: self, "Room {} has been destroyed", room_destroyed.room);
+                            gst::trace!(
+                                CAT,
+                                imp = self,
+                                "Room {} has been destroyed",
+                                room_destroyed.room
+                            );
 
                             self.raise_error(format!(
                                 "room {} has been destroyed",
@@ -782,7 +802,12 @@ impl SignallableImpl for Signaller {
     }
 
     fn send_sdp(&self, _session_id: &str, offer: &gst_webrtc::WebRTCSessionDescription) {
-        gst::info!(CAT, imp: self, "sending SDP offer to peer: {:?}", offer.sdp().as_text());
+        gst::info!(
+            CAT,
+            imp = self,
+            "sending SDP offer to peer: {:?}",
+            offer.sdp().as_text()
+        );
 
         self.publish(offer);
     }
@@ -798,7 +823,7 @@ impl SignallableImpl for Signaller {
     }
 
     fn stop(&self) {
-        gst::info!(CAT, imp: self, "Stopping now");
+        gst::info!(CAT, imp = self, "Stopping now");
         let mut state = self.state.lock().unwrap();
 
         let send_task_handle = state.send_task_handle.take();
@@ -810,7 +835,7 @@ impl SignallableImpl for Signaller {
 
                 if let Some(handle) = send_task_handle {
                     if let Err(err) = handle.await {
-                        gst::warning!(CAT, imp: self, "Error while joining send task: {}", err);
+                        gst::warning!(CAT, imp = self, "Error while joining send task: {}", err);
                     }
                 }
 

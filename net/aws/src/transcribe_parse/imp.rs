@@ -83,7 +83,7 @@ impl TranscribeParse {
         pad: &gst::Pad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, obj = pad, "Handling buffer {:?}", buffer);
 
         let mut state = self.state.lock().unwrap();
 
@@ -218,7 +218,7 @@ impl TranscribeParse {
     fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
         match event.view() {
             EventView::FlushStop(..) => {
                 let mut state = self.state.lock().unwrap();
@@ -228,7 +228,7 @@ impl TranscribeParse {
             EventView::Eos(..) => match self.drain() {
                 Ok(()) => gst::Pad::event_default(pad, Some(&*self.obj()), event),
                 Err(err) => {
-                    gst::error!(CAT, imp: self, "failed to drain on EOS: {}", err);
+                    gst::error!(CAT, imp = self, "failed to drain on EOS: {}", err);
                     element_imp_error!(
                         self,
                         gst::StreamError::Failed,
@@ -338,7 +338,7 @@ impl ElementImpl for TranscribeParse {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused | gst::StateChange::PausedToReady => {

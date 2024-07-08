@@ -178,7 +178,7 @@ impl VideoEncoderImpl for PngEncoder {
         state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
         let video_info = state.info();
-        gst::debug!(CAT, imp: self, "Setting format {:?}", video_info);
+        gst::debug!(CAT, imp = self, "Setting format {:?}", video_info);
 
         *self.state.lock() = Some(State { video_info });
 
@@ -201,7 +201,7 @@ impl VideoEncoderImpl for PngEncoder {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Sending frame {}",
             frame.system_frame_number()
         );
@@ -232,7 +232,7 @@ impl VideoEncoderImpl for PngEncoder {
         encoder.set_filter(png::FilterType::from(settings.filter));
 
         let mut writer = encoder.write_header().map_err(|e| {
-            gst::error!(CAT, imp: self, "Failed to create encoder: {e}");
+            gst::error!(CAT, imp = self, "Failed to create encoder: {e}");
             gst::element_imp_error!(self, gst::CoreError::Failed, ["{e}"]);
             gst::FlowError::Error
         })?;
@@ -241,14 +241,14 @@ impl VideoEncoderImpl for PngEncoder {
             let input_buffer = frame.input_buffer().expect("frame without input buffer");
             let input_map = input_buffer.map_readable().unwrap();
             writer.write_image_data(&input_map).map_err(|e| {
-                gst::error!(CAT, imp: self, "Failed to write image data: {e}");
+                gst::error!(CAT, imp = self, "Failed to write image data: {e}");
                 gst::element_imp_error!(self, gst::CoreError::Failed, ["{e}"]);
                 gst::FlowError::Error
             })?;
         }
 
         writer.finish().map_err(|e| {
-            gst::error!(CAT, imp: self, "Failed to finish encoder: {e}");
+            gst::error!(CAT, imp = self, "Failed to finish encoder: {e}");
             gst::element_imp_error!(self, gst::CoreError::Failed, ["{e}"]);
             gst::FlowError::Error
         })?;

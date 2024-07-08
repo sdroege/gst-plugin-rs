@@ -138,7 +138,7 @@ impl WebPDec {
         pad: &gst::Pad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, obj = pad, "Handling buffer {:?}", buffer);
 
         let mut state = self.state.lock().unwrap();
 
@@ -236,7 +236,7 @@ impl WebPDec {
     fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
         match event.view() {
             EventView::FlushStop(..) => {
                 let mut state = self.state.lock().unwrap();
@@ -257,7 +257,7 @@ impl WebPDec {
     fn src_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Seek(..) => false,
             _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
@@ -365,7 +365,7 @@ impl ElementImpl for WebPDec {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         if transition == gst::StateChange::PausedToReady {
             *self.state.lock().unwrap() = State::default();

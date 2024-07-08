@@ -224,7 +224,7 @@ impl HrtfRender {
         let mut outbuf =
             gst_audio::AudioBufferRef::from_buffer_ref_writable(outbuf, &state.outinfo).map_err(
                 |err| {
-                    gst::error!(CAT, imp: self, "Failed to map buffer : {}", err);
+                    gst::error!(CAT, imp = self, "Failed to map buffer : {}", err);
                     gst::FlowError::Error
                 },
             )?;
@@ -248,13 +248,13 @@ impl HrtfRender {
 
         while state.adapter.available() >= inblksz {
             let inbuf = state.adapter.take_buffer(inblksz).map_err(|_| {
-                gst::error!(CAT, imp: self, "Failed to map buffer");
+                gst::error!(CAT, imp = self, "Failed to map buffer");
                 gst::FlowError::Error
             })?;
 
             let inbuf = gst_audio::AudioBuffer::from_buffer_readable(inbuf, &state.ininfo)
                 .map_err(|_| {
-                    gst::error!(CAT, imp: self, "Failed to map buffer");
+                    gst::error!(CAT, imp = self, "Failed to map buffer");
                     gst::FlowError::Error
                 })?;
 
@@ -624,7 +624,7 @@ impl BaseTransformImpl for HrtfRender {
 
         gst::log!(
             CAT,
-            imp: self,
+            imp = self,
             "Adapter size: {}, input size {}, transformed size {}",
             state.adapter.available(),
             size,
@@ -670,7 +670,7 @@ impl BaseTransformImpl for HrtfRender {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Transformed caps from {} to {} in direction {:?}",
             caps,
             other_caps,
@@ -741,7 +741,7 @@ impl BaseTransformImpl for HrtfRender {
             adapter: gst_base::UniqueAdapter::new(),
         });
 
-        gst::debug!(CAT, imp: self, "Configured for caps {}", incaps);
+        gst::debug!(CAT, imp = self, "Configured for caps {}", incaps);
 
         Ok(())
     }
@@ -749,7 +749,7 @@ impl BaseTransformImpl for HrtfRender {
     fn sink_event(&self, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::debug!(CAT, imp: self, "Handling event {:?}", event);
+        gst::debug!(CAT, imp = self, "Handling event {:?}", event);
 
         match event.view() {
             EventView::FlushStop(_) => {

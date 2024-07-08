@@ -90,7 +90,7 @@ impl PadSrcHandler for AudioTestSrcPadHandler {
     type ElementImpl = AudioTestSrc;
 
     fn src_query(self, pad: &gst::Pad, imp: &Self::ElementImpl, query: &mut gst::QueryRef) -> bool {
-        gst::debug!(CAT, obj: pad, "Received {query:?}");
+        gst::debug!(CAT, obj = pad, "Received {query:?}");
 
         if let gst::QueryViewMut::Latency(q) = query.view_mut() {
             let settings = imp.settings.lock().unwrap();
@@ -187,17 +187,17 @@ impl AudioTestSrcTask {
         }
 
         let mut caps = pad.peer_query_caps(Some(&DEFAULT_CAPS));
-        gst::debug!(CAT, imp: imp, "Peer returned {caps:?}");
+        gst::debug!(CAT, imp = imp, "Peer returned {caps:?}");
 
         if caps.is_empty() {
             pad.mark_reconfigure();
             let err = gst::error_msg!(gst::CoreError::Pad, ["No common Caps"]);
-            gst::error!(CAT, imp: imp, "{err}");
+            gst::error!(CAT, imp = imp, "{err}");
             return Err(err);
         }
 
         if caps.is_any() {
-            gst::debug!(CAT, imp: imp, "Using our own Caps");
+            gst::debug!(CAT, imp = imp, "Using our own Caps");
             caps = DEFAULT_CAPS.clone();
         }
 
@@ -205,7 +205,7 @@ impl AudioTestSrcTask {
             let caps = caps.make_mut();
             let s = caps.structure_mut(0).ok_or_else(|| {
                 let err = gst::error_msg!(gst::CoreError::Pad, ["Invalid peer Caps structure"]);
-                gst::error!(CAT, imp: imp, "{err}");
+                gst::error!(CAT, imp = imp, "{err}");
                 err
             })?;
 
@@ -227,7 +227,7 @@ impl AudioTestSrcTask {
         }
 
         caps.fixate();
-        gst::debug!(CAT, imp: imp, "fixated to {caps:?}");
+        gst::debug!(CAT, imp = imp, "fixated to {caps:?}");
 
         imp.src_pad.push_event(gst::event::Caps::new(&caps)).await;
 
@@ -241,7 +241,7 @@ impl TaskImpl for AudioTestSrcTask {
     type Item = gst::Buffer;
 
     fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        gst::log!(CAT, obj: self.elem, "Preparing Task");
+        gst::log!(CAT, obj = self.elem, "Preparing Task");
 
         let imp = self.elem.imp();
         let settings = imp.settings.lock().unwrap();
@@ -260,10 +260,10 @@ impl TaskImpl for AudioTestSrcTask {
 
     fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(CAT, obj: self.elem, "Starting Task");
+            gst::log!(CAT, obj = self.elem, "Starting Task");
 
             if self.need_initial_events {
-                gst::debug!(CAT, obj: self.elem, "Pushing initial events");
+                gst::debug!(CAT, obj = self.elem, "Pushing initial events");
 
                 let stream_id =
                     format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
@@ -311,14 +311,14 @@ impl TaskImpl for AudioTestSrcTask {
     }
 
     fn pause(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        gst::log!(CAT, obj: self.elem, "Pausing Task");
+        gst::log!(CAT, obj = self.elem, "Pausing Task");
         self.buffer_pool.set_active(false).unwrap();
 
         future::ok(()).boxed()
     }
 
     fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        gst::log!(CAT, obj: self.elem, "Stopping Task");
+        gst::log!(CAT, obj = self.elem, "Stopping Task");
 
         self.need_initial_events = true;
         self.accumulator = 0.0;
@@ -331,7 +331,7 @@ impl TaskImpl for AudioTestSrcTask {
         let mut buffer = match self.buffer_pool.acquire_buffer(None) {
             Ok(buffer) => buffer,
             Err(err) => {
-                gst::error!(CAT, obj: self.elem, "Failed to acquire buffer {}", err);
+                gst::error!(CAT, obj = self.elem, "Failed to acquire buffer {}", err);
                 return future::err(err).boxed();
             }
         };
@@ -399,9 +399,9 @@ impl TaskImpl for AudioTestSrcTask {
         async move {
             let imp = self.elem.imp();
 
-            gst::debug!(CAT, imp: imp, "Pushing {buffer:?}");
+            gst::debug!(CAT, imp = imp, "Pushing {buffer:?}");
             imp.src_pad.push(buffer).await?;
-            gst::log!(CAT, imp: imp, "Successfully pushed buffer");
+            gst::log!(CAT, imp = imp, "Successfully pushed buffer");
 
             self.buffer_count += 1;
 
@@ -442,12 +442,12 @@ impl TaskImpl for AudioTestSrcTask {
         async move {
             match err {
                 gst::FlowError::Flushing => {
-                    gst::debug!(CAT, obj: self.elem, "Flushing");
+                    gst::debug!(CAT, obj = self.elem, "Flushing");
 
                     task::Trigger::FlushStart
                 }
                 gst::FlowError::Eos => {
-                    gst::debug!(CAT, obj: self.elem, "EOS");
+                    gst::debug!(CAT, obj = self.elem, "EOS");
                     self.elem
                         .imp()
                         .src_pad
@@ -457,7 +457,7 @@ impl TaskImpl for AudioTestSrcTask {
                     task::Trigger::Stop
                 }
                 err => {
-                    gst::error!(CAT, obj: self.elem, "Got error {err}");
+                    gst::error!(CAT, obj = self.elem, "Got error {err}");
                     gst::element_error!(
                         &self.elem,
                         gst::StreamError::Failed,
@@ -482,7 +482,7 @@ pub struct AudioTestSrc {
 
 impl AudioTestSrc {
     fn prepare(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp: self, "Preparing");
+        gst::debug!(CAT, imp = self, "Preparing");
 
         let settings = self.settings.lock().unwrap();
         let context =
@@ -498,37 +498,37 @@ impl AudioTestSrc {
             .prepare(AudioTestSrcTask::new(self.obj().clone()), context)
             .block_on()?;
 
-        gst::debug!(CAT, imp: self, "Prepared");
+        gst::debug!(CAT, imp = self, "Prepared");
 
         Ok(())
     }
 
     fn unprepare(&self) {
-        gst::debug!(CAT, imp: self, "Unpreparing");
+        gst::debug!(CAT, imp = self, "Unpreparing");
         self.task.unprepare().block_on().unwrap();
-        gst::debug!(CAT, imp: self, "Unprepared");
+        gst::debug!(CAT, imp = self, "Unprepared");
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp: self, "Stopping");
+        gst::debug!(CAT, imp = self, "Stopping");
         self.task.stop().block_on()?;
-        gst::debug!(CAT, imp: self, "Stopped");
+        gst::debug!(CAT, imp = self, "Stopped");
 
         Ok(())
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp: self, "Starting");
+        gst::debug!(CAT, imp = self, "Starting");
         self.task.start().block_on()?;
-        gst::debug!(CAT, imp: self, "Started");
+        gst::debug!(CAT, imp = self, "Started");
 
         Ok(())
     }
 
     fn pause(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp: self, "Pausing");
+        gst::debug!(CAT, imp = self, "Pausing");
         self.task.pause().block_on()?;
-        gst::debug!(CAT, imp: self, "Paused");
+        gst::debug!(CAT, imp = self, "Paused");
 
         Ok(())
     }
@@ -695,7 +695,7 @@ impl ElementImpl for AudioTestSrc {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {transition:?}");
+        gst::trace!(CAT, imp = self, "Changing state {transition:?}");
 
         match transition {
             gst::StateChange::NullToReady => {

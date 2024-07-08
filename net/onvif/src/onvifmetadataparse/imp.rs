@@ -177,7 +177,7 @@ impl OnvifMetadataParse {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::log!(
             CAT,
-            obj: pad,
+            obj = pad,
             "Handling buffer {:?} with UTC time {}",
             buffer,
             crate::lookup_reference_timestamp(&buffer).display()
@@ -188,7 +188,7 @@ impl OnvifMetadataParse {
         let pts = match buffer.pts() {
             Some(pts) => pts,
             None => {
-                gst::error!(CAT, obj: pad, "Need buffers with PTS");
+                gst::error!(CAT, obj = pad, "Need buffers with PTS");
                 return Err(gst::FlowError::Error);
             }
         };
@@ -200,7 +200,7 @@ impl OnvifMetadataParse {
             .position()
             .map_or(true, |position| position < pts)
         {
-            gst::trace!(CAT, imp: self, "Input position updated to {}", pts);
+            gst::trace!(CAT, imp = self, "Input position updated to {}", pts);
             state.in_segment.set_position(pts);
         }
 
@@ -228,7 +228,7 @@ impl OnvifMetadataParse {
                         None => {
                             gst::error!(
                                 CAT,
-                                obj: pad,
+                                obj = pad,
                                 "Too big running time difference between initial running time {:?} and current running time {:?}",
                                 initial_running_time,
                                 running_time,
@@ -243,7 +243,7 @@ impl OnvifMetadataParse {
                         Some(Negative(initial_utc_time)) => {
                             gst::warning!(
                                 CAT,
-                                obj: pad,
+                                obj = pad,
                                 "Initial UTC time is negative: -{}, dropping buffer",
                                 initial_utc_time
                             );
@@ -254,7 +254,7 @@ impl OnvifMetadataParse {
                         None => {
                             gst::warning!(
                                 CAT,
-                                obj: pad,
+                                obj = pad,
                                 "Can't calculate initial UTC time, dropping buffer"
                             );
                             state.pre_queued_buffers.remove(idx.unwrap());
@@ -267,7 +267,7 @@ impl OnvifMetadataParse {
 
                 gst::info!(
                     CAT,
-                    obj: pad,
+                    obj = pad,
                     "Calculated initial UTC/running time mapping: {}/{:?}",
                     initial_utc_time,
                     initial_running_time
@@ -294,7 +294,7 @@ impl OnvifMetadataParse {
                     if running_time.saturating_sub(front_running_time) >= state.configured_latency {
                         gst::warning!(
                             CAT,
-                            obj: pad,
+                            obj = pad,
                             "Received no UTC time in the first {}",
                             state.configured_latency
                         );
@@ -310,7 +310,7 @@ impl OnvifMetadataParse {
         self.queue(&mut state, buffer, running_time)?;
         let res = self.wake_up_output(state);
 
-        gst::trace!(CAT, obj: pad, "Returning {:?}", res);
+        gst::trace!(CAT, obj = pad, "Returning {:?}", res);
 
         res
     }
@@ -373,8 +373,9 @@ impl OnvifMetadataParse {
                     .and_then(|ns| ns.nseconds().checked_add(crate::PRIME_EPOCH_OFFSET));
 
                 let Some(dt_unix_ns) = dt_unix_ns else {
-                    gst::warning!(CAT,
-                        imp: self,
+                    gst::warning!(
+                        CAT,
+                        imp = self,
                         "Frame with unrepresentable UTC time {}",
                         dt,
                     );
@@ -383,7 +384,7 @@ impl OnvifMetadataParse {
 
                 gst::trace!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Queueing frame with UTC time {}",
                     dt_unix_ns
                 );
@@ -435,7 +436,7 @@ impl OnvifMetadataParse {
         if state.upstream_latency.is_none() {
             drop(state);
 
-            gst::debug!(CAT, imp: self, "Have no upstream latency yet, querying");
+            gst::debug!(CAT, imp = self, "Have no upstream latency yet, querying");
             let mut q = gst::query::Latency::new();
             let res = self.sinkpad.peer_query(&mut q);
 
@@ -446,7 +447,7 @@ impl OnvifMetadataParse {
 
                 gst::debug!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Latency query response: live {} min {} max {}",
                     live,
                     min,
@@ -457,7 +458,7 @@ impl OnvifMetadataParse {
             } else {
                 gst::warning!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Can't query upstream latency -- assuming non-live upstream for now"
                 );
             }
@@ -465,7 +466,7 @@ impl OnvifMetadataParse {
 
         // Consider waking up the source element thread
         if self.sinkpad.pad_flags().contains(gst::PadFlags::EOS) {
-            gst::trace!(CAT, imp: self, "Scheduling immediate wakeup at EOS",);
+            gst::trace!(CAT, imp = self, "Scheduling immediate wakeup at EOS",);
 
             if let Some(clock_wait) = state.clock_wait.take() {
                 clock_wait.unschedule();
@@ -483,7 +484,7 @@ impl OnvifMetadataParse {
             if queued_time.is_some_and(|queued_time| queued_time >= state.configured_latency) {
                 gst::trace!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Scheduling immediate wakeup -- queued time {}",
                     queued_time.display()
                 );
@@ -520,7 +521,12 @@ impl OnvifMetadataParse {
             .and_then(|queued_time| queued_time.positive())
             .unwrap_or(gst::ClockTime::ZERO);
 
-        gst::trace!(CAT, imp: self, "Currently queued {}", queued_time.display());
+        gst::trace!(
+            CAT,
+            imp = self,
+            "Currently queued {}",
+            queued_time.display()
+        );
 
         Some(queued_time)
     }
@@ -546,7 +552,7 @@ impl OnvifMetadataParse {
             _ => {
                 gst::warning!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Upstream is live but have no clock -- assuming non-live for now"
                 );
                 return false;
@@ -572,7 +578,7 @@ impl OnvifMetadataParse {
                 }
                 gst::trace!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Scheduling timer for {} / running time {}, now {}",
                     earliest_clock_time,
                     earliest_running_time.unwrap().display(),
@@ -585,7 +591,7 @@ impl OnvifMetadataParse {
             if let Some(clock_wait) = state.clock_wait.take() {
                 clock_wait.unschedule();
             }
-            gst::trace!(CAT, imp: self, "Scheduling immediate wakeup");
+            gst::trace!(CAT, imp = self, "Scheduling immediate wakeup");
         }
 
         true
@@ -610,7 +616,7 @@ impl OnvifMetadataParse {
 
         gst::log!(
             CAT,
-            imp: self,
+            imp = self,
             "Draining up to UTC time {} / running time {} from current position {} / running time {}",
             drain_utc_time.display(),
             drain_utc_time
@@ -658,7 +664,7 @@ impl OnvifMetadataParse {
                             });
                         segment.set_position(current_position);
 
-                        gst::debug!(CAT, imp: self, "Configuring output segment {:?}", segment);
+                        gst::debug!(CAT, imp = self, "Configuring output segment {:?}", segment);
 
                         *out_segment = segment;
 
@@ -680,7 +686,7 @@ impl OnvifMetadataParse {
                         {
                             gst::trace!(
                                 CAT,
-                                imp: self,
+                                imp = self,
                                 "Output position updated to {}",
                                 current_position
                             );
@@ -703,7 +709,7 @@ impl OnvifMetadataParse {
                 match utc_time_to_pts(out_segment, utc_time_running_time_mapping, utc_time) {
                     Some(frame_pts) => frame_pts,
                     None => {
-                        gst::warning!(CAT, imp: self, "UTC time {} outside segment", utc_time);
+                        gst::warning!(CAT, imp = self, "UTC time {} outside segment", utc_time);
                         gst::ClockTime::ZERO
                     }
                 };
@@ -732,7 +738,7 @@ impl OnvifMetadataParse {
                 {
                     gst::warning!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Dropping frame with UTC time {} / PTS {} that is too late by {} at current position {}",
                         utc_time,
                         frame_pts,
@@ -748,7 +754,7 @@ impl OnvifMetadataParse {
                 } else if diff > gst::ClockTime::ZERO {
                     gst::warning!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Frame in the past by {} with UTC time {} / PTS {} at current position {}",
                         diff,
                         utc_time,
@@ -764,7 +770,7 @@ impl OnvifMetadataParse {
                 .position()
                 .map_or(true, |position| position < frame_pts)
             {
-                gst::trace!(CAT, imp: self, "Output position updated to {}", frame_pts);
+                gst::trace!(CAT, imp = self, "Output position updated to {}", frame_pts);
                 out_segment.set_position(frame_pts);
             }
 
@@ -776,7 +782,7 @@ impl OnvifMetadataParse {
 
             gst::trace!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Producing frame with UTC time {} / PTS {}",
                 utc_time,
                 frame_pts
@@ -806,7 +812,7 @@ impl OnvifMetadataParse {
                     ..xmltree::EmitterConfig::default()
                 },
             ) {
-                gst::error!(CAT, imp: self, "Can't serialize XML element: {}", err);
+                gst::error!(CAT, imp = self, "Can't serialize XML element: {}", err);
                 for event in eos_events {
                     data.push(BufferOrEvent::Event(event));
                 }
@@ -833,7 +839,7 @@ impl OnvifMetadataParse {
 
         gst::trace!(
             CAT,
-            imp: self,
+            imp = self,
             "Position after draining {} / running time {} -- queued now {} / {} items",
             out_segment.position().display(),
             out_segment
@@ -847,7 +853,7 @@ impl OnvifMetadataParse {
     }
 
     fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
 
         match event.view() {
             gst::EventView::FlushStart(_) => {
@@ -902,14 +908,14 @@ impl OnvifMetadataParse {
 
                                 gst::debug!(
                                     CAT,
-                                    obj: pad,
+                                    obj = pad,
                                     "Configuring input segment {:?}",
                                     segment
                                 );
                                 state.in_segment = segment;
                             }
                             None => {
-                                gst::error!(CAT, obj: pad, "Non-TIME segment");
+                                gst::error!(CAT, obj = pad, "Non-TIME segment");
                                 return false;
                             }
                         }
@@ -934,7 +940,7 @@ impl OnvifMetadataParse {
                         state.configured_latency = latency;
                         drop(state);
 
-                        gst::debug!(CAT, obj: pad, "Configuring latency of {}", latency);
+                        gst::debug!(CAT, obj = pad, "Configuring latency of {}", latency);
                         if previous_latency != latency {
                             let element = self.obj();
                             let _ = element.post_message(
@@ -957,7 +963,7 @@ impl OnvifMetadataParse {
                         {
                             gst::trace!(
                                 CAT,
-                                imp: self,
+                                imp = self,
                                 "Input position updated to {}",
                                 current_position
                             );
@@ -983,7 +989,7 @@ impl OnvifMetadataParse {
 
                         gst::trace!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "Queueing EOS event with UTC time {} / running time {}",
                             eos_utc_time,
                             utc_time_to_running_time(*utc_time_running_time_mapping, eos_utc_time)
@@ -1003,7 +1009,7 @@ impl OnvifMetadataParse {
 
                         gst::trace!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "Queueing event with UTC time {} / running time {}",
                             current_utc_time,
                             current_running_time.display(),
@@ -1021,7 +1027,7 @@ impl OnvifMetadataParse {
                     if matches!(ev, gst::EventView::Eos(_)) {
                         gst::error!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "Got EOS event before creating UTC/running time mapping"
                         );
                         gst::element_imp_error!(
@@ -1038,7 +1044,7 @@ impl OnvifMetadataParse {
 
                     gst::trace!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Pre-queueing event with running time {}",
                         current_running_time.display()
                     );
@@ -1052,7 +1058,7 @@ impl OnvifMetadataParse {
     }
 
     fn sink_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
-        gst::log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::log!(CAT, obj = pad, "Handling query {:?}", query);
 
         match query.view_mut() {
             gst::QueryViewMut::Caps(q) => {
@@ -1075,7 +1081,7 @@ impl OnvifMetadataParse {
                 true
             }
             gst::QueryViewMut::Allocation(_) => {
-                gst::fixme!(CAT, obj: pad, "Dropping allocation query");
+                gst::fixme!(CAT, obj = pad, "Dropping allocation query");
                 false
             }
             _ => gst::Pad::query_default(pad, Some(&*self.obj()), query),
@@ -1083,7 +1089,7 @@ impl OnvifMetadataParse {
     }
 
     fn src_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
 
         match event.view() {
             gst::EventView::FlushStart(_) => {
@@ -1120,7 +1126,7 @@ impl OnvifMetadataParse {
     }
 
     fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
-        gst::log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::log!(CAT, obj = pad, "Handling query {:?}", query);
 
         match query.view_mut() {
             gst::QueryViewMut::Caps(q) => {
@@ -1158,7 +1164,7 @@ impl OnvifMetadataParse {
 
                     gst::debug!(
                         CAT,
-                        obj: pad,
+                        obj = pad,
                         "Latency query response: live {} min {} max {}",
                         live,
                         min,
@@ -1181,17 +1187,17 @@ impl OnvifMetadataParse {
                 if let Err(err) = self_.src_loop() {
                     match err {
                         gst::FlowError::Flushing => {
-                            gst::debug!(CAT, imp: self_, "Pausing after flow {:?}", err);
+                            gst::debug!(CAT, imp = self_, "Pausing after flow {:?}", err);
                         }
                         gst::FlowError::Eos => {
                             let _ = self_.srcpad.push_event(gst::event::Eos::builder().build());
 
-                            gst::debug!(CAT, imp: self_, "Pausing after flow {:?}", err);
+                            gst::debug!(CAT, imp = self_, "Pausing after flow {:?}", err);
                         }
                         _ => {
                             let _ = self_.srcpad.push_event(gst::event::Eos::builder().build());
 
-                            gst::error!(CAT, imp: self_, "Pausing after flow {:?}", err);
+                            gst::error!(CAT, imp = self_, "Pausing after flow {:?}", err);
 
                             gst::element_imp_error!(
                                 self_,
@@ -1269,7 +1275,7 @@ impl OnvifMetadataParse {
             let mut drain_running_time = None;
             if self.sinkpad.pad_flags().contains(gst::PadFlags::EOS) {
                 // Drain completely
-                gst::debug!(CAT, imp: self, "Sink pad is EOS, draining");
+                gst::debug!(CAT, imp = self, "Sink pad is EOS, draining");
             } else if let Some((true, min_latency)) = state.upstream_latency {
                 // Drain until the current clock running time minus the configured latency when
                 // live
@@ -1279,7 +1285,7 @@ impl OnvifMetadataParse {
                 ) {
                     gst::trace!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Clock time now {}, last timer was at {} and current timer at {}",
                         now,
                         last_clock_wait_time.display(),
@@ -1333,13 +1339,13 @@ impl OnvifMetadataParse {
             if data.is_empty() {
                 if self.sinkpad.pad_flags().contains(gst::PadFlags::EOS) {
                     state.last_flow_ret = Err(gst::FlowError::Eos);
-                    gst::debug!(CAT, imp: self, "EOS, waiting on cond");
+                    gst::debug!(CAT, imp = self, "EOS, waiting on cond");
                     state = self.cond.wait(state).unwrap();
-                    gst::trace!(CAT, imp: self, "Woke up");
+                    gst::trace!(CAT, imp = self, "Woke up");
                 } else if let Some(clock_wait) = state.clock_wait.clone() {
                     gst::trace!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Waiting on timer with time {}, now {}",
                         clock_wait.time(),
                         clock_wait.clock().and_then(|clock| clock.time()).display(),
@@ -1358,13 +1364,13 @@ impl OnvifMetadataParse {
 
                     match res {
                         (Ok(_), jitter) => {
-                            gst::trace!(CAT, imp: self, "Woke up after waiting for {}", jitter);
+                            gst::trace!(CAT, imp = self, "Woke up after waiting for {}", jitter);
                             last_clock_wait_time = Some(clock_wait.time());
                         }
                         (Err(err), jitter) => {
                             gst::trace!(
                                 CAT,
-                                imp: self,
+                                imp = self,
                                 "Woke up with error {:?} and jitter {}",
                                 err,
                                 jitter
@@ -1372,9 +1378,9 @@ impl OnvifMetadataParse {
                         }
                     }
                 } else {
-                    gst::debug!(CAT, imp: self, "Waiting on cond");
+                    gst::debug!(CAT, imp = self, "Waiting on cond");
                     state = self.cond.wait(state).unwrap();
-                    gst::trace!(CAT, imp: self, "Woke up");
+                    gst::trace!(CAT, imp = self, "Woke up");
                 }
 
                 // And retry if there's anything to drain now.
@@ -1385,15 +1391,15 @@ impl OnvifMetadataParse {
 
             let mut res = Ok(());
 
-            gst::trace!(CAT, imp: self, "Pushing {} items downstream", data.len());
+            gst::trace!(CAT, imp = self, "Pushing {} items downstream", data.len());
             for data in data {
                 match data {
                     BufferOrEvent::Event(event) => {
-                        gst::trace!(CAT, imp: self, "Pushing event {:?}", event);
+                        gst::trace!(CAT, imp = self, "Pushing event {:?}", event);
                         self.srcpad.push_event(event);
                     }
                     BufferOrEvent::Buffer(buffer) => {
-                        gst::trace!(CAT, imp: self, "Pushing buffer {:?}", buffer);
+                        gst::trace!(CAT, imp = self, "Pushing buffer {:?}", buffer);
                         if let Err(err) = self.srcpad.push(buffer) {
                             res = Err(err);
                             break;
@@ -1401,7 +1407,7 @@ impl OnvifMetadataParse {
                     }
                 }
             }
-            gst::trace!(CAT, imp: self, "Pushing returned {:?}", res);
+            gst::trace!(CAT, imp = self, "Pushing returned {:?}", res);
 
             state = self.state.lock().unwrap();
             // If flushing or any other error then just return here
@@ -1601,7 +1607,7 @@ impl ElementImpl for OnvifMetadataParse {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         if matches!(transition, gst::StateChange::ReadyToPaused) {
             let mut state = self.state.lock().unwrap();

@@ -250,13 +250,13 @@ impl SccEnc {
         pad: &gst::Pad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, obj = pad, "Handling buffer {:?}", buffer);
 
         let mut state = self.state.lock().unwrap();
         let res = state.generate_caption(self, buffer)?;
 
         if let Some(outbuf) = res {
-            gst::trace!(CAT, obj: pad, "Pushing buffer {:?} to the pad", &outbuf);
+            gst::trace!(CAT, obj = pad, "Pushing buffer {:?} to the pad", &outbuf);
 
             drop(state);
             self.srcpad.push(outbuf)?;
@@ -268,7 +268,7 @@ impl SccEnc {
     fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
 
         match event.view() {
             EventView::Caps(ev) => {
@@ -277,7 +277,7 @@ impl SccEnc {
                 let framerate = match s.get::<gst::Fraction>("framerate") {
                     Ok(framerate) => Some(framerate),
                     Err(structure::GetError::FieldNotFound { .. }) => {
-                        gst::error!(CAT, obj: pad, "Caps without framerate");
+                        gst::error!(CAT, obj = pad, "Caps without framerate");
                         return false;
                     }
                     err => panic!("SccEnc::sink_event caps: {err:?}"),
@@ -296,15 +296,20 @@ impl SccEnc {
                 let outbuf = state.write_line(self);
 
                 if let Ok(Some(buffer)) = outbuf {
-                    gst::trace!(CAT, obj: pad, "Pushing buffer {:?} to the pad", &buffer);
+                    gst::trace!(CAT, obj = pad, "Pushing buffer {:?} to the pad", &buffer);
 
                     drop(state);
                     if self.srcpad.push(buffer).is_err() {
-                        gst::error!(CAT, obj: pad, "Failed to push buffer to the pad");
+                        gst::error!(CAT, obj = pad, "Failed to push buffer to the pad");
                         return false;
                     }
                 } else if let Err(err) = outbuf {
-                    gst::error!(CAT, obj: pad, "Failed to write a line after EOS: {:?}", err);
+                    gst::error!(
+                        CAT,
+                        obj = pad,
+                        "Failed to write a line after EOS: {:?}",
+                        err
+                    );
                     return false;
                 }
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
@@ -316,10 +321,10 @@ impl SccEnc {
     fn src_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Seek(_) => {
-                gst::log!(CAT, obj: pad, "Dropping seek event");
+                gst::log!(CAT, obj = pad, "Dropping seek event");
                 false
             }
             _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
@@ -329,7 +334,7 @@ impl SccEnc {
     fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
-        gst::log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::log!(CAT, obj = pad, "Handling query {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Seeking(q) => {
@@ -485,7 +490,7 @@ impl ElementImpl for SccEnc {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {

@@ -171,7 +171,7 @@ impl ElementImpl for WhepSrc {
                 let settings = self.settings.lock().unwrap();
 
                 if settings.whep_endpoint.is_none() {
-                    gst::error!(CAT, imp: self, "WHEP endpoint URL must be set");
+                    gst::error!(CAT, imp = self, "WHEP endpoint URL must be set");
                     return Err(gst::StateChangeError);
                 }
 
@@ -184,7 +184,7 @@ impl ElementImpl for WhepSrc {
                 {
                     gst::error!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "WHEP endpoint URL could not be parsed: {}",
                         e
                     );
@@ -217,12 +217,18 @@ impl ElementImpl for WhepSrc {
                 }
 
                 for pad in self.obj().src_pads() {
-                    gst::debug!(CAT, imp: self, "Removing pad: {}", pad.name());
+                    gst::debug!(CAT, imp = self, "Removing pad: {}", pad.name());
 
                     // No need to deactivate pad here. Parent GstBin will deactivate
                     // the pad. Only remove the pad.
                     if let Err(e) = self.obj().remove_pad(&pad) {
-                        gst::error!(CAT, imp: self, "Failed to remove pad {}: {}", pad.name(), e);
+                        gst::error!(
+                            CAT,
+                            imp = self,
+                            "Failed to remove pad {}: {}",
+                            pad.name(),
+                            e
+                        );
                     }
                 }
             }
@@ -431,7 +437,7 @@ impl WhepSrc {
     fn handle_future_error(&self, err: WaitError) {
         match err {
             WaitError::FutureAborted => {
-                gst::warning!(CAT, imp: self, "Future aborted")
+                gst::warning!(CAT, imp = self, "Future aborted")
             }
             WaitError::FutureError(err) => {
                 self.raise_error(gst::ResourceError::Failed, err.to_string())
@@ -455,10 +461,10 @@ impl WhepSrc {
 
                 match state {
                     WebRTCICEGatheringState::Gathering => {
-                        gst::info!(CAT, imp: self_, "ICE gathering started")
+                        gst::info!(CAT, imp = self_, "ICE gathering started")
                     }
                     WebRTCICEGatheringState::Complete => {
-                        gst::info!(CAT, imp: self_, "ICE gathering completed");
+                        gst::info!(CAT, imp = self_, "ICE gathering completed");
 
                         let self_ref = self_.ref_counted();
 
@@ -487,13 +493,13 @@ impl WhepSrc {
                 match state {
                     WebRTCICEConnectionState::New => (),
                     WebRTCICEConnectionState::Checking => {
-                        gst::info!(CAT, imp: self_, "ICE connecting...")
+                        gst::info!(CAT, imp = self_, "ICE connecting...")
                     }
                     WebRTCICEConnectionState::Connected => {
-                        gst::info!(CAT, imp: self_, "ICE connected")
+                        gst::info!(CAT, imp = self_, "ICE connected")
                     }
                     WebRTCICEConnectionState::Completed => {
-                        gst::info!(CAT, imp: self_, "ICE completed")
+                        gst::info!(CAT, imp = self_, "ICE completed")
                     }
                     WebRTCICEConnectionState::Failed => {
                         self_.terminate_session();
@@ -517,10 +523,10 @@ impl WhepSrc {
                 match state {
                     WebRTCPeerConnectionState::New => (),
                     WebRTCPeerConnectionState::Connecting => {
-                        gst::info!(CAT, imp: self_, "PeerConnection connecting...")
+                        gst::info!(CAT, imp = self_, "PeerConnection connecting...")
                     }
                     WebRTCPeerConnectionState::Connected => {
-                        gst::info!(CAT, imp: self_, "PeerConnection connected")
+                        gst::info!(CAT, imp = self_, "PeerConnection connected")
                     }
                     WebRTCPeerConnectionState::Disconnected => (),
                     WebRTCPeerConnectionState::Failed => {
@@ -544,7 +550,7 @@ impl WhepSrc {
 
             gst::debug!(
                 CAT,
-                imp: self_,
+                imp = self_,
                 "Pad added with name: {} and caps: {:?}",
                 pad.name(),
                 pad.current_caps()
@@ -607,7 +613,7 @@ impl WhepSrc {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Setting remote description: {:?}",
             remote_sdp.sdp().as_text()
         );
@@ -624,7 +630,7 @@ impl WhepSrc {
                 let m_line_index = 0u32;
                 let c = format!("candidate:{candidate}");
 
-                gst::debug!(CAT, imp: self, "Adding ICE candidate from offer: {:?}", c);
+                gst::debug!(CAT, imp = self, "Adding ICE candidate from offer: {:?}", c);
 
                 self.webrtcbin
                     .emit_by_name::<()>("add-ice-candidate", &[&m_line_index, &c]);
@@ -651,11 +657,11 @@ impl WhepSrc {
 
         match resp.status() {
             StatusCode::OK | StatusCode::NO_CONTENT => {
-                gst::info!(CAT, imp: self, "SDP offer successfully send");
+                gst::info!(CAT, imp = self, "SDP offer successfully send");
             }
 
             StatusCode::CREATED => {
-                gst::debug!(CAT, imp: self, "Response headers: {:?}", resp.headers());
+                gst::debug!(CAT, imp = self, "Response headers: {:?}", resp.headers());
 
                 if use_link_headers {
                     if let Err(e) = set_ice_servers(&self.webrtcbin, resp.headers()) {
@@ -690,7 +696,7 @@ impl WhepSrc {
 
                 let url = reqwest::Url::parse(endpoint.as_str()).unwrap();
 
-                gst::debug!(CAT, imp: self, "WHEP resource: {:?}", location);
+                gst::debug!(CAT, imp = self, "WHEP resource: {:?}", location);
 
                 let url = match url.join(location) {
                     Ok(joined_url) => joined_url,
@@ -756,7 +762,7 @@ impl WhepSrc {
 
                             gst::warning!(
                                 CAT,
-                                imp: self,
+                                imp = self,
                                 "Redirecting endpoint to {}",
                                 redirect_url.as_str()
                             );
@@ -823,7 +829,7 @@ impl WhepSrc {
             {
                 gst::debug!(
                     CAT,
-                    imp: self_,
+                    imp = self_,
                     "Setting local description: {:?}",
                     offer_sdp.sdp().as_text()
                 );
@@ -851,7 +857,7 @@ impl WhepSrc {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Audio caps: {:?} Video caps: {:?}",
             settings.audio_caps,
             settings.video_caps
@@ -892,7 +898,7 @@ impl WhepSrc {
     fn initial_post_request(&self, endpoint: reqwest::Url) {
         let state = self.state.lock().unwrap();
 
-        gst::info!(CAT, imp: self, "WHEP endpoint url: {}", endpoint.as_str());
+        gst::info!(CAT, imp = self, "WHEP endpoint url: {}", endpoint.as_str());
 
         match *state {
             State::Post { .. } => (),
@@ -931,7 +937,7 @@ impl WhepSrc {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Sending offer SDP: {:?}",
             sess_desc.sdp().as_text()
         );
@@ -967,7 +973,7 @@ impl WhepSrc {
         let sdp = offer.sdp();
         let body = sdp.as_text().unwrap();
 
-        gst::info!(CAT, imp: self, "Using endpoint {}", endpoint.as_str());
+        gst::info!(CAT, imp = self, "Using endpoint {}", endpoint.as_str());
 
         let mut headermap = HeaderMap::new();
         headermap.insert(
@@ -986,7 +992,7 @@ impl WhepSrc {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Url for HTTP POST request: {}",
             endpoint.as_str()
         );
@@ -1058,7 +1064,7 @@ impl WhepSrc {
 
         drop(settings);
 
-        gst::debug!(CAT, imp: self, "DELETE request on {}", resource_url);
+        gst::debug!(CAT, imp = self, "DELETE request on {}", resource_url);
 
         /* DELETE request goes to the WHEP resource URL. See section 3 of the specification. */
         let client = build_reqwest_client(reqwest::redirect::Policy::default());
@@ -1079,14 +1085,14 @@ impl WhepSrc {
         let res = wait(&self.canceller, future, timeout);
         match res {
             Ok(r) => {
-                gst::debug!(CAT, imp: self, "Response to DELETE : {}", r.status());
+                gst::debug!(CAT, imp = self, "Response to DELETE : {}", r.status());
             }
             Err(e) => match e {
                 WaitError::FutureAborted => {
-                    gst::warning!(CAT, imp: self, "DELETE request aborted")
+                    gst::warning!(CAT, imp = self, "DELETE request aborted")
                 }
                 WaitError::FutureError(e) => {
-                    gst::error!(CAT, imp: self, "Error on DELETE request : {}", e)
+                    gst::error!(CAT, imp = self, "Error on DELETE request : {}", e)
                 }
             },
         };

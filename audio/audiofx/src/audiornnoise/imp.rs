@@ -113,7 +113,7 @@ impl AudioRNNoise {
 
         let settings = *self.settings.lock().unwrap();
         let mut buffer = gst::Buffer::with_size(available).map_err(|e| {
-            gst::error!(CAT, imp: self, "Failed to allocate buffer at EOS {:?}", e);
+            gst::error!(CAT, imp = self, "Failed to allocate buffer at EOS {:?}", e);
             gst::FlowError::Flushing
         })?;
 
@@ -214,7 +214,7 @@ impl AudioRNNoise {
                 );
             }
 
-            gst::trace!(CAT, imp: self, "Voice activity: {}", vad);
+            gst::trace!(CAT, imp = self, "Voice activity: {}", vad);
             if vad < settings.vad_threshold {
                 out_frame.fill(0.0);
             } else {
@@ -237,8 +237,9 @@ impl AudioRNNoise {
 
         gst::trace!(
             CAT,
-            imp: self,
-            "rms: {}, level: {}, has_voice : {} ", rms,
+            imp = self,
+            "rms: {}, level: {}, has_voice : {} ",
+            rms,
             level,
             has_voice
         );
@@ -345,7 +346,7 @@ impl BaseTransformImpl for AudioRNNoise {
         use gst::EventView;
 
         if let EventView::Eos(_) = event.view() {
-            gst::debug!(CAT, imp: self, "Handling EOS");
+            gst::debug!(CAT, imp = self, "Handling EOS");
             if self.drain().is_err() {
                 return false;
             }
@@ -361,7 +362,7 @@ impl BaseTransformImpl for AudioRNNoise {
                     let (live, mut min, mut max) = upstream_query.result();
                     gst::debug!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Peer latency: live {} min {} max {}",
                         live,
                         min,
@@ -406,7 +407,7 @@ impl AudioFilterImpl for AudioRNNoise {
             })?;
         }
 
-        gst::debug!(CAT, imp: self, "Set caps to {:?}", info);
+        gst::debug!(CAT, imp = self, "Set caps to {:?}", info);
 
         let mut denoisers = vec![];
         for _i in 0..info.channels() {

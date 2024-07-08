@@ -85,16 +85,9 @@ fn cc_data_buffer(
 
     if cc_data != [0x80, 0x80] {
         let code = cea608_types::tables::Code::from_data(cc_data);
-        gst::log!(
-            CAT,
-            imp: imp,
-            "{} -> {}: {:?}",
-            pts,
-            pts + duration,
-            code
-        );
+        gst::log!(CAT, imp = imp, "{} -> {}: {:?}", pts, pts + duration, code);
     } else {
-        gst::trace!(CAT, imp: imp, "{} -> {}: padding", pts, pts + duration);
+        gst::trace!(CAT, imp = imp, "{} -> {}: padding", pts, pts + duration);
     }
 
     buf_mut.copy_from_slice(0, &cc_data).unwrap();
@@ -146,7 +139,7 @@ impl TtToCea608 {
         let mut_list = bufferlist.get_mut().unwrap();
         while let Some(cea608) = state.translator.pop_output() {
             if cea608.frame_no > state.max_frame_no {
-                gst::warning!(CAT, imp: self, "Too much text for bandwidth");
+                gst::warning!(CAT, imp = self, "Too much text for bandwidth");
             }
             let frame_no = cea608.frame_no.min(state.max_frame_no);
             let pts = frame_no
@@ -170,7 +163,7 @@ impl TtToCea608 {
         pad: &gst::Pad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, imp: self, "Handling {:?}", buffer);
+        gst::log!(CAT, imp = self, "Handling {:?}", buffer);
 
         let pts = buffer.pts().ok_or_else(|| {
             gst::element_imp_error!(
@@ -191,7 +184,7 @@ impl TtToCea608 {
         })?;
 
         let data = buffer.map_readable().map_err(|_| {
-            gst::error!(CAT, obj: pad, "Can't map buffer readable");
+            gst::error!(CAT, obj = pad, "Can't map buffer readable");
 
             gst::FlowError::Error
         })?;
@@ -208,7 +201,7 @@ impl TtToCea608 {
         match state.json_input {
             false => {
                 let data = std::str::from_utf8(&data).map_err(|err| {
-                    gst::error!(CAT, obj: pad, "Can't decode utf8: {}", err);
+                    gst::error!(CAT, obj = pad, "Can't decode utf8: {}", err);
 
                     gst::FlowError::Error
                 })?;
@@ -242,7 +235,7 @@ impl TtToCea608 {
             }
             true => {
                 lines = serde_json::from_slice(&data).map_err(|err| {
-                    gst::error!(CAT, obj: pad, "Failed to parse input as json: {}", err);
+                    gst::error!(CAT, obj = pad, "Failed to parse input as json: {}", err);
 
                     gst::FlowError::Error
                 })?;
@@ -259,7 +252,7 @@ impl TtToCea608 {
     }
 
     fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
 
         use gst::EventView;
 
@@ -271,7 +264,7 @@ impl TtToCea608 {
                 };
 
                 if downstream_caps.is_empty() {
-                    gst::error!(CAT, obj: pad, "Empty downstream caps");
+                    gst::error!(CAT, obj = pad, "Empty downstream caps");
                     return false;
                 }
 
@@ -296,7 +289,7 @@ impl TtToCea608 {
                 let s = upstream_caps.structure(0).unwrap();
                 state.json_input = s.name() == "application/x-json";
 
-                gst::debug!(CAT, obj: pad, "Pushing caps {}", caps);
+                gst::debug!(CAT, obj = pad, "Pushing caps {}", caps);
 
                 let new_event = gst::event::Caps::new(&caps);
 
@@ -588,7 +581,7 @@ impl ElementImpl for TtToCea608 {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {

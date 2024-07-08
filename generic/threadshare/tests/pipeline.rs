@@ -364,7 +364,7 @@ fn eos() {
     sink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
             .new_sample(move |appsink| {
-                gst::debug!(CAT, obj: appsink, "eos: pulling sample");
+                gst::debug!(CAT, obj = appsink, "eos: pulling sample");
                 let _ = appsink.pull_sample().unwrap();
 
                 sample_notifier.send(()).unwrap();
@@ -376,7 +376,7 @@ fn eos() {
     );
 
     fn push_buffer(src: &gst::Element) -> bool {
-        gst::debug!(CAT, obj: src, "eos: pushing buffer");
+        gst::debug!(CAT, obj = src, "eos: pushing buffer");
         src.emit_by_name::<bool>("push-buffer", &[&gst::Buffer::from_slice(vec![0; 1024])])
     }
 
@@ -498,7 +498,7 @@ fn premature_shutdown() {
     sink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
             .new_sample(move |appsink| {
-                gst::debug!(CAT, obj: appsink, "premature_shutdown: pulling sample");
+                gst::debug!(CAT, obj = appsink, "premature_shutdown: pulling sample");
                 let _sample = appsink.pull_sample().unwrap();
 
                 appsink_sender.send(()).unwrap();
@@ -511,7 +511,7 @@ fn premature_shutdown() {
     fn push_buffer(src: &gst::Element, intent: &str) -> bool {
         gst::debug!(
             CAT,
-            obj: src,
+            obj = src,
             "premature_shutdown: pushing buffer {}",
             intent
         );

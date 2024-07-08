@@ -188,7 +188,12 @@ impl VideoDecoderImpl for CdgDec {
             }
         }
 
-        gst::debug!(CAT, imp: self, "Finish frame pts={}", frame.pts().display());
+        gst::debug!(
+            CAT,
+            imp = self,
+            "Finish frame pts={}",
+            frame.pts().display()
+        );
 
         self.obj().finish_frame(frame)
     }
@@ -214,7 +219,7 @@ impl VideoDecoderImpl for CdgDec {
     }
 
     fn flush(&self) -> bool {
-        gst::debug!(CAT, imp: self, "flushing, reset CDG interpreter");
+        gst::debug!(CAT, imp = self, "flushing, reset CDG interpreter");
 
         let mut cdg_inter = self.cdg_inter.lock().unwrap();
         cdg_inter.reset(false);

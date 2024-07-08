@@ -162,7 +162,7 @@ impl RtpBaseDepay2Impl for RtpAc3Depay {
         if payload.len() < 2 + 6 {
             gst::warning!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Payload too small: {} bytes, but need at least 8 bytes",
                 payload.len(),
             );
@@ -173,7 +173,7 @@ impl RtpBaseDepay2Impl for RtpAc3Depay {
 
         gst::log!(
             CAT,
-            imp: self,
+            imp = self,
             "Have payload of {} bytes, header {:02x?} {:02x?}",
             payload.len(),
             payload[0],
@@ -201,7 +201,7 @@ impl RtpBaseDepay2Impl for RtpAc3Depay {
 
         if frag_type == FragType::Start || frag_type == FragType::NotFragmented {
             if let Some(partial_frame) = state.partial_frame.as_ref() {
-                gst::warning!(CAT, imp: self, "Dropping unfinished partial frame");
+                gst::warning!(CAT, imp = self, "Dropping unfinished partial frame");
 
                 self.obj()
                     .drop_packets(partial_frame.ext_seqnum..=packet.ext_seqnum() - 1);
@@ -225,7 +225,7 @@ impl RtpBaseDepay2Impl for RtpAc3Depay {
                     ext_timestamp: packet.ext_timestamp(),
                 });
 
-                gst::trace!(CAT, imp: self, "Partial frame {:?}", state.partial_frame);
+                gst::trace!(CAT, imp = self, "Partial frame {:?}", state.partial_frame);
 
                 return Ok(gst::FlowSuccess::Ok);
             }
@@ -234,7 +234,7 @@ impl RtpBaseDepay2Impl for RtpAc3Depay {
                 let Some(partial_frame) = state.partial_frame.as_mut() else {
                     gst::debug!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "{frag_type:?} packet but no partial frame (most likely indicates packet loss)",
                     );
                     self.obj().drop_packet(packet);
@@ -245,7 +245,7 @@ impl RtpBaseDepay2Impl for RtpAc3Depay {
                 if partial_frame.ext_timestamp != packet.ext_timestamp() {
                     gst::warning!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "{frag_type:?} packet timestamp {} doesn't match existing partial fragment timestamp {}",
                         packet.ext_timestamp(),
                         partial_frame.ext_timestamp,
@@ -259,7 +259,7 @@ impl RtpBaseDepay2Impl for RtpAc3Depay {
 
                 gst::log!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Added {frag_type:?} packet payload, assembled {} bytes now",
                     partial_frame.data.len()
                 );
@@ -268,18 +268,22 @@ impl RtpBaseDepay2Impl for RtpAc3Depay {
                     let partial_frame = state.partial_frame.take().unwrap();
 
                     let Ok(hdr) = ac3_audio_utils::peek_frame_header(&partial_frame.data) else {
-                        gst::warning!(CAT, imp: self, "Could not parse frame header, dropping frame");
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "Could not parse frame header, dropping frame"
+                        );
                         self.obj()
                             .drop_packets(partial_frame.ext_seqnum..=packet.ext_seqnum());
                         return Ok(gst::FlowSuccess::Ok);
                     };
 
-                    gst::trace!(CAT, imp: self, "{hdr:?}");
+                    gst::trace!(CAT, imp = self, "{hdr:?}");
 
                     if partial_frame.data.len() != hdr.frame_len {
                         gst::warning!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "Partial frame finished, but have {} bytes, and expected {} bytes!",
                             partial_frame.data.len(),
                             hdr.frame_len,
@@ -294,7 +298,7 @@ impl RtpBaseDepay2Impl for RtpAc3Depay {
 
                     outbuf_ref.set_duration(gst::ClockTime::from_nseconds(hdr.duration()));
 
-                    gst::trace!(CAT, imp: self, "Finishing buffer {outbuf:?}");
+                    gst::trace!(CAT, imp = self, "Finishing buffer {outbuf:?}");
 
                     return self.obj().queue_buffer(
                         PacketToBufferRelation::Seqnums(
@@ -314,18 +318,22 @@ impl RtpBaseDepay2Impl for RtpAc3Depay {
 
                 while offset < payload.len() {
                     let Ok(hdr) = ac3_audio_utils::peek_frame_header(&payload[offset..]) else {
-                        gst::warning!(CAT, imp: self, "Could not parse frame header at offset {offset}");
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "Could not parse frame header at offset {offset}"
+                        );
                         break;
                     };
 
-                    gst::trace!(CAT, imp: self, "{hdr:?} at offset {offset}");
+                    gst::trace!(CAT, imp = self, "{hdr:?} at offset {offset}");
 
                     let frame_len = if offset + hdr.frame_len <= payload.len() {
                         hdr.frame_len
                     } else {
                         gst::warning!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "Frame at offset {offset} is {} bytes, but we have only {} bytes left!",
                             hdr.frame_len,
                             payload.len() - offset,
@@ -336,7 +344,7 @@ impl RtpBaseDepay2Impl for RtpAc3Depay {
 
                     self.ensure_output_caps(&mut state, &hdr);
 
-                    gst::trace!(CAT, imp: self, "Getting frame @ {offset}+{frame_len}");
+                    gst::trace!(CAT, imp = self, "Getting frame @ {offset}+{frame_len}");
 
                     let mut outbuf =
                         packet.payload_subbuffer_from_offset_with_length(offset, frame_len);
@@ -345,7 +353,11 @@ impl RtpBaseDepay2Impl for RtpAc3Depay {
 
                     outbuf_ref.set_duration(gst::ClockTime::from_nseconds(hdr.duration()));
 
-                    gst::trace!(CAT, imp: self, "Finishing frame @ {offset}, buffer {outbuf:?}");
+                    gst::trace!(
+                        CAT,
+                        imp = self,
+                        "Finishing frame @ {offset}, buffer {outbuf:?}"
+                    );
 
                     self.obj().queue_buffer(
                         PacketToBufferRelation::SeqnumsWithOffset {
@@ -381,7 +393,7 @@ impl RtpAc3Depay {
             if state.clock_rate != Some(frame_header.sample_rate as i32) {
                 gst::warning!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "clock-rate {} does not match sample rate {}!",
                     state.clock_rate.unwrap(),
                     frame_header.sample_rate,
@@ -395,7 +407,7 @@ impl RtpAc3Depay {
                 .field("alignment", "frame")
                 .build();
 
-            gst::info!(CAT, imp: self, "Setting output caps {src_caps}..");
+            gst::info!(CAT, imp = self, "Setting output caps {src_caps}..");
 
             // Ignore failure here and let the next buffer push yield an appropriate flow return
             self.obj().set_src_caps(&src_caps);

@@ -251,7 +251,7 @@ impl ObjectImpl for HlsSink3 {
                         return Some(None::<String>.to_value());
                     };
                     let fragment_id = args[1].get::<u32>().unwrap();
-                    gst::info!(CAT, imp: imp, "Got fragment-id: {}", fragment_id);
+                    gst::info!(CAT, imp = imp, "Got fragment-id: {}", fragment_id);
 
                     let sample = args[2].get::<gst::Sample>().unwrap();
                     let buffer = sample.buffer();
@@ -265,7 +265,7 @@ impl ObjectImpl for HlsSink3 {
                     } else {
                         gst::warning!(
                             CAT,
-                            imp: imp,
+                            imp = imp,
                             "buffer null for fragment-id: {}",
                             fragment_id
                         );
@@ -275,7 +275,7 @@ impl ObjectImpl for HlsSink3 {
                     match imp.on_format_location(fragment_id, running_time) {
                         Ok(segment_location) => Some(segment_location.to_value()),
                         Err(err) => {
-                            gst::error!(CAT, imp: imp, "on format-location handler: {}", err);
+                            gst::error!(CAT, imp = imp, "on format-location handler: {}", err);
                             Some("unknown_segment".to_value())
                         }
                     }
@@ -362,7 +362,7 @@ impl ElementImpl for HlsSink3 {
                 if settings.audio_sink {
                     gst::debug!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "requested_new_pad: audio pad is already set"
                     );
                     return None;
@@ -389,7 +389,7 @@ impl ElementImpl for HlsSink3 {
                 if settings.video_sink {
                     gst::debug!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "requested_new_pad: video pad is already set"
                     );
                     return None;
@@ -406,7 +406,7 @@ impl ElementImpl for HlsSink3 {
             other_name => {
                 gst::debug!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "requested_new_pad: name \"{}\" is not audio or video",
                     other_name
                 );
@@ -486,7 +486,7 @@ impl HlsSink3 {
         playlist_type: Option<MediaPlaylistType>,
         i_frames_only: bool,
     ) -> Playlist {
-        gst::info!(CAT, imp: self, "Starting");
+        gst::info!(CAT, imp = self, "Starting");
 
         let mut state = self.state.lock().unwrap();
         *state = HlsSink3State::default();
@@ -515,7 +515,7 @@ impl HlsSink3 {
     ) -> Result<String, String> {
         gst::info!(
             CAT,
-            imp: self,
+            imp = self,
             "Starting the formatting of the fragment-id: {}",
             fragment_id
         );
@@ -535,7 +535,7 @@ impl HlsSink3 {
 
         gst::info!(
             CAT,
-            imp: self,
+            imp = self,
             "New segment location: {:?}",
             state.current_segment_location.as_ref()
         );
@@ -548,7 +548,7 @@ impl HlsSink3 {
         let location = match state.current_segment_location.take() {
             Some(location) => location,
             None => {
-                gst::error!(CAT, imp: self, "Unknown segment location");
+                gst::error!(CAT, imp = self, "Unknown segment location");
                 return;
             }
         };
@@ -556,7 +556,7 @@ impl HlsSink3 {
         let opened_at = match state.fragment_opened_at.take() {
             Some(opened_at) => opened_at,
             None => {
-                gst::error!(CAT, imp: self, "Unknown segment duration");
+                gst::error!(CAT, imp = self, "Unknown segment duration");
                 return;
             }
         };

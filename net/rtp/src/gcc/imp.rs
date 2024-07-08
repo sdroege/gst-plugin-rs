@@ -795,7 +795,7 @@ impl State {
 
         gst::trace!(
             CAT,
-            obj: bwe,
+            obj = bwe,
             "{} bitrate: {}ps budget: {}/{} sending: {} Remaining: {}/{}",
             elapsed,
             human_kbits(self.estimated_bitrate),
@@ -882,7 +882,7 @@ impl State {
             if rate > received_max && received_max > self.target_bitrate_on_delay as f64 {
                 gst::log!(
                     CAT,
-                    obj: bwe,
+                    obj = bwe,
                     "Increasing == received_max rate: {}ps - effective bitrate: {}ps",
                     human_kbits(received_max),
                     human_kbits(effective_bitrate),
@@ -896,7 +896,7 @@ impl State {
             } else if rate < self.target_bitrate_on_delay as f64 {
                 gst::log!(
                     CAT,
-                    obj: bwe,
+                    obj = bwe,
                     "Rate < target, returning {}ps - effective bitrate: {}ps",
                     human_kbits(self.target_bitrate_on_delay),
                     human_kbits(effective_bitrate),
@@ -906,7 +906,7 @@ impl State {
             } else {
                 gst::log!(
                     CAT,
-                    obj: bwe,
+                    obj = bwe,
                     "Increase mult {eta}x{}ps={}ps - effective bitrate: {}ps",
                     human_kbits(self.target_bitrate_on_delay),
                     human_kbits(rate),
@@ -948,7 +948,7 @@ impl State {
 
         gst::info!(
             CAT,
-            obj: bwe,
+            obj = bwe,
             "{controller_type:?}: {}ps => {}ps ({:?}) - effective bitrate: {}ps",
             human_kbits(prev_bitrate),
             human_kbits(target_bitrate),
@@ -1110,7 +1110,7 @@ impl BandwidthEstimator {
             if !list.is_empty() {
                 if let Err(err) = bwe.imp().push_list(list) {
                     if err != gst::FlowError::Flushing {
-                        gst::error!(CAT, obj: bwe, "pause task, reason: {err:?}");
+                        gst::error!(CAT, obj = bwe, "pause task, reason: {err:?}");
                     }
                     pause()
                 }
@@ -1218,7 +1218,7 @@ impl ObjectSubclass for BandwidthEstimator {
                                     if let Some(bitrates) = logged_bitrates {
                                         gst::log!(
                                             CAT,
-                                            obj: bwe,
+                                            obj = bwe,
                                             "target bitrate on delay: {}ps - target bitrate on loss: {}ps",
                                             human_kbits(bitrates.0),
                                             human_kbits(bitrates.1),

@@ -132,12 +132,12 @@ impl RtpBasePay2Impl for RtpKlvPay {
         id: u64,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let map = buffer.map_readable().map_err(|_| {
-            gst::error!(CAT, imp: self, "Can't map buffer readable");
+            gst::error!(CAT, imp = self, "Can't map buffer readable");
             gst::FlowError::Error
         })?;
 
         if map.size() == 0 {
-            gst::log!(CAT, imp: self, "Empty buffer, skipping");
+            gst::log!(CAT, imp = self, "Empty buffer, skipping");
             self.obj().drop_buffers(id..=id);
             return Ok(gst::FlowSuccess::Ok);
         }
@@ -154,7 +154,7 @@ impl RtpBasePay2Impl for RtpKlvPay {
                 // Also post warning message?
                 gst::warning!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Input doesn't look like a KLV unit, ignoring. {err:?}",
                 );
                 return Ok(gst::FlowSuccess::Ok);
@@ -164,7 +164,7 @@ impl RtpBasePay2Impl for RtpKlvPay {
         if unit_len != data.len() {
             gst::error!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Input is not properly framed: KLV unit of size {unit_len} but buffer is {} bytes",
                 data.len(),
             );

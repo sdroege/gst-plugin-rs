@@ -180,17 +180,17 @@ impl MP4Mux {
         }
 
         if delta_frames.requires_dts() && buffer.dts().is_none() {
-            gst::error!(CAT, obj: sinkpad, "Require DTS for video streams");
+            gst::error!(CAT, obj = sinkpad, "Require DTS for video streams");
             return Err(gst::FlowError::Error);
         }
 
         if buffer.pts().is_none() {
-            gst::error!(CAT, obj: sinkpad, "Require timestamped buffers");
+            gst::error!(CAT, obj = sinkpad, "Require timestamped buffers");
             return Err(gst::FlowError::Error);
         }
 
         if delta_frames.intra_only() && buffer.flags().contains(gst::BufferFlags::DELTA_UNIT) {
-            gst::error!(CAT, obj: sinkpad, "Intra-only stream with delta units");
+            gst::error!(CAT, obj = sinkpad, "Intra-only stream with delta units");
             return Err(gst::FlowError::Error);
         }
 
@@ -216,7 +216,7 @@ impl MP4Mux {
         let mut segment = match sinkpad.segment().downcast::<gst::ClockTime>().ok() {
             Some(segment) => segment,
             None => {
-                gst::error!(CAT, obj: sinkpad, "Got buffer before segment");
+                gst::error!(CAT, obj = sinkpad, "Got buffer before segment");
                 return Err(gst::FlowError::Error);
             }
         };
@@ -242,7 +242,7 @@ impl MP4Mux {
                     // Calculate from the mapping
                     running_time_to_utc_time(pts, running_time_utc_time_mapping).ok_or_else(
                         || {
-                            gst::error!(CAT, obj: sinkpad, "Stream has negative PTS UTC time");
+                            gst::error!(CAT, obj = sinkpad, "Stream has negative PTS UTC time");
                             gst::FlowError::Error
                         },
                     )?
@@ -252,7 +252,7 @@ impl MP4Mux {
 
             gst::trace!(
                 CAT,
-                obj: sinkpad,
+                obj = sinkpad,
                 "Mapped PTS running time {pts} to UTC time {utc_time}"
             );
 
@@ -263,12 +263,12 @@ impl MP4Mux {
                 if let Some(dts) = dts {
                     let dts_utc_time =
                         running_time_to_utc_time(dts, (pts, utc_time)).ok_or_else(|| {
-                            gst::error!(CAT, obj: sinkpad, "Stream has negative DTS UTC time");
+                            gst::error!(CAT, obj = sinkpad, "Stream has negative DTS UTC time");
                             gst::FlowError::Error
                         })?;
                     gst::trace!(
                         CAT,
-                        obj: sinkpad,
+                        obj = sinkpad,
                         "Mapped DTS running time {dts} to UTC time {dts_utc_time}"
                     );
                     buffer.set_dts(dts_utc_time);
@@ -317,7 +317,7 @@ impl MP4Mux {
                 {
                     gst::error!(
                         CAT,
-                        obj: sinkpad,
+                        obj = sinkpad,
                         "Got no UTC time in the first 6s of the stream"
                     );
                     return Err(gst::FlowError::Error);
@@ -326,7 +326,7 @@ impl MP4Mux {
 
             let Some(buffer) = sinkpad.pop_buffer() else {
                 if sinkpad.is_eos() {
-                    gst::error!(CAT, obj: sinkpad, "Got no UTC time before EOS");
+                    gst::error!(CAT, obj = sinkpad, "Got no UTC time before EOS");
                     return Err(gst::FlowError::Error);
                 } else {
                     return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
@@ -342,7 +342,7 @@ impl MP4Mux {
             let segment = match sinkpad.segment().downcast::<gst::ClockTime>().ok() {
                 Some(segment) => segment,
                 None => {
-                    gst::error!(CAT, obj: sinkpad, "Got buffer before segment");
+                    gst::error!(CAT, obj = sinkpad, "Got buffer before segment");
                     return Err(gst::FlowError::Error);
                 }
             };
@@ -358,7 +358,7 @@ impl MP4Mux {
             let running_time = segment.to_running_time_full(buffer.pts().unwrap()).unwrap();
             gst::info!(
                 CAT,
-                obj: sinkpad,
+                obj = sinkpad,
                 "Got initial UTC time {utc_time} at PTS running time {running_time}",
             );
 
@@ -374,12 +374,12 @@ impl MP4Mux {
 
                 let pts = segment.to_running_time_full(buffer.pts().unwrap()).unwrap();
                 let pts_utc_time = running_time_to_utc_time(pts, mapping).ok_or_else(|| {
-                    gst::error!(CAT, obj: sinkpad, "Stream has negative PTS UTC time");
+                    gst::error!(CAT, obj = sinkpad, "Stream has negative PTS UTC time");
                     gst::FlowError::Error
                 })?;
                 gst::trace!(
                     CAT,
-                    obj: sinkpad,
+                    obj = sinkpad,
                     "Mapped PTS running time {pts} to UTC time {pts_utc_time}"
                 );
                 buffer.set_pts(pts_utc_time);
@@ -387,12 +387,12 @@ impl MP4Mux {
                 if let Some(dts) = buffer.dts() {
                     let dts = segment.to_running_time_full(dts).unwrap();
                     let dts_utc_time = running_time_to_utc_time(dts, mapping).ok_or_else(|| {
-                        gst::error!(CAT, obj: sinkpad, "Stream has negative DTS UTC time");
+                        gst::error!(CAT, obj = sinkpad, "Stream has negative DTS UTC time");
                         gst::FlowError::Error
                     })?;
                     gst::trace!(
                         CAT,
-                        obj: sinkpad,
+                        obj = sinkpad,
                         "Mapped DTS running time {dts} to UTC time {dts_utc_time}"
                     );
                     buffer.set_dts(dts_utc_time);
@@ -432,7 +432,7 @@ impl MP4Mux {
         let segment = match stream.sinkpad.segment().downcast::<gst::ClockTime>().ok() {
             Some(segment) => segment,
             None => {
-                gst::error!(CAT, obj: stream.sinkpad, "Got buffer before segment");
+                gst::error!(CAT, obj = stream.sinkpad, "Got buffer before segment");
                 return Err(gst::FlowError::Error);
             }
         };
@@ -486,13 +486,13 @@ impl MP4Mux {
                                 let dur = buffer.duration().unwrap_or(gst::ClockTime::ZERO);
                                 gst::trace!(
                                     CAT,
-                                    obj: stream.sinkpad,
+                                    obj = stream.sinkpad,
                                     "Stream is EOS, using {dur} as duration for queued buffer",
                                 );
 
                                 let pts = pts + dur;
                                 if stream.end_pts.map_or(true, |end_pts| end_pts < pts) {
-                                    gst::trace!(CAT, obj: stream.sinkpad, "Stream end PTS {pts}");
+                                    gst::trace!(CAT, obj = stream.sinkpad, "Stream end PTS {pts}");
                                     stream.end_pts = Some(pts);
                                 }
 
@@ -500,7 +500,11 @@ impl MP4Mux {
 
                                 return Ok(());
                             } else {
-                                gst::trace!(CAT, obj: stream.sinkpad, "Stream has no buffer queued");
+                                gst::trace!(
+                                    CAT,
+                                    obj = stream.sinkpad,
+                                    "Stream has no buffer queued"
+                                );
                                 return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
                             }
                         }
@@ -521,7 +525,7 @@ impl MP4Mux {
 
                     gst::trace!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "Stream has buffer with timestamp {next_timestamp} queued",
                     );
 
@@ -531,7 +535,7 @@ impl MP4Mux {
                         .unwrap_or_else(|| {
                             gst::warning!(
                                 CAT,
-                                obj: stream.sinkpad,
+                                obj = stream.sinkpad,
                                 "Stream timestamps going backwards {next_timestamp} < {timestamp}",
                             );
                             gst::ClockTime::ZERO
@@ -539,13 +543,13 @@ impl MP4Mux {
 
                     gst::trace!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "Using {dur} as duration for queued buffer",
                     );
 
                     let pts = pts + dur;
                     if stream.end_pts.map_or(true, |end_pts| end_pts < pts) {
-                        gst::trace!(CAT, obj: stream.sinkpad, "Stream end PTS {pts}");
+                        gst::trace!(CAT, obj = stream.sinkpad, "Stream end PTS {pts}");
                         stream.end_pts = Some(pts);
                     }
 
@@ -558,13 +562,18 @@ impl MP4Mux {
                         && s.name().as_str() == "video/x-av1"
                     {
                         let buf_map = buffer.map_readable().map_err(|_| {
-                            gst::error!(CAT, obj: stream.sinkpad, "Failed to map buffer");
+                            gst::error!(CAT, obj = stream.sinkpad, "Failed to map buffer");
                             gst::FlowError::Error
                         })?;
-                        stream.extra_header_data = read_seq_header_obu_bytes(buf_map.as_slice()).map_err(|_| {
-                            gst::error!(CAT, obj: stream.sinkpad, "Failed to parse AV1 SequenceHeader OBU");
-                            gst::FlowError::Error
-                        })?;
+                        stream.extra_header_data = read_seq_header_obu_bytes(buf_map.as_slice())
+                            .map_err(|_| {
+                                gst::error!(
+                                    CAT,
+                                    obj = stream.sinkpad,
+                                    "Failed to parse AV1 SequenceHeader OBU"
+                                );
+                                gst::FlowError::Error
+                            })?;
                     }
 
                     return Ok(());
@@ -576,15 +585,15 @@ impl MP4Mux {
                         Some(res) => res,
                         None => {
                             if stream.sinkpad.is_eos() {
-                                gst::trace!(
-                                    CAT,
-                                    obj: stream.sinkpad,
-                                    "Stream is EOS",
-                                );
+                                gst::trace!(CAT, obj = stream.sinkpad, "Stream is EOS",);
 
                                 return Err(gst::FlowError::Eos);
                             } else {
-                                gst::trace!(CAT, obj: stream.sinkpad, "Stream has no buffer queued");
+                                gst::trace!(
+                                    CAT,
+                                    obj = stream.sinkpad,
+                                    "Stream has no buffer queued"
+                                );
                                 return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
                             }
                         }
@@ -594,9 +603,16 @@ impl MP4Mux {
                     let pts_position = buffer.pts().unwrap();
                     let dts_position = buffer.dts();
 
-                    let pts = segment.to_running_time_full(pts_position).unwrap()
-                        .positive().unwrap_or_else(|| {
-                            gst::error!(CAT, obj: stream.sinkpad, "Stream has negative PTS running time");
+                    let pts = segment
+                        .to_running_time_full(pts_position)
+                        .unwrap()
+                        .positive()
+                        .unwrap_or_else(|| {
+                            gst::error!(
+                                CAT,
+                                obj = stream.sinkpad,
+                                "Stream has negative PTS running time"
+                            );
                             gst::ClockTime::ZERO
                         });
 
@@ -608,7 +624,7 @@ impl MP4Mux {
                         let dts = dts.unwrap();
 
                         if stream.start_dts.is_none() {
-                            gst::debug!(CAT, obj: stream.sinkpad, "Stream start DTS {dts}");
+                            gst::debug!(CAT, obj = stream.sinkpad, "Stream start DTS {dts}");
                             stream.start_dts = Some(dts);
                         }
 
@@ -621,7 +637,7 @@ impl MP4Mux {
                         .earliest_pts
                         .map_or(true, |earliest_pts| earliest_pts > pts)
                     {
-                        gst::debug!(CAT, obj: stream.sinkpad, "Stream earliest PTS {pts}");
+                        gst::debug!(CAT, obj = stream.sinkpad, "Stream earliest PTS {pts}");
                         stream.earliest_pts = Some(pts);
                     }
 
@@ -630,7 +646,7 @@ impl MP4Mux {
                         let dts = dts.unwrap(); // set above
 
                         Some(i64::try_from((pts - dts).nseconds()).map_err(|_| {
-                            gst::error!(CAT, obj: stream.sinkpad, "Too big PTS/DTS difference");
+                            gst::error!(CAT, obj = stream.sinkpad, "Too big PTS/DTS difference");
                             gst::FlowError::Error
                         })?)
                     } else {
@@ -639,7 +655,7 @@ impl MP4Mux {
 
                     gst::trace!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "Stream has buffer of size {} with timestamp {timestamp} pending",
                         buffer.size(),
                     );
@@ -686,7 +702,7 @@ impl MP4Mux {
                         }))
                     {
                         gst::trace!(CAT,
-                            obj: stream.sinkpad,
+                            obj = stream.sinkpad,
                             "Continuing current chunk: single stream {single_stream}, or {} >= {} and {} >= {}",
                             gst::format::Bytes::from_u64(stream.queued_chunk_bytes),
                             settings.interleave_bytes.map(gst::format::Bytes::from_u64).display(),
@@ -696,16 +712,25 @@ impl MP4Mux {
                     }
 
                     state.current_stream_idx = None;
-                    gst::debug!(CAT,
-                        obj: stream.sinkpad,
+                    gst::debug!(
+                        CAT,
+                        obj = stream.sinkpad,
                         "Switching to next chunk: {} < {} and {} < {}",
                         gst::format::Bytes::from_u64(stream.queued_chunk_bytes),
-                        settings.interleave_bytes.map(gst::format::Bytes::from_u64).display(),
-                        stream.queued_chunk_time, settings.interleave_time.display(),
+                        settings
+                            .interleave_bytes
+                            .map(gst::format::Bytes::from_u64)
+                            .display(),
+                        stream.queued_chunk_time,
+                        settings.interleave_time.display(),
                     );
                 }
                 Err(gst::FlowError::Eos) => {
-                    gst::debug!(CAT, obj: stream.sinkpad, "Stream is EOS, switching to next stream");
+                    gst::debug!(
+                        CAT,
+                        obj = stream.sinkpad,
+                        "Stream is EOS, switching to next stream"
+                    );
                     state.current_stream_idx = None;
                 }
                 Err(err) => {
@@ -734,10 +759,7 @@ impl MP4Mux {
 
                     let timestamp = stream.pending_buffer.as_ref().unwrap().timestamp;
 
-                    gst::trace!(CAT,
-                        obj: stream.sinkpad,
-                        "Stream at timestamp {timestamp}",
-                    );
+                    gst::trace!(CAT, obj = stream.sinkpad, "Stream at timestamp {timestamp}",);
 
                     all_eos = false;
 
@@ -765,21 +787,21 @@ impl MP4Mux {
         }
 
         if !all_have_data_or_eos {
-            gst::trace!(CAT, imp: self, "Not all streams have a buffer or are EOS");
+            gst::trace!(CAT, imp = self, "Not all streams have a buffer or are EOS");
             Err(gst_base::AGGREGATOR_FLOW_NEED_DATA)
         } else if all_eos {
-            gst::info!(CAT, imp: self, "All streams are EOS");
+            gst::info!(CAT, imp = self, "All streams are EOS");
             Err(gst::FlowError::Eos)
         } else if let Some((idx, stream, earliest_timestamp)) = earliest_stream {
             gst::debug!(
                 CAT,
-                obj: stream.sinkpad,
+                obj = stream.sinkpad,
                 "Stream is earliest stream with timestamp {earliest_timestamp}",
             );
 
             gst::debug!(
                 CAT,
-                obj: stream.sinkpad,
+                obj = stream.sinkpad,
                 "Starting new chunk at offset {}",
                 state.current_offset,
             );
@@ -813,7 +835,7 @@ impl MP4Mux {
                 && buffer.buffer.flags().contains(gst::BufferFlags::DROPPABLE)
                 && buffer.buffer.size() == 0
             {
-                gst::trace!(CAT, obj: stream.sinkpad, "Skipping gap buffer {buffer:?}");
+                gst::trace!(CAT, obj = stream.sinkpad, "Skipping gap buffer {buffer:?}");
 
                 // If a new chunk was just started for the gap buffer, don't bother and get rid
                 // of this chunk again for now and search for the next stream.
@@ -831,10 +853,19 @@ impl MP4Mux {
                 if let Some(previous_sample) =
                     stream.chunks.last_mut().and_then(|c| c.samples.last_mut())
                 {
-                    gst::trace!(CAT, obj: stream.sinkpad, "Adding gap duration {} to previous sample", buffer.duration.unwrap());
+                    gst::trace!(
+                        CAT,
+                        obj = stream.sinkpad,
+                        "Adding gap duration {} to previous sample",
+                        buffer.duration.unwrap()
+                    );
                     previous_sample.duration += buffer.duration.unwrap();
                 } else {
-                    gst::trace!(CAT, obj: stream.sinkpad, "Resetting stream start time because it started with a gap");
+                    gst::trace!(
+                        CAT,
+                        obj = stream.sinkpad,
+                        "Resetting stream start time because it started with a gap"
+                    );
                     // If there was no previous sample yet then the next sample needs to start
                     // earlier or alternatively we change the start PTS. We do the latter here
                     // as otherwise the first sample would be displayed too early.
@@ -846,7 +877,12 @@ impl MP4Mux {
                 continue;
             }
 
-            gst::trace!(CAT, obj: stream.sinkpad, "Handling buffer {buffer:?} at offset {}", state.current_offset);
+            gst::trace!(
+                CAT,
+                obj = stream.sinkpad,
+                "Handling buffer {buffer:?} at offset {}",
+                state.current_offset
+            );
 
             let duration = buffer.duration.unwrap();
             let composition_time_offset = buffer.composition_time_offset;
@@ -884,7 +920,7 @@ impl MP4Mux {
     }
 
     fn create_streams(&self, state: &mut State) -> Result<(), gst::FlowError> {
-        gst::info!(CAT, imp: self, "Creating streams");
+        gst::info!(CAT, imp = self, "Creating streams");
 
         for pad in self
             .obj()
@@ -895,12 +931,12 @@ impl MP4Mux {
             let caps = match pad.current_caps() {
                 Some(caps) => caps,
                 None => {
-                    gst::warning!(CAT, obj: pad, "Skipping pad without caps");
+                    gst::warning!(CAT, obj = pad, "Skipping pad without caps");
                     continue;
                 }
             };
 
-            gst::info!(CAT, obj: pad, "Configuring caps {caps:?}");
+            gst::info!(CAT, obj = pad, "Configuring caps {caps:?}");
 
             let s = caps.structure(0).unwrap();
 
@@ -909,7 +945,7 @@ impl MP4Mux {
             match s.name().as_str() {
                 "video/x-h264" | "video/x-h265" => {
                     if !s.has_field_with_type("codec_data", gst::Buffer::static_type()) {
-                        gst::error!(CAT, obj: pad, "Received caps without codec_data");
+                        gst::error!(CAT, obj = pad, "Received caps without codec_data");
                         return Err(gst::FlowError::NotNegotiated);
                     }
                     delta_frames = super::DeltaFrames::Bidirectional;
@@ -919,7 +955,7 @@ impl MP4Mux {
                 }
                 "video/x-vp9" => {
                     if !s.has_field_with_type("colorimetry", str::static_type()) {
-                        gst::error!(CAT, obj: pad, "Received caps without colorimetry");
+                        gst::error!(CAT, obj = pad, "Received caps without colorimetry");
                         return Err(gst::FlowError::NotNegotiated);
                     }
                     delta_frames = super::DeltaFrames::PredictiveOnly;
@@ -930,7 +966,7 @@ impl MP4Mux {
                 "image/jpeg" => (),
                 "audio/mpeg" => {
                     if !s.has_field_with_type("codec_data", gst::Buffer::static_type()) {
-                        gst::error!(CAT, obj: pad, "Received caps without codec_data");
+                        gst::error!(CAT, obj = pad, "Received caps without codec_data");
                         return Err(gst::FlowError::NotNegotiated);
                     }
                 }
@@ -941,18 +977,23 @@ impl MP4Mux {
                         .and_then(|a| a.first().and_then(|v| v.get::<gst::Buffer>().ok()))
                     {
                         if gst_pbutils::codec_utils_opus_parse_header(&header, None).is_err() {
-                            gst::error!(CAT, obj: pad, "Received invalid Opus header");
+                            gst::error!(CAT, obj = pad, "Received invalid Opus header");
                             return Err(gst::FlowError::NotNegotiated);
                         }
                     } else if gst_pbutils::codec_utils_opus_parse_caps(&caps, None).is_err() {
-                        gst::error!(CAT, obj: pad, "Received invalid Opus caps");
+                        gst::error!(CAT, obj = pad, "Received invalid Opus caps");
                         return Err(gst::FlowError::NotNegotiated);
                     }
                 }
                 "audio/x-flac" => {
                     discard_header_buffers = true;
                     if let Err(e) = s.get::<gst::ArrayRef>("streamheader") {
-                        gst::error!(CAT, obj: pad, "Muxing FLAC into MP4 needs streamheader: {}", e);
+                        gst::error!(
+                            CAT,
+                            obj = pad,
+                            "Muxing FLAC into MP4 needs streamheader: {}",
+                            e
+                        );
                         return Err(gst::FlowError::NotNegotiated);
                     };
                 }
@@ -981,7 +1022,7 @@ impl MP4Mux {
         }
 
         if state.streams.is_empty() {
-            gst::error!(CAT, imp: self, "No streams available");
+            gst::error!(CAT, imp = self, "No streams available");
             return Err(gst::FlowError::Error);
         }
 
@@ -1116,7 +1157,7 @@ impl ElementImpl for MP4Mux {
         if !state.streams.is_empty() {
             gst::error!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Can't request new pads after stream was started"
             );
             return None;
@@ -1138,7 +1179,7 @@ impl AggregatorImpl for MP4Mux {
     ) -> bool {
         use gst::QueryViewMut;
 
-        gst::trace!(CAT, obj: aggregator_pad, "Handling query {query:?}");
+        gst::trace!(CAT, obj = aggregator_pad, "Handling query {query:?}");
 
         match query.view_mut() {
             QueryViewMut::Caps(q) => {
@@ -1172,14 +1213,14 @@ impl AggregatorImpl for MP4Mux {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         use gst::EventView;
 
-        gst::trace!(CAT, obj: aggregator_pad, "Handling event {event:?}");
+        gst::trace!(CAT, obj = aggregator_pad, "Handling event {event:?}");
 
         match event.view() {
             EventView::Segment(ev) => {
                 if ev.segment().format() != gst::Format::Time {
                     gst::warning!(
                         CAT,
-                        obj: aggregator_pad,
+                        obj = aggregator_pad,
                         "Received non-TIME segment, replacing with default TIME segment"
                     );
                     let segment = gst::FormattedSegment::<gst::ClockTime>::new();
@@ -1192,7 +1233,12 @@ impl AggregatorImpl for MP4Mux {
             EventView::Tag(ev) => {
                 if let Some(tag_value) = ev.tag().get::<gst::tags::LanguageCode>() {
                     let lang = tag_value.get();
-                    gst::trace!(CAT, imp: self, "Received language code from tags: {:?}", lang);
+                    gst::trace!(
+                        CAT,
+                        imp = self,
+                        "Received language code from tags: {:?}",
+                        lang
+                    );
 
                     // Language as ISO-639-2/T
                     if lang.len() == 3 && lang.chars().all(|c| c.is_ascii_lowercase()) {
@@ -1215,7 +1261,7 @@ impl AggregatorImpl for MP4Mux {
     fn sink_event(&self, aggregator_pad: &gst_base::AggregatorPad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::trace!(CAT, obj: aggregator_pad, "Handling event {event:?}");
+        gst::trace!(CAT, obj = aggregator_pad, "Handling event {event:?}");
 
         match event.view() {
             EventView::Tag(_ev) => {
@@ -1230,7 +1276,7 @@ impl AggregatorImpl for MP4Mux {
     fn src_query(&self, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
-        gst::trace!(CAT, imp: self, "Handling query {query:?}");
+        gst::trace!(CAT, imp = self, "Handling query {query:?}");
 
         match query.view_mut() {
             QueryViewMut::Seeking(q) => {
@@ -1245,7 +1291,7 @@ impl AggregatorImpl for MP4Mux {
     fn src_event(&self, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::trace!(CAT, imp: self, "Handling event {event:?}");
+        gst::trace!(CAT, imp = self, "Handling event {event:?}");
 
         match event.view() {
             EventView::Seek(_ev) => false,
@@ -1254,7 +1300,7 @@ impl AggregatorImpl for MP4Mux {
     }
 
     fn flush(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::info!(CAT, imp: self, "Flushing");
+        gst::info!(CAT, imp = self, "Flushing");
 
         let mut state = self.state.lock().unwrap();
         for stream in &mut state.streams {
@@ -1268,7 +1314,7 @@ impl AggregatorImpl for MP4Mux {
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
-        gst::trace!(CAT, imp: self, "Stopping");
+        gst::trace!(CAT, imp = self, "Stopping");
 
         let _ = self.parent_stop();
 
@@ -1278,7 +1324,7 @@ impl AggregatorImpl for MP4Mux {
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
-        gst::trace!(CAT, imp: self, "Starting");
+        gst::trace!(CAT, imp = self, "Starting");
 
         self.parent_start()?;
 
@@ -1319,7 +1365,7 @@ impl AggregatorImpl for MP4Mux {
                 }
             } else {
                 // Can't query downstream, have to assume downstream is seekable
-                gst::warning!(CAT, imp: self, "Can't query downstream for seekability");
+                gst::warning!(CAT, imp = self, "Can't query downstream for seekability");
             }
 
             state = self.state.lock().unwrap();
@@ -1334,7 +1380,7 @@ impl AggregatorImpl for MP4Mux {
 
             gst::info!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Creating ftyp box at offset {}",
                 state.current_offset
             );
@@ -1350,7 +1396,7 @@ impl AggregatorImpl for MP4Mux {
                     .collect::<Vec<_>>(),
             )
             .map_err(|err| {
-                gst::error!(CAT, imp: self, "Failed to create ftyp box: {err}");
+                gst::error!(CAT, imp = self, "Failed to create ftyp box: {err}");
                 gst::FlowError::Error
             })?;
             state.current_offset += ftyp.size() as u64;
@@ -1358,13 +1404,13 @@ impl AggregatorImpl for MP4Mux {
 
             gst::info!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Creating mdat box header at offset {}",
                 state.current_offset
             );
             state.mdat_offset = Some(state.current_offset);
             let mdat = boxes::create_mdat_header(None).map_err(|err| {
-                gst::error!(CAT, imp: self, "Failed to create mdat box header: {err}");
+                gst::error!(CAT, imp = self, "Failed to create mdat box header: {err}");
                 gst::FlowError::Error
             })?;
             state.current_offset += mdat.size() as u64;
@@ -1385,7 +1431,7 @@ impl AggregatorImpl for MP4Mux {
 
             gst::info!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Creating moov box now, mdat ends at offset {} with size {}",
                 state.current_offset,
                 state.mdat_size
@@ -1419,7 +1465,7 @@ impl AggregatorImpl for MP4Mux {
                 language_code: state.language_code,
             })
             .map_err(|err| {
-                gst::error!(CAT, imp: self, "Failed to create moov box: {err}");
+                gst::error!(CAT, imp = self, "Failed to create moov box: {err}");
                 gst::FlowError::Error
             })?;
             state.current_offset += moov.size() as u64;
@@ -1434,7 +1480,7 @@ impl AggregatorImpl for MP4Mux {
 
         if !buffers.is_empty() {
             if let Err(err) = self.obj().finish_buffer_list(buffers) {
-                gst::error!(CAT, imp: self, "Failed pushing buffers: {err:?}");
+                gst::error!(CAT, imp = self, "Failed pushing buffers: {err:?}");
                 return Err(err);
             }
         }
@@ -1445,7 +1491,7 @@ impl AggregatorImpl for MP4Mux {
             if let Some(mdat_offset) = state.mdat_offset {
                 gst::info!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Rewriting mdat box header at offset {mdat_offset} with size {} now",
                     state.mdat_size,
                 );
@@ -1453,7 +1499,7 @@ impl AggregatorImpl for MP4Mux {
                 segment.set_start(gst::format::Bytes::from_u64(mdat_offset));
                 state.current_offset = mdat_offset;
                 let mdat = boxes::create_mdat_header(Some(state.mdat_size)).map_err(|err| {
-                    gst::error!(CAT, imp: self, "Failed to create mdat box header: {err}");
+                    gst::error!(CAT, imp = self, "Failed to create mdat box header: {err}");
                     gst::FlowError::Error
                 })?;
                 drop(state);
@@ -1462,7 +1508,7 @@ impl AggregatorImpl for MP4Mux {
                 if let Err(err) = self.obj().finish_buffer(mdat) {
                     gst::error!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Failed pushing updated mdat box header buffer downstream: {err:?}",
                     );
                 }
@@ -1788,7 +1834,7 @@ impl AggregatorPadImpl for MP4MuxPad {
         let mux = aggregator.downcast_ref::<super::MP4Mux>().unwrap();
         let mut mux_state = mux.imp().state.lock().unwrap();
 
-        gst::info!(CAT, imp: self, "Flushing");
+        gst::info!(CAT, imp = self, "Flushing");
 
         for stream in &mut mux_state.streams {
             if stream.sinkpad == *self.obj() {

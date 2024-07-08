@@ -67,30 +67,30 @@ impl Cea608ToTt {
         pad: &gst::Pad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, obj = pad, "Handling buffer {:?}", buffer);
 
         let mut state = self.state.borrow_mut();
         let format = match state.format {
             Some(format) => format,
             None => {
-                gst::error!(CAT, obj: pad, "Not negotiated yet");
+                gst::error!(CAT, obj = pad, "Not negotiated yet");
                 return Err(gst::FlowError::NotNegotiated);
             }
         };
 
         let buffer_pts = buffer.pts().ok_or_else(|| {
-            gst::error!(CAT, obj: pad, "Require timestamped buffers");
+            gst::error!(CAT, obj = pad, "Require timestamped buffers");
             gst::FlowError::Error
         })?;
 
         let data = buffer.map_readable().map_err(|_| {
-            gst::error!(CAT, obj: pad, "Can't map buffer readable");
+            gst::error!(CAT, obj = pad, "Can't map buffer readable");
 
             gst::FlowError::Error
         })?;
 
         if data.len() < 2 {
-            gst::error!(CAT, obj: pad, "Invalid closed caption packet size");
+            gst::error!(CAT, obj = pad, "Invalid closed caption packet size");
 
             return Ok(gst::FlowSuccess::Ok);
         }
@@ -98,14 +98,23 @@ impl Cea608ToTt {
         let previous_text = {
             match state.state.decode([data[0], data[1]]) {
                 Err(e) => {
-                    gst::error!(CAT, obj: pad, "Failed to decode closed caption packet: {e:?}");
+                    gst::error!(
+                        CAT,
+                        obj = pad,
+                        "Failed to decode closed caption packet: {e:?}"
+                    );
                     return Ok(gst::FlowSuccess::Ok);
                 }
                 Ok(Some(cea608)) => {
-                    gst::trace!(CAT, obj: pad, "received {:x?} cea608: {cea608:?}", [data[0], data[1]]);
+                    gst::trace!(
+                        CAT,
+                        obj = pad,
+                        "received {:x?} cea608: {cea608:?}",
+                        [data[0], data[1]]
+                    );
                     if state.frame.push_code(cea608) {
                         let text = state.frame.get_text();
-                        gst::trace!(CAT, obj: pad, "generated text: {text}");
+                        gst::trace!(CAT, obj = pad, "generated text: {text}");
                         if text.is_empty() {
                             state.previous_text.take()
                         } else if state.frame.mode() == Some(cea608_types::Mode::PaintOn)
@@ -135,7 +144,7 @@ impl Cea608ToTt {
         };
 
         let Some(previous_text) = previous_text else {
-            gst::debug!(CAT, obj: pad, "Have no previous text");
+            gst::debug!(CAT, obj = pad, "Have no previous text");
             return Ok(gst::FlowSuccess::Ok);
         };
 
@@ -278,7 +287,7 @@ impl Cea608ToTt {
     fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Caps(..) => {
                 let mut state = self.state.borrow_mut();
@@ -293,7 +302,7 @@ impl Cea608ToTt {
                 };
 
                 if downstream_caps.is_empty() {
-                    gst::error!(CAT, obj: pad, "Empty downstream caps");
+                    gst::error!(CAT, obj = pad, "Empty downstream caps");
                     return false;
                 }
 
@@ -301,7 +310,7 @@ impl Cea608ToTt {
 
                 gst::debug!(
                     CAT,
-                    obj: pad,
+                    obj = pad,
                     "Negotiating for downstream caps {}",
                     downstream_caps
                 );
@@ -335,7 +344,7 @@ impl Cea608ToTt {
             EventView::Eos(..) => {
                 let mut state = self.state.borrow_mut();
                 if let Some((timestamp, text)) = state.previous_text.take() {
-                    gst::debug!(CAT, obj: pad, "Outputting final text on EOS");
+                    gst::debug!(CAT, obj = pad, "Outputting final text on EOS");
 
                     let format = state.format.unwrap();
 
@@ -498,7 +507,7 @@ impl ElementImpl for Cea608ToTt {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {

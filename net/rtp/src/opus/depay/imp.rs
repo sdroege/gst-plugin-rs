@@ -118,9 +118,12 @@ impl RtpBaseDepay2Impl for RtpOpusDepay {
         };
 
         let Ok(src_caps) = res else {
-            gst::warning!(CAT, imp: self,
+            gst::warning!(
+                CAT,
+                imp = self,
                 "Failed to parse {encoding_name} RTP input caps {s}: {}",
-                res.unwrap_err());
+                res.unwrap_err()
+            );
             return false;
         };
 
@@ -150,7 +153,7 @@ impl RtpBaseDepay2Impl for RtpOpusDepay {
             outbuf_ref.set_flags(gst::BufferFlags::RESYNC);
         }
 
-        gst::trace!(CAT, imp: self, "Finishing buffer {outbuf:?}");
+        gst::trace!(CAT, imp = self, "Finishing buffer {outbuf:?}");
 
         self.obj().queue_buffer(packet.into(), outbuf)
     }
@@ -175,7 +178,11 @@ impl RtpOpusDepay {
                 0 => 1, // mono
                 1 => 2, // stereo
                 _ => {
-                    gst::warning!(CAT, imp: self, "Unexpected sprop-stereo value {v} in input caps {s}");
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Unexpected sprop-stereo value {v} in input caps {s}"
+                    );
                     DEFAULT_CHANNELS
                 }
             })
@@ -293,7 +300,11 @@ impl RtpOpusDepay {
         let duration = frame_duration * n_frames;
 
         if duration > gst::ClockTime::from_mseconds(120) {
-            gst::warning!(CAT, imp: self, "Opus packet with frame duration {duration:?} > 120ms");
+            gst::warning!(
+                CAT,
+                imp = self,
+                "Opus packet with frame duration {duration:?} > 120ms"
+            );
             return gst::ClockTime::NONE;
         }
 

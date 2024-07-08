@@ -93,18 +93,18 @@ impl Settings {
         let s = match gst::Structure::from_str(&format!("pipeline-snapshot,{params}")) {
             Ok(s) => s,
             Err(err) => {
-                gst::warning!(CAT, imp: imp, "failed to parse tracer parameters: {}", err);
+                gst::warning!(CAT, imp = imp, "failed to parse tracer parameters: {}", err);
                 return;
             }
         };
 
         if let Ok(dot_prefix) = s.get("dot-prefix") {
-            gst::log!(CAT, imp: imp, "dot-prefix = {}", dot_prefix);
+            gst::log!(CAT, imp = imp, "dot-prefix = {}", dot_prefix);
             self.dot_prefix = dot_prefix;
         }
 
         if let Ok(dot_ts) = s.get("dot-ts") {
-            gst::log!(CAT, imp: imp, "dot-ts = {}", dot_ts);
+            gst::log!(CAT, imp = imp, "dot-ts = {}", dot_ts);
             self.dot_ts = dot_ts;
         }
     }
@@ -142,7 +142,7 @@ impl ObjectImpl for PipelineSnapshot {
         self.register_hook(TracerHook::ObjectDestroyed);
 
         if let Err(err) = self.setup_signal(settings) {
-            gst::warning!(CAT, imp: self, "failed to setup UNIX signals: {}", err);
+            gst::warning!(CAT, imp = self, "failed to setup UNIX signals: {}", err);
         }
     }
 
@@ -161,7 +161,7 @@ impl GstObjectImpl for PipelineSnapshot {}
 impl TracerImpl for PipelineSnapshot {
     fn element_new(&self, _ts: u64, element: &gst::Element) {
         if element.is::<gst::Pipeline>() {
-            gst::debug!(CAT, imp: self, "new pipeline: {}", element.name());
+            gst::debug!(CAT, imp = self, "new pipeline: {}", element.name());
 
             let weak = element.downgrade();
             let mut pipelines = self.pipelines.lock().unwrap();
@@ -206,7 +206,7 @@ impl PipelineSnapshot {
 
                         for pipeline in pipelines.into_iter() {
                             let pipeline = pipeline.downcast::<gst::Pipeline>().unwrap();
-                            gst::debug!(CAT, obj: tracer, "dump {}", pipeline.name());
+                            gst::debug!(CAT, obj = tracer, "dump {}", pipeline.name());
 
                             let dump_name = format!("{}{}", settings.dot_prefix, pipeline.name());
 

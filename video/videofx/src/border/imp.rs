@@ -298,7 +298,7 @@ impl ObjectImpl for RoundedCorners {
                     settings.changed = true;
                     gst::info!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Changing border radius from {} to {}",
                         settings.border_radius_px,
                         border_radius
@@ -378,7 +378,7 @@ impl BaseTransformImpl for RoundedCorners {
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         let _ = self.state.lock().unwrap().take();
 
-        gst::info!(CAT, imp: self, "Stopped");
+        gst::info!(CAT, imp = self, "Stopped");
 
         Ok(())
     }
@@ -425,7 +425,7 @@ impl BaseTransformImpl for RoundedCorners {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Transformed caps from {} to {} in direction {:?}",
             caps,
             other_caps,
@@ -449,7 +449,7 @@ impl BaseTransformImpl for RoundedCorners {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Configured for caps {} to {}",
             incaps,
             outcaps
@@ -490,7 +490,7 @@ impl BaseTransformImpl for RoundedCorners {
             settings.changed = false;
             gst::debug!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Caps or border radius changed, generating alpha mask"
             );
             let state_guard = self.state.lock().unwrap();
@@ -530,7 +530,7 @@ impl BaseTransformImpl for RoundedCorners {
             InputBuffer::Writable(outbuf) => {
                 gst::log!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Received writable input buffer of size: {}",
                     outbuf.size()
                 );
@@ -542,7 +542,7 @@ impl BaseTransformImpl for RoundedCorners {
             InputBuffer::Readable(buf) => {
                 gst::log!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Received readable input buffer of size: {}",
                     buf.size()
                 );

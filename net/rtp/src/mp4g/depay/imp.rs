@@ -274,7 +274,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
     }
 
     fn flush(&self) {
-        gst::debug!(CAT, imp: self, "Flushing");
+        gst::debug!(CAT, imp = self, "Flushing");
         self.state.borrow_mut().flush();
     }
 
@@ -283,7 +283,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
 
         let mode = s.get::<&str>("mode").expect("Required by Caps");
         if mode.starts_with("CELP") {
-            gst::error!(CAT, imp: self, "{mode} not supported yet");
+            gst::error!(CAT, imp = self, "{mode} not supported yet");
             return false;
         }
 
@@ -301,7 +301,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
         let mode_config = match ModeConfig::from_caps(s) {
             Ok(h) => h,
             Err(err) => {
-                gst::error!(CAT, imp: self, "Error parsing Header in Caps: {err:#}");
+                gst::error!(CAT, imp = self, "Error parsing Header in Caps: {err:#}");
                 return false;
             }
         };
@@ -311,7 +311,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
                 caps_builder = caps_builder.field("codec_data", codec_data);
             }
             Err(err) => {
-                gst::error!(CAT, imp: self, "Error parsing Caps: {err:#}");
+                gst::error!(CAT, imp = self, "Error parsing Caps: {err:#}");
                 return false;
             }
         }
@@ -324,7 +324,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
             let mut state = self.state.borrow_mut();
             state.seqnum_base = s.get_optional::<u32>("seqnum-base").unwrap();
             if let Some(seqnum_base) = state.seqnum_base {
-                gst::info!(CAT, imp: self, "Got seqnum_base {seqnum_base}");
+                gst::info!(CAT, imp = self, "Got seqnum_base {seqnum_base}");
             }
             state.clock_rate = clock_rate;
 
@@ -364,7 +364,11 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
         let au_iter = match parser.parse(payload, ext_seqnum, packet_ts) {
             Ok(au_iter) => au_iter,
             Err(err) => {
-                gst::warning!(CAT, imp: self, "Failed to parse payload for packet {ext_seqnum}: {err:#}");
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Failed to parse payload for packet {ext_seqnum}: {err:#}"
+                );
                 *au_acc = None;
                 self.obj().drop_packets(..=packet.ext_seqnum());
 
@@ -377,8 +381,11 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
             let au = match au {
                 Ok(au) => au,
                 Err(err) => {
-                    gst::warning!(CAT, imp: self,
-                        "Failed to parse AU from packet {}: {err:#}", packet.ext_seqnum(),
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Failed to parse AU from packet {}: {err:#}",
+                        packet.ext_seqnum(),
                     );
 
                     continue;
@@ -390,13 +397,17 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
             // > a fragmented Access Unit or one or more complete Access Units
             if !packet.marker_bit() {
                 if !au.is_fragment {
-                    gst::warning!(CAT, imp: self, "Dropping non fragmented AU {au} in un-marked packet");
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Dropping non fragmented AU {au} in un-marked packet"
+                    );
                     continue;
                 }
 
                 if let Some(ref mut acc) = au_acc {
                     if let Err(err) = acc.try_append(au) {
-                        gst::warning!(CAT, imp: self, "Discarding pending fragmented AU: {err}");
+                        gst::warning!(CAT, imp = self, "Discarding pending fragmented AU: {err}");
                         *au_acc = None;
                         parser.reset();
                         self.obj().drop_packets(..=packet.ext_seqnum());
@@ -407,7 +418,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
                     *au_acc = Some(AuAccumulator::new(au));
                 }
 
-                gst::trace!(CAT, imp: self, "Non-final fragment");
+                gst::trace!(CAT, imp = self, "Non-final fragment");
 
                 return Ok(gst::FlowSuccess::Ok);
             }
@@ -418,7 +429,11 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
                 Some(mut acc) => {
                     if au.is_fragment {
                         if let Err(err) = acc.try_append(au) {
-                            gst::warning!(CAT, imp: self, "Discarding pending fragmented AU: {err}");
+                            gst::warning!(
+                                CAT,
+                                imp = self,
+                                "Discarding pending fragmented AU: {err}"
+                            );
                             parser.reset();
                             self.obj().drop_packets(..=packet.ext_seqnum());
 
@@ -428,7 +443,11 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
                         match acc.try_into_au() {
                             Ok(au) => au,
                             Err(err) => {
-                                gst::warning!(CAT, imp: self, "Discarding pending fragmented AU: {err}");
+                                gst::warning!(
+                                    CAT,
+                                    imp = self,
+                                    "Discarding pending fragmented AU: {err}"
+                                );
                                 let Mpeg4GenericDepayError::FragmentedAuSizeMismatch { .. } = err
                                 else {
                                     unreachable!();
@@ -440,7 +459,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
                             }
                         }
                     } else {
-                        gst::warning!(CAT, imp: self,
+                        gst::warning!(CAT, imp = self,
                             "Discarding pending fragmented AU {} due to incoming non fragmented AU {au}",
                             acc.0,
                         );
@@ -454,7 +473,11 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
 
             if let Some(ref mut deint_buf) = deint_buf {
                 if let Err(err) = deint_buf.push_and_pop(au, &mut aus) {
-                    gst::warning!(CAT, imp: self, "Failed to push AU to deinterleave buffer: {err}");
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Failed to push AU to deinterleave buffer: {err}"
+                    );
                     // The AU has been dropped, just keep going
                     // Packet will be dropped eventually
                 }
@@ -467,7 +490,11 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
                 // > some broken non-interleaved streams have AU-index jumping around
                 // > all over the place, apparently assuming receiver disregards
 
-                gst::warning!(CAT, imp: self, "Interleaved AU, but no `max_displacement` was defined");
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Interleaved AU, but no `max_displacement` was defined"
+                );
             }
 
             aus.push(au);
@@ -498,8 +525,11 @@ impl RtpMpeg4GenericDepay {
             let delta = crate::utils::seqnum_distance(seqnum, seqnum_base);
 
             if delta == 0 {
-                gst::debug!(CAT, imp: self,
-                    "Got initial packet {seqnum_base} @ ext seqnum {}", packet.ext_seqnum(),
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "Got initial packet {seqnum_base} @ ext seqnum {}",
+                    packet.ext_seqnum(),
                 );
                 state.can_parse = true;
 
@@ -507,7 +537,9 @@ impl RtpMpeg4GenericDepay {
             }
 
             if delta < 0 {
-                gst::log!(CAT, imp: self,
+                gst::log!(
+                    CAT,
+                    imp = self,
                     "Waiting for initial packet {seqnum_base}, got {seqnum} (ext seqnum {})",
                     packet.ext_seqnum(),
                 );
@@ -515,7 +547,7 @@ impl RtpMpeg4GenericDepay {
                 return ControlFlow::Break(());
             }
 
-            gst::debug!(CAT, imp: self,
+            gst::debug!(CAT, imp = self,
                 "Packet {seqnum} (ext seqnum {}) passed expected initial packet {seqnum_base}, will sync on next marker",
                 packet.ext_seqnum(),
             );
@@ -525,7 +557,7 @@ impl RtpMpeg4GenericDepay {
 
         // Wait until a marked packet is found and start parsing from the next packet
         if packet.marker_bit() {
-            gst::debug!(CAT, imp: self,
+            gst::debug!(CAT, imp = self,
                 "Found first marked packet {seqnum} (ext seqnum {}). Will start parsing from next packet",
                 packet.ext_seqnum(),
             );
@@ -533,7 +565,9 @@ impl RtpMpeg4GenericDepay {
             assert!(state.au_acc.is_none());
             state.can_parse = true;
         } else {
-            gst::log!(CAT, imp: self,
+            gst::log!(
+                CAT,
+                imp = self,
                 "First marked packet not found yet, skipping packet {seqnum} (ext seqnum {})",
                 packet.ext_seqnum(),
             );
@@ -590,7 +624,11 @@ impl RtpMpeg4GenericDepay {
                 let packet_to_buffer_relation =
                     get_packet_to_buffer_relation(&au, state.clock_rate, range);
 
-                gst::trace!(CAT, imp: self, "Finishing AU buffer {packet_to_buffer_relation:?}");
+                gst::trace!(
+                    CAT,
+                    imp = self,
+                    "Finishing AU buffer {packet_to_buffer_relation:?}"
+                );
 
                 let buffer = Self::new_buffer(au, state);
 
@@ -607,7 +645,11 @@ impl RtpMpeg4GenericDepay {
                     let packet_to_buffer_relation =
                         get_packet_to_buffer_relation(&au, state.clock_rate, range);
 
-                    gst::trace!(CAT, imp: self, "Finishing AU buffer {packet_to_buffer_relation:?}");
+                    gst::trace!(
+                        CAT,
+                        imp = self,
+                        "Finishing AU buffer {packet_to_buffer_relation:?}"
+                    );
 
                     let buffer = Self::new_buffer(au, state);
 

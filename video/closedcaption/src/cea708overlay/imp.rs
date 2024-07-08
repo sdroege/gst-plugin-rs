@@ -202,10 +202,15 @@ impl Cea708Overlay {
         cea608: [u8; 2],
         pts: gst::ClockTime,
     ) {
-        gst::trace!(CAT, imp: self, "Handling CEA-608 for field {field:?} (selected: {:?}) data: {cea608:x?}", state.selected);
+        gst::trace!(
+            CAT,
+            imp = self,
+            "Handling CEA-608 for field {field:?} (selected: {:?}) data: {cea608:x?}",
+            state.selected
+        );
 
         match state.cea708_renderer.push_cea608(field, cea608) {
-            Err(e) => gst::warning!(CAT, imp: self, "Failed to parse CEA-608 data: {e:?}"),
+            Err(e) => gst::warning!(CAT, imp = self, "Failed to parse CEA-608 data: {e:?}"),
             Ok(true) => self.reset_timeout(state, pts),
             _ => (),
         }
@@ -223,7 +228,12 @@ impl Cea708Overlay {
 
             for service in packet.services() {
                 if state.selected.is_none() {
-                    gst::info!(CAT, imp: self, "Automatic selection chose CEA-708 service {}", service.number());
+                    gst::info!(
+                        CAT,
+                        imp = self,
+                        "Automatic selection chose CEA-708 service {}",
+                        service.number()
+                    );
                     state.selected = Some(ServiceOrChannel::Service(service.number()));
                 }
                 if Some(ServiceOrChannel::Service(service.number())) != state.selected {
@@ -235,7 +245,7 @@ impl Cea708Overlay {
         }
 
         let Some(cea608) = cea608 else {
-            gst::log!(CAT, imp: self, "No CEA-608");
+            gst::log!(CAT, imp = self, "No CEA-608");
             return;
         };
 
@@ -245,7 +255,13 @@ impl Cea708Overlay {
                 None | Some(ServiceOrChannel::Cea608Channel(_))
             )
         {
-            gst::log!(CAT, imp: self, "CEA-608 not to be used (enabled {}, selected {:?})", state.enabled_608, state.selected);
+            gst::log!(
+                CAT,
+                imp = self,
+                "CEA-608 not to be used (enabled {}, selected {:?})",
+                state.enabled_608,
+                state.selected
+            );
             return;
         }
 
@@ -288,10 +304,10 @@ impl Cea708Overlay {
         pad: &gst::Pad,
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, obj = pad, "Handling buffer {:?}", buffer);
 
         let pts = buffer.pts().ok_or_else(|| {
-            gst::error!(CAT, obj: pad, "Require timestamped buffers");
+            gst::error!(CAT, obj = pad, "Require timestamped buffers");
             gst::FlowError::Error
         })?;
 
@@ -307,7 +323,12 @@ impl Cea708Overlay {
         self.check_service_channel(&mut state);
 
         for meta in buffer.iter_meta::<gst_video::VideoCaptionMeta>() {
-            gst::log!(CAT, imp: self, "Have caption meta of type {:?}", meta.caption_type());
+            gst::log!(
+                CAT,
+                imp = self,
+                "Have caption meta of type {:?}",
+                meta.caption_type()
+            );
 
             if meta.caption_type() == gst_video::VideoCaptionType::Cea708Cdp {
                 match extract_cdp(meta.data()) {
@@ -371,7 +392,7 @@ impl Cea708Overlay {
         if let Some(timeout) = caption_timeout {
             if let Some(interval) = pts.opt_saturating_sub(state.last_cc_pts) {
                 if interval > timeout {
-                    gst::info!(CAT, imp: self, "Reached timeout, clearing overlay");
+                    gst::info!(CAT, imp = self, "Reached timeout, clearing overlay");
                     state.cea708_renderer.clear_composition();
                     state.last_cc_pts.take();
                 }
@@ -390,7 +411,7 @@ impl Cea708Overlay {
                 .unwrap();
 
                 if composition.blend(&mut frame).is_err() {
-                    gst::error!(CAT, obj: pad, "Failed to blend composition");
+                    gst::error!(CAT, obj = pad, "Failed to blend composition");
                 }
             }
         }
@@ -402,7 +423,7 @@ impl Cea708Overlay {
     fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Caps(c) => {
                 let mut state = self.state.lock().unwrap();
@@ -614,7 +635,7 @@ impl ElementImpl for Cea708Overlay {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused | gst::StateChange::PausedToReady => {

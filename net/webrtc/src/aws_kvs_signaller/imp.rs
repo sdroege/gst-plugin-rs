@@ -115,7 +115,7 @@ impl Signaller {
                             } else {
                                 gst::warning!(
                                     CAT,
-                                    imp: self,
+                                    imp = self,
                                     "Failed to parse SDP_OFFER: {payload}"
                                 );
                             }
@@ -142,7 +142,7 @@ impl Signaller {
                             } else {
                                 gst::warning!(
                                     CAT,
-                                    imp: self,
+                                    imp = self,
                                     "Failed to parse ICE_CANDIDATE: {payload}"
                                 );
                             }
@@ -150,7 +150,7 @@ impl Signaller {
                         _ => {
                             gst::log!(
                                 CAT,
-                                imp: self,
+                                imp = self,
                                 "Ignoring unsupported message type {}",
                                 msg.message_type
                             );
@@ -160,7 +160,7 @@ impl Signaller {
                 Err(e) => {
                     gst::error!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Failed to decode message payload from server: {e}"
                     );
                     self.obj().emit_by_name::<()>(
@@ -173,7 +173,7 @@ impl Signaller {
                 }
             }
         } else {
-            gst::log!(CAT, imp: self, "Unknown message from server: [{msg}]");
+            gst::log!(CAT, imp = self, "Unknown message from server: [{msg}]");
         }
     }
 
@@ -203,7 +203,7 @@ impl Signaller {
             (Some(key), Some(secret_key)) => {
                 gst::debug!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Using provided access and secret access key"
                 );
                 Ok(Credentials::new(
@@ -215,7 +215,7 @@ impl Signaller {
                 ))
             }
             _ => {
-                gst::debug!(CAT, imp: self, "Using default AWS credentials");
+                gst::debug!(CAT, imp = self, "Using default AWS credentials");
                 let cred = DefaultCredentialsChain::builder()
                     .region(region.clone())
                     .build()
@@ -387,7 +387,7 @@ impl Signaller {
             ))
             .build()
             .map_err(|err| {
-                gst::error!(CAT, imp: self, "Failed to build HTTP request URI: {err}");
+                gst::error!(CAT, imp = self, "Failed to build HTTP request URI: {err}");
                 anyhow!("Failed to build HTTP request URI: {err}")
             })?;
 
@@ -415,7 +415,7 @@ impl Signaller {
         let (ws, _) =
             async_tungstenite::tokio::connect_async_with_tls_connector(url, connector).await?;
 
-        gst::info!(CAT, imp: self, "connected");
+        gst::info!(CAT, imp = self, "connected");
 
         // Channel for asynchronously sending out websocket message
         let (mut ws_sink, mut ws_stream) = ws.split();
@@ -439,7 +439,7 @@ impl Signaller {
                         if let Some(imp) = imp.upgrade() {
                             gst::trace!(
                                 CAT,
-                                imp: imp,
+                                imp = imp,
                                 "Sending websocket message {}",
                                 serde_json::to_string(&msg).unwrap()
                             );
@@ -458,7 +458,7 @@ impl Signaller {
 
                 if let Err(ref err) = res {
                     if let Some(imp) = imp.upgrade() {
-                        gst::error!(CAT, imp: imp, "Quitting send loop: {err}");
+                        gst::error!(CAT, imp = imp, "Quitting send loop: {err}");
                     } else {
                         gst::error!(CAT, "Quitting send loop: {err}");
                     }
@@ -468,7 +468,7 @@ impl Signaller {
             }
 
             if let Some(imp) = imp.upgrade() {
-                gst::debug!(CAT, imp: imp, "Done sending");
+                gst::debug!(CAT, imp = imp, "Done sending");
             } else {
                 gst::debug!(CAT, "Done sending");
             }
@@ -488,7 +488,7 @@ impl Signaller {
                             imp.handle_message(msg);
                         }
                         Ok(WsMessage::Close(reason)) => {
-                            gst::info!(CAT, imp: imp, "websocket connection closed: {:?}", reason);
+                            gst::info!(CAT, imp = imp, "websocket connection closed: {:?}", reason);
                             imp.obj().emit_by_name::<()>("shutdown", &[]);
                             break;
                         }
@@ -507,7 +507,7 @@ impl Signaller {
             }
 
             if let Some(imp) = imp.upgrade() {
-                gst::info!(CAT, imp: imp, "Stopped websocket receiving");
+                gst::info!(CAT, imp = imp, "Stopped websocket receiving");
             }
         });
 
@@ -603,7 +603,7 @@ impl SignallableImpl for Signaller {
     }
 
     fn stop(&self) {
-        gst::info!(CAT, imp: self, "Stopping now");
+        gst::info!(CAT, imp = self, "Stopping now");
 
         let mut state = self.state.lock().unwrap();
         let send_task_handle = state.send_task_handle.take();
@@ -616,7 +616,7 @@ impl SignallableImpl for Signaller {
                 if let Some(handle) = send_task_handle {
                     if let Err(err) = handle.await {
                         if let Some(imp) = imp.upgrade() {
-                            gst::warning!(CAT, imp: imp, "Error while joining send task: {err}");
+                            gst::warning!(CAT, imp = imp, "Error while joining send task: {err}");
                         }
                     }
                 }
@@ -624,7 +624,11 @@ impl SignallableImpl for Signaller {
                 if let Some(handle) = receive_task_handle {
                     if let Err(err) = handle.await {
                         if let Some(imp) = imp.upgrade() {
-                            gst::warning!(CAT, imp: imp, "Error while joining receive task: {err}");
+                            gst::warning!(
+                                CAT,
+                                imp = imp,
+                                "Error while joining receive task: {err}"
+                            );
                         }
                     }
                 }
@@ -633,7 +637,7 @@ impl SignallableImpl for Signaller {
     }
 
     fn end_session(&self, session_id: &str) {
-        gst::info!(CAT, imp: self, "Signalling session {session_id} ended");
+        gst::info!(CAT, imp = self, "Signalling session {session_id} ended");
 
         // We can seemingly not do anything beyond that
     }

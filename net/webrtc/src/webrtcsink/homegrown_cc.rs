@@ -131,7 +131,7 @@ impl CongestionController {
 
         gst::trace!(
             CAT,
-            obj: element,
+            obj = element,
             "consumer {}: considering stats {}",
             self.peer_id,
             twcc_stats
@@ -159,7 +159,7 @@ impl CongestionController {
 
                 gst::trace!(
                     CAT,
-                    obj: element,
+                    obj = element,
                     "consumer {}: Old bitrate: {}, ema: {}, stddev: {}",
                     self.peer_id,
                     target_bitrate,
@@ -174,7 +174,7 @@ impl CongestionController {
                 if target_bitrate < ema - 7. * bitrate_stdev {
                     gst::trace!(
                         CAT,
-                        obj: element,
+                        obj = element,
                         "consumer {}: below last congestion window",
                         self.peer_id
                     );
@@ -183,7 +183,7 @@ impl CongestionController {
                 } else if target_bitrate > ema + 7. * bitrate_stdev {
                     gst::trace!(
                         CAT,
-                        obj: element,
+                        obj = element,
                         "consumer {}: above last congestion window",
                         self.peer_id
                     );
@@ -213,7 +213,7 @@ impl CongestionController {
 
                     gst::trace!(
                         CAT,
-                        obj: element,
+                        obj = element,
                         "consumer {}: still in last congestion window",
                         self.peer_id,
                     );
@@ -225,7 +225,7 @@ impl CongestionController {
                 /* Multiplicative increase */
                 gst::trace!(
                     CAT,
-                    obj: element,
+                    obj = element,
                     "consumer {}: outside congestion window",
                     self.peer_id
                 );
@@ -335,7 +335,7 @@ impl CongestionController {
     ) {
         gst::trace!(
             CAT,
-            obj: element,
+            obj = element,
             "consumer {}: applying congestion control operation {:?}",
             self.peer_id,
             control_op

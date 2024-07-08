@@ -95,7 +95,7 @@ impl ColorDetect {
     fn color_changed(&self, dominant_color_name: &str, palette: Vec<Color>) {
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Dominant color changed to {}",
             dominant_color_name
         );
@@ -159,7 +159,7 @@ impl ObjectImpl for ColorDetect {
                 if settings.quality != quality {
                     gst::info!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Changing quality from {} to {}",
                         settings.quality,
                         quality
@@ -173,7 +173,7 @@ impl ObjectImpl for ColorDetect {
                 if settings.max_colors != max_colors {
                     gst::info!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Changing max_colors from {} to {}",
                         settings.max_colors,
                         max_colors
@@ -258,7 +258,7 @@ impl BaseTransformImpl for ColorDetect {
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         *self.state.borrow_mut() = None;
-        gst::info!(CAT, imp: self, "Stopped");
+        gst::info!(CAT, imp = self, "Stopped");
         Ok(())
     }
 
@@ -275,7 +275,7 @@ impl BaseTransformImpl for ColorDetect {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Configured for caps {} to {}",
             incaps,
             outcaps

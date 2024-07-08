@@ -169,7 +169,7 @@ impl ObjectImpl for NdiSrc {
                 let ndi_name = value.get().unwrap();
                 gst::debug!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing ndi-name from {:?} to {:?}",
                     settings.ndi_name,
                     ndi_name,
@@ -181,7 +181,7 @@ impl ObjectImpl for NdiSrc {
                 let url_address = value.get().unwrap();
                 gst::debug!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing url-address from {:?} to {:?}",
                     settings.url_address,
                     url_address,
@@ -193,7 +193,7 @@ impl ObjectImpl for NdiSrc {
                 let receiver_ndi_name = value.get::<Option<String>>().unwrap();
                 gst::debug!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing receiver-ndi-name from {:?} to {:?}",
                     settings.receiver_ndi_name,
                     receiver_ndi_name,
@@ -206,7 +206,7 @@ impl ObjectImpl for NdiSrc {
                 let connect_timeout = value.get().unwrap();
                 gst::debug!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing connect-timeout from {} to {}",
                     settings.connect_timeout,
                     connect_timeout,
@@ -218,7 +218,7 @@ impl ObjectImpl for NdiSrc {
                 let timeout = value.get().unwrap();
                 gst::debug!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing timeout from {} to {}",
                     settings.timeout,
                     timeout,
@@ -230,7 +230,7 @@ impl ObjectImpl for NdiSrc {
                 let max_queue_length = value.get().unwrap();
                 gst::debug!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing max-queue-length from {} to {}",
                     settings.max_queue_length,
                     max_queue_length,
@@ -242,7 +242,7 @@ impl ObjectImpl for NdiSrc {
                 let bandwidth = value.get().unwrap();
                 gst::debug!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing bandwidth from {} to {}",
                     settings.bandwidth,
                     bandwidth,
@@ -254,7 +254,7 @@ impl ObjectImpl for NdiSrc {
                 let color_format = value.get().unwrap();
                 gst::debug!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing color format from {:?} to {:?}",
                     settings.color_format,
                     color_format,
@@ -266,7 +266,7 @@ impl ObjectImpl for NdiSrc {
                 let timestamp_mode = value.get().unwrap();
                 gst::debug!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing timestamp mode from {:?} to {:?}",
                     settings.timestamp_mode,
                     timestamp_mode
@@ -398,7 +398,7 @@ impl BaseSrcImpl for NdiSrc {
     }
 
     fn unlock(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp: self, "Unlocking",);
+        gst::debug!(CAT, imp = self, "Unlocking",);
         if let Some(ref controller) = *self.receiver_controller.lock().unwrap() {
             controller.set_flushing(true);
         }
@@ -406,7 +406,7 @@ impl BaseSrcImpl for NdiSrc {
     }
 
     fn unlock_stop(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp: self, "Stop unlocking",);
+        gst::debug!(CAT, imp = self, "Stop unlocking",);
         if let Some(ref controller) = *self.receiver_controller.lock().unwrap() {
             controller.set_flushing(false);
         }
@@ -488,7 +488,7 @@ impl BaseSrcImpl for NdiSrc {
 
                     let max = settings.max_queue_length as u64 * latency;
 
-                    gst::debug!(CAT, imp: self, "Returning latency min {} max {}", min, max);
+                    gst::debug!(CAT, imp = self, "Returning latency min {} max {}", min, max);
                     q.set(true, min, max);
                     true
                 } else {
@@ -510,7 +510,7 @@ impl BaseSrcImpl for NdiSrc {
             match state.receiver.take() {
                 Some(recv) => recv,
                 None => {
-                    gst::error!(CAT, imp: self, "Have no receiver");
+                    gst::error!(CAT, imp = self, "Have no receiver");
                     return Err(gst::FlowError::Error);
                 }
             }

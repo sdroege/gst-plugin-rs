@@ -126,7 +126,7 @@ impl ObjectImpl for Rgb2Gray {
                 let invert = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing invert from {} to {}",
                     settings.invert,
                     invert
@@ -138,7 +138,7 @@ impl ObjectImpl for Rgb2Gray {
                 let shift = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing shift from {} to {}",
                     settings.shift,
                     shift
@@ -289,7 +289,7 @@ impl BaseTransformImpl for Rgb2Gray {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Transformed caps from {} to {} in direction {:?}",
             caps,
             other_caps,

@@ -186,7 +186,7 @@ impl Signaller {
         while let Some(candidate_str) = early_candidates.pop() {
             gst::debug!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Sending delayed ice candidate {candidate_str:?}"
             );
             self.send_trickle_request(&candidate_str).await;
@@ -201,7 +201,7 @@ impl Signaller {
                         self.on_signal_event(*signal).await;
                     }
                     signal_client::SignalEvent::Close(reason) => {
-                        gst::debug!(CAT, imp: self, "Close: {reason}");
+                        gst::debug!(CAT, imp = self, "Close: {reason}");
                         self.raise_error("Server disconnected".to_string());
                         break;
                     }
@@ -209,7 +209,7 @@ impl Signaller {
                 Ok(None) => {}
                 Err(err) => match err {
                     WaitError::FutureAborted => {
-                        gst::debug!(CAT, imp: self, "Closing signal_task");
+                        gst::debug!(CAT, imp = self, "Closing signal_task");
                         break;
                     }
                     WaitError::FutureError(err) => self.raise_error(err.to_string()),
@@ -221,7 +221,7 @@ impl Signaller {
     async fn on_signal_event(&self, event: proto::signal_response::Message) {
         match event {
             proto::signal_response::Message::Answer(answer) => {
-                gst::debug!(CAT, imp: self, "Received publisher answer: {:?}", answer);
+                gst::debug!(CAT, imp = self, "Received publisher answer: {:?}", answer);
                 let sdp = match gst_sdp::SDPMessage::parse_buffer(answer.sdp.as_bytes()) {
                     Ok(sdp) => sdp,
                     Err(_) => {
@@ -239,10 +239,15 @@ impl Signaller {
 
             proto::signal_response::Message::Offer(offer) => {
                 if !self.is_subscriber() {
-                    gst::warning!(CAT, imp: self, "Ignoring subscriber offer in non-subscriber mode: {:?}", offer);
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Ignoring subscriber offer in non-subscriber mode: {:?}",
+                        offer
+                    );
                     return;
                 }
-                gst::debug!(CAT, imp: self, "Received subscriber offer: {:?}", offer);
+                gst::debug!(CAT, imp = self, "Received subscriber offer: {:?}", offer);
                 let sdp = match gst_sdp::SDPMessage::parse_buffer(offer.sdp.as_bytes()) {
                     Ok(sdp) => sdp,
                     Err(_) => {
@@ -259,7 +264,7 @@ impl Signaller {
             }
 
             proto::signal_response::Message::Trickle(trickle) => {
-                gst::debug!(CAT, imp: self, "Received ice_candidate {:?}", trickle);
+                gst::debug!(CAT, imp = self, "Received ice_candidate {:?}", trickle);
 
                 let Some(target) = self.signal_target() else {
                     return;
@@ -279,11 +284,11 @@ impl Signaller {
             }
 
             proto::signal_response::Message::ConnectionQuality(quality) => {
-                gst::debug!(CAT, imp: self, "Connection quality: {:?}", quality);
+                gst::debug!(CAT, imp = self, "Connection quality: {:?}", quality);
             }
 
             proto::signal_response::Message::TrackPublished(publish_res) => {
-                gst::debug!(CAT, imp: self, "Track published: {:?}", publish_res);
+                gst::debug!(CAT, imp = self, "Track published: {:?}", publish_res);
                 if let Some(connection) = &mut *self.connection.lock().unwrap() {
                     if let Some(tx) = connection.pending_tracks.remove(&publish_res.cid) {
                         let _ = tx.send(publish_res.track.unwrap());
@@ -293,17 +298,22 @@ impl Signaller {
 
             proto::signal_response::Message::Update(update) => {
                 if !self.is_subscriber() {
-                    gst::trace!(CAT, imp: self, "Ignoring update in non-subscriber mode: {:?}", update);
+                    gst::trace!(
+                        CAT,
+                        imp = self,
+                        "Ignoring update in non-subscriber mode: {:?}",
+                        update
+                    );
                     return;
                 }
-                gst::debug!(CAT, imp: self, "Update: {:?}", update);
+                gst::debug!(CAT, imp = self, "Update: {:?}", update);
                 for participant in update.participants {
                     self.on_participant(&participant, true)
                 }
             }
 
             proto::signal_response::Message::Leave(leave) => {
-                gst::debug!(CAT, imp: self, "Leave: {:?}", leave);
+                gst::debug!(CAT, imp = self, "Leave: {:?}", leave);
             }
 
             _ => {}
@@ -317,7 +327,7 @@ impl Signaller {
         RUNTIME.spawn(async move {
             if let Some(imp) = weak_imp.upgrade() {
                 let sdp = sessdesc.sdp();
-                gst::debug!(CAT, imp: imp, "Sending SDP {:?} now", &sdp);
+                gst::debug!(CAT, imp = imp, "Sending SDP {:?} now", &sdp);
                 let signal_client = imp.require_signal_client();
                 signal_client
                     .send(proto::signal_request::Message::Answer(
@@ -429,7 +439,7 @@ impl Signaller {
 
                             match err {
                                 WaitError::FutureAborted => {
-                                    gst::warning!(CAT, imp: imp, "Future aborted")
+                                    gst::warning!(CAT, imp = imp, "Future aborted")
                                 }
                                 WaitError::FutureError(err) => imp.raise_error(err.to_string()),
                             };
@@ -437,7 +447,7 @@ impl Signaller {
                     }
                 }
 
-                gst::debug!(CAT, imp: imp, "Sending SDP now");
+                gst::debug!(CAT, imp = imp, "Sending SDP now");
                 signal_client
                     .send(proto::signal_request::Message::Offer(
                         proto::SessionDescription {
@@ -455,7 +465,7 @@ impl Signaller {
     }
 
     fn on_participant(&self, participant: &proto::ParticipantInfo, new_connection: bool) {
-        gst::debug!(CAT, imp: self, "{:?}", participant);
+        gst::debug!(CAT, imp = self, "{:?}", participant);
         if !participant.is_publisher {
             return;
         }
@@ -463,17 +473,17 @@ impl Signaller {
         let peer_identity = &participant.identity;
         match self.producer_peer_id() {
             Some(id) if id == *peer_sid => {
-                gst::debug!(CAT, imp: self, "matching peer sid {id:?}");
+                gst::debug!(CAT, imp = self, "matching peer sid {id:?}");
             }
             Some(id) if id == *peer_identity => {
-                gst::debug!(CAT, imp: self, "matching peer identity {id:?}");
+                gst::debug!(CAT, imp = self, "matching peer identity {id:?}");
             }
             None => {
                 if self.is_peer_excluded(peer_sid) || self.is_peer_excluded(peer_identity) {
-                    gst::debug!(CAT, imp: self, "ignoring excluded peer {participant:?}");
+                    gst::debug!(CAT, imp = self, "ignoring excluded peer {participant:?}");
                     return;
                 }
-                gst::debug!(CAT, imp: self, "catch-all mode, matching {participant:?}");
+                gst::debug!(CAT, imp = self, "catch-all mode, matching {participant:?}");
             }
             _ => return,
         }
@@ -531,7 +541,7 @@ impl Signaller {
 
 impl SignallableImpl for Signaller {
     fn start(&self) {
-        gst::debug!(CAT, imp: self, "Connecting");
+        gst::debug!(CAT, imp = self, "Connecting");
 
         let wsurl = if let Some(wsurl) = &self.settings.lock().unwrap().wsurl {
             wsurl.clone()
@@ -585,7 +595,7 @@ impl SignallableImpl for Signaller {
             }
         };
 
-        gst::debug!(CAT, imp: self, "We have an authentication token");
+        gst::debug!(CAT, imp = self, "We have an authentication token");
 
         let weak_imp = self.downgrade();
         RUNTIME.spawn(async move {
@@ -597,7 +607,7 @@ impl SignallableImpl for Signaller {
                 auto_subscribe: imp.auto_subscribe(),
                 ..Default::default()
             };
-            gst::debug!(CAT, imp: imp, "Connecting to {}", wsurl);
+            gst::debug!(CAT, imp = imp, "Connecting to {}", wsurl);
 
             let res = signal_client::SignalClient::connect(&wsurl, &auth_token, options).await;
             let (signal_client, join_response, signal_events) = match res {
@@ -612,7 +622,7 @@ impl SignallableImpl for Signaller {
 
             gst::debug!(
                 CAT,
-                imp: imp,
+                imp = imp,
                 "Connected with JoinResponse: {:?}",
                 join_response
             );
@@ -700,7 +710,7 @@ impl SignallableImpl for Signaller {
     }
 
     fn send_sdp(&self, session_id: &str, sessdesc: &gst_webrtc::WebRTCSessionDescription) {
-        gst::debug!(CAT, imp: self, "Created SDP {:?}", sessdesc.sdp());
+        gst::debug!(CAT, imp = self, "Created SDP {:?}", sessdesc.sdp());
 
         match sessdesc.type_() {
             gst_webrtc::WebRTCSDPType::Offer => {
@@ -710,7 +720,7 @@ impl SignallableImpl for Signaller {
                 self.send_sdp_answer(session_id, sessdesc);
             }
             _ => {
-                gst::debug!(CAT, imp: self, "Ignoring SDP {:?}", sessdesc.sdp());
+                gst::debug!(CAT, imp = self, "Ignoring SDP {:?}", sessdesc.sdp());
             }
         }
     }
@@ -731,14 +741,14 @@ impl SignallableImpl for Signaller {
 
         if let Some(connection) = &mut *self.connection.lock().unwrap() {
             if let Some(early_candidates) = connection.early_candidates.as_mut() {
-                gst::debug!(CAT, imp: self, "Delaying ice candidate {candidate_str:?}");
+                gst::debug!(CAT, imp = self, "Delaying ice candidate {candidate_str:?}");
 
                 early_candidates.push(candidate_str);
                 return;
             }
         };
 
-        gst::debug!(CAT, imp: self, "Sending ice candidate {candidate_str:?}");
+        gst::debug!(CAT, imp = self, "Sending ice candidate {candidate_str:?}");
 
         let imp = self.downgrade();
         RUNTIME.spawn(async move {

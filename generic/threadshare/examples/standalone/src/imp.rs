@@ -103,7 +103,7 @@ impl TaskImpl for SrcTask {
         let settings = imp.settings.lock().unwrap();
         self.is_main_elem = settings.is_main_elem;
 
-        log_or_trace!(CAT, self.is_main_elem, imp: imp, "Preparing Task");
+        log_or_trace!(CAT, self.is_main_elem, imp = imp, "Preparing Task");
 
         self.push_period = settings.push_period;
         self.num_buffers = settings.num_buffers;
@@ -113,12 +113,17 @@ impl TaskImpl for SrcTask {
 
     fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            log_or_trace!(CAT, self.is_main_elem, obj: self.elem, "Starting Task");
+            log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Starting Task");
 
             if self.need_initial_events {
                 let imp = self.elem.imp();
 
-                debug_or_trace!(CAT, self.is_main_elem, obj: self.elem, "Pushing initial events");
+                debug_or_trace!(
+                    CAT,
+                    self.is_main_elem,
+                    obj = self.elem,
+                    "Pushing initial events"
+                );
 
                 let stream_id =
                     format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
@@ -157,7 +162,7 @@ impl TaskImpl for SrcTask {
     }
 
     fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        log_or_trace!(CAT, self.is_main_elem, obj: self.elem, "Stopping Task");
+        log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Stopping Task");
         self.buffer_pool.set_active(false).unwrap();
         self.timer = None;
         self.need_initial_events = true;
@@ -167,9 +172,9 @@ impl TaskImpl for SrcTask {
 
     fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
         async move {
-            log_or_trace!(CAT, self.is_main_elem, obj: self.elem, "Awaiting timer");
+            log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Awaiting timer");
             self.timer.as_mut().unwrap().next().await;
-            log_or_trace!(CAT, self.is_main_elem, obj: self.elem, "Timer ticked");
+            log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Timer ticked");
 
             Ok(())
         }
@@ -190,13 +195,18 @@ impl TaskImpl for SrcTask {
                     buffer
                 })
                 .map_err(|err| {
-                    gst::error!(CAT, obj: self.elem, "Failed to acquire buffer {err}");
+                    gst::error!(CAT, obj = self.elem, "Failed to acquire buffer {err}");
                     err
                 })?;
 
-            debug_or_trace!(CAT, self.is_main_elem, obj: self.elem, "Forwarding buffer");
+            debug_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Forwarding buffer");
             self.elem.imp().src_pad.push(buffer).await?;
-            log_or_trace!(CAT, self.is_main_elem, obj: self.elem, "Successfully pushed buffer");
+            log_or_trace!(
+                CAT,
+                self.is_main_elem,
+                obj = self.elem,
+                "Successfully pushed buffer"
+            );
 
             self.buffer_count += 1;
 
@@ -213,22 +223,22 @@ impl TaskImpl for SrcTask {
         async move {
             match err {
                 gst::FlowError::Eos => {
-                    debug_or_trace!(CAT, self.is_main_elem, obj: self.elem, "Pushing EOS");
+                    debug_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Pushing EOS");
 
                     let imp = self.elem.imp();
                     if !imp.src_pad.push_event(gst::event::Eos::new()).await {
-                        gst::error!(CAT, imp: imp, "Error pushing EOS");
+                        gst::error!(CAT, imp = imp, "Error pushing EOS");
                     }
 
                     task::Trigger::Stop
                 }
                 gst::FlowError::Flushing => {
-                    debug_or_trace!(CAT, self.is_main_elem, obj: self.elem, "Flushing");
+                    debug_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Flushing");
 
                     task::Trigger::FlushStart
                 }
                 err => {
-                    gst::error!(CAT, obj: self.elem, "Got error {err}");
+                    gst::error!(CAT, obj = self.elem, "Got error {err}");
                     gst::element_error!(
                         &self.elem,
                         gst::StreamError::Failed,
@@ -254,7 +264,7 @@ pub struct TestSrc {
 impl TestSrc {
     fn prepare(&self) -> Result<(), gst::ErrorMessage> {
         let is_main_elem = self.settings.lock().unwrap().is_main_elem;
-        debug_or_trace!(CAT, is_main_elem, imp: self, "Preparing");
+        debug_or_trace!(CAT, is_main_elem, imp = self, "Preparing");
 
         let settings = self.settings.lock().unwrap();
         let ts_ctx = Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
@@ -269,41 +279,41 @@ impl TestSrc {
             .prepare(SrcTask::new(self.obj().clone()), ts_ctx)
             .block_on()?;
 
-        debug_or_trace!(CAT, is_main_elem, imp: self, "Prepared");
+        debug_or_trace!(CAT, is_main_elem, imp = self, "Prepared");
 
         Ok(())
     }
 
     fn unprepare(&self) {
         let is_main_elem = self.settings.lock().unwrap().is_main_elem;
-        debug_or_trace!(CAT, is_main_elem, imp: self, "Unpreparing");
+        debug_or_trace!(CAT, is_main_elem, imp = self, "Unpreparing");
         self.task.unprepare().block_on().unwrap();
-        debug_or_trace!(CAT, is_main_elem, imp: self, "Unprepared");
+        debug_or_trace!(CAT, is_main_elem, imp = self, "Unprepared");
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         let is_main_elem = self.settings.lock().unwrap().is_main_elem;
-        debug_or_trace!(CAT, is_main_elem, imp: self, "Stopping");
+        debug_or_trace!(CAT, is_main_elem, imp = self, "Stopping");
         self.task.stop().block_on()?;
-        debug_or_trace!(CAT, is_main_elem, imp: self, "Stopped");
+        debug_or_trace!(CAT, is_main_elem, imp = self, "Stopped");
 
         Ok(())
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
         let is_main_elem = self.settings.lock().unwrap().is_main_elem;
-        debug_or_trace!(CAT, is_main_elem, imp: self, "Starting");
+        debug_or_trace!(CAT, is_main_elem, imp = self, "Starting");
         self.task.start().block_on()?;
-        debug_or_trace!(CAT, is_main_elem, imp: self, "Started");
+        debug_or_trace!(CAT, is_main_elem, imp = self, "Started");
 
         Ok(())
     }
 
     fn pause(&self) -> Result<(), gst::ErrorMessage> {
         let is_main_elem = self.settings.lock().unwrap().is_main_elem;
-        debug_or_trace!(CAT, is_main_elem, imp: self, "Pausing");
+        debug_or_trace!(CAT, is_main_elem, imp = self, "Pausing");
         self.task.pause().block_on()?;
-        debug_or_trace!(CAT, is_main_elem, imp: self, "Paused");
+        debug_or_trace!(CAT, is_main_elem, imp = self, "Paused");
 
         Ok(())
     }
@@ -453,7 +463,7 @@ impl ElementImpl for TestSrc {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {transition:?}");
+        gst::trace!(CAT, imp = self, "Changing state {transition:?}");
 
         match transition {
             gst::StateChange::NullToReady => {

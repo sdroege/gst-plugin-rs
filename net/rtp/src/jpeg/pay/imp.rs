@@ -154,7 +154,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpJpegPay {
     }
 
     fn set_sink_caps(&self, caps: &gst::Caps) -> bool {
-        gst::debug!(CAT, imp: self, "received caps {caps:?}");
+        gst::debug!(CAT, imp = self, "received caps {caps:?}");
 
         let s = caps.structure(0).unwrap();
 
@@ -210,7 +210,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpJpegPay {
 
         let max_payload_size = self.obj().max_payload_size();
 
-        gst::trace!(CAT, imp: self, "received buffer of size {}", buffer.size());
+        gst::trace!(CAT, imp = self, "received buffer of size {}", buffer.size());
 
         let map = buffer.map_readable().map_err(|_| {
             gst::element_imp_error!(
@@ -231,12 +231,16 @@ impl crate::basepay::RtpBasePay2Impl for RtpJpegPay {
         let jpeg_header = match r.parse::<JpegHeader>() {
             Ok(header) => header,
             Err(err) => {
-                gst::error!(CAT, imp: self, "Failed parsing JPEG header: {err}");
+                gst::error!(CAT, imp = self, "Failed parsing JPEG header: {err}");
                 return Err(gst::FlowError::Error);
             }
         };
         let data_offset = cursor.position() as usize;
-        gst::trace!(CAT, imp: self, "Parsed JPEG header {jpeg_header:?}, data starts at offset {data_offset}");
+        gst::trace!(
+            CAT,
+            imp = self,
+            "Parsed JPEG header {jpeg_header:?}, data starts at offset {data_offset}"
+        );
 
         // Try detecting static quantization headers
         let luma_quant = &jpeg_header.quant.luma_quant[..jpeg_header.quant.luma_len as usize];
@@ -251,7 +255,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpJpegPay {
             255
         };
 
-        gst::trace!(CAT, imp: self, "Using Q {q}");
+        gst::trace!(CAT, imp = self, "Using Q {q}");
 
         let mut data = &map[data_offset..];
         let mut fragment_offset = 0;
@@ -265,7 +269,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpJpegPay {
                 height,
             };
             let main_header_size = main_header.size().map_err(|err| {
-                gst::error!(CAT, imp: self, "Failed to write main header: {err:?}");
+                gst::error!(CAT, imp = self, "Failed to write main header: {err:?}");
                 gst::FlowError::Error
             })?;
 
@@ -281,7 +285,11 @@ impl crate::basepay::RtpBasePay2Impl for RtpJpegPay {
                 .map(|q| q.size(&main_header))
                 .unwrap_or(Ok(0))
                 .map_err(|err| {
-                    gst::error!(CAT, imp: self, "Failed to write quantization table header: {err:?}");
+                    gst::error!(
+                        CAT,
+                        imp = self,
+                        "Failed to write quantization table header: {err:?}"
+                    );
                     gst::FlowError::Error
                 })?;
 
@@ -289,7 +297,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpJpegPay {
             let payload_size = (max_payload_size as usize)
                 .checked_sub(overhead + 1)
                 .ok_or_else(|| {
-                    gst::error!(CAT, imp: self, "Too small MTU configured for stream");
+                    gst::error!(CAT, imp = self, "Too small MTU configured for stream");
                     gst::element_imp_error!(
                         self,
                         gst::LibraryError::Settings,
@@ -302,7 +310,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpJpegPay {
 
             gst::trace!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Writing packet with main header {main_header:?}, quantization table header {quant_table_header:?} and payload size {payload_size}",
             );
 
@@ -314,15 +322,19 @@ impl crate::basepay::RtpBasePay2Impl for RtpJpegPay {
 
             let mut w = ByteWriter::endian(&mut headers_buffer, BigEndian);
             w.build::<MainHeader>(&main_header).map_err(|err| {
-                gst::error!(CAT, imp: self, "Failed to write main header: {err:?}");
+                gst::error!(CAT, imp = self, "Failed to write main header: {err:?}");
                 gst::FlowError::Error
             })?;
             if let Some(quant_table_header) = quant_table_header {
                 w.build_with::<QuantizationTableHeader>(&quant_table_header, &main_header)
-                .map_err(|err| {
-                    gst::error!(CAT, imp: self, "Failed to write quantization table header: {err:?}");
-                    gst::FlowError::Error
-                })?;
+                    .map_err(|err| {
+                        gst::error!(
+                            CAT,
+                            imp = self,
+                            "Failed to write quantization table header: {err:?}"
+                        );
+                        gst::FlowError::Error
+                    })?;
             }
             assert_eq!(
                 headers_buffer.len(),

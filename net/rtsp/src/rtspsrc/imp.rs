@@ -354,7 +354,7 @@ impl ObjectImpl for RtspSrc {
         if let Err(err) = res {
             gst::error!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Failed to set property `{}`: {:?}",
                 pspec.name(),
                 err
@@ -537,17 +537,9 @@ impl RtspSrc {
             ));
         };
 
-        gst::info!(
-            CAT,
-            imp: self,
-            "Location: {url}",
-        );
+        gst::info!(CAT, imp = self, "Location: {url}",);
 
-        gst::info!(
-            CAT,
-            imp: self,
-            "Starting RTSP connection thread.. "
-        );
+        gst::info!(CAT, imp = self, "Starting RTSP connection thread.. ");
 
         let task_src = self.ref_counted();
 
@@ -635,7 +627,7 @@ impl RtspSrc {
         debug_assert!(task_handle.is_none());
         task_handle.replace(join_handle);
 
-        gst::info!(CAT, imp: self, "Started");
+        gst::info!(CAT, imp = self, "Started");
 
         Ok(())
     }
@@ -664,7 +656,7 @@ impl RtspSrc {
 
         self.command_queue.lock().unwrap().take();
 
-        gst::info!(CAT, imp: self, "Stopped");
+        gst::info!(CAT, imp = self, "Stopped");
 
         Ok(())
     }

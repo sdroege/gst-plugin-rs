@@ -106,12 +106,12 @@ impl Settings {
 
             for (key, value) in structure.iter() {
                 if let Ok(Ok(value_str)) = value.transform::<String>().map(|v| v.get()) {
-                    gst::log!(CAT, imp: imp, "metadata '{}' -> '{}'", key, value_str);
+                    gst::log!(CAT, imp = imp, "metadata '{}' -> '{}'", key, value_str);
                     hash.insert(key.to_string(), value_str);
                 } else {
                     gst::warning!(
                         CAT,
-                        imp: imp,
+                        imp = imp,
                         "Failed to convert metadata '{}' to string ('{:?}')",
                         key,
                         value
@@ -215,7 +215,7 @@ impl S3PutObjectSink {
                 WaitError::Cancelled => None,
             })?;
 
-        gst::debug!(CAT, imp: self, "Upload complete");
+        gst::debug!(CAT, imp = self, "Upload complete");
 
         Ok(())
     }
@@ -343,7 +343,7 @@ impl S3PutObjectSink {
             return Ok(());
         }
 
-        gst::debug!(CAT, imp: self, "Setting uri to {:?}", url_str);
+        gst::debug!(CAT, imp = self, "Setting uri to {:?}", url_str);
 
         let url_str = url_str.unwrap();
         match parse_s3_url(url_str) {
@@ -484,7 +484,7 @@ impl ObjectImpl for S3PutObjectSink {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Setting property '{}' to '{:?}'",
             pspec.name(),
             value
@@ -677,11 +677,11 @@ impl BaseSinkImpl for S3PutObjectSink {
                 drop(settings);
                 drop(state);
 
-                gst::warning!(CAT, imp: self, "Stopped without EOS, but flushing");
+                gst::warning!(CAT, imp = self, "Stopped without EOS, but flushing");
                 if let Err(error_message) = self.flush_buffer() {
                     gst::error!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Failed to finalize the upload: {:?}",
                         error_message
                     );
@@ -692,7 +692,7 @@ impl BaseSinkImpl for S3PutObjectSink {
         }
 
         *state = State::Stopped;
-        gst::info!(CAT, imp: self, "Stopped");
+        gst::info!(CAT, imp = self, "Stopped");
 
         Ok(())
     }
@@ -715,7 +715,7 @@ impl BaseSinkImpl for S3PutObjectSink {
         started_state.num_buffers += 1;
         started_state.need_flush = true;
 
-        gst::trace!(CAT, imp: self, "Rendering {:?}", buffer);
+        gst::trace!(CAT, imp = self, "Rendering {:?}", buffer);
         let map = buffer.map_readable().map_err(|_| {
             gst::element_imp_error!(self, gst::CoreError::Failed, ["Failed to map buffer"]);
             gst::FlowError::Error
@@ -733,12 +733,12 @@ impl BaseSinkImpl for S3PutObjectSink {
             Ok(_) => Ok(gst::FlowSuccess::Ok),
             Err(err) => match err {
                 Some(error_message) => {
-                    gst::error!(CAT, imp: self, "Upload failed: {}", error_message);
+                    gst::error!(CAT, imp = self, "Upload failed: {}", error_message);
                     self.post_error_message(error_message);
                     Err(gst::FlowError::Error)
                 }
                 _ => {
-                    gst::info!(CAT, imp: self, "Upload interrupted. Flushing...");
+                    gst::info!(CAT, imp = self, "Upload interrupted. Flushing...");
                     Err(gst::FlowError::Flushing)
                 }
             },
@@ -770,7 +770,7 @@ impl BaseSinkImpl for S3PutObjectSink {
             if let Err(error_message) = self.flush_buffer() {
                 gst::error!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Failed to finalize the upload: {:?}",
                     error_message
                 );

@@ -326,12 +326,16 @@ impl RtpBasePay2Impl for RtpAc3Pay {
         let mut settings = self.settings.lock().unwrap();
 
         if buffer.flags().contains(gst::BufferFlags::DISCONT) {
-            gst::debug!(CAT, imp: self, "Discont on {buffer:?}, pushing out any pending frames");
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Discont on {buffer:?}, pushing out any pending frames"
+            );
             self.send_packets(&settings, &mut state, SendPacketMode::ForcePending)?;
         }
 
         let map = buffer.clone().into_mapped_buffer_readable().map_err(|_| {
-            gst::error!(CAT, imp: self, "Can't map buffer readable");
+            gst::error!(CAT, imp = self, "Can't map buffer readable");
             gst::FlowError::Error
         })?;
 
@@ -350,7 +354,7 @@ impl RtpBasePay2Impl for RtpAc3Pay {
             let Ok(frame_hdr) = ac3_audio_utils::peek_frame_header(&data[map_offset..]) else {
                 gst::warning!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Failed to parse AC-3 audio frame header for {buffer:?} at offset {map_offset}",
                 );
 
@@ -376,7 +380,11 @@ impl RtpBasePay2Impl for RtpAc3Pay {
             let frame_dur = queued_frame.duration();
 
             if map_offset + frame_len > data.len() {
-                gst::warning!(CAT, imp: self, "Short audio frame for {buffer:?} at offset {map_offset}");
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Short audio frame for {buffer:?} at offset {map_offset}"
+                );
             }
 
             pts_offset += frame_dur;
@@ -426,7 +434,7 @@ impl RtpBasePay2Impl for RtpAc3Pay {
                     let mut live_guard = self.is_live.lock().unwrap();
 
                     if Some(is_live) != *live_guard {
-                        gst::info!(CAT, imp: self, "Upstream is live: {is_live}");
+                        gst::info!(CAT, imp = self, "Upstream is live: {is_live}");
                         *live_guard = Some(is_live);
                     }
                 }
@@ -438,7 +446,7 @@ impl RtpBasePay2Impl for RtpAc3Pay {
                     } else if is_live {
                         gst::warning!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "Aggregating packets in live mode, but no max_ptime configured. \
                             Configured latency may be too low!",
                         );
@@ -565,19 +573,20 @@ impl RtpAc3Pay {
 
             gst::log!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Queued: size {queue_size}, duration ~{}ms, mode: {:?} + {:?} => ready: {}",
                 queue_duration / 1_000_000,
                 agg_mode,
                 send_mode,
-                is_ready);
+                is_ready
+            );
 
             if !is_ready {
-                gst::log!(CAT, imp: self, "Not ready yet, waiting for more data");
+                gst::log!(CAT, imp = self, "Not ready yet, waiting for more data");
                 break;
             }
 
-            gst::trace!(CAT, imp: self, "Creating packet..");
+            gst::trace!(CAT, imp = self, "Creating packet..");
 
             let pts_offset = gst::ClockTime::from_nseconds(first.pts_offset);
 
@@ -593,9 +602,10 @@ impl RtpAc3Pay {
             for frame in &state.queued_frames {
                 gst::trace!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "{frame:?}, accumulated size {acc_size} duration ~{}ms",
-                    acc_duration / 1_000_000);
+                    acc_duration / 1_000_000
+                );
 
                 // If this frame would overflow the packet, bail out and send out what we have.
                 //
@@ -651,7 +661,12 @@ impl RtpAc3Pay {
             }
         }
 
-        gst::log!(CAT, imp: self, "All done for now, {} frames queued", state.queued_frames.len());
+        gst::log!(
+            CAT,
+            imp = self,
+            "All done for now, {} frames queued",
+            state.queued_frames.len()
+        );
 
         if send_mode == SendPacketMode::ForcePending {
             self.obj().finish_pending_packets()?;
@@ -691,7 +706,7 @@ impl RtpAc3Pay {
 
         *self.is_live.lock().unwrap() = Some(is_live);
 
-        gst::info!(CAT, imp: self, "Upstream is live: {is_live}");
+        gst::info!(CAT, imp = self, "Upstream is live: {is_live}");
     }
 
     // We can get max ptime or ptime recommendations/restrictions from multiple places, e.g. the

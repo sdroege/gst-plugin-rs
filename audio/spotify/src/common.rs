@@ -135,7 +135,7 @@ impl Settings {
             if !self.username.is_empty() && self.username != cached_cred.username {
                 gst::debug!(
                     cat,
-                    obj: &src,
+                    obj = &src,
                     "ignore cached credentials for user {} which mismatch user {}",
                     cached_cred.username,
                     self.username
@@ -143,7 +143,7 @@ impl Settings {
             } else {
                 gst::debug!(
                     cat,
-                    obj: &src,
+                    obj = &src,
                     "reuse cached credentials for user {}",
                     cached_cred.username
                 );
@@ -162,7 +162,7 @@ impl Settings {
 
         gst::debug!(
             cat,
-            obj: &src,
+            obj = &src,
             "credentials not in cache or cached credentials invalid",
         );
 

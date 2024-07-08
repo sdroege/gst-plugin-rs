@@ -155,7 +155,7 @@ impl State {
             let caps = caps_builder.build();
 
             events.push(gst::event::Caps::new(&caps));
-            gst::info!(CAT, imp: imp, "Caps changed to {:?}", &caps);
+            gst::info!(CAT, imp = imp, "Caps changed to {:?}", &caps);
             self.need_caps = false;
         }
 
@@ -236,7 +236,7 @@ impl JsonGstParse {
                 })) => {
                     gst::debug!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Got buffer with timestamp {} and duration {}",
                         pts.display(),
                         duration.display(),
@@ -270,13 +270,13 @@ impl JsonGstParse {
                         drop(state);
 
                         for event in events {
-                            gst::debug!(CAT, imp: self, "Pushing event {:?}", event);
+                            gst::debug!(CAT, imp = self, "Pushing event {:?}", event);
                             self.srcpad.push_event(event);
                         }
 
                         self.srcpad.push(buffer).map_err(|err| {
                             if err != gst::FlowError::Flushing {
-                                gst::error!(CAT, imp: self, "Pushing buffer returned {:?}", err);
+                                gst::error!(CAT, imp = self, "Pushing buffer returned {:?}", err);
                             }
                             err
                         })?;
@@ -294,13 +294,13 @@ impl JsonGstParse {
                     if state.format.is_none() {
                         state.format = Some(format);
                     } else {
-                        gst::warning!(CAT, imp: self, "Ignoring format change",);
+                        gst::warning!(CAT, imp = self, "Ignoring format change",);
                     }
                 }
                 Err((line, err)) => {
                     gst::error!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Couldn't parse line '{:?}': {:?}",
                         std::str::from_utf8(line),
                         err
@@ -316,7 +316,7 @@ impl JsonGstParse {
                 }
                 Ok(None) => {
                     if drain && state.pull.is_some() {
-                        gst::debug!(CAT, imp: self, "Finished draining");
+                        gst::debug!(CAT, imp = self, "Finished draining");
                         break Err(gst::FlowError::Eos);
                     }
                     break Ok(gst::FlowSuccess::Ok);
@@ -336,7 +336,7 @@ impl JsonGstParse {
             state.replay_last_line = true;
             state.need_flush_stop = true;
 
-            gst::debug!(CAT, imp: self, "Done seeking");
+            gst::debug!(CAT, imp = self, "Done seeking");
         }
 
         drop(state);
@@ -352,18 +352,18 @@ impl JsonGstParse {
             state.pull = None;
 
             if !pad.peer_query(&mut query) {
-                gst::debug!(CAT, obj: pad, "Scheduling query failed on peer");
+                gst::debug!(CAT, obj = pad, "Scheduling query failed on peer");
                 gst::PadMode::Push
             } else if query
                 .has_scheduling_mode_with_flags(gst::PadMode::Pull, gst::SchedulingFlags::SEEKABLE)
             {
-                gst::debug!(CAT, obj: pad, "Activating in Pull mode");
+                gst::debug!(CAT, obj = pad, "Activating in Pull mode");
 
                 state.pull = Some(PullState::new(self, &self.srcpad));
 
                 gst::PadMode::Pull
             } else {
-                gst::debug!(CAT, obj: pad, "Activating in Push mode");
+                gst::debug!(CAT, obj = pad, "Activating in Push mode");
                 gst::PadMode::Push
             }
         };
@@ -401,7 +401,7 @@ impl JsonGstParse {
     }
 
     fn scan_duration(&self) -> Result<Option<gst::ClockTime>, gst::LoggableError> {
-        gst::debug!(CAT, imp: self, "Scanning duration");
+        gst::debug!(CAT, imp = self, "Scanning duration");
 
         /* First let's query the bytes duration upstream */
         let mut q = gst::query::Duration::new(gst::Format::Bytes);
@@ -470,7 +470,7 @@ impl JsonGstParse {
             if last_pts.is_some() || offset == 0 {
                 gst::debug!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Duration scan done, last_pts: {:?}",
                     last_pts
                 );
@@ -499,7 +499,7 @@ impl JsonGstParse {
         drop(state);
 
         for event in events {
-            gst::debug!(CAT, imp: self, "Pushing event {:?}", event);
+            gst::debug!(CAT, imp = self, "Pushing event {:?}", event);
             self.srcpad.push_event(event);
         }
     }
@@ -540,13 +540,22 @@ impl JsonGstParse {
             Ok(buffer) => Some(buffer),
             Err(gst::FlowError::Eos) => None,
             Err(gst::FlowError::Flushing) => {
-                gst::debug!(CAT, obj: self.sinkpad, "Pausing after pulling buffer, reason: flushing");
+                gst::debug!(
+                    CAT,
+                    obj = self.sinkpad,
+                    "Pausing after pulling buffer, reason: flushing"
+                );
 
                 self.sinkpad.pause_task().unwrap();
                 return;
             }
             Err(flow) => {
-                gst::error!(CAT, obj: self.sinkpad, "Failed to pull, reason: {:?}", flow);
+                gst::error!(
+                    CAT,
+                    obj = self.sinkpad,
+                    "Failed to pull, reason: {:?}",
+                    flow
+                );
 
                 gst::element_imp_error!(
                     self,
@@ -562,17 +571,17 @@ impl JsonGstParse {
         if let Err(flow) = self.handle_buffer(buffer) {
             match flow {
                 gst::FlowError::Flushing => {
-                    gst::debug!(CAT, imp: self, "Pausing after flow {:?}", flow);
+                    gst::debug!(CAT, imp = self, "Pausing after flow {:?}", flow);
                 }
                 gst::FlowError::Eos => {
                     self.push_eos();
 
-                    gst::debug!(CAT, imp: self, "Pausing after flow {:?}", flow);
+                    gst::debug!(CAT, imp = self, "Pausing after flow {:?}", flow);
                 }
                 _ => {
                     self.push_eos();
 
-                    gst::error!(CAT, imp: self, "Pausing after flow {:?}", flow);
+                    gst::error!(CAT, imp = self, "Pausing after flow {:?}", flow);
 
                     gst::element_imp_error!(
                         self,
@@ -591,7 +600,7 @@ impl JsonGstParse {
         pad: &gst::Pad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, obj = pad, "Handling buffer {:?}", buffer);
 
         self.handle_buffer(Some(buffer))
     }
@@ -613,17 +622,17 @@ impl JsonGstParse {
     fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
 
         match event.view() {
             EventView::Caps(_) => {
                 // We send a proper caps event from the chain function later
-                gst::log!(CAT, obj: pad, "Dropping caps event");
+                gst::log!(CAT, obj = pad, "Dropping caps event");
                 true
             }
             EventView::Segment(_) => {
                 // We send a gst::Format::Time segment event later when needed
-                gst::log!(CAT, obj: pad, "Dropping segment event");
+                gst::log!(CAT, obj = pad, "Dropping segment event");
                 true
             }
             EventView::FlushStop(_) => {
@@ -634,9 +643,9 @@ impl JsonGstParse {
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             EventView::Eos(_) => {
-                gst::log!(CAT, obj: pad, "Draining");
+                gst::log!(CAT, obj = pad, "Draining");
                 if let Err(err) = self.handle_buffer(None) {
-                    gst::error!(CAT, obj: pad, "Failed to drain parser: {:?}", err);
+                    gst::error!(CAT, obj = pad, "Failed to drain parser: {:?}", err);
                 }
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
@@ -645,7 +654,7 @@ impl JsonGstParse {
                     && !self.srcpad.has_current_caps()
                     && event.type_() > gst::EventType::Caps
                 {
-                    gst::log!(CAT, obj: pad, "Deferring sticky event until we have caps");
+                    gst::log!(CAT, obj = pad, "Deferring sticky event until we have caps");
                     let mut state = self.state.lock().unwrap();
                     state.pending_events.push(event);
                     true
@@ -658,7 +667,7 @@ impl JsonGstParse {
 
     fn perform_seek(&self, event: &gst::event::Seek) -> bool {
         if self.state.lock().unwrap().pull.is_none() {
-            gst::error!(CAT, imp: self, "seeking is only supported in pull mode");
+            gst::error!(CAT, imp = self, "seeking is only supported in pull mode");
             return false;
         }
 
@@ -667,7 +676,7 @@ impl JsonGstParse {
         let mut start: Option<gst::ClockTime> = match start.try_into() {
             Ok(start) => start,
             Err(_) => {
-                gst::error!(CAT, imp: self, "seek has invalid format");
+                gst::error!(CAT, imp = self, "seek has invalid format");
                 return false;
             }
         };
@@ -675,18 +684,18 @@ impl JsonGstParse {
         let mut stop: Option<gst::ClockTime> = match stop.try_into() {
             Ok(stop) => stop,
             Err(_) => {
-                gst::error!(CAT, imp: self, "seek has invalid format");
+                gst::error!(CAT, imp = self, "seek has invalid format");
                 return false;
             }
         };
 
         if !flags.contains(gst::SeekFlags::FLUSH) {
-            gst::error!(CAT, imp: self, "only flushing seeks are supported");
+            gst::error!(CAT, imp = self, "only flushing seeks are supported");
             return false;
         }
 
         if start_type == gst::SeekType::End || stop_type == gst::SeekType::End {
-            gst::error!(CAT, imp: self, "Relative seeks are not supported");
+            gst::error!(CAT, imp = self, "Relative seeks are not supported");
             return false;
         }
 
@@ -696,14 +705,14 @@ impl JsonGstParse {
             .seqnum(seek_seqnum)
             .build();
 
-        gst::debug!(CAT, imp: self, "Sending event {:?} upstream", event);
+        gst::debug!(CAT, imp = self, "Sending event {:?} upstream", event);
         self.sinkpad.push_event(event);
 
         let event = gst::event::FlushStart::builder()
             .seqnum(seek_seqnum)
             .build();
 
-        gst::debug!(CAT, imp: self, "Pushing event {:?}", event);
+        gst::debug!(CAT, imp = self, "Pushing event {:?}", event);
         self.srcpad.push_event(event);
 
         self.sinkpad.pause_task().unwrap();
@@ -731,7 +740,7 @@ impl JsonGstParse {
         /* Drop our state while we push a serialized event upstream */
         drop(state);
 
-        gst::debug!(CAT, imp: self, "Sending event {:?} upstream", event);
+        gst::debug!(CAT, imp = self, "Sending event {:?} upstream", event);
         self.sinkpad.push_event(event);
 
         state = self.state.lock().unwrap();
@@ -752,7 +761,7 @@ impl JsonGstParse {
     fn src_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Seek(e) => self.perform_seek(e),
             _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
@@ -762,7 +771,7 @@ impl JsonGstParse {
     fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
-        gst::log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::log!(CAT, obj = pad, "Handling query {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Seeking(q) => {
@@ -940,7 +949,7 @@ impl ElementImpl for JsonGstParse {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused | gst::StateChange::PausedToReady => {

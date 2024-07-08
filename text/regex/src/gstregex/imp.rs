@@ -52,14 +52,14 @@ impl RegEx {
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let data = buffer.map_readable().map_err(|_| {
-            gst::error!(CAT, imp: self, "Can't map buffer readable");
+            gst::error!(CAT, imp = self, "Can't map buffer readable");
             gst::element_imp_error!(self, gst::CoreError::Failed, ["Failed to map buffer"]);
             gst::FlowError::Error
         })?;
 
         let mut data = std::str::from_utf8(&data)
             .map_err(|err| {
-                gst::error!(CAT, imp: self, "Can't decode utf8: {}", err);
+                gst::error!(CAT, imp = self, "Can't decode utf8: {}", err);
                 gst::element_imp_error!(
                     self,
                     gst::StreamError::Decode,
@@ -186,7 +186,7 @@ impl ObjectImpl for RegEx {
                         Ok(None) | Err(_) => {
                             gst::error!(
                                 CAT,
-                                imp: self,
+                                imp = self,
                                 "All commands require a pattern field as a string"
                             );
                             continue;
@@ -222,7 +222,7 @@ impl ObjectImpl for RegEx {
                     let regex = match builder.build() {
                         Ok(regex) => regex,
                         Err(err) => {
-                            gst::error!(CAT, imp: self, "Failed to compile regex: {:?}", err);
+                            gst::error!(CAT, imp = self, "Failed to compile regex: {:?}", err);
                             continue;
                         }
                     };
@@ -234,7 +234,7 @@ impl ObjectImpl for RegEx {
                                 Ok(None) | Err(_) => {
                                     gst::error!(
                                         CAT,
-                                        imp: self,
+                                        imp = self,
                                         "Replace operations require a replacement field as a string"
                                     );
                                     continue;
@@ -247,7 +247,7 @@ impl ObjectImpl for RegEx {
                             });
                         }
                         val => {
-                            gst::error!(CAT, imp: self, "Unknown operation {}", val);
+                            gst::error!(CAT, imp = self, "Unknown operation {}", val);
                         }
                     }
                 }

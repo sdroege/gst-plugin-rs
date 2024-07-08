@@ -233,7 +233,7 @@ impl TranscriberBin {
         pad_state: &TranscriberSinkPadState,
         state: &mut State,
     ) -> Result<(), Error> {
-        gst::debug!(CAT, imp: self, "Linking input audio stream {pad_name}");
+        gst::debug!(CAT, imp = self, "Linking input audio stream {pad_name}");
 
         pad_state
             .transcription_bin
@@ -323,7 +323,7 @@ impl TranscriberBin {
     }
 
     fn construct_transcription_bin(&self, state: &mut State) -> Result<(), Error> {
-        gst::debug!(CAT, imp: self, "Building transcription bin");
+        gst::debug!(CAT, imp = self, "Building transcription bin");
 
         let ccconverter = gst::ElementFactory::make("ccconverter").build()?;
 
@@ -517,7 +517,11 @@ impl TranscriberBin {
         }
 
         if !settings.passthrough {
-            gst::debug!(CAT, imp: self, "Linking transcription bins and synchronizing state");
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Linking transcription bins and synchronizing state"
+            );
             state
                 .transcription_bin
                 .link_pads(Some("src"), &state.cccombiner, Some("caption"))
@@ -558,7 +562,7 @@ impl TranscriberBin {
         let passthrough = self.settings.lock().unwrap().passthrough;
 
         if passthrough {
-            gst::debug!(CAT, imp: self, "disabling transcription bin");
+            gst::debug!(CAT, imp = self, "disabling transcription bin");
 
             for pad in state.audio_sink_pads.values() {
                 let ps = pad.imp().state.lock().unwrap();
@@ -643,7 +647,13 @@ impl TranscriberBin {
         mux_method: MuxMethod,
         mode: Cea608Mode,
     ) {
-        gst::debug!(CAT, imp: self, "setting CC mode {:?} for pad {:?}", mode, pad);
+        gst::debug!(
+            CAT,
+            imp = self,
+            "setting CC mode {:?} for pad {:?}",
+            mode,
+            pad
+        );
 
         for channel in pad_state.transcription_channels.values() {
             match mux_method {
@@ -681,7 +691,7 @@ impl TranscriberBin {
     ) -> Result<(), Error> {
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Relinking transcriber, old: {:?}, new: {:?}",
             old_transcriber,
             pad_state.transcriber
@@ -788,7 +798,7 @@ impl TranscriberBin {
 
             gst::debug!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Updating transcription/translation language"
             );
 
@@ -799,7 +809,7 @@ impl TranscriberBin {
                 .unwrap();
             let peer = sinkpad.peer();
             if let Some(peer) = &peer {
-                gst::debug!(CAT, imp: self, "Unlinking {:?}", peer);
+                gst::debug!(CAT, imp = self, "Unlinking {:?}", peer);
                 peer.unlink(&sinkpad)?;
                 pad_state.audio_tee.release_request_pad(peer);
             }
@@ -816,7 +826,7 @@ impl TranscriberBin {
 
             if lang_code_only {
                 if !settings.passthrough {
-                    gst::debug!(CAT, imp: self, "Syncing state with parent");
+                    gst::debug!(CAT, imp = self, "Syncing state with parent");
 
                     drop(settings);
 
@@ -897,7 +907,7 @@ impl TranscriberBin {
             self.setup_cc_mode(&pad.obj(), pad_state, state.mux_method, pad_settings.mode);
 
             if !settings.passthrough {
-                gst::debug!(CAT, imp: self, "Syncing state with parent");
+                gst::debug!(CAT, imp = self, "Syncing state with parent");
 
                 let audio_tee_pad = pad_state.audio_tee.request_pad_simple("src_%u").unwrap();
 
@@ -916,7 +926,7 @@ impl TranscriberBin {
     fn update_languages(&self, pad: &super::TranscriberSinkPad, lang_code_only: bool) {
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Schedule transcription/translation language update for pad {pad:?}"
         );
 
@@ -930,7 +940,7 @@ impl TranscriberBin {
             .transcription_bin
             .static_pad(pad.name().as_str())
         else {
-            gst::debug!(CAT, imp: pad.imp(), "transcription bin not set up yet");
+            gst::debug!(CAT, imp = pad.imp(), "transcription bin not set up yet");
             return;
         };
 
@@ -994,7 +1004,7 @@ impl TranscriberBin {
     fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
-        gst::log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::log!(CAT, obj = pad, "Handling query {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Latency(q) => {
@@ -1104,7 +1114,7 @@ impl TranscriberBin {
     fn video_sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Caps(e) => {
                 let mut state = self.state.lock().unwrap();
@@ -1124,7 +1134,7 @@ impl TranscriberBin {
                     if !had_framerate {
                         gst::info!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "Received video caps, setting up transcription"
                         );
                         self.setup_transcription(state);
@@ -1345,10 +1355,14 @@ impl ObjectImpl for TranscriberBin {
                 let s = self.state.lock().unwrap();
                 if let Some(state) = s.as_ref() {
                     if settings.caption_source == CaptionSource::Inband {
-                        gst::debug!(CAT, imp: self, "Use inband caption, dropping transcription");
+                        gst::debug!(
+                            CAT,
+                            imp = self,
+                            "Use inband caption, dropping transcription"
+                        );
                         state.transcription_valve.set_property("drop", true);
                     } else {
-                        gst::debug!(CAT, imp: self, "Stop dropping transcription");
+                        gst::debug!(CAT, imp = self, "Stop dropping transcription");
                         state.transcription_valve.set_property("drop", false);
                     }
                 }
@@ -1528,7 +1542,11 @@ impl ElementImpl for TranscriberBin {
 
     fn release_pad(&self, pad: &gst::Pad) {
         if self.obj().current_state() > gst::State::Null {
-            gst::fixme!(CAT, obj: pad, "releasing secondary audio stream while PLAYING is untested");
+            gst::fixme!(
+                CAT,
+                obj = pad,
+                "releasing secondary audio stream while PLAYING is untested"
+            );
         }
 
         // In practice we will probably at least need some flushing here,
@@ -1536,7 +1554,7 @@ impl ElementImpl for TranscriberBin {
         // releasing is in place
 
         let Some(pad) = pad.downcast_ref::<super::TranscriberSinkPad>() else {
-            gst::error!(CAT, imp: self, "not a transcriber sink pad: {pad:?}");
+            gst::error!(CAT, imp = self, "not a transcriber sink pad: {pad:?}");
             return;
         };
 
@@ -1704,7 +1722,7 @@ impl ElementImpl for TranscriberBin {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {
@@ -1714,7 +1732,7 @@ impl ElementImpl for TranscriberBin {
                     if state.framerate.is_some() {
                         gst::info!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "Received video caps, setting up transcription"
                         );
                         self.setup_transcription(state);
@@ -1751,7 +1769,7 @@ impl BinImpl for TranscriberBin {
                 if msg.src() == Some(pad_state.transcriber.upcast_ref()) {
                     gst::error!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Transcriber has posted an error ({m:?}), going back to passthrough",
                     );
                     drop(ps);
@@ -1888,7 +1906,7 @@ impl ObjectImpl for TranscriberSinkPad {
                     .expect("type checked upstream");
                 gst::debug!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Updated translation-languages {:?}",
                     settings.translation_languages
                 );
@@ -1937,7 +1955,7 @@ impl ObjectImpl for TranscriberSinkPad {
                     if new_code != old_code {
                         gst::debug!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "Updating language code {old_code} -> {new_code}",
                         );
 

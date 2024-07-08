@@ -324,11 +324,7 @@ impl HlsBaseSink {
         let context = match state.context.as_mut() {
             Some(context) => context,
             None => {
-                gst::error!(
-                    CAT,
-                    imp: self,
-                    "Playlist is not configured",
-                );
+                gst::error!(CAT, imp = self, "Playlist is not configured",);
 
                 return None;
             }
@@ -337,22 +333,13 @@ impl HlsBaseSink {
         let location = match sprintf::sprintf!(&context.segment_template, fragment_id) {
             Ok(file_name) => file_name,
             Err(err) => {
-                gst::error!(
-                    CAT,
-                    imp: self,
-                    "Couldn't build file name, err: {:?}", err,
-                );
+                gst::error!(CAT, imp = self, "Couldn't build file name, err: {:?}", err,);
 
                 return None;
             }
         };
 
-        gst::trace!(
-            CAT,
-            imp: self,
-            "Segment location formatted: {}",
-            location
-        );
+        gst::trace!(CAT, imp = self, "Segment location formatted: {}", location);
 
         let stream = match self
             .obj()
@@ -390,11 +377,7 @@ impl HlsBaseSink {
         let context = match state.context.as_mut() {
             Some(context) => context,
             None => {
-                gst::error!(
-                    CAT,
-                    imp: self,
-                    "Playlist is not configured",
-                );
+                gst::error!(CAT, imp = self, "Playlist is not configured",);
 
                 return Err(gst::FlowError::Error);
             }
@@ -459,7 +442,12 @@ impl HlsBaseSink {
         &self,
         context: &mut PlaylistContext,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::info!(CAT, imp: self, "Preparing to write new playlist, COUNT {}", context.playlist.len());
+        gst::info!(
+            CAT,
+            imp = self,
+            "Preparing to write new playlist, COUNT {}",
+            context.playlist.len()
+        );
 
         context
             .playlist
@@ -476,7 +464,7 @@ impl HlsBaseSink {
             .ok_or_else(|| {
                 gst::error!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Could not get stream to write playlist content",
                 );
                 gst::FlowError::Error
@@ -489,7 +477,7 @@ impl HlsBaseSink {
             .map_err(|err| {
                 gst::error!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Could not write new playlist: {}",
                     err.to_string()
                 );
@@ -498,7 +486,7 @@ impl HlsBaseSink {
         playlist_stream.flush().map_err(|err| {
             gst::error!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Could not flush playlist: {}",
                 err.to_string()
             );
@@ -513,12 +501,12 @@ impl HlsBaseSink {
                     .obj()
                     .emit_by_name::<bool>(SIGNAL_DELETE_FRAGMENT, &[&old_segment_location])
                 {
-                    gst::error!(CAT, imp: self, "Could not delete fragment");
+                    gst::error!(CAT, imp = self, "Could not delete fragment");
                 }
             }
         }
 
-        gst::debug!(CAT, imp: self, "Wrote new playlist file!");
+        gst::debug!(CAT, imp = self, "Wrote new playlist file!");
         Ok(gst::FlowSuccess::Ok)
     }
 
@@ -548,7 +536,7 @@ impl HlsBaseSink {
         let _ = fs::remove_file(location).map_err(|err| {
             gst::warning!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Could not delete segment file: {}",
                 err.to_string()
             );

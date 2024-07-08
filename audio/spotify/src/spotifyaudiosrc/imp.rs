@@ -209,7 +209,7 @@ impl BaseSrcImpl for SpotifyAudioSrc {
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         if let Some(state) = self.state.lock().unwrap().take() {
-            gst::debug!(CAT, imp: self, "stopping");
+            gst::debug!(CAT, imp = self, "stopping");
             state.player.stop();
             state.player_channel_handle.abort();
             // FIXME: not sure why this is needed to unblock BufferSink::write(), dropping State should drop the receiver
@@ -270,13 +270,13 @@ impl PushSrcImpl for SpotifyAudioSrc {
 
                 match res {
                     Err(_aborted) => {
-                        gst::debug!(CAT, imp: self, "setup has been cancelled");
+                        gst::debug!(CAT, imp = self, "setup has been cancelled");
                         setup_thread = self.setup_thread.lock().unwrap();
                         *setup_thread = SetupThread::Cancelled;
                         return Err(gst::FlowError::Flushing);
                     }
                     Ok(Err(err)) => {
-                        gst::error!(CAT, imp: self, "failed to start: {err:?}");
+                        gst::error!(CAT, imp = self, "failed to start: {err:?}");
                         gst::element_imp_error!(self, gst::ResourceError::Settings, ["{err:?}"]);
                         setup_thread = self.setup_thread.lock().unwrap();
                         *setup_thread = SetupThread::None;
@@ -295,15 +295,15 @@ impl PushSrcImpl for SpotifyAudioSrc {
 
         match state.receiver.recv().unwrap() {
             Message::Buffer(buffer) => {
-                gst::log!(CAT, imp: self, "got buffer of size {}", buffer.size());
+                gst::log!(CAT, imp = self, "got buffer of size {}", buffer.size());
                 Ok(CreateSuccess::NewBuffer(buffer))
             }
             Message::Eos => {
-                gst::debug!(CAT, imp: self, "eos");
+                gst::debug!(CAT, imp = self, "eos");
                 Err(gst::FlowError::Eos)
             }
             Message::Unavailable => {
-                gst::error!(CAT, imp: self, "track is not available");
+                gst::error!(CAT, imp = self, "track is not available");
                 gst::element_imp_error!(
                     self,
                     gst::ResourceError::NotFound,
@@ -352,7 +352,7 @@ impl URIHandlerImpl for SpotifyAudioSrc {
     }
 
     fn set_uri(&self, uri: &str) -> Result<(), glib::Error> {
-        gst::debug!(CAT, imp: self, "set URI: {}", uri);
+        gst::debug!(CAT, imp = self, "set URI: {}", uri);
 
         let url = url::Url::parse(uri)
             .map_err(|e| glib::Error::new(gst::URIError::BadUri, &format!("{e:?}")))?;
@@ -364,7 +364,7 @@ impl URIHandlerImpl for SpotifyAudioSrc {
                     self.obj().set_property(&key, value.as_ref());
                 }
                 _ => {
-                    gst::warning!(CAT, imp: self, "unsupported query: {}={}", key, value);
+                    gst::warning!(CAT, imp = self, "unsupported query: {}={}", key, value);
                 }
             }
         }
@@ -420,7 +420,7 @@ impl SpotifyAudioSrc {
 
             let session = common.connect_session(src.clone(), &CAT).await?;
             let track = common.track_id()?;
-            gst::debug!(CAT, imp: self, "Requesting bitrate {:?}", bitrate);
+            gst::debug!(CAT, imp = self, "Requesting bitrate {:?}", bitrate);
 
             (session, track, bitrate)
         };

@@ -165,7 +165,7 @@ impl RaptorqDec {
             if data_packets_num == n {
                 gst::trace!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "All packets ({}) received, dropping Source Block ({})",
                     data_packets_num,
                     seq_lo
@@ -300,7 +300,7 @@ impl RaptorqDec {
 
                         gst::debug!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "Successfully recovered packet: seqnum: {}, len: {}, ts: {}",
                             rtpbuf.seq(),
                             rtpbuf.payload_size(),
@@ -324,13 +324,13 @@ impl RaptorqDec {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let this_seq = {
             let rtpbuf = RTPBuffer::from_buffer_readable(buffer).map_err(|err| {
-                gst::error!(CAT, imp: self, "Failed to map rtp buffer : {}", err);
+                gst::error!(CAT, imp = self, "Failed to map rtp buffer : {}", err);
                 gst::FlowError::Error
             })?;
 
             gst::trace!(
                 CAT,
-                imp: self,
+                imp = self,
                 "New data packet, seq {}, ts {}",
                 rtpbuf.seq(),
                 rtpbuf.timestamp()
@@ -388,7 +388,7 @@ impl RaptorqDec {
         for seq in expired {
             gst::trace!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Source Block ({}) dropped, because max wait time has been exceeded",
                 seq as u16
             );
@@ -399,7 +399,7 @@ impl RaptorqDec {
         if thresh > 0 && state.media_packets.len() >= thresh {
             gst::warning!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Too many buffered media packets, resetting decoder. This might \
                  be because we haven't received a repair packet for too long, or \
                  repair packets have no valid timestamps.",
@@ -420,13 +420,13 @@ impl RaptorqDec {
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let rtpbuf = RTPBuffer::from_buffer_readable(&buffer).map_err(|err| {
-            gst::error!(CAT, imp: self, "Failed to map rtp buffer : {}", err);
+            gst::error!(CAT, imp = self, "Failed to map rtp buffer : {}", err);
             gst::FlowError::Error
         })?;
 
         let payload = rtpbuf.payload().unwrap();
         let payload_id = payload[0..7].try_into().map_err(|err| {
-            gst::error!(CAT, imp: self, "Unexpected rtp fec payload : {}", err);
+            gst::error!(CAT, imp = self, "Unexpected rtp fec payload : {}", err);
             gst::FlowError::Error
         })?;
 
@@ -440,7 +440,7 @@ impl RaptorqDec {
 
         gst::trace!(
             CAT,
-            imp: self,
+            imp = self,
             "New repair packet, I: {}, LP: {}, LB: {}",
             i,
             lp,
@@ -553,7 +553,7 @@ impl RaptorqDec {
 
         let media_packets_reset_threshold = settings.media_packets_reset_threshold as usize;
 
-        gst::debug!(CAT, imp: self, "Configured for caps {}", incaps);
+        gst::debug!(CAT, imp = self, "Configured for caps {}", incaps);
 
         let mut state = self.state.lock().unwrap();
 
@@ -788,7 +788,7 @@ impl ElementImpl for RaptorqDec {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {

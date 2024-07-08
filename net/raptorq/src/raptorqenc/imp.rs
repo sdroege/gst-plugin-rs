@@ -132,7 +132,13 @@ impl RaptorqEnc {
             // placed in each repair packet.
             let si = state.symbols_per_packet;
 
-            gst::trace!(CAT, imp: self, "Source Block add ADU: si {}, li {}", si, li);
+            gst::trace!(
+                CAT,
+                imp = self,
+                "Source Block add ADU: si {}, li {}",
+                si,
+                li
+            );
 
             let mut data = vec![0; si * state.symbol_size];
 
@@ -397,21 +403,21 @@ impl RaptorqEnc {
         let state = state_guard.as_mut().ok_or(gst::FlowError::NotNegotiated)?;
 
         if buffer.size() > state.mtu {
-            gst::error!(CAT, imp: self, "Packet length exceeds configured MTU");
+            gst::error!(CAT, imp = self, "Packet length exceeds configured MTU");
             return Err(gst::FlowError::NotSupported);
         }
 
         let (curr_seq, now_rtpts) = match RTPBuffer::from_buffer_readable(&buffer) {
             Ok(rtpbuf) => (rtpbuf.seq(), rtpbuf.timestamp()),
             Err(_) => {
-                gst::error!(CAT, imp: self, "Mapping to RTP packet failed");
+                gst::error!(CAT, imp = self, "Mapping to RTP packet failed");
                 return Err(gst::FlowError::NotSupported);
             }
         };
 
         if let Some(last_seq) = state.seqnums.last() {
             if last_seq.overflowing_add(1).0 != curr_seq {
-                gst::error!(CAT, imp: self, "Got out of sequence packets");
+                gst::error!(CAT, imp = self, "Got out of sequence packets");
                 return Err(gst::FlowError::NotSupported);
             }
         }
@@ -464,7 +470,7 @@ impl RaptorqEnc {
             }
             EventView::Caps(ev) => {
                 let caps = ev.caps();
-                gst::info!(CAT, obj: pad, "Got caps {:?}", caps);
+                gst::info!(CAT, obj = pad, "Got caps {:?}", caps);
 
                 let mut state_guard = self.state.lock().unwrap();
 
@@ -605,7 +611,7 @@ impl RaptorqEnc {
 
         gst::info!(
             CAT,
-            imp: self,
+            imp = self,
             "Starting RaptorQ Encoder, Symbols per Block: {}, Symbol Size: {}",
             symbols_per_block,
             symbol_size
@@ -909,7 +915,7 @@ impl ElementImpl for RaptorqEnc {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {

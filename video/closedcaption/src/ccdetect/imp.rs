@@ -75,7 +75,7 @@ impl CCDetect {
         if data.len() % 3 != 0 {
             gst::warning!(
                 CAT,
-                imp: self,
+                imp = self,
                 "cc_data length is not a multiple of 3, truncating"
             );
         }
@@ -89,7 +89,7 @@ impl CCDetect {
             let cc_type = triple[0] & 0x03;
             gst::trace!(
                 CAT,
-                imp: self,
+                imp = self,
                 "triple:{} have ccp:{} 608:{} 708:{} data:{:02x},{:02x},{:02x} cc_valid:{} cc_type:{:02b}",
                 i * 3,
                 started_ccp,
@@ -163,7 +163,7 @@ impl CCDetect {
 
             gst::trace!(
                 CAT,
-                imp: self,
+                imp = self,
                 "packet contains {:?} current settings {:?} and state {:?}",
                 cc_packet,
                 settings,
@@ -199,7 +199,7 @@ impl CCDetect {
 
             gst::trace!(
                 CAT,
-                imp: self,
+                imp = self,
                 "changed to settings {:?} state {:?}",
                 settings,
                 state
@@ -362,7 +362,7 @@ impl BaseTransformImpl for CCDetect {
         let cc_packet = match self.detect(format, map.as_slice()) {
             Ok(v) => v,
             Err(e) => {
-                gst::warning!(CAT, imp: self, "{e}");
+                gst::warning!(CAT, imp = self, "{e}");
                 gst::element_imp_warning!(self, gst::StreamError::Decode, ["{e}"]);
                 CCPacketContents {
                     cc608: false,

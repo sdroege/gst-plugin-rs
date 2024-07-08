@@ -129,7 +129,7 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
         if pad.is_active() {
             gst::debug!(
                 RUNTIME_CAT,
-                obj: pad,
+                obj = pad,
                 "Already activated in {:?} mode ",
                 pad.mode()
             );
@@ -137,7 +137,12 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
         }
 
         pad.activate_mode(gst::PadMode::Push, true).map_err(|err| {
-            gst::error!(RUNTIME_CAT, obj: pad, "Error in PadSrc activate: {:?}", err);
+            gst::error!(
+                RUNTIME_CAT,
+                obj = pad,
+                "Error in PadSrc activate: {:?}",
+                err
+            );
             gst::loggable_error!(RUNTIME_CAT, "Error in PadSrc activate: {:?}", err)
         })
     }
@@ -153,7 +158,7 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
     }
 
     fn src_event(self, pad: &gst::Pad, imp: &Self::ElementImpl, event: gst::Event) -> bool {
-        gst::log!(RUNTIME_CAT, obj: pad, "Handling {:?}", event);
+        gst::log!(RUNTIME_CAT, obj = pad, "Handling {:?}", event);
 
         let elem = imp.obj();
         // FIXME with GAT on `Self::ElementImpl`, we should be able to
@@ -178,13 +183,13 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
     }
 
     fn src_query(self, pad: &gst::Pad, imp: &Self::ElementImpl, query: &mut gst::QueryRef) -> bool {
-        gst::log!(RUNTIME_CAT, obj: pad, "Handling {:?}", query);
+        gst::log!(RUNTIME_CAT, obj = pad, "Handling {:?}", query);
         if query.is_serialized() {
             // FIXME serialized queries should be handled with the dataflow
             // but we can't return a `Future` because we couldn't honor QueryRef's lifetime
             false
         } else {
-            gst::log!(RUNTIME_CAT, obj: pad, "Handling {:?}", query);
+            gst::log!(RUNTIME_CAT, obj = pad, "Handling {:?}", query);
 
             let elem = imp.obj();
             // FIXME with GAT on `Self::ElementImpl`, we should be able to
@@ -217,48 +222,61 @@ impl PadSrcInner {
     }
 
     pub async fn push(&self, buffer: gst::Buffer) -> Result<FlowSuccess, FlowError> {
-        gst::log!(RUNTIME_CAT, obj: self.gst_pad, "Pushing {:?}", buffer);
+        gst::log!(RUNTIME_CAT, obj = self.gst_pad, "Pushing {:?}", buffer);
 
         let success = self.gst_pad.push(buffer).map_err(|err| {
-            gst::error!(RUNTIME_CAT,
-                obj: self.gst_pad,
+            gst::error!(
+                RUNTIME_CAT,
+                obj = self.gst_pad,
                 "Failed to push Buffer to PadSrc: {:?}",
                 err,
             );
             err
         })?;
 
-        gst::log!(RUNTIME_CAT, obj: self.gst_pad, "Processing any pending sub tasks");
+        gst::log!(
+            RUNTIME_CAT,
+            obj = self.gst_pad,
+            "Processing any pending sub tasks"
+        );
         Context::drain_sub_tasks().await?;
 
         Ok(success)
     }
 
     pub async fn push_list(&self, list: gst::BufferList) -> Result<FlowSuccess, FlowError> {
-        gst::log!(RUNTIME_CAT, obj: self.gst_pad, "Pushing {:?}", list);
+        gst::log!(RUNTIME_CAT, obj = self.gst_pad, "Pushing {:?}", list);
 
         let success = self.gst_pad.push_list(list).map_err(|err| {
             gst::error!(
                 RUNTIME_CAT,
-                obj: self.gst_pad,
+                obj = self.gst_pad,
                 "Failed to push BufferList to PadSrc: {:?}",
                 err,
             );
             err
         })?;
 
-        gst::log!(RUNTIME_CAT, obj: self.gst_pad, "Processing any pending sub tasks");
+        gst::log!(
+            RUNTIME_CAT,
+            obj = self.gst_pad,
+            "Processing any pending sub tasks"
+        );
         Context::drain_sub_tasks().await?;
 
         Ok(success)
     }
 
     pub async fn push_event(&self, event: gst::Event) -> bool {
-        gst::log!(RUNTIME_CAT, obj: self.gst_pad, "Pushing {:?}", event);
+        gst::log!(RUNTIME_CAT, obj = self.gst_pad, "Pushing {:?}", event);
 
         let was_handled = self.gst_pad.push_event(event);
 
-        gst::log!(RUNTIME_CAT, obj: self.gst_pad, "Processing any pending sub tasks");
+        gst::log!(
+            RUNTIME_CAT,
+            obj = self.gst_pad,
+            "Processing any pending sub tasks"
+        );
         if Context::drain_sub_tasks().await.is_err() {
             return false;
         }
@@ -365,7 +383,7 @@ impl PadSrc {
                     H::ElementImpl::catch_panic_pad_function(
                         parent,
                         || {
-                            gst::error!(RUNTIME_CAT, obj: gst_pad, "Panic in PadSrc activate");
+                            gst::error!(RUNTIME_CAT, obj = gst_pad, "Panic in PadSrc activate");
                             Err(gst::loggable_error!(
                                 RUNTIME_CAT,
                                 "Panic in PadSrc activate"
@@ -383,7 +401,7 @@ impl PadSrc {
                     H::ElementImpl::catch_panic_pad_function(
                         parent,
                         || {
-                            gst::error!(RUNTIME_CAT, obj: gst_pad, "Panic in PadSrc activatemode");
+                            gst::error!(RUNTIME_CAT, obj = gst_pad, "Panic in PadSrc activatemode");
                             Err(gst::loggable_error!(
                                 RUNTIME_CAT,
                                 "Panic in PadSrc activatemode"
@@ -392,7 +410,7 @@ impl PadSrc {
                         move |imp| {
                             gst::log!(
                                 RUNTIME_CAT,
-                                obj: gst_pad,
+                                obj = gst_pad,
                                 "ActivateMode {:?}, {}",
                                 mode,
                                 active
@@ -401,7 +419,7 @@ impl PadSrc {
                             if mode == gst::PadMode::Pull {
                                 gst::error!(
                                     RUNTIME_CAT,
-                                    obj: gst_pad,
+                                    obj = gst_pad,
                                     "Pull mode not supported by PadSrc"
                                 );
                                 return Err(gst::loggable_error!(
@@ -442,7 +460,7 @@ impl PadSrc {
                             } else {
                                 gst::fixme!(
                                     RUNTIME_CAT,
-                                    obj: gst_pad,
+                                    obj = gst_pad,
                                     "Serialized Query not supported"
                                 );
                                 false
@@ -507,7 +525,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         if pad.is_active() {
             gst::debug!(
                 RUNTIME_CAT,
-                obj: pad,
+                obj = pad,
                 "Already activated in {:?} mode ",
                 pad.mode()
             );
@@ -517,7 +535,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         pad.activate_mode(gst::PadMode::Push, true).map_err(|err| {
             gst::error!(
                 RUNTIME_CAT,
-                obj: pad,
+                obj = pad,
                 "Error in PadSink activate: {:?}",
                 err
             );
@@ -555,7 +573,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
 
     fn sink_event(self, pad: &gst::Pad, imp: &Self::ElementImpl, event: gst::Event) -> bool {
         assert!(!event.is_serialized());
-        gst::log!(RUNTIME_CAT, obj: pad, "Handling {:?}", event);
+        gst::log!(RUNTIME_CAT, obj = pad, "Handling {:?}", event);
 
         let elem = imp.obj();
         // FIXME with GAT on `Self::ElementImpl`, we should be able to
@@ -581,7 +599,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         let element = unsafe { elem.unsafe_cast::<gst::Element>() };
 
         async move {
-            gst::log!(RUNTIME_CAT, obj: pad, "Handling {:?}", event);
+            gst::log!(RUNTIME_CAT, obj = pad, "Handling {:?}", event);
 
             gst::Pad::event_default(&pad, Some(&element), event)
         }
@@ -624,12 +642,12 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         query: &mut gst::QueryRef,
     ) -> bool {
         if query.is_serialized() {
-            gst::log!(RUNTIME_CAT, obj: pad, "Dropping {:?}", query);
+            gst::log!(RUNTIME_CAT, obj = pad, "Dropping {:?}", query);
             // FIXME serialized queries should be handled with the dataflow
             // but we can't return a `Future` because we couldn't honor QueryRef's lifetime
             false
         } else {
-            gst::log!(RUNTIME_CAT, obj: pad, "Handling {:?}", query);
+            gst::log!(RUNTIME_CAT, obj = pad, "Handling {:?}", query);
 
             let elem = imp.obj();
             // FIXME with GAT on `Self::ElementImpl`, we should be able to
@@ -764,7 +782,7 @@ impl PadSink {
                     H::ElementImpl::catch_panic_pad_function(
                         parent,
                         || {
-                            gst::error!(RUNTIME_CAT, obj: gst_pad, "Panic in PadSink activate");
+                            gst::error!(RUNTIME_CAT, obj = gst_pad, "Panic in PadSink activate");
                             Err(gst::loggable_error!(
                                 RUNTIME_CAT,
                                 "Panic in PadSink activate"
@@ -782,7 +800,11 @@ impl PadSink {
                     H::ElementImpl::catch_panic_pad_function(
                         parent,
                         || {
-                            gst::error!(RUNTIME_CAT, obj: gst_pad, "Panic in PadSink activatemode");
+                            gst::error!(
+                                RUNTIME_CAT,
+                                obj = gst_pad,
+                                "Panic in PadSink activatemode"
+                            );
                             Err(gst::loggable_error!(
                                 RUNTIME_CAT,
                                 "Panic in PadSink activatemode"
@@ -791,7 +813,7 @@ impl PadSink {
                         move |imp| {
                             gst::log!(
                                 RUNTIME_CAT,
-                                obj: gst_pad,
+                                obj = gst_pad,
                                 "ActivateMode {:?}, {}",
                                 mode,
                                 active
@@ -800,7 +822,7 @@ impl PadSink {
                             if mode == gst::PadMode::Pull {
                                 gst::error!(
                                     RUNTIME_CAT,
-                                    obj: gst_pad,
+                                    obj = gst_pad,
                                     "Pull mode not supported by PadSink"
                                 );
                                 return Err(gst::loggable_error!(
@@ -923,7 +945,7 @@ impl PadSink {
                             } else {
                                 gst::fixme!(
                                     RUNTIME_CAT,
-                                    obj: gst_pad,
+                                    obj = gst_pad,
                                     "Serialized Query not supported"
                                 );
                                 false

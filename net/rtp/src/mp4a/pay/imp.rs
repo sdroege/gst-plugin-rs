@@ -175,7 +175,7 @@ impl RtpBasePay2Impl for RtpMpeg4AudioPay {
         let (config, config_data) = match ConfigWithCodecData::from_codec_data(s) {
             Ok(c) => (c.audio_config, c.config_data),
             Err(err) => {
-                gst::error!(CAT, imp: self, "Unusable codec_data: {err:#}");
+                gst::error!(CAT, imp = self, "Unusable codec_data: {err:#}");
                 return false;
             }
         };
@@ -212,14 +212,14 @@ impl RtpBasePay2Impl for RtpMpeg4AudioPay {
         id: u64,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         if buffer.size() == 0 {
-            gst::info!(CAT, imp: self, "Dropping empty buffer {id}");
+            gst::info!(CAT, imp = self, "Dropping empty buffer {id}");
             self.obj().drop_buffers(..=id);
 
             return Ok(gst::FlowSuccess::Ok);
         }
 
         let Ok(buffer_ref) = buffer.map_readable() else {
-            gst::error!(CAT, imp: self, "Failed to map buffer {id} readable");
+            gst::error!(CAT, imp = self, "Failed to map buffer {id} readable");
 
             return Err(gst::FlowError::Error);
         };
@@ -237,7 +237,7 @@ impl RtpBasePay2Impl for RtpMpeg4AudioPay {
         if max_payload_size < size_prefix.len() {
             gst::error!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Insufficient max-payload-size {} for buffer {id} at least {} bytes needed",
                 self.obj().max_payload_size(),
                 size_prefix.len() + 1,
@@ -268,10 +268,17 @@ impl RtpBasePay2Impl for RtpMpeg4AudioPay {
             // audioMuxElement or the last fragment of an audioMuxElement.
             let marker = rem_data.is_empty();
 
-            gst::log!(CAT, imp: self, "Queuing {}packet with size {} for {}buffer {id}",
+            gst::log!(
+                CAT,
+                imp = self,
+                "Queuing {}packet with size {} for {}buffer {id}",
                 if marker { "marked " } else { "" },
                 payload.len(),
-                if !marker || !is_first { "fragmented " } else { "" },
+                if !marker || !is_first {
+                    "fragmented "
+                } else {
+                    ""
+                },
             );
 
             self.obj()

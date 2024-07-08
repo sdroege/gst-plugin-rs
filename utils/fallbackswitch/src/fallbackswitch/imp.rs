@@ -350,7 +350,7 @@ impl SinkState {
         if wait_until < now {
             debug!(
                 CAT,
-                obj: pad,
+                obj = pad,
                 "Skipping buffer wait until {} - clock already {}",
                 wait_until,
                 now
@@ -360,7 +360,7 @@ impl SinkState {
 
         debug!(
             CAT,
-            obj: pad,
+            obj = pad,
             "Scheduling buffer wait until {} = {} + extra {} + base time {}",
             wait_until,
             running_time,
@@ -394,7 +394,7 @@ impl SinkState {
                 let timeout_running_time = pad_running_time.saturating_add(settings.timeout);
                 log!(
                     CAT,
-                    obj: pad,
+                    obj = pad,
                     "pad_running_time {} timeout_running_time {} now_running_time {}",
                     pad_running_time,
                     timeout_running_time,
@@ -408,7 +408,7 @@ impl SinkState {
                 let timeout_running_time = pad_running_time.saturating_add(settings.timeout);
                 log!(
                     CAT,
-                    obj: pad,
+                    obj = pad,
                     "pad_running_time {} timeout_running_time {} now_running_time {}",
                     pad_running_time,
                     timeout_running_time,
@@ -454,13 +454,13 @@ impl FallbackSwitch {
         pad_state.cancel_wait();
         drop(pad_state);
 
-        debug!(CAT, obj: pad, "Now active pad");
+        debug!(CAT, obj = pad, "Now active pad");
     }
 
     fn handle_timeout(&self, state: &mut State, settings: &Settings) {
         debug!(
             CAT,
-            imp: self,
+            imp = self,
             "timeout fired - looking for a pad to switch to"
         );
 
@@ -504,7 +504,7 @@ impl FallbackSwitch {
         if let Some(best_pad) = best_pad {
             debug!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Found viable pad to switch to: {:?}",
                 best_pad
             );
@@ -520,7 +520,7 @@ impl FallbackSwitch {
 
         if state.timeout_clock_id.as_ref() != Some(clock_id) {
             /* Timeout fired late, ignore it. */
-            debug!(CAT, imp: self, "Late timeout callback. Ignoring");
+            debug!(CAT, imp = self, "Late timeout callback. Ignoring");
             return;
         }
 
@@ -574,7 +574,7 @@ impl FallbackSwitch {
             return true;
         }
 
-        debug!(CAT, imp: self, "Scheduling timeout for {}", wait_until);
+        debug!(CAT, imp = self, "Scheduling timeout for {}", wait_until);
         let timeout_id = clock.new_single_shot_id(wait_until);
 
         state.timeout_clock_id = Some(timeout_id.clone().into());
@@ -615,7 +615,7 @@ impl FallbackSwitch {
             drop(pad_state);
 
             if health_changed {
-                log!(CAT, obj: pad, "Health changed to {}", is_healthy);
+                log!(CAT, obj = pad, "Health changed to {}", is_healthy);
                 changed.push(pad.clone());
             }
         }
@@ -658,7 +658,7 @@ impl FallbackSwitch {
         let pad_imp = pad.imp();
 
         if settings.stop_on_eos && self.has_sink_pad_eos() {
-            debug!(CAT, obj: pad, "return eos as stop-on-eos is enabled");
+            debug!(CAT, obj = pad, "return eos as stop-on-eos is enabled");
             return Err(gst::FlowError::Eos);
         }
 
@@ -666,7 +666,7 @@ impl FallbackSwitch {
             let pad_state = pad_imp.state.lock();
             trace!(
                 CAT,
-                obj: pad,
+                obj = pad,
                 "Clipping {:?} against segment {:?}",
                 buffer,
                 pad_state.segment,
@@ -676,7 +676,7 @@ impl FallbackSwitch {
                 None => {
                     log!(
                         CAT,
-                        obj: pad,
+                        obj = pad,
                         "Dropping raw buffer completely out of segment",
                     );
 
@@ -747,7 +747,7 @@ impl FallbackSwitch {
         let (mut state, mut pad_state) = if health_changed {
             drop(pad_state);
             drop(state);
-            log!(CAT, obj: pad, "Health changed to {}", is_healthy);
+            log!(CAT, obj = pad, "Health changed to {}", is_healthy);
             pad.notify(PROP_IS_HEALTHY);
 
             if !settings.auto_switch {
@@ -763,7 +763,7 @@ impl FallbackSwitch {
 
         log!(
             CAT,
-            obj: pad,
+            obj = pad,
             "Handling {:?} run ts start {} end {} pad active {}",
             buffer,
             start_running_time.display(),
@@ -787,7 +787,7 @@ impl FallbackSwitch {
             if raw_pad {
                 log!(
                     CAT,
-                    obj: pad,
+                    obj = pad,
                     "Dropping trailing raw {:?} before timeout {}",
                     buffer,
                     state.timeout_running_time.unwrap()
@@ -796,7 +796,7 @@ impl FallbackSwitch {
             } else {
                 log!(
                     CAT,
-                    obj: pad,
+                    obj = pad,
                     "Not dropping trailing non-raw {:?} before timeout {}",
                     buffer,
                     state.timeout_running_time.unwrap()
@@ -837,7 +837,7 @@ impl FallbackSwitch {
 
         let pad_state = pad_imp.state.lock();
         if pad_state.flushing {
-            debug!(CAT, imp: self, "Flushing");
+            debug!(CAT, imp = self, "Flushing");
             return Err(gst::FlowError::Flushing);
         }
         // calling schedule_timeout() may result in handle_timeout() being called right away,
@@ -852,7 +852,7 @@ impl FallbackSwitch {
                 if raw_pad {
                     log!(
                         CAT,
-                        obj: pad,
+                        obj = pad,
                         "Dropping trailing raw {:?} before output running time {}",
                         buffer,
                         state.output_running_time.display(),
@@ -861,7 +861,7 @@ impl FallbackSwitch {
                 } else {
                     log!(
                         CAT,
-                        obj: pad,
+                        obj = pad,
                         "Not dropping trailing non-raw {:?} before output running time {}",
                         buffer,
                         state.output_running_time.display(),
@@ -896,7 +896,7 @@ impl FallbackSwitch {
         let is_healthy = pad_state.is_healthy(pad, &state, &settings, state.output_running_time);
         let health_changed = is_healthy != pad_state.is_healthy;
         if health_changed {
-            log!(CAT, obj: pad, "Health changed to {}", is_healthy);
+            log!(CAT, obj = pad, "Health changed to {}", is_healthy);
         }
         pad_state.is_healthy = is_healthy;
         drop(pad_state);
@@ -917,7 +917,7 @@ impl FallbackSwitch {
         };
 
         if !is_active {
-            log!(CAT, obj: pad, "Dropping {:?} on inactive pad", buffer);
+            log!(CAT, obj = pad, "Dropping {:?} on inactive pad", buffer);
 
             drop(state);
             if health_changed {
@@ -932,7 +932,7 @@ impl FallbackSwitch {
 
         is_active = self.active_sinkpad.lock().as_ref() == Some(pad);
         if !is_active {
-            log!(CAT, obj: pad, "Dropping {:?} on inactive pad", buffer);
+            log!(CAT, obj = pad, "Dropping {:?} on inactive pad", buffer);
 
             drop(state);
             if health_changed {
@@ -976,7 +976,7 @@ impl FallbackSwitch {
 
         /* TODO: Clip raw video and audio buffers to avoid going backward? */
 
-        log!(CAT, obj: pad, "Forwarding {:?}", buffer);
+        log!(CAT, obj = pad, "Forwarding {:?}", buffer);
 
         if let Some(in_gap_event) = from_gap {
             // Safe unwrap: the buffer was constructed from a gap event with
@@ -1017,7 +1017,7 @@ impl FallbackSwitch {
         pad: &super::FallbackSwitchSinkPad,
         list: gst::BufferList,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        log!(CAT, obj: pad, "Handling buffer list {:?}", list);
+        log!(CAT, obj = pad, "Handling buffer list {:?}", list);
         // TODO: Keep the list intact and forward it in one go (or broken into several
         // pieces if needed) when outputting to the active pad
         for buffer in list.iter_owned() {
@@ -1028,7 +1028,7 @@ impl FallbackSwitch {
     }
 
     fn sink_event(&self, pad: &super::FallbackSwitchSinkPad, event: gst::Event) -> bool {
-        log!(CAT, obj: pad, "Handling event {:?}", event);
+        log!(CAT, obj = pad, "Handling event {:?}", event);
 
         if let gst::EventView::Gap(ev) = event.view() {
             let mut buffer = gst::Buffer::new();
@@ -1045,7 +1045,7 @@ impl FallbackSwitch {
                 Ok(_) => true,
                 Err(gst::FlowError::Flushing) | Err(gst::FlowError::Eos) => true,
                 Err(err) => {
-                    gst::error!(CAT, obj: pad, "Error processing gap event: {}", err);
+                    gst::error!(CAT, obj = pad, "Error processing gap event: {}", err);
                     false
                 }
             };
@@ -1058,7 +1058,7 @@ impl FallbackSwitch {
         match event.view() {
             gst::EventView::Caps(caps) => {
                 let caps = caps.caps();
-                debug!(CAT, obj: pad, "Received caps {}", caps);
+                debug!(CAT, obj = pad, "Received caps {}", caps);
 
                 let caps_info = match caps.structure(0).unwrap().name().as_str() {
                     "audio/x-raw" => {
@@ -1107,7 +1107,7 @@ impl FallbackSwitch {
 
         let mut is_active = self.active_sinkpad.lock().as_ref() == Some(pad);
         if !is_active {
-            log!(CAT, obj: pad, "Dropping {:?} on inactive pad", event);
+            log!(CAT, obj = pad, "Dropping {:?} on inactive pad", event);
             return true;
         }
 
@@ -1118,7 +1118,7 @@ impl FallbackSwitch {
 
         is_active = self.active_sinkpad.lock().as_ref() == Some(pad);
         if !is_active {
-            log!(CAT, obj: pad, "Dropping {:?} on inactive pad", event);
+            log!(CAT, obj = pad, "Dropping {:?} on inactive pad", event);
             return true;
         }
 
@@ -1148,7 +1148,7 @@ impl FallbackSwitch {
     fn sink_query(&self, pad: &super::FallbackSwitchSinkPad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryView;
 
-        log!(CAT, obj: pad, "Handling query {:?}", query);
+        log!(CAT, obj = pad, "Handling query {:?}", query);
 
         let forward = match query.view() {
             QueryView::Context(_) => true,
@@ -1168,7 +1168,7 @@ impl FallbackSwitch {
         };
 
         if forward {
-            log!(CAT, obj: pad, "Forwarding query {:?}", query);
+            log!(CAT, obj = pad, "Forwarding query {:?}", query);
             self.src_pad.peer_query(query)
         } else {
             false
@@ -1184,7 +1184,7 @@ impl FallbackSwitch {
     fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
-        log!(CAT, obj: pad, "Handling {:?}", query);
+        log!(CAT, obj = pad, "Handling {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Latency(ref mut q) => {
@@ -1213,7 +1213,7 @@ impl FallbackSwitch {
                 let mut state = self.state.lock();
                 min_latency = min_latency.max(settings.min_upstream_latency);
                 state.upstream_latency = min_latency;
-                log!(CAT, obj: pad, "Upstream latency {}", min_latency);
+                log!(CAT, obj = pad, "Upstream latency {}", min_latency);
 
                 q.set(true, min_latency + settings.latency, max_latency);
 
@@ -1378,7 +1378,7 @@ impl ObjectImpl for FallbackSwitch {
                 if settings.auto_switch {
                     gst::warning!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "active-pad property setting ignored, because auto-switch=true"
                     );
                 } else {
@@ -1402,7 +1402,7 @@ impl ObjectImpl for FallbackSwitch {
                 let new_value = value.get().expect("type checked upstream");
 
                 settings.timeout = new_value;
-                debug!(CAT, imp: self, "Timeout now {}", settings.timeout);
+                debug!(CAT, imp = self, "Timeout now {}", settings.timeout);
                 drop(settings);
                 let _ = self
                     .obj()
@@ -1534,7 +1534,7 @@ impl ElementImpl for FallbackSwitch {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        trace!(CAT, imp: self, "Changing state {:?}", transition);
+        trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::PlayingToPaused => {

@@ -93,7 +93,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpPcmauDepay {
             buffer_ref.set_flags(gst::BufferFlags::RESYNC);
         }
 
-        gst::trace!(CAT, imp: self, "Finishing buffer {buffer:?}");
+        gst::trace!(CAT, imp = self, "Finishing buffer {buffer:?}");
 
         self.obj().queue_buffer(packet.into(), buffer)
     }

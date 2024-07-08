@@ -372,7 +372,7 @@ impl SessionWrapper {
         if !cands.is_empty() {
             gst::trace!(
                 CAT,
-                obj: element,
+                obj = element,
                 "handling {} pending ice candidates for session {}",
                 cands.len(),
                 session.id,
@@ -401,13 +401,21 @@ impl SessionWrapper {
     ) {
         match self {
             SessionWrapper::InPlace(session) => {
-                gst::trace!(CAT, obj: element, "adding ice candidate for session {session_id}");
+                gst::trace!(
+                    CAT,
+                    obj = element,
+                    "adding ice candidate for session {session_id}"
+                );
                 session
                     .webrtcbin
                     .emit_by_name::<()>("add-ice-candidate", &[&sdp_m_line_index, &candidate]);
             }
             SessionWrapper::Taken(cands) => {
-                gst::trace!(CAT, obj: element, "queueing ice candidate for session {session_id}");
+                gst::trace!(
+                    CAT,
+                    obj = element,
+                    "queueing ice candidate for session {session_id}"
+                );
                 cands.push(IceCandidate {
                     sdp_m_line_index,
                     candidate: candidate.to_string(),
@@ -449,7 +457,7 @@ fn create_navigation_event(sink: &super::BaseWebRTCSink, msg: &str) {
     let event: Result<NavigationEvent, _> = serde_json::from_str(msg);
 
     if let Ok(event) = event {
-        gst::log!(CAT, obj: sink, "Processing navigation event: {:?}", event);
+        gst::log!(CAT, obj = sink, "Processing navigation event: {:?}", event);
 
         if let Some(mid) = event.mid {
             let this = sink.imp();
@@ -460,7 +468,7 @@ fn create_navigation_event(sink: &super::BaseWebRTCSink, msg: &str) {
                     let event = gst::event::Navigation::new(event.event.structure());
 
                     if !stream.sink_pad.push_event(event.clone()) {
-                        gst::info!(CAT, obj: sink, "Could not send event: {:?}", event);
+                        gst::info!(CAT, obj = sink, "Could not send event: {:?}", event);
                     }
                 }
             }
@@ -473,13 +481,13 @@ fn create_navigation_event(sink: &super::BaseWebRTCSink, msg: &str) {
                 if stream.sink_pad.name().starts_with("video_") {
                     gst::log!(CAT, "Navigating to: {:?}", event);
                     if !stream.sink_pad.push_event(event.clone()) {
-                        gst::info!(CAT, obj: sink, "Could not send event: {:?}", event);
+                        gst::info!(CAT, obj = sink, "Could not send event: {:?}", event);
                     }
                 }
             });
         }
     } else {
-        gst::error!(CAT, obj: sink, "Invalid navigation event: {:?}", msg);
+        gst::error!(CAT, obj = sink, "Invalid navigation event: {:?}", msg);
     }
 }
 
@@ -868,7 +876,7 @@ impl PayloadChainBuilder {
     fn build(self, pipeline: &gst::Pipeline, src: &gst::Element) -> Result<PayloadChain, Error> {
         gst::trace!(
             CAT,
-            obj: pipeline,
+            obj = pipeline,
             "Setting up encoding, input caps: {input_caps}, \
                     output caps: {output_caps}, codec: {codec:?}",
             input_caps = self.input_caps,
@@ -1097,7 +1105,7 @@ impl VideoEncoder {
         if !caps.is_strictly_equal(&current_caps) {
             gst::log!(
                 CAT,
-                obj: element,
+                obj = element,
                 "session {}: setting bitrate {} and caps {} on encoder {:?}",
                 self.session_id,
                 bitrate,
@@ -1159,7 +1167,7 @@ impl State {
             sessions.remove(&session_id);
             cvar.notify_one();
 
-            gst::debug!(CAT, obj: element, "Session {session_id} ended");
+            gst::debug!(CAT, obj = element, "Session {session_id} ended");
         });
     }
 
@@ -1270,7 +1278,7 @@ impl Session {
             None => {
                 gst::info!(
                     CAT,
-                    obj: element,
+                    obj = element,
                     "Consumer {} not connecting any input stream for inactive media {}",
                     self.peer_id,
                     webrtc_pad.media_idx
@@ -1281,7 +1289,7 @@ impl Session {
 
         gst::info!(
             CAT,
-            obj: element,
+            obj = element,
             "Connecting input stream {} for consumer {} and media {}",
             stream_name,
             self.peer_id,
@@ -1292,7 +1300,7 @@ impl Session {
 
         let codec = match self.codecs {
             Some(ref codecs) => {
-                gst::debug!(CAT, obj: element, "Picking codec from remote offer");
+                gst::debug!(CAT, obj = element, "Picking codec from remote offer");
 
                 codecs
                     .get(&payload)
@@ -1300,7 +1308,7 @@ impl Session {
                     .ok_or_else(|| anyhow!("No codec for payload {}", payload))?
             }
             None => {
-                gst::debug!(CAT, obj: element, "Picking codec from local offer");
+                gst::debug!(CAT, obj = element, "Picking codec from local offer");
 
                 codecs
                     .get(&payload)
@@ -1522,7 +1530,7 @@ impl InputStream {
 
 impl NavigationEventHandler {
     fn new(element: &super::BaseWebRTCSink, webrtcbin: &gst::Element) -> Self {
-        gst::info!(CAT, obj: element, "Creating navigation data channel");
+        gst::info!(CAT, obj = element, "Creating navigation data channel");
         let channel = webrtcbin.emit_by_name::<WebRTCDataChannel>(
             "create-data-channel",
             &[
@@ -1576,7 +1584,11 @@ impl BaseWebRTCSink {
         if codec.is_video() {
             if let Some(enc_name) = codec.encoder_name().as_deref() {
                 if !VideoEncoder::is_bitrate_supported(enc_name) {
-                    gst::error!(CAT, imp: self, "Bitrate handling is not supported yet for {enc_name}");
+                    gst::error!(
+                        CAT,
+                        imp = self,
+                        "Bitrate handling is not supported yet for {enc_name}"
+                    );
 
                     return Ok(());
                 }
@@ -1592,7 +1604,12 @@ impl BaseWebRTCSink {
             return Ok(());
         };
 
-        gst::debug!(CAT, obj: payloader, "Mapping TWCC extension to ID {}", twcc_id);
+        gst::debug!(
+            CAT,
+            obj = payloader,
+            "Mapping TWCC extension to ID {}",
+            twcc_id
+        );
 
         /* We only enforce TWCC in the offer caps, once a remote description
          * has been set it will get automatically negotiated. This is necessary
@@ -1635,7 +1652,7 @@ impl BaseWebRTCSink {
                 // GstRTPBasePayload::extensions property is only available since GStreamer 1.24
                 if !payloader.has_property("extensions", Some(gst::Array::static_type())) {
                     if self.has_connected_payloader_setup_slots() {
-                        gst::warning!(CAT, imp: self, "'extensions' property is not available: TWCC extension ID will default to 1. \
+                        gst::warning!(CAT, imp = self, "'extensions' property is not available: TWCC extension ID will default to 1. \
         Application code must ensure to pick non-conflicting IDs for any additionally configured extensions. \
         Please consider updating GStreamer to 1.24.");
                     }
@@ -1658,7 +1675,12 @@ impl BaseWebRTCSink {
                     .map(|value| value.get::<gst_rtp::RTPHeaderExtension>().unwrap());
 
                 if let Some(ext) = twcc {
-                    gst::debug!(CAT, obj: payloader, "TWCC extension is already mapped to id {} by application", ext.id());
+                    gst::debug!(
+                        CAT,
+                        obj = payloader,
+                        "TWCC extension is already mapped to id {} by application",
+                        ext.id()
+                    );
                     return None;
                 }
 
@@ -1706,11 +1728,19 @@ impl BaseWebRTCSink {
                         payloader.set_property("ssrc", ssrc);
                     }
                     _ => {
-                        gst::warning!(CAT, imp: self, "Unsupported ssrc type (expected i64 or u32)");
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "Unsupported ssrc type (expected i64 or u32)"
+                        );
                     }
                 }
             } else {
-                gst::warning!(CAT, imp: self, "Failed to find 'ssrc' property on payloader");
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Failed to find 'ssrc' property on payloader"
+                );
             }
         }
 
@@ -1757,7 +1787,7 @@ impl BaseWebRTCSink {
             let ret = fastrand::u32(..);
 
             if !webrtc_pads.contains_key(&ret) {
-                gst::trace!(CAT, imp: self, "Selected ssrc {}", ret);
+                gst::trace!(CAT, imp = self, "Selected ssrc {}", ret);
                 return ret;
             }
         }
@@ -1773,7 +1803,7 @@ impl BaseWebRTCSink {
         let media_idx = webrtc_pads.len() as i32;
 
         let Some(pad) = webrtcbin.request_pad_simple(&format!("sink_{}", media_idx)) else {
-            gst::error!(CAT, imp: self, "Failed to request pad from webrtcbin");
+            gst::error!(CAT, imp = self, "Failed to request pad from webrtcbin");
             gst::element_imp_error!(
                 self,
                 gst::StreamError::Failed,
@@ -1836,17 +1866,13 @@ impl BaseWebRTCSink {
 
                 match codec {
                     Some(codec) => {
-                        gst::debug!(
-                            CAT,
-                            imp: self,
-                            "Selected {codec:?} for media {media_idx}"
-                        );
+                        gst::debug!(CAT, imp = self, "Selected {codec:?} for media {media_idx}");
 
                         codecs.insert(codec.payload().unwrap(), codec.clone());
                         codec.output_filter().unwrap()
                     }
                     None => {
-                        gst::error!(CAT, imp: self, "No codec selected for media {media_idx}");
+                        gst::error!(CAT, imp = self, "No codec selected for media {media_idx}");
 
                         gst::Caps::new_empty()
                     }
@@ -1869,7 +1895,7 @@ impl BaseWebRTCSink {
                     .expect("element added and pipeline playing");
 
                 let ts_refclk = if clock.is::<gst_net::NtpClock>() {
-                    gst::debug!(CAT, imp: self, "Found NTP clock");
+                    gst::debug!(CAT, imp = self, "Found NTP clock");
 
                     let addr = clock.property::<String>("address");
                     let port = clock.property::<i32>("port");
@@ -1880,7 +1906,7 @@ impl BaseWebRTCSink {
                         format!("ntp={addr}:{port}")
                     })
                 } else if clock.is::<gst_net::PtpClock>() {
-                    gst::debug!(CAT, imp: self, "Found PTP clock");
+                    gst::debug!(CAT, imp = self, "Found PTP clock");
 
                     let clock_id = clock.property::<u64>("grandmaster-clock-id");
                     let domain = clock.property::<u32>("domain");
@@ -1918,13 +1944,13 @@ impl BaseWebRTCSink {
 
             gst::info!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Requesting WebRTC pad with caps {}",
                 payloader_caps
             );
 
             let Some(pad) = webrtcbin.request_pad_simple(&format!("sink_{}", media_idx)) else {
-                gst::error!(CAT, imp: self, "Failed to request pad from webrtcbin");
+                gst::error!(CAT, imp = self, "Failed to request pad from webrtcbin");
                 gst::element_imp_error!(
                     self,
                     gst::StreamError::Failed,
@@ -1934,7 +1960,11 @@ impl BaseWebRTCSink {
             };
 
             if let Some(msid) = stream.msid() {
-                gst::trace!(CAT, imp: self, "forwarding msid={msid:?} to webrtcbin sinkpad");
+                gst::trace!(
+                    CAT,
+                    imp = self,
+                    "forwarding msid={msid:?} to webrtcbin sinkpad"
+                );
                 pad.set_property("msid", &msid);
             }
 
@@ -1972,7 +2002,7 @@ impl BaseWebRTCSink {
     /// Prepare for accepting consumers, by setting
     /// up StreamProducers for each of our sink pads
     fn prepare(&self) -> Result<(), Error> {
-        gst::debug!(CAT, imp: self, "preparing");
+        gst::debug!(CAT, imp = self, "preparing");
 
         self.state
             .lock()
@@ -1987,7 +2017,7 @@ impl BaseWebRTCSink {
     /// Unprepare by stopping consumers, then the signaller object.
     /// Might abort codec discovery
     fn unprepare(&self) -> Result<(), Error> {
-        gst::info!(CAT, imp: self, "unpreparing");
+        gst::info!(CAT, imp = self, "unpreparing");
 
         let settings = self.settings.lock().unwrap();
         let signaller = settings.signaller.clone();
@@ -2011,14 +2041,14 @@ impl BaseWebRTCSink {
             handle.abort();
         });
 
-        gst::debug!(CAT, imp: self, "Waiting for codec discoveries to finish");
+        gst::debug!(CAT, imp = self, "Waiting for codec discoveries to finish");
         let codecs_done_receiver = std::mem::take(&mut state.codecs_done_receivers);
         codecs_done_receiver.into_iter().for_each(|receiver| {
             RUNTIME.block_on(async {
                 let _ = receiver.await;
             });
         });
-        gst::debug!(CAT, imp: self, "No codec discovery is running anymore");
+        gst::debug!(CAT, imp = self, "No codec discovery is running anymore");
 
         state.codec_discovery_done = false;
         state.codecs = BTreeMap::new();
@@ -2029,16 +2059,16 @@ impl BaseWebRTCSink {
         }
 
         drop(state);
-        gst::debug!(CAT, imp: self, "Ending sessions");
+        gst::debug!(CAT, imp = self, "Ending sessions");
         for session in sessions {
             signaller.end_session(&session.id);
         }
-        gst::debug!(CAT, imp: self, "All sessions have started finalizing");
+        gst::debug!(CAT, imp = self, "All sessions have started finalizing");
 
         if signaller_state == SignallerState::Started {
-            gst::info!(CAT, imp: self, "Stopping signaller");
+            gst::info!(CAT, imp = self, "Stopping signaller");
             signaller.stop();
-            gst::info!(CAT, imp: self, "Stopped signaller");
+            gst::info!(CAT, imp = self, "Stopped signaller");
         }
 
         let finalizing_sessions = self.state.lock().unwrap().finalizing_sessions.clone();
@@ -2049,7 +2079,7 @@ impl BaseWebRTCSink {
             sessions = cvar.wait(sessions).unwrap();
         }
 
-        gst::debug!(CAT, imp: self, "All sessions are done finalizing");
+        gst::debug!(CAT, imp = self, "All sessions are done finalizing");
 
         Ok(())
     }
@@ -2085,7 +2115,7 @@ impl BaseWebRTCSink {
                 false,
                 glib::closure!(#[watch] instance, move |_signaler: glib::Object, session_id: &str, peer_id: &str, offer: Option<&gst_webrtc::WebRTCSessionDescription>|{
                     if let Err(err) = instance.imp().start_session(session_id, peer_id, offer) {
-                        gst::warning!(CAT, obj: instance, "{}", err);
+                        gst::warning!(CAT, obj = instance, "{}", err);
                     }
                 }),
             ),
@@ -2101,7 +2131,7 @@ impl BaseWebRTCSink {
                         if session_description.type_() == gst_webrtc::WebRTCSDPType::Answer {
                             instance.imp().handle_sdp_answer(session_id, session_description);
                         } else {
-                            gst::error!(CAT, obj: instance, "Unsupported SDP Type");
+                            gst::error!(CAT, obj = instance, "Unsupported SDP Type");
                         }
                     }
                 ),
@@ -2127,7 +2157,7 @@ impl BaseWebRTCSink {
                 false,
                 glib::closure!(#[watch] instance, move |_signaler: glib::Object, session_id: &str|{
                     if let Err(err) = instance.imp().remove_session(session_id, false) {
-                        gst::warning!(CAT, obj: instance, "{}", err);
+                        gst::warning!(CAT, obj = instance, "{}", err);
                     }
                     false
                 }),
@@ -2156,7 +2186,7 @@ impl BaseWebRTCSink {
 
     /// Called by the signaller when it wants to shut down gracefully
     fn shutdown(&self) {
-        gst::info!(CAT, imp: self, "Shutting down");
+        gst::info!(CAT, imp = self, "Shutting down");
         let _ = self
             .obj()
             .post_message(gst::message::Eos::builder().src(&*self.obj()).build());
@@ -2220,7 +2250,7 @@ impl BaseWebRTCSink {
             if let Some(session_wrapper) = state.sessions.get_mut(&session_id) {
                 session_wrapper.restore(&self.obj(), session);
             } else {
-                gst::warning!(CAT, imp: self, "Session {session_id} was removed");
+                gst::warning!(CAT, imp = self, "Session {session_id} was removed");
             }
 
             drop(state);
@@ -2246,21 +2276,26 @@ impl BaseWebRTCSink {
         let state = self.state.lock().unwrap();
 
         if let Some(session) = state.sessions.get(&session_id) {
-            gst::debug!(CAT, imp: self, "Creating answer for session {}", session_id);
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Creating answer for session {}",
+                session_id
+            );
             let promise = gst::Promise::with_change_func(glib::clone!(
                 #[weak(rename_to = this)]
                 self,
                 #[strong]
                 session_id,
                 move |reply| {
-                    gst::debug!(CAT, imp: this, "Created answer for session {}", session_id);
+                    gst::debug!(CAT, imp = this, "Created answer for session {}", session_id);
 
                     let reply = match reply {
                         Ok(Some(reply)) => reply,
                         Ok(None) => {
                             gst::warning!(
                                 CAT,
-                                imp: this,
+                                imp = this,
                                 "Promise returned without a reply for {}",
                                 session_id
                             );
@@ -2270,7 +2305,7 @@ impl BaseWebRTCSink {
                         Err(err) => {
                             gst::warning!(
                                 CAT,
-                                imp: this,
+                                imp = this,
                                 "Promise returned with an error for {}: {:?}",
                                 session_id,
                                 err
@@ -2289,7 +2324,7 @@ impl BaseWebRTCSink {
                     } else {
                         gst::warning!(
                             CAT,
-                            imp: this,
+                            imp = this,
                             "Reply without an answer for session {}: {:?}",
                             session_id,
                             reply
@@ -2383,7 +2418,7 @@ impl BaseWebRTCSink {
                             } else {
                                 gst::warning!(
                                     CAT,
-                                    imp: self,
+                                    imp = self,
                                     "Failed to parse twcc index: {idx_str}"
                                 );
                             }
@@ -2430,11 +2465,11 @@ impl BaseWebRTCSink {
     fn negotiate(&self, session_id: &str, offer: Option<&gst_webrtc::WebRTCSessionDescription>) {
         let state = self.state.lock().unwrap();
 
-        gst::debug!(CAT, imp: self, "Negotiating for session {}", session_id);
+        gst::debug!(CAT, imp = self, "Negotiating for session {}", session_id);
 
         if let Some(session) = state.sessions.get(session_id) {
             let session = session.unwrap();
-            gst::trace!(CAT, imp: self, "WebRTC pads: {:?}", session.webrtc_pads);
+            gst::trace!(CAT, imp = self, "WebRTC pads: {:?}", session.webrtc_pads);
 
             if let Some(offer) = offer {
                 let promise = gst::Promise::with_change_func(glib::clone!(
@@ -2443,7 +2478,7 @@ impl BaseWebRTCSink {
                     #[to_owned]
                     session_id,
                     move |reply| {
-                        gst::debug!(CAT, imp: this, "received reply {:?}", reply);
+                        gst::debug!(CAT, imp = this, "received reply {:?}", reply);
                         this.on_remote_description_offer_set(session_id);
                     }
                 ));
@@ -2452,21 +2487,21 @@ impl BaseWebRTCSink {
                     .webrtcbin
                     .emit_by_name::<()>("set-remote-description", &[&offer, &promise]);
             } else {
-                gst::debug!(CAT, imp: self, "Creating offer for session {}", session_id);
+                gst::debug!(CAT, imp = self, "Creating offer for session {}", session_id);
                 let promise = gst::Promise::with_change_func(glib::clone!(
                     #[weak(rename_to = this)]
                     self,
                     #[to_owned]
                     session_id,
                     move |reply| {
-                        gst::debug!(CAT, imp: this, "Created offer for session {}", session_id);
+                        gst::debug!(CAT, imp = this, "Created offer for session {}", session_id);
 
                         let reply = match reply {
                             Ok(Some(reply)) => reply,
                             Ok(None) => {
                                 gst::warning!(
                                     CAT,
-                                    imp: this,
+                                    imp = this,
                                     "Promise returned without a reply for {}",
                                     session_id
                                 );
@@ -2476,7 +2511,7 @@ impl BaseWebRTCSink {
                             Err(err) => {
                                 gst::warning!(
                                     CAT,
-                                    imp: this,
+                                    imp = this,
                                     "Promise returned with an error for {}: {:?}",
                                     session_id,
                                     err
@@ -2509,7 +2544,7 @@ impl BaseWebRTCSink {
         } else {
             gst::debug!(
                 CAT,
-                imp: self,
+                imp = self,
                 "consumer for session {} no longer exists (sessions: {:?}",
                 session_id,
                 state.sessions.keys()
@@ -2550,7 +2585,7 @@ impl BaseWebRTCSink {
 
         gst::info!(
             CAT,
-            obj: element,
+            obj = element,
             "Adding session: {} for peer: {}",
             session_id,
             peer_id,
@@ -2696,7 +2731,7 @@ impl BaseWebRTCSink {
                             let this = element.imp();
                             gst::warning!(
                                 CAT,
-                                obj: element,
+                                obj = element,
                                 "Connection state for in session {} (peer {}) failed",
                                 session_id,
                                 peer_id
@@ -2706,7 +2741,7 @@ impl BaseWebRTCSink {
                         _ => {
                             gst::log!(
                                 CAT,
-                                obj: element,
+                                obj = element,
                                 "Connection state in session {} (peer {}) changed: {:?}",
                                 session_id,
                                 peer_id,
@@ -2736,7 +2771,7 @@ impl BaseWebRTCSink {
                         gst_webrtc::WebRTCICEConnectionState::Failed => {
                             gst::warning!(
                                 CAT,
-                                obj: element,
+                                obj = element,
                                 "Ice connection state in session {} (peer {}) failed",
                                 session_id,
                                 peer_id,
@@ -2746,7 +2781,7 @@ impl BaseWebRTCSink {
                         _ => {
                             gst::log!(
                                 CAT,
-                                obj: element,
+                                obj = element,
                                 "Ice connection state in session {} (peer {}) changed: {:?}",
                                 session_id,
                                 peer_id,
@@ -2789,7 +2824,7 @@ impl BaseWebRTCSink {
 
                     gst::log!(
                         CAT,
-                        obj: element,
+                        obj = element,
                         "Ice gathering state in session {} (peer {}) changed: {:?}",
                         session_id,
                         peer_id,
@@ -2906,7 +2941,7 @@ impl BaseWebRTCSink {
                         }
                     }
                     gst::MessageView::Latency(..) => {
-                        gst::info!(CAT, obj: pipeline, "Recalculating latency");
+                        gst::info!(CAT, obj = pipeline, "Recalculating latency");
                         let _ = pipeline.recalculate_latency();
                     }
                     gst::MessageView::Eos(..) => {
@@ -3013,7 +3048,7 @@ impl BaseWebRTCSink {
                 if let Err(err) = pipeline.set_state(gst::State::Ready) {
                     gst::warning!(
                         CAT,
-                        obj: element,
+                        obj = element,
                         "Failed to bring {peer_id} pipeline to READY: {}",
                         err
                     );
@@ -3048,7 +3083,7 @@ impl BaseWebRTCSink {
                 if let Err(err) = pipeline.set_state(gst::State::Playing) {
                     gst::warning!(
                         CAT,
-                        obj: element,
+                        obj = element,
                         "Failed to bring {peer_id} pipeline to PLAYING: {}",
                         err
                     );
@@ -3204,7 +3239,7 @@ impl BaseWebRTCSink {
                     {
                         gst::error!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "Failed to connect input stream {} for session {}: {}",
                             stream_name,
                             session_id,
@@ -3218,7 +3253,7 @@ impl BaseWebRTCSink {
                 } else {
                     gst::error!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "No producer to connect session {} to",
                         session_id,
                     );
@@ -3261,7 +3296,7 @@ impl BaseWebRTCSink {
             } else if let Some(session_wrapper) = state.sessions.get_mut(&session_id) {
                 session_wrapper.restore(&self.obj(), session);
             } else {
-                gst::warning!(CAT, imp: self, "Session {session_id} was removed");
+                gst::warning!(CAT, imp = self, "Session {session_id} was removed");
             }
         }
     }
@@ -3279,7 +3314,7 @@ impl BaseWebRTCSink {
         let sdp_m_line_index = match sdp_m_line_index {
             Some(sdp_m_line_index) => sdp_m_line_index,
             None => {
-                gst::warning!(CAT, imp: self, "No mandatory SDP m-line index");
+                gst::warning!(CAT, imp = self, "No mandatory SDP m-line index");
                 return;
             }
         };
@@ -3287,7 +3322,7 @@ impl BaseWebRTCSink {
         if let Some(session_wrapper) = state.sessions.get_mut(session_id) {
             session_wrapper.add_ice_candidate(&self.obj(), session_id, sdp_m_line_index, candidate);
         } else {
-            gst::warning!(CAT, imp: self, "No consumer with ID {session_id}");
+            gst::warning!(CAT, imp = self, "No consumer with ID {session_id}");
         }
     }
 
@@ -3313,7 +3348,7 @@ impl BaseWebRTCSink {
 
                         gst::warning!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "consumer from session {} refused media {}: {:?}",
                             session_id,
                             media_idx,
@@ -3329,7 +3364,7 @@ impl BaseWebRTCSink {
 
                         gst::warning!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "Consumer refused media {session_id}, {media_idx}"
                         );
                         return;
@@ -3345,7 +3380,7 @@ impl BaseWebRTCSink {
                 } else {
                     gst::warning!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "consumer from session {} did not provide valid payload for media index {} for session {}",
                         session_id,
                         media_idx,
@@ -3360,7 +3395,7 @@ impl BaseWebRTCSink {
                         signaller.end_session(session_id);
                     }
 
-                    gst::warning!(CAT, imp: self, "Consumer did not provide valid payload for media session: {session_id} media_ix: {media_idx}");
+                    gst::warning!(CAT, imp = self, "Consumer did not provide valid payload for media session: {session_id} media_ix: {media_idx}");
                     return;
                 }
             }
@@ -3371,7 +3406,7 @@ impl BaseWebRTCSink {
                 #[to_owned]
                 session_id,
                 move |reply| {
-                    gst::debug!(CAT, imp: this, "received reply {:?}", reply);
+                    gst::debug!(CAT, imp = this, "received reply {:?}", reply);
                     this.on_remote_description_set(session_id);
                 }
             ));
@@ -3380,7 +3415,7 @@ impl BaseWebRTCSink {
                 .webrtcbin
                 .emit_by_name::<()>("set-remote-description", &[desc, &promise]);
         } else {
-            gst::warning!(CAT, imp: self, "No consumer with ID {session_id}");
+            gst::warning!(CAT, imp = self, "No consumer with ID {session_id}");
         }
     }
 
@@ -3411,11 +3446,11 @@ impl BaseWebRTCSink {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Running discovery pipeline for input caps {input_caps} and output caps {output_caps} with codec {codec:?}"
         );
 
-        gst::debug!(CAT, imp: self, "Running discovery pipeline");
+        gst::debug!(CAT, imp = self, "Running discovery pipeline");
         let elements_slice = &elements.iter().collect::<Vec<_>>();
         pipe.0.add_many(elements_slice).unwrap();
         gst::Element::link_many(elements_slice)
@@ -3498,7 +3533,7 @@ impl BaseWebRTCSink {
                 if let Some(msg) = stream.next().await {
                     match msg.view() {
                         gst::MessageView::Error(err) => {
-                            gst::warning!(CAT, imp: self, "Error in discovery pipeline: {err:#?}");
+                            gst::warning!(CAT, imp = self, "Error in discovery pipeline: {err:#?}");
                             pipe.0.debug_to_dot_file_with_ts(
                                 gst::DebugGraphDetails::all(),
                                 "webrtcsink-discovery-error",
@@ -3531,7 +3566,7 @@ impl BaseWebRTCSink {
                                 _ => continue,
                             };
 
-                            gst::info!(CAT, imp: self, "Discovery pipeline got caps {caps:?}");
+                            gst::info!(CAT, imp = self, "Discovery pipeline got caps {caps:?}");
                             pipe.0.debug_to_dot_file_with_ts(
                                 gst::DebugGraphDetails::all(),
                                 format!("webrtcsink-discovery-{}-done", pipe.0.name()),
@@ -3549,7 +3584,7 @@ impl BaseWebRTCSink {
                                 s.set("payload", codec.payload().unwrap());
                                 gst::debug!(
                                     CAT,
-                                    imp: self,
+                                    imp = self,
                                     "Codec discovery pipeline for caps {input_caps} with codec {codec:?} succeeded: {s}"
                                 );
                                 break Ok(s);
@@ -3585,7 +3620,7 @@ impl BaseWebRTCSink {
 
             gst::info!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Stream is already encoded with codec {}, still need to payload it",
                 codec.name
             );
@@ -3646,12 +3681,7 @@ impl BaseWebRTCSink {
                     /* We don't consider this fatal, as long as we end up with one
                      * potential codec for each input stream
                      */
-                    gst::warning!(
-                        CAT,
-                        imp: self,
-                        "Codec discovery pipeline failed: {}",
-                        err
-                    );
+                    gst::warning!(CAT, imp = self, "Codec discovery pipeline failed: {}", err);
                 }
             }
         }
@@ -3729,7 +3759,7 @@ impl BaseWebRTCSink {
                 if !self.input_caps_change_allowed(&caps, e.caps()) {
                     gst::error!(
                         CAT,
-                        obj: pad,
+                        obj = pad,
                         "Renegotiation is not supported (old: {}, new: {})",
                         caps,
                         e.caps()
@@ -3737,7 +3767,7 @@ impl BaseWebRTCSink {
                     return false;
                 }
             }
-            gst::info!(CAT, obj: pad, "Received caps event {:?}", e);
+            gst::info!(CAT, obj = pad, "Received caps event {:?}", e);
 
             let mut state = self.state.lock().unwrap();
 
@@ -3787,7 +3817,7 @@ impl BaseWebRTCSink {
             for discovery_info in discos.iter() {
                 for src in discovery_info.srcs() {
                     if let Err(err) = src.push_buffer(buffer.clone()) {
-                        gst::log!(CAT, obj: src, "Failed to push buffer: {}", err);
+                        gst::log!(CAT, obj = src, "Failed to push buffer: {}", err);
                     }
                 }
             }
@@ -3854,7 +3884,7 @@ impl BaseWebRTCSink {
 
                 match fut.await {
                     Ok(Err(err)) => {
-                        gst::error!(CAT, imp: this, "Error running discovery: {err:?}");
+                        gst::error!(CAT, imp = this, "Error running discovery: {err:?}");
                         gst::element_error!(
                             this.obj(),
                             gst::StreamError::CodecNotFound,
@@ -4253,7 +4283,7 @@ impl ObjectImpl for BaseWebRTCSink {
 
                         gst::debug!(
                             CAT,
-                            obj: element,
+                            obj = element,
                             "applying default configuration on encoder {:?}",
                             enc
                         );
@@ -4407,7 +4437,11 @@ impl ElementImpl for BaseWebRTCSink {
     ) -> Option<gst::Pad> {
         let element = self.obj();
         if element.current_state() > gst::State::Ready {
-            gst::error!(CAT, imp: self, "element pads can only be requested before starting");
+            gst::error!(
+                CAT,
+                imp = self,
+                "element pads can only be requested before starting"
+            );
             return None;
         }
 
@@ -4491,7 +4525,7 @@ impl ElementImpl for BaseWebRTCSink {
                     Ok(_) => {
                         gst::error!(
                             CAT,
-                            obj: element,
+                            obj = element,
                             "Trying to set state to NULL from an async \
                                     tokio context, working around the panic but \
                                     you should refactor your code to make use of \
@@ -4566,7 +4600,7 @@ impl NavigationImpl for BaseWebRTCSink {
                 gst::log!(CAT, "Navigating to: {:?}", event);
                 // FIXME: Handle multi tracks.
                 if !stream.sink_pad.push_event(event.clone()) {
-                    gst::info!(CAT, imp: self, "Could not send event: {:?}", event);
+                    gst::info!(CAT, imp = self, "Could not send event: {:?}", event);
                 }
             }
         });

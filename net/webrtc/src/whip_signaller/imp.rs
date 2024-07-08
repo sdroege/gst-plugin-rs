@@ -97,7 +97,7 @@ impl WhipClient {
     fn handle_future_error(&self, err: WaitError) {
         match err {
             WaitError::FutureAborted => {
-                gst::warning!(CAT, imp: self, "Future aborted")
+                gst::warning!(CAT, imp = self, "Future aborted")
             }
             WaitError::FutureError(err) => self.raise_error(err.to_string()),
         };
@@ -123,7 +123,7 @@ impl WhipClient {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Sending offer SDP: {:?}",
             offer_sdp.sdp().as_text()
         );
@@ -187,7 +187,7 @@ impl WhipClient {
         let sdp = offer.sdp();
         let body = sdp.as_text().unwrap();
 
-        gst::debug!(CAT, imp: self, "Using endpoint {}", endpoint.as_str());
+        gst::debug!(CAT, imp = self, "Using endpoint {}", endpoint.as_str());
         let mut headermap = HeaderMap::new();
         headermap.insert(
             reqwest::header::CONTENT_TYPE,
@@ -226,7 +226,7 @@ impl WhipClient {
         redirects: u8,
         webrtcbin: &gst::Element,
     ) {
-        gst::debug!(CAT, imp: self, "Parsing endpoint response");
+        gst::debug!(CAT, imp = self, "Parsing endpoint response");
 
         let endpoint;
         let use_link_headers;
@@ -277,7 +277,7 @@ impl WhipClient {
 
                 let url = reqwest::Url::parse(endpoint.as_str()).unwrap();
 
-                gst::debug!(CAT, imp: self, "WHIP resource: {:?}", location);
+                gst::debug!(CAT, imp = self, "WHIP resource: {:?}", location);
 
                 let url = match url.join(location) {
                     Ok(joined_url) => joined_url,
@@ -352,7 +352,7 @@ impl WhipClient {
 
                             gst::debug!(
                                 CAT,
-                                imp: self,
+                                imp = self,
                                 "Redirecting endpoint to {}",
                                 redirect_url.as_str()
                             );
@@ -407,7 +407,7 @@ impl WhipClient {
             );
         }
 
-        gst::debug!(CAT, imp: self, "DELETE request on {}", resource_url);
+        gst::debug!(CAT, imp = self, "DELETE request on {}", resource_url);
         let client = build_reqwest_client(reqwest::redirect::Policy::default());
         let future = async {
             client
@@ -426,14 +426,14 @@ impl WhipClient {
         let res = wait(&self.canceller, future, timeout);
         match res {
             Ok(r) => {
-                gst::debug!(CAT, imp: self, "Response to DELETE : {}", r.status());
+                gst::debug!(CAT, imp = self, "Response to DELETE : {}", r.status());
             }
             Err(e) => match e {
                 WaitError::FutureAborted => {
-                    gst::warning!(CAT, imp: self, "DELETE request aborted")
+                    gst::warning!(CAT, imp = self, "DELETE request aborted")
                 }
                 WaitError::FutureError(e) => {
-                    gst::error!(CAT, imp: self, "Error on DELETE request : {}", e)
+                    gst::error!(CAT, imp = self, "Error on DELETE request : {}", e)
                 }
             },
         };
@@ -464,10 +464,10 @@ impl SignallableImpl for WhipClient {
 
                             match state {
                                 WebRTCICEGatheringState::Gathering => {
-                                    gst::info!(CAT, obj: signaller, "ICE gathering started");
+                                    gst::info!(CAT, obj = signaller, "ICE gathering started");
                                 }
                                 WebRTCICEGatheringState::Complete => {
-                                    gst::info!(CAT, obj: signaller, "ICE gathering complete");
+                                    gst::info!(CAT, obj = signaller, "ICE gathering complete");
 
                                     let webrtcbin = webrtcbin.clone();
 
@@ -670,10 +670,10 @@ impl WhipServer {
 
                         match state {
                             WebRTCICEGatheringState::Gathering => {
-                                gst::info!(CAT, obj: signaller, "ICE gathering started");
+                                gst::info!(CAT, obj = signaller, "ICE gathering started");
                             }
                             WebRTCICEGatheringState::Complete => {
-                                gst::info!(CAT, obj: signaller, "ICE gathering complete");
+                                gst::info!(CAT, obj = signaller, "ICE gathering complete");
                                 let ans: Option<gst_sdp::SDPMessage>;
                                 let mut settings = signaller.imp().settings.lock().unwrap();
                                 if let Some(answer_desc) = webrtcbin
@@ -690,11 +690,19 @@ impl WhipServer {
                                     .take()
                                     .expect("SDP answer Sender needs to be valid");
 
-                                RUNTIME.spawn(glib::clone!(#[strong] signaller, async move {
-                                    if let Err(e) = tx.send(ans).await {
-                                        gst::error!(CAT, obj: signaller, "Failed to send SDP {e}");
+                                RUNTIME.spawn(glib::clone!(
+                                    #[strong]
+                                    signaller,
+                                    async move {
+                                        if let Err(e) = tx.send(ans).await {
+                                            gst::error!(
+                                                CAT,
+                                                obj = signaller,
+                                                "Failed to send SDP {e}"
+                                            );
+                                        }
                                     }
-                                }));
+                                ));
                             }
                             _ => (),
                         }
@@ -719,9 +727,9 @@ impl WhipServer {
             .obj()
             .emit_by_name::<bool>("session-ended", &[&id.as_str()])
         {
-            gst::info!(CAT, imp:self, "Ended session {id}");
+            gst::info!(CAT, imp = self, "Ended session {id}");
         } else {
-            gst::info!(CAT, imp:self, "Failed to End session {id}");
+            gst::info!(CAT, imp = self, "Failed to End session {id}");
             // FIXME: Do we send a different response
         }
         Ok(warp::reply::reply().into_response())
@@ -739,7 +747,7 @@ impl WhipServer {
                     links.append(LINK, HeaderValue::from_str(stun_link.as_str()).unwrap());
                 }
                 Err(e) => {
-                    gst::error!(CAT, imp: self, "Failed to parse {stun:?} : {e:?}");
+                    gst::error!(CAT, imp = self, "Failed to parse {stun:?} : {e:?}");
                 }
             },
             None => {}
@@ -748,17 +756,21 @@ impl WhipServer {
         if !settings.turn_servers.is_empty() {
             for turn_server in settings.turn_servers.iter() {
                 if let Ok(turn) = turn_server.get::<String>() {
-                    gst::debug!(CAT, imp: self, "turn server: {}",turn.as_str());
+                    gst::debug!(CAT, imp = self, "turn server: {}", turn.as_str());
                     match build_link_header(turn.as_str()) {
                         Ok(turn_link) => {
                             links.append(LINK, HeaderValue::from_str(turn_link.as_str()).unwrap());
                         }
                         Err(e) => {
-                            gst::error!(CAT, imp: self, "Failed to parse {turn_server:?} : {e:?}");
+                            gst::error!(CAT, imp = self, "Failed to parse {turn_server:?} : {e:?}");
                         }
                     }
                 } else {
-                    gst::debug!(CAT, imp: self, "Failed to get String value of {turn_server:?}");
+                    gst::debug!(
+                        CAT,
+                        imp = self,
+                        "Failed to get String value of {turn_server:?}"
+                    );
                 }
             }
         }
@@ -801,7 +813,7 @@ impl WhipServer {
                     .emit_by_name::<()>("session-description", &[&session_id, &offer]);
             }
             Err(err) => {
-                gst::error!(CAT, imp: self, "Could not parse offer SDP: {err}");
+                gst::error!(CAT, imp = self, "Could not parse offer SDP: {err}");
                 let reply = warp::reply::reply();
                 let res = warp::reply::with_status(reply, http::StatusCode::NOT_ACCEPTABLE);
                 return Ok(res.into_response());
@@ -846,7 +858,7 @@ impl WhipServer {
                     links.append(LINK, HeaderValue::from_str(stun_link.as_str()).unwrap());
                 }
                 Err(e) => {
-                    gst::error!(CAT, imp: self, "Failed to parse {stun:?} : {e:?}");
+                    gst::error!(CAT, imp = self, "Failed to parse {stun:?} : {e:?}");
                 }
             },
             None => {}
@@ -855,17 +867,25 @@ impl WhipServer {
         if !settings.turn_servers.is_empty() {
             for turn_server in settings.turn_servers.iter() {
                 if let Ok(turn) = turn_server.get::<String>() {
-                    gst::debug!(CAT, imp: self, "turn server: {}",turn.as_str());
+                    gst::debug!(CAT, imp = self, "turn server: {}", turn.as_str());
                     match build_link_header(turn.as_str()) {
                         Ok(turn_link) => {
                             links.append(LINK, HeaderValue::from_str(turn_link.as_str()).unwrap());
                         }
                         Err(e) => {
-                            gst::error!(CAT, imp: self, "Failed to  parse {turn_server:?} : {e:?}");
+                            gst::error!(
+                                CAT,
+                                imp = self,
+                                "Failed to  parse {turn_server:?} : {e:?}"
+                            );
                         }
                     }
                 } else {
-                    gst::error!(CAT, imp: self, "Failed to get String value of {turn_server:?}");
+                    gst::error!(
+                        CAT,
+                        imp = self,
+                        "Failed to get String value of {turn_server:?}"
+                    );
                 }
             }
         }
@@ -878,16 +898,16 @@ impl WhipServer {
             match sdp.as_text() {
                 Ok(text) => {
                     ans_text = Ok(text);
-                    gst::debug!(CAT, imp: self, "{ans_text:?}");
+                    gst::debug!(CAT, imp = self, "{ans_text:?}");
                 }
                 Err(e) => {
                     ans_text = Err(format!("Failed to get SDP answer: {e:?}"));
-                    gst::error!(CAT, imp: self, "{e:?}");
+                    gst::error!(CAT, imp = self, "{e:?}");
                 }
             }
         } else {
             let e = "SDP Answer is empty!".to_string();
-            gst::error!(CAT, imp: self, "{e:?}");
+            gst::error!(CAT, imp = self, "{e:?}");
             ans_text = Err(e);
         }
 
@@ -924,10 +944,10 @@ impl WhipServer {
             Ok(v) => {
                 // pick the first vector item
                 addr = v[0];
-                gst::info!(CAT, imp:self, "using {addr:?} as address");
+                gst::info!(CAT, imp = self, "using {addr:?} as address");
             }
             Err(e) => {
-                gst::error!(CAT, imp:self, "error getting addr from uri  {e:?}");
+                gst::error!(CAT, imp = self, "error getting addr from uri  {e:?}");
                 self.obj()
                     .emit_by_name::<()>("error", &[&format!("Unable to start WHIP Server: {e:?}")]);
                 return None;
@@ -1011,7 +1031,7 @@ impl WhipServer {
             gst::debug!(CAT, "Stopped the server task...");
         });
 
-        gst::debug!(CAT, imp: self, "Started the server...");
+        gst::debug!(CAT, imp = self, "Started the server...");
         Some(jh)
     }
 
@@ -1024,7 +1044,7 @@ impl WhipServer {
 
 impl SignallableImpl for WhipServer {
     fn start(&self) {
-        gst::info!(CAT, imp: self, "starting the WHIP server");
+        gst::info!(CAT, imp = self, "starting the WHIP server");
         let jh = self.serve();
         let mut settings = self.settings.lock().unwrap();
         settings.server_handle = jh;
@@ -1044,21 +1064,25 @@ impl SignallableImpl for WhipServer {
             .expect("Shutdown signal Sender needs to be valid");
 
         if tx.send(()).is_err() {
-            gst::error!(CAT, imp: self, "Failed to send shutdown signal. Receiver dropped");
+            gst::error!(
+                CAT,
+                imp = self,
+                "Failed to send shutdown signal. Receiver dropped"
+            );
         }
 
-        gst::debug!(CAT, imp: self, "Await server handle to join");
+        gst::debug!(CAT, imp = self, "Await server handle to join");
         RUNTIME.block_on(async {
             if let Err(e) = handle.await {
-                gst::error!(CAT, imp:self, "Failed to join server handle: {e:?}");
+                gst::error!(CAT, imp = self, "Failed to join server handle: {e:?}");
             };
         });
 
-        gst::info!(CAT, imp: self, "stopped the WHIP server");
+        gst::info!(CAT, imp = self, "stopped the WHIP server");
     }
 
     fn end_session(&self, session_id: &str) {
-        gst::info!(CAT, imp: self, "Session {session_id} ended");
+        gst::info!(CAT, imp = self, "Session {session_id} ended");
         //FIXME: send any events to the client
     }
 }

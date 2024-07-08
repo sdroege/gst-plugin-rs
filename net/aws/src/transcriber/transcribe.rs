@@ -167,7 +167,7 @@ impl TranscriberStream {
             .await
             .map_err(|err| {
                 let err = format!("Transcribe ws init error: {err}: {}", err.meta());
-                gst::error!(CAT, imp: imp, "{err}");
+                gst::error!(CAT, imp = imp, "{err}");
                 gst::error_msg!(gst::LibraryError::Init, ["{err}"])
             })?;
 
@@ -189,12 +189,12 @@ impl TranscriberStream {
                 .await
                 .map_err(|err| {
                     let err = format!("Transcribe ws stream error: {err}: {}", err.meta());
-                    gst::error!(CAT, imp: self.imp, "{err}");
+                    gst::error!(CAT, imp = self.imp, "{err}");
                     gst::error_msg!(gst::LibraryError::Failed, ["{err}"])
                 })?;
 
             let Some(event) = event else {
-                gst::debug!(CAT, imp: self.imp, "Transcriber loop sending EOS");
+                gst::debug!(CAT, imp = self.imp, "Transcriber loop sending EOS");
                 return Ok(TranscriptEvent::Eos);
             };
 
@@ -206,7 +206,7 @@ impl TranscriberStream {
                     .and_then(|transcript| transcript.results)
                     .and_then(|mut results| results.drain(..).next())
                 {
-                    gst::trace!(CAT, imp: self.imp, "Received: {result:?}");
+                    gst::trace!(CAT, imp = self.imp, "Received: {result:?}");
 
                     if let Some(alternative) = result
                         .alternatives
@@ -224,7 +224,7 @@ impl TranscriberStream {
             } else {
                 gst::warning!(
                     CAT,
-                    imp: self.imp,
+                    imp = self.imp,
                     "Transcribe ws returned unknown event: consider upgrading the SDK"
                 )
             }
@@ -240,7 +240,7 @@ impl TranscriberStream {
         if items.len() <= self.partial_index {
             gst::error!(
                 CAT,
-                imp: self.imp,
+                imp = self.imp,
                 "sanity check failed, alternative length {} < partial_index {}",
                 items.len(),
                 self.partial_index
@@ -267,7 +267,7 @@ impl TranscriberStream {
             };
             gst::debug!(
                 CAT,
-                imp: self.imp,
+                imp = self.imp,
                 "Item is ready for queuing: {}, PTS {}",
                 item.content,
                 item.pts,

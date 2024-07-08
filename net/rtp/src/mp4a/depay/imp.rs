@@ -218,7 +218,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4AudioDepay {
 
         let mut config = match ConfigWithCodecData::from_caps_structure(s) {
             Ok(Some(c)) => {
-                gst::log!(CAT, imp: self, "{:?}", c.config);
+                gst::log!(CAT, imp = self, "{:?}", c.config);
 
                 caps_builder = caps_builder
                     .field("channels", c.config.prog.channel_conf as i32)
@@ -229,11 +229,11 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4AudioDepay {
             }
             Ok(None) => {
                 // In-band StreamMuxConfig not supported yet
-                gst::log!(CAT, imp: self, "config field not found");
+                gst::log!(CAT, imp = self, "config field not found");
                 return false;
             }
             Err(err) => {
-                gst::error!(CAT, imp: self, "Error parsing StreamMuxConfig: {err}");
+                gst::error!(CAT, imp = self, "Error parsing StreamMuxConfig: {err}");
                 return false;
             }
         };
@@ -249,7 +249,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4AudioDepay {
             {
                 // FIXME this is a workaround for forward compatibility with AAC SBR & HE
                 // see also comment in the parsers module.
-                gst::warning!(CAT, imp: self, concat!(
+                gst::warning!(CAT, imp = self, concat!(
                         "Found audio object type {}, which uses a specific extension for samplingFrequency. ",
                         "This extension is not supported yet. ",
                         "Will use 'clock-rate' {} as a workaround.",
@@ -258,7 +258,10 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4AudioDepay {
                     clock_rate,
                 );
             } else {
-                gst::error!(CAT, imp: self, concat!(
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    concat!(
                         "Caps 'clock-rate' {} and 'codec-data' sample rate {} mismatch. ",
                         "Will use 'clock-rate'",
                     ),
@@ -283,7 +286,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4AudioDepay {
 
     // Can't push incomplete frames, so draining is the same as flushing.
     fn flush(&self) {
-        gst::debug!(CAT, imp: self, "Flushing");
+        gst::debug!(CAT, imp = self, "Flushing");
         self.state.borrow_mut().flush();
     }
 
@@ -323,7 +326,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4AudioDepay {
         // See also: https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/1173
 
         let Some(config) = state.config.as_ref() else {
-            gst::error!(CAT, imp: self, "In-band StreamMuxConfig not supported");
+            gst::error!(CAT, imp = self, "In-band StreamMuxConfig not supported");
             return Err(gst::FlowError::NotSupported);
         };
 
@@ -334,7 +337,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4AudioDepay {
         for (idx, subframe) in frame.take_subframes(config).enumerate() {
             match subframe {
                 Ok(subframe) => {
-                    gst::log!(CAT, imp: self, "subframe {idx}: len {}", subframe.size());
+                    gst::log!(CAT, imp = self, "subframe {idx}: len {}", subframe.size());
                     // The duration is always set by the subframes iterator
                     let duration = subframe.duration().expect("no duration set");
 
@@ -351,11 +354,11 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4AudioDepay {
                     accumulated_duration.opt_add_assign(duration);
                 }
                 Err(err) if err.is_zero_length_subframe() => {
-                    gst::warning!(CAT, imp: self, "{err}");
+                    gst::warning!(CAT, imp = self, "{err}");
                     continue;
                 }
                 Err(err) => {
-                    gst::warning!(CAT, imp: self, "{err}");
+                    gst::warning!(CAT, imp = self, "{err}");
                     self.obj().drop_packets(..=packet.ext_seqnum());
                     break;
                 }
@@ -379,8 +382,11 @@ impl RtpMpeg4AudioDepay {
             let delta = crate::utils::seqnum_distance(seqnum, seqnum_base);
 
             if delta == 0 {
-                gst::debug!(CAT, imp: self,
-                    "Got initial packet {seqnum_base} @ ext seqnum {}", packet.ext_seqnum(),
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "Got initial packet {seqnum_base} @ ext seqnum {}",
+                    packet.ext_seqnum(),
                 );
                 state.can_parse = true;
 
@@ -388,7 +394,9 @@ impl RtpMpeg4AudioDepay {
             }
 
             if delta < 0 {
-                gst::log!(CAT, imp: self,
+                gst::log!(
+                    CAT,
+                    imp = self,
                     "Waiting for initial packet {seqnum_base}, got {seqnum} (ext seqnum {})",
                     packet.ext_seqnum(),
                 );
@@ -396,7 +404,7 @@ impl RtpMpeg4AudioDepay {
                 return ControlFlow::Break(());
             }
 
-            gst::debug!(CAT, imp: self,
+            gst::debug!(CAT, imp = self,
                 "Packet {seqnum} (ext seqnum {}) passed expected initial packet {seqnum_base}, will sync on next marker",
                 packet.ext_seqnum(),
             );
@@ -407,7 +415,7 @@ impl RtpMpeg4AudioDepay {
         // AudioMuxElement doesn't come with a frame start marker
         // so wait until a marked packet is found and start parsing from the next packet
         if packet.marker_bit() {
-            gst::debug!(CAT, imp: self,
+            gst::debug!(CAT, imp = self,
                 "Found first marked packet {seqnum} (ext seqnum {}). Will start parsing from next packet",
                 packet.ext_seqnum(),
             );
@@ -415,7 +423,9 @@ impl RtpMpeg4AudioDepay {
             assert!(state.frame_acc.is_none());
             state.can_parse = true;
         } else {
-            gst::log!(CAT, imp: self,
+            gst::log!(
+                CAT,
+                imp = self,
                 "First marked packet not found yet, skipping packet {seqnum} (ext seqnum {})",
                 packet.ext_seqnum(),
             );

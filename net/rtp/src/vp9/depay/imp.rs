@@ -118,7 +118,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 impl RtpVp9Depay {
     fn reset(&self, state: &mut State) {
-        gst::debug!(CAT, imp: self, "resetting state");
+        gst::debug!(CAT, imp = self, "resetting state");
 
         *state = State::default()
     }
@@ -260,7 +260,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let settings = self.settings.lock().unwrap().clone();
 
-        gst::trace!(CAT, imp: self, "Handling RTP packet {packet:?}");
+        gst::trace!(CAT, imp = self, "Handling RTP packet {packet:?}");
         let mut state = self.state.borrow_mut();
 
         let payload = packet.payload();
@@ -270,7 +270,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
         let payload_descriptor = match r.parse::<PayloadDescriptor>() {
             Ok(payload_descriptor) => payload_descriptor,
             Err(err) => {
-                gst::warning!(CAT, imp: self, "Invalid VP9 RTP packet: {err}");
+                gst::warning!(CAT, imp = self, "Invalid VP9 RTP packet: {err}");
                 // TODO: Could potentially drain here?
                 self.reset(&mut state);
                 self.obj().drop_packet(packet);
@@ -280,8 +280,17 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
 
         let payload_start_index = cursor.position() as usize;
 
-        gst::trace!(CAT, imp: self, "VP9 RTP payload descriptor size: {}", payload_start_index);
-        gst::trace!(CAT, imp: self, "Received VP9 RTP payload descriptor: {payload_descriptor:?}");
+        gst::trace!(
+            CAT,
+            imp = self,
+            "VP9 RTP payload descriptor size: {}",
+            payload_start_index
+        );
+        gst::trace!(
+            CAT,
+            imp = self,
+            "Received VP9 RTP payload descriptor: {payload_descriptor:?}"
+        );
 
         // This is the start of a picture if this is the start of the frame and either there is no
         // layer information or this is the first spatial layer.
@@ -305,7 +314,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
         {
             // Missed the marker packet for the last picture
             if state.current_picture_payload_descriptor.is_some() {
-                gst::warning!(CAT, imp: self, "Packet is part of a new picture but didn't receive last packet of previous picture");
+                gst::warning!(CAT, imp = self, "Packet is part of a new picture but didn't receive last packet of previous picture");
                 // TODO: Could potentially drain here?
                 self.reset(&mut state);
             }
@@ -334,7 +343,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
             {
                 gst::warning!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Scalability structure present and non-flexible scalability mode used but no picture ID present",
                 );
                 // TODO: Could potentially drain here?
@@ -357,7 +366,11 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
                 && last_keyframe_payloader_descriptor.flexible_mode
                     != payload_descriptor.flexible_mode
             {
-                gst::warning!(CAT, imp: self, "Flexible scalability mode can only change on key pictures");
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Flexible scalability mode can only change on key pictures"
+                );
 
                 // TODO: Could potentially drain here?
                 self.reset(&mut state);
@@ -376,7 +389,11 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
                 .as_ref()
                 .is_some_and(|layer_index| layer_index.temporal_layer_id != 0)
         {
-            gst::warning!(CAT, imp: self, "Temporal layer ID of non-inter-predicted frame must be 0");
+            gst::warning!(
+                CAT,
+                imp = self,
+                "Temporal layer ID of non-inter-predicted frame must be 0"
+            );
             // TODO: Could potentially drain here?
             self.reset(&mut state);
             self.obj().drop_packet(packet);
@@ -388,7 +405,11 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
         // > This MUST only be set to 1 if the I bit is also set to one; if the I bit is set to
         // > zero, then this MUST also be set to zero and ignored by receivers.
         if payload_descriptor.flexible_mode && payload_descriptor.picture_id.is_none() {
-            gst::warning!(CAT, imp: self, "Flexible scalability mode but no picture ID present");
+            gst::warning!(
+                CAT,
+                imp = self,
+                "Flexible scalability mode but no picture ID present"
+            );
             // TODO: Could potentially drain here?
             self.reset(&mut state);
             self.obj().drop_packet(packet);
@@ -398,9 +419,9 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
         // If this is not the start of a picture then we have to wait for one
         if state.current_picture_payload_descriptor.is_none() && !is_start_of_picture {
             if state.last_timestamp.is_some() {
-                gst::warning!(CAT, imp: self, "Waiting for start of picture");
+                gst::warning!(CAT, imp = self, "Waiting for start of picture");
             } else {
-                gst::trace!(CAT, imp: self, "Waiting for start of picture");
+                gst::trace!(CAT, imp = self, "Waiting for start of picture");
             }
             // TODO: Could potentially drain here?
             self.obj().drop_packet(packet);
@@ -415,7 +436,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
             && state.last_key_picture_payload_descriptor.is_none()
         {
             if settings.request_keyframe {
-                gst::debug!(CAT, imp: self, "Requesting keyframe from upstream");
+                gst::debug!(CAT, imp = self, "Requesting keyframe from upstream");
                 let event = gst_video::UpstreamForceKeyUnitEvent::builder()
                     .all_headers(true)
                     .build();
@@ -423,7 +444,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
             }
 
             if settings.wait_for_keyframe {
-                gst::trace!(CAT, imp: self, "Waiting for keyframe");
+                gst::trace!(CAT, imp = self, "Waiting for keyframe");
                 // TODO: Could potentially drain here?
                 self.reset(&mut state);
                 self.obj().drop_packet(packet);
@@ -463,12 +484,12 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
             // We assume that the beginning of the frame header fits into the first packet
             match r.parse::<FrameHeader>() {
                 Ok(frame_header) => {
-                    gst::trace!(CAT, imp: self, "Parsed frame header: {frame_header:?}");
+                    gst::trace!(CAT, imp = self, "Parsed frame header: {frame_header:?}");
                     state.current_keyframe_frame_header = Some(frame_header);
                 }
                 Err(err) => {
                     // Don't consider this a fatal error
-                    gst::warning!(CAT, imp: self, "Failed to read frame header: {err}");
+                    gst::warning!(CAT, imp = self, "Failed to read frame header: {err}");
                 }
             };
         }
@@ -529,13 +550,13 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
 
             if current_picture_payload_descriptor.inter_picture_predicted_frame {
                 buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
-                gst::trace!(CAT, imp: self, "Finishing delta-frame");
+                gst::trace!(CAT, imp = self, "Finishing delta-frame");
             } else {
-                gst::trace!(CAT, imp: self, "Finishing keyframe");
+                gst::trace!(CAT, imp = self, "Finishing keyframe");
             }
 
             if state.needs_discont {
-                gst::trace!(CAT, imp: self, "Setting DISCONT");
+                gst::trace!(CAT, imp = self, "Setting DISCONT");
                 buffer.set_flags(gst::BufferFlags::DISCONT);
                 state.needs_discont = false;
             }

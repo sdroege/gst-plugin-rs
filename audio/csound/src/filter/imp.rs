@@ -191,7 +191,7 @@ impl CsoundFilter {
             (avail / state.in_info.channels() as usize) * state.out_info.channels() as usize;
 
         let mut buffer = gst::Buffer::with_size(out_bytes).map_err(|e| {
-            gst::error!(CAT, imp: self, "Failed to allocate buffer at EOS {:?}", e);
+            gst::error!(CAT, imp = self, "Failed to allocate buffer at EOS {:?}", e);
             gst::FlowError::Flushing
         })?;
 
@@ -246,7 +246,7 @@ impl CsoundFilter {
 
         gst::log!(
             CAT,
-            imp: self,
+            imp = self,
             "Generating output at: {} - duration: {}",
             pts.display(),
             duration.display(),
@@ -481,7 +481,7 @@ impl BaseTransformImpl for CsoundFilter {
         csound.reset();
         let _ = self.state.lock().unwrap().take();
 
-        gst::info!(CAT, imp: self, "Stopped");
+        gst::info!(CAT, imp = self, "Stopped");
 
         Ok(())
     }
@@ -490,7 +490,7 @@ impl BaseTransformImpl for CsoundFilter {
         use gst::EventView;
 
         if let EventView::Eos(_) = event.view() {
-            gst::log!(CAT, imp: self, "Handling Eos");
+            gst::log!(CAT, imp = self, "Handling Eos");
             if self.drain().is_err() {
                 return false;
             }
@@ -535,7 +535,7 @@ impl BaseTransformImpl for CsoundFilter {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Transformed caps from {} to {} in direction {:?}",
             caps,
             other_caps,

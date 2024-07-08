@@ -163,7 +163,7 @@ impl RtpBaseDepay2Impl for RtpKlvDepay {
         {
             gst::debug!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Discontinuity, discarding {} bytes in accumulator",
                 state.accumulator.len(),
             );
@@ -189,7 +189,11 @@ impl RtpBaseDepay2Impl for RtpKlvDepay {
 
         let end = packet.marker_bit() || looks_like == LooksLike::SelfContained;
 
-        gst::trace!(CAT, imp: self, "start: {start}, end: {end}, looks like: {looks_like:?}");
+        gst::trace!(
+            CAT,
+            imp = self,
+            "start: {start}, end: {end}, looks like: {looks_like:?}"
+        );
 
         if end {
             state.prev_marker_seqnum = Some(packet.ext_seqnum());
@@ -198,7 +202,7 @@ impl RtpBaseDepay2Impl for RtpKlvDepay {
         if start && looks_like == LooksLike::Undetermined {
             gst::warning!(
                 CAT,
-                imp: self,
+                imp = self,
                 "New start, but data doesn't look like the start of a KLV unit?! Discarding",
             );
             state.clear_accumulator();
@@ -210,7 +214,12 @@ impl RtpBaseDepay2Impl for RtpKlvDepay {
 
         if looks_like == LooksLike::SelfContained {
             state.clear_accumulator();
-            gst::debug!(CAT, imp: self, "Finished KLV unit, pushing out {} bytes", payload.len());
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Finished KLV unit, pushing out {} bytes",
+                payload.len()
+            );
             return self
                 .obj()
                 .queue_buffer(packet.into(), packet.payload_buffer());
@@ -222,7 +231,7 @@ impl RtpBaseDepay2Impl for RtpKlvDepay {
             if !state.accumulator.is_empty() {
                 gst::debug!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "New start, but still {} bytes in accumulator, discarding",
                     state.accumulator.len(),
                 );
@@ -236,7 +245,7 @@ impl RtpBaseDepay2Impl for RtpKlvDepay {
             // if it looks like a start we know we don't have enough bytes yet
             gst::debug!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Start. Have {} bytes, but want {} bytes, waiting for more data",
                 state.accumulator.len(),
                 klv_utils::peek_klv(payload).unwrap(),
@@ -252,7 +261,7 @@ impl RtpBaseDepay2Impl for RtpKlvDepay {
         if state.accumulator.is_empty() {
             gst::debug!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Continuation fragment, but no data in accumulator. Need to wait for start of next unit, discarding.",
             );
             self.obj().drop_packet(packet);
@@ -264,7 +273,7 @@ impl RtpBaseDepay2Impl for RtpKlvDepay {
         let Ok(klv_unit_size) = klv_utils::peek_klv(&state.accumulator) else {
             gst::warning!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Accumulator does not contain KLV unit start?! Clearing.",
             );
 
@@ -275,7 +284,7 @@ impl RtpBaseDepay2Impl for RtpKlvDepay {
 
         gst::log!(
             CAT,
-            imp: self,
+            imp = self,
             "Continuation. Have {} bytes, want {} bytes",
             state.accumulator.len(),
             klv_unit_size,
@@ -285,12 +294,12 @@ impl RtpBaseDepay2Impl for RtpKlvDepay {
         if state.accumulator.len() >= klv_unit_size || end {
             if state.accumulator.len() != klv_unit_size {
                 if state.accumulator.len() > klv_unit_size {
-                    gst::warning!(CAT, imp: self, "More bytes than expected in accumulator!");
+                    gst::warning!(CAT, imp = self, "More bytes than expected in accumulator!");
                 } else {
                     // For now we'll honour the marker bit unconditionally and don't second-guess it
                     gst::warning!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Fewer bytes than expected in accumulator, but marker bit set!",
                     );
                 }
@@ -303,7 +312,7 @@ impl RtpBaseDepay2Impl for RtpKlvDepay {
 
             gst::debug!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Finished KLV unit, pushing out {} bytes",
                 accumulator.len(),
             );

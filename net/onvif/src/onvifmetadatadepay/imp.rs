@@ -116,7 +116,7 @@ impl RTPBaseDepayloadImpl for OnvifMetadataDepay {
             .flags()
             .contains(gst::BufferFlags::DISCONT)
         {
-            gst::debug!(CAT, imp: self, "processing discont RTP buffer");
+            gst::debug!(CAT, imp = self, "processing discont RTP buffer");
             state.adapter.clear();
         }
 
@@ -148,7 +148,12 @@ impl RTPBaseDepayloadImpl for OnvifMetadataDepay {
         let utf8 = match std::str::from_utf8(map.as_ref()) {
             Ok(s) => s,
             Err(err) => {
-                gst::warning!(CAT, imp: self, "Failed to decode payload as UTF-8: {}", err);
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Failed to decode payload as UTF-8: {}",
+                    err
+                );
 
                 return None;
             }
@@ -178,7 +183,7 @@ impl RTPBaseDepayloadImpl for OnvifMetadataDepay {
                         }
                     },
                     Err(err) => {
-                        gst::warning!(CAT, imp: self, "Invalid XML in payload: {}", err);
+                        gst::warning!(CAT, imp = self, "Invalid XML in payload: {}", err);
 
                         return None;
                     }
@@ -192,7 +197,7 @@ impl RTPBaseDepayloadImpl for OnvifMetadataDepay {
         if !forward {
             gst::warning!(
                 CAT,
-                imp: self,
+                imp = self,
                 "document must start with tt:MetadataStream element",
             );
 

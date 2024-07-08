@@ -200,17 +200,17 @@ impl UdpSinkPadHandler {
         futures::executor::block_on(async move {
             let mut inner = self.0.lock().await;
             if inner.clients.contains(&addr) {
-                gst::warning!(CAT, imp: imp, "Not adding client {addr:?} again");
+                gst::warning!(CAT, imp = imp, "Not adding client {addr:?} again");
                 return;
             }
 
             match inner.configure_client(&addr) {
                 Ok(()) => {
-                    gst::info!(CAT, imp: imp, "Added client {addr:?}");
+                    gst::info!(CAT, imp = imp, "Added client {addr:?}");
                     inner.clients.insert(addr);
                 }
                 Err(err) => {
-                    gst::error!(CAT, imp: imp, "Failed to add client {addr:?}: {err}");
+                    gst::error!(CAT, imp = imp, "Failed to add client {addr:?}: {err}");
                     imp.obj().post_error_message(err);
                 }
             }
@@ -221,16 +221,16 @@ impl UdpSinkPadHandler {
         futures::executor::block_on(async move {
             let mut inner = self.0.lock().await;
             if inner.clients.take(&addr).is_none() {
-                gst::warning!(CAT, imp: imp, "Not removing unknown client {addr:?}");
+                gst::warning!(CAT, imp = imp, "Not removing unknown client {addr:?}");
                 return;
             }
 
             match inner.unconfigure_client(&addr) {
                 Ok(()) => {
-                    gst::info!(CAT, imp: imp, "Removed client {addr:?}");
+                    gst::info!(CAT, imp = imp, "Removed client {addr:?}");
                 }
                 Err(err) => {
-                    gst::error!(CAT, imp: imp, "Failed to remove client {addr:?}: {err}");
+                    gst::error!(CAT, imp = imp, "Failed to remove client {addr:?}: {err}");
                     imp.obj().post_error_message(err);
                 }
             }
@@ -241,9 +241,9 @@ impl UdpSinkPadHandler {
         futures::executor::block_on(async move {
             let mut inner = self.0.lock().await;
             if new_clients.is_empty() {
-                gst::info!(CAT, imp: imp, "Clearing clients");
+                gst::info!(CAT, imp = imp, "Clearing clients");
             } else {
-                gst::info!(CAT, imp: imp, "Replacing clients");
+                gst::info!(CAT, imp = imp, "Replacing clients");
             }
 
             let old_clients = std::mem::take(&mut inner.clients);
@@ -255,19 +255,19 @@ impl UdpSinkPadHandler {
                     // client is already configured
                     inner.clients.insert(*addr);
                 } else if let Err(err) = inner.unconfigure_client(addr) {
-                    gst::error!(CAT, imp: imp, "Failed to remove client {addr:?}: {err}");
+                    gst::error!(CAT, imp = imp, "Failed to remove client {addr:?}: {err}");
                     res = Err(err);
                 } else {
-                    gst::info!(CAT, imp: imp, "Removed client {addr:?}");
+                    gst::info!(CAT, imp = imp, "Removed client {addr:?}");
                 }
             }
 
             for addr in new_clients.into_iter() {
                 if let Err(err) = inner.configure_client(&addr) {
-                    gst::error!(CAT, imp: imp, "Failed to add client {addr:?}: {err}");
+                    gst::error!(CAT, imp = imp, "Failed to add client {addr:?}: {err}");
                     res = Err(err);
                 } else {
-                    gst::info!(CAT, imp: imp, "Added client {addr:?}");
+                    gst::info!(CAT, imp = imp, "Added client {addr:?}");
                     inner.clients.insert(addr);
                 }
             }
@@ -319,7 +319,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
         event: gst::Event,
     ) -> BoxFuture<'static, bool> {
         async move {
-            gst::debug!(CAT, obj: elem, "Handling {event:?}");
+            gst::debug!(CAT, obj = elem, "Handling {event:?}");
 
             match event.view() {
                 EventView::Eos(_) => {
@@ -343,7 +343,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
     }
 
     fn sink_event(self, _pad: &gst::Pad, imp: &UdpSink, event: gst::Event) -> bool {
-        gst::debug!(CAT, imp: imp, "Handling {event:?}");
+        gst::debug!(CAT, imp = imp, "Handling {event:?}");
 
         if let EventView::FlushStart(..) = event.view() {
             block_on_or_add_sub_task(async move {
@@ -554,7 +554,7 @@ impl UdpSinkPadHandlerInner {
             };
 
             if let Some(socket) = socket.as_mut() {
-                gst::log!(CAT, obj: elem, "Sending to {client:?}");
+                gst::log!(CAT, obj = elem, "Sending to {client:?}");
                 socket.send_to(&data, *client).await.map_err(|err| {
                     gst::element_error!(
                         elem,
@@ -575,7 +575,7 @@ impl UdpSinkPadHandlerInner {
             }
         }
 
-        gst::log!(CAT, obj: elem, "Sent buffer {buffer:?} to all clients");
+        gst::log!(CAT, obj = elem, "Sent buffer {buffer:?} to all clients");
 
         Ok(gst::FlowSuccess::Ok)
     }
@@ -585,7 +585,7 @@ impl UdpSinkPadHandlerInner {
         let now = elem.current_running_time();
 
         if let Ok(Some(delay)) = running_time.opt_checked_sub(now) {
-            gst::trace!(CAT, obj: elem, "sync: waiting {delay}");
+            gst::trace!(CAT, obj = elem, "sync: waiting {delay}");
             runtime::timer::delay_for(delay.into()).await;
         }
     }
@@ -596,7 +596,7 @@ impl UdpSinkPadHandlerInner {
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         if self.is_flushing {
-            gst::info!(CAT, obj: elem, "Discarding {buffer:?} (flushing)");
+            gst::info!(CAT, obj = elem, "Discarding {buffer:?} (flushing)");
 
             return Err(gst::FlowError::Flushing);
         }
@@ -612,14 +612,14 @@ impl UdpSinkPadHandlerInner {
                 self.sync(elem, rtime).await;
 
                 if self.is_flushing {
-                    gst::info!(CAT, obj: elem, "Discarding {buffer:?} (flushing)");
+                    gst::info!(CAT, obj = elem, "Discarding {buffer:?} (flushing)");
 
                     return Err(gst::FlowError::Flushing);
                 }
             }
         }
 
-        gst::debug!(CAT, obj: elem, "Handling {buffer:?}");
+        gst::debug!(CAT, obj = elem, "Handling {buffer:?}");
 
         self.render(elem, buffer).await.map_err(|err| {
             element_error!(
@@ -698,7 +698,7 @@ impl UdpSink {
             };
 
             let saddr = SocketAddr::new(bind_addr, bind_port as u16);
-            gst::debug!(CAT, imp: self, "Binding to {:?}", saddr);
+            gst::debug!(CAT, imp = self, "Binding to {:?}", saddr);
 
             let socket = match family {
                 SocketFamily::Ipv4 => socket2::Socket::new(
@@ -718,7 +718,7 @@ impl UdpSink {
                 Err(err) => {
                     gst::warning!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Failed to create {} socket: {}",
                         match family {
                             SocketFamily::Ipv4 => "IPv4",
@@ -771,7 +771,7 @@ impl UdpSink {
     }
 
     fn prepare(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp: self, "Preparing");
+        gst::debug!(CAT, imp = self, "Preparing");
 
         let mut settings = self.settings.lock().unwrap();
 
@@ -789,36 +789,36 @@ impl UdpSink {
             .prepare(self, socket, socket_v6, &settings)?;
         *self.ts_ctx.lock().unwrap() = Some(ts_ctx);
 
-        gst::debug!(CAT, imp: self, "Started preparation");
+        gst::debug!(CAT, imp = self, "Started preparation");
 
         Ok(())
     }
 
     fn unprepare(&self) {
-        gst::debug!(CAT, imp: self, "Unpreparing");
+        gst::debug!(CAT, imp = self, "Unpreparing");
         self.sink_pad_handler.unprepare();
         *self.ts_ctx.lock().unwrap() = None;
-        gst::debug!(CAT, imp: self, "Unprepared");
+        gst::debug!(CAT, imp = self, "Unprepared");
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp: self, "Stopping");
+        gst::debug!(CAT, imp = self, "Stopping");
         self.sink_pad_handler.stop();
-        gst::debug!(CAT, imp: self, "Stopped");
+        gst::debug!(CAT, imp = self, "Stopped");
         Ok(())
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp: self, "Starting");
+        gst::debug!(CAT, imp = self, "Starting");
         self.sink_pad_handler.start();
-        gst::debug!(CAT, imp: self, "Started");
+        gst::debug!(CAT, imp = self, "Started");
         Ok(())
     }
 
     fn try_into_socket_addr(&self, host: &str, port: i32) -> Result<SocketAddr, ()> {
         let addr: IpAddr = match host.parse() {
             Err(err) => {
-                gst::error!(CAT, imp: self, "Failed to parse host {}: {}", host, err);
+                gst::error!(CAT, imp = self, "Failed to parse host {}: {}", host, err);
                 return Err(());
             }
             Ok(addr) => addr,
@@ -826,7 +826,7 @@ impl UdpSink {
 
         let port: u16 = match port.try_into() {
             Err(err) => {
-                gst::error!(CAT, imp: self, "Invalid port {}: {}", port, err);
+                gst::error!(CAT, imp = self, "Invalid port {}: {}", port, err);
                 return Err(());
             }
             Ok(port) => port,
@@ -1088,19 +1088,19 @@ impl ObjectImpl for UdpSink {
                                 Err(()) => {
                                     gst::error!(
                                         CAT,
-                                        imp: self,
+                                        imp = self,
                                         "Invalid socket address {addr}:{port}"
                                     );
                                     None
                                 }
                             },
                             Err(err) => {
-                                gst::error!(CAT, imp: self, "Invalid port {err}");
+                                gst::error!(CAT, imp = self, "Invalid port {err}");
                                 None
                             }
                         }
                     } else {
-                        gst::error!(CAT, imp: self, "Invalid client {client}");
+                        gst::error!(CAT, imp = self, "Invalid client {client}");
                         None
                     }
                 });
@@ -1215,7 +1215,7 @@ impl ElementImpl for UdpSink {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {

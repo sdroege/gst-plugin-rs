@@ -298,7 +298,7 @@ impl TextAhead {
         // queue buffer
         let mut state = self.state.lock().unwrap();
 
-        gst::log!(CAT, imp: self, "input {:?}: {}", pts, text);
+        gst::log!(CAT, imp = self, "input {:?}: {}", pts, text);
 
         state.pending.push(Input {
             text,
@@ -325,7 +325,7 @@ impl TextAhead {
             gst::EventView::Eos(_) => {
                 let mut state = self.state.lock().unwrap();
 
-                gst::debug!(CAT, imp: self, "eos");
+                gst::debug!(CAT, imp = self, "eos");
 
                 while !state.pending.is_empty() {
                     let _ = self.push_pending(&mut state);
@@ -456,7 +456,7 @@ impl TextAhead {
             }
         }
 
-        gst::log!(CAT, imp: self, "output {:?}: {}", pts, text);
+        gst::log!(CAT, imp = self, "output {:?}: {}", pts, text);
 
         let mut output = gst::Buffer::from_mut_slice(text.into_bytes());
         {

@@ -266,7 +266,7 @@ impl VideoEncoderImpl for GifEnc {
             .map_err(|_| gst::loggable_error!(CAT, "Failed to drain"))?;
 
         let video_info = state.info();
-        gst::debug!(CAT, imp: self, "Setting format {:?}", video_info);
+        gst::debug!(CAT, imp = self, "Setting format {:?}", video_info);
 
         {
             let mut state = State::new(video_info);
@@ -299,7 +299,7 @@ impl VideoEncoderImpl for GifEnc {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Sending frame {}",
             frame.system_frame_number()
         );
@@ -403,7 +403,7 @@ impl VideoEncoderImpl for GifEnc {
 
 impl GifEnc {
     fn flush_encoder(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::debug!(CAT, imp: self, "Flushing");
+        gst::debug!(CAT, imp = self, "Flushing");
 
         let trailer_buffer = self.state.borrow_mut().as_mut().map(|state| {
             // Drop encoder to flush and take flushed data (gif trailer)

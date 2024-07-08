@@ -214,7 +214,7 @@ impl PaintableImpl for Paintable {
         let paintables = self.paintables.borrow();
 
         let Some(first_paintable) = paintables.first() else {
-            gst::trace!(CAT, imp: self, "Snapshotting black frame");
+            gst::trace!(CAT, imp = self, "Snapshotting black frame");
             snapshot.append_color(
                 &background_color,
                 &graphene::Rect::new(0f32, 0f32, width as f32, height as f32),
@@ -223,7 +223,7 @@ impl PaintableImpl for Paintable {
             return;
         };
 
-        gst::trace!(CAT, imp: self, "Snapshotting frame");
+        gst::trace!(CAT, imp = self, "Snapshotting frame");
 
         // The first paintable is the actual video frame and defines the overall size.
         //
@@ -513,7 +513,7 @@ impl Paintable {
     pub(super) fn handle_frame_changed(&self, sink: &crate::PaintableSink, frame: Frame) {
         let context = self.gl_context.borrow();
 
-        gst::trace!(CAT, imp: self, "Received new frame");
+        gst::trace!(CAT, imp = self, "Received new frame");
 
         let new_paintables =
             match frame.into_textures(context.as_ref(), &mut self.cached_textures.borrow_mut()) {
@@ -541,7 +541,7 @@ impl Paintable {
         if Some(new_size) != old_size {
             gst::debug!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Size changed from {old_size:?} to {new_size:?}",
             );
             self.obj().invalidate_size();
@@ -551,7 +551,7 @@ impl Paintable {
     }
 
     pub(super) fn handle_flush_frames(&self) {
-        gst::debug!(CAT, imp: self, "Flushing frames");
+        gst::debug!(CAT, imp = self, "Flushing frames");
         self.paintables.borrow_mut().clear();
         self.cached_textures.borrow_mut().clear();
         self.obj().invalidate_size();

@@ -82,7 +82,7 @@ impl PadSrcHandler for AppSrcPadHandler {
     type ElementImpl = AppSrc;
 
     fn src_event(self, pad: &gst::Pad, imp: &AppSrc, event: gst::Event) -> bool {
-        gst::log!(CAT, obj: pad, "Handling {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling {:?}", event);
 
         use gst::EventView;
         let ret = match event.view() {
@@ -94,16 +94,16 @@ impl PadSrcHandler for AppSrcPadHandler {
         };
 
         if ret {
-            gst::log!(CAT, obj: pad, "Handled {:?}", event);
+            gst::log!(CAT, obj = pad, "Handled {:?}", event);
         } else {
-            gst::log!(CAT, obj: pad, "Didn't handle {:?}", event);
+            gst::log!(CAT, obj = pad, "Didn't handle {:?}", event);
         }
 
         ret
     }
 
     fn src_query(self, pad: &gst::Pad, imp: &AppSrc, query: &mut gst::QueryRef) -> bool {
-        gst::log!(CAT, obj: pad, "Handling {:?}", query);
+        gst::log!(CAT, obj = pad, "Handling {:?}", query);
 
         use gst::QueryViewMut;
         let ret = match query.view_mut() {
@@ -135,9 +135,9 @@ impl PadSrcHandler for AppSrcPadHandler {
         };
 
         if ret {
-            gst::log!(CAT, obj: pad, "Handled {:?}", query);
+            gst::log!(CAT, obj = pad, "Handled {:?}", query);
         } else {
-            gst::log!(CAT, obj: pad, "Didn't handle {:?}", query);
+            gst::log!(CAT, obj = pad, "Didn't handle {:?}", query);
         }
         ret
     }
@@ -169,11 +169,11 @@ impl AppSrcTask {
     }
 
     async fn push_item(&mut self, item: StreamItem) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj: self.element, "Handling {:?}", item);
+        gst::log!(CAT, obj = self.element, "Handling {:?}", item);
         let appsrc = self.element.imp();
 
         if self.need_initial_events {
-            gst::debug!(CAT, obj: self.element, "Pushing initial events");
+            gst::debug!(CAT, obj = self.element, "Pushing initial events");
 
             let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
             let stream_start_evt = gst::event::StreamStart::builder(&stream_id)
@@ -203,7 +203,7 @@ impl AppSrcTask {
 
         match item {
             StreamItem::Buffer(buffer) => {
-                gst::log!(CAT, obj: self.element, "Forwarding {:?}", buffer);
+                gst::log!(CAT, obj = self.element, "Forwarding {:?}", buffer);
                 appsrc.src_pad.push(buffer).await
             }
             StreamItem::Event(event) => {
@@ -213,7 +213,7 @@ impl AppSrcTask {
                         Err(gst::FlowError::Eos)
                     }
                     _ => {
-                        gst::log!(CAT, obj: self.element, "Forwarding {:?}", event);
+                        gst::log!(CAT, obj = self.element, "Forwarding {:?}", event);
                         appsrc.src_pad.push_event(event).await;
                         Ok(gst::FlowSuccess::Ok)
                     }
@@ -241,18 +241,18 @@ impl TaskImpl for AppSrcTask {
             let res = self.push_item(item).await;
             match res {
                 Ok(_) => {
-                    gst::log!(CAT, obj: self.element, "Successfully pushed item");
+                    gst::log!(CAT, obj = self.element, "Successfully pushed item");
                 }
                 Err(gst::FlowError::Eos) => {
-                    gst::debug!(CAT, obj: self.element, "EOS");
+                    gst::debug!(CAT, obj = self.element, "EOS");
                     let appsrc = self.element.imp();
                     appsrc.src_pad.push_event(gst::event::Eos::new()).await;
                 }
                 Err(gst::FlowError::Flushing) => {
-                    gst::debug!(CAT, obj: self.element, "Flushing");
+                    gst::debug!(CAT, obj = self.element, "Flushing");
                 }
                 Err(err) => {
-                    gst::error!(CAT, obj: self.element, "Got error {}", err);
+                    gst::error!(CAT, obj = self.element, "Got error {}", err);
                     gst::element_error!(
                         &self.element,
                         gst::StreamError::Failed,
@@ -269,13 +269,13 @@ impl TaskImpl for AppSrcTask {
 
     fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(CAT, obj: self.element, "Stopping task");
+            gst::log!(CAT, obj = self.element, "Stopping task");
 
             self.flush();
             self.need_initial_events = true;
             self.need_segment = true;
 
-            gst::log!(CAT, obj: self.element, "Task stopped");
+            gst::log!(CAT, obj = self.element, "Task stopped");
             Ok(())
         }
         .boxed()
@@ -283,12 +283,12 @@ impl TaskImpl for AppSrcTask {
 
     fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(CAT, obj: self.element, "Starting task flush");
+            gst::log!(CAT, obj = self.element, "Starting task flush");
 
             self.flush();
             self.need_segment = true;
 
-            gst::log!(CAT, obj: self.element, "Task flush started");
+            gst::log!(CAT, obj = self.element, "Task flush started");
             Ok(())
         }
         .boxed()
@@ -308,7 +308,7 @@ impl AppSrc {
     fn push_buffer(&self, mut buffer: gst::Buffer) -> bool {
         let state = self.task.lock_state();
         if *state != TaskState::Started && *state != TaskState::Paused {
-            gst::debug!(CAT, imp: self, "Rejecting buffer due to element state");
+            gst::debug!(CAT, imp = self, "Rejecting buffer due to element state");
             return false;
         }
 
@@ -323,7 +323,7 @@ impl AppSrc {
                 buffer.set_dts(now.opt_checked_sub(base_time).ok().flatten());
                 buffer.set_pts(None);
             } else {
-                gst::error!(CAT, imp: self, "Don't have a clock yet");
+                gst::error!(CAT, imp = self, "Don't have a clock yet");
                 return false;
             }
         }
@@ -336,7 +336,7 @@ impl AppSrc {
         {
             Ok(_) => true,
             Err(err) => {
-                gst::error!(CAT, imp: self, "Failed to queue buffer: {}", err);
+                gst::error!(CAT, imp = self, "Failed to queue buffer: {}", err);
                 false
             }
         }
@@ -352,14 +352,14 @@ impl AppSrc {
         match sender.try_send(StreamItem::Event(gst::event::Eos::new())) {
             Ok(_) => true,
             Err(err) => {
-                gst::error!(CAT, imp: self, "Failed to queue EOS: {}", err);
+                gst::error!(CAT, imp = self, "Failed to queue EOS: {}", err);
                 false
             }
         }
     }
 
     fn prepare(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp: self, "Preparing");
+        gst::debug!(CAT, imp = self, "Preparing");
 
         let settings = self.settings.lock().unwrap();
         let context =
@@ -386,38 +386,38 @@ impl AppSrc {
             .prepare(AppSrcTask::new(self.obj().clone(), receiver), context)
             .block_on()?;
 
-        gst::debug!(CAT, imp: self, "Prepared");
+        gst::debug!(CAT, imp = self, "Prepared");
 
         Ok(())
     }
 
     fn unprepare(&self) {
-        gst::debug!(CAT, imp: self, "Unpreparing");
+        gst::debug!(CAT, imp = self, "Unpreparing");
 
         *self.sender.lock().unwrap() = None;
         self.task.unprepare().block_on().unwrap();
 
-        gst::debug!(CAT, imp: self, "Unprepared");
+        gst::debug!(CAT, imp = self, "Unprepared");
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp: self, "Stopping");
+        gst::debug!(CAT, imp = self, "Stopping");
         self.task.stop().block_on()?;
-        gst::debug!(CAT, imp: self, "Stopped");
+        gst::debug!(CAT, imp = self, "Stopped");
         Ok(())
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp: self, "Starting");
+        gst::debug!(CAT, imp = self, "Starting");
         self.task.start().block_on()?;
-        gst::debug!(CAT, imp: self, "Started");
+        gst::debug!(CAT, imp = self, "Started");
         Ok(())
     }
 
     fn pause(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp: self, "Pausing");
+        gst::debug!(CAT, imp = self, "Pausing");
         self.task.pause().block_on()?;
-        gst::debug!(CAT, imp: self, "Paused");
+        gst::debug!(CAT, imp = self, "Paused");
         Ok(())
     }
 }
@@ -598,7 +598,7 @@ impl ElementImpl for AppSrc {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {

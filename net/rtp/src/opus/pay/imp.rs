@@ -246,7 +246,11 @@ impl RtpBasePay2Impl for RtpOpusPay {
                         // Can't use .collect().map_err()? because it doesn't work for funcs with bool returns
                         match res {
                             Err(_) => {
-                                gst::error!(CAT, imp: self, "Invalid 'channel-mapping' field types");
+                                gst::error!(
+                                    CAT,
+                                    imp = self,
+                                    "Invalid 'channel-mapping' field types"
+                                );
                                 return false;
                             }
                             Ok(num_strings) => num_strings.join(","),
@@ -289,7 +293,7 @@ impl RtpBasePay2Impl for RtpOpusPay {
         let mut state = self.state.borrow_mut();
 
         let map = buffer.map_readable().map_err(|_| {
-            gst::error!(CAT, imp: self, "Can't map buffer readable");
+            gst::error!(CAT, imp = self, "Can't map buffer readable");
             gst::FlowError::Error
         })?;
 
@@ -303,7 +307,12 @@ impl RtpBasePay2Impl for RtpOpusPay {
         //
         // Even in DTX mode there will still be a non-DTX packet going through every 400ms.
         if dtx && data.len() <= 2 {
-            gst::log!(CAT, imp: self, "Not sending out empty DTX packet {:?}", buffer);
+            gst::log!(
+                CAT,
+                imp = self,
+                "Not sending out empty DTX packet {:?}",
+                buffer
+            );
             // The first non-DTX packet will be the start of a talkspurt
             state.marker_pending = true;
             self.obj().drop_buffers(..=id);
@@ -370,22 +379,27 @@ impl RtpBasePay2Impl for RtpOpusPay {
                 if s.get::<i32>("channel-mapping-family") == Ok(0) {
                     let peer_s = peer_caps.structure(0).unwrap();
 
-                    gst::trace!(CAT, imp: self, "Peer preference structure: {peer_s}");
+                    gst::trace!(CAT, imp = self, "Peer preference structure: {peer_s}");
 
-                    let pref_chans = peer_s.get::<&str>("stereo")
+                    let pref_chans = peer_s
+                        .get::<&str>("stereo")
                         .ok()
                         .and_then(|params| params.trim().parse::<i32>().ok())
                         .map(|v| match v {
                             0 => 1, // mono
                             1 => 2, // stereo
                             _ => {
-                                gst::warning!(CAT, imp: self, "Unexpected stereo value {v} in peer caps {s}");
+                                gst::warning!(
+                                    CAT,
+                                    imp = self,
+                                    "Unexpected stereo value {v} in peer caps {s}"
+                                );
                                 2 // default is stereo
                             }
                         });
 
                     if let Some(pref_chans) = pref_chans {
-                        gst::trace!(CAT, imp: self, "Peer preference: channels={pref_chans}");
+                        gst::trace!(CAT, imp = self, "Peer preference: channels={pref_chans}");
 
                         let mut pref_caps = gst::Caps::builder("audio/x-opus")
                             .field("channel-mapping-family", 0i32)

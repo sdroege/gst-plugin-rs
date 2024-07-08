@@ -334,13 +334,13 @@ impl RtpBasePay2Impl for RtpMpeg4GenericPay {
         let codec_data = match s.get::<&gst::BufferRef>("codec_data") {
             Ok(codec_data) => codec_data,
             Err(err) => {
-                gst::error!(CAT, imp: self, "Error getting codec_data from Caps: {err}");
+                gst::error!(CAT, imp = self, "Error getting codec_data from Caps: {err}");
                 return false;
             }
         };
 
         let Ok(codec_data) = codec_data.map_readable() else {
-            gst::error!(CAT, imp: self, "Failed to map codec_data as readable");
+            gst::error!(CAT, imp = self, "Failed to map codec_data as readable");
             return false;
         };
 
@@ -358,25 +358,34 @@ impl RtpBasePay2Impl for RtpMpeg4GenericPay {
                 let config = match r.parse::<AudioSpecificConfig>() {
                     Ok(config) => config,
                     Err(err) => {
-                        gst::error!(CAT, imp: self, "Error parsing audio codec_data: {err:#}");
+                        gst::error!(CAT, imp = self, "Error parsing audio codec_data: {err:#}");
                         return false;
                     }
                 };
 
                 if config.audio_object_type == 0 || config.audio_object_type > 6 {
-                    gst::error!(CAT, imp: self, "Unsupported Audio Object Type {}", config.audio_object_type);
+                    gst::error!(
+                        CAT,
+                        imp = self,
+                        "Unsupported Audio Object Type {}",
+                        config.audio_object_type
+                    );
                     return false;
                 }
 
                 let profile_level = match ProfileLevel::from_caps(s) {
                     Ok(profile_level) => profile_level,
                     Err(err) => {
-                        gst::error!(CAT, imp: self, "Error getting profile level from Caps: {err:#}");
+                        gst::error!(
+                            CAT,
+                            imp = self,
+                            "Error getting profile level from Caps: {err:#}"
+                        );
                         return false;
                     }
                 };
 
-                gst::log!(CAT, imp: self, "Using audio codec_data {config:?}");
+                gst::log!(CAT, imp = self, "Using audio codec_data {config:?}");
 
                 // AAC-hbr: also used by rtpmp4gpay
                 // RFC 3640 also defines AAC-lbr, with a maximum encoded buffer
@@ -411,18 +420,22 @@ impl RtpBasePay2Impl for RtpMpeg4GenericPay {
             }
             "video/mpeg" => {
                 if codec_data.len() < 5 {
-                    gst::error!(CAT, imp: self, "Error parsing video codec_data: too short");
+                    gst::error!(CAT, imp = self, "Error parsing video codec_data: too short");
                     return false;
                 }
 
                 let code = u32::from_be_bytes(codec_data[..4].try_into().unwrap());
                 let profile = if code == VOS_STARTCODE {
                     let profile = codec_data[4];
-                    gst::log!(CAT, imp: self, "Using video codec_data profile {profile}");
+                    gst::log!(CAT, imp = self, "Using video codec_data profile {profile}");
 
                     profile
                 } else {
-                    gst::warning!(CAT, imp: self, "Unexpected VOS startcode in video codec_data. Assuming profile '1'");
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Unexpected VOS startcode in video codec_data. Assuming profile '1'"
+                    );
 
                     1
                 };
@@ -510,8 +523,14 @@ impl RtpBasePay2Impl for RtpMpeg4GenericPay {
         let mut state = self.state.borrow_mut();
         let mut settings = self.settings.lock().unwrap();
 
-        gst::trace!(CAT, imp: self, "Handling buffer {id} duration {} pts {} dts {}, len {}",
-            buffer.duration().display(), buffer.pts().display(), buffer.dts().display(), buffer.size(),
+        gst::trace!(
+            CAT,
+            imp = self,
+            "Handling buffer {id} duration {} pts {} dts {}, len {}",
+            buffer.duration().display(),
+            buffer.pts().display(),
+            buffer.dts().display(),
+            buffer.size(),
         );
 
         let maybe_random_access = if state.mode.random_access_indication {
@@ -520,17 +539,23 @@ impl RtpBasePay2Impl for RtpMpeg4GenericPay {
             None
         };
 
-        let dts_delta = ct_delta_to_rtp(buffer.dts(), buffer.pts(), state.clock_rate).and_then(|dts_delta_res| {
-            if dts_delta_res.is_none() {
-                gst::warning!(CAT, imp: self, "Overflow computing DTS-delta between pts {} & dts {}",
-                    buffer.dts().display(), buffer.pts().display(),
-                );
-            }
+        let dts_delta = ct_delta_to_rtp(buffer.dts(), buffer.pts(), state.clock_rate).and_then(
+            |dts_delta_res| {
+                if dts_delta_res.is_none() {
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Overflow computing DTS-delta between pts {} & dts {}",
+                        buffer.dts().display(),
+                        buffer.pts().display(),
+                    );
+                }
 
-            dts_delta_res
-        });
+                dts_delta_res
+            },
+        );
 
-        gst::trace!(CAT, imp: self,
+        gst::trace!(CAT, imp = self,
             "Pushing AU from buffer {id} dts_delta {dts_delta:?} random access {maybe_random_access:?}",
         );
 
@@ -540,7 +565,7 @@ impl RtpBasePay2Impl for RtpMpeg4GenericPay {
             pts: buffer.pts(),
             dts_delta,
             buffer: buffer.clone().into_mapped_buffer_readable().map_err(|_| {
-                gst::error!(CAT, imp: self, "Can't map incoming buffer readable");
+                gst::error!(CAT, imp = self, "Can't map incoming buffer readable");
                 gst::FlowError::Error
             })?,
             maybe_random_access,
@@ -585,7 +610,7 @@ impl RtpBasePay2Impl for RtpMpeg4GenericPay {
                     let mut live_guard = self.is_live.lock().unwrap();
 
                     if Some(is_live) != *live_guard {
-                        gst::info!(CAT, imp: self, "Upstream is live: {is_live}");
+                        gst::info!(CAT, imp = self, "Upstream is live: {is_live}");
                         *live_guard = Some(is_live);
                     }
                 }
@@ -597,7 +622,9 @@ impl RtpBasePay2Impl for RtpMpeg4GenericPay {
                         min += max_ptime;
                         max.opt_add_assign(max_ptime);
                     } else if is_live {
-                        gst::warning!(CAT, imp: self,
+                        gst::warning!(
+                            CAT,
+                            imp = self,
                             "Aggregating packets in live mode, but no max_ptime configured. \
                             Configured latency may be too low!"
                         );
@@ -642,7 +669,13 @@ impl RtpMpeg4GenericPay {
         let agg_mode = self.effective_aggregate_mode(settings);
 
         if (self.obj().mtu() as usize) < state.min_mtu {
-            gst::error!(CAT, imp: self, "Insufficient mtu {} at least {} bytes needed", self.obj().mtu(), state.min_mtu);
+            gst::error!(
+                CAT,
+                imp = self,
+                "Insufficient mtu {} at least {} bytes needed",
+                self.obj().mtu(),
+                state.min_mtu
+            );
             return Err(gst::FlowError::Error);
         }
 
@@ -693,7 +726,13 @@ impl RtpMpeg4GenericPay {
                         res = w.write(7, 0).map_err(Into::into);
                     }
                     if let Err(err) = res {
-                        gst::error!(CAT, imp: self, "Failed to write header for AU {} in buffer {}: {err:#}", header.index, au.id);
+                        gst::error!(
+                            CAT,
+                            imp = self,
+                            "Failed to write header for AU {} in buffer {}: {err:#}",
+                            header.index,
+                            au.id
+                        );
                         return Err(gst::FlowError::Error);
                     }
 
@@ -748,18 +787,24 @@ impl RtpMpeg4GenericPay {
                     .opt_gt(max_ptime)
                     .unwrap_or(false);
 
-            gst::log!(CAT, imp: self,
+            gst::log!(
+                CAT,
+                imp = self,
                 "Pending: size {}, duration ~{:.3}, mode: {agg_mode:?} + {send_mode:?} => {}",
                 state.pending_size,
                 state.pending_duration.display(),
-                if is_ready { "ready" } else { "not ready, waiting for more data" },
+                if is_ready {
+                    "ready"
+                } else {
+                    "not ready, waiting for more data"
+                },
             );
 
             if !is_ready {
                 break;
             }
 
-            gst::trace!(CAT, imp: self, "Creating packet..");
+            gst::trace!(CAT, imp = self, "Creating packet..");
 
             let id = front.id;
             let mut end_id = front.id;
@@ -776,7 +821,11 @@ impl RtpMpeg4GenericPay {
             au_data_list.clear();
 
             while let Some(front) = state.pending_aus.front() {
-                gst::trace!(CAT, imp: self, "{front:?}, accumulated size {acc_size} duration ~{acc_duration:.3}");
+                gst::trace!(
+                    CAT,
+                    imp = self,
+                    "{front:?}, accumulated size {acc_size} duration ~{acc_duration:.3}"
+                );
 
                 // If this AU would overflow the packet, bail out and send out what we have.
                 //
@@ -790,15 +839,21 @@ impl RtpMpeg4GenericPay {
                     // No CTS-delta for the first AU in the packet
                     None
                 } else {
-                    ct_delta_to_rtp(front.pts, previous_pts, state.clock_rate).and_then(|dts_delta_res| {
-                        if dts_delta_res.is_none() {
-                            gst::warning!(CAT, imp: self, "Overflow computing CTS-delta between pts {} & previous pts {}",
-                            front.pts.display(), previous_pts.display(),
-                            );
-                        }
+                    ct_delta_to_rtp(front.pts, previous_pts, state.clock_rate).and_then(
+                        |dts_delta_res| {
+                            if dts_delta_res.is_none() {
+                                gst::warning!(
+                                    CAT,
+                                    imp = self,
+                                    "Overflow computing CTS-delta between pts {} & previous pts {}",
+                                    front.pts.display(),
+                                    previous_pts.display(),
+                                );
+                            }
 
-                        dts_delta_res
-                    })
+                            dts_delta_res
+                        },
+                    )
                 };
 
                 previous_pts = front.pts;
@@ -813,8 +868,12 @@ impl RtpMpeg4GenericPay {
                 };
 
                 w.build_with(&header, &ctx).map_err(|err| {
-                    gst::error!(CAT, imp: self, "Failed to write header for AU {} in buffer {}: {err:#}",
-                        header.index, front.id,
+                    gst::error!(
+                        CAT,
+                        imp = self,
+                        "Failed to write header for AU {} in buffer {}: {err:#}",
+                        header.index,
+                        front.id,
                     );
                     gst::FlowError::Error
                 })?;
@@ -852,7 +911,10 @@ impl RtpMpeg4GenericPay {
 
             // add final padding
             if let Err(err) = w.write(7, 0) {
-                gst::error!(CAT, imp: self, "Failed to write padding for final AU {} in buffer {end_id}: {err}",
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Failed to write padding for final AU {} in buffer {end_id}: {err}",
                     ctx.prev_index.expect("at least one AU"),
                 );
                 return Err(gst::FlowError::Error);
@@ -874,7 +936,12 @@ impl RtpMpeg4GenericPay {
                 .queue_packet(PacketToBufferRelation::Ids(id..=end_id), packet)?;
         }
 
-        gst::log!(CAT, imp: self, "All done for now, {} pending AUs", state.pending_aus.len());
+        gst::log!(
+            CAT,
+            imp = self,
+            "All done for now, {} pending AUs",
+            state.pending_aus.len()
+        );
 
         if send_mode == SendPacketMode::ForcePending {
             self.obj().finish_pending_packets()?;
@@ -916,6 +983,6 @@ impl RtpMpeg4GenericPay {
 
         *self.is_live.lock().unwrap() = Some(is_live);
 
-        gst::info!(CAT, imp: self, "Upstream is live: {is_live}");
+        gst::info!(CAT, imp = self, "Upstream is live: {is_live}");
     }
 }

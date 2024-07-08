@@ -136,12 +136,12 @@ impl Settings {
 
             for (key, value) in structure.iter() {
                 if let Ok(Ok(value_str)) = value.transform::<String>().map(|v| v.get()) {
-                    gst::log!(CAT, imp: imp, "metadata '{}' -> '{}'", key, value_str);
+                    gst::log!(CAT, imp = imp, "metadata '{}' -> '{}'", key, value_str);
                     hash.insert(key.to_string(), value_str);
                 } else {
                     gst::warning!(
                         CAT,
-                        imp: imp,
+                        imp = imp,
                         "Failed to convert metadata '{}' to string ('{:?}')",
                         key,
                         value
@@ -203,7 +203,7 @@ impl S3Sink {
             OnError::Abort => {
                 gst::log!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Aborting multipart upload request with id: {}",
                     state.upload_id
                 );
@@ -211,13 +211,13 @@ impl S3Sink {
                     Ok(()) => {
                         gst::log!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "Aborting multipart upload request succeeded."
                         );
                     }
                     Err(err) => gst::error!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Aborting multipart upload failed: {}",
                         err.to_string()
                     ),
@@ -226,7 +226,7 @@ impl S3Sink {
             OnError::Complete => {
                 gst::log!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Completing multipart upload request with id: {}",
                     state.upload_id
                 );
@@ -234,13 +234,13 @@ impl S3Sink {
                     Ok(()) => {
                         gst::log!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "Complete multipart upload request succeeded."
                         );
                     }
                     Err(err) => gst::error!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Completing multipart upload failed: {}",
                         err.to_string()
                     ),
@@ -285,7 +285,7 @@ impl S3Sink {
             .build();
         state.completed_parts.push(completed_part);
 
-        gst::info!(CAT, imp: self, "Uploaded part {}", part_number);
+        gst::info!(CAT, imp = self, "Uploaded part {}", part_number);
 
         Ok(())
     }
@@ -633,7 +633,7 @@ impl S3Sink {
             return Ok(());
         }
 
-        gst::debug!(CAT, imp: self, "Setting uri to {:?}", url_str);
+        gst::debug!(CAT, imp = self, "Setting uri to {:?}", url_str);
 
         let url_str = url_str.unwrap();
         match parse_s3_url(url_str) {
@@ -804,7 +804,7 @@ impl ObjectImpl for S3Sink {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Setting property '{}' to '{:?}'",
             pspec.name(),
             value
@@ -1030,7 +1030,7 @@ impl BaseSinkImpl for S3Sink {
     fn start(&self) -> Result<(), gst::ErrorMessage> {
         let res = self.start();
         if let Err(ref err) = res {
-            gst::error!(CAT, imp: self, "Failed to start: {err}");
+            gst::error!(CAT, imp = self, "Failed to start: {err}");
         }
 
         res
@@ -1040,7 +1040,7 @@ impl BaseSinkImpl for S3Sink {
         let mut state = self.state.lock().unwrap();
 
         if let State::Started(ref mut state) = *state {
-            gst::warning!(CAT, imp: self, "Stopped without EOS");
+            gst::warning!(CAT, imp = self, "Stopped without EOS");
 
             // We're stopping without an EOS -- treat this as an error and deal with the open
             // multipart upload accordingly _if_ we managed to upload any parts
@@ -1050,7 +1050,7 @@ impl BaseSinkImpl for S3Sink {
         }
 
         *state = State::Stopped;
-        gst::info!(CAT, imp: self, "Stopped");
+        gst::info!(CAT, imp = self, "Stopped");
 
         Ok(())
     }
@@ -1070,7 +1070,7 @@ impl BaseSinkImpl for S3Sink {
             return Err(gst::FlowError::Error);
         }
 
-        gst::trace!(CAT, imp: self, "Rendering {:?}", buffer);
+        gst::trace!(CAT, imp = self, "Rendering {:?}", buffer);
         let map = buffer.map_readable().map_err(|_| {
             gst::element_imp_error!(self, gst::CoreError::Failed, ["Failed to map buffer"]);
             gst::FlowError::Error
@@ -1080,12 +1080,17 @@ impl BaseSinkImpl for S3Sink {
             Ok(_) => Ok(gst::FlowSuccess::Ok),
             Err(err) => match err {
                 Some(error_message) => {
-                    gst::error!(CAT, imp: self, "Multipart upload failed: {}", error_message);
+                    gst::error!(
+                        CAT,
+                        imp = self,
+                        "Multipart upload failed: {}",
+                        error_message
+                    );
                     self.post_error_message(error_message);
                     Err(gst::FlowError::Error)
                 }
                 _ => {
-                    gst::info!(CAT, imp: self, "Upload interrupted. Flushing...");
+                    gst::info!(CAT, imp = self, "Upload interrupted. Flushing...");
                     Err(gst::FlowError::Flushing)
                 }
             },
@@ -1113,7 +1118,7 @@ impl BaseSinkImpl for S3Sink {
             if let Err(error_message) = self.finalize_upload() {
                 gst::error!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Failed to finalize the upload: {}",
                     error_message
                 );

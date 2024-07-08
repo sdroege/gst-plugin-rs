@@ -180,10 +180,14 @@ impl RtpBaseDepay2Impl for RtpJpegDepay {
             });
 
             if let Some((width, height)) = dimensions {
-                gst::debug!(CAT, imp: self, "Parsed SDP dimensions {width}x{height}");
+                gst::debug!(CAT, imp = self, "Parsed SDP dimensions {width}x{height}");
                 state.sdp_dimensions = dimensions;
             } else {
-                gst::warning!(CAT, imp: self, "Failed to parse 'x-dimensions' attribute: {dimensions_str}");
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Failed to parse 'x-dimensions' attribute: {dimensions_str}"
+                );
             }
         }
 
@@ -200,10 +204,14 @@ impl RtpBaseDepay2Impl for RtpJpegDepay {
                 .ok()
                 .and_then(gst::Fraction::approximate_f64)
             {
-                gst::debug!(CAT, imp: self, "Parsed SDP framerate {framerate}");
+                gst::debug!(CAT, imp = self, "Parsed SDP framerate {framerate}");
                 state.sdp_framerate = Some(framerate);
             } else {
-                gst::warning!(CAT, imp: self, "Failed to parse 'a-framerate' attribute: {framerate_str}");
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Failed to parse 'a-framerate' attribute: {framerate_str}"
+                );
             }
         }
 
@@ -234,17 +242,17 @@ impl RtpBaseDepay2Impl for RtpJpegDepay {
         let main_header = match r.parse::<MainHeader>() {
             Ok(main_header) => main_header,
             Err(err) => {
-                gst::warning!(CAT, imp: self, "Failed to parse main header: {err}");
+                gst::warning!(CAT, imp = self, "Failed to parse main header: {err}");
                 state.pending_frame = None;
                 self.obj().drop_packet(packet);
                 return Ok(gst::FlowSuccess::Ok);
             }
         };
 
-        gst::trace!(CAT, imp: self, "Parsed main header {main_header:?}");
+        gst::trace!(CAT, imp = self, "Parsed main header {main_header:?}");
 
         if state.pending_frame.is_none() && main_header.fragment_offset > 0 {
-            gst::trace!(CAT, imp: self, "Waiting for start of frame");
+            gst::trace!(CAT, imp = self, "Waiting for start of frame");
             self.obj().drop_packet(packet);
             return Ok(gst::FlowSuccess::Ok);
         }
@@ -253,7 +261,7 @@ impl RtpBaseDepay2Impl for RtpJpegDepay {
             match r.parse::<RestartHeader>() {
                 Ok(restart_header) => Some(restart_header),
                 Err(err) => {
-                    gst::warning!(CAT, imp: self, "Failed to parse restart header: {err}");
+                    gst::warning!(CAT, imp = self, "Failed to parse restart header: {err}");
                     self.obj().drop_packet(packet);
                     return Ok(gst::FlowSuccess::Ok);
                 }
@@ -265,7 +273,7 @@ impl RtpBaseDepay2Impl for RtpJpegDepay {
         // Handle initial setup for a frame
         if main_header.fragment_offset == 0 {
             if state.pending_frame.is_some() {
-                gst::warning!(CAT, imp: self, "Dropping incomplete pending frame");
+                gst::warning!(CAT, imp = self, "Dropping incomplete pending frame");
                 state.pending_frame = None;
             }
 
@@ -289,13 +297,22 @@ impl RtpBaseDepay2Impl for RtpJpegDepay {
                     Ok(_) => match state.quant_tables.get(&main_header.q) {
                         Some(quant) => quant.clone(),
                         None => {
-                            gst::warning!(CAT, imp: self, "Have no quantization table for Q {} yet", main_header.q);
+                            gst::warning!(
+                                CAT,
+                                imp = self,
+                                "Have no quantization table for Q {} yet",
+                                main_header.q
+                            );
                             self.obj().drop_packet(packet);
                             return Ok(gst::FlowSuccess::Ok);
                         }
                     },
                     Err(err) => {
-                        gst::warning!(CAT, imp: self, "Failed to parse quantization table header: {err}");
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "Failed to parse quantization table header: {err}"
+                        );
                         self.obj().drop_packet(packet);
                         return Ok(gst::FlowSuccess::Ok);
                     }
@@ -319,7 +336,7 @@ impl RtpBaseDepay2Impl for RtpJpegDepay {
             } else if let Some((width, _)) = state.sdp_dimensions {
                 width as i32
             } else {
-                gst::warning!(CAT, imp: self, "Can't determine valid width for frame");
+                gst::warning!(CAT, imp = self, "Can't determine valid width for frame");
                 self.obj().drop_packet(packet);
                 return Ok(gst::FlowSuccess::Ok);
             };
@@ -329,7 +346,7 @@ impl RtpBaseDepay2Impl for RtpJpegDepay {
             } else if let Some((height, _)) = state.sdp_dimensions {
                 height as i32
             } else {
-                gst::warning!(CAT, imp: self, "Can't determine valid height for frame");
+                gst::warning!(CAT, imp = self, "Can't determine valid height for frame");
                 self.obj().drop_packet(packet);
                 return Ok(gst::FlowSuccess::Ok);
             };
@@ -357,7 +374,7 @@ impl RtpBaseDepay2Impl for RtpJpegDepay {
                 }
 
                 let caps = caps_builder.build();
-                gst::debug!(CAT, imp: self, "Setting caps {caps:?}");
+                gst::debug!(CAT, imp = self, "Setting caps {caps:?}");
                 self.obj().set_src_caps(&caps);
                 state.dimensions = Some((width, height));
                 state.framerate = state.sdp_framerate;
@@ -376,7 +393,7 @@ impl RtpBaseDepay2Impl for RtpJpegDepay {
             ) {
                 Ok(jpeg_header) => jpeg_header,
                 Err(err) => {
-                    gst::warning!(CAT, imp: self, "Can't create JPEG header for frame: {err}");
+                    gst::warning!(CAT, imp = self, "Can't create JPEG header for frame: {err}");
                     self.obj().drop_packet(packet);
                     return Ok(gst::FlowSuccess::Ok);
                 }
@@ -384,7 +401,11 @@ impl RtpBaseDepay2Impl for RtpJpegDepay {
             let mut w = ByteWriter::endian(&mut data, BigEndian);
 
             if let Err(err) = w.build::<JpegHeader>(&jpeg_header) {
-                gst::warning!(CAT, imp: self, "Failed to write JPEG header for frame: {err}");
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Failed to write JPEG header for frame: {err}"
+                );
                 self.obj().drop_packet(packet);
                 return Ok(gst::FlowSuccess::Ok);
             }
@@ -399,7 +420,10 @@ impl RtpBaseDepay2Impl for RtpJpegDepay {
 
         let pending_frame = state.pending_frame.as_mut().expect("no pending frame");
         if pending_frame.expected_fragment_offset != main_header.fragment_offset {
-            gst::warning!(CAT, imp: self, "Expected fragment offset {} but got {}",
+            gst::warning!(
+                CAT,
+                imp = self,
+                "Expected fragment offset {} but got {}",
                 pending_frame.expected_fragment_offset,
                 main_header.fragment_offset,
             );
@@ -416,7 +440,7 @@ impl RtpBaseDepay2Impl for RtpJpegDepay {
         {
             gst::warning!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Main header changed in incompatible ways from {:?} to {:?} during a frame",
                 pending_frame.main_header,
                 main_header,

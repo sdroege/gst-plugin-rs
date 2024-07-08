@@ -177,7 +177,7 @@ impl ElementImpl for InterSrc {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         if transition == gst::StateChange::ReadyToPaused {
             if let Err(err) = self.prepare() {

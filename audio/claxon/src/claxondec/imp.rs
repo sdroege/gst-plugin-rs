@@ -115,7 +115,7 @@ impl AudioDecoderImpl for ClaxonDec {
     }
 
     fn set_format(&self, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        gst::debug!(CAT, imp: self, "Setting format {:?}", caps);
+        gst::debug!(CAT, imp = self, "Setting format {:?}", caps);
 
         let mut audio_info: Option<gst_audio::AudioInfo> = None;
 
@@ -124,15 +124,15 @@ impl AudioDecoderImpl for ClaxonDec {
             let streamheaders = streamheaders.as_slice();
 
             if streamheaders.len() < 2 {
-                gst::debug!(CAT, imp: self, "Not enough streamheaders, trying in-band");
+                gst::debug!(CAT, imp = self, "Not enough streamheaders, trying in-band");
             } else {
                 let ident_buf = streamheaders[0].get::<Option<gst::Buffer>>();
                 if let Ok(Some(ident_buf)) = ident_buf {
-                    gst::debug!(CAT, imp: self, "Got streamheader buffers");
+                    gst::debug!(CAT, imp = self, "Got streamheader buffers");
                     let inmap = ident_buf.map_readable().unwrap();
 
                     if inmap[0..7] != [0x7f, b'F', b'L', b'A', b'C', 0x01, 0x00] {
-                        gst::debug!(CAT, imp: self, "Unknown streamheader format");
+                        gst::debug!(CAT, imp = self, "Unknown streamheader format");
                     } else if let Ok(tstreaminfo) = claxon_streaminfo(&inmap[13..]) {
                         if let Ok(taudio_info) = gstaudioinfo(&tstreaminfo) {
                             // To speed up negotiation
@@ -142,7 +142,7 @@ impl AudioDecoderImpl for ClaxonDec {
                             {
                                 gst::debug!(
                                     CAT,
-                                    imp: self,
+                                    imp = self,
                                     "Error to negotiate output from based on in-caps streaminfo"
                                 );
                             }
@@ -165,7 +165,7 @@ impl AudioDecoderImpl for ClaxonDec {
         &self,
         inbuf: Option<&gst::Buffer>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::debug!(CAT, imp: self, "Handling buffer {:?}", inbuf);
+        gst::debug!(CAT, imp = self, "Handling buffer {:?}", inbuf);
 
         let inbuf = match inbuf {
             None => return Ok(gst::FlowSuccess::Ok),
@@ -173,7 +173,7 @@ impl AudioDecoderImpl for ClaxonDec {
         };
 
         let inmap = inbuf.map_readable().map_err(|_| {
-            gst::error!(CAT, imp: self, "Failed to buffer readable");
+            gst::error!(CAT, imp = self, "Failed to buffer readable");
             gst::FlowError::Error
         })?;
 
@@ -181,18 +181,18 @@ impl AudioDecoderImpl for ClaxonDec {
         let state = state_guard.as_mut().ok_or(gst::FlowError::NotNegotiated)?;
 
         if inmap.as_slice() == b"fLaC" {
-            gst::debug!(CAT, imp: self, "fLaC buffer received");
+            gst::debug!(CAT, imp = self, "fLaC buffer received");
         } else if inmap[0] & 0x7F == 0x00 {
-            gst::debug!(CAT, imp: self, "Streaminfo header buffer received");
+            gst::debug!(CAT, imp = self, "Streaminfo header buffer received");
             return self.handle_streaminfo_header(state, inmap.as_ref());
         } else if inmap[0] == 0b1111_1111 && inmap[1] & 0b1111_1100 == 0b1111_1000 {
-            gst::debug!(CAT, imp: self, "Data buffer received");
+            gst::debug!(CAT, imp = self, "Data buffer received");
             return self.handle_data(state, inmap.as_ref());
         } else {
             // info about other headers in flacparse and https://xiph.org/flac/format.html
             gst::debug!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Other header buffer received {:?}",
                 inmap[0] & 0x7F
             );
@@ -220,7 +220,7 @@ impl ClaxonDec {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Successfully parsed headers: {:?}",
             audio_info
         );

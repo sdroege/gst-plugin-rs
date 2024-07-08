@@ -210,9 +210,12 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMP2TDepay {
         let payload = packet.payload();
 
         if payload.len() < 188 + bytes_to_skip {
-            gst::warning!(CAT, imp: self,
+            gst::warning!(
+                CAT,
+                imp = self,
                 "Payload too small: {} bytes, but need at least {} bytes",
-                payload.len(), 188 + bytes_to_skip
+                payload.len(),
+                188 + bytes_to_skip
             );
 
             self.obj().drop_packet(packet);
@@ -236,7 +239,11 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMP2TDepay {
         }
 
         let Some(packet_size) = state.packet_size else {
-            gst::debug!(CAT, imp: self, "Could not determine packet size, dropping packet {packet:?}");
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Could not determine packet size, dropping packet {packet:?}"
+            );
             self.obj().drop_packet(packet);
             return Ok(gst::FlowSuccess::Ok);
         };
@@ -248,14 +255,21 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMP2TDepay {
         let n_packets = payload.len() / packet_size;
 
         if payload.len() % packet_size != 0 {
-            gst::warning!(CAT, imp: self,
+            gst::warning!(
+                CAT,
+                imp = self,
                 "Payload does not contain an integral number of MPEG-TS packets! ({} left over)",
-                payload.len() % packet_size);
+                payload.len() % packet_size
+            );
         }
 
         let output_size = n_packets * packet_size;
 
-        gst::trace!(CAT, imp: self, "Packet with {n_packets} MPEG-TS packets of size {packet_size}");
+        gst::trace!(
+            CAT,
+            imp = self,
+            "Packet with {n_packets} MPEG-TS packets of size {packet_size}"
+        );
 
         let mut buffer =
             packet.payload_subbuffer_from_offset_with_length(bytes_to_skip, output_size);
@@ -266,7 +280,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMP2TDepay {
             buffer_ref.set_flags(gst::BufferFlags::RESYNC);
         }
 
-        gst::trace!(CAT, imp: self, "Finishing buffer {buffer:?}");
+        gst::trace!(CAT, imp = self, "Finishing buffer {buffer:?}");
 
         self.obj().queue_buffer(packet.into(), buffer)
     }
@@ -277,7 +291,11 @@ impl RtpMP2TDepay {
         const PACKET_SIZES: [(usize, usize); 4] = [(188, 0), (192, 4), (204, 0), (208, 0)];
 
         for (size, offset) in PACKET_SIZES {
-            gst::debug!(CAT, imp: self, "Trying MPEG-TS packet size of {size} bytes..");
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Trying MPEG-TS packet size of {size} bytes.."
+            );
 
             // Try exact size match for the payload first
             if payload.len() >= size
@@ -286,16 +304,29 @@ impl RtpMP2TDepay {
                     .chunks_exact(size)
                     .all(|packet| packet[offset] == TS_PACKET_SYNC)
             {
-                gst::info!(CAT, imp: self, "Detected MPEG-TS packet size of {size} bytes, {} packets", payload.len() / size);
+                gst::info!(
+                    CAT,
+                    imp = self,
+                    "Detected MPEG-TS packet size of {size} bytes, {} packets",
+                    payload.len() / size
+                );
                 return NonZeroUsize::new(size);
             }
         }
 
-        gst::warning!(CAT, imp: self, "Could not detect MPEG-TS packet size using full payload");
+        gst::warning!(
+            CAT,
+            imp = self,
+            "Could not detect MPEG-TS packet size using full payload"
+        );
 
         // No match? Try if we find a size if we ignore any leftover bytes
         for (size, offset) in PACKET_SIZES {
-            gst::debug!(CAT, imp: self, "Trying MPEG-TS packet size of {size} bytes with remainder..");
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Trying MPEG-TS packet size of {size} bytes with remainder.."
+            );
 
             if payload.len() >= size
                 && payload.len() % size != 0
@@ -303,13 +334,18 @@ impl RtpMP2TDepay {
                     .chunks_exact(size)
                     .all(|packet| packet[offset] == TS_PACKET_SYNC)
             {
-                gst::info!(CAT, imp: self, "Detected MPEG-TS packet size of {size} bytes, {} packets, {} bytes leftover",
-                payload.len() / size, payload.len() % size);
+                gst::info!(
+                    CAT,
+                    imp = self,
+                    "Detected MPEG-TS packet size of {size} bytes, {} packets, {} bytes leftover",
+                    payload.len() / size,
+                    payload.len() % size
+                );
                 return NonZeroUsize::new(size);
             }
         }
 
-        gst::warning!(CAT, imp: self, "Could not detect MPEG-TS packet size");
+        gst::warning!(CAT, imp = self, "Could not detect MPEG-TS packet size");
 
         None
     }

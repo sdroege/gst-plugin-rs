@@ -128,10 +128,14 @@ impl AggregatorImpl for Cea708Mux {
             .nseconds();
         let end_running_time = start_running_time + duration;
         let mut need_data = false;
-        gst::debug!(CAT, imp: self, "Aggregating for start time {} end {} timeout {}",
+        gst::debug!(
+            CAT,
+            imp = self,
+            "Aggregating for start time {} end {} timeout {}",
             start_running_time.display(),
             end_running_time.display(),
-            timeout);
+            timeout
+        );
 
         let sinkpads = self.obj().sink_pads();
 
@@ -183,7 +187,7 @@ impl AggregatorImpl for Cea708Mux {
             let buffer_end_ts = buffer_start_ts + duration;
             // allow a 1 second grace period before dropping data
             if start_running_time.saturating_sub(buffer_end_ts) > gst::ClockTime::from_seconds(1) {
-                gst::warning!(CAT, obj: pad,
+                gst::warning!(CAT, obj = pad,
                     "Dropping buffer because start_running_time {} is more than 1s later than buffer_end_ts {}",
                     start_running_time.display(),
                     buffer_end_ts.display());
@@ -204,7 +208,7 @@ impl AggregatorImpl for Cea708Mux {
                 return Err(gst::FlowError::Error);
             };
 
-            gst::debug!(CAT, obj: pad, "Parsing input buffer {buffer:?}");
+            gst::debug!(CAT, obj = pad, "Parsing input buffer {buffer:?}");
             let in_format = pad_state.format;
             match in_format {
                 CeaFormat::CcData => {
@@ -272,7 +276,12 @@ impl AggregatorImpl for Cea708Mux {
                             }
 
                             for code in service.codes() {
-                                gst::trace!(CAT, obj: pad, "Handling service {} code {code:?}", service.number());
+                                gst::trace!(
+                                    CAT,
+                                    obj = pad,
+                                    "Handling service {} code {code:?}",
+                                    service.number()
+                                );
                                 if overflowed {
                                     pad_state
                                         .pending_services
@@ -306,7 +315,12 @@ impl AggregatorImpl for Cea708Mux {
 
         for (_service_no, service) in services.into_iter() {
             // FIXME: handle needing to split services
-            gst::trace!(CAT, imp: self, "Adding service {} to packet", service.number());
+            gst::trace!(
+                CAT,
+                imp = self,
+                "Adding service {} to packet",
+                service.number()
+            );
             packet.push_service(service).unwrap();
         }
 
@@ -396,7 +410,7 @@ impl AggregatorImpl for Cea708Mux {
             .expect("Not a Cea708MuxSinkPad");
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
         #[allow(clippy::single_match)]
         match event.view() {
             EventView::Caps(event) => {
@@ -525,7 +539,7 @@ impl ElementImpl for Cea708Mux {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {

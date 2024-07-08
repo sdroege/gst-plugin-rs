@@ -144,7 +144,7 @@ impl SinkHandler {
 
     // For resetting if seqnum discontinuities
     fn reset(&self, inner: &mut SinkHandlerInner, jb: &JitterBuffer) -> BTreeSet<GapPacket> {
-        gst::info!(CAT, imp: jb, "Resetting");
+        gst::info!(CAT, imp = jb, "Resetting");
 
         let mut state = jb.state.lock().unwrap();
         state.jbuf.flush();
@@ -176,17 +176,17 @@ impl SinkHandler {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let s = caps.structure(0).ok_or(gst::FlowError::Error)?;
 
-        gst::debug!(CAT, imp: jb, "Parsing {:?}", caps);
+        gst::debug!(CAT, imp = jb, "Parsing {:?}", caps);
 
         let payload = s.get::<i32>("payload").map_err(|err| {
-            gst::debug!(CAT, imp: jb, "Caps 'payload': {}", err);
+            gst::debug!(CAT, imp = jb, "Caps 'payload': {}", err);
             gst::FlowError::Error
         })?;
 
         if pt != 0 && payload as u8 != pt {
             gst::debug!(
                 CAT,
-                imp: jb,
+                imp = jb,
                 "Caps 'payload' ({}) doesn't match payload type ({})",
                 payload,
                 pt
@@ -196,12 +196,12 @@ impl SinkHandler {
 
         inner.last_pt = Some(pt);
         let clock_rate = s.get::<i32>("clock-rate").map_err(|err| {
-            gst::debug!(CAT, imp: jb, "Caps 'clock-rate': {}", err);
+            gst::debug!(CAT, imp = jb, "Caps 'clock-rate': {}", err);
             gst::FlowError::Error
         })?;
 
         if clock_rate <= 0 {
-            gst::debug!(CAT, imp: jb, "Caps 'clock-rate' <= 0");
+            gst::debug!(CAT, imp = jb, "Caps 'clock-rate' <= 0");
             return Err(gst::FlowError::Error);
         }
         state.clock_rate = Some(clock_rate as u32);
@@ -258,7 +258,7 @@ impl SinkHandler {
 
         gst::debug!(
             CAT,
-            imp: jb,
+            imp = jb,
             "Handling big gap, gap packets length: {}",
             gap_packets_length
         );
@@ -272,7 +272,7 @@ impl SinkHandler {
             for gap_packet in inner.gap_packets.iter() {
                 gst::log!(
                     CAT,
-                    imp: jb,
+                    imp = jb,
                     "Looking at gap packet with seq {}",
                     gap_packet.seq,
                 );
@@ -292,7 +292,7 @@ impl SinkHandler {
                 }
             }
 
-            gst::debug!(CAT, imp: jb, "all consecutive: {}", all_consecutive);
+            gst::debug!(CAT, imp = jb, "all consecutive: {}", all_consecutive);
 
             if all_consecutive && gap_packets_length > 3 {
                 reset = true;
@@ -334,7 +334,7 @@ impl SinkHandler {
 
         gst::log!(
             CAT,
-            imp: jb,
+            imp = jb,
             "Storing buffer, seq: {}, rtptime: {}, pt: {}",
             seq,
             rtptime,
@@ -367,7 +367,7 @@ impl SinkHandler {
             inner.last_pt = Some(pt);
             state.clock_rate = None;
 
-            gst::debug!(CAT, obj: pad, "New payload type: {}", pt);
+            gst::debug!(CAT, obj = pad, "New payload type: {}", pt);
 
             if let Some(caps) = pad.current_caps() {
                 /* Ignore errors at this point, as we want to emit request-pt-map */
@@ -381,7 +381,7 @@ impl SinkHandler {
                 let caps = element
                     .emit_by_name::<Option<gst::Caps>>("request-pt-map", &[&(pt as u32)])
                     .ok_or_else(|| {
-                        gst::error!(CAT, obj: pad, "Signal 'request-pt-map' returned None");
+                        gst::error!(CAT, obj = pad, "Signal 'request-pt-map' returned None");
                         gst::FlowError::Error
                     })?;
                 let mut state = jb.state.lock().unwrap();
@@ -404,7 +404,7 @@ impl SinkHandler {
         if pts.is_none() {
             gst::debug!(
                 CAT,
-                imp: jb,
+                imp = jb,
                 "cannot calculate a valid pts for #{}, discard",
                 seq
             );
@@ -437,7 +437,7 @@ impl SinkHandler {
 
             if gap <= 0 {
                 state.stats.num_late += 1;
-                gst::debug!(CAT, imp: jb, "Dropping late {}", seq);
+                gst::debug!(CAT, imp = jb, "Dropping late {}", seq);
                 return Ok(gst::FlowSuccess::Ok);
             }
         }
@@ -481,7 +481,7 @@ impl SinkHandler {
             state.earliest_seqnum = Some(seq);
         }
 
-        gst::log!(CAT, obj: pad, "Stored buffer");
+        gst::log!(CAT, obj = pad, "Stored buffer");
 
         Ok(gst::FlowSuccess::Ok)
     }
@@ -531,7 +531,7 @@ impl SinkHandler {
                 {
                     gst::debug!(
                         CAT,
-                        obj: pad,
+                        obj = pad,
                         "Rescheduling for new item {} < {}",
                         next_wakeup.display(),
                         previous_next_wakeup.display(),
@@ -555,7 +555,7 @@ impl PadSinkHandler for SinkHandler {
         buffer: gst::Buffer,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
         async move {
-            gst::debug!(CAT, obj: pad, "Handling {:?}", buffer);
+            gst::debug!(CAT, obj = pad, "Handling {:?}", buffer);
             self.enqueue_item(pad, elem.imp(), Some(buffer))
         }
         .boxed()
@@ -564,11 +564,11 @@ impl PadSinkHandler for SinkHandler {
     fn sink_event(self, pad: &gst::Pad, jb: &JitterBuffer, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad, "Handling {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling {:?}", event);
 
         if let EventView::FlushStart(..) = event.view() {
             if let Err(err) = jb.task.flush_start().await_maybe_on_context() {
-                gst::error!(CAT, obj: pad, "FlushStart failed {:?}", err);
+                gst::error!(CAT, obj = pad, "FlushStart failed {:?}", err);
                 gst::element_imp_error!(
                     jb,
                     gst::StreamError::Failed,
@@ -579,7 +579,7 @@ impl PadSinkHandler for SinkHandler {
             }
         }
 
-        gst::log!(CAT, obj: pad, "Forwarding {:?}", event);
+        gst::log!(CAT, obj = pad, "Forwarding {:?}", event);
         jb.src_pad.gst_pad().push_event(event)
     }
 
@@ -590,7 +590,7 @@ impl PadSinkHandler for SinkHandler {
         event: gst::Event,
     ) -> BoxFuture<'static, bool> {
         async move {
-            gst::log!(CAT, obj: pad, "Handling {:?}", event);
+            gst::log!(CAT, obj = pad, "Handling {:?}", event);
 
             let jb = elem.imp();
 
@@ -603,7 +603,7 @@ impl PadSinkHandler for SinkHandler {
                 }
                 EventView::FlushStop(..) => {
                     if let Err(err) = jb.task.flush_stop().await_maybe_on_context() {
-                        gst::error!(CAT, obj: pad, "FlushStop failed {:?}", err);
+                        gst::error!(CAT, obj = pad, "FlushStop failed {:?}", err);
                         gst::element_error!(
                             elem,
                             gst::StreamError::Failed,
@@ -626,7 +626,7 @@ impl PadSinkHandler for SinkHandler {
 
             if forward {
                 // FIXME: These events should really be queued up and stay in order
-                gst::log!(CAT, obj: pad, "Forwarding serialized {:?}", event);
+                gst::log!(CAT, obj = pad, "Forwarding serialized {:?}", event);
                 jb.src_pad.push_event(event).await
             } else {
                 true
@@ -665,7 +665,7 @@ impl SrcHandler {
 
         gst::debug!(
             CAT,
-            obj: element,
+            obj = element,
             "Generating lost events seq: {}, last popped seq: {:?}",
             seqnum,
             last_popped_seqnum,
@@ -801,11 +801,22 @@ impl SrcHandler {
         };
 
         for event in lost_events {
-            gst::debug!(CAT, obj: jb.src_pad.gst_pad(), "Pushing lost event {:?}", event);
+            gst::debug!(
+                CAT,
+                obj = jb.src_pad.gst_pad(),
+                "Pushing lost event {:?}",
+                event
+            );
             let _ = jb.src_pad.push_event(event).await;
         }
 
-        gst::debug!(CAT, obj: jb.src_pad.gst_pad(), "Pushing {:?} with seq {:?}", buffer, seq);
+        gst::debug!(
+            CAT,
+            obj = jb.src_pad.gst_pad(),
+            "Pushing {:?} with seq {:?}",
+            buffer,
+            seq
+        );
 
         jb.src_pad.push(buffer).await
     }
@@ -824,7 +835,7 @@ impl SrcHandler {
 
         gst::debug!(
             CAT,
-            obj: element,
+            obj = element,
             "Now is {}, EOS {}, earliest pts is {}, packet_spacing {} and latency {}",
             now.display(),
             state.eos,
@@ -834,7 +845,7 @@ impl SrcHandler {
         );
 
         if state.eos {
-            gst::debug!(CAT, obj: element, "EOS, not waiting");
+            gst::debug!(CAT, obj = element, "EOS, not waiting");
             return (now, Some((now, Duration::ZERO)));
         }
 
@@ -854,7 +865,7 @@ impl SrcHandler {
 
         gst::debug!(
             CAT,
-            obj: element,
+            obj = element,
             "Next wakeup at {} with delay {}",
             next_wakeup.display(),
             delay
@@ -870,12 +881,12 @@ impl PadSrcHandler for SrcHandler {
     fn src_event(self, pad: &gst::Pad, jb: &JitterBuffer, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad, "Handling {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling {:?}", event);
 
         match event.view() {
             EventView::FlushStart(..) => {
                 if let Err(err) = jb.task.flush_start().await_maybe_on_context() {
-                    gst::error!(CAT, obj: pad, "FlushStart failed {:?}", err);
+                    gst::error!(CAT, obj = pad, "FlushStart failed {:?}", err);
                     gst::element_imp_error!(
                         jb,
                         gst::StreamError::Failed,
@@ -887,7 +898,7 @@ impl PadSrcHandler for SrcHandler {
             }
             EventView::FlushStop(..) => {
                 if let Err(err) = jb.task.flush_stop().await_maybe_on_context() {
-                    gst::error!(CAT, obj: pad, "FlushStop failed {:?}", err);
+                    gst::error!(CAT, obj = pad, "FlushStop failed {:?}", err);
                     gst::element_imp_error!(
                         jb,
                         gst::StreamError::Failed,
@@ -900,14 +911,14 @@ impl PadSrcHandler for SrcHandler {
             _ => (),
         }
 
-        gst::log!(CAT, obj: pad, "Forwarding {:?}", event);
+        gst::log!(CAT, obj = pad, "Forwarding {:?}", event);
         jb.sink_pad.gst_pad().push_event(event)
     }
 
     fn src_query(self, pad: &gst::Pad, jb: &JitterBuffer, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
-        gst::log!(CAT, obj: pad, "Forwarding {:?}", query);
+        gst::log!(CAT, obj = pad, "Forwarding {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Latency(q) => {
@@ -1030,7 +1041,7 @@ impl TaskImpl for JitterBufferTask {
 
     fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(CAT, obj: self.element, "Starting task");
+            gst::log!(CAT, obj = self.element, "Starting task");
 
             self.src_pad_handler.clear();
             self.sink_pad_handler.clear();
@@ -1043,7 +1054,7 @@ impl TaskImpl for JitterBufferTask {
             state.jbuf.set_delay(latency);
             *jb.state.lock().unwrap() = state;
 
-            gst::log!(CAT, obj: self.element, "Task started");
+            gst::log!(CAT, obj = self.element, "Task started");
             Ok(())
         }
         .boxed()
@@ -1103,9 +1114,9 @@ impl TaskImpl for JitterBufferTask {
 
                 // Got aborted, reschedule if needed
                 if let Some(delay_fut) = delay_fut {
-                    gst::debug!(CAT, obj: self.element, "Waiting");
+                    gst::debug!(CAT, obj = self.element, "Waiting");
                     if let Err(Aborted) = delay_fut.await {
-                        gst::debug!(CAT, obj: self.element, "Waiting aborted");
+                        gst::debug!(CAT, obj = self.element, "Waiting aborted");
                         return Ok(());
                     }
                 }
@@ -1123,7 +1134,7 @@ impl TaskImpl for JitterBufferTask {
 
                     gst::debug!(
                         CAT,
-                        obj: self.element,
+                        obj = self.element,
                         "Woke up at {}, earliest_pts {}",
                         now.display(),
                         state.earliest_pts.display()
@@ -1179,13 +1190,13 @@ impl TaskImpl for JitterBufferTask {
                 if let Err(err) = res {
                     match err {
                         gst::FlowError::Eos => {
-                            gst::debug!(CAT, obj: self.element, "Pushing EOS event");
+                            gst::debug!(CAT, obj = self.element, "Pushing EOS event");
                             let _ = jb.src_pad.push_event(gst::event::Eos::new()).await;
                         }
                         gst::FlowError::Flushing => {
-                            gst::debug!(CAT, obj: self.element, "Flushing")
+                            gst::debug!(CAT, obj = self.element, "Flushing")
                         }
-                        err => gst::error!(CAT, obj: self.element, "Error {}", err),
+                        err => gst::error!(CAT, obj = self.element, "Error {}", err),
                     }
 
                     return Err(err);
@@ -1201,7 +1212,7 @@ impl TaskImpl for JitterBufferTask {
 
     fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst::log!(CAT, obj: self.element, "Stopping task");
+            gst::log!(CAT, obj = self.element, "Stopping task");
 
             let jb = self.element.imp();
             let mut jb_state = jb.state.lock().unwrap();
@@ -1215,7 +1226,7 @@ impl TaskImpl for JitterBufferTask {
 
             *jb_state = State::default();
 
-            gst::log!(CAT, obj: self.element, "Task stopped");
+            gst::log!(CAT, obj = self.element, "Task stopped");
             Ok(())
         }
         .boxed()
@@ -1242,7 +1253,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 impl JitterBuffer {
     fn clear_pt_map(&self) {
-        gst::debug!(CAT, imp: self, "Clearing PT map");
+        gst::debug!(CAT, imp = self, "Clearing PT map");
 
         let mut state = self.state.lock().unwrap();
         state.clock_rate = None;
@@ -1250,7 +1261,7 @@ impl JitterBuffer {
     }
 
     fn prepare(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp: self, "Preparing");
+        gst::debug!(CAT, imp = self, "Preparing");
 
         let context = {
             let settings = self.settings.lock().unwrap();
@@ -1264,28 +1275,28 @@ impl JitterBuffer {
             )
             .block_on()?;
 
-        gst::debug!(CAT, imp: self, "Prepared");
+        gst::debug!(CAT, imp = self, "Prepared");
 
         Ok(())
     }
 
     fn unprepare(&self) {
-        gst::debug!(CAT, imp: self, "Unpreparing");
+        gst::debug!(CAT, imp = self, "Unpreparing");
         self.task.unprepare().block_on().unwrap();
-        gst::debug!(CAT, imp: self, "Unprepared");
+        gst::debug!(CAT, imp = self, "Unprepared");
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp: self, "Starting");
+        gst::debug!(CAT, imp = self, "Starting");
         self.task.start().block_on()?;
-        gst::debug!(CAT, imp: self, "Started");
+        gst::debug!(CAT, imp = self, "Started");
         Ok(())
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp: self, "Stopping");
+        gst::debug!(CAT, imp = self, "Stopping");
         self.task.stop().block_on()?;
-        gst::debug!(CAT, imp: self, "Stopped");
+        gst::debug!(CAT, imp = self, "Stopped");
         Ok(())
     }
 }
@@ -1528,7 +1539,7 @@ impl ElementImpl for JitterBuffer {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {

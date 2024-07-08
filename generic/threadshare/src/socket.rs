@@ -74,7 +74,7 @@ impl<T: SocketRead> Socket<T> {
         buffer_pool.set_active(true).map_err(|err| {
             gst::error!(
                 SOCKET_CAT,
-                obj: element,
+                obj = element,
                 "Failed to prepare socket: {}",
                 err
             );
@@ -122,7 +122,7 @@ impl<T: SocketRead> Socket<T> {
     pub async fn try_next(
         &mut self,
     ) -> Result<(gst::Buffer, Option<std::net::SocketAddr>), SocketError> {
-        gst::log!(SOCKET_CAT, obj: self.element, "Trying to read data");
+        gst::log!(SOCKET_CAT, obj = self.element, "Trying to read data");
 
         if self.mapped_buffer.is_none() {
             match self.buffer_pool.acquire_buffer(None) {
@@ -130,7 +130,12 @@ impl<T: SocketRead> Socket<T> {
                     self.mapped_buffer = Some(buffer.into_mapped_buffer_writable().unwrap());
                 }
                 Err(err) => {
-                    gst::debug!(SOCKET_CAT, obj: self.element, "Failed to acquire buffer {:?}", err);
+                    gst::debug!(
+                        SOCKET_CAT,
+                        obj = self.element,
+                        "Failed to acquire buffer {:?}",
+                        err
+                    );
                     return Err(SocketError::Gst(err));
                 }
             }
@@ -149,7 +154,7 @@ impl<T: SocketRead> Socket<T> {
                     // so as to display another message
                     gst::debug!(
                         SOCKET_CAT,
-                        obj: self.element,
+                        obj = self.element,
                         "Read {} bytes at {} (clock {})",
                         len,
                         running_time.display(),
@@ -157,7 +162,7 @@ impl<T: SocketRead> Socket<T> {
                     );
                     running_time
                 } else {
-                    gst::debug!(SOCKET_CAT, obj: self.element, "Read {} bytes", len);
+                    gst::debug!(SOCKET_CAT, obj = self.element, "Read {} bytes", len);
                     gst::ClockTime::NONE
                 };
 
@@ -173,7 +178,7 @@ impl<T: SocketRead> Socket<T> {
                 Ok((buffer, saddr))
             }
             Err(err) => {
-                gst::debug!(SOCKET_CAT, obj: self.element, "Read error {:?}", err);
+                gst::debug!(SOCKET_CAT, obj = self.element, "Read error {:?}", err);
 
                 Err(SocketError::Io(err))
             }
@@ -184,7 +189,12 @@ impl<T: SocketRead> Socket<T> {
 impl<T: SocketRead> Drop for Socket<T> {
     fn drop(&mut self) {
         if let Err(err) = self.buffer_pool.set_active(false) {
-            gst::error!(SOCKET_CAT, obj: self.element, "Failed to unprepare socket: {}", err);
+            gst::error!(
+                SOCKET_CAT,
+                obj = self.element,
+                "Failed to unprepare socket: {}",
+                err
+            );
         }
     }
 }

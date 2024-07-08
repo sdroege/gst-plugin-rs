@@ -74,7 +74,7 @@ static TEMPORAL_DELIMITER: [u8; 2] = [0b0001_0010, 0];
 
 impl RTPAv1Depay {
     fn reset(&self, state: &mut State) {
-        gst::debug!(CAT, imp: self, "resetting state");
+        gst::debug!(CAT, imp = self, "resetting state");
 
         *state = State::default()
     }
@@ -177,7 +177,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RTPAv1Depay {
                 .queue_buffer(PacketToBufferRelation::Seqnums(seqnums), buffer),
             Ok(None) => Ok(gst::FlowSuccess::Ok),
             Err(err) => {
-                gst::warning!(CAT, imp: self, "Failed to handle RTP packet: {err:?}");
+                gst::warning!(CAT, imp = self, "Failed to handle RTP packet: {err:?}");
                 self.reset(&mut self.state.borrow_mut());
                 self.obj().drop_packets(..=packet.ext_seqnum());
                 Ok(gst::FlowSuccess::Ok)
@@ -191,11 +191,7 @@ impl RTPAv1Depay {
         &self,
         packet: &crate::basedepay::Packet,
     ) -> Result<Option<(RangeInclusive<u64>, gst::Buffer)>, gst::FlowError> {
-        gst::trace!(
-            CAT,
-            imp: self,
-            "Processing RTP packet {packet:?}",
-        );
+        gst::trace!(CAT, imp = self, "Processing RTP packet {packet:?}",);
 
         let mut state = self.state.borrow_mut();
 
@@ -210,14 +206,14 @@ impl RTPAv1Depay {
             AggregationHeader::from(&byte)
         };
 
-        gst::trace!(CAT, imp: self, "Aggregation header {aggr_header:?}");
+        gst::trace!(CAT, imp = self, "Aggregation header {aggr_header:?}");
 
         // handle new temporal units
         if state.marked_packet || state.last_timestamp != Some(packet.ext_timestamp()) {
             if state.last_timestamp.is_some() && state.obu_fragment.is_some() {
                 gst::error!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     concat!(
                         "invalid packet: packet is part of a new TU but ",
                         "the previous TU still has an incomplete OBU",
@@ -243,7 +239,7 @@ impl RTPAv1Depay {
         if state.obu_fragment.is_some() && !aggr_header.leading_fragment {
             gst::error!(
                 CAT,
-                imp: self,
+                imp = self,
                 "invalid packet: dropping unclosed OBU fragment"
             );
             self.reset(&mut state);
@@ -294,7 +290,7 @@ impl RTPAv1Depay {
                 if state.found_valid_obu {
                     gst::error!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "invalid packet: unexpected leading OBU fragment"
                     );
                 }
@@ -327,7 +323,7 @@ impl RTPAv1Depay {
                 if remaining_slice.len() < element_size as usize {
                     gst::error!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "invalid packet: not enough data left for OBU {idx} (needed {element_size}, have {})",
                         remaining_slice.len(),
                     );
@@ -355,7 +351,7 @@ impl RTPAv1Depay {
         let buffer = if !ready_obus.is_empty() && ready_obus != TEMPORAL_DELIMITER {
             gst::log!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Creating buffer containing {} bytes of data (marker {}, discont {})...",
                 ready_obus.len(),
                 state.marked_packet,
@@ -384,7 +380,7 @@ impl RTPAv1Depay {
         if state.marked_packet && state.obu_fragment.is_some() {
             gst::error!(
                 CAT,
-                imp: self,
+                imp = self,
                 concat!(
                     "invalid packet: has marker bit set, but ",
                     "last OBU is not yet complete. Dropping incomplete OBU."
@@ -437,7 +433,7 @@ impl RTPAv1Depay {
                 Ordering::Less => {
                     gst::error!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "invalid packet: size field gives impossibly large OBU size"
                     );
                     return Err(gst::FlowError::Error);
@@ -516,7 +512,7 @@ impl RTPAv1Depay {
                     if first {
                         return Err(err);
                     } else {
-                        gst::warning!(CAT, imp: self, "Trailing payload unit is not a valid OBU");
+                        gst::warning!(CAT, imp = self, "Trailing payload unit is not a valid OBU");
                         return Ok(());
                     }
                 }
@@ -526,23 +522,31 @@ impl RTPAv1Depay {
                 .seek(SeekFrom::Start(header_pos))
                 .map_err(err_flow!(self, buf_read))?;
 
-            gst::trace!(CAT, imp: self, "Handling OBU {obu:?}");
+            gst::trace!(CAT, imp = self, "Handling OBU {obu:?}");
 
             let remaining_slice = &reader.get_ref()[reader.position() as usize..];
             let element_size = if let Some((size, leb_size)) = obu.size {
                 let size = (size + leb_size + obu.header_len) as usize;
                 if size > remaining_slice.len() {
                     if first {
-                        gst::warning!(CAT, imp: self, "Payload unit starts with an incomplete OBU");
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "Payload unit starts with an incomplete OBU"
+                        );
                         return Err(gst::FlowError::Error);
                     } else {
-                        gst::warning!(CAT, imp: self, "Trailing payload unit is an incomplete OBU");
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "Trailing payload unit is an incomplete OBU"
+                        );
                         return Ok(());
                     }
                 }
 
                 if !first {
-                    gst::debug!(CAT, imp: self, "Multiple OBUs in a single payload unit");
+                    gst::debug!(CAT, imp = self, "Multiple OBUs in a single payload unit");
                 }
                 size
             } else {
@@ -557,7 +561,12 @@ impl RTPAv1Depay {
                 obu.obu_type,
                 ObuType::TemporalDelimiter | ObuType::TileList | ObuType::Padding
             ) {
-                gst::trace!(CAT, imp: self, "Dropping {:?} of size {element_size}", obu.obu_type);
+                gst::trace!(
+                    CAT,
+                    imp = self,
+                    "Dropping {:?} of size {element_size}",
+                    obu.obu_type
+                );
                 reader
                     .seek(SeekFrom::Current(element_size as i64))
                     .map_err(err_flow!(self, buf_read))?;

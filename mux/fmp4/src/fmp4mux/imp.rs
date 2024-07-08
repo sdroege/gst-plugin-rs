@@ -290,17 +290,17 @@ impl FMP4Mux {
         }
 
         if delta_frames.requires_dts() && buffer.dts().is_none() {
-            gst::error!(CAT, obj: sinkpad, "Require DTS for video streams");
+            gst::error!(CAT, obj = sinkpad, "Require DTS for video streams");
             return Err(gst::FlowError::Error);
         }
 
         if buffer.pts().is_none() {
-            gst::error!(CAT, obj: sinkpad, "Require timestamped buffers");
+            gst::error!(CAT, obj = sinkpad, "Require timestamped buffers");
             return Err(gst::FlowError::Error);
         }
 
         if delta_frames.intra_only() && buffer.flags().contains(gst::BufferFlags::DELTA_UNIT) {
-            gst::error!(CAT, obj: sinkpad, "Intra-only stream with delta units");
+            gst::error!(CAT, obj = sinkpad, "Intra-only stream with delta units");
             return Err(gst::FlowError::Error);
         }
 
@@ -335,7 +335,7 @@ impl FMP4Mux {
         let segment = match stream.sinkpad.segment().downcast::<gst::ClockTime>().ok() {
             Some(segment) => segment,
             None => {
-                gst::error!(CAT, obj: stream.sinkpad, "Got buffer before segment");
+                gst::error!(CAT, obj = stream.sinkpad, "Got buffer before segment");
                 return Err(gst::FlowError::Error);
             }
         };
@@ -347,12 +347,16 @@ impl FMP4Mux {
         let pts = segment
             .to_running_time_full(pts_position)
             .ok_or_else(|| {
-                gst::error!(CAT, obj: stream.sinkpad, "Couldn't convert PTS to running time");
+                gst::error!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "Couldn't convert PTS to running time"
+                );
                 gst::FlowError::Error
             })?
             .positive()
             .unwrap_or_else(|| {
-                gst::warning!(CAT, obj: stream.sinkpad, "Negative PTSs are not supported");
+                gst::warning!(CAT, obj = stream.sinkpad, "Negative PTSs are not supported");
                 gst::ClockTime::ZERO
             });
 
@@ -361,14 +365,14 @@ impl FMP4Mux {
             .ok_or_else(|| {
                 gst::error!(
                     CAT,
-                    obj: stream.sinkpad,
+                    obj = stream.sinkpad,
                     "Couldn't convert end PTS to running time"
                 );
                 gst::FlowError::Error
             })?
             .positive()
             .unwrap_or_else(|| {
-                gst::warning!(CAT, obj: stream.sinkpad, "Negative PTSs are not supported");
+                gst::warning!(CAT, obj = stream.sinkpad, "Negative PTSs are not supported");
                 gst::ClockTime::ZERO
             });
 
@@ -381,7 +385,11 @@ impl FMP4Mux {
             let end_dts_position = duration.opt_add(dts_position).unwrap_or(dts_position);
 
             let dts = segment.to_running_time_full(dts_position).ok_or_else(|| {
-                gst::error!(CAT, obj: stream.sinkpad, "Couldn't convert DTS to running time");
+                gst::error!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "Couldn't convert DTS to running time"
+                );
                 gst::FlowError::Error
             })?;
 
@@ -390,7 +398,7 @@ impl FMP4Mux {
                 .ok_or_else(|| {
                     gst::error!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "Couldn't convert end DTS to running time"
                     );
                     gst::FlowError::Error
@@ -436,7 +444,11 @@ impl FMP4Mux {
                     // Calculate from the mapping
                     running_time_to_utc_time(pts, running_time_utc_time_mapping).ok_or_else(
                         || {
-                            gst::error!(CAT, obj: stream.sinkpad, "Stream has negative PTS UTC time");
+                            gst::error!(
+                                CAT,
+                                obj = stream.sinkpad,
+                                "Stream has negative PTS UTC time"
+                            );
                             gst::FlowError::Error
                         },
                     )?
@@ -445,31 +457,43 @@ impl FMP4Mux {
             };
             gst::trace!(
                 CAT,
-                obj: stream.sinkpad,
+                obj = stream.sinkpad,
                 "Mapped PTS running time {pts} to UTC time {utc_time}"
             );
 
             let end_pts_utc_time =
                 running_time_to_utc_time(end_pts, (pts, utc_time)).ok_or_else(|| {
-                    gst::error!(CAT, obj: stream.sinkpad, "Stream has negative end PTS UTC time");
+                    gst::error!(
+                        CAT,
+                        obj = stream.sinkpad,
+                        "Stream has negative end PTS UTC time"
+                    );
                     gst::FlowError::Error
                 })?;
 
             let (dts_utc_time, end_dts_utc_time) = if let Some(dts) = dts {
                 let dts_utc_time =
                     running_time_to_utc_time(dts, (pts, utc_time)).ok_or_else(|| {
-                        gst::error!(CAT, obj: stream.sinkpad, "Stream has negative DTS UTC time");
+                        gst::error!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Stream has negative DTS UTC time"
+                        );
                         gst::FlowError::Error
                     })?;
                 gst::trace!(
                     CAT,
-                    obj: stream.sinkpad,
+                    obj = stream.sinkpad,
                     "Mapped DTS running time {dts} to UTC time {dts_utc_time}"
                 );
 
                 let end_dts_utc_time = running_time_to_utc_time(end_dts.unwrap(), (pts, utc_time))
                     .ok_or_else(|| {
-                        gst::error!(CAT, obj: stream.sinkpad, "Stream has negative end DTS UTC time");
+                        gst::error!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Stream has negative end DTS UTC time"
+                        );
                         gst::FlowError::Error
                     })?;
 
@@ -508,7 +532,7 @@ impl FMP4Mux {
                 if last.saturating_sub(first) > gst::Signed::Positive(limit) {
                     gst::error!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "Got no UTC time in the first {limit} of the stream"
                     );
                     return Err(gst::FlowError::Error);
@@ -545,12 +569,16 @@ impl FMP4Mux {
             for pre_queued_buffer in stream.pre_queue.iter_mut() {
                 let pts_utc_time = running_time_to_utc_time(pre_queued_buffer.pts, mapping)
                     .ok_or_else(|| {
-                        gst::error!(CAT, obj: stream.sinkpad, "Stream has negative PTS UTC time");
+                        gst::error!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Stream has negative PTS UTC time"
+                        );
                         gst::FlowError::Error
                     })?;
                 gst::trace!(
                     CAT,
-                    obj: stream.sinkpad,
+                    obj = stream.sinkpad,
                     "Mapped PTS running time {} to UTC time {pts_utc_time}",
                     pre_queued_buffer.pts,
                 );
@@ -558,31 +586,41 @@ impl FMP4Mux {
 
                 let end_pts_utc_time = running_time_to_utc_time(pre_queued_buffer.end_pts, mapping)
                     .ok_or_else(|| {
-                        gst::error!(CAT, obj: stream.sinkpad, "Stream has negative end PTS UTC time");
+                        gst::error!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Stream has negative end PTS UTC time"
+                        );
                         gst::FlowError::Error
                     })?;
                 pre_queued_buffer.end_pts = end_pts_utc_time;
 
                 if let Some(dts) = pre_queued_buffer.dts {
                     let dts_utc_time = running_time_to_utc_time(dts, mapping).ok_or_else(|| {
-                        gst::error!(CAT, obj: stream.sinkpad, "Stream has negative DTS UTC time");
+                        gst::error!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Stream has negative DTS UTC time"
+                        );
                         gst::FlowError::Error
                     })?;
                     gst::trace!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "Mapped DTS running time {dts} to UTC time {dts_utc_time}"
                     );
                     pre_queued_buffer.dts = Some(gst::Signed::Positive(dts_utc_time));
 
-                    let end_dts_utc_time = running_time_to_utc_time(
-                        pre_queued_buffer.end_dts.unwrap(),
-                        mapping,
-                    )
-                    .ok_or_else(|| {
-                        gst::error!(CAT, obj: stream.sinkpad, "Stream has negative DTS UTC time");
-                        gst::FlowError::Error
-                    })?;
+                    let end_dts_utc_time =
+                        running_time_to_utc_time(pre_queued_buffer.end_dts.unwrap(), mapping)
+                            .ok_or_else(|| {
+                                gst::error!(
+                                    CAT,
+                                    obj = stream.sinkpad,
+                                    "Stream has negative DTS UTC time"
+                                );
+                                gst::FlowError::Error
+                            })?;
                     pre_queued_buffer.end_dts = Some(gst::Signed::Positive(end_dts_utc_time));
                 }
             }
@@ -620,7 +658,7 @@ impl FMP4Mux {
         {
             gst::trace!(
                 CAT,
-                imp: self,
+                imp = self,
                 "All streams are currently filled and have to be drained"
             );
             return Ok(None);
@@ -634,10 +672,10 @@ impl FMP4Mux {
                 Ok(Some(buffer)) => buffer,
                 Ok(None) | Err(gst_base::AGGREGATOR_FLOW_NEED_DATA) => {
                     if stream.sinkpad.is_eos() {
-                        gst::trace!(CAT, obj: stream.sinkpad, "Stream is EOS");
+                        gst::trace!(CAT, obj = stream.sinkpad, "Stream is EOS");
                     } else {
                         all_have_data_or_eos = false;
-                        gst::trace!(CAT, obj: stream.sinkpad, "Stream has no buffer");
+                        gst::trace!(CAT, obj = stream.sinkpad, "Stream has no buffer");
                     }
                     continue;
                 }
@@ -646,7 +684,7 @@ impl FMP4Mux {
 
             gst::trace!(
                 CAT,
-                obj: stream.sinkpad,
+                obj = stream.sinkpad,
                 "Stream has running time PTS {} / DTS {} queued",
                 pre_queued_buffer.pts,
                 pre_queued_buffer.dts.display(),
@@ -671,21 +709,21 @@ impl FMP4Mux {
         if !timeout && !all_have_data_or_eos {
             gst::trace!(
                 CAT,
-                imp: self,
+                imp = self,
                 "No timeout and not all streams have a buffer or are EOS"
             );
             Ok(None)
         } else if let Some((stream, earliest_running_time)) = earliest_stream {
             gst::trace!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Stream {} is earliest stream with running time {}",
                 stream.sinkpad.name(),
                 earliest_running_time
             );
             Ok(Some(stream))
         } else {
-            gst::trace!(CAT, imp: self, "No streams have data queued currently");
+            gst::trace!(CAT, imp = self, "No streams have data queued currently");
             Ok(None)
         }
     }
@@ -696,7 +734,12 @@ impl FMP4Mux {
         stream: &mut Stream,
         mut pre_queued_buffer: PreQueuedBuffer,
     ) -> Result<(), gst::FlowError> {
-        gst::trace!(CAT, obj: stream.sinkpad, "Handling buffer {:?}", pre_queued_buffer);
+        gst::trace!(
+            CAT,
+            obj = stream.sinkpad,
+            "Handling buffer {:?}",
+            pre_queued_buffer
+        );
 
         let delta_frames = stream.delta_frames;
 
@@ -705,7 +748,7 @@ impl FMP4Mux {
             if pre_queued_buffer.pts < stream.current_position {
                 gst::warning!(
                     CAT,
-                    obj: stream.sinkpad,
+                    obj = stream.sinkpad,
                     "Decreasing PTS {} < {}",
                     pre_queued_buffer.pts,
                     stream.current_position,
@@ -734,7 +777,7 @@ impl FMP4Mux {
 
                     let dts_offset = stream.dts_offset.unwrap();
                     if dts > dts_offset {
-                        gst::warning!(CAT, obj: stream.sinkpad, "DTS before first DTS");
+                        gst::warning!(CAT, obj = stream.sinkpad, "DTS before first DTS");
                         gst::ClockTime::ZERO
                     } else {
                         dts_offset - dts
@@ -753,7 +796,7 @@ impl FMP4Mux {
                 gst::Signed::Negative(dts) => {
                     let dts_offset = stream.dts_offset.unwrap();
                     if dts > dts_offset {
-                        gst::warning!(CAT, obj: stream.sinkpad, "End DTS before first DTS");
+                        gst::warning!(CAT, obj = stream.sinkpad, "End DTS before first DTS");
                         gst::ClockTime::ZERO
                     } else {
                         dts_offset - dts
@@ -767,7 +810,7 @@ impl FMP4Mux {
             if dts < stream.current_position {
                 gst::warning!(
                     CAT,
-                    obj: stream.sinkpad,
+                    obj = stream.sinkpad,
                     "Decreasing DTS {} < {}",
                     dts,
                     stream.current_position,
@@ -796,7 +839,7 @@ impl FMP4Mux {
         if !buffer.flags().contains(gst::BufferFlags::DELTA_UNIT) {
             gst::debug!(
                 CAT,
-                obj: stream.sinkpad,
+                obj = stream.sinkpad,
                 "Starting new GOP at PTS {} DTS {} (DTS offset {})",
                 pts,
                 dts.display(),
@@ -810,13 +853,18 @@ impl FMP4Mux {
                 && s.name().as_str() == "video/x-av1"
             {
                 let buf_map = buffer.map_readable().map_err(|_| {
-                    gst::error!(CAT, obj: stream.sinkpad, "Failed to map buffer");
+                    gst::error!(CAT, obj = stream.sinkpad, "Failed to map buffer");
                     gst::FlowError::Error
                 })?;
-                stream.extra_header_data = read_seq_header_obu_bytes(buf_map.as_slice()).map_err(|_| {
-                    gst::error!(CAT, obj: stream.sinkpad, "Failed to parse AV1 SequenceHeader OBU");
-                    gst::FlowError::Error
-                })?;
+                stream.extra_header_data =
+                    read_seq_header_obu_bytes(buf_map.as_slice()).map_err(|_| {
+                        gst::error!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Failed to parse AV1 SequenceHeader OBU"
+                        );
+                        gst::FlowError::Error
+                    })?;
             }
 
             let gop = Gop {
@@ -840,7 +888,7 @@ impl FMP4Mux {
             if let Some(prev_gop) = stream.queued_gops.get_mut(1) {
                 gst::debug!(
                     CAT,
-                    obj: stream.sinkpad,
+                    obj = stream.sinkpad,
                     "Updating previous GOP starting at PTS {} to end PTS {} DTS {}",
                     prev_gop.earliest_pts,
                     pts,
@@ -860,7 +908,7 @@ impl FMP4Mux {
                     if delta_frames.requires_dts() {
                         gst::debug!(
                             CAT,
-                            obj: stream.sinkpad,
+                            obj = stream.sinkpad,
                             "Previous GOP has final earliest PTS at {}",
                             prev_gop.earliest_pts
                         );
@@ -890,7 +938,7 @@ impl FMP4Mux {
                 if gop.earliest_pts > pts && !gop.final_earliest_pts {
                     gst::debug!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "Updating current GOP earliest PTS from {} to {}",
                         gop.earliest_pts,
                         pts
@@ -902,7 +950,7 @@ impl FMP4Mux {
                         if prev_gop.end_pts < pts {
                             gst::debug!(
                                 CAT,
-                                obj: stream.sinkpad,
+                                obj = stream.sinkpad,
                                 "Updating previous GOP starting PTS {} end time from {} to {}",
                                 pts,
                                 prev_gop.end_pts,
@@ -922,7 +970,7 @@ impl FMP4Mux {
                 if gop.start_pts <= dts && !gop.final_earliest_pts {
                     gst::debug!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "GOP has final earliest PTS at {}",
                         gop.earliest_pts
                     );
@@ -936,7 +984,7 @@ impl FMP4Mux {
         } else {
             gst::warning!(
                 CAT,
-                obj: stream.sinkpad,
+                obj = stream.sinkpad,
                 "Waiting for keyframe at the beginning of the stream"
             );
         }
@@ -947,7 +995,7 @@ impl FMP4Mux {
         ) {
             gst::debug!(
                 CAT,
-                obj: stream.sinkpad,
+                obj = stream.sinkpad,
                 "Queued full GOPs duration updated to {}",
                 prev_gop.end_pts.saturating_sub(first_gop.earliest_pts),
             );
@@ -955,7 +1003,7 @@ impl FMP4Mux {
 
         gst::debug!(
             CAT,
-            obj: stream.sinkpad,
+            obj = stream.sinkpad,
             "Queued duration updated to {}",
             Option::zip(stream.queued_gops.front(), stream.queued_gops.back())
                 .map(|(end, start)| end.end_pts.saturating_sub(start.start_pts))
@@ -1014,7 +1062,7 @@ impl FMP4Mux {
             // In chunk mode
             gst::trace!(
                 CAT,
-                obj: stream.sinkpad,
+                obj = stream.sinkpad,
                 "Current chunk start {}, current fragment start {}",
                 chunk_start_pts,
                 fragment_start_pts,
@@ -1026,7 +1074,7 @@ impl FMP4Mux {
             if fragment_end_pts < chunk_end_pts {
                 gst::trace!(
                     CAT,
-                    obj: stream.sinkpad,
+                    obj = stream.sinkpad,
                     "Current chunk end {}, current fragment end {}. Fragment end before chunk end, extending fragment",
                     chunk_end_pts,
                     fragment_end_pts,
@@ -1034,7 +1082,7 @@ impl FMP4Mux {
             } else {
                 gst::trace!(
                     CAT,
-                    obj: stream.sinkpad,
+                    obj = stream.sinkpad,
                     "Current chunk end {}, current fragment end {}",
                     chunk_end_pts,
                     fragment_end_pts,
@@ -1049,7 +1097,7 @@ impl FMP4Mux {
                 if let Some(gop) = stream.queued_gops.back() {
                     gst::trace!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "GOP {} start PTS {}, GOP end PTS {}",
                         stream.queued_gops.len() - 1,
                         gop.start_pts,
@@ -1067,7 +1115,11 @@ impl FMP4Mux {
                             b.buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
                         })
                     {
-                        gst::debug!(CAT, obj: stream.sinkpad, "Stream's first GOP starting after this fragment");
+                        gst::debug!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Stream's first GOP starting after this fragment"
+                        );
                         stream.fragment_filled = true;
                         return;
                     }
@@ -1083,13 +1135,17 @@ impl FMP4Mux {
                 {
                     gst::trace!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "GOP {gop_idx} start PTS {}, GOP end PTS {}",
                         gop.start_pts,
                         gop.end_pts,
                     );
                     if gop.end_pts >= fragment_end_pts {
-                        gst::debug!(CAT, obj: stream.sinkpad, "Stream queued enough data for finishing this fragment");
+                        gst::debug!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Stream queued enough data for finishing this fragment"
+                        );
                         stream.fragment_filled = true;
                         return;
                     }
@@ -1102,14 +1158,18 @@ impl FMP4Mux {
                 if let Some(gop) = stream.queued_gops.back() {
                     gst::trace!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "GOP {} start PTS {}, GOP end PTS {}",
                         stream.queued_gops.len() - 1,
                         gop.start_pts,
                         gop.end_pts,
                     );
                     if gop.start_pts > chunk_end_pts {
-                        gst::debug!(CAT, obj: stream.sinkpad, "Stream's first GOP starting after this chunk");
+                        gst::debug!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Stream's first GOP starting after this chunk"
+                        );
                         stream.chunk_filled = true;
                         return;
                     }
@@ -1124,7 +1184,7 @@ impl FMP4Mux {
                     None => {
                         gst::trace!(
                             CAT,
-                            obj: stream.sinkpad,
+                            obj = stream.sinkpad,
                             "Chunked mode and want to finish fragment but no GOP with final end PTS known yet",
                         );
                         return;
@@ -1133,7 +1193,7 @@ impl FMP4Mux {
 
                 gst::trace!(
                     CAT,
-                    obj: stream.sinkpad,
+                    obj = stream.sinkpad,
                     "GOP {gop_idx} start PTS {}, GOP end PTS {} (final {})",
                     gop.start_pts,
                     gop.end_pts,
@@ -1146,7 +1206,11 @@ impl FMP4Mux {
                     && (gop_idx > 0
                         || last_pts.is_some_and(|last_pts| last_pts.saturating_sub(chunk_start_pts) > chunk_duration))
                 {
-                    gst::debug!(CAT, obj: stream.sinkpad, "Stream queued enough data for this chunk");
+                    gst::debug!(
+                        CAT,
+                        obj = stream.sinkpad,
+                        "Stream queued enough data for this chunk"
+                    );
                     stream.chunk_filled = true;
                 }
             }
@@ -1155,7 +1219,7 @@ impl FMP4Mux {
             let fragment_end_pts = fragment_start_pts + settings.fragment_duration;
             gst::trace!(
                 CAT,
-                obj: stream.sinkpad,
+                obj = stream.sinkpad,
                 "Current fragment start {}, current fragment end {}",
                 fragment_start_pts,
                 fragment_start_pts + settings.fragment_duration,
@@ -1166,14 +1230,18 @@ impl FMP4Mux {
             if let Some(gop) = stream.queued_gops.back() {
                 gst::trace!(
                     CAT,
-                    obj: stream.sinkpad,
+                    obj = stream.sinkpad,
                     "GOP {} start PTS {}, GOP end PTS {}",
                     stream.queued_gops.len() - 1,
                     gop.start_pts,
                     gop.end_pts,
                 );
                 if gop.start_pts > fragment_end_pts {
-                    gst::debug!(CAT, obj: stream.sinkpad, "Stream's first GOP starting after this fragment");
+                    gst::debug!(
+                        CAT,
+                        obj = stream.sinkpad,
+                        "Stream's first GOP starting after this fragment"
+                    );
                     stream.fragment_filled = true;
                     return;
                 }
@@ -1187,21 +1255,29 @@ impl FMP4Mux {
             {
                 Some(gop) => gop,
                 None => {
-                    gst::trace!(CAT, obj: stream.sinkpad, "Fragment mode but no GOP with final end PTS known yet");
+                    gst::trace!(
+                        CAT,
+                        obj = stream.sinkpad,
+                        "Fragment mode but no GOP with final end PTS known yet"
+                    );
                     return;
                 }
             };
 
             gst::trace!(
                 CAT,
-                obj: stream.sinkpad,
+                obj = stream.sinkpad,
                 "GOP {gop_idx} start PTS {}, GOP end PTS {}",
                 gop.start_pts,
                 gop.end_pts,
             );
 
             if gop.end_pts >= fragment_end_pts {
-                gst::debug!(CAT, obj: stream.sinkpad, "Stream queued enough data for this fragment");
+                gst::debug!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "Stream queued enough data for this fragment"
+                );
                 stream.fragment_filled = true;
             }
         }
@@ -1265,7 +1341,7 @@ impl FMP4Mux {
         // The earliest PTS is known and as such the start of the first and second fragment.
         gst::info!(
             CAT,
-            imp: self,
+            imp = self,
             "Got earliest PTS {}, start DTS {} (timeout: {timeout}, all eos: {all_eos})",
             earliest_pts,
             start_dts.display()
@@ -1306,7 +1382,7 @@ impl FMP4Mux {
                 if current_position.is_some_and(|current_position| current_position > fku_time) {
                     gst::warning!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "Sending first force-keyunit event late for running time {} at {}",
                         fku_time,
                         current_position.display(),
@@ -1315,7 +1391,7 @@ impl FMP4Mux {
                 } else {
                     gst::debug!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "Sending first force-keyunit event for running time {}",
                         fku_time,
                     );
@@ -1391,7 +1467,7 @@ impl FMP4Mux {
 
             gst::trace!(
                 CAT,
-                obj: stream.sinkpad,
+                obj = stream.sinkpad,
                 "Draining from {} up to end PTS {} / duration {}",
                 chunk_start_pts,
                 dequeue_end_pts,
@@ -1409,9 +1485,10 @@ impl FMP4Mux {
                 if fragment_filled {
                     gst::trace!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "Fragment filled, current GOP start {} end {} (final {})",
-                        gop.start_pts, gop.end_pts,
+                        gop.start_pts,
+                        gop.end_pts,
                         gop.final_end_pts || all_eos || stream.sinkpad.is_eos()
                     );
 
@@ -1425,11 +1502,7 @@ impl FMP4Mux {
                         && (gop.end_pts <= dequeue_end_pts
                             || (gops.is_empty() && chunk_end_pts.is_none()))
                     {
-                        gst::trace!(
-                            CAT,
-                            obj: stream.sinkpad,
-                            "Pushing whole GOP",
-                        );
+                        gst::trace!(CAT, obj = stream.sinkpad, "Pushing whole GOP",);
                         gops.push(stream.queued_gops.pop_back().unwrap());
                         continue;
                     }
@@ -1444,24 +1517,25 @@ impl FMP4Mux {
                     if gop.start_pts >= dequeue_end_pts
                         || (!gop.final_earliest_pts && !all_eos && !stream.sinkpad.is_eos())
                     {
-                        gst::trace!(
-                            CAT,
-                            obj: stream.sinkpad,
-                            "GOP starts after fragment end",
-                        );
+                        gst::trace!(CAT, obj = stream.sinkpad, "GOP starts after fragment end",);
                         break;
                     } else if chunk_end_pts.is_none() {
-                        gst::info!(CAT, obj: stream.sinkpad, "Don't have a full GOP at the end of a fragment for the first stream");
+                        gst::info!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Don't have a full GOP at the end of a fragment for the first stream"
+                        );
                         return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
                     } else {
-                        gst::info!(CAT, obj: stream.sinkpad, "Including incomplete GOP");
+                        gst::info!(CAT, obj = stream.sinkpad, "Including incomplete GOP");
                     }
                 } else {
                     gst::trace!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "Chunk filled, current GOP start {} end {} (final {})",
-                        gop.start_pts, gop.end_pts,
+                        gop.start_pts,
+                        gop.end_pts,
                         gop.final_end_pts || all_eos || stream.sinkpad.is_eos()
                     );
                 }
@@ -1469,20 +1543,12 @@ impl FMP4Mux {
                 if gop.end_pts <= dequeue_end_pts
                     && (gop.final_end_pts || all_eos || stream.sinkpad.is_eos())
                 {
-                    gst::trace!(
-                        CAT,
-                        obj: stream.sinkpad,
-                        "Pushing whole GOP",
-                    );
+                    gst::trace!(CAT, obj = stream.sinkpad, "Pushing whole GOP",);
                     gops.push(stream.queued_gops.pop_back().unwrap());
                 } else if gop.start_pts >= dequeue_end_pts
                     || (!gop.final_earliest_pts && !all_eos && !stream.sinkpad.is_eos())
                 {
-                    gst::trace!(
-                        CAT,
-                        obj: stream.sinkpad,
-                        "GOP starts after chunk end",
-                    );
+                    gst::trace!(CAT, obj = stream.sinkpad, "GOP starts after chunk end",);
                     break;
                 } else {
                     let gop = stream.queued_gops.back_mut().unwrap();
@@ -1507,7 +1573,7 @@ impl FMP4Mux {
                             // in the future.
                             gst::trace!(
                                 CAT,
-                                obj: stream.sinkpad,
+                                obj = stream.sinkpad,
                                 "First buffer of GOP too far in the future",
                             );
                             break;
@@ -1518,16 +1584,12 @@ impl FMP4Mux {
                     // after the end. We still take it here and remove the whole GOP.
                     if split_index == gop.buffers.len() - 1 {
                         if gop.final_end_pts || all_eos || stream.sinkpad.is_eos() {
-                            gst::trace!(
-                                CAT,
-                                obj: stream.sinkpad,
-                                "Pushing whole GOP",
-                            );
+                            gst::trace!(CAT, obj = stream.sinkpad, "Pushing whole GOP",);
                             gops.push(stream.queued_gops.pop_back().unwrap());
                         } else {
                             gst::trace!(
                                 CAT,
-                                obj: stream.sinkpad,
+                                obj = stream.sinkpad,
                                 "Can't push whole GOP as it's not final yet",
                             );
                         }
@@ -1545,7 +1607,7 @@ impl FMP4Mux {
 
                     gst::trace!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "Splitting GOP and keeping PTS {}",
                         gop.buffers[0].pts,
                     );
@@ -1574,7 +1636,11 @@ impl FMP4Mux {
                         .flags()
                         .contains(gst::BufferFlags::DELTA_UNIT)
                     {
-                        gst::error!(CAT, obj: stream.sinkpad, "First buffer of a new fragment is not a keyframe");
+                        gst::error!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "First buffer of a new fragment is not a keyframe"
+                        );
                     }
                 }
             }
@@ -1590,7 +1656,7 @@ impl FMP4Mux {
 
             gst::trace!(
                 CAT,
-                obj: stream.sinkpad,
+                obj = stream.sinkpad,
                 "Draining from {} up to end PTS {} / duration {}",
                 chunk_start_pts,
                 dequeue_end_pts,
@@ -1600,9 +1666,10 @@ impl FMP4Mux {
             while let Some(gop) = stream.queued_gops.back() {
                 gst::trace!(
                     CAT,
-                    obj: stream.sinkpad,
+                    obj = stream.sinkpad,
                     "Current GOP start {} end {} (final {})",
-                    gop.start_pts, gop.end_pts,
+                    gop.start_pts,
+                    gop.end_pts,
                     gop.final_end_pts || all_eos || stream.sinkpad.is_eos()
                 );
 
@@ -1614,7 +1681,7 @@ impl FMP4Mux {
                 if !gop.final_end_pts && !all_eos && !stream.sinkpad.is_eos() {
                     gst::trace!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "Not including GOP without final end PTS",
                     );
                     break;
@@ -1627,19 +1694,11 @@ impl FMP4Mux {
                     && gop.end_pts > dequeue_end_pts
                     && (chunk_end_pts.is_some() || !gops.is_empty())
                 {
-                    gst::trace!(
-                        CAT,
-                        obj: stream.sinkpad,
-                        "Not including GOP yet",
-                    );
+                    gst::trace!(CAT, obj = stream.sinkpad, "Not including GOP yet",);
                     break;
                 }
 
-                gst::trace!(
-                    CAT,
-                    obj: stream.sinkpad,
-                    "Pushing complete GOP",
-                );
+                gst::trace!(CAT, obj = stream.sinkpad, "Pushing complete GOP",);
                 gops.push(stream.queued_gops.pop_back().unwrap());
             }
         }
@@ -1699,11 +1758,7 @@ impl FMP4Mux {
                 && buffer.buffer.flags().contains(gst::BufferFlags::DROPPABLE)
                 && buffer.buffer.size() == 0
             {
-                gst::trace!(
-                    CAT,
-                    obj: stream.sinkpad,
-                    "Skipping gap buffer {buffer:?}",
-                );
+                gst::trace!(CAT, obj = stream.sinkpad, "Skipping gap buffer {buffer:?}",);
                 continue;
             }
 
@@ -1766,7 +1821,7 @@ impl FMP4Mux {
                         (gst::Signed::Positive(pts) - gst::Signed::Positive(dts)).nseconds(),
                     )
                     .map_err(|_| {
-                        gst::error!(CAT, obj: stream.sinkpad, "Too big PTS/DTS difference");
+                        gst::error!(CAT, obj = stream.sinkpad, "Too big PTS/DTS difference");
                         gst::FlowError::Error
                     })?,
                 )
@@ -1893,7 +1948,7 @@ impl FMP4Mux {
         // taken in its place.
         gst::info!(
             CAT,
-            imp: self,
+            imp = self,
             "Starting to drain at {} (fragment start {}, fragment end {}, chunk start {}, chunk end {})",
             chunk_start_pts,
             fragment_start_pts,
@@ -1926,7 +1981,7 @@ impl FMP4Mux {
                     chunk_end_pts = Some(last_gop.end_pts);
                     gst::info!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "Draining up to PTS {} for this chunk",
                         last_gop.end_pts,
                     );
@@ -1948,13 +2003,13 @@ impl FMP4Mux {
                         if settings.chunk_duration.is_some() {
                             gst::debug!(
                                 CAT,
-                                obj: stream.sinkpad,
+                                obj = stream.sinkpad,
                                 "Don't have anything to drain for the first stream on timeout in a live pipeline",
                             );
                         } else {
                             gst::warning!(
                                 CAT,
-                                obj: stream.sinkpad,
+                                obj = stream.sinkpad,
                                 "Don't have a complete GOP for the first stream on timeout in a live pipeline",
                             );
                         }
@@ -1974,11 +2029,7 @@ impl FMP4Mux {
             }
 
             if gops.is_empty() {
-                gst::info!(
-                    CAT,
-                    obj: stream.sinkpad,
-                    "Draining no buffers",
-                );
+                gst::info!(CAT, obj = stream.sinkpad, "Draining no buffers",);
 
                 drained_streams.push((
                     super::FragmentHeaderStream {
@@ -2001,7 +2052,7 @@ impl FMP4Mux {
             ) {
                 gst::debug!(
                     CAT,
-                    obj: stream.sinkpad,
+                    obj = stream.sinkpad,
                     "Queued full GOPs duration updated to {}",
                     prev_gop.end_pts.saturating_sub(first_gop.earliest_pts),
                 );
@@ -2009,7 +2060,7 @@ impl FMP4Mux {
 
             gst::debug!(
                 CAT,
-                obj: stream.sinkpad,
+                obj = stream.sinkpad,
                 "Queued duration updated to {}",
                 Option::zip(stream.queued_gops.front(), stream.queued_gops.back())
                     .map(|(end, start)| end.end_pts.saturating_sub(start.start_pts))
@@ -2029,11 +2080,7 @@ impl FMP4Mux {
             ) = match buffers {
                 Some(res) => res,
                 None => {
-                    gst::info!(
-                        CAT,
-                        obj: stream.sinkpad,
-                        "Drained only gap buffers",
-                    );
+                    gst::info!(CAT, obj = stream.sinkpad, "Drained only gap buffers",);
 
                     drained_streams.push((
                         super::FragmentHeaderStream {
@@ -2051,7 +2098,7 @@ impl FMP4Mux {
 
             gst::info!(
                 CAT,
-                obj: stream.sinkpad,
+                obj = stream.sinkpad,
                 "Draining {} worth of buffers starting at PTS {} DTS {}, DTS offset {}",
                 end_pts.saturating_sub(earliest_pts),
                 earliest_pts,
@@ -2217,7 +2264,7 @@ impl FMP4Mux {
                 if current_position.is_some_and(|current_position| current_position > fku_time) {
                     gst::warning!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "Sending force-keyunit event late for running time {} at {}",
                         fku_time,
                         current_position.display(),
@@ -2226,7 +2273,7 @@ impl FMP4Mux {
                 } else {
                     gst::debug!(
                         CAT,
-                        obj: stream.sinkpad,
+                        obj = stream.sinkpad,
                         "Sending force-keyunit event for running time {}",
                         fku_time,
                     );
@@ -2254,9 +2301,9 @@ impl FMP4Mux {
         upstream_events: &mut Vec<(super::FMP4MuxPad, gst::Event)>,
     ) -> Result<(Option<gst::Caps>, Option<gst::BufferList>), gst::FlowError> {
         if at_eos {
-            gst::info!(CAT, imp: self, "Draining at EOS");
+            gst::info!(CAT, imp = self, "Draining at EOS");
         } else if timeout {
-            gst::info!(CAT, imp: self, "Draining at timeout");
+            gst::info!(CAT, imp = self, "Draining at timeout");
         } else {
             for stream in &state.streams {
                 if !stream.chunk_filled && !stream.fragment_filled && !stream.sinkpad.is_eos() {
@@ -2265,7 +2312,7 @@ impl FMP4Mux {
             }
             gst::info!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Draining because all streams have enough data queued"
             );
         }
@@ -2322,7 +2369,7 @@ impl FMP4Mux {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             concat!(
                 "Draining chunk (fragment start: {} fragment end: {}) ",
                 "from PTS {} to {}"
@@ -2375,7 +2422,7 @@ impl FMP4Mux {
             .map_err(|err| {
                 gst::error!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Failed to create FMP4 fragment header: {}",
                     err
                 );
@@ -2450,9 +2497,14 @@ impl FMP4Mux {
 
         if fragment_filled {
             state.fragment_start_pts = Some(chunk_end_pts);
-            gst::info!(CAT, imp: self, "Starting new fragment at {}", chunk_end_pts,);
+            gst::info!(
+                CAT,
+                imp = self,
+                "Starting new fragment at {}",
+                chunk_end_pts,
+            );
         } else {
-            gst::info!(CAT, imp: self, "Starting new chunk at {}", chunk_end_pts,);
+            gst::info!(CAT, imp = self, "Starting new chunk at {}", chunk_end_pts,);
         }
         state.chunk_start_pts = Some(chunk_end_pts);
 
@@ -2501,7 +2553,7 @@ impl FMP4Mux {
                 Err(err) => {
                     if err == gst_base::AGGREGATOR_FLOW_NEED_DATA {
                         assert!(!all_eos);
-                        gst::debug!(CAT, imp: self, "Need more data");
+                        gst::debug!(CAT, imp = self, "Need more data");
                         state.timeout_delay += 1.seconds();
                     }
 
@@ -2513,7 +2565,7 @@ impl FMP4Mux {
             // EOS add the footers.
             if buffer_list.is_none() {
                 if settings.write_mfra && all_eos {
-                    gst::debug!(CAT, imp: self, "Writing mfra box");
+                    gst::debug!(CAT, imp = self, "Writing mfra box");
                     match boxes::create_mfra(&state.streams[0].caps, &state.fragment_offsets) {
                         Ok(mut mfra) => {
                             {
@@ -2529,7 +2581,7 @@ impl FMP4Mux {
                             buffers.extend(buffer_list);
                         }
                         Err(err) => {
-                            gst::error!(CAT, imp: self, "Failed to create mfra box: {}", err);
+                            gst::error!(CAT, imp = self, "Failed to create mfra box: {}", err);
                         }
                     }
                 }
@@ -2572,12 +2624,12 @@ impl FMP4Mux {
             let caps = match pad.current_caps() {
                 Some(caps) => caps,
                 None => {
-                    gst::warning!(CAT, obj: pad, "Skipping pad without caps");
+                    gst::warning!(CAT, obj = pad, "Skipping pad without caps");
                     continue;
                 }
             };
 
-            gst::info!(CAT, obj: pad, "Configuring caps {:?}", caps);
+            gst::info!(CAT, obj = pad, "Configuring caps {:?}", caps);
 
             let s = caps.structure(0).unwrap();
 
@@ -2586,7 +2638,7 @@ impl FMP4Mux {
             match s.name().as_str() {
                 "video/x-h264" | "video/x-h265" => {
                     if !s.has_field_with_type("codec_data", gst::Buffer::static_type()) {
-                        gst::error!(CAT, obj: pad, "Received caps without codec_data");
+                        gst::error!(CAT, obj = pad, "Received caps without codec_data");
                         return Err(gst::FlowError::NotNegotiated);
                     }
                     delta_frames = DeltaFrames::Bidirectional;
@@ -2596,7 +2648,7 @@ impl FMP4Mux {
                 }
                 "video/x-vp9" => {
                     if !s.has_field_with_type("colorimetry", str::static_type()) {
-                        gst::error!(CAT, obj: pad, "Received caps without colorimetry");
+                        gst::error!(CAT, obj = pad, "Received caps without colorimetry");
                         return Err(gst::FlowError::NotNegotiated);
                     }
                     delta_frames = DeltaFrames::PredictiveOnly;
@@ -2607,7 +2659,7 @@ impl FMP4Mux {
                 "image/jpeg" => (),
                 "audio/mpeg" => {
                     if !s.has_field_with_type("codec_data", gst::Buffer::static_type()) {
-                        gst::error!(CAT, obj: pad, "Received caps without codec_data");
+                        gst::error!(CAT, obj = pad, "Received caps without codec_data");
                         return Err(gst::FlowError::NotNegotiated);
                     }
                 }
@@ -2618,18 +2670,23 @@ impl FMP4Mux {
                         .and_then(|a| a.first().and_then(|v| v.get::<gst::Buffer>().ok()))
                     {
                         if gst_pbutils::codec_utils_opus_parse_header(&header, None).is_err() {
-                            gst::error!(CAT, obj: pad, "Received invalid Opus header");
+                            gst::error!(CAT, obj = pad, "Received invalid Opus header");
                             return Err(gst::FlowError::NotNegotiated);
                         }
                     } else if gst_pbutils::codec_utils_opus_parse_caps(&caps, None).is_err() {
-                        gst::error!(CAT, obj: pad, "Received invalid Opus caps");
+                        gst::error!(CAT, obj = pad, "Received invalid Opus caps");
                         return Err(gst::FlowError::NotNegotiated);
                     }
                 }
                 "audio/x-flac" => {
                     discard_header_buffers = true;
                     if let Err(e) = s.get::<gst::ArrayRef>("streamheader") {
-                        gst::error!(CAT, obj: pad, "Muxing FLAC into MP4 needs streamheader: {}", e);
+                        gst::error!(
+                            CAT,
+                            obj = pad,
+                            "Muxing FLAC into MP4 needs streamheader: {}",
+                            e
+                        );
                         return Err(gst::FlowError::NotNegotiated);
                     };
                 }
@@ -2656,7 +2713,7 @@ impl FMP4Mux {
         }
 
         if state.streams.is_empty() {
-            gst::error!(CAT, imp: self, "No streams available");
+            gst::error!(CAT, imp = self, "No streams available");
             return Err(gst::FlowError::Error);
         }
 
@@ -2740,7 +2797,7 @@ impl FMP4Mux {
             },
         })
         .map_err(|err| {
-            gst::error!(CAT, imp: self, "Failed to create FMP4 header: {}", err);
+            gst::error!(CAT, imp = self, "Failed to create FMP4 header: {}", err);
             gst::FlowError::Error
         })?;
 
@@ -2777,7 +2834,7 @@ impl FMP4Mux {
     /// Finish the stream be rewriting / updating headers.
     fn finish(&self, settings: &Settings) {
         // Do remaining EOS handling after the end of the stream was pushed.
-        gst::debug!(CAT, imp: self, "Doing EOS handling");
+        gst::debug!(CAT, imp = self, "Doing EOS handling");
 
         if settings.header_update_mode == super::HeaderUpdateMode::None {
             // Need to output new headers if started again after EOS
@@ -2805,7 +2862,7 @@ impl FMP4Mux {
                             if let Err(err) = aggregator.finish_buffer_list(buffer_list) {
                                 gst::error!(
                                     CAT,
-                                    imp: self,
+                                    imp = self,
                                     "Failed pushing updated header buffer downstream: {:?}",
                                     err,
                                 );
@@ -2813,7 +2870,7 @@ impl FMP4Mux {
                         } else {
                             gst::error!(
                                 CAT,
-                                imp: self,
+                                imp = self,
                                 "Can't rewrite header because downstream is not seekable"
                             );
                         }
@@ -2825,7 +2882,7 @@ impl FMP4Mux {
                         if let Err(err) = aggregator.finish_buffer_list(buffer_list) {
                             gst::error!(
                                 CAT,
-                                imp: self,
+                                imp = self,
                                 "Failed pushing updated header buffer downstream: {:?}",
                                 err,
                             );
@@ -2837,7 +2894,7 @@ impl FMP4Mux {
             Err(err) => {
                 gst::error!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Failed to generate updated header: {:?}",
                     err
                 );
@@ -3060,7 +3117,7 @@ impl ElementImpl for FMP4Mux {
         if state.stream_header.is_some() {
             gst::error!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Can't request new pads after header was generated"
             );
             return None;
@@ -3083,7 +3140,7 @@ impl AggregatorImpl for FMP4Mux {
     ) -> bool {
         use gst::QueryViewMut;
 
-        gst::trace!(CAT, obj: aggregator_pad, "Handling query {:?}", query);
+        gst::trace!(CAT, obj = aggregator_pad, "Handling query {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Caps(q) => {
@@ -3117,14 +3174,14 @@ impl AggregatorImpl for FMP4Mux {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         use gst::EventView;
 
-        gst::trace!(CAT, obj: aggregator_pad, "Handling event {:?}", event);
+        gst::trace!(CAT, obj = aggregator_pad, "Handling event {:?}", event);
 
         match event.view() {
             EventView::Segment(ev) => {
                 if ev.segment().format() != gst::Format::Time {
                     gst::warning!(
                         CAT,
-                        obj: aggregator_pad,
+                        obj = aggregator_pad,
                         "Received non-TIME segment, replacing with default TIME segment"
                     );
                     let segment = gst::FormattedSegment::<gst::ClockTime>::new();
@@ -3141,7 +3198,7 @@ impl AggregatorImpl for FMP4Mux {
     fn sink_event(&self, aggregator_pad: &gst_base::AggregatorPad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::trace!(CAT, obj: aggregator_pad, "Handling event {:?}", event);
+        gst::trace!(CAT, obj = aggregator_pad, "Handling event {:?}", event);
 
         match event.view() {
             EventView::Segment(ev) => {
@@ -3151,7 +3208,7 @@ impl AggregatorImpl for FMP4Mux {
                     .clone()
                     .downcast::<gst::ClockTime>()
                     .expect("non-TIME segment");
-                gst::info!(CAT, obj: aggregator_pad, "Received segment {:?}", segment);
+                gst::info!(CAT, obj = aggregator_pad, "Received segment {:?}", segment);
 
                 // Only forward the segment event verbatim if this is a single stream variant.
                 // Otherwise we have to produce a default segment and re-timestamp all buffers
@@ -3167,7 +3224,12 @@ impl AggregatorImpl for FMP4Mux {
             EventView::Tag(ev) => {
                 if let Some(tag_value) = ev.tag().get::<gst::tags::LanguageCode>() {
                     let lang = tag_value.get();
-                    gst::trace!(CAT, imp: self, "Received language code from tags: {:?}", lang);
+                    gst::trace!(
+                        CAT,
+                        imp = self,
+                        "Received language code from tags: {:?}",
+                        lang
+                    );
 
                     // Language as ISO-639-2/T
                     if lang.len() == 3 && lang.chars().all(|c| c.is_ascii_lowercase()) {
@@ -3190,7 +3252,7 @@ impl AggregatorImpl for FMP4Mux {
     fn src_query(&self, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
-        gst::trace!(CAT, imp: self, "Handling query {:?}", query);
+        gst::trace!(CAT, imp = self, "Handling query {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Seeking(q) => {
@@ -3205,7 +3267,7 @@ impl AggregatorImpl for FMP4Mux {
     fn src_event(&self, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::trace!(CAT, imp: self, "Handling event {:?}", event);
+        gst::trace!(CAT, imp = self, "Handling event {:?}", event);
 
         match event.view() {
             EventView::Seek(_ev) => false,
@@ -3234,7 +3296,7 @@ impl AggregatorImpl for FMP4Mux {
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
-        gst::trace!(CAT, imp: self, "Stopping");
+        gst::trace!(CAT, imp = self, "Stopping");
 
         let _ = self.parent_stop();
 
@@ -3244,7 +3306,7 @@ impl AggregatorImpl for FMP4Mux {
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
-        gst::trace!(CAT, imp: self, "Starting");
+        gst::trace!(CAT, imp = self, "Starting");
 
         self.parent_start()?;
 
@@ -3287,7 +3349,7 @@ impl AggregatorImpl for FMP4Mux {
 
             all_eos = state.streams.iter().all(|stream| stream.sinkpad.is_eos());
             if all_eos {
-                gst::debug!(CAT, imp: self, "All streams are EOS now");
+                gst::debug!(CAT, imp = self, "All streams are EOS now");
 
                 let fragment_start_pts = state.fragment_start_pts;
                 let chunk_start_pts = state.chunk_start_pts;
@@ -3330,12 +3392,12 @@ impl AggregatorImpl for FMP4Mux {
         }
 
         if let Some(caps) = caps {
-            gst::debug!(CAT, imp: self, "Setting caps on source pad: {:?}", caps);
+            gst::debug!(CAT, imp = self, "Setting caps on source pad: {:?}", caps);
             self.obj().set_src_caps(&caps);
         }
 
         for buffer_list in buffers {
-            gst::trace!(CAT, imp: self, "Pushing buffer list {:?}", buffer_list);
+            gst::trace!(CAT, imp = self, "Pushing buffer list {:?}", buffer_list);
             self.obj().finish_buffer_list(buffer_list)?;
         }
 

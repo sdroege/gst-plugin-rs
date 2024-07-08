@@ -136,7 +136,7 @@ impl Signaller {
 
         if insecure_tls {
             connector_builder.danger_accept_invalid_certs(true);
-            gst::warning!(CAT, imp: self, "insecure tls connections are allowed");
+            gst::warning!(CAT, imp = self, "insecure tls connections are allowed");
         }
 
         let connector = Some(tokio_native_tls::TlsConnector::from(
@@ -146,7 +146,7 @@ impl Signaller {
         let mut uri = self.uri();
         uri.set_query(None);
 
-        gst::info!(CAT, imp: self, "connecting to {}", uri.to_string());
+        gst::info!(CAT, imp = self, "connecting to {}", uri.to_string());
 
         let mut req = uri.into_client_request()?;
         let req_headers = req.headers_mut();
@@ -166,7 +166,7 @@ impl Signaller {
         )
         .await??;
 
-        gst::info!(CAT, imp: self, "connected");
+        gst::info!(CAT, imp = self, "connected");
 
         // Channel for asynchronously sending out websocket message
         let (mut ws_sink, mut ws_stream) = ws.split();
@@ -186,12 +186,12 @@ impl Signaller {
                         .await;
 
                     if let Err(ref err) = res {
-                        gst::error!(CAT, imp: this, "Quitting send loop: {err}");
+                        gst::error!(CAT, imp = this, "Quitting send loop: {err}");
                         break;
                     }
                 }
 
-                gst::debug!(CAT, imp: this, "Done sending");
+                gst::debug!(CAT, imp = this, "Done sending");
 
                 let _ = ws_sink.close().await;
 
@@ -218,7 +218,7 @@ impl Signaller {
                 }
 
                 let msg = "Stopped websocket receiving";
-                gst::info!(CAT, imp: this, "{msg}");
+                gst::info!(CAT, imp = this, "{msg}");
             }
         ));
 
@@ -274,12 +274,12 @@ impl Signaller {
 
                 for (key, value) in structure.iter() {
                     if let Ok(Ok(value_str)) = value.transform::<String>().map(|v| v.get()) {
-                        gst::log!(CAT, imp: self, "headers '{}' -> '{}'", key, value_str);
+                        gst::log!(CAT, imp = self, "headers '{}' -> '{}'", key, value_str);
                         hash.insert(key.to_string(), value_str);
                     } else {
                         gst::warning!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "Failed to convert headers '{}' to string ('{:?}')",
                             key,
                             value
@@ -318,7 +318,7 @@ impl Signaller {
 
             gst::info!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Started session with producer peer id {target_producer}",
             );
         }
@@ -331,7 +331,7 @@ impl Signaller {
     ) -> ControlFlow<()> {
         match msg {
             Ok(WsMessage::Text(msg)) => {
-                gst::trace!(CAT, imp: self, "Received message {}", msg);
+                gst::trace!(CAT, imp = self, "Received message {}", msg);
 
                 if let Ok(msg) = serde_json::from_str::<p::OutgoingMessage>(&msg) {
                     match msg {
@@ -347,7 +347,7 @@ impl Signaller {
                             let meta = meta.and_then(|m| match m {
                                 serde_json::Value::Object(v) => Some(serialize_json_object(&v)),
                                 _ => {
-                                    gst::error!(CAT, imp: self, "Invalid json value: {m:?}");
+                                    gst::error!(CAT, imp = self, "Invalid json value: {m:?}");
                                     None
                                 }
                             });
@@ -398,7 +398,7 @@ impl Signaller {
                             );
                         }
                         p::OutgoingMessage::EndSession(p::EndSessionMessage { session_id }) => {
-                            gst::info!(CAT, imp: self, "Session {session_id} ended");
+                            gst::info!(CAT, imp = self, "Session {session_id} ended");
 
                             self.obj()
                                 .emit_by_name::<bool>("session-ended", &[&session_id]);
@@ -454,9 +454,15 @@ impl Signaller {
                                     drop(state);
 
                                     let meta = producer.meta.and_then(|m| match m {
-                                        serde_json::Value::Object(v) => Some(serialize_json_object(&v)),
+                                        serde_json::Value::Object(v) => {
+                                            Some(serialize_json_object(&v))
+                                        }
                                         _ => {
-                                            gst::error!(CAT, imp: self, "Invalid json value: {m:?}");
+                                            gst::error!(
+                                                CAT,
+                                                imp = self,
+                                                "Invalid json value: {m:?}"
+                                            );
                                             None
                                         }
                                     });
@@ -476,7 +482,7 @@ impl Signaller {
                         }
                     }
                 } else {
-                    gst::error!(CAT, imp: self, "Unknown message from server: {}", msg);
+                    gst::error!(CAT, imp = self, "Unknown message from server: {}", msg);
 
                     self.obj().emit_by_name::<()>(
                         "error",
@@ -485,7 +491,7 @@ impl Signaller {
                 }
             }
             Ok(WsMessage::Close(reason)) => {
-                gst::info!(CAT, imp: self, "websocket connection closed: {:?}", reason);
+                gst::info!(CAT, imp = self, "websocket connection closed: {:?}", reason);
                 return ControlFlow::Break(());
             }
             Ok(_) => (),
@@ -637,7 +643,7 @@ impl ObjectImpl for Signaller {
 
 impl SignallableImpl for Signaller {
     fn start(&self) {
-        gst::info!(CAT, imp: self, "Starting");
+        gst::info!(CAT, imp = self, "Starting");
 
         let mut state = self.state.lock().unwrap();
         let connect_task_handle = RUNTIME.spawn(glib::clone!(
@@ -655,7 +661,7 @@ impl SignallableImpl for Signaller {
     }
 
     fn stop(&self) {
-        gst::info!(CAT, imp: self, "Stopping now");
+        gst::info!(CAT, imp = self, "Stopping now");
 
         let mut state = self.state.lock().unwrap();
 
@@ -677,7 +683,7 @@ impl SignallableImpl for Signaller {
 
                 if let Some(handle) = send_task_handle {
                     if let Err(err) = handle.await {
-                        gst::warning!(CAT, imp: self, "Error while joining send task: {}", err);
+                        gst::warning!(CAT, imp = self, "Error while joining send task: {}", err);
                     }
                 }
 
@@ -692,7 +698,7 @@ impl SignallableImpl for Signaller {
     }
 
     fn send_sdp(&self, session_id: &str, sdp: &gst_webrtc::WebRTCSessionDescription) {
-        gst::debug!(CAT, imp: self, "Sending SDP {sdp:#?}");
+        gst::debug!(CAT, imp = self, "Sending SDP {sdp:#?}");
 
         let role = self.settings.lock().unwrap().role;
         let is_consumer = matches!(role, super::WebRTCSignallerRole::Consumer);
@@ -722,7 +728,7 @@ impl SignallableImpl for Signaller {
     ) {
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Adding ice candidate {candidate:?} for {sdp_m_line_index:?} on session {session_id}"
         );
 
@@ -738,7 +744,7 @@ impl SignallableImpl for Signaller {
     }
 
     fn end_session(&self, session_id: &str) {
-        gst::debug!(CAT, imp: self, "Signalling session done {}", session_id);
+        gst::debug!(CAT, imp = self, "Signalling session done {}", session_id);
 
         let state = self.state.lock().unwrap();
         let session_id = session_id.to_string();

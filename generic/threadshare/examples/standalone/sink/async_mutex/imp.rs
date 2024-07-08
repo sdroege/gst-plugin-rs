@@ -43,14 +43,14 @@ impl PadSinkHandlerInner {
             log_or_trace!(
                 CAT,
                 self.is_main_elem,
-                obj: elem,
+                obj = elem,
                 "Discarding {buffer:?} (flushing)"
             );
 
             return Err(gst::FlowError::Flushing);
         }
 
-        debug_or_trace!(CAT, self.is_main_elem, obj: elem, "Received {buffer:?}");
+        debug_or_trace!(CAT, self.is_main_elem, obj = elem, "Received {buffer:?}");
 
         let dts = buffer
             .dts()
@@ -67,18 +67,23 @@ impl PadSinkHandlerInner {
                 stats.add_buffer(latency, interval);
             }
 
-            debug_or_trace!(CAT, self.is_main_elem, obj: elem, "o latency {latency:.2?}");
             debug_or_trace!(
                 CAT,
                 self.is_main_elem,
-                obj: elem,
+                obj = elem,
+                "o latency {latency:.2?}"
+            );
+            debug_or_trace!(
+                CAT,
+                self.is_main_elem,
+                obj = elem,
                 "o interval {interval:.2?}",
             );
         }
 
         self.last_dts = Some(dts);
 
-        log_or_trace!(CAT, self.is_main_elem, obj: elem, "Buffer processed");
+        log_or_trace!(CAT, self.is_main_elem, obj = elem, "Buffer processed");
 
         Ok(())
     }
@@ -117,7 +122,7 @@ impl PadSinkHandler for AsyncPadSinkHandler {
                 EventView::Eos(_) => {
                     {
                         let mut inner = self.0.lock().await;
-                        debug_or_trace!(CAT, inner.is_main_elem, obj: elem, "EOS");
+                        debug_or_trace!(CAT, inner.is_main_elem, obj = elem, "EOS");
                         inner.is_flushing = true;
                     }
 
@@ -196,7 +201,7 @@ pub struct AsyncMutexSink {
 impl AsyncMutexSink {
     fn prepare(&self) -> Result<(), gst::ErrorMessage> {
         let settings = self.settings.lock().unwrap();
-        debug_or_trace!(CAT, settings.is_main_elem, imp: self, "Preparing");
+        debug_or_trace!(CAT, settings.is_main_elem, imp = self, "Preparing");
         let stats = if settings.logs_stats {
             Some(Stats::new(
                 settings.max_buffers,
@@ -207,25 +212,25 @@ impl AsyncMutexSink {
         };
 
         self.sink_pad_handler.prepare(settings.is_main_elem, stats);
-        debug_or_trace!(CAT, settings.is_main_elem, imp: self, "Prepared");
+        debug_or_trace!(CAT, settings.is_main_elem, imp = self, "Prepared");
 
         Ok(())
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         let is_main_elem = self.settings.lock().unwrap().is_main_elem;
-        debug_or_trace!(CAT, is_main_elem, imp: self, "Stopping");
+        debug_or_trace!(CAT, is_main_elem, imp = self, "Stopping");
         self.sink_pad_handler.stop();
-        debug_or_trace!(CAT, is_main_elem, imp: self, "Stopped");
+        debug_or_trace!(CAT, is_main_elem, imp = self, "Stopped");
 
         Ok(())
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
         let is_main_elem = self.settings.lock().unwrap().is_main_elem;
-        debug_or_trace!(CAT, is_main_elem, imp: self, "Starting");
+        debug_or_trace!(CAT, is_main_elem, imp = self, "Starting");
         self.sink_pad_handler.start();
-        debug_or_trace!(CAT, is_main_elem, imp: self, "Started");
+        debug_or_trace!(CAT, is_main_elem, imp = self, "Started");
 
         Ok(())
     }
@@ -311,7 +316,7 @@ impl ElementImpl for AsyncMutexSink {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {transition:?}");
+        gst::trace!(CAT, imp = self, "Changing state {transition:?}");
 
         match transition {
             gst::StateChange::NullToReady => {

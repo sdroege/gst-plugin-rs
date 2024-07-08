@@ -147,7 +147,7 @@ impl ElementImpl for QuinnQuicSink {
             {
                 gst::error!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Certificate or private key file not provided for secure connection"
                 );
                 return Err(gst::StateChangeError);
@@ -456,17 +456,17 @@ impl BaseSinkImpl for QuinnQuicSink {
                     stream: s,
                 });
 
-                gst::info!(CAT, imp: self, "Started");
+                gst::info!(CAT, imp = self, "Started");
 
                 Ok(())
             }
             Ok(Err(e)) => match e {
                 WaitError::FutureAborted => {
-                    gst::warning!(CAT, imp: self, "Connection aborted");
+                    gst::warning!(CAT, imp = self, "Connection aborted");
                     Ok(())
                 }
                 WaitError::FutureError(err) => {
-                    gst::error!(CAT, imp: self, "Connection request failed: {}", err);
+                    gst::error!(CAT, imp = self, "Connection request failed: {}", err);
                     Err(gst::error_msg!(
                         gst::ResourceError::Failed,
                         ["Connection request failed: {}", err]
@@ -474,7 +474,7 @@ impl BaseSinkImpl for QuinnQuicSink {
                 }
             },
             Err(e) => {
-                gst::error!(CAT, imp: self, "Failed to establish a connection: {:?}", e);
+                gst::error!(CAT, imp = self, "Failed to establish a connection: {:?}", e);
                 Err(gst::error_msg!(
                     gst::ResourceError::Failed,
                     ["Failed to establish a connection: {:?}", e]
@@ -505,17 +505,17 @@ impl BaseSinkImpl for QuinnQuicSink {
                     Ok(r) => {
                         if let Err(e) = r {
                             close_msg = format!("Stream finish request error: {}", e);
-                            gst::error!(CAT, imp: self, "{}", close_msg);
+                            gst::error!(CAT, imp = self, "{}", close_msg);
                         }
                     }
                     Err(e) => match e {
                         WaitError::FutureAborted => {
                             close_msg = "Stream finish request aborted".to_string();
-                            gst::warning!(CAT, imp: self, "{}", close_msg);
+                            gst::warning!(CAT, imp = self, "{}", close_msg);
                         }
                         WaitError::FutureError(e) => {
                             close_msg = format!("Stream finish request future error: {}", e);
-                            gst::error!(CAT, imp: self, "{}", close_msg);
+                            gst::error!(CAT, imp = self, "{}", close_msg);
                         }
                     },
                 };
@@ -526,7 +526,7 @@ impl BaseSinkImpl for QuinnQuicSink {
 
         *state = State::Stopped;
 
-        gst::info!(CAT, imp: self, "Stopped");
+        gst::info!(CAT, imp = self, "Stopped");
 
         Ok(())
     }
@@ -537,7 +537,7 @@ impl BaseSinkImpl for QuinnQuicSink {
             return Err(gst::FlowError::Error);
         }
 
-        gst::trace!(CAT, imp: self, "Rendering {:?}", buffer);
+        gst::trace!(CAT, imp = self, "Rendering {:?}", buffer);
 
         let map = buffer.map_readable().map_err(|_| {
             gst::element_imp_error!(self, gst::CoreError::Failed, ["Failed to map buffer"]);
@@ -548,12 +548,12 @@ impl BaseSinkImpl for QuinnQuicSink {
             Ok(_) => Ok(gst::FlowSuccess::Ok),
             Err(err) => match err {
                 Some(error_message) => {
-                    gst::error!(CAT, imp: self, "Data sending failed: {}", error_message);
+                    gst::error!(CAT, imp = self, "Data sending failed: {}", error_message);
                     self.post_error_message(error_message);
                     Err(gst::FlowError::Error)
                 }
                 _ => {
-                    gst::info!(CAT, imp: self, "Send interrupted. Flushing...");
+                    gst::info!(CAT, imp = self, "Send interrupted. Flushing...");
                     Err(gst::FlowError::Flushing)
                 }
             },
@@ -603,7 +603,7 @@ impl QuinnQuicSink {
                 Some(size) => {
                     if src.len() > size {
                         if drop_buffer_for_datagram {
-                            gst::warning!(CAT, imp: self, "Buffer dropped, current max datagram size: {size} > buffer size: {}", src.len());
+                            gst::warning!(CAT, imp = self, "Buffer dropped, current max datagram size: {size} > buffer size: {}", src.len());
                             return Ok(());
                         } else {
                             return Err(Some(gst::error_msg!(
@@ -638,7 +638,7 @@ impl QuinnQuicSink {
                 ))),
                 Err(e) => match e {
                     WaitError::FutureAborted => {
-                        gst::warning!(CAT, imp: self, "Sending aborted");
+                        gst::warning!(CAT, imp = self, "Sending aborted");
                         Ok(())
                     }
                     WaitError::FutureError(e) => Err(Some(gst::error_msg!(
@@ -738,7 +738,11 @@ impl QuinnQuicSink {
         } else {
             match connection.max_datagram_size() {
                 Some(datagram_size) => {
-                    gst::info!(CAT, imp: self, "Datagram size reported by peer: {datagram_size}");
+                    gst::info!(
+                        CAT,
+                        imp = self,
+                        "Datagram size reported by peer: {datagram_size}"
+                    );
                 }
                 None => {
                     return Err(WaitError::FutureError(gst::error_msg!(

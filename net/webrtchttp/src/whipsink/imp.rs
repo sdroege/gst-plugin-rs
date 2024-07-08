@@ -160,7 +160,7 @@ impl ElementImpl for WhipSink {
                 let settings = self.settings.lock().unwrap();
 
                 if settings.whip_endpoint.is_none() {
-                    gst::error!(CAT, imp: self, "WHIP endpoint URL must be set");
+                    gst::error!(CAT, imp = self, "WHIP endpoint URL must be set");
                     return Err(gst::StateChangeError);
                 }
 
@@ -173,7 +173,7 @@ impl ElementImpl for WhipSink {
                 {
                     gst::error!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "WHIP endpoint URL could not be parsed: {}",
                         e
                     );
@@ -363,7 +363,7 @@ impl ObjectImpl for WhipSink {
 
         gst::warning!(
             CAT,
-            imp: self,
+            imp = self,
             "whipsink will be deprecated in the future, \
             it is recommended that whipclientsink be used instead"
         );
@@ -383,14 +383,14 @@ impl ObjectImpl for WhipSink {
 
                 match state {
                     WebRTCICEGatheringState::Gathering => {
-                        gst::info!(CAT, imp: self_, "ICE gathering started")
+                        gst::info!(CAT, imp = self_, "ICE gathering started")
                     }
                     WebRTCICEGatheringState::Complete => {
-                        gst::info!(CAT, imp: self_, "ICE gathering completed");
+                        gst::info!(CAT, imp = self_, "ICE gathering completed");
 
                         let self_ref = self_.ref_counted();
 
-                        gst::info!(CAT, imp: self_, "ICE gathering complete");
+                        gst::info!(CAT, imp = self_, "ICE gathering complete");
 
                         // With tokio's spawn one does not have to .await the
                         // returned JoinHandle to make the provided future start
@@ -535,7 +535,7 @@ impl WhipSink {
     fn handle_future_error(&self, err: WaitError) {
         match err {
             WaitError::FutureAborted => {
-                gst::warning!(CAT, imp: self, "Future aborted")
+                gst::warning!(CAT, imp = self, "Future aborted")
             }
             WaitError::FutureError(err) => {
                 self.raise_error(gst::ResourceError::Failed, err.to_string())
@@ -568,7 +568,7 @@ impl WhipSink {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Sending offer SDP: {:?}",
             offer_sdp.sdp().as_text()
         );
@@ -627,7 +627,7 @@ impl WhipSink {
         let sdp = offer.sdp();
         let body = sdp.as_text().unwrap();
 
-        gst::debug!(CAT, imp: self, "Using endpoint {}", endpoint.as_str());
+        gst::debug!(CAT, imp = self, "Using endpoint {}", endpoint.as_str());
         let mut headermap = HeaderMap::new();
         headermap.insert(
             reqwest::header::CONTENT_TYPE,
@@ -713,7 +713,7 @@ impl WhipSink {
 
                 let url = reqwest::Url::parse(endpoint.as_str()).unwrap();
 
-                gst::debug!(CAT, imp: self, "WHIP resource: {:?}", location);
+                gst::debug!(CAT, imp = self, "WHIP resource: {:?}", location);
 
                 let url = match url.join(location) {
                     Ok(joined_url) => joined_url,
@@ -796,7 +796,7 @@ impl WhipSink {
 
                             gst::debug!(
                                 CAT,
-                                imp: self,
+                                imp = self,
                                 "Redirecting endpoint to {}",
                                 redirect_url.as_str()
                             );
@@ -861,7 +861,7 @@ impl WhipSink {
             );
         }
 
-        gst::debug!(CAT, imp: self, "DELETE request on {}", resource_url);
+        gst::debug!(CAT, imp = self, "DELETE request on {}", resource_url);
         let client = build_reqwest_client(reqwest::redirect::Policy::default());
         let future = async {
             client
@@ -880,14 +880,14 @@ impl WhipSink {
         let res = wait(&self.canceller, future, timeout);
         match res {
             Ok(r) => {
-                gst::debug!(CAT, imp: self, "Response to DELETE : {}", r.status());
+                gst::debug!(CAT, imp = self, "Response to DELETE : {}", r.status());
             }
             Err(e) => match e {
                 WaitError::FutureAborted => {
-                    gst::warning!(CAT, imp: self, "DELETE request aborted")
+                    gst::warning!(CAT, imp = self, "DELETE request aborted")
                 }
                 WaitError::FutureError(e) => {
-                    gst::error!(CAT, imp: self, "Error on DELETE request : {}", e)
+                    gst::error!(CAT, imp = self, "Error on DELETE request : {}", e)
                 }
             },
         };

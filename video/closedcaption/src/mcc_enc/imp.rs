@@ -113,7 +113,7 @@ impl MccEnc {
                         .latest()
                     })
                     .ok_or_else(|| {
-                        gst::error!(CAT, imp: self, "Invalid creation datetime");
+                        gst::error!(CAT, imp = self, "Invalid creation datetime");
                         gst::FlowError::Error
                     })?;
 
@@ -318,7 +318,7 @@ impl MccEnc {
         pad: &gst::Pad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, obj = pad, "Handling buffer {:?}", buffer);
 
         let mut state = self.state.lock().unwrap();
 
@@ -342,7 +342,7 @@ impl MccEnc {
     fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
 
         match event.view() {
             EventView::Caps(ev) => {
@@ -351,7 +351,7 @@ impl MccEnc {
                 let framerate = match s.get::<gst::Fraction>("framerate") {
                     Ok(framerate) => framerate,
                     Err(structure::GetError::FieldNotFound { .. }) => {
-                        gst::error!(CAT, obj: pad, "Caps without framerate");
+                        gst::error!(CAT, obj = pad, "Caps without framerate");
                         return false;
                     }
                     err => panic!("MccEnc::sink_event caps: {err:?}"),
@@ -385,10 +385,10 @@ impl MccEnc {
     fn src_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Seek(_) => {
-                gst::log!(CAT, obj: pad, "Dropping seek event");
+                gst::log!(CAT, obj = pad, "Dropping seek event");
                 false
             }
             _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
@@ -398,7 +398,7 @@ impl MccEnc {
     fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
-        gst::log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::log!(CAT, obj = pad, "Handling query {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Seeking(q) => {
@@ -584,7 +584,7 @@ impl ElementImpl for MccEnc {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused | gst::StateChange::PausedToReady => {

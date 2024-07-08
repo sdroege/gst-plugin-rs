@@ -101,7 +101,7 @@ impl ObjectImpl for VideoCompare {
                 if settings.hash_algo != hash_algo {
                     gst::info!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Changing hash-algo from {:?} to {:?}",
                         settings.hash_algo,
                         hash_algo
@@ -117,7 +117,7 @@ impl ObjectImpl for VideoCompare {
                 if settings.max_distance_threshold != max_distance_threshold {
                     gst::info!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Changing max-dist-threshold from {} to {}",
                         settings.max_distance_threshold,
                         max_distance_threshold
@@ -222,7 +222,7 @@ impl AggregatorImpl for VideoCompare {
                 let pad = pad.clone().upcast::<gst::Pad>();
                 gst::info!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Reference sink pad selected: {}",
                     pad.name()
                 );
@@ -242,7 +242,7 @@ impl AggregatorImpl for VideoCompare {
         if !sink_caps.can_intersect(caps) {
             gst::error!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Proposed src caps ({:?}) not supported, needs to intersect with the reference sink caps ({:?})",
                 caps,
                 sink_caps
@@ -250,7 +250,7 @@ impl AggregatorImpl for VideoCompare {
             return Err(gst::FlowError::NotNegotiated);
         }
 
-        gst::info!(CAT, imp: self, "Caps for src pad: {:?}", sink_caps);
+        gst::info!(CAT, imp = self, "Caps for src pad: {:?}", sink_caps);
         Ok(sink_caps)
     }
 }
@@ -273,7 +273,7 @@ impl VideoAggregatorImpl for VideoCompare {
                         .unwrap()
                 })
                 .ok_or_else(|| {
-                    gst::warning!(CAT, imp: self, "No reference sink pad exists");
+                    gst::warning!(CAT, imp = self, "No reference sink pad exists");
                     gst::FlowError::Eos
                 })?
         };
@@ -286,7 +286,7 @@ impl VideoAggregatorImpl for VideoCompare {
                 } else {
                     gst::warning!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "The reference sink pad '{}' has not produced a buffer, image comparison not possible",
                         reference_pad.name()
                     );
@@ -339,7 +339,7 @@ impl VideoAggregatorImpl for VideoCompare {
             {
                 gst::error!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Video streams do not have the same sizes (add videoscale and force the sizes to be equal on all sink pads)",
                 );
                 return Err(gst::FlowError::NotNegotiated);
@@ -365,7 +365,7 @@ impl VideoAggregatorImpl for VideoCompare {
         {
             gst::debug!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Image detected {}",
                 message.running_time.unwrap().display()
             );
@@ -378,7 +378,7 @@ impl VideoAggregatorImpl for VideoCompare {
         } else {
             gst::debug!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Compared images and could not find any frame with distance lower than the threshold of {}: {:?}",
                 max_distance_threshold,
                 message

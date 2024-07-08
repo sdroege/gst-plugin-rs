@@ -108,7 +108,7 @@ impl ObjectImpl for InterSink {
                         InterStreamProducer::acquire(&settings.producer_name, &appsink)
                     {
                         drop(settings);
-                        gst::error!(CAT, imp: self, "{err}");
+                        gst::error!(CAT, imp = self, "{err}");
                         self.post_error_message(gst::error_msg!(
                             gst::StreamError::Failed,
                             ["{err}"]
@@ -191,7 +191,7 @@ impl ElementImpl for InterSink {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         if transition == gst::StateChange::ReadyToPaused {
             if let Err(err) = self.prepare() {

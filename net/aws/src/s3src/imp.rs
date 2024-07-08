@@ -191,7 +191,7 @@ impl S3Src {
 
         gst::info!(
             CAT,
-            imp: self,
+            imp = self,
             "HEAD success, content length = {:?}",
             output.content_length
         );
@@ -226,7 +226,7 @@ impl S3Src {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Requesting range: {}-{}",
             offset,
             offset + length - 1
@@ -243,7 +243,7 @@ impl S3Src {
                 WaitError::Cancelled => None,
             })?;
 
-        gst::debug!(CAT, imp: self, "Read {:?} bytes", output.content_length);
+        gst::debug!(CAT, imp = self, "Read {:?} bytes", output.content_length);
 
         s3utils::wait_stream(&self.canceller, &mut output.body).map_err(|err| match err {
             WaitError::FutureError(err) => Some(gst::error_msg!(
@@ -562,7 +562,7 @@ impl BaseSrcImpl for S3Src {
             Err(None) => Err(gst::FlowError::Flushing),
             /* Actual Error */
             Err(Some(err)) => {
-                gst::error!(CAT, imp: self, "Could not GET: {}", err);
+                gst::error!(CAT, imp = self, "Could not GET: {}", err);
                 Err(gst::FlowError::Error)
             }
         }

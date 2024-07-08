@@ -184,7 +184,7 @@ pub struct Transcriber {
 
 impl Transcriber {
     fn start_srcpad_tasks(&self, state: &State) -> Result<(), gst::LoggableError> {
-        gst::debug!(CAT, imp: self, "Starting tasks");
+        gst::debug!(CAT, imp = self, "Starting tasks");
 
         if self.static_srcpad.is_linked() {
             self.static_srcpad.imp().start_task()?;
@@ -194,13 +194,13 @@ impl Transcriber {
             pad.imp().start_task()?;
         }
 
-        gst::debug!(CAT, imp: self, "Tasks Started");
+        gst::debug!(CAT, imp = self, "Tasks Started");
 
         Ok(())
     }
 
     fn stop_tasks(&self, state: &mut State) {
-        gst::debug!(CAT, imp: self, "Stopping tasks");
+        gst::debug!(CAT, imp = self, "Stopping tasks");
 
         if self.static_srcpad.is_linked() {
             self.static_srcpad.imp().stop_task();
@@ -219,11 +219,11 @@ impl Transcriber {
 
         state.start_time = None;
 
-        gst::debug!(CAT, imp: self, "Tasks Stopped");
+        gst::debug!(CAT, imp = self, "Tasks Stopped");
     }
 
     fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
-        gst::log!(CAT, obj: pad, "Handling event {event:?}");
+        gst::log!(CAT, obj = pad, "Handling event {event:?}");
 
         use gst::EventView::*;
         match event.view() {
@@ -234,20 +234,20 @@ impl Transcriber {
                 true
             }
             FlushStart(_) => {
-                gst::info!(CAT, imp: self, "Received flush start, disconnecting");
+                gst::info!(CAT, imp = self, "Received flush start, disconnecting");
                 let ret = gst::Pad::event_default(pad, Some(&*self.obj()), event);
                 self.stop_tasks(&mut self.state.lock().unwrap());
 
                 ret
             }
             FlushStop(_) => {
-                gst::info!(CAT, imp: self, "Received flush stop, restarting task");
+                gst::info!(CAT, imp = self, "Received flush stop, restarting task");
 
                 if gst::Pad::event_default(pad, Some(&*self.obj()), event) {
                     let state = self.state.lock().unwrap();
                     match self.start_srcpad_tasks(&state) {
                         Err(err) => {
-                            gst::error!(CAT, imp: self, "Failed to start srcpad tasks: {err}");
+                            gst::error!(CAT, imp = self, "Failed to start srcpad tasks: {err}");
                             false
                         }
                         Ok(_) => true,
@@ -290,7 +290,7 @@ impl Transcriber {
         pad: &gst::Pad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj: pad, "Handling {buffer:?}");
+        gst::log!(CAT, obj = pad, "Handling {buffer:?}");
 
         if buffer.pts().is_none() {
             gst::element_imp_error!(
@@ -322,7 +322,7 @@ impl Transcriber {
         };
 
         let Some(mut buffer_tx) = self.state.lock().unwrap().buffer_tx.take() else {
-            gst::log!(CAT, obj: pad, "Flushing");
+            gst::log!(CAT, obj = pad, "Flushing");
             return Err(gst::FlowError::Flushing);
         };
 
@@ -474,7 +474,7 @@ impl Transcriber {
                         }
                     }
                     Some(Eos) => {
-                        gst::debug!(CAT, imp: imp, "Transcriber loop sending EOS");
+                        gst::debug!(CAT, imp = imp, "Transcriber loop sending EOS");
 
                         if imp.transcript_event_tx.receiver_count() > 0 {
                             let _ = imp.transcript_event_tx.send(Eos);
@@ -509,7 +509,7 @@ impl Transcriber {
                         {
                             gst::debug!(
                                 CAT,
-                                imp: imp,
+                                imp = imp,
                                 "Forcing to translation (threshold {threshold}): {items_to_translate:?}"
                             );
                             let _ = imp
@@ -520,7 +520,7 @@ impl Transcriber {
                 }
             }
 
-            gst::debug!(CAT, imp: imp, "Exiting transcriber loop");
+            gst::debug!(CAT, imp = imp, "Exiting transcriber loop");
 
             Ok(())
         });
@@ -532,7 +532,7 @@ impl Transcriber {
     }
 
     fn prepare(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp: self, "Preparing");
+        gst::debug!(CAT, imp = self, "Preparing");
 
         let (access_key, secret_access_key, session_token) = {
             let settings = self.settings.lock().unwrap();
@@ -543,12 +543,12 @@ impl Transcriber {
             )
         };
 
-        gst::info!(CAT, imp: self, "Loading aws config...");
+        gst::info!(CAT, imp = self, "Loading aws config...");
         let _enter_guard = RUNTIME.enter();
 
         let config_loader = match (access_key, secret_access_key) {
             (Some(key), Some(secret_key)) => {
-                gst::debug!(CAT, imp: self, "Using settings credentials");
+                gst::debug!(CAT, imp = self, "Using settings credentials");
                 aws_config::defaults(AWS_BEHAVIOR_VERSION.clone()).credentials_provider(
                     aws_transcribe::config::Credentials::new(
                         key,
@@ -560,7 +560,7 @@ impl Transcriber {
                 )
             }
             _ => {
-                gst::debug!(CAT, imp: self, "Attempting to get credentials from env...");
+                gst::debug!(CAT, imp = self, "Attempting to get credentials from env...");
                 aws_config::defaults(AWS_BEHAVIOR_VERSION.clone())
             }
         };
@@ -571,17 +571,17 @@ impl Transcriber {
         );
 
         let config = futures::executor::block_on(config_loader.load());
-        gst::debug!(CAT, imp: self, "Using region {}", config.region().unwrap());
+        gst::debug!(CAT, imp = self, "Using region {}", config.region().unwrap());
 
         *self.aws_config.lock().unwrap() = Some(config);
 
-        gst::debug!(CAT, imp: self, "Prepared");
+        gst::debug!(CAT, imp = self, "Prepared");
 
         Ok(())
     }
 
     fn disconnect(&self) {
-        gst::info!(CAT, imp: self, "Unpreparing");
+        gst::info!(CAT, imp = self, "Unpreparing");
         let mut state = self.state.lock().unwrap();
 
         self.stop_tasks(&mut state);
@@ -589,7 +589,7 @@ impl Transcriber {
         for pad in state.srcpads.iter() {
             pad.imp().set_discont();
         }
-        gst::info!(CAT, imp: self, "Unprepared");
+        gst::info!(CAT, imp = self, "Unprepared");
     }
 
     fn get_start_time_and_now(&self) -> Option<(gst::ClockTime, gst::ClockTime)> {
@@ -975,7 +975,7 @@ impl ElementImpl for Transcriber {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::info!(CAT, imp: self, "Changing state {transition:?}");
+        gst::info!(CAT, imp = self, "Changing state {transition:?}");
 
         if let gst::StateChange::NullToReady = transition {
             self.prepare().map_err(|err| {
@@ -1131,7 +1131,7 @@ impl TranslationPadTask {
                     "total latency + lateness must be greater than {}",
                     2 * GRANULARITY
                 );
-                gst::error!(CAT, imp: pad, "{err}");
+                gst::error!(CAT, imp = pad, "{err}");
                 return Err(gst::error_msg!(gst::LibraryError::Settings, ["{err}"]));
             }
 
@@ -1205,7 +1205,7 @@ impl TranslationPadTask {
         }
 
         if !self.dequeue().await {
-            gst::info!(CAT, imp: self.pad, "Failed to dequeue buffer, pausing");
+            gst::info!(CAT, imp = self.pad, "Failed to dequeue buffer, pausing");
             let _ = self.pad.obj().pause_task();
         }
 
@@ -1231,14 +1231,14 @@ impl TranslationPadTask {
                         self.output_items.extend(transcript_items.iter().map(Into::into));
                     }
                     Ok(Eos) => {
-                        gst::debug!(CAT, imp: self.pad, "Got eos");
+                        gst::debug!(CAT, imp = self.pad, "Got eos");
                         self.send_eos = true;
                     }
                     Err(RecvError::Lagged(nb_msg)) => {
-                        gst::warning!(CAT, imp: self.pad, "Missed {nb_msg} transcript sets");
+                        gst::warning!(CAT, imp = self.pad, "Missed {nb_msg} transcript sets");
                     }
                     Err(RecvError::Closed) => {
-                        gst::debug!(CAT, imp: self.pad, "Transcript chan terminated: setting eos");
+                        gst::debug!(CAT, imp = self.pad, "Transcript chan terminated: setting eos");
                         self.send_eos = true;
                     }
                 }
@@ -1256,7 +1256,7 @@ impl TranslationPadTask {
             .map_or(true, task::JoinHandle::is_finished)
         {
             const ERR: &str = "Translate loop is not running";
-            gst::error!(CAT, imp: self.pad, "{ERR}");
+            gst::error!(CAT, imp = self.pad, "{ERR}");
             return Err(gst::error_msg!(gst::StreamError::Failed, ["{ERR}"]));
         }
 
@@ -1277,16 +1277,16 @@ impl TranslationPadTask {
                     match items_res {
                         Ok(Items(items_to_translate)) => Some(items_to_translate),
                         Ok(Eos) => {
-                            gst::debug!(CAT, imp: self.pad, "Got eos");
+                            gst::debug!(CAT, imp = self.pad, "Got eos");
                             self.send_eos = true;
                             None
                         }
                         Err(RecvError::Lagged(nb_msg)) => {
-                            gst::warning!(CAT, imp: self.pad, "Missed {nb_msg} transcript sets");
+                            gst::warning!(CAT, imp = self.pad, "Missed {nb_msg} transcript sets");
                             None
                         }
                         Err(RecvError::Closed) => {
-                            gst::debug!(CAT, imp: self.pad, "Transcript chan terminated: setting eos");
+                            gst::debug!(CAT, imp = self.pad, "Transcript chan terminated: setting eos");
                             self.send_eos = true;
                             None
                         }
@@ -1307,7 +1307,7 @@ impl TranslationPadTask {
 
                 if res.is_err() {
                     const ERR: &str = "to_translation chan terminated";
-                    gst::debug!(CAT, imp: self.pad, "{ERR}");
+                    gst::debug!(CAT, imp = self.pad, "{ERR}");
                     return Err(gst::error_msg!(gst::StreamError::Failed, ["{ERR}"]));
                 }
 
@@ -1324,7 +1324,7 @@ impl TranslationPadTask {
         while let Ok(translated_items) = from_translate_rx.try_next() {
             let Some(translated_items) = translated_items else {
                 const ERR: &str = "translation chan terminated";
-                gst::debug!(CAT, imp: self.pad, "{ERR}");
+                gst::debug!(CAT, imp = self.pad, "{ERR}");
                 return Err(gst::error_msg!(gst::StreamError::Failed, ["{ERR}"]));
             };
 
@@ -1360,7 +1360,7 @@ impl TranslationPadTask {
             // Note: items pts start from 0 + lateness
             gst::trace!(
                 CAT,
-                imp: self.pad,
+                imp = self.pad,
                 "Checking now {now} if item is ready for dequeuing, PTS {}, threshold {} vs {}",
                 item.pts,
                 item.pts + self.our_latency.saturating_sub(3 * GRANULARITY),
@@ -1402,7 +1402,11 @@ impl TranslationPadTask {
                             .duration(pts - last_position)
                             .seqnum(self.seqnum)
                             .build();
-                        gst::log!(CAT, imp: self.pad, "Pushing gap:    {last_position} -> {pts}");
+                        gst::log!(
+                            CAT,
+                            imp = self.pad,
+                            "Pushing gap:    {last_position} -> {pts}"
+                        );
                         if !self.pad.obj().push_event(gap_event) {
                             return false;
                         }
@@ -1415,7 +1419,7 @@ impl TranslationPadTask {
 
                         gst::warning!(
                             CAT,
-                            imp: self.pad,
+                            imp = self.pad,
                             "Updating item PTS ({pts} < {last_position}), consider increasing latency",
                         );
 
@@ -1435,7 +1439,12 @@ impl TranslationPadTask {
 
                 last_position = pts + duration;
 
-                gst::debug!(CAT, imp: self.pad, "Pushing buffer with content {content}: {pts} -> {}", pts + duration);
+                gst::debug!(
+                    CAT,
+                    imp = self.pad,
+                    "Pushing buffer with content {content}: {pts} -> {}",
+                    pts + duration
+                );
 
                 if self.pad.obj().push(buf).is_err() {
                     return false;
@@ -1450,7 +1459,7 @@ impl TranslationPadTask {
             /* We're EOS, we can pause and exit early */
             let _ = self.pad.obj().pause_task();
 
-            gst::info!(CAT, imp: self.pad, "Sending eos");
+            gst::info!(CAT, imp = self.pad, "Sending eos");
             return self
                 .pad
                 .obj()
@@ -1460,7 +1469,7 @@ impl TranslationPadTask {
         /* next, push a gap if we're lagging behind the target position */
         gst::trace!(
             CAT,
-            imp: self.pad,
+            imp = self.pad,
             "Checking now: {now} if we need to push a gap, last_position: {last_position}, threshold: {}",
             last_position + self.our_latency.saturating_sub(GRANULARITY)
         );
@@ -1478,7 +1487,7 @@ impl TranslationPadTask {
 
             gst::log!(
                 CAT,
-                imp: self.pad,
+                imp = self.pad,
                 "Pushing gap:    {last_position} -> {}",
                 last_position + duration
             );
@@ -1533,10 +1542,10 @@ impl TranslationPadTask {
         }
 
         for event in events.drain(..) {
-            gst::info!(CAT, imp: self.pad, "Sending {event:?}");
+            gst::info!(CAT, imp = self.pad, "Sending {event:?}");
             if !self.pad.obj().push_event(event) {
                 const ERR: &str = "Failed to send initial";
-                gst::error!(CAT, imp: self.pad, "{ERR}");
+                gst::error!(CAT, imp = self.pad, "{ERR}");
                 return Err(gst::error_msg!(gst::StreamError::Failed, ["{ERR}"]));
             }
         }
@@ -1580,7 +1589,7 @@ pub struct TranslateSrcPad {
 
 impl TranslateSrcPad {
     fn start_task(&self) -> Result<(), gst::LoggableError> {
-        gst::debug!(CAT, imp: self, "Starting task");
+        gst::debug!(CAT, imp = self, "Starting task");
 
         let elem = self.parent();
         let _enter = RUNTIME.enter();
@@ -1598,10 +1607,10 @@ impl TranslateSrcPad {
                 Ok(Err(err)) => {
                     // Don't bring down the whole element if this Pad fails
                     // FIXME is there a way to mark the Pad in error though?
-                    gst::info!(CAT, imp: imp, "Pausing task due to: {err}");
+                    gst::info!(CAT, imp = imp, "Pausing task due to: {err}");
                     let _ = imp.obj().pause_task();
                 }
-                Err(_) => gst::debug!(CAT, imp: imp, "task iter aborted"),
+                Err(_) => gst::debug!(CAT, imp = imp, "task iter aborted"),
             }
         });
 
@@ -1609,13 +1618,13 @@ impl TranslateSrcPad {
             return Err(gst::loggable_error!(CAT, "Failed to start pad task"));
         }
 
-        gst::debug!(CAT, imp: self, "Task started");
+        gst::debug!(CAT, imp = self, "Task started");
 
         Ok(())
     }
 
     fn stop_task(&self) {
-        gst::debug!(CAT, imp: self, "Stopping task");
+        gst::debug!(CAT, imp = self, "Stopping task");
 
         // See also the note in `start_task()`:
         // 1. Mark the task as stopped so no further iteration is executed.
@@ -1626,7 +1635,7 @@ impl TranslateSrcPad {
             task_abort_handle.abort();
         }
 
-        gst::debug!(CAT, imp: self, "Task stopped");
+        gst::debug!(CAT, imp = self, "Task stopped");
     }
 
     fn set_discont(&self) {
@@ -1688,7 +1697,7 @@ impl TranslateSrcPad {
         pad: &super::TranslateSrcPad,
         query: &mut gst::QueryRef,
     ) -> bool {
-        gst::log!(CAT, obj: pad, "Handling query {query:?}");
+        gst::log!(CAT, obj = pad, "Handling query {query:?}");
 
         use gst::QueryViewMut::*;
         match query.view_mut() {
@@ -1707,7 +1716,7 @@ impl TranslateSrcPad {
                         Self::our_latency(&elem_settings, &pad_settings)
                     };
 
-                    gst::info!(CAT, obj: pad, "Our latency {our_latency}");
+                    gst::info!(CAT, obj = pad, "Our latency {our_latency}");
                     q.set(true, our_latency + min, gst::ClockTime::NONE);
                 }
                 ret

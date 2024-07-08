@@ -162,7 +162,7 @@ impl BinImpl for CustomSource {
 
 impl CustomSource {
     fn start(&self) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::debug!(CAT, imp: self, "Starting");
+        gst::debug!(CAT, imp = self, "Starting");
         let source = self.source.get().unwrap();
 
         let templates = source.pad_template_list();
@@ -171,7 +171,7 @@ impl CustomSource {
             .iter()
             .any(|templ| templ.presence() == gst::PadPresence::Request)
         {
-            gst::error!(CAT, imp: self, "Request pads not supported");
+            gst::error!(CAT, imp = self, "Request pads not supported");
             gst::element_imp_error!(
                 self,
                 gst::LibraryError::Settings,
@@ -195,7 +195,7 @@ impl CustomSource {
         if !has_sometimes_pads {
             self.handle_source_no_more_pads();
         } else {
-            gst::debug!(CAT, imp: self, "Found sometimes pads");
+            gst::debug!(CAT, imp = self, "Found sometimes pads");
 
             let pad_added_sig_id = source.connect_pad_added(move |source, pad| {
                 let element = match source
@@ -247,7 +247,7 @@ impl CustomSource {
     }
 
     fn handle_source_pad_added(&self, pad: &gst::Pad) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp: self, "Source added pad {}", pad.name());
+        gst::debug!(CAT, imp = self, "Source added pad {}", pad.name());
 
         let mut state = self.state.lock().unwrap();
 
@@ -263,7 +263,7 @@ impl CustomSource {
             let caps = match pad.current_caps().unwrap_or_else(|| pad.query_caps(None)) {
                 caps if !caps.is_any() && !caps.is_empty() => caps,
                 _ => {
-                    gst::error!(CAT, imp: self, "Pad {} had no caps", pad.name());
+                    gst::error!(CAT, imp = self, "Pad {} had no caps", pad.name());
                     return Err(gst::error_msg!(
                         gst::CoreError::Negotiation,
                         ["Pad had no caps"]
@@ -315,7 +315,7 @@ impl CustomSource {
     }
 
     fn handle_source_pad_removed(&self, pad: &gst::Pad) {
-        gst::debug!(CAT, imp: self, "Source removed pad {}", pad.name());
+        gst::debug!(CAT, imp = self, "Source removed pad {}", pad.name());
 
         let mut state = self.state.lock().unwrap();
         let (i, stream) = match state
@@ -338,7 +338,7 @@ impl CustomSource {
     }
 
     fn handle_source_no_more_pads(&self) {
-        gst::debug!(CAT, imp: self, "Source signalled no-more-pads");
+        gst::debug!(CAT, imp = self, "Source signalled no-more-pads");
 
         let state = self.state.lock().unwrap();
         let collection = gst::StreamCollection::builder(None)
@@ -356,7 +356,7 @@ impl CustomSource {
     }
 
     fn stop(&self) {
-        gst::debug!(CAT, imp: self, "Stopping");
+        gst::debug!(CAT, imp = self, "Stopping");
 
         let mut state = self.state.lock().unwrap();
         let source = self.source.get().unwrap();

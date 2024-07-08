@@ -318,7 +318,7 @@ impl RecvSession {
     }
 
     fn start_rtp_task(&mut self, pad: &gst::Pad) -> Result<(), glib::BoolError> {
-        gst::debug!(CAT, obj: pad, "Starting rtp recv src task");
+        gst::debug!(CAT, obj = pad, "Starting rtp recv src task");
 
         let recv_pad = self
             .rtp_recv_srcpads
@@ -354,21 +354,21 @@ impl RecvSession {
                     match item {
                         JitterBufferItem::PacketList(list) => {
                             let flow = pad.push_list(list);
-                            gst::trace!(CAT, obj: pad, "Pushed buffer list, flow ret {:?}", flow);
+                            gst::trace!(CAT, obj = pad, "Pushed buffer list, flow ret {:?}", flow);
                             let mut recv_flow_combiner = recv_flow_combiner.lock().unwrap();
                             let _combined_flow = recv_flow_combiner.update_pad_flow(&pad, flow);
                             // TODO: store flow, return only on session pads?
                         }
                         JitterBufferItem::Packet(buffer) => {
                             let flow = pad.push(buffer);
-                            gst::trace!(CAT, obj: pad, "Pushed buffer, flow ret {:?}", flow);
+                            gst::trace!(CAT, obj = pad, "Pushed buffer, flow ret {:?}", flow);
                             let mut recv_flow_combiner = recv_flow_combiner.lock().unwrap();
                             let _combined_flow = recv_flow_combiner.update_pad_flow(&pad, flow);
                             // TODO: store flow, return only on session pads?
                         }
                         JitterBufferItem::Event(event) => {
                             let res = pad.push_event(event);
-                            gst::trace!(CAT, obj: pad, "Pushed serialized event, result: {}", res);
+                            gst::trace!(CAT, obj = pad, "Pushed serialized event, result: {}", res);
                         }
                         JitterBufferItem::Query(mut query, tx) => {
                             // This is safe because the thread holding the original reference is waiting
@@ -381,13 +381,13 @@ impl RecvSession {
             })
         })?;
 
-        gst::debug!(CAT, obj: pad, "Task started");
+        gst::debug!(CAT, obj = pad, "Task started");
 
         Ok(())
     }
 
     fn stop_rtp_task(&mut self, pad: &gst::Pad) -> Result<(), glib::BoolError> {
-        gst::debug!(CAT, obj: pad, "Stopping rtp recv src task");
+        gst::debug!(CAT, obj = pad, "Stopping rtp recv src task");
         let recv_pad = self
             .rtp_recv_srcpads
             .iter_mut()
@@ -561,7 +561,7 @@ impl RtpRecv {
             } else {
                 session.stop_rtp_task(pad)?;
 
-                gst::debug!(CAT, obj: pad, "Stopping task");
+                gst::debug!(CAT, obj = pad, "Stopping task");
 
                 let _ = pad.stop_task();
             }
@@ -576,7 +576,7 @@ impl RtpRecv {
     }
 
     pub fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
-        gst::log!(CAT, obj: pad, "Handling query {query:?}");
+        gst::log!(CAT, obj = pad, "Handling query {query:?}");
 
         use gst::QueryViewMut::*;
         match query.view_mut() {
@@ -594,7 +594,11 @@ impl RtpRecv {
                     our_latency
                 };
 
-                gst::info!(CAT, obj: pad, "Handled latency query, our latency {our_latency}, minimum latency: {min}");
+                gst::info!(
+                    CAT,
+                    obj = pad,
+                    "Handled latency query, our latency {our_latency}, minimum latency: {min}"
+                );
                 q.set(true, min, gst::ClockTime::NONE);
 
                 ret
@@ -649,7 +653,7 @@ impl RtpRecv {
                 match segment.to_running_time(dts) {
                     Some(time) => time,
                     None => {
-                        gst::error!(CAT, obj: pad, "out of segment DTS are not supported");
+                        gst::error!(CAT, obj = pad, "out of segment DTS are not supported");
                         return Err(gst::FlowError::Error);
                     }
                 }
@@ -657,7 +661,7 @@ impl RtpRecv {
             None => match self.obj().current_running_time() {
                 Some(time) => time,
                 None => {
-                    gst::error!(CAT, obj: pad, "Failed to get current time");
+                    gst::error!(CAT, obj = pad, "Failed to get current time");
                     return Err(gst::FlowError::Error);
                 }
             },
@@ -674,7 +678,7 @@ impl RtpRecv {
                         .ok()
                 });
         let mapped = buffer.map_readable().map_err(|e| {
-            gst::error!(CAT, imp: self, "Failed to map input buffer {e:?}");
+            gst::error!(CAT, imp = self, "Failed to map input buffer {e:?}");
             gst::FlowError::Error
         })?;
 
@@ -690,12 +694,16 @@ impl RtpRecv {
                     return Ok(RecvRtpBuffer::IsRtcp(buffer));
                 }
 
-                gst::error!(CAT, imp: self, "Failed to parse input as valid rtp packet: {e:?}");
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Failed to parse input as valid rtp packet: {e:?}"
+                );
                 return Ok(RecvRtpBuffer::Drop);
             }
         };
 
-        gst::trace!(CAT, obj: pad, "using arrival time {}", arrival_time);
+        gst::trace!(CAT, obj = pad, "using arrival time {}", arrival_time);
 
         let internal_session = session.internal_session.clone();
         let mut session_inner = internal_session.inner.lock().unwrap();
@@ -721,11 +729,11 @@ impl RtpRecv {
         let pts = segment
             .position_from_running_time(gst::ClockTime::from_nseconds(pts))
             .unwrap();
-        gst::debug!(CAT, obj: pad, "Calculated PTS: {}", pts);
+        gst::debug!(CAT, obj = pad, "Calculated PTS: {}", pts);
 
         loop {
             let recv_ret = session_inner.session.handle_recv(&rtp, addr, now);
-            gst::trace!(CAT, obj: pad, "session handle_recv ret: {recv_ret:?}");
+            gst::trace!(CAT, obj = pad, "session handle_recv ret: {recv_ret:?}");
             match recv_ret {
                 RecvReply::SsrcCollision(ssrc) => return Ok(RecvRtpBuffer::SsrcCollision(ssrc)),
                 RecvReply::NewSsrc(ssrc, _pt) => {
@@ -849,13 +857,17 @@ impl RtpRecv {
                 }
                 HeldRecvItem::Buffer(buffer) => {
                     let mapped = buffer.buffer.map_readable().map_err(|e| {
-                        gst::error!(CAT, imp: self, "Failed to map input buffer {e:?}");
+                        gst::error!(CAT, imp = self, "Failed to map input buffer {e:?}");
                         gst::FlowError::Error
                     })?;
                     let rtp = match rtp_types::RtpPacket::parse(&mapped) {
                         Ok(rtp) => rtp,
                         Err(e) => {
-                            gst::error!(CAT, imp: self, "Failed to parse input as valid rtp packet: {e:?}");
+                            gst::error!(
+                                CAT,
+                                imp = self,
+                                "Failed to parse input as valid rtp packet: {e:?}"
+                            );
                             return Ok(state);
                         }
                     };
@@ -899,13 +911,17 @@ impl RtpRecv {
 
                     for buffer in list.list.iter_owned() {
                         let mapped = buffer.map_readable().map_err(|e| {
-                            gst::error!(CAT, imp: self, "Failed to map input buffer {e:?}");
+                            gst::error!(CAT, imp = self, "Failed to map input buffer {e:?}");
                             gst::FlowError::Error
                         })?;
                         let rtp = match rtp_types::RtpPacket::parse(&mapped) {
                             Ok(rtp) => rtp,
                             Err(e) => {
-                                gst::error!(CAT, imp: self, "Failed to parse input as valid rtp packet: {e:?}");
+                                gst::error!(
+                                    CAT,
+                                    imp = self,
+                                    "Failed to parse input as valid rtp packet: {e:?}"
+                                );
                                 return Ok(state);
                             }
                         };
@@ -1131,13 +1147,17 @@ impl RtpRecv {
                         .ok()
                 });
         let mapped = buffer.map_readable().map_err(|e| {
-            gst::error!(CAT, imp: self, "Failed to map input buffer {e:?}");
+            gst::error!(CAT, imp = self, "Failed to map input buffer {e:?}");
             gst::FlowError::Error
         })?;
         let rtcp = match rtcp_types::Compound::parse(&mapped) {
             Ok(rtcp) => rtcp,
             Err(e) => {
-                gst::error!(CAT, imp: self, "Failed to parse input as valid rtcp packet: {e:?}");
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Failed to parse input as valid rtcp packet: {e:?}"
+                );
                 return Ok(gst::FlowSuccess::Ok);
             }
         };
@@ -1187,7 +1207,11 @@ impl RtpRecv {
                 }
                 RtcpRecvReply::RequestKeyUnit { ssrcs, fir } => {
                     if let Some(ref rtp_send_sinkpad) = rtp_send_sinkpad {
-                        gst::debug!(CAT, imp: self, "Sending force-keyunit event for ssrcs {ssrcs:?} (all headers: {fir})");
+                        gst::debug!(
+                            CAT,
+                            imp = self,
+                            "Sending force-keyunit event for ssrcs {ssrcs:?} (all headers: {fir})"
+                        );
                         // TODO what to do with the ssrc?
                         let event = gst_video::UpstreamForceKeyUnitEvent::builder()
                             .all_headers(fir)
@@ -1196,7 +1220,11 @@ impl RtpRecv {
 
                         let _ = rtp_send_sinkpad.push_event(event);
                     } else {
-                        gst::debug!(CAT, imp: self, "Can't send force-keyunit event because of missing sinkpad");
+                        gst::debug!(
+                            CAT,
+                            imp = self,
+                            "Can't send force-keyunit event because of missing sinkpad"
+                        );
                     }
                 }
                 RtcpRecvReply::NewCName((cname, ssrc)) => {
@@ -1223,7 +1251,7 @@ impl RtpRecv {
     }
 
     pub fn rtp_sink_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef, id: usize) -> bool {
-        gst::log!(CAT, obj: pad, "Handling query {query:?}");
+        gst::log!(CAT, obj = pad, "Handling query {query:?}");
 
         if query.is_serialized() {
             let state = self.state.lock().unwrap();
@@ -1352,7 +1380,11 @@ impl RtpRecv {
                         session_inner.add_caps(caps);
                     }
                 } else {
-                    gst::warning!(CAT, obj: pad, "input caps are missing payload or clock-rate fields");
+                    gst::warning!(
+                        CAT,
+                        obj = pad,
+                        "input caps are missing payload or clock-rate fields"
+                    );
                 }
                 true
             }
@@ -1364,7 +1396,7 @@ impl RtpRecv {
                     let segment = match segment.downcast_ref::<gst::ClockTime>() {
                         Some(segment) => segment.clone(),
                         None => {
-                            gst::warning!(CAT, obj: pad, "Only TIME segments are supported");
+                            gst::warning!(CAT, obj = pad, "Only TIME segments are supported");
 
                             let segment = gst::FormattedSegment::new();
                             let seqnum = event.seqnum();

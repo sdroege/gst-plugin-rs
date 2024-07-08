@@ -149,7 +149,7 @@ impl ElementImpl for QuinnQuicSrc {
             {
                 gst::error!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Certificate or private key file not provided for secure connection"
                 );
                 return Err(gst::StateChangeError);
@@ -468,17 +468,17 @@ impl BaseSrcImpl for QuinnQuicSrc {
                     stream: s,
                 });
 
-                gst::info!(CAT, imp: self, "Started");
+                gst::info!(CAT, imp = self, "Started");
 
                 Ok(())
             }
             Ok(Err(e)) | Err(e) => match e {
                 WaitError::FutureAborted => {
-                    gst::warning!(CAT, imp: self, "Connection aborted");
+                    gst::warning!(CAT, imp = self, "Connection aborted");
                     Ok(())
                 }
                 WaitError::FutureError(err) => {
-                    gst::error!(CAT, imp: self, "Connection request failed: {}", err);
+                    gst::error!(CAT, imp = self, "Connection request failed: {}", err);
                     Err(gst::error_msg!(
                         gst::ResourceError::Failed,
                         ["Connection request failed: {}", err]
@@ -531,7 +531,7 @@ impl BaseSrcImpl for QuinnQuicSrc {
         match data {
             Ok(bytes) => {
                 if bytes.is_empty() {
-                    gst::debug!(CAT, imp: self, "End of stream");
+                    gst::debug!(CAT, imp = self, "End of stream");
                     return Err(gst::FlowError::Eos);
                 }
 
@@ -546,7 +546,7 @@ impl BaseSrcImpl for QuinnQuicSrc {
             }
             Err(None) => Err(gst::FlowError::Flushing),
             Err(Some(err)) => {
-                gst::error!(CAT, imp: self, "Could not GET: {}", err);
+                gst::error!(CAT, imp = self, "Could not GET: {}", err);
                 Err(gst::FlowError::Error)
             }
         }
@@ -571,12 +571,12 @@ impl BaseSrcImpl for QuinnQuicSrc {
 
         let mut tmp_caps = settings.caps.clone();
 
-        gst::debug!(CAT, imp: self, "Advertising our own caps: {:?}", &tmp_caps);
+        gst::debug!(CAT, imp = self, "Advertising our own caps: {:?}", &tmp_caps);
 
         if let Some(filter_caps) = filter {
             gst::debug!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Intersecting with filter caps: {:?}",
                 &filter_caps
             );
@@ -584,7 +584,7 @@ impl BaseSrcImpl for QuinnQuicSrc {
             tmp_caps = filter_caps.intersect_with_mode(&tmp_caps, gst::CapsIntersectMode::First);
         };
 
-        gst::debug!(CAT, imp: self, "Returning caps: {:?}", &tmp_caps);
+        gst::debug!(CAT, imp = self, "Returning caps: {:?}", &tmp_caps);
 
         Some(tmp_caps)
     }
@@ -618,11 +618,11 @@ impl QuinnQuicSrc {
                     Ok(bytes) => Ok(bytes),
                     Err(err) => match err {
                         ConnectionError::ApplicationClosed(ac) => {
-                            gst::info!(CAT, imp: self, "Application closed connection, {}", ac);
+                            gst::info!(CAT, imp = self, "Application closed connection, {}", ac);
                             Ok(Bytes::new())
                         }
                         ConnectionError::ConnectionClosed(cc) => {
-                            gst::info!(CAT, imp: self, "Transport closed connection, {}", cc);
+                            gst::info!(CAT, imp = self, "Transport closed connection, {}", cc);
                             Ok(Bytes::new())
                         }
                         _ => Err(WaitError::FutureError(gst::error_msg!(
@@ -640,11 +640,16 @@ impl QuinnQuicSrc {
                     Err(err) => match err {
                         ReadError::ConnectionLost(conn_err) => match conn_err {
                             ConnectionError::ConnectionClosed(cc) => {
-                                gst::info!(CAT, imp: self, "Transport closed connection, {}", cc);
+                                gst::info!(CAT, imp = self, "Transport closed connection, {}", cc);
                                 Ok(Bytes::new())
                             }
                             ConnectionError::ApplicationClosed(ac) => {
-                                gst::info!(CAT, imp: self, "Application closed connection, {}", ac);
+                                gst::info!(
+                                    CAT,
+                                    imp = self,
+                                    "Application closed connection, {}",
+                                    ac
+                                );
                                 Ok(Bytes::new())
                             }
                             _ => Err(WaitError::FutureError(gst::error_msg!(
@@ -653,7 +658,7 @@ impl QuinnQuicSrc {
                             ))),
                         },
                         ReadError::ClosedStream => {
-                            gst::info!(CAT, imp: self, "Stream closed");
+                            gst::info!(CAT, imp = self, "Stream closed");
                             Ok(Bytes::new())
                         }
                         _ => Err(WaitError::FutureError(gst::error_msg!(
@@ -669,11 +674,11 @@ impl QuinnQuicSrc {
             Ok(Ok(bytes)) => Ok(bytes),
             Ok(Err(e)) | Err(e) => match e {
                 WaitError::FutureAborted => {
-                    gst::warning!(CAT, imp: self, "Read from stream request aborted");
+                    gst::warning!(CAT, imp = self, "Read from stream request aborted");
                     Err(None)
                 }
                 WaitError::FutureError(e) => {
-                    gst::error!(CAT, imp: self, "Failed to read from stream: {}", e);
+                    gst::error!(CAT, imp = self, "Failed to read from stream: {}", e);
                     Err(Some(e))
                 }
             },
@@ -768,7 +773,11 @@ impl QuinnQuicSrc {
         } else {
             match connection.max_datagram_size() {
                 Some(datagram_size) => {
-                    gst::info!(CAT, imp: self, "Datagram size reported by peer: {datagram_size}");
+                    gst::info!(
+                        CAT,
+                        imp = self,
+                        "Datagram size reported by peer: {datagram_size}"
+                    );
                 }
                 None => {
                     return Err(WaitError::FutureError(gst::error_msg!(
@@ -783,7 +792,7 @@ impl QuinnQuicSrc {
 
         gst::info!(
             CAT,
-            imp: self,
+            imp = self,
             "Remote connection accepted: {}",
             connection.remote_address()
         );

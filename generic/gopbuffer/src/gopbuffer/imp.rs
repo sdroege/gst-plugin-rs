@@ -164,12 +164,16 @@ impl Stream {
         let pts = segment
             .to_running_time_full(pts_position)
             .ok_or_else(|| {
-                gst::error!(CAT, obj: self.sinkpad, "Couldn't convert PTS to running time");
+                gst::error!(
+                    CAT,
+                    obj = self.sinkpad,
+                    "Couldn't convert PTS to running time"
+                );
                 gst::FlowError::Error
             })?
             .positive()
             .unwrap_or_else(|| {
-                gst::warning!(CAT, obj: self.sinkpad, "Negative PTSs are not supported");
+                gst::warning!(CAT, obj = self.sinkpad, "Negative PTSs are not supported");
                 gst::ClockTime::ZERO
             });
         let end_pts = segment
@@ -177,14 +181,14 @@ impl Stream {
             .ok_or_else(|| {
                 gst::error!(
                     CAT,
-                    obj: self.sinkpad,
+                    obj = self.sinkpad,
                     "Couldn't convert end PTS to running time"
                 );
                 gst::FlowError::Error
             })?
             .positive()
             .unwrap_or_else(|| {
-                gst::warning!(CAT, obj: self.sinkpad, "Negative PTSs are not supported");
+                gst::warning!(CAT, obj = self.sinkpad, "Negative PTSs are not supported");
                 gst::ClockTime::ZERO
             });
 
@@ -198,7 +202,11 @@ impl Stream {
                 .unwrap_or(dts_position);
 
             let dts = segment.to_running_time_full(dts_position).ok_or_else(|| {
-                gst::error!(CAT, obj: self.sinkpad, "Couldn't convert DTS to running time");
+                gst::error!(
+                    CAT,
+                    obj = self.sinkpad,
+                    "Couldn't convert DTS to running time"
+                );
                 gst::FlowError::Error
             })?;
 
@@ -207,7 +215,7 @@ impl Stream {
                 .ok_or_else(|| {
                     gst::error!(
                         CAT,
-                        obj: self.sinkpad,
+                        obj = self.sinkpad,
                         "Couldn't convert end DTS to running time"
                     );
                     gst::FlowError::Error
@@ -239,7 +247,7 @@ impl Stream {
             if let Some(prev_gop) = self.queued_gops.get_mut(1) {
                 gst::debug!(
                     CAT,
-                    obj: self.sinkpad,
+                    obj = self.sinkpad,
                     "Updating previous GOP starting at PTS {} to end PTS {}",
                     prev_gop.earliest_pts,
                     pts,
@@ -258,7 +266,7 @@ impl Stream {
                     if self.delta_frames.requires_dts() {
                         gst::debug!(
                             CAT,
-                            obj: self.sinkpad,
+                            obj = self.sinkpad,
                             "Previous GOP has final earliest PTS at {}",
                             prev_gop.earliest_pts
                         );
@@ -281,7 +289,7 @@ impl Stream {
                 if gop.earliest_pts > pts && !gop.final_earliest_pts {
                     gst::debug!(
                         CAT,
-                        obj: self.sinkpad,
+                        obj = self.sinkpad,
                         "Updating current GOP earliest PTS from {} to {}",
                         gop.earliest_pts,
                         pts
@@ -292,7 +300,7 @@ impl Stream {
                         if prev_gop.end_pts < pts {
                             gst::debug!(
                                 CAT,
-                                obj: self.sinkpad,
+                                obj = self.sinkpad,
                                 "Updating previous GOP starting PTS {} end time from {} to {}",
                                 pts,
                                 prev_gop.end_pts,
@@ -311,7 +319,7 @@ impl Stream {
                 if gop.start_pts <= dts && !gop.final_earliest_pts {
                     gst::debug!(
                         CAT,
-                        obj: self.sinkpad,
+                        obj = self.sinkpad,
                         "GOP has final earliest PTS at {}",
                         gop.earliest_pts
                     );
@@ -337,7 +345,7 @@ impl Stream {
         ) {
             gst::debug!(
                 CAT,
-                obj: self.sinkpad,
+                obj = self.sinkpad,
                 "Queued full GOPs duration updated to {}",
                 prev_gop.end_pts.saturating_sub(first_gop.earliest_pts),
             );
@@ -345,7 +353,7 @@ impl Stream {
 
         gst::debug!(
             CAT,
-            obj: self.sinkpad,
+            obj = self.sinkpad,
             "Queued duration updated to {}",
             Option::zip(self.queued_gops.front(), self.queued_gops.back())
                 .map(|(end, start)| end.end_pts.saturating_sub(start.start_pts))
@@ -412,7 +420,7 @@ impl GopBuffer {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let obj = self.obj();
         if buffer.pts().is_none() {
-            gst::error!(CAT, obj: obj, "Require timestamped buffers!");
+            gst::error!(CAT, obj = obj, "Require timestamped buffers!");
             return Err(gst::FlowError::Error);
         }
 
@@ -429,12 +437,12 @@ impl GopBuffer {
 
         if stream.delta_frames.intra_only() && buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
         {
-            gst::error!(CAT, obj: pad, "Intra-only stream with delta units");
+            gst::error!(CAT, obj = pad, "Intra-only stream with delta units");
             return Err(gst::FlowError::Error);
         }
 
         if stream.delta_frames.requires_dts() && buffer.dts().is_none() {
-            gst::error!(CAT, obj: pad, "Require DTS for video streams");
+            gst::error!(CAT, obj = pad, "Require DTS for video streams");
             return Err(gst::FlowError::Error);
         }
 
@@ -468,7 +476,7 @@ impl GopBuffer {
             let stored_duration_without_oldest = newest_ts.saturating_sub(oldest_ts);
             gst::trace!(
                 CAT,
-                obj: obj,
+                obj = obj,
                 "newest_pts {}, second oldest_pts {}, stored_duration_without_oldest_gop {}, min-time {}",
                 newest_ts.display(),
                 oldest_ts.display(),
@@ -497,7 +505,7 @@ impl GopBuffer {
                     .opt_saturating_sub(oldest_ts)
                     .is_some_and(|diff| diff > gst::Signed::Positive(max_time))
                 {
-                    gst::warning!(CAT, obj: obj, "Stored data has overflowed the maximum allowed stored time {}, pushing oldest GOP", max_time.display());
+                    gst::warning!(CAT, obj = obj, "Stored data has overflowed the maximum allowed stored time {}, pushing oldest GOP", max_time.display());
                     gops_to_push.push(stream.oldest_gop().unwrap());
                 } else {
                     break;
@@ -527,11 +535,11 @@ impl GopBuffer {
                 stream.delta_frames = delta_frames;
             }
             gst::EventView::FlushStop(_flush) => {
-                gst::debug!(CAT, obj: obj, "flushing stored data");
+                gst::debug!(CAT, obj = obj, "flushing stored data");
                 stream.flush();
             }
             gst::EventView::Eos(_eos) => {
-                gst::debug!(CAT, obj: obj, "draining data at EOS");
+                gst::debug!(CAT, obj = obj, "draining data at EOS");
                 let gops = stream.drain_all().collect::<Vec<_>>();
                 let srcpad = stream.srcpad.clone();
                 drop(state);
@@ -555,7 +563,12 @@ impl GopBuffer {
         if event.is_serialized() {
             if stream.peek_oldest_gop().is_none() {
                 // if there is nothing queued, the event can go straight through
-                gst::trace!(CAT, obj: obj, "nothing queued, event {:?} passthrough", event.structure().map(|s| s.name().as_str()));
+                gst::trace!(
+                    CAT,
+                    obj = obj,
+                    "nothing queued, event {:?} passthrough",
+                    event.structure().map(|s| s.name().as_str())
+                );
                 drop(state);
                 return gst::Pad::event_default(pad, Some(&*obj), event);
             }
@@ -573,7 +586,11 @@ impl GopBuffer {
         let obj = self.obj();
         if query.is_serialized() {
             // TODO: serialized queries somehow?
-            gst::warning!(CAT, obj: pad, "Serialized queries are currently not supported");
+            gst::warning!(
+                CAT,
+                obj = pad,
+                "Serialized queries are currently not supported"
+            );
             return false;
         }
         gst::Pad::query_default(pad, Some(&*obj), query)
@@ -604,7 +621,7 @@ impl GopBuffer {
 
                     gst::debug!(
                         CAT,
-                        obj: pad,
+                        obj = pad,
                         "Latency query response: live {} min {} max {}",
                         live,
                         min,

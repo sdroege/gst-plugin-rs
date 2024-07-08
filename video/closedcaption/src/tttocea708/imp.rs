@@ -157,7 +157,7 @@ impl TtToCea708 {
         pad: &gst::Pad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, imp: self, "Handling {:?}", buffer);
+        gst::log!(CAT, imp = self, "Handling {:?}", buffer);
 
         let pts = buffer.pts().ok_or_else(|| {
             gst::element_imp_error!(
@@ -178,7 +178,7 @@ impl TtToCea708 {
         })?;
 
         let data = buffer.map_readable().map_err(|_| {
-            gst::error!(CAT, obj: pad, "Can't map buffer readable");
+            gst::error!(CAT, obj = pad, "Can't map buffer readable");
 
             gst::FlowError::Error
         })?;
@@ -203,7 +203,7 @@ impl TtToCea708 {
         };
         state.force_clear = false;
         let data = std::str::from_utf8(&data).map_err(|err| {
-            gst::error!(CAT, obj: pad, "Can't decode utf8: {}", err);
+            gst::error!(CAT, obj = pad, "Can't decode utf8: {}", err);
 
             gst::FlowError::Error
         })?;
@@ -245,7 +245,7 @@ impl TtToCea708 {
     }
 
     fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
 
         use gst::EventView;
 
@@ -257,7 +257,7 @@ impl TtToCea708 {
                 };
 
                 if downstream_caps.is_empty() {
-                    gst::error!(CAT, obj: pad, "Empty downstream caps");
+                    gst::error!(CAT, obj = pad, "Empty downstream caps");
                     return false;
                 }
 
@@ -277,7 +277,7 @@ impl TtToCea708 {
                 state.framerate = framerate;
                 state.translator.set_framerate(framerate);
 
-                gst::debug!(CAT, obj: pad, "Pushing caps {}", caps);
+                gst::debug!(CAT, obj = pad, "Pushing caps {}", caps);
 
                 let new_event = gst::event::Caps::new(&caps);
 
@@ -300,7 +300,7 @@ impl TtToCea708 {
 
                     gst::debug!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Initial skip to frame no {}",
                         state.last_frame_no
                     );
@@ -653,7 +653,7 @@ impl ElementImpl for TtToCea708 {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {

@@ -223,7 +223,7 @@ impl ObjectImpl for HsvDetector {
                 let hue_ref = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing hue-ref from {} to {}",
                     settings.hue_ref,
                     hue_ref
@@ -235,7 +235,7 @@ impl ObjectImpl for HsvDetector {
                 let hue_var = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing hue-var from {} to {}",
                     settings.hue_var,
                     hue_var
@@ -247,7 +247,7 @@ impl ObjectImpl for HsvDetector {
                 let saturation_ref = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing saturation-ref from {} to {}",
                     settings.saturation_ref,
                     saturation_ref
@@ -259,7 +259,7 @@ impl ObjectImpl for HsvDetector {
                 let saturation_var = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing saturation-var from {} to {}",
                     settings.saturation_var,
                     saturation_var
@@ -271,7 +271,7 @@ impl ObjectImpl for HsvDetector {
                 let value_ref = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing value-ref from {} to {}",
                     settings.value_ref,
                     value_ref
@@ -283,7 +283,7 @@ impl ObjectImpl for HsvDetector {
                 let value_var = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing value-var from {} to {}",
                     settings.value_var,
                     value_var
@@ -402,7 +402,7 @@ impl BaseTransformImpl for HsvDetector {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Transformed caps from {} to {} in direction {:?}",
             caps,
             other_caps,

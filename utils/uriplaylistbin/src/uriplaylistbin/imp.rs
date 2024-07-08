@@ -218,7 +218,7 @@ impl ObjectImpl for UriPlaylistBin {
                 let new_value = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Changing uris from {:?} to {:?}",
                     settings.uris,
                     new_value,
@@ -231,7 +231,7 @@ impl ObjectImpl for UriPlaylistBin {
                     let mut settings = self.settings.lock().unwrap();
                     gst::info!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Changing iterations from {:?} to {:?}",
                         settings.iterations,
                         new_value,
@@ -406,7 +406,7 @@ impl ElementImpl for UriPlaylistBin {
 
 impl UriPlaylistBin {
     fn start(&self) -> Result<(), PlaylistError> {
-        gst::debug!(CAT, imp: self, "Starting");
+        gst::debug!(CAT, imp = self, "Starting");
         {
             let mut state_guard = self.state.lock().unwrap();
             assert!(state_guard.is_none());
@@ -433,7 +433,7 @@ impl UriPlaylistBin {
 
                 gst::debug!(
                     CAT,
-                    obj: bin,
+                    obj = bin,
                     "uridecodebin src pad added: {}",
                     src_pad.name()
                 );
@@ -474,7 +474,7 @@ impl UriPlaylistBin {
 
                 gst::debug!(
                     CAT,
-                    obj: bin,
+                    obj = bin,
                     "uridecodebin src pad removed: {}",
                     src_pad.name()
                 );
@@ -498,7 +498,7 @@ impl UriPlaylistBin {
                 let bin = bin_weak.upgrade()?;
                 let self_ = bin.imp();
 
-                gst::debug!(CAT, obj: bin, "current URI about to finish");
+                gst::debug!(CAT, obj = bin, "current URI about to finish");
 
                 let _ = self_.start_next_item();
 
@@ -542,7 +542,7 @@ impl UriPlaylistBin {
         let item = match state.playlist.next() {
             Some(item) => item,
             None => {
-                gst::debug!(CAT, imp: self, "no more item to queue",);
+                gst::debug!(CAT, imp = self, "no more item to queue",);
 
                 state.pending_current_items.push_back(None);
                 return Ok(());
@@ -551,7 +551,7 @@ impl UriPlaylistBin {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "start next item #{}: {}",
             item.index(),
             item.uri()
@@ -618,7 +618,7 @@ impl UriPlaylistBin {
 
     fn failed(&self, error: PlaylistError) {
         let error_msg = error.to_string();
-        gst::error!(CAT, imp: self, "{}", error_msg);
+        gst::error!(CAT, imp = self, "{}", error_msg);
 
         match error {
             PlaylistError::PluginMissing { .. } => {

@@ -210,13 +210,13 @@ impl NdiSrcDemux {
         _pad: &gst::Pad,
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, imp: self, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, imp = self, "Handling buffer {:?}", buffer);
 
         let mut meta = buffer
             .make_mut()
             .meta_mut::<ndisrcmeta::NdiSrcMeta>()
             .ok_or_else(|| {
-                gst::error!(CAT, imp: self, "Buffer without NDI source meta");
+                gst::error!(CAT, imp = self, "Buffer without NDI source meta");
                 gst::FlowError::Error
             })?;
 
@@ -225,7 +225,7 @@ impl NdiSrcDemux {
 
         match ndi_buffer {
             Buffer::Audio { ref frame, .. } => {
-                gst::debug!(CAT, imp: self, "Received audio frame {:?}", frame);
+                gst::debug!(CAT, imp = self, "Received audio frame {:?}", frame);
 
                 let mut reconfigure = false;
                 let info = self.create_audio_info(frame)?;
@@ -239,7 +239,7 @@ impl NdiSrcDemux {
                         gst::FlowError::NotNegotiated
                     })?;
 
-                    gst::debug!(CAT, imp: self, "Audio caps changed to {}", caps);
+                    gst::debug!(CAT, imp = self, "Audio caps changed to {}", caps);
 
                     #[allow(irrefutable_let_patterns)]
                     if let AudioInfo::Audio(ref info) = info {
@@ -274,7 +274,7 @@ impl NdiSrcDemux {
                     srcpad = pad.clone();
                     reconfigure |= pad.check_reconfigure();
                 } else {
-                    gst::debug!(CAT, imp: self, "Adding audio pad");
+                    gst::debug!(CAT, imp = self, "Adding audio pad");
 
                     let templ = self.obj().element_class().pad_template("audio").unwrap();
                     let pad = gst::Pad::builder_from_template(&templ)
@@ -297,7 +297,7 @@ impl NdiSrcDemux {
                             .flags(ev.stream_flags())
                             .group_id(ev.group_id().unwrap_or_else(|| {
                                 // This can't really happen as ndisrc would provide one!
-                                gst::error!(CAT, imp: self, "Upstream provided no group id");
+                                gst::error!(CAT, imp = self, "Upstream provided no group id");
                                 gst::GroupId::next()
                             }))
                             .build();
@@ -351,16 +351,20 @@ impl NdiSrcDemux {
                         let allowed_caps = srcpad.peer().map(|peer| peer.query_caps(Some(&caps)));
                         state = self.state.lock().unwrap();
 
-                        gst::info!(CAT, imp: self, "Allowed audio caps {allowed_caps:?}");
+                        gst::info!(CAT, imp = self, "Allowed audio caps {allowed_caps:?}");
 
                         state.audio_non_interleaved = allowed_caps
                             .is_some_and(|allowed_caps| allowed_caps.can_intersect(&caps));
 
                         gst::info!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "Non-interleaved caps{} supported",
-                            if state.audio_non_interleaved { "" } else { "not" },
+                            if state.audio_non_interleaved {
+                                ""
+                            } else {
+                                "not"
+                            },
                         );
                     }
 
@@ -375,7 +379,7 @@ impl NdiSrcDemux {
                 }
             }
             Buffer::Video { ref frame, .. } => {
-                gst::debug!(CAT, imp: self, "Received video frame {:?}", frame);
+                gst::debug!(CAT, imp = self, "Received video frame {:?}", frame);
 
                 let mut reconfigure = false;
                 let info = self.create_video_info(frame)?;
@@ -393,7 +397,7 @@ impl NdiSrcDemux {
                         state.ndi_cc_decoder = Some(NDICCMetaDecoder::new(info.width()));
                     }
 
-                    gst::debug!(CAT, imp: self, "Video caps changed to {}", caps);
+                    gst::debug!(CAT, imp = self, "Video caps changed to {}", caps);
                     state.video_info = Some(info);
                     state.video_caps = Some(caps);
                     state.video_buffer_pool = None;
@@ -405,7 +409,7 @@ impl NdiSrcDemux {
                     srcpad = pad.clone();
                     reconfigure |= pad.check_reconfigure();
                 } else {
-                    gst::debug!(CAT, imp: self, "Adding video pad");
+                    gst::debug!(CAT, imp = self, "Adding video pad");
 
                     let templ = self.obj().element_class().pad_template("video").unwrap();
                     let pad = gst::Pad::builder_from_template(&templ)
@@ -428,7 +432,7 @@ impl NdiSrcDemux {
                             .flags(ev.stream_flags())
                             .group_id(ev.group_id().unwrap_or_else(|| {
                                 // This can't really happen as ndisrc would provide one!
-                                gst::error!(CAT, imp: self, "Upstream provided no group id");
+                                gst::error!(CAT, imp = self, "Upstream provided no group id");
                                 gst::GroupId::next()
                             }))
                             .build();
@@ -501,13 +505,13 @@ impl NdiSrcDemux {
                         &frame,
                     )
                     .ok_or_else(|| {
-                        gst::debug!(CAT, imp: self, "Flushing, dropping buffer");
+                        gst::debug!(CAT, imp = self, "Flushing, dropping buffer");
                         gst::FlowError::Flushing
                     })?;
 
                 buffer = self.create_audio_buffer(&state, pts, duration, discont, resync, frame)?;
 
-                gst::log!(CAT, imp: self, "Produced audio buffer {:?}", buffer);
+                gst::log!(CAT, imp = self, "Produced audio buffer {:?}", buffer);
             }
             Buffer::Video {
                 frame,
@@ -524,14 +528,14 @@ impl NdiSrcDemux {
                         &frame,
                     )
                     .ok_or_else(|| {
-                        gst::debug!(CAT, imp: self, "Flushing, dropping buffer");
+                        gst::debug!(CAT, imp = self, "Flushing, dropping buffer");
                         gst::FlowError::Flushing
                     })?;
 
                 buffer =
                     self.create_video_buffer(&mut state, pts, duration, discont, resync, frame)?;
 
-                gst::log!(CAT, imp: self, "Produced video buffer {:?}", buffer);
+                gst::log!(CAT, imp = self, "Produced video buffer {:?}", buffer);
             }
             Buffer::Metadata { frame, .. } => {
                 // Only closed caption meta are supported,
@@ -553,7 +557,7 @@ impl NdiSrcDemux {
     fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, imp: self, "Handling event {:?}", event);
+        gst::log!(CAT, imp = self, "Handling event {:?}", event);
         match event.view() {
             EventView::StreamStart(ev) => {
                 let state = self.state.lock().unwrap();
@@ -576,7 +580,7 @@ impl NdiSrcDemux {
                     .flags(ev.stream_flags())
                     .group_id(ev.group_id().unwrap_or_else(|| {
                         // This can't really happen as ndisrc would provide one!
-                        gst::error!(CAT, imp: self, "Upstream provided no group id");
+                        gst::error!(CAT, imp = self, "Upstream provided no group id");
                         gst::GroupId::next()
                     }))
                     .build();
@@ -626,7 +630,7 @@ impl NdiSrcDemux {
 
         gst::log!(
             CAT,
-            imp: self,
+            imp = self,
             "Received frame with timecode {}, timestamp {}, duration {}, receive time {}, local time now {}",
             timecode,
             timestamp.display(),
@@ -653,7 +657,7 @@ impl NdiSrcDemux {
             TimestampMode::ReceiveTimeTimecode => match res_timecode {
                 Some((pts, duration, discont)) => (pts, duration, discont),
                 None => {
-                    gst::warning!(CAT, imp: self, "Can't calculate timestamp");
+                    gst::warning!(CAT, imp = self, "Can't calculate timestamp");
                     (receive_time_gst, duration, false)
                 }
             },
@@ -661,7 +665,7 @@ impl NdiSrcDemux {
                 Some((pts, duration, discont)) => (pts, duration, discont),
                 None => {
                     if timestamp.is_some() {
-                        gst::warning!(CAT, imp: self, "Can't calculate timestamp");
+                        gst::warning!(CAT, imp = self, "Can't calculate timestamp");
                     }
 
                     (receive_time_gst, duration, false)
@@ -694,7 +698,7 @@ impl NdiSrcDemux {
 
         gst::log!(
             CAT,
-            imp: self,
+            imp = self,
             "Calculated PTS {}, duration {}",
             pts.display(),
             duration.display(),
@@ -879,7 +883,7 @@ impl NdiSrcDemux {
             let compressed_packet = video_frame.compressed_packet().ok_or_else(|| {
                 gst::error!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Video packet doesn't have compressed packet start"
                 );
                 gst::element_imp_error!(self, gst::StreamError::Format, ["Invalid video packet"]);
@@ -888,7 +892,7 @@ impl NdiSrcDemux {
             })?;
 
             if compressed_packet.fourcc != ndisys::NDIlib_compressed_FourCC_type_H264 {
-                gst::error!(CAT, imp: self, "Non-H264 video packet");
+                gst::error!(CAT, imp = self, "Non-H264 video packet");
                 gst::element_imp_error!(self, gst::StreamError::Format, ["Invalid video packet"]);
 
                 return Err(gst::FlowError::Error);
@@ -917,7 +921,7 @@ impl NdiSrcDemux {
             let compressed_packet = video_frame.compressed_packet().ok_or_else(|| {
                 gst::error!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Video packet doesn't have compressed packet start"
                 );
                 gst::element_imp_error!(self, gst::StreamError::Format, ["Invalid video packet"]);
@@ -926,7 +930,7 @@ impl NdiSrcDemux {
             })?;
 
             if compressed_packet.fourcc != ndisys::NDIlib_compressed_FourCC_type_HEVC {
-                gst::error!(CAT, imp: self, "Non-H265 video packet");
+                gst::error!(CAT, imp = self, "Non-H265 video packet");
                 gst::element_imp_error!(self, gst::StreamError::Format, ["Invalid video packet"]);
 
                 return Err(gst::FlowError::Error);
@@ -975,7 +979,7 @@ impl NdiSrcDemux {
                 if let Some(meta) = metadata.metadata() {
                     let res = ndi_cc_decoder.decode(meta);
                     if let Err(err) = res {
-                        gst::debug!(CAT, imp: self, "Failed to parse NDI metadata: {err}");
+                        gst::debug!(CAT, imp = self, "Failed to parse NDI metadata: {err}");
                     }
                 }
             }
@@ -987,7 +991,11 @@ impl NdiSrcDemux {
                         captions.extend_from_slice(&c);
                     }
                     Err(err) => {
-                        gst::debug!(CAT, imp: self, "Failed to parse NDI video frame metadata: {err}");
+                        gst::debug!(
+                            CAT,
+                            imp = self,
+                            "Failed to parse NDI video frame metadata: {err}"
+                        );
                     }
                 }
             }
@@ -1093,7 +1101,11 @@ impl NdiSrcDemux {
                         if src_stride == info.stride()[0] as usize {
                             Ok(gst::Buffer::from_slice(WrappedVideoFrame(video_frame)))
                         } else {
-                            gst::debug!(gst::CAT_PERFORMANCE, imp: self, "Copying raw video frame");
+                            gst::debug!(
+                                gst::CAT_PERFORMANCE,
+                                imp = self,
+                                "Copying raw video frame"
+                            );
 
                             let src = video_frame.data().ok_or(gst::FlowError::Error)?;
 
@@ -1117,7 +1129,11 @@ impl NdiSrcDemux {
                             let plane_size = video_frame.yres() as usize * src_stride;
 
                             if src.len() < plane_size || src_stride < line_bytes {
-                                gst::error!(CAT, imp: self, "Video packet has wrong stride or size");
+                                gst::error!(
+                                    CAT,
+                                    imp = self,
+                                    "Video packet has wrong stride or size"
+                                );
                                 gst::element_imp_error!(
                                     self,
                                     gst::StreamError::Format,
@@ -1142,7 +1158,11 @@ impl NdiSrcDemux {
                         if src_stride == info.stride()[0] as usize {
                             Ok(gst::Buffer::from_slice(WrappedVideoFrame(video_frame)))
                         } else {
-                            gst::debug!(gst::CAT_PERFORMANCE, imp: self, "Copying raw video frame");
+                            gst::debug!(
+                                gst::CAT_PERFORMANCE,
+                                imp = self,
+                                "Copying raw video frame"
+                            );
 
                             let src = video_frame.data().ok_or(gst::FlowError::Error)?;
 
@@ -1159,7 +1179,11 @@ impl NdiSrcDemux {
                             let plane_size = video_frame.yres() as usize * src_stride;
 
                             if src.len() < 2 * plane_size || src_stride < line_bytes {
-                                gst::error!(CAT, imp: self, "Video packet has wrong stride or size");
+                                gst::error!(
+                                    CAT,
+                                    imp = self,
+                                    "Video packet has wrong stride or size"
+                                );
                                 gst::element_imp_error!(
                                     self,
                                     gst::StreamError::Format,
@@ -1208,7 +1232,11 @@ impl NdiSrcDemux {
                         {
                             Ok(gst::Buffer::from_slice(WrappedVideoFrame(video_frame)))
                         } else {
-                            gst::debug!(gst::CAT_PERFORMANCE, imp: self, "Copying raw video frame");
+                            gst::debug!(
+                                gst::CAT_PERFORMANCE,
+                                imp = self,
+                                "Copying raw video frame"
+                            );
 
                             let src = video_frame.data().ok_or(gst::FlowError::Error)?;
 
@@ -1228,7 +1256,11 @@ impl NdiSrcDemux {
                             let plane_size1 = ((video_frame.yres() as usize + 1) / 2) * src_stride1;
 
                             if src.len() < plane_size + 2 * plane_size1 || src_stride < line_bytes {
-                                gst::error!(CAT, imp: self, "Video packet has wrong stride or size");
+                                gst::error!(
+                                    CAT,
+                                    imp = self,
+                                    "Video packet has wrong stride or size"
+                                );
                                 gst::element_imp_error!(
                                     self,
                                     gst::StreamError::Format,
@@ -1294,7 +1326,7 @@ impl NdiSrcDemux {
                 let compressed_packet = video_frame.compressed_packet().ok_or_else(|| {
                     gst::error!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Video packet doesn't have compressed packet start"
                     );
                     gst::element_imp_error!(
@@ -1388,7 +1420,7 @@ impl NdiSrcDemux {
             let compressed_packet = audio_frame.compressed_packet().ok_or_else(|| {
                 gst::error!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Audio packet doesn't have compressed packet start"
                 );
                 gst::element_imp_error!(self, gst::StreamError::Format, ["Invalid audio packet"]);
@@ -1397,7 +1429,7 @@ impl NdiSrcDemux {
             })?;
 
             if compressed_packet.fourcc != ndisys::NDIlib_compressed_FourCC_type_AAC {
-                gst::error!(CAT, imp: self, "Non-AAC audio packet");
+                gst::error!(CAT, imp = self, "Non-AAC audio packet");
                 gst::element_imp_error!(self, gst::StreamError::Format, ["Invalid audio packet"]);
 
                 return Err(gst::FlowError::Error);
@@ -1462,7 +1494,7 @@ impl NdiSrcDemux {
 
                     buffer
                 } else {
-                    gst::debug!(gst::CAT_PERFORMANCE, imp: self, "Copying raw audio frame");
+                    gst::debug!(gst::CAT_PERFORMANCE, imp = self, "Copying raw audio frame");
 
                     let src = audio_frame.data().ok_or(gst::FlowError::Error)?;
                     let mut buffer = gst::Buffer::with_size(buff_size).unwrap();
@@ -1536,7 +1568,7 @@ impl NdiSrcDemux {
             #[cfg(feature = "advanced-sdk")]
             AudioInfo::Opus { .. } => {
                 let data = audio_frame.data().ok_or_else(|| {
-                    gst::error!(CAT, imp: self, "Audio packet has no data");
+                    gst::error!(CAT, imp = self, "Audio packet has no data");
                     gst::element_imp_error!(
                         self,
                         gst::StreamError::Format,
@@ -1553,7 +1585,7 @@ impl NdiSrcDemux {
                 let compressed_packet = audio_frame.compressed_packet().ok_or_else(|| {
                     gst::error!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Audio packet doesn't have compressed packet start"
                     );
                     gst::element_imp_error!(
@@ -1798,7 +1830,7 @@ impl Observations {
 
         gst::trace!(
             CAT,
-            obj: element,
+            obj = element,
             "Local time {}, remote time {}, slope correct {}/{}",
             local_time.nseconds(),
             remote_time.nseconds(),
@@ -1832,7 +1864,7 @@ impl Observations {
                 _ => {
                     gst::debug!(
                         CAT,
-                        obj: element,
+                        obj = element,
                         "Initializing base time: local {}, remote {}",
                         local_time.nseconds(),
                         remote_time.nseconds(),
@@ -1880,7 +1912,7 @@ impl Observations {
                 if !(0.5..1.5).contains(&scaled_slope) {
                     gst::warning!(
                         CAT,
-                        obj: element,
+                        obj = element,
                         "Too small/big slope {}, resetting",
                         scaled_slope
                     );
@@ -1921,7 +1953,7 @@ impl Observations {
                         .mul_div_round(inner.slope_correction.0, inner.slope_correction.1)?;
                     gst::debug!(
                         CAT,
-                        obj: element,
+                        obj = element,
                         "Initializing base time: local {}, remote {}, slope correction {}/{}",
                         local_time.nseconds(),
                         remote_time.nseconds(),
@@ -1942,7 +1974,7 @@ impl Observations {
 
         gst::trace!(
             CAT,
-            obj: element,
+            obj = element,
             "Local diff {}, remote diff {}, delta {}",
             local_diff.nseconds(),
             remote_diff.nseconds(),
@@ -1954,7 +1986,7 @@ impl Observations {
         {
             gst::warning!(
                 CAT,
-                obj: element,
+                obj = element,
                 "Delta {} too far from skew {}, resetting",
                 delta,
                 inner.skew
@@ -1964,7 +1996,7 @@ impl Observations {
 
             gst::debug!(
                 CAT,
-                obj: element,
+                obj = element,
                 "Initializing base time: local {}, remote {}",
                 local_time.nseconds(),
                 remote_time.nseconds(),
@@ -2018,12 +2050,12 @@ impl Observations {
 
         gst::trace!(
             CAT,
-            obj: element,
+            obj = element,
             "Skew {}, min delta {}",
             inner.skew,
             inner.min_delta
         );
-        gst::trace!(CAT, obj: element, "Outputting {}", out_time.nseconds());
+        gst::trace!(CAT, obj = element, "Outputting {}", out_time.nseconds());
 
         Some((out_time.nseconds(), duration, false))
     }

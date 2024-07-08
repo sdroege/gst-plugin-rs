@@ -200,7 +200,7 @@ impl BaseParseImpl for CdgParse {
             buffer.set_flags(gst::BufferFlags::HEADER);
         }
 
-        gst::debug!(CAT, imp: self, "Found frame pts={}", pts);
+        gst::debug!(CAT, imp = self, "Found frame pts={}", pts);
 
         self.obj().finish_frame(frame, CDG_PACKET_SIZE as u32)?;
 

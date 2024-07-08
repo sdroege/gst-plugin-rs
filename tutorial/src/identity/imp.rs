@@ -42,7 +42,7 @@ impl Identity {
         pad: &gst::Pad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, obj = pad, "Handling buffer {:?}", buffer);
         self.srcpad.push(buffer)
     }
 
@@ -54,7 +54,7 @@ impl Identity {
     // See the documentation of gst::Event and gst::EventRef to see what can be done with
     // events, and especially the gst::EventView type for inspecting events.
     fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
         self.srcpad.push_event(event)
     }
 
@@ -68,7 +68,7 @@ impl Identity {
     // See the documentation of gst::Query and gst::QueryRef to see what can be done with
     // queries, and especially the gst::QueryView type for inspecting and modifying queries.
     fn sink_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
-        gst::log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::log!(CAT, obj = pad, "Handling query {:?}", query);
         self.srcpad.peer_query(query)
     }
 
@@ -81,7 +81,7 @@ impl Identity {
     // See the documentation of gst::Event and gst::EventRef to see what can be done with
     // events, and especially the gst::EventView type for inspecting events.
     fn src_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
         self.sinkpad.push_event(event)
     }
 
@@ -95,7 +95,7 @@ impl Identity {
     // See the documentation of gst::Query and gst::QueryRef to see what can be done with
     // queries, and especially the gst::QueryView type for inspecting and modifying queries.
     fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
-        gst::log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::log!(CAT, obj = pad, "Handling query {:?}", query);
         self.sinkpad.peer_query(query)
     }
 }
@@ -247,7 +247,7 @@ impl ElementImpl for Identity {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         // Call the parent class' implementation of ::change_state()
         self.parent_change_state(transition)

@@ -83,7 +83,7 @@ impl TranslateLoop {
                 "Failed to call list_languages service: {err}: {}",
                 err.meta()
             );
-            gst::info!(CAT, imp: self.pad, "{err}");
+            gst::info!(CAT, imp = self.pad, "{err}");
             gst::error_msg!(gst::LibraryError::Failed, ["{err}"])
         })?;
 
@@ -94,7 +94,7 @@ impl TranslateLoop {
 
         if !found_output_lang {
             let err = format!("Unknown output languages: {}", self.output_lang);
-            gst::info!(CAT, imp: self.pad, "{err}");
+            gst::info!(CAT, imp = self.pad, "{err}");
             return Err(gst::error_msg!(gst::LibraryError::Failed, ["{err}"]));
         }
 
@@ -136,7 +136,11 @@ impl TranslateLoop {
 
             let content: String = content.join("");
 
-            gst::debug!(CAT, imp: self.pad, "Translating {content} with {ts_duration_list:?}");
+            gst::debug!(
+                CAT,
+                imp = self.pad,
+                "Translating {content} with {ts_duration_list:?}"
+            );
 
             let translated_text = self
                 .client
@@ -148,12 +152,12 @@ impl TranslateLoop {
                 .await
                 .map_err(|err| {
                     let err = format!("Failed to call translation service: {err}: {}", err.meta());
-                    gst::info!(CAT, imp: self.pad, "{err}");
+                    gst::info!(CAT, imp = self.pad, "{err}");
                     gst::error_msg!(gst::LibraryError::Failed, ["{err}"])
                 })?
                 .translated_text;
 
-            gst::debug!(CAT, imp: self.pad, "Got translation {translated_text}");
+            gst::debug!(CAT, imp = self.pad, "Got translation {translated_text}");
 
             let translated_items = match self.tokenization_method {
                 Tokenization::None => {
@@ -173,12 +177,12 @@ impl TranslateLoop {
                 Tokenization::SpanBased => span_tokenize_items(&translated_text, ts_duration_list),
             };
 
-            gst::trace!(CAT, imp: self.pad, "Sending {translated_items:?}");
+            gst::trace!(CAT, imp = self.pad, "Sending {translated_items:?}");
 
             if self.translate_tx.send(translated_items).await.is_err() {
                 gst::info!(
                     CAT,
-                    imp: self.pad,
+                    imp = self.pad,
                     "translation chan terminated, exiting translation loop"
                 );
                 break;

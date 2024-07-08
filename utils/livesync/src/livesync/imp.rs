@@ -448,7 +448,7 @@ impl ElementImpl for LiveSync {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::trace!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
         if transition == gst::StateChange::PausedToPlaying {
             let mut state = self.state.lock();
@@ -639,7 +639,7 @@ impl LiveSync {
                 self.set_flushing(&mut self.state.lock());
 
                 if let Err(e) = self.srcpad.pause_task() {
-                    gst::error!(CAT, imp: self, "Failed to pause task: {e}");
+                    gst::error!(CAT, imp = self, "Failed to pause task: {e}");
                     return false;
                 }
 
@@ -654,7 +654,7 @@ impl LiveSync {
                 self.src_reset(&mut state);
 
                 if let Err(e) = self.start_src_task(&mut state) {
-                    gst::error!(CAT, imp: self, "Failed to start task: {e}");
+                    gst::error!(CAT, imp = self, "Failed to start task: {e}");
                     return false;
                 }
 
@@ -667,7 +667,7 @@ impl LiveSync {
                 is_restart = true;
 
                 let Some(segment) = e.segment().downcast_ref() else {
-                    gst::error!(CAT, imp: self, "Got non-TIME segment");
+                    gst::error!(CAT, imp = self, "Got non-TIME segment");
                     return false;
                 };
 
@@ -683,7 +683,7 @@ impl LiveSync {
                 let audio_info = match audio_info_from_caps(&caps) {
                     Ok(ai) => ai,
                     Err(e) => {
-                        gst::error!(CAT, imp: self, "Failed to parse audio caps: {}", e);
+                        gst::error!(CAT, imp = self, "Failed to parse audio caps: {}", e);
                         return false;
                     }
                 };
@@ -697,7 +697,7 @@ impl LiveSync {
             }
 
             gst::EventView::Gap(_) => {
-                gst::debug!(CAT, imp: self, "Got gap event");
+                gst::debug!(CAT, imp = self, "Got gap event");
                 return true;
             }
 
@@ -715,14 +715,14 @@ impl LiveSync {
 
             if state.srcresult == Err(gst::FlowError::Eos) {
                 if let Err(e) = self.start_src_task(&mut state) {
-                    gst::error!(CAT, imp: self, "Failed to start task: {e}");
+                    gst::error!(CAT, imp = self, "Failed to start task: {e}");
                     return false;
                 }
             }
         }
 
         if state.eos {
-            gst::trace!(CAT, imp: self, "Refusing event, we are EOS: {:?}", event);
+            gst::trace!(CAT, imp = self, "Refusing event, we are EOS: {:?}", event);
             return false;
         }
 
@@ -741,7 +741,7 @@ impl LiveSync {
             return false;
         }
 
-        gst::trace!(CAT, imp: self, "Queueing {:?}", event);
+        gst::trace!(CAT, imp = self, "Queueing {:?}", event);
         state.queue.push_back(Item::Event(event));
         self.cond.notify_all();
 
@@ -764,7 +764,7 @@ impl LiveSync {
                     let mut state = self.state.lock();
                     if state.srcresult == Err(gst::FlowError::NotLinked) {
                         if let Err(e) = self.start_src_task(&mut state) {
-                            gst::error!(CAT, imp: self, "Failed to start task: {e}");
+                            gst::error!(CAT, imp = self, "Failed to start task: {e}");
                         }
                     }
                 }
@@ -785,7 +785,7 @@ impl LiveSync {
                 return false;
             }
 
-            gst::trace!(CAT, imp: self, "Queueing {:?}", query);
+            gst::trace!(CAT, imp = self, "Queueing {:?}", query);
             state
                 .queue
                 .push_back(Item::Query(std::ptr::NonNull::from(query), sender));
@@ -830,24 +830,24 @@ impl LiveSync {
         _pad: &gst::Pad,
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::trace!(CAT, imp: self, "Incoming {:?}", buffer);
+        gst::trace!(CAT, imp = self, "Incoming {:?}", buffer);
 
         let mut state = self.state.lock();
 
         if state.eos {
-            gst::debug!(CAT, imp: self, "Refusing buffer, we are EOS");
+            gst::debug!(CAT, imp = self, "Refusing buffer, we are EOS");
             return Err(gst::FlowError::Eos);
         }
 
         if state.upstream_latency.is_none() {
-            gst::debug!(CAT, imp: self, "Have no upstream latency yet, querying");
+            gst::debug!(CAT, imp = self, "Have no upstream latency yet, querying");
             let mut q = gst::query::Latency::new();
             if MutexGuard::unlocked(&mut state, || self.sinkpad.peer_query(&mut q)) {
                 let (live, min, max) = q.result();
 
                 gst::debug!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Latency query response: live {} min {} max {}",
                     live,
                     min,
@@ -858,7 +858,7 @@ impl LiveSync {
             } else {
                 gst::warning!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Can't query upstream latency -- assuming zero"
                 );
                 state.upstream_latency = Some(gst::ClockTime::ZERO);
@@ -873,7 +873,7 @@ impl LiveSync {
         let buf_mut = buffer.make_mut();
 
         if buf_mut.pts().is_none() {
-            gst::warning!(CAT, imp: self, "Incoming buffer has no timestamps");
+            gst::warning!(CAT, imp = self, "Incoming buffer has no timestamps");
         }
 
         if let Some(audio_info) = &state.in_audio_info {
@@ -883,7 +883,7 @@ impl LiveSync {
             else {
                 gst::error!(
                     CAT,
-                    imp: self,
+                    imp = self,
                     "Failed to calculate duration of {:?}",
                     buf_mut,
                 );
@@ -904,14 +904,18 @@ impl LiveSync {
                 if diff > sample_duration {
                     gst::warning!(
                         CAT,
-                        imp: self,
+                        imp = self,
                         "Correcting duration on audio buffer from {} to {}",
                         buf_duration,
                         calc_duration,
                     );
                 }
             } else {
-                gst::debug!(CAT, imp: self, "Patching incoming buffer with duration {calc_duration}");
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "Patching incoming buffer with duration {calc_duration}"
+                );
             }
 
             buf_mut.set_duration(calc_duration);
@@ -920,13 +924,17 @@ impl LiveSync {
                 dur.clamp(MINIMUM_DURATION, MAXIMUM_DURATION)
             });
 
-            gst::debug!(CAT, imp: self, "Patching incoming buffer with duration {duration}");
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Patching incoming buffer with duration {duration}"
+            );
             buf_mut.set_duration(duration);
         }
 
         // At this stage we should really really have a segment
         let segment = state.in_segment.as_ref().ok_or_else(|| {
-            gst::error!(CAT, imp: self, "Missing segment");
+            gst::error!(CAT, imp = self, "Missing segment");
             gst::FlowError::Error
         })?;
 
@@ -953,12 +961,12 @@ impl LiveSync {
         let lateness = self.buffer_is_backwards(&state, timestamp);
 
         if lateness == BufferLateness::LateUnderThreshold {
-            gst::debug!(CAT, imp: self, "Discarding late {:?}", buf_mut);
+            gst::debug!(CAT, imp = self, "Discarding late {:?}", buf_mut);
             state.num_drop += 1;
             return Ok(gst::FlowSuccess::Ok);
         }
 
-        gst::trace!(CAT, imp: self, "Queueing {:?} ({:?})", buffer, lateness);
+        gst::trace!(CAT, imp = self, "Queueing {:?} ({:?})", buffer, lateness);
         state
             .queue
             .push_back(Item::Buffer(buffer, timestamp, lateness));
@@ -1018,7 +1026,7 @@ impl LiveSync {
             self.srcpad.push_event(gst::event::Eos::new());
         }
 
-        gst::log!(CAT, imp: self, "Loop stopping");
+        gst::log!(CAT, imp = self, "Loop stopping");
         let _ = self.srcpad.pause_task();
     }
 
@@ -1042,12 +1050,12 @@ impl LiveSync {
             let element = self.obj();
 
             let base_time = element.base_time().ok_or_else(|| {
-                gst::error!(CAT, imp: self, "Missing base time");
+                gst::error!(CAT, imp = self, "Missing base time");
                 gst::FlowError::Flushing
             })?;
 
             let clock = element.clock().ok_or_else(|| {
-                gst::error!(CAT, imp: self, "Missing clock");
+                gst::error!(CAT, imp = self, "Missing clock");
                 gst::FlowError::Flushing
             })?;
 
@@ -1056,22 +1064,26 @@ impl LiveSync {
 
             gst::trace!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Waiting for clock to reach {}",
                 clock_id.time(),
             );
 
             let (res, jitter) = MutexGuard::unlocked(&mut state, || clock_id.wait());
-            gst::trace!(CAT, imp: self, "Clock returned {res:?} {}{}",
-                if jitter.is_negative() {"-"} else {""},
-                gst::ClockTime::from_nseconds(jitter.unsigned_abs()));
+            gst::trace!(
+                CAT,
+                imp = self,
+                "Clock returned {res:?} {}{}",
+                if jitter.is_negative() { "-" } else { "" },
+                gst::ClockTime::from_nseconds(jitter.unsigned_abs())
+            );
 
             state.clock_id = None;
             state.srcresult?;
         }
 
         let in_item = state.queue.pop_front();
-        gst::trace!(CAT, imp: self, "Unqueueing {:?}", in_item);
+        gst::trace!(CAT, imp = self, "Unqueueing {:?}", in_item);
 
         let in_buffer = match in_item {
             None => None,
@@ -1104,7 +1116,7 @@ impl LiveSync {
                 match event.view() {
                     gst::EventView::Segment(e) => {
                         let segment = e.segment().downcast_ref().unwrap();
-                        gst::debug!(CAT, imp: self, "pending {segment:?}");
+                        gst::debug!(CAT, imp = self, "pending {segment:?}");
                         state.pending_segment = Some(segment.clone());
                         push = false;
                     }
@@ -1169,7 +1181,7 @@ impl LiveSync {
             Some((buffer, _timestamp, BufferLateness::LateOverThreshold))
                 if !state.pending_events() =>
             {
-                gst::debug!(CAT, imp: self, "Accepting late {:?}", buffer);
+                gst::debug!(CAT, imp = self, "Accepting late {:?}", buffer);
                 state.num_in += 1;
 
                 self.patch_output_buffer(&mut state, Some(buffer))?;
@@ -1177,7 +1189,7 @@ impl LiveSync {
 
             Some((buffer, _timestamp, BufferLateness::LateOverThreshold)) => {
                 // Cannot accept late-over-threshold buffers while we have pending events
-                gst::debug!(CAT, imp: self, "Discarding late {:?}", buffer);
+                gst::debug!(CAT, imp = self, "Discarding late {:?}", buffer);
                 state.num_drop += 1;
 
                 self.patch_output_buffer(&mut state, None)?;
@@ -1199,7 +1211,7 @@ impl LiveSync {
             .map_or(gst::ClockTime::ZERO, |t| t.start);
 
         if let Some(caps) = caps {
-            gst::debug!(CAT, imp: self, "Sending new caps: {}", caps);
+            gst::debug!(CAT, imp = self, "Sending new caps: {}", caps);
 
             let event = gst::event::Caps::new(&caps);
             MutexGuard::unlocked(&mut state, || self.srcpad.push_event(event));
@@ -1212,11 +1224,16 @@ impl LiveSync {
         if let Some(mut segment) = segment {
             if !state.single_segment {
                 if let Some(stop) = segment.stop() {
-                    gst::debug!(CAT, imp: self, "Removing stop {} from outgoing segment", stop);
+                    gst::debug!(
+                        CAT,
+                        imp = self,
+                        "Removing stop {} from outgoing segment",
+                        stop
+                    );
                     segment.set_stop(gst::ClockTime::NONE);
                 }
 
-                gst::debug!(CAT, imp: self, "Forwarding segment: {:?}", segment);
+                gst::debug!(CAT, imp = self, "Forwarding segment: {:?}", segment);
 
                 let event = gst::event::Segment::new(&segment);
                 MutexGuard::unlocked(&mut state, || self.srcpad.push_event(event));
@@ -1229,7 +1246,7 @@ impl LiveSync {
                 live_segment.set_time(sync_ts);
                 live_segment.set_position(sync_ts + SEGMENT_OFFSET);
 
-                gst::debug!(CAT, imp: self, "Sending new segment: {:?}", live_segment);
+                gst::debug!(CAT, imp = self, "Sending new segment: {:?}", live_segment);
 
                 let event = gst::event::Segment::new(&live_segment);
                 MutexGuard::unlocked(&mut state, || self.srcpad.push_event(event));
@@ -1243,7 +1260,7 @@ impl LiveSync {
 
         drop(state);
 
-        gst::trace!(CAT, imp: self, "Pushing {buffer:?}");
+        gst::trace!(CAT, imp = self, "Pushing {buffer:?}");
         self.srcpad.push(buffer)
     }
 
@@ -1262,7 +1279,7 @@ impl LiveSync {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Timestamp regresses: buffer ends at {}, expected {}",
             timestamp.end,
             out_timestamp.end,
@@ -1313,7 +1330,7 @@ impl LiveSync {
 
         gst::debug!(
             CAT,
-            imp: self,
+            imp = self,
             "Timestamp is too early: buffer starts at {}, expected {}",
             timestamp.start,
             out_timestamp.end,
@@ -1351,11 +1368,17 @@ impl LiveSync {
         let pts = out_buffer.pts().map(|t| t + duration);
 
         if let Some(source) = source {
-            gst::debug!(CAT, imp: self, "Repeating {:?} using {:?}", out_buffer, source);
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Repeating {:?} using {:?}",
+                out_buffer,
+                source
+            );
             *out_buffer = source;
             duplicate = false;
         } else {
-            gst::debug!(CAT, imp: self, "Repeating {:?}", out_buffer);
+            gst::debug!(CAT, imp = self, "Repeating {:?}", out_buffer);
         }
 
         let buffer = out_buffer.make_mut();
@@ -1378,7 +1401,7 @@ impl LiveSync {
                         .flatten()
                         .and_then(|bytes| usize::try_from(bytes).ok())
                     else {
-                        gst::error!(CAT, imp: self, "Failed to calculate size of repeat buffer");
+                        gst::error!(CAT, imp = self, "Failed to calculate size of repeat buffer");
                         return Err(gst::FlowError::Error);
                     };
 
@@ -1386,12 +1409,16 @@ impl LiveSync {
                 }
 
                 buffer.set_duration(duration);
-                gst::debug!(CAT, imp: self, "Patched output buffer duration to {duration}");
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "Patched output buffer duration to {duration}"
+                );
             }
 
             if let Some(audio_info) = &state.out_audio_info {
                 let mut map_info = buffer.map_writable().map_err(|e| {
-                    gst::error!(CAT, imp: self, "Failed to map buffer: {}", e);
+                    gst::error!(CAT, imp = self, "Failed to map buffer: {}", e);
                     gst::FlowError::Error
                 })?;
                 audio_info

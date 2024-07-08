@@ -259,7 +259,7 @@ fn find_pcr(slice: &[u8], imp: &MpegTsLiveSource) -> Result<Option<u64>> {
                     reader.skip(6)?;
                     let pcr_ext = reader.read::<u64>(9).context("PCR_ext")?;
                     let pcr = pcr_base * 300 + pcr_ext;
-                    gst::debug!(CAT, imp:imp, "PID {pid} PCR {pcr}");
+                    gst::debug!(CAT, imp = imp, "PID {pid} PCR {pcr}");
                     buffer_pcr = Some(pcr);
                     break;
                 }
@@ -277,13 +277,13 @@ fn get_pcr_from_buffer(imp: &MpegTsLiveSource, buffer: &gst::Buffer) -> Option<u
     let buffer_pcr = match find_pcr(range.as_slice(), imp) {
         Ok(pcr) => pcr,
         Err(err) => {
-            gst::error!(CAT, imp:imp, "Failed parsing MPEG-TS packets: {err}");
+            gst::error!(CAT, imp = imp, "Failed parsing MPEG-TS packets: {err}");
             return None;
         }
     };
 
     let Some(raw_pcr) = buffer_pcr else {
-        gst::debug!(CAT, imp:imp, "No PCR observed in {:?}", buffer);
+        gst::debug!(CAT, imp = imp, "No PCR observed in {:?}", buffer);
         return None;
     };
     Some(raw_pcr)
@@ -466,20 +466,20 @@ impl ObjectImpl for MpegTsLiveSource {
                     .expect("type checked upstream")
                 {
                     if self.obj().add(&source).is_err() {
-                        gst::warning!(CAT, imp:self, "Failed to add source");
+                        gst::warning!(CAT, imp = self, "Failed to add source");
                         return;
                     };
                     if source.set_clock(Some(&self.internal_clock)).is_err() {
-                        gst::warning!(CAT, imp:self, "Failed to set clock on source");
+                        gst::warning!(CAT, imp = self, "Failed to set clock on source");
                         return;
                     };
 
                     let Some(target_pad) = source.static_pad("src") else {
-                        gst::warning!(CAT, imp:self, "Source element has no 'src' pad");
+                        gst::warning!(CAT, imp = self, "Source element has no 'src' pad");
                         return;
                     };
                     if self.srcpad.set_target(Some(&target_pad)).is_err() {
-                        gst::warning!(CAT, imp:self, "Failed to set ghost pad target");
+                        gst::warning!(CAT, imp = self, "Failed to set ghost pad target");
                         return;
                     }
                     state.source = Some(source);

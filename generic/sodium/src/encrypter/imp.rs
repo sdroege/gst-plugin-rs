@@ -166,7 +166,7 @@ impl Encrypter {
         pad: &gst::Pad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, obj = pad, "Handling buffer {:?}", buffer);
 
         let mut buffers = BufferVec::new();
         let mut state_guard = self.state.lock().unwrap();
@@ -193,7 +193,7 @@ impl Encrypter {
 
         for buffer in buffers {
             self.srcpad.push(buffer).map_err(|err| {
-                gst::error!(CAT, imp: self, "Failed to push buffer {:?}", err);
+                gst::error!(CAT, imp = self, "Failed to push buffer {:?}", err);
                 err
             })?;
         }
@@ -204,7 +204,7 @@ impl Encrypter {
     fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
 
         match event.view() {
             EventView::Caps(_) => {
@@ -236,7 +236,7 @@ impl Encrypter {
 
                 for buffer in buffers {
                     if let Err(err) = self.srcpad.push(buffer) {
-                        gst::error!(CAT, imp: self, "Failed to push buffer at EOS {:?}", err);
+                        gst::error!(CAT, imp = self, "Failed to push buffer at EOS {:?}", err);
                         return false;
                     }
                 }
@@ -250,7 +250,7 @@ impl Encrypter {
     fn src_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
 
         match event.view() {
             EventView::Seek(_) => false,
@@ -261,7 +261,7 @@ impl Encrypter {
     fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
-        gst::log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::log!(CAT, obj = pad, "Handling query {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Seeking(q) => {
@@ -271,7 +271,7 @@ impl Encrypter {
                     gst::GenericFormattedValue::none_for_format(format),
                     gst::GenericFormattedValue::none_for_format(format),
                 );
-                gst::log!(CAT, obj: pad, "Returning {:?}", q.query_mut());
+                gst::log!(CAT, obj = pad, "Returning {:?}", q.query_mut());
                 true
             }
             QueryViewMut::Duration(q) => {
@@ -311,7 +311,7 @@ impl Encrypter {
                 // add static offsets
                 let size = size + crate::HEADERS_SIZE as u64;
 
-                gst::debug!(CAT, obj: pad, "Setting duration bytes: {}", size);
+                gst::debug!(CAT, obj = pad, "Setting duration bytes: {}", size);
                 q.set(size.bytes());
 
                 true
@@ -492,7 +492,7 @@ impl ElementImpl for Encrypter {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst::debug!(CAT, imp: self, "Changing state {:?}", transition);
+        gst::debug!(CAT, imp = self, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {

@@ -84,7 +84,7 @@ pub struct RTPAv1Pay {
 
 impl RTPAv1Pay {
     fn reset(&self, state: &mut State, full: bool) {
-        gst::debug!(CAT, imp: self, "resetting state");
+        gst::debug!(CAT, imp = self, "resetting state");
 
         if full {
             *state = State::default();
@@ -118,7 +118,7 @@ impl RTPAv1Pay {
             match obu.obu_type {
                 // completely ignore tile lists and padding
                 ObuType::TileList | ObuType::Padding => {
-                    gst::log!(CAT, imp: self, "ignoring {:?} OBU", obu.obu_type);
+                    gst::log!(CAT, imp = self, "ignoring {:?} OBU", obu.obu_type);
                     reader
                         .seek(SeekFrom::Current(obu.size as i64))
                         .map_err(err_flow!(self, buf_read))?;
@@ -200,7 +200,7 @@ impl RTPAv1Pay {
     ) -> Option<PacketOBUData> {
         gst::trace!(
             CAT,
-            imp: self,
+            imp = self,
             "{} new packet, currently storing {} OBUs (marker {})",
             if force { "forcing" } else { "considering" },
             state.obus.len(),
@@ -239,13 +239,13 @@ impl RTPAv1Pay {
             if current.obu_type == ObuType::TemporalDelimiter {
                 // ignore the temporal delimiter, it is not supposed to be transmitted,
                 // it will be skipped later when building the packet
-                gst::log!(CAT, imp: self, "ignoring temporal delimiter OBU");
+                gst::log!(CAT, imp = self, "ignoring temporal delimiter OBU");
 
                 if packet.obu_count > 0 {
                     if marker {
                         gst::warning!(
                             CAT,
-                            imp: self,
+                            imp = self,
                             "Temporal delimited in the middle of a frame"
                         );
                     }
@@ -356,7 +356,7 @@ impl RTPAv1Pay {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::log!(
             CAT,
-            imp: self,
+            imp = self,
             "constructing new RTP packet with {} OBUs",
             packet.obu_count
         );
@@ -475,7 +475,7 @@ impl RTPAv1Pay {
 
         gst::log!(
             CAT,
-            imp: self,
+            imp = self,
             "generated RTP packet of size {}",
             payload.len()
         );
@@ -567,7 +567,7 @@ impl crate::basepay::RtpBasePay2Impl for RTPAv1Pay {
     }
 
     fn set_sink_caps(&self, caps: &gst::Caps) -> bool {
-        gst::debug!(CAT, imp: self, "received caps {caps:?}");
+        gst::debug!(CAT, imp = self, "received caps {caps:?}");
 
         self.obj().set_src_caps(
             &gst::Caps::builder("application/x-rtp")
@@ -596,7 +596,7 @@ impl crate::basepay::RtpBasePay2Impl for RTPAv1Pay {
         buffer: &gst::Buffer,
         id: u64,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::trace!(CAT, imp: self, "received buffer of size {}", buffer.size());
+        gst::trace!(CAT, imp = self, "received buffer of size {}", buffer.size());
 
         let mut state = self.state.borrow_mut();
         let map = buffer.map_readable().map_err(|_| {

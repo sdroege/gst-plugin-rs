@@ -219,7 +219,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpVp9Pay {
     }
 
     fn set_sink_caps(&self, caps: &gst::Caps) -> bool {
-        gst::debug!(CAT, imp: self, "received caps {caps:?}");
+        gst::debug!(CAT, imp = self, "received caps {caps:?}");
 
         let caps_builder = gst::Caps::builder("application/x-rtp")
             .field("media", "video")
@@ -254,7 +254,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpVp9Pay {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let max_payload_size = self.obj().max_payload_size();
 
-        gst::trace!(CAT, imp: self, "received buffer of size {}", buffer.size());
+        gst::trace!(CAT, imp = self, "received buffer of size {}", buffer.size());
 
         let map = buffer.map_readable().map_err(|_| {
             gst::element_imp_error!(
@@ -284,13 +284,13 @@ impl crate::basepay::RtpBasePay2Impl for RtpVp9Pay {
         let mut r = BitReader::endian(map.as_slice(), BigEndian);
         let key_frame = match r.parse::<FrameHeader>() {
             Ok(frame_header) => {
-                gst::trace!(CAT, imp: self, "Parsed frame header: {frame_header:?}");
+                gst::trace!(CAT, imp = self, "Parsed frame header: {frame_header:?}");
                 // show_existing_frame assumes that there is an existing frame to show so this is
                 // clearly not a keyframe
                 frame_header.is_keyframe.unwrap_or(false)
             }
             Err(err) => {
-                gst::trace!(CAT, imp: self, "Failed parsing frame header: {err:?}");
+                gst::trace!(CAT, imp = self, "Failed parsing frame header: {err:?}");
                 !buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
             }
         };
@@ -311,14 +311,18 @@ impl crate::basepay::RtpBasePay2Impl for RtpVp9Pay {
             };
 
             let payload_descriptor_size = payload_descriptor.size().map_err(|err| {
-                gst::error!(CAT, imp: self, "Failed to write payload descriptor: {err:?}");
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Failed to write payload descriptor: {err:?}"
+                );
                 gst::FlowError::Error
             })?;
             let overhead = payload_descriptor_size;
             let payload_size = (max_payload_size as usize)
                 .checked_sub(overhead + 1)
                 .ok_or_else(|| {
-                    gst::error!(CAT, imp: self, "Too small MTU configured for stream");
+                    gst::error!(CAT, imp = self, "Too small MTU configured for stream");
                     gst::element_imp_error!(
                         self,
                         gst::LibraryError::Settings,
@@ -333,7 +337,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpVp9Pay {
 
             gst::trace!(
                 CAT,
-                imp: self,
+                imp = self,
                 "Writing packet with payload descriptor {payload_descriptor:?} and payload size {payload_size}",
             );
 
@@ -342,7 +346,11 @@ impl crate::basepay::RtpBasePay2Impl for RtpVp9Pay {
             let mut w = ByteWriter::endian(&mut payload_descriptor_buffer, BigEndian);
             w.build::<PayloadDescriptor>(&payload_descriptor)
                 .map_err(|err| {
-                    gst::error!(CAT, imp: self, "Failed to write payload descriptor: {err:?}");
+                    gst::error!(
+                        CAT,
+                        imp = self,
+                        "Failed to write payload descriptor: {err:?}"
+                    );
                     gst::FlowError::Error
                 })?;
             assert_eq!(payload_descriptor_buffer.len(), payload_descriptor_size);

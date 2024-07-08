@@ -248,14 +248,14 @@ impl crate::basepay::RtpBasePay2Impl for RtpMP2TPay {
         //
         // Set marker flag whenever the timestamp is discontinuous.
         if buffer.flags().contains(gst::BufferFlags::DISCONT) {
-            gst::debug!(CAT, imp: self, "discont, pushing out pending packets");
+            gst::debug!(CAT, imp = self, "discont, pushing out pending packets");
             self.send_pending_data(&mut state)?;
             self.obj().finish_pending_packets()?;
             state.discont_pending = true;
         }
 
         let map = buffer.map_readable().map_err(|_| {
-            gst::error!(CAT, imp: self, "Can't map buffer readable");
+            gst::error!(CAT, imp = self, "Can't map buffer readable");
             gst::FlowError::Error
         })?;
 
@@ -292,7 +292,9 @@ impl crate::basepay::RtpBasePay2Impl for RtpMP2TPay {
             let n_bytes_from_new_data_in_first_packet =
                 target_payload_size - state.pending_data.len();
 
-            gst::log!(CAT, imp: self,
+            gst::log!(
+                CAT,
+                imp = self,
                 "Using {} bytes ({} packets) of old data and {} bytes ({} packets) from new buffer",
                 state.pending_data.len(),
                 state.pending_data.len() / packet_size,
@@ -321,7 +323,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpMP2TPay {
 
         let remainder = iter.remainder();
 
-        gst::log!(CAT, imp: self,
+        gst::log!(CAT, imp = self,
             "Sending {} bytes ({} packets) in {} RTP packets with max payload size {}, {} bytes ({} packets) remaining for next time",
             data.len() - remainder.len(),
             (data.len() - remainder.len()) / packet_size, data.len() / target_payload_size,
@@ -364,11 +366,16 @@ impl crate::basepay::RtpBasePay2Impl for RtpMP2TPay {
 impl RtpMP2TPay {
     fn send_pending_data(&self, state: &mut State) -> Result<gst::FlowSuccess, gst::FlowError> {
         if state.pending_data.is_empty() {
-            gst::log!(CAT, imp: self, "No pending data, nothing to do");
+            gst::log!(CAT, imp = self, "No pending data, nothing to do");
             return Ok(gst::FlowSuccess::Ok);
         }
 
-        gst::log!(CAT, imp: self, "Sending {} bytes of old data", state.pending_data.len());
+        gst::log!(
+            CAT,
+            imp = self,
+            "Sending {} bytes of old data",
+            state.pending_data.len()
+        );
 
         let pending_id = state.pending_data.id();
 
