@@ -556,8 +556,8 @@ impl ElementImpl for MpegTsLiveSource {
             state.external_clock.set_calibration(
                 gst::ClockTime::from_nseconds(0),
                 gst::ClockTime::from_nseconds(0),
-                gst::ClockTime::from_nseconds(1),
-                gst::ClockTime::from_nseconds(1),
+                1,
+                1,
             );
             // Hack to flush out observations, we set the window-size to the
             // same value
