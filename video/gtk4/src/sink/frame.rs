@@ -169,6 +169,14 @@ impl AsRef<[u8]> for FrameWrapper {
 
 fn video_format_to_memory_format(f: gst_video::VideoFormat) -> gdk::MemoryFormat {
     match f {
+        #[cfg(feature = "gtk_v4_14")]
+        gst_video::VideoFormat::Bgrx => gdk::MemoryFormat::B8g8r8x8,
+        #[cfg(feature = "gtk_v4_14")]
+        gst_video::VideoFormat::Xrgb => gdk::MemoryFormat::X8r8g8b8,
+        #[cfg(feature = "gtk_v4_14")]
+        gst_video::VideoFormat::Rgbx => gdk::MemoryFormat::R8g8b8x8,
+        #[cfg(feature = "gtk_v4_14")]
+        gst_video::VideoFormat::Xbgr => gdk::MemoryFormat::X8b8g8r8,
         gst_video::VideoFormat::Bgra => gdk::MemoryFormat::B8g8r8a8,
         gst_video::VideoFormat::Argb => gdk::MemoryFormat::A8r8g8b8,
         gst_video::VideoFormat::Rgba => gdk::MemoryFormat::R8g8b8a8,
@@ -256,6 +264,10 @@ fn video_frame_to_gl_texture(
                             gdk::MemoryFormat::R8g8b8a8 => gdk::MemoryFormat::R8g8b8a8Premultiplied,
                             gdk::MemoryFormat::A8b8g8r8 => gdk::MemoryFormat::A8r8g8b8Premultiplied,
                             gdk::MemoryFormat::R8g8b8 | gdk::MemoryFormat::B8g8r8 => format,
+                            gdk::MemoryFormat::B8g8r8x8
+                            | gdk::MemoryFormat::X8r8g8b8
+                            | gdk::MemoryFormat::R8g8b8x8
+                            | gdk::MemoryFormat::X8b8g8r8 => format,
                             _ => unreachable!(),
                         }
                     } else {
