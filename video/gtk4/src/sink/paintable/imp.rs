@@ -253,25 +253,24 @@ impl PaintableImpl for Paintable {
                 snapshot.rotate(90.0);
             }
             frame::Orientation::Rotate180 => {
-                snapshot.rotate(180.0);
+                snapshot.scale(-1.0, -1.0);
             }
             frame::Orientation::Rotate270 => {
                 snapshot.rotate(270.0);
             }
             frame::Orientation::FlipRotate0 => {
-                snapshot.rotate_3d(180.0, &gtk::graphene::Vec3::y_axis());
+                snapshot.scale(-1.0, 1.0);
             }
             frame::Orientation::FlipRotate90 => {
                 snapshot.rotate(90.0);
-                snapshot.rotate_3d(180.0, &gtk::graphene::Vec3::y_axis());
+                snapshot.scale(-1.0, 1.0);
             }
             frame::Orientation::FlipRotate180 => {
-                snapshot.rotate(180.0);
-                snapshot.rotate_3d(180.0, &gtk::graphene::Vec3::y_axis());
+                snapshot.scale(1.0, -1.0);
             }
             frame::Orientation::FlipRotate270 => {
                 snapshot.rotate(270.0);
-                snapshot.rotate_3d(180.0, &gtk::graphene::Vec3::y_axis());
+                snapshot.scale(-1.0, 1.0);
             }
             frame::Orientation::Auto => unreachable!(),
         }
