@@ -121,7 +121,7 @@ panic = 'unwind'
 opt-level = 1
 
 [workspace.package]
-version = "0.13.0-alpha.1"
+version = "0.13.0"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 edition = "2021"
 rust-version = "1.71"
