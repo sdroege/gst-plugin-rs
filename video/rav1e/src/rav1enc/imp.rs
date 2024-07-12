@@ -278,7 +278,7 @@ impl ObjectImpl for Rav1Enc {
                     .build(),
                 glib::ParamSpecInt::builder("bitrate")
                     .nick("Bitrate")
-                    .blurb("Bitrate")
+                    .blurb("Bitrate in bits per second")
                     .minimum(0)
                     .default_value(DEFAULT_BITRATE)
                     .mutable_ready()
