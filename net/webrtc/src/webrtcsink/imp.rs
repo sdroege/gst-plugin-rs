@@ -774,10 +774,10 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
                 enc.set_property_from_str("usage-profile", "realtime");
             }
             "rav1enc" => {
-                enc.set_property("bitrate", start_bitrate);
+                enc.set_property("bitrate", start_bitrate as i32);
                 enc.set_property("low-latency", true);
-                enc.set_property("max-key-frame-interval", 715827882);
-                enc.set_property("speed-preset", 10);
+                enc.set_property("max-key-frame-interval", 715827882u64);
+                enc.set_property("speed-preset", 10u32);
             }
             _ => (),
         }
@@ -1033,9 +1033,10 @@ impl VideoEncoder {
                 self.element
                     .set_property("bitrate", (bitrate / 1000) as u32);
             }
-            "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" | "rav1enc" => {
+            "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" => {
                 self.element.set_property("bitrate", bitrate as u32)
             }
+            "rav1enc" => self.element.set_property("bitrate", bitrate),
             _ => return Err(WebRTCSinkError::BitrateNotSupported),
         }
 
