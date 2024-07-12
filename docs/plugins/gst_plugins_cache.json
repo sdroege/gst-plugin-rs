@@ -5101,7 +5101,7 @@
                 },
                 "properties": {
                     "bitrate": {
-                        "blurb": "Bitrate",
+                        "blurb": "Bitrate in bits per second",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
