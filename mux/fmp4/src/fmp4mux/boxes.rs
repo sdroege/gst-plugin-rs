@@ -11,7 +11,7 @@ use gst::prelude::*;
 use anyhow::{anyhow, bail, Context, Error};
 use std::convert::TryFrom;
 
-use super::Buffer;
+use super::{Buffer, ImageOrientation, IDENTITY_MATRIX};
 
 fn write_box<T, F: FnOnce(&mut Vec<u8>) -> Result<T, Error>>(
     vec: &mut Vec<u8>,
@@ -618,21 +618,15 @@ fn write_tkhd(
     v.extend([0u8; 2]);
 
     // Matrix
-    v.extend(
-        [
-            (1u32 << 16).to_be_bytes(),
-            0u32.to_be_bytes(),
-            0u32.to_be_bytes(),
-            0u32.to_be_bytes(),
-            (1u32 << 16).to_be_bytes(),
-            0u32.to_be_bytes(),
-            0u32.to_be_bytes(),
-            0u32.to_be_bytes(),
-            (16384u32 << 16).to_be_bytes(),
-        ]
-        .into_iter()
-        .flatten(),
-    );
+    let matrix = match s.name().as_str() {
+        x if x.starts_with("video/") || x.starts_with("image/") => _cfg
+            .orientation
+            .unwrap_or(ImageOrientation::Rotate0)
+            .transform_matrix(),
+        _ => &IDENTITY_MATRIX,
+    };
+
+    v.extend(matrix.iter().flatten());
 
     // Width/height
     match s.name().as_str() {
