@@ -336,11 +336,10 @@ fn configure_server(
             ep_config.private_key_file.clone(),
         )?
     } else {
-        let rcgen::CertifiedKey { cert: _, key_pair } =
+        let rcgen::CertifiedKey { cert, key_pair } =
             rcgen::generate_simple_self_signed(vec![ep_config.server_name.clone()]).unwrap();
-        let cert_der = key_pair.serialize_der();
-        let priv_key = rustls_pki_types::PrivateKeyDer::try_from(cert_der.clone()).unwrap();
-        let cert_chain = vec![rustls_pki_types::CertificateDer::from(cert_der)];
+        let priv_key = rustls_pki_types::PrivateKeyDer::try_from(key_pair.serialize_der()).unwrap();
+        let cert_chain = vec![rustls_pki_types::CertificateDer::from(cert)];
 
         (cert_chain, priv_key)
     };
