@@ -17,6 +17,7 @@ use std::mem;
 use std::sync::Mutex;
 
 use crate::fmp4mux::obu::read_seq_header_obu_bytes;
+use crate::fmp4mux::ImageOrientation;
 use once_cell::sync::Lazy;
 
 use super::boxes;
@@ -255,6 +256,8 @@ struct State {
     start_dts: Option<gst::ClockTime>,
     /// Language code from tags
     language_code: Option<[u8; 3]>,
+    /// Orientation from tags
+    orientation: Option<ImageOrientation>,
 
     /// Start PTS of the current fragment
     fragment_start_pts: Option<gst::ClockTime>,
@@ -2788,6 +2791,7 @@ impl FMP4Mux {
             write_mehd: settings.write_mehd,
             duration: if at_eos { duration } else { None },
             language_code: state.language_code,
+            orientation: state.orientation,
             start_utc_time: if variant == super::Variant::ONVIF {
                 state
                     .earliest_pts
@@ -3240,6 +3244,28 @@ impl AggregatorImpl for FMP4Mux {
                             *out = c as u8;
                         }
                         state.language_code = Some(language_code);
+                    }
+                } else if let Some(tag_value) = ev.tag().get::<gst::tags::ImageOrientation>() {
+                    let orientation = tag_value.get();
+                    gst::trace!(
+                        CAT,
+                        imp = self,
+                        "Received image orientation from tags: {:?}",
+                        orientation
+                    );
+
+                    let mut state = self.state.lock().unwrap();
+                    state.orientation = match orientation {
+                        "rotate-0" => Some(ImageOrientation::Rotate0),
+                        "rotate-90" => Some(ImageOrientation::Rotate90),
+                        "rotate-180" => Some(ImageOrientation::Rotate180),
+                        "rotate-270" => Some(ImageOrientation::Rotate270),
+                        // TODO:
+                        // "flip-rotate-0" => Some(ImageOrientation::FlipRotate0),
+                        // "flip-rotate-90" => Some(ImageOrientation::FlipRotate90),
+                        // "flip-rotate-180" => Some(ImageOrientation::FlipRotate180),
+                        // "flip-rotate-270" => Some(ImageOrientation::FlipRotate270),
+                        _ => None,
                     }
                 }
 

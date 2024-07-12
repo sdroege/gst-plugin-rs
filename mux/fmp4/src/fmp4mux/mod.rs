@@ -73,6 +73,80 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     Ok(())
 }
 
+#[derive(Debug, Copy, Clone)]
+pub(crate) enum ImageOrientation {
+    Rotate0,
+    Rotate90,
+    Rotate180,
+    Rotate270,
+    // TODO:
+    // FlipRotate0,
+    // FlipRotate90,
+    // FlipRotate180,
+    // FlipRotate270,
+}
+
+type TransformMatrix = [[u8; 4]; 9];
+
+const IDENTITY_MATRIX: TransformMatrix = [
+    (1u32 << 16).to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    (1u32 << 16).to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    (1u32 << 30).to_be_bytes(),
+];
+
+const ROTATE_90_MATRIX: TransformMatrix = [
+    0u32.to_be_bytes(),
+    (1u32 << 16).to_be_bytes(),
+    0u32.to_be_bytes(),
+    (-1i32 << 16).to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    (1u32 << 30).to_be_bytes(),
+];
+
+const ROTATE_180_MATRIX: TransformMatrix = [
+    (-1i32 << 16).to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    (-1i32 << 16).to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    (1u32 << 30).to_be_bytes(),
+];
+
+const ROTATE_270_MATRIX: TransformMatrix = [
+    0u32.to_be_bytes(),
+    (-1i32 << 16).to_be_bytes(),
+    0u32.to_be_bytes(),
+    (1u32 << 16).to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    (1u32 << 30).to_be_bytes(),
+];
+
+impl ImageOrientation {
+    pub(crate) fn transform_matrix(&self) -> &'static TransformMatrix {
+        match self {
+            ImageOrientation::Rotate0 => &IDENTITY_MATRIX,
+            ImageOrientation::Rotate90 => &ROTATE_90_MATRIX,
+            ImageOrientation::Rotate180 => &ROTATE_180_MATRIX,
+            ImageOrientation::Rotate270 => &ROTATE_270_MATRIX,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct HeaderConfiguration {
     variant: Variant,
@@ -88,6 +162,7 @@ pub(crate) struct HeaderConfiguration {
     write_mehd: bool,
     duration: Option<gst::ClockTime>,
     language_code: Option<[u8; 3]>,
+    orientation: Option<ImageOrientation>,
 
     /// Start UTC time in ONVIF mode.
     /// Since Jan 1 1601 in 100ns units.
