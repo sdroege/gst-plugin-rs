@@ -2204,6 +2204,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "getifaddrs"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5145f1db081f9c1bd68384b4602d701efbd1b1fb8fa1a4938bd8eebfaa34ea76"
+dependencies = [
+ "bitflags 2.6.0",
+ "libc",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3066,6 +3077,7 @@ dependencies = [
  "concurrent-queue",
  "flume",
  "futures",
+ "getifaddrs",
  "gio",
  "gst-plugin-version-helper",
  "gstreamer",
@@ -3074,6 +3086,7 @@ dependencies = [
  "gstreamer-check",
  "gstreamer-net",
  "gstreamer-rtp",
+ "libc",
  "pin-project-lite",
  "pkg-config",
  "polling",
@@ -3083,6 +3096,7 @@ dependencies = [
  "socket2",
  "waker-fn",
  "winapi",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

@@ -14220,6 +14220,18 @@
                         "type": "gboolean",
                         "writable": true
                     },
+                    "multicast-iface": {
+                        "blurb": "The network interface on which to join the multicast group. (Supports only single interface)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "qos-dscp": {
                         "blurb": "Quality of Service, differentiated services code point (-1 default)",
                         "conditionally-available": false,
@@ -14466,6 +14478,18 @@
                         "mutable": "null",
                         "readable": true,
                         "type": "guint",
+                        "writable": true
+                    },
+                    "multicast-iface": {
+                        "blurb": "The network interface on which to join the multicast group. This allows multiple interfaces\n                        separated by comma. (\"eth0,eth1\")",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
                         "writable": true
                     },
                     "port": {

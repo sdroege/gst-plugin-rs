@@ -28,13 +28,14 @@ use gst::{element_error, error_msg};
 
 use std::sync::LazyLock;
 
+use crate::net;
 use crate::runtime::executor::block_on_or_add_sub_task;
 use crate::runtime::prelude::*;
 use crate::runtime::{self, Async, Context, PadSink};
 use crate::socket::{wrap_socket, GioSocketWrapper};
 
 use std::collections::BTreeSet;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -57,6 +58,7 @@ const DEFAULT_QOS_DSCP: i32 = -1;
 const DEFAULT_CLIENTS: &str = "";
 const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: Duration = Duration::ZERO;
+const DEFAULT_MULTICAST_IFACE: Option<&str> = None;
 
 #[derive(Debug, Clone, Copy)]
 struct SocketConf {
@@ -92,6 +94,7 @@ struct Settings {
     qos_dscp: i32,
     context: String,
     context_wait: Duration,
+    multicast_iface: Option<String>,
 }
 
 impl Default for Settings {
@@ -110,6 +113,7 @@ impl Default for Settings {
             qos_dscp: DEFAULT_QOS_DSCP,
             context: DEFAULT_CONTEXT.into(),
             context_wait: DEFAULT_CONTEXT_WAIT,
+            multicast_iface: DEFAULT_MULTICAST_IFACE.map(Into::into),
         }
     }
 }
@@ -128,7 +132,7 @@ struct UdpSinkPadHandler(Arc<futures::lock::Mutex<UdpSinkPadHandlerInner>>);
 impl UdpSinkPadHandler {
     fn prepare(
         &self,
-        _imp: &UdpSink,
+        imp: &UdpSink,
         socket: Option<Async<UdpSocket>>,
         socket_v6: Option<Async<UdpSocket>>,
         settings: &Settings,
@@ -140,6 +144,58 @@ impl UdpSinkPadHandler {
             inner.socket_conf = settings.socket_conf;
             inner.socket = socket;
             inner.socket_v6 = socket_v6;
+
+            if let Some(multicast_iface) = &settings.multicast_iface {
+                gst::debug!(
+                    CAT,
+                    imp = imp,
+                    "searching for interface: {}",
+                    multicast_iface
+                );
+
+                // The 'InterfaceFilter::name' only checks for the 'name' field , it does not check
+                // whether the given name with the interface 'description' (Friendly Name) on Windows
+
+                // So we first get all the interfaces and then apply filter
+                // for name and description (Friendly Name) of each interface.
+
+                let ifaces = getifaddrs::getifaddrs().map_err(|err| {
+                    gst::error_msg!(
+                        gst::ResourceError::OpenRead,
+                        ["Failed to find interface {}: {}", multicast_iface, err]
+                    )
+                })?;
+
+                let iface_filter = ifaces.filter(|i| {
+                    let ip_ver = if i.address.is_ipv4() { "IPv4" } else { "IPv6" };
+
+                    if &i.name == multicast_iface {
+                        gst::debug!(
+                            CAT,
+                            imp = imp,
+                            "Found interface: {}, version: {ip_ver}",
+                            i.name,
+                        );
+                        true
+                    } else {
+                        #[cfg(windows)]
+                        if &i.description == multicast_iface {
+                            gst::debug!(
+                                CAT,
+                                imp = imp,
+                                "Found interface: {}, version: {ip_ver}",
+                                i.description,
+                            );
+                            return true;
+                        }
+
+                        gst::trace!(CAT, imp = imp, "skipping interface {}", i.name);
+                        false
+                    }
+                });
+
+                inner.multicast_ifaces = iface_filter.collect();
+            }
 
             for addr in inner.clients.iter() {
                 inner.configure_client(addr)?;
@@ -365,6 +421,7 @@ struct UdpSinkPadHandlerInner {
     clients: BTreeSet<SocketAddr>,
     socket_conf: SocketConf,
     segment: Option<gst::Segment>,
+    multicast_ifaces: Vec<getifaddrs::Interface>,
 }
 
 impl Default for UdpSinkPadHandlerInner {
@@ -381,6 +438,7 @@ impl Default for UdpSinkPadHandlerInner {
             )]),
             socket_conf: Default::default(),
             segment: None,
+            multicast_ifaces: Vec::<getifaddrs::Interface>::new(),
         }
     }
 }
@@ -391,62 +449,103 @@ impl UdpSinkPadHandlerInner {
         if client.ip().is_multicast() {
             match client.ip() {
                 IpAddr::V4(addr) => {
-                    if let Some(socket) = self.socket.as_ref() {
-                        if self.socket_conf.auto_multicast {
+                    let Some(socket) = self.socket.as_ref() else {
+                        return Ok(());
+                    };
+
+                    if self.socket_conf.auto_multicast {
+                        for iface in &self.multicast_ifaces {
+                            if !iface.address.is_ipv4() {
+                                gst::debug!(
+                                    CAT,
+                                    "Skipping the IPv6 version of the interface {}",
+                                    iface.name
+                                );
+                                continue;
+                            }
+
+                            gst::debug!(CAT, "interface {} joining the multicast", iface.name);
+                            net::imp::join_multicast_v4(socket.as_ref(), &addr, iface).map_err(
+                                |err| {
+                                    error_msg!(
+                                        gst::ResourceError::OpenWrite,
+                                        [
+                                            "Failed to join multicast group on iface {} for {:?}: {}",
+                                            iface.name,
+                                            client,
+                                            err
+                                        ]
+                                    )
+                                },
+                            )?;
+                        }
+                    }
+
+                    if self.socket_conf.multicast_loop {
+                        socket.as_ref().set_multicast_loop_v4(true).map_err(|err| {
+                            error_msg!(
+                                gst::ResourceError::OpenWrite,
+                                ["Failed to set multicast loop for {:?}: {}", client, err]
+                            )
+                        })?;
+                    }
+
+                    socket
+                        .as_ref()
+                        .set_multicast_ttl_v4(self.socket_conf.ttl_mc)
+                        .map_err(|err| {
+                            error_msg!(
+                                gst::ResourceError::OpenWrite,
+                                ["Failed to set multicast ttl for {:?}: {}", client, err]
+                            )
+                        })?;
+                }
+                IpAddr::V6(addr) => {
+                    let Some(socket) = self.socket.as_ref() else {
+                        return Err(error_msg!(
+                            gst::ResourceError::OpenWrite,
+                            ["Socket not available"]
+                        ));
+                    };
+
+                    if self.socket_conf.auto_multicast {
+                        for iface in &self.multicast_ifaces {
+                            if !iface.address.is_ipv6() {
+                                gst::debug!(
+                                    CAT,
+                                    "Skipping the IPv4 version of the interface {}",
+                                    iface.name
+                                );
+                                continue;
+                            }
+
+                            gst::debug!(CAT, "interface {} joining the multicast", iface.name);
                             socket
                                 .as_ref()
-                                .join_multicast_v4(&addr, &Ipv4Addr::new(0, 0, 0, 0))
+                                .join_multicast_v6(&addr, iface.index.unwrap_or(0))
                                 .map_err(|err| {
                                     error_msg!(
                                         gst::ResourceError::OpenWrite,
                                         [
-                                            "Failed to join multicast group for {:?}: {}",
+                                            "Failed to join multicast group on iface {} for {:?}: {}",
+                                            iface.name,
                                             client,
                                             err
                                         ]
                                     )
                                 })?;
                         }
-                        if self.socket_conf.multicast_loop {
-                            socket.as_ref().set_multicast_loop_v4(true).map_err(|err| {
-                                error_msg!(
-                                    gst::ResourceError::OpenWrite,
-                                    ["Failed to set multicast loop for {:?}: {}", client, err]
-                                )
-                            })?;
-                        }
+                    }
 
-                        socket
-                            .as_ref()
-                            .set_multicast_ttl_v4(self.socket_conf.ttl_mc)
-                            .map_err(|err| {
-                                error_msg!(
-                                    gst::ResourceError::OpenWrite,
-                                    ["Failed to set multicast ttl for {:?}: {}", client, err]
-                                )
-                            })?;
+                    if self.socket_conf.multicast_loop {
+                        socket.as_ref().set_multicast_loop_v6(true).map_err(|err| {
+                            error_msg!(
+                                gst::ResourceError::OpenWrite,
+                                ["Failed to set multicast loop for {:?}: {}", client, err]
+                            )
+                        })?;
                     }
-                }
-                IpAddr::V6(addr) => {
-                    if let Some(socket) = self.socket_v6.as_ref() {
-                        if self.socket_conf.auto_multicast {
-                            socket.as_ref().join_multicast_v6(&addr, 0).map_err(|err| {
-                                error_msg!(
-                                    gst::ResourceError::OpenWrite,
-                                    ["Failed to join multicast group for {:?}: {}", client, err]
-                                )
-                            })?;
-                        }
-                        if self.socket_conf.multicast_loop {
-                            socket.as_ref().set_multicast_loop_v6(true).map_err(|err| {
-                                error_msg!(
-                                    gst::ResourceError::OpenWrite,
-                                    ["Failed to set multicast loop for {:?}: {}", client, err]
-                                )
-                            })?;
-                        }
-                        /* FIXME no API for set_multicast_ttl_v6 ? */
-                    }
+                    /* FIXME no API for set_multicast_ttl_v6 ? */
                 }
             }
         } else {
@@ -487,12 +586,27 @@ impl UdpSinkPadHandlerInner {
         if client.ip().is_multicast() {
             match client.ip() {
                 IpAddr::V4(addr) => {
-                    if let Some(socket) = self.socket.as_ref() {
-                        if self.socket_conf.auto_multicast {
-                            socket
-                                .as_ref()
-                                .leave_multicast_v4(&addr, &Ipv4Addr::new(0, 0, 0, 0))
-                                .map_err(|err| {
+                    let Some(socket) = self.socket.as_ref() else {
+                        return Err(error_msg!(
+                            gst::ResourceError::OpenWrite,
+                            ["Socket not available"]
+                        ));
+                    };
+
+                    if self.socket_conf.auto_multicast {
+                        for iface in &self.multicast_ifaces {
+                            if !iface.address.is_ipv4() {
+                                gst::debug!(
+                                    CAT,
+                                    "Skipping the IPv6 version of the interface {}",
+                                    iface.name
+                                );
+                                continue;
+                            }
+
+                            gst::debug!(CAT, "interface {} leaving the multicast", iface.name);
+                            net::imp::leave_multicast_v4(socket.as_ref(), &addr, iface).map_err(
+                                |err| {
                                     error_msg!(
                                         gst::ResourceError::OpenWrite,
                                         [
@@ -501,16 +615,34 @@ impl UdpSinkPadHandlerInner {
                                             err
                                         ]
                                     )
-                                })?;
+                                },
+                            )?;
                         }
                     }
                 }
                 IpAddr::V6(addr) => {
-                    if let Some(socket) = self.socket_v6.as_ref() {
-                        if self.socket_conf.auto_multicast {
+                    let Some(socket) = self.socket.as_ref() else {
+                        return Err(error_msg!(
+                            gst::ResourceError::OpenWrite,
+                            ["Socket not available"]
+                        ));
+                    };
+
+                    if self.socket_conf.auto_multicast {
+                        for iface in &self.multicast_ifaces {
+                            if !iface.address.is_ipv6() {
+                                gst::debug!(
+                                    CAT,
+                                    "Skipping the IPv4 version of the interface {}",
+                                    iface.name
+                                );
+                                continue;
+                            }
+
+                            gst::debug!(CAT, "interface {} leaving the multicast", iface.name);
                             socket
                                 .as_ref()
-                                .leave_multicast_v6(&addr, 0)
+                                .leave_multicast_v6(&addr, iface.index.unwrap_or(0))
                                 .map_err(|err| {
                                     error_msg!(
                                         gst::ResourceError::OpenWrite,
@@ -952,6 +1084,11 @@ impl ObjectImpl for UdpSink {
                     .blurb("A comma separated list of host:port pairs with destinations")
                     .default_value(Some(DEFAULT_CLIENTS))
                     .build(),
+                glib::ParamSpecString::builder("multicast-iface")
+                    .nick("Multicast Interface")
+                    .blurb("The network interface on which to join the multicast group. (Supports only single interface)")
+                    .default_value(DEFAULT_MULTICAST_IFACE)
+                    .build(),
             ]
         });
 
@@ -1119,6 +1256,9 @@ impl ObjectImpl for UdpSink {
                     value.get::<u32>().expect("type checked upstream").into(),
                 );
             }
+            "multicast-iface" => {
+                settings.multicast_iface = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -1164,6 +1304,7 @@ impl ObjectImpl for UdpSink {
             }
             "context" => settings.context.to_value(),
             "context-wait" => (settings.context_wait.as_millis() as u32).to_value(),
+            "multicast-iface" => settings.multicast_iface.to_value(),
             _ => unimplemented!(),
         }
     }

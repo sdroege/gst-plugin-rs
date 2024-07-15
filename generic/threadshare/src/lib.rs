@@ -28,6 +28,8 @@ mod tcpclientsrc;
 mod udpsink;
 mod udpsrc;
 
+pub mod net;
+
 use gst::glib;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {

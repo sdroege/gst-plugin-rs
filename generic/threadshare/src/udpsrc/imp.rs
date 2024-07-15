@@ -35,6 +35,7 @@ use std::time::Duration;
 use crate::runtime::prelude::*;
 use crate::runtime::{task, Async, Context, PadSrc, Task, TaskState};
 
+use crate::net;
 use crate::socket::{wrap_socket, GioSocketWrapper, Socket, SocketError, SocketRead};
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures::pin_mut;
@@ -51,6 +52,7 @@ const DEFAULT_CONTEXT_WAIT: Duration = Duration::ZERO;
 const DEFAULT_RETRIEVE_SENDER_ADDRESS: bool = true;
 const DEFAULT_MULTICAST_LOOP: bool = true;
 const DEFAULT_BUFFER_SIZE: u32 = 0;
+const DEFAULT_MULTICAST_IFACE: Option<&str> = None;
 
 #[derive(Debug, Default)]
 struct State {
@@ -71,6 +73,7 @@ struct Settings {
     retrieve_sender_address: bool,
     multicast_loop: bool,
     buffer_size: u32,
+    multicast_iface: Option<String>,
 }
 
 impl Default for Settings {
@@ -88,6 +91,7 @@ impl Default for Settings {
             retrieve_sender_address: DEFAULT_RETRIEVE_SENDER_ADDRESS,
             multicast_loop: DEFAULT_MULTICAST_LOOP,
             buffer_size: DEFAULT_BUFFER_SIZE,
+            multicast_iface: DEFAULT_MULTICAST_IFACE.map(Into::into),
         }
     }
 }
@@ -194,6 +198,8 @@ struct UdpSrcTask {
     need_initial_events: bool,
     need_segment: bool,
     event_receiver: Receiver<gst::Event>,
+    multicast_ifaces: Vec<getifaddrs::Interface>,
+    multicast_addr: Option<IpAddr>,
 }
 
 impl UdpSrcTask {
@@ -205,6 +211,8 @@ impl UdpSrcTask {
             need_initial_events: true,
             need_segment: true,
             event_receiver,
+            multicast_ifaces: Vec::<getifaddrs::Interface>::new(),
+            multicast_addr: None,
         }
     }
 }
@@ -258,7 +266,10 @@ impl TaskImpl for UdpSrcTask {
                                 ["Invalid address '{}' set: {}", addr, err]
                             ));
                         }
-                        Ok(addr) => addr,
+                        Ok(addr) => {
+                            self.multicast_addr = Some(addr);
+                            addr
+                        }
                     },
                 };
                 let port = settings.port;
@@ -363,18 +374,91 @@ impl TaskImpl for UdpSrcTask {
                 })?;
 
                 if addr.is_multicast() {
-                    // TODO: Multicast interface configuration, going to be tricky
+                    if let Some(multicast_iface) = &settings.multicast_iface {
+                        let multi_ifaces: Vec<String> =
+                            multicast_iface.split(',').map(|s| s.to_string()).collect();
+
+                        let iter = getifaddrs::getifaddrs().map_err(|err| {
+                            gst::error_msg!(
+                                gst::ResourceError::OpenRead,
+                                ["Failed to get interfaces: {}", err]
+                            )
+                        })?;
+
+                        iter.for_each(|iface| {
+                            let ip_ver = if iface.address.is_ipv4() {
+                                "IPv4"
+                            } else {
+                                "IPv6"
+                            };
+
+                            for m in &multi_ifaces {
+                                if &iface.name == m {
+                                    self.multicast_ifaces.push(iface.clone());
+                                    gst::debug!(
+                                        CAT,
+                                        obj = self.element,
+                                        "Interface {m} available, version: {ip_ver}"
+                                    );
+                                } else {
+                                    // check if name matches the interface description (Friendly name) on Windows
+                                    #[cfg(windows)]
+                                    if &iface.description == m {
+                                        self.multicast_ifaces.push(iface.clone());
+                                        gst::debug!(
+                                            CAT,
+                                            obj = self.element,
+                                            "Interface {m} available, version: {ip_ver}"
+                                        );
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    if self.multicast_ifaces.is_empty() {
+                        gst::warning!(
+                            CAT,
+                            obj = self.element,
+                            "No suitable network interfaces found, adding default iface"
+                        );
+
+                        self.multicast_ifaces.push(getifaddrs::Interface {
+                            name: "default".to_owned(),
+                            #[cfg(windows)]
+                            description: "default".to_owned(),
+                            address: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+                            #[cfg(not(windows))]
+                            associated_address: None,
+                            netmask: None,
+                            flags: getifaddrs::InterfaceFlags::UP,
+                            index: Some(0),
+                        });
+                    }
+
                     match addr {
                         IpAddr::V4(addr) => {
-                            socket
-                                .as_ref()
-                                .join_multicast_v4(&addr, &Ipv4Addr::new(0, 0, 0, 0))
-                                .map_err(|err| {
-                                    gst::error_msg!(
-                                        gst::ResourceError::OpenRead,
-                                        ["Failed to join multicast group: {}", err]
-                                    )
-                                })?;
+                            for iface in &self.multicast_ifaces {
+                                if !iface.address.is_ipv4() {
+                                    gst::debug!(
+                                        CAT,
+                                        "Skipping the IPv6 version of the interface {}",
+                                        iface.name
+                                    );
+                                    continue;
+                                }
+
+                                gst::debug!(CAT, "interface {} joining the multicast", iface.name);
+                                // use the custom written API to be able to pass the interface index
+                                // for all types of target OS
+                                net::imp::join_multicast_v4(socket.as_ref(), &addr, iface)
+                                    .map_err(|err| {
+                                        gst::error_msg!(
+                                            gst::ResourceError::OpenRead,
+                                            ["Failed to join multicast group: {}", err]
+                                        )
+                                    })?;
+                            }
 
                             socket
                                 .as_ref()
@@ -391,12 +475,27 @@ impl TaskImpl for UdpSrcTask {
                                 })?;
                         }
                         IpAddr::V6(addr) => {
-                            socket.as_ref().join_multicast_v6(&addr, 0).map_err(|err| {
-                                gst::error_msg!(
-                                    gst::ResourceError::OpenRead,
-                                    ["Failed to join multicast group: {}", err]
-                                )
-                            })?;
+                            for iface in &self.multicast_ifaces {
+                                if !iface.address.is_ipv6() {
+                                    gst::debug!(
+                                        CAT,
+                                        "Skipping the IPv4 version of the interface {}",
+                                        iface.name
+                                    );
+                                    continue;
+                                }
+
+                                gst::debug!(CAT, "interface {} joining the multicast", iface.name);
+                                socket
+                                    .as_ref()
+                                    .join_multicast_v6(&addr, iface.index.unwrap_or(0))
+                                    .map_err(|err| {
+                                        gst::error_msg!(
+                                            gst::ResourceError::OpenRead,
+                                            ["Failed to join multicast group: {}", err]
+                                        )
+                                    })?;
+                            }
 
                             socket
                                 .as_ref()
@@ -466,6 +565,47 @@ impl TaskImpl for UdpSrcTask {
         async move {
             gst::debug!(CAT, obj = self.element, "Unpreparing Task");
             let udpsrc = self.element.imp();
+            if let Some(reader) = &self.socket {
+                let socket = &reader.get().0;
+                if let Some(addr) = self.multicast_addr {
+                    match addr {
+                        IpAddr::V4(addr) => {
+                            for iface in &self.multicast_ifaces {
+                                if !iface.address.is_ipv4() {
+                                    gst::debug!(
+                                        CAT,
+                                        "Skipping the IPv6 version of the interface {}",
+                                        iface.name
+                                    );
+                                    continue;
+                                }
+
+                                gst::debug!(CAT, "interface {} leaving the multicast", iface.name);
+                                net::imp::leave_multicast_v4(socket.as_ref(), &addr, iface)
+                                    .unwrap();
+                            }
+                        }
+                        IpAddr::V6(addr) => {
+                            for iface in &self.multicast_ifaces {
+                                if !iface.address.is_ipv6() {
+                                    gst::debug!(
+                                        CAT,
+                                        "Skipping the IPv4 version of the interface {}",
+                                        iface.name
+                                    );
+                                    continue;
+                                }
+
+                                gst::debug!(CAT, "interface {} leaving the multicast", iface.name);
+                                socket
+                                    .as_ref()
+                                    .leave_multicast_v6(&addr, iface.index.unwrap_or(0))
+                                    .unwrap();
+                            }
+                        }
+                    }
+                }
+            }
             udpsrc.settings.lock().unwrap().used_socket = None;
             self.element.notify("used-socket");
         }
@@ -825,6 +965,12 @@ impl ObjectImpl for UdpSrc {
                     .maximum(u32::MAX)
                     .default_value(DEFAULT_BUFFER_SIZE)
                     .build(),
+                glib::ParamSpecString::builder("multicast-iface")
+                    .nick("Multicast Interface")
+                    .blurb("The network interface on which to join the multicast group. This allows multiple interfaces
+                        separated by comma. (\"eth0,eth1\")")
+                    .default_value(DEFAULT_MULTICAST_IFACE)
+                    .build(),
 
             ];
 
@@ -898,6 +1044,9 @@ impl ObjectImpl for UdpSrc {
             "buffer-size" => {
                 settings.buffer_size = value.get().expect("type checked upstream");
             }
+            "multicast-iface" => {
+                settings.multicast_iface = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -925,6 +1074,7 @@ impl ObjectImpl for UdpSrc {
             "retrieve-sender-address" => settings.retrieve_sender_address.to_value(),
             "loop" => settings.multicast_loop.to_value(),
             "buffer-size" => settings.buffer_size.to_value(),
+            "multicast-iface" => settings.multicast_iface.to_value(),
             _ => unimplemented!(),
         }
     }

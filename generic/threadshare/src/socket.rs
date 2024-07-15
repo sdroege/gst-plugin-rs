@@ -99,6 +99,10 @@ impl<T: SocketRead> Socket<T> {
         self.clock = clock;
         self.base_time = base_time;
     }
+
+    pub fn get(&self) -> &T {
+        &self.reader
+    }
 }
 
 #[derive(Debug)]
