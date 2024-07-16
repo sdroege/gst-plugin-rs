@@ -24,7 +24,7 @@ gst-app = { workspace = true, features = ["v1_18"] }
 gst-check = { workspace = true, features = ["v1_18"] }
 
 [build-dependencies]
-gst-plugin-version-helper = { path="../../version-helper" }
+gst-plugin-version-helper.workspace = true
 
 [features]
 static = []
