@@ -50,12 +50,10 @@ const config = {
   plugins: [new webpack.ProgressPlugin()]
 };
 
-if (isDevServer) {
-  config.plugins.push(new HtmlWebpackPlugin({
-    template: "./index.html",
-    inject: "head",
-    minify: false
-  }));
-}
+config.plugins.push(new HtmlWebpackPlugin({
+  template: "./index.html",
+  inject: "head",
+  minify: false
+}));
 
 module.exports = config; // eslint-disable-line no-undef
