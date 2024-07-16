@@ -5,6 +5,62 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.13.0] - 2024-07-16
+
+### Added
+- rtp: New RTP payloader and depayloader base classes, in addition to new
+  payloader and depayloaders for: PCMA, PCMU, AC-3, AV1 (ported to the new
+  base classes), MPEG-TS, VP8, VP9, MP4A, MP4G, JPEG, Opus, KLV.
+- originalbuffer: New pair of elements that allows to save a buffer, perform
+  transformations on it and then restore the original buffer but keeping any
+  new analytics and other metadata on it.
+- gopbuffer: New element for buffering an entire group-of-pictures.
+- tttocea708: New element for converting timed text to CEA-708 closed captions.
+- cea708mux: New element for muxing multiple CEA-708 services together.
+- transcriberbin: Add support for generating CEA-708 closed captions and
+  CEA-608-in-708.
+- cea708overlay: New overlay element for CEA-708 and CEA-608 closed captions.
+- dav1ddec: Signal colorimetry in the caps.
+- webrtc: Add support for RFC7273 clock signalling and synchronization to
+  webrtcsrc and webrtcsink.
+- tracers: Add a new pad push durations tracer.
+- transcriberbin: Add support for a secondary audio stream.
+- quinn: New plugin with a QUIC source and sink element.
+- rtpgccbwe: New mode based on linear regression instead of a kalman filter.
+- rtp: New rtpsend and rtprecv elements that provide a new implementation of
+  the rtpbin element with a separate send and receive side.
+- rtpsrc2: Add support for new rtpsend / rtprecv elements instead of rtpbin.
+- webrtcsrc: Add multi-producer support.
+- livesync: Add sync property for enabling/disabling syncing of the output
+  buffers to the clock.
+- mpegtslivesrc: New element for receiving an MPEG-TS stream, e.g. over SRT or
+  UDP, and exposing the remote PCR clock as a local GStreamer clock.
+- gtk4paintablesink: Add support for rotations / flipping.
+- gtk4paintablesink: Add support for RGBx formats in non-GL mode.
+
+### Fixed
+- livesync: Queue up to latency buffers instead of requiring a queue of the
+  same size in front of livesync.
+- livesync: Synchronize the first buffer to the clock too.
+- livesync: Use correct duration for deciding whether a filler has to be
+  inserted or not.
+- audioloudnorm: Fix possible off-by-one in the limiter when handling the very
+  last buffer.
+- webrtcsink: Fix property types for rav1enc.
+
+### Changed
+- sccparse, mccparse: Port from nom to winnow.
+- uriplaylistbin: Rely on uridecodebin3 gapless logic instead of
+  re-implementing it.
+- webrtc: Refactor of JavaScript API.
+- janusvrwebrtcsink: New use-string-ids property to distinguish between
+  integer and string room IDs, instead of always using strings and guessing
+  what the server expects.
+- janusvrwebrtcsink: Handle more events and expose some via signals.
+- dav1ddec: Require dav1d 1.3.0.
+- closedcaption: Drop libcaption C code and switch to a pure Rust
+  implementation.
+
 ## [0.12.7] - 2024-06-19
 ### Fixed
 - aws, spotifyaudiosrc, reqwesthttpsrc, webrtchttp: Fix race condition when unlocking
@@ -84,7 +140,7 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 
 ### Changed
 - webrtc: Allow resolution and framerate changes.
-- webrtcsrc: Make produce-peer-id optional.
+- webrtcsrc: Make producer-peer-id optional.
 
 ### Added
 - livekitwebrtcsrc: Add new LiveKit source element.
@@ -448,7 +504,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.7...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.0...HEAD
+[0.13.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.7...0.13.0
 [0.12.7]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.6...0.12.7
 [0.12.6]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.5...0.12.6
 [0.12.5]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.4...0.12.5
