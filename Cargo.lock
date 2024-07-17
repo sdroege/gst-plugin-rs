@@ -3056,6 +3056,7 @@ dependencies = [
  "futures",
  "gst-plugin-rtp",
  "gst-plugin-version-helper",
+ "gst-plugin-webrtc-signalling",
  "gst-plugin-webrtc-signalling-protocol",
  "gstreamer",
  "gstreamer-app",
