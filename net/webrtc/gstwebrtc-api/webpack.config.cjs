@@ -20,12 +20,6 @@ const config = {
   devServer: {
     open: true,
     static: false,
-    proxy: {
-      "/webrtc": {
-        target: "ws://127.0.0.1:8443",
-        ws: true
-      }
-    },
     server: "https",
     port: 9090
   },
