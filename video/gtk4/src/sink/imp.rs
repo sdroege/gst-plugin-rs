@@ -762,6 +762,10 @@ impl PaintableSink {
             {
                 let offload = gtk::GraphicsOffload::new(Some(&picture));
                 offload.set_enabled(gtk::GraphicsOffloadEnabled::Enabled);
+                #[cfg(feature = "gtk_v4_16")]
+                {
+                    offload.set_black_background(true);
+                }
                 window.set_child(Some(&offload));
             }
             #[cfg(not(feature = "gtk_v4_14"))]
