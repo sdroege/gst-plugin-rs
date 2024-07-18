@@ -72,6 +72,18 @@ const DEFAULT_DO_CLOCK_SIGNALLING: bool = false;
 const DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION: bool = false;
 const DEFAULT_ICE_TRANSPORT_POLICY: WebRTCICETransportPolicy = WebRTCICETransportPolicy::All;
 const DEFAULT_START_BITRATE: u32 = 2048000;
+#[cfg(feature = "web_server")]
+const DEFAULT_RUN_WEB_SERVER: bool = false;
+#[cfg(feature = "web_server")]
+const DEFAULT_WEB_SERVER_CERT: Option<&str> = None;
+#[cfg(feature = "web_server")]
+const DEFAULT_WEB_SERVER_KEY: Option<&str> = None;
+#[cfg(feature = "web_server")]
+const DEFAULT_WEB_SERVER_PATH: Option<&str> = None;
+#[cfg(feature = "web_server")]
+const DEFAULT_WEB_SERVER_DIRECTORY: &str = "gstwebrtc-api/dist";
+#[cfg(feature = "web_server")]
+const DEFAULT_WEB_SERVER_HOST_ADDR: &str = "http://127.0.0.1:8080";
 /* Start adding some FEC when the bitrate > 2Mbps as we found experimentally
  * that it is not worth it below that threshold */
 #[cfg(feature = "v1_22")]
@@ -100,6 +112,18 @@ struct Settings {
     meta: Option<gst::Structure>,
     ice_transport_policy: WebRTCICETransportPolicy,
     signaller: Signallable,
+    #[cfg(feature = "web_server")]
+    run_web_server: bool,
+    #[cfg(feature = "web_server")]
+    web_server_cert: Option<String>,
+    #[cfg(feature = "web_server")]
+    web_server_key: Option<String>,
+    #[cfg(feature = "web_server")]
+    web_server_path: Option<String>,
+    #[cfg(feature = "web_server")]
+    web_server_directory: String,
+    #[cfg(feature = "web_server")]
+    web_server_host_addr: url::Url,
 }
 
 #[derive(Debug, Clone)]
@@ -462,6 +486,10 @@ struct State {
     mids: HashMap<String, String>,
     signaller_signals: Option<SignallerSignals>,
     finalizing_sessions: Arc<(Mutex<HashSet<String>>, Condvar)>,
+    #[cfg(feature = "web_server")]
+    web_shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
+    #[cfg(feature = "web_server")]
+    web_join_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 fn create_navigation_event(sink: &super::BaseWebRTCSink, msg: &str) {
@@ -546,6 +574,18 @@ impl Default for Settings {
             meta: None,
             ice_transport_policy: DEFAULT_ICE_TRANSPORT_POLICY,
             signaller: signaller.upcast(),
+            #[cfg(feature = "web_server")]
+            run_web_server: DEFAULT_RUN_WEB_SERVER,
+            #[cfg(feature = "web_server")]
+            web_server_cert: DEFAULT_WEB_SERVER_CERT.map(String::from),
+            #[cfg(feature = "web_server")]
+            web_server_key: DEFAULT_WEB_SERVER_KEY.map(String::from),
+            #[cfg(feature = "web_server")]
+            web_server_path: DEFAULT_WEB_SERVER_PATH.map(String::from),
+            #[cfg(feature = "web_server")]
+            web_server_directory: String::from(DEFAULT_WEB_SERVER_DIRECTORY),
+            #[cfg(feature = "web_server")]
+            web_server_host_addr: url::Url::parse(DEFAULT_WEB_SERVER_HOST_ADDR).unwrap(),
         }
     }
 }
@@ -567,6 +607,10 @@ impl Default for State {
             mids: HashMap::new(),
             signaller_signals: Default::default(),
             finalizing_sessions: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
+            #[cfg(feature = "web_server")]
+            web_shutdown_tx: None,
+            #[cfg(feature = "web_server")]
+            web_join_handle: None,
         }
     }
 }
@@ -2022,17 +2066,78 @@ impl BaseWebRTCSink {
         }
     }
 
+    #[cfg(feature = "web_server")]
+    fn spawn_web_server(
+        settings: &Settings,
+    ) -> Result<
+        (
+            tokio::sync::oneshot::Sender<()>,
+            tokio::task::JoinHandle<()>,
+        ),
+        Error,
+    > {
+        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+
+        let addr = settings.web_server_host_addr.socket_addrs(|| None).unwrap()[0];
+
+        let settings = settings.clone();
+
+        let jh = RUNTIME.spawn(async move {
+            let route = match settings.web_server_path {
+                Some(path) => warp::path(path)
+                    .and(warp::fs::dir(settings.web_server_directory))
+                    .boxed(),
+                None => warp::get()
+                    .and(warp::fs::dir(settings.web_server_directory))
+                    .boxed(),
+            };
+            if let (Some(cert), Some(key)) = (settings.web_server_cert, settings.web_server_key) {
+                let (_, server) = warp::serve(route)
+                    .tls()
+                    .cert_path(cert)
+                    .key_path(key)
+                    .bind_with_graceful_shutdown(addr, async move {
+                        match rx.await {
+                            Ok(_) => gst::debug!(CAT, "Server shut down signal received"),
+                            Err(e) => gst::error!(CAT, "{e:?}: Sender dropped"),
+                        }
+                    });
+                server.await;
+            } else {
+                let (_, server) =
+                    warp::serve(route).bind_with_graceful_shutdown(addr, async move {
+                        match rx.await {
+                            Ok(_) => gst::debug!(CAT, "Server shut down signal received"),
+                            Err(e) => gst::error!(CAT, "{e:?}: Sender dropped"),
+                        }
+                    });
+                server.await;
+            }
+        });
+
+        Ok((tx, jh))
+    }
+
     /// Prepare for accepting consumers, by setting
     /// up StreamProducers for each of our sink pads
     fn prepare(&self) -> Result<(), Error> {
         gst::debug!(CAT, imp = self, "preparing");
 
+        #[cfg(feature = "web_server")]
+        let settings = self.settings.lock().unwrap();
         let mut state = self.state.lock().unwrap();
 
         state
             .streams
             .iter_mut()
             .try_for_each(|(_, stream)| stream.prepare(&self.obj()))?;
+
+        #[cfg(feature = "web_server")]
+        if settings.run_web_server {
+            let (web_shutdown_tx, web_join_handle) = BaseWebRTCSink::spawn_web_server(&settings)?;
+            state.web_shutdown_tx = Some(web_shutdown_tx);
+            state.web_join_handle = Some(web_join_handle);
+        }
 
         Ok(())
     }
@@ -2046,6 +2151,15 @@ impl BaseWebRTCSink {
         let signaller = settings.signaller.clone();
         drop(settings);
         let mut state = self.state.lock().unwrap();
+
+        #[cfg(feature = "web_server")]
+        if let Some(web_shutdown_tx) = state.web_shutdown_tx.take() {
+            let _ = web_shutdown_tx.send(());
+            let web_join_handle = state.web_join_handle.take().expect("no web join handle");
+            RUNTIME.block_on(async {
+                let _ = web_join_handle.await;
+            });
+        }
 
         let session_ids: Vec<_> = state.sessions.keys().map(|k| k.to_owned()).collect();
 
@@ -4075,6 +4189,95 @@ impl ObjectImpl for BaseWebRTCSink {
                     .flags(glib::ParamFlags::READABLE | gst::PARAM_FLAG_MUTABLE_READY)
                     .blurb("The Signallable object to use to handle WebRTC Signalling")
                     .build(),
+                /**
+                 * GstBaseWebRTCSink:run-web-server:
+                 *
+                 * Whether the element should use [warp] to serve the folder at
+                 * #GstBaseWebRTCSink:web-server-directory.
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
+                #[cfg(feature = "web_server")]
+                glib::ParamSpecBoolean::builder("run-web-server")
+                    .nick("Run web server")
+                    .blurb("Whether the element should run a web server")
+                    .default_value(DEFAULT_RUN_WEB_SERVER)
+                    .mutable_ready()
+                    .build(),
+                /**
+                 * GstBaseWebRTCSink:web-server-cert:
+                 *
+                 * The certificate to use when #GstBaseWebRTCSink:run-web-server
+                 * is TRUE.
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
+                #[cfg(feature = "web_server")]
+                glib::ParamSpecString::builder("web-server-cert")
+                    .nick("Web server certificate")
+                    .blurb(
+                        "Path to TLS certificate the web server should use.
+                        The certificate should be formatted as PEM",
+                    )
+                    .default_value(DEFAULT_WEB_SERVER_CERT)
+                    .build(),
+                /**
+                 * GstBaseWebRTCSink:web-server-key:
+                 *
+                 * The private key to use when #GstBaseWebRTCSink:run-web-server
+                 * is TRUE.
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
+                #[cfg(feature = "web_server")]
+                glib::ParamSpecString::builder("web-server-key")
+                    .nick("Web server private key")
+                    .blurb("Path to private encryption key the web server should use.
+                        The key should be formatted as PEM")
+                    .default_value(DEFAULT_WEB_SERVER_KEY)
+                    .build(),
+                /**
+                 * GstBaseWebRTCSink:web-server-key:
+                 *
+                 * The root path for the web server when #GstBaseWebRTCSink:run-web-server
+                 * is TRUE.
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
+                #[cfg(feature = "web_server")]
+                glib::ParamSpecString::builder("web-server-path")
+                    .nick("Web server path")
+                    .blurb("The root path for the web server")
+                    .default_value(DEFAULT_WEB_SERVER_PATH)
+                    .build(),
+                /**
+                 * GstBaseWebRTCSink:web-server-directory:
+                 *
+                 * The directory to serve when #GstBaseWebRTCSink:run-web-server
+                 * is TRUE.
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
+                #[cfg(feature = "web_server")]
+                glib::ParamSpecString::builder("web-server-directory")
+                    .nick("Web server directory")
+                    .blurb("The directory the web server should serve")
+                    .default_value(DEFAULT_WEB_SERVER_DIRECTORY)
+                    .build(),
+                /**
+                 * GstBaseWebRTCSink:web-server-host-addr:
+                 *
+                 * The address to listen on when #GstBaseWebRTCSink:run-web-server
+                 * is TRUE.
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
+                #[cfg(feature = "web_server")]
+                glib::ParamSpecString::builder("web-server-host-addr")
+                    .nick("Web server host address")
+                    .blurb("Address the web server should listen on")
+                    .default_value(DEFAULT_WEB_SERVER_HOST_ADDR)
+                    .build(),
             ]
         });
 
@@ -4154,6 +4357,54 @@ impl ObjectImpl for BaseWebRTCSink {
                     .get::<WebRTCICETransportPolicy>()
                     .expect("type checked upstream");
             }
+            #[cfg(feature = "web_server")]
+            "run-web-server" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.run_web_server = value.get::<bool>().expect("type checked upstream");
+            }
+            #[cfg(feature = "web_server")]
+            "web-server-cert" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.web_server_cert = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream")
+            }
+            #[cfg(feature = "web_server")]
+            "web-server-key" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.web_server_key = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream")
+            }
+            #[cfg(feature = "web_server")]
+            "web-server-path" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.web_server_path = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream")
+            }
+            #[cfg(feature = "web_server")]
+            "web-server-directory" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.web_server_directory =
+                    value.get::<String>().expect("type checked upstream")
+            }
+            #[cfg(feature = "web_server")]
+            "web-server-host-addr" => {
+                let mut settings = self.settings.lock().unwrap();
+
+                let host_addr = match url::Url::parse(
+                    &value.get::<String>().expect("type checked upstream"),
+                ) {
+                    Err(e) => {
+                        gst::error!(CAT, "Couldn't set the host address as {e:?}, fallback to the default value {DEFAULT_WEB_SERVER_HOST_ADDR:?}");
+                        return;
+                    }
+
+                    Ok(addr) => addr,
+                };
+                settings.web_server_host_addr = host_addr;
+            }
             _ => unimplemented!(),
         }
     }
@@ -4218,6 +4469,36 @@ impl ObjectImpl for BaseWebRTCSink {
                 settings.ice_transport_policy.to_value()
             }
             "signaller" => self.settings.lock().unwrap().signaller.to_value(),
+            #[cfg(feature = "web_server")]
+            "run-web-server" => {
+                let settings = self.settings.lock().unwrap();
+                settings.run_web_server.to_value()
+            }
+            #[cfg(feature = "web_server")]
+            "web-server-cert" => {
+                let settings = self.settings.lock().unwrap();
+                settings.web_server_cert.to_value()
+            }
+            #[cfg(feature = "web_server")]
+            "web-server-key" => {
+                let settings = self.settings.lock().unwrap();
+                settings.web_server_key.to_value()
+            }
+            #[cfg(feature = "web_server")]
+            "web-server-path" => {
+                let settings = self.settings.lock().unwrap();
+                settings.web_server_path.to_value()
+            }
+            #[cfg(feature = "web_server")]
+            "web-server-directory" => {
+                let settings = self.settings.lock().unwrap();
+                settings.web_server_directory.to_value()
+            }
+            #[cfg(feature = "web_server")]
+            "web-server-host-addr" => {
+                let settings = self.settings.lock().unwrap();
+                settings.web_server_host_addr.to_string().to_value()
+            }
             _ => unimplemented!(),
         }
     }
@@ -4680,7 +4961,6 @@ pub struct WebRTCSink {
     settings: Mutex<WebRTCSinkSettings>,
 }
 
-
 fn initialize_logging(envvar_name: &str) -> Result<(), Error> {
     tracing_log::LogTracer::init()?;
     let env_filter = tracing_subscriber::EnvFilter::try_from_env(envvar_name)
@@ -4702,6 +4982,9 @@ fn initialize_logging(envvar_name: &str) -> Result<(), Error> {
 
 pub static SIGNALLING_LOGGING: Lazy<Result<(), Error>> =
     Lazy::new(|| initialize_logging("WEBRTCSINK_SIGNALLING_SERVER_LOG"));
+
+#[cfg(feature = "web_server")]
+use warp::Filter;
 
 impl WebRTCSink {
     async fn spawn_signalling_server(settings: &WebRTCSinkSettings) -> Result<(), Error> {
@@ -4791,8 +5074,12 @@ impl WebRTCSink {
                 self,
                 async move {
                     if let Err(err) = WebRTCSink::spawn_signalling_server(&settings).await {
-                        gst::error!(CAT, imp = this,
-                            "Failed to start signalling server: {}", err);
+                        gst::error!(
+                            CAT,
+                            imp = this,
+                            "Failed to start signalling server: {}",
+                            err
+                        );
                         this.post_error_message(gst::error_msg!(
                             gst::StreamError::Failed,
                             ["Failed to start signalling server: {}", err]
@@ -4820,17 +5107,40 @@ impl ObjectImpl for WebRTCSink {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
+                /**
+                 * GstWebRTCSink:run-signalling-server:
+                 *
+                 * Whether the element should run its own signalling server.
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
                 glib::ParamSpecBoolean::builder("run-signalling-server")
                     .nick("Run signalling server")
                     .blurb("Whether the element should run its own signalling server")
                     .default_value(DEFAULT_RUN_SIGNALLING_SERVER)
                     .mutable_ready()
                     .build(),
+                /**
+                 * GstWebRTCSink:signalling-server-host:
+                 *
+                 * The address to listen on when #GstWebRTCSink:run-signalling-server
+                 * is TRUE.
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
                 glib::ParamSpecString::builder("signalling-server-host")
                     .nick("Signalling server host")
                     .blurb("Address the signalling server should listen on")
                     .default_value(DEFAULT_SIGNALLING_SERVER_HOST)
                     .build(),
+                /**
+                 * GstWebRTCSink:signalling-server-port:
+                 *
+                 * The port to listen on when #GstWebRTCSink:run-signalling-server
+                 * is TRUE.
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
                 glib::ParamSpecUInt::builder("signalling-server-port")
                     .nick("Signalling server port")
                     .blurb("Port the signalling server should listen on")
@@ -4838,6 +5148,16 @@ impl ObjectImpl for WebRTCSink {
                     .maximum(u16::MAX as u32)
                     .default_value(DEFAULT_SIGNALLING_SERVER_PORT as u32)
                     .build(),
+                /**
+                 * GstWebRTCSink:signalling-server-cert:
+                 *
+                 * Path to TLS certificate to use when #GstWebRTCSink:run-signalling-server
+                 * is TRUE.
+                 *
+                 * The certificate should be formatted as PKCS 12.
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
                 glib::ParamSpecString::builder("signalling-server-cert")
                     .nick("Signalling server certificate")
                     .blurb(
@@ -4846,6 +5166,14 @@ impl ObjectImpl for WebRTCSink {
                     )
                     .default_value(DEFAULT_SIGNALLING_SERVER_CERT)
                     .build(),
+                /**
+                 * GstWebRTCSink:signalling-server-cert-password:
+                 *
+                 * The password for the certificate provided through
+                 * #GstWebRTCSink:signalling-server-cert.
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
                 glib::ParamSpecString::builder("signalling-server-cert-password")
                     .nick("Signalling server certificate password")
                     .blurb("The password for the certificate the signalling server will use")

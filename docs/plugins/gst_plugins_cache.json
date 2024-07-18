@@ -10067,6 +10067,70 @@
                         "type": "GstWebRTCSinkPad"
                     }
                 },
+                "properties": {
+                    "run-signalling-server": {
+                        "blurb": "Whether the element should run its own signalling server",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "signalling-server-cert": {
+                        "blurb": "Path to TLS certificate the signalling server should use.\n                        The certificate should be formatted as PKCS 12",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "signalling-server-cert-password": {
+                        "blurb": "The password for the certificate the signalling server will use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "signalling-server-host": {
+                        "blurb": "Address the signalling server should listen on",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0.0.0.0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "signalling-server-port": {
+                        "blurb": "Port the signalling server should listen on",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "8443",
+                        "max": "65535",
+                        "min": "1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                },
                 "rank": "none"
             },
             "webrtcsrc": {
@@ -10334,6 +10398,18 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "run-web-server": {
+                        "blurb": "Whether the element should run a web server",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "signaller": {
                         "blurb": "The Signallable object to use to handle WebRTC Signalling",
                         "conditionally-available": false,
@@ -10404,6 +10480,66 @@
                         "mutable": "ready",
                         "readable": true,
                         "type": "GstCaps",
+                        "writable": true
+                    },
+                    "web-server-cert": {
+                        "blurb": "Path to TLS certificate the web server should use.\n                        The certificate should be formatted as PEM",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "web-server-directory": {
+                        "blurb": "The directory the web server should serve",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "gstwebrtc-api/dist",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "web-server-host-addr": {
+                        "blurb": "Address the web server should listen on",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "http://127.0.0.1:8080/",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "web-server-key": {
+                        "blurb": "Path to private encryption key the web server should use.\n                        The key should be formatted as PEM",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "web-server-path": {
+                        "blurb": "The root path for the web server",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
                         "writable": true
                     }
                 },
