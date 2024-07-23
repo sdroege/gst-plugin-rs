@@ -80,7 +80,26 @@ it might expose more interfaces to guide and tune the heuristics it employs.
 cargo build
 ```
 
-## Usage
+## Usage (embedded services)
+
+`webrtcsink` can optionally instantiate a signalling server and a web server.
+
+This is the simplest set up for testing, but may not always be desirable.
+For instance one may prefer hosting the services on different machines, or would
+prefer that a crash from the host webrtcsink doesn't take down signalling / websites.
+
+Head over to the following section if you want to learn how to run services individually.
+
+In the terminal, from the root of the `net/webrtc` crate:
+
+```
+gst-launch-1.0 videotestsrc ! webrtcsink run-signalling-server=true run-web-server=true
+```
+
+In your browser of choice, navigate to <http://127.0.0.1:8080/>, and click on the stream
+identifier under "Remote streams". You should see a test video stream and hear a test tone.
+
+## Usage (standalone services)
 
 Open three terminals. In the first one, run the signalling server:
 
