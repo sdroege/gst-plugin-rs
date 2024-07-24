@@ -5,6 +5,23 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.12.8] - 2024-07-24
+### Fixed
+- audioloudnorm: Fix limiter buffer index wraparound off-by-one for the last buffer
+- aws: s3hlssink: Do not call abort before finishing uploads
+- livesync: Use the actual output buffer duration of gap filler buffers
+- rav1enc: document bitrate property unit
+- webrtcsink: fix property types for `rav1enc` AV1 encoder
+
+### Added
+- gtk4paintablesink: Support RGBx formats in SW paths
+- livesync: Add sync property for allowing to output buffers as soon as they arrive
+
+### Changed
+- gtk4paintablesink: default to `force-aspect-ratio=false` for Paintable
+- livesync: Synchronize on the first buffer too
+- livesync: Allow queueing up to latency buffers
+
 ## [0.12.7] - 2024-06-19
 ### Fixed
 - aws, spotifyaudiosrc, reqwesthttpsrc, webrtchttp: Fix race condition when unlocking
@@ -448,7 +465,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.7...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.8...HEAD
+[0.12.8]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.7...0.12.8
 [0.12.7]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.6...0.12.7
 [0.12.6]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.5...0.12.6
 [0.12.5]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.4...0.12.5
