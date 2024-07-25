@@ -271,15 +271,21 @@ impl TranscriberBin {
             &aqueue_transcription,
             &pad_state.transcriber_resample,
             &pad_state.transcriber_aconv,
-            &pad_state.transcriber,
         ])?;
+
+        if let Some(ref transcriber) = pad_state.transcriber {
+            pad_state.transcription_bin.add(transcriber)?;
+        }
 
         gst::Element::link_many([
             &aqueue_transcription,
             &pad_state.transcriber_resample,
             &pad_state.transcriber_aconv,
-            &pad_state.transcriber,
         ])?;
+
+        if let Some(ref transcriber) = pad_state.transcriber {
+            pad_state.transcriber_aconv.link(transcriber)?;
+        }
 
         let transcription_audio_sinkpad =
             gst::GhostPad::builder_with_target(&aqueue_transcription.static_pad("sink").unwrap())
@@ -301,7 +307,9 @@ impl TranscriberBin {
         for channel in pad_state.transcription_channels.values() {
             pad_state.transcription_bin.add(&channel.bin)?;
 
-            channel.link_transcriber(&pad_state.transcriber)?;
+            if let Some(ref transcriber) = pad_state.transcriber {
+                channel.link_transcriber(transcriber)?;
+            }
 
             let srcpad =
                 gst::GhostPad::builder_with_target(&channel.bin.static_pad("src").unwrap())
@@ -496,15 +504,14 @@ impl TranscriberBin {
         for pad in state.audio_sink_pads.values() {
             let ps = pad.imp().state.lock().unwrap();
             let pad_state = ps.as_ref().unwrap();
-            let latency_ms = settings.latency.mseconds() as u32;
-            pad_state
-                .transcriber
-                .set_property("transcribe-latency", latency_ms);
 
-            let translate_latency_ms = settings.translate_latency.mseconds() as u32;
-            pad_state
-                .transcriber
-                .set_property("translate-latency", translate_latency_ms);
+            if let Some(ref transcriber) = pad_state.transcriber {
+                let latency_ms = settings.latency.mseconds() as u32;
+                transcriber.set_property("transcribe-latency", latency_ms);
+
+                let translate_latency_ms = settings.translate_latency.mseconds() as u32;
+                transcriber.set_property("translate-latency", translate_latency_ms);
+            }
             pad_state
                 .queue_passthrough
                 .set_property("max-size-bytes", 0u32);
@@ -687,7 +694,7 @@ impl TranscriberBin {
         &self,
         state: &mut State,
         pad_state: &TranscriberSinkPadState,
-        old_transcriber: &gst::Element,
+        old_transcriber: Option<&gst::Element>,
     ) -> Result<(), Error> {
         gst::debug!(
             CAT,
@@ -697,20 +704,23 @@ impl TranscriberBin {
             pad_state.transcriber
         );
 
-        pad_state.transcriber_aconv.unlink(old_transcriber);
-
-        for channel in pad_state.transcription_channels.values() {
-            old_transcriber.unlink(&channel.bin);
+        if let Some(old_transcriber) = old_transcriber {
+            pad_state.transcriber_aconv.unlink(old_transcriber);
+            for channel in pad_state.transcription_channels.values() {
+                old_transcriber.unlink(&channel.bin);
+            }
+            let _ = state.transcription_bin.remove(old_transcriber);
+            old_transcriber.set_state(gst::State::Null).unwrap();
         }
-        state.transcription_bin.remove(old_transcriber).unwrap();
-        old_transcriber.set_state(gst::State::Null).unwrap();
 
-        state.transcription_bin.add(&pad_state.transcriber)?;
-        pad_state.transcriber.sync_state_with_parent().unwrap();
-        pad_state.transcriber_aconv.link(&pad_state.transcriber)?;
+        if let Some(ref transcriber) = pad_state.transcriber {
+            state.transcription_bin.add(transcriber)?;
+            transcriber.sync_state_with_parent().unwrap();
+            pad_state.transcriber_aconv.link(transcriber)?;
 
-        for channel in pad_state.transcription_channels.values() {
-            channel.link_transcriber(&pad_state.transcriber)?;
+            for channel in pad_state.transcription_channels.values() {
+                channel.link_transcriber(transcriber)?;
+            }
         }
 
         Ok(())
@@ -765,8 +775,7 @@ impl TranscriberBin {
 
                 transcription_channels.insert(
                     language_code.to_owned(),
-                    self.construct_channel_bin(&language_code, mux_method, caption_streams)
-                        .unwrap(),
+                    self.construct_channel_bin(&language_code, mux_method, caption_streams)?,
                 );
             }
         } else {
@@ -776,8 +785,7 @@ impl TranscriberBin {
             };
             transcription_channels.insert(
                 "transcript".to_string(),
-                self.construct_channel_bin("transcript", mux_method, caption_streams)
-                    .unwrap(),
+                self.construct_channel_bin("transcript", mux_method, caption_streams)?,
             );
         }
         Ok(())
@@ -820,9 +828,9 @@ impl TranscriberBin {
                 .set_state(gst::State::Null)
                 .unwrap();
 
-            pad_state
-                .transcriber
-                .set_property("language-code", &pad_settings.language_code);
+            if let Some(ref transcriber) = pad_state.transcriber {
+                transcriber.set_property("language-code", &pad_settings.language_code);
+            }
 
             if lang_code_only {
                 if !settings.passthrough {
@@ -852,7 +860,9 @@ impl TranscriberBin {
                 if let Some(peer) = sinkpad.peer() {
                     peer.unlink(&sinkpad)?;
                     if channel.language != "transcript" {
-                        pad_state.transcriber.release_request_pad(&peer);
+                        if let Some(ref transcriber) = pad_state.transcriber {
+                            transcriber.release_request_pad(&peer);
+                        }
                     }
                 }
 
@@ -883,7 +893,9 @@ impl TranscriberBin {
             for channel in pad_state.transcription_channels.values() {
                 pad_state.transcription_bin.add(&channel.bin)?;
 
-                channel.link_transcriber(&pad_state.transcriber)?;
+                if let Some(ref transcriber) = pad_state.transcriber {
+                    channel.link_transcriber(transcriber)?;
+                }
 
                 let srcpad = pad_state
                     .transcription_bin
@@ -1085,7 +1097,9 @@ impl TranscriberBin {
         let mut audio_sink_pads = HashMap::new();
         audio_sink_pads.insert(self.audio_sinkpad.name().to_string(), pad.clone());
         let mut ps = pad.imp().state.lock().unwrap();
-        let pad_state = ps.as_mut().unwrap();
+        let pad_state = ps
+            .as_mut()
+            .map_err(|err| anyhow!("Sink pad state creation failed: {err}"))?;
         let pad_settings = pad.imp().settings.lock().unwrap();
         self.construct_transcription_channels(
             &pad_settings,
@@ -1766,7 +1780,7 @@ impl BinImpl for TranscriberBin {
                     .unwrap();
                 let ps = pad.imp().state.lock().unwrap();
                 let pad_state = ps.as_ref().unwrap();
-                if msg.src() == Some(pad_state.transcriber.upcast_ref()) {
+                if msg.src() == pad_state.transcriber.as_ref().map(|t| t.upcast_ref()) {
                     gst::error!(
                         CAT,
                         imp = self,
@@ -1813,7 +1827,7 @@ struct TranscriberSinkPadState {
     transcription_bin: gst::Bin,
     transcriber_aconv: gst::Element,
     transcriber_resample: gst::Element,
-    transcriber: gst::Element,
+    transcriber: Option<gst::Element>,
     queue_passthrough: gst::Element,
     transcription_channels: HashMap<String, TranscriptionChannel>,
     srcpad_name: Option<String>,
@@ -1839,7 +1853,8 @@ impl TranscriberSinkPadState {
             transcriber_aconv: gst::ElementFactory::make("audioconvert").build()?,
             transcriber: gst::ElementFactory::make("awstranscriber")
                 .name("transcriber")
-                .build()?,
+                .build()
+                .ok(),
             queue_passthrough: gst::ElementFactory::make("queue").build()?,
             transcription_channels: HashMap::new(),
             srcpad_name: None,
@@ -1965,19 +1980,23 @@ impl ObjectImpl for TranscriberSinkPad {
             }
             "transcriber" => {
                 let mut ps = self.state.lock().unwrap();
-                let pad_state = ps.as_mut().unwrap();
+                let Ok(pad_state) = ps.as_mut() else {
+                    return;
+                };
                 let old_transcriber = pad_state.transcriber.clone();
-                let new_transcriber: gst::Element = value.get().expect("type checked upstream");
-                pad_state.transcriber = new_transcriber.clone();
+                let new_transcriber: Option<gst::Element> =
+                    value.get().expect("type checked upstream");
+                pad_state.transcriber.clone_from(&new_transcriber);
 
                 if let Some(this) = self.obj().parent().and_downcast::<super::TranscriberBin>() {
                     let mut s = this.imp().state.lock().unwrap();
                     if old_transcriber != new_transcriber {
                         if let Some(ref mut state) = s.as_mut() {
-                            match this
-                                .imp()
-                                .relink_transcriber(state, pad_state, &old_transcriber)
-                            {
+                            match this.imp().relink_transcriber(
+                                state,
+                                pad_state,
+                                old_transcriber.as_ref(),
+                            ) {
                                 Ok(()) => (),
                                 Err(err) => {
                                     gst::error!(CAT, "invalid transcriber: {err}");
@@ -2009,8 +2028,10 @@ impl ObjectImpl for TranscriberSinkPad {
             }
             "transcriber" => {
                 let ps = self.state.lock().unwrap();
-                let pad_state = ps.as_ref().unwrap();
-                pad_state.transcriber.to_value()
+                match ps.as_ref() {
+                    Ok(ps) => ps.transcriber.to_value(),
+                    Err(_) => None::<gst::Element>.to_value(),
+                }
             }
             _ => unimplemented!(),
         }
