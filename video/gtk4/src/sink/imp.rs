@@ -26,10 +26,13 @@ use gst_gl::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_base::subclass::prelude::*;
-use gst_video::subclass::prelude::*;
+use gst_video::{prelude::*, subclass::prelude::*};
 
 use once_cell::sync::Lazy;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex, MutexGuard,
+};
 
 use crate::utils;
 
@@ -84,6 +87,14 @@ pub struct PaintableSink {
     sender: Mutex<Option<async_channel::Sender<SinkEvent>>>,
     pending_frame: Mutex<Option<Frame>>,
     cached_caps: Mutex<Option<gst::Caps>>,
+    settings: Mutex<Settings>,
+    window_resized: AtomicBool,
+}
+
+#[derive(Default)]
+struct Settings {
+    window_width: u32,
+    window_height: u32,
 }
 
 impl Drop for PaintableSink {
@@ -111,6 +122,16 @@ impl ObjectImpl for PaintableSink {
                     .nick("Paintable")
                     .blurb("The Paintable the sink renders to")
                     .read_only()
+                    .build(),
+                glib::ParamSpecUInt::builder("window-width")
+                    .nick("Window width")
+                    .blurb("the width of the main widget rendering the paintable")
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecUInt::builder("window-height")
+                    .nick("Window height")
+                    .blurb("the height of the main widget rendering the paintable")
+                    .mutable_playing()
                     .build(),
             ]
         });
@@ -170,6 +191,36 @@ impl ObjectImpl for PaintableSink {
                 }
 
                 paintable.to_value()
+            }
+            "window-width" => {
+                let settings = self.settings.lock().unwrap();
+                settings.window_width.to_value()
+            }
+            "window-height" => {
+                let settings = self.settings.lock().unwrap();
+                settings.window_height.to_value()
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        match pspec.name() {
+            "window-width" => {
+                let mut settings = self.settings.lock().unwrap();
+                let value = value.get().expect("type checked upstream");
+                if settings.window_width != value {
+                    self.window_resized.store(true, Ordering::SeqCst);
+                }
+                settings.window_width = value;
+            }
+            "window-height" => {
+                let mut settings = self.settings.lock().unwrap();
+                let value = value.get().expect("type checked upstream");
+                if settings.window_height != value {
+                    self.window_resized.store(true, Ordering::SeqCst);
+                }
+                settings.window_height = value;
             }
             _ => unimplemented!(),
         }
@@ -495,8 +546,32 @@ impl BaseSinkImpl for PaintableSink {
         self.parent_propose_allocation(query)?;
 
         query.add_allocation_meta::<gst_video::VideoMeta>(None);
-        // TODO: Provide a preferred "window size" here for higher-resolution rendering
-        query.add_allocation_meta::<gst_video::VideoOverlayCompositionMeta>(None);
+
+        let s = {
+            let settings = self.settings.lock().unwrap();
+            if (settings.window_width, settings.window_height) != (0, 0) {
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "answering alloc query with size {}x{}",
+                    settings.window_width,
+                    settings.window_height
+                );
+
+                self.window_resized.store(false, Ordering::SeqCst);
+
+                Some(
+                    gst::Structure::builder("GstVideoOverlayCompositionMeta")
+                        .field("width", settings.window_width)
+                        .field("height", settings.window_height)
+                        .build(),
+                )
+            } else {
+                None
+            }
+        };
+
+        query.add_allocation_meta::<gst_video::VideoOverlayCompositionMeta>(s.as_deref());
 
         #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
         {
@@ -582,6 +657,13 @@ impl BaseSinkImpl for PaintableSink {
 impl VideoSinkImpl for PaintableSink {
     fn show_frame(&self, buffer: &gst::Buffer) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::trace!(CAT, imp = self, "Rendering buffer {:?}", buffer);
+
+        if self.window_resized.swap(false, Ordering::SeqCst) {
+            gst::debug!(CAT, imp = self, "Window size changed, needs to reconfigure");
+            let obj = self.obj();
+            let sink = obj.sink_pad();
+            sink.push_event(gst::event::Reconfigure::builder().build());
+        }
 
         // Empty buffer, nothing to render
         if buffer.n_memory() == 0 {
