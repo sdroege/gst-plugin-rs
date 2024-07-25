@@ -2567,6 +2567,34 @@
                         "readable": true,
                         "type": "GstGtk4Paintable",
                         "writable": false
+                    },
+                    "window-height": {
+                        "blurb": "the height of the main widget rendering the paintable",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "window-width": {
+                        "blurb": "the width of the main widget rendering the paintable",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
                     }
                 },
                 "rank": "none"
