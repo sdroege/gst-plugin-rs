@@ -74,7 +74,7 @@ struct State {
     audio_tee: gst::Element,
     transcriber_resample: gst::Element,
     transcriber_aconv: gst::Element,
-    transcriber: gst::Element,
+    transcriber: Option<gst::Element>,
     ccmux: gst::Element,
     ccmux_filter: gst::Element,
     cccombiner: gst::Element,
@@ -179,7 +179,6 @@ impl TranscriberBin {
             &aqueue_transcription,
             &state.transcriber_resample,
             &state.transcriber_aconv,
-            &state.transcriber,
             &state.ccmux,
             &state.ccmux_filter,
             &ccconverter,
@@ -187,12 +186,19 @@ impl TranscriberBin {
             &state.transcription_valve,
         ])?;
 
+        if let Some(ref transcriber) = state.transcriber {
+            state.transcription_bin.add(transcriber)?;
+        }
+
         gst::Element::link_many([
             &aqueue_transcription,
             &state.transcriber_resample,
             &state.transcriber_aconv,
-            &state.transcriber,
         ])?;
+
+        if let Some(ref transcriber) = state.transcriber {
+            state.transcriber_aconv.link(transcriber)?;
+        }
 
         gst::Element::link_many([
             &state.ccmux,
@@ -205,7 +211,9 @@ impl TranscriberBin {
         for (padname, channel) in &state.transcription_channels {
             state.transcription_bin.add(&channel.bin)?;
 
-            channel.link_transcriber(&state.transcriber)?;
+            if let Some(ref transcriber) = state.transcriber {
+                channel.link_transcriber(transcriber)?;
+            }
 
             let ccmux_pad = state
                 .ccmux
@@ -355,13 +363,13 @@ impl TranscriberBin {
             queue.set_property("max-size-time", max_size_time);
         }
 
-        let latency_ms = settings.latency.mseconds() as u32;
-        state.transcriber.set_property("latency", latency_ms);
+        if let Some(ref transcriber) = state.transcriber {
+            let latency_ms = settings.latency.mseconds() as u32;
+            transcriber.set_property("latency", latency_ms);
 
-        let translate_latency_ms = settings.translate_latency.mseconds() as u32;
-        state
-            .transcriber
-            .set_property("translate-latency", translate_latency_ms);
+            let translate_latency_ms = settings.translate_latency.mseconds() as u32;
+            transcriber.set_property("translate-latency", translate_latency_ms);
+        }
 
         if !settings.passthrough {
             state
@@ -482,7 +490,7 @@ impl TranscriberBin {
     fn relink_transcriber(
         &self,
         state: &mut State,
-        old_transcriber: &gst::Element,
+        old_transcriber: Option<&gst::Element>,
     ) -> Result<(), Error> {
         gst::debug!(
             CAT,
@@ -492,20 +500,24 @@ impl TranscriberBin {
             state.transcriber
         );
 
-        state.transcriber_aconv.unlink(old_transcriber);
+        if let Some(old_transcriber) = old_transcriber {
+            state.transcriber_aconv.unlink(old_transcriber);
 
-        for channel in state.transcription_channels.values() {
-            old_transcriber.unlink(&channel.bin);
+            for channel in state.transcription_channels.values() {
+                old_transcriber.unlink(&channel.bin);
+            }
+            state.transcription_bin.remove(old_transcriber).unwrap();
+            old_transcriber.set_state(gst::State::Null).unwrap();
         }
-        state.transcription_bin.remove(old_transcriber).unwrap();
-        old_transcriber.set_state(gst::State::Null).unwrap();
 
-        state.transcription_bin.add(&state.transcriber)?;
-        state.transcriber.sync_state_with_parent().unwrap();
-        state.transcriber_aconv.link(&state.transcriber)?;
+        if let Some(ref transcriber) = state.transcriber {
+            state.transcription_bin.add(transcriber)?;
+            transcriber.sync_state_with_parent().unwrap();
+            state.transcriber_aconv.link(transcriber)?;
 
-        for channel in state.transcription_channels.values() {
-            channel.link_transcriber(&state.transcriber)?;
+            for channel in state.transcription_channels.values() {
+                channel.link_transcriber(transcriber)?;
+            }
         }
 
         Ok(())
@@ -535,9 +547,9 @@ impl TranscriberBin {
             state.transcription_bin.set_locked_state(true);
             state.transcription_bin.set_state(gst::State::Null).unwrap();
 
-            state
-                .transcriber
-                .set_property("language-code", &settings.language_code);
+            if let Some(ref transcriber) = state.transcriber {
+                transcriber.set_property("language-code", &settings.language_code);
+            }
 
             if lang_code_only {
                 if !settings.passthrough {
@@ -560,7 +572,9 @@ impl TranscriberBin {
                 if let Some(peer) = sinkpad.peer() {
                     peer.unlink(&sinkpad)?;
                     if channel.language != "transcript" {
-                        state.transcriber.release_request_pad(&peer);
+                        if let Some(ref transcriber) = state.transcriber {
+                            transcriber.release_request_pad(&peer);
+                        }
                     }
                 }
 
@@ -585,20 +599,21 @@ impl TranscriberBin {
 
                     state.transcription_channels.insert(
                         channel.to_owned(),
-                        self.construct_channel_bin(&language_code).unwrap(),
+                        self.construct_channel_bin(&language_code)?,
                     );
                 }
             } else {
-                state.transcription_channels.insert(
-                    "cc1".to_string(),
-                    self.construct_channel_bin("transcript").unwrap(),
-                );
+                state
+                    .transcription_channels
+                    .insert("cc1".to_string(), self.construct_channel_bin("transcript")?);
             }
 
             for (padname, channel) in &state.transcription_channels {
                 state.transcription_bin.add(&channel.bin)?;
 
-                channel.link_transcriber(&state.transcriber)?;
+                if let Some(ref transcriber) = state.transcriber {
+                    channel.link_transcriber(transcriber)?;
+                }
 
                 let ccmux_pad = state
                     .ccmux
@@ -738,7 +753,8 @@ impl TranscriberBin {
                 "language-code",
                 &self.settings.lock().unwrap().language_code,
             )
-            .build()?;
+            .build()
+            .ok();
         let audio_queue_passthrough = gst::ElementFactory::make("queue").build()?;
         let video_queue = gst::ElementFactory::make("queue").build()?;
         let cccapsfilter = gst::ElementFactory::make("capsfilter").build()?;
@@ -762,14 +778,12 @@ impl TranscriberBin {
 
                 transcription_channels.insert(
                     channel.to_owned(),
-                    self.construct_channel_bin(&language_code).unwrap(),
+                    self.construct_channel_bin(&language_code)?,
                 );
             }
         } else {
-            transcription_channels.insert(
-                "cc1".to_string(),
-                self.construct_channel_bin("transcript").unwrap(),
-            );
+            transcription_channels
+                .insert("cc1".to_string(), self.construct_channel_bin("transcript")?);
         }
 
         Ok(State {
@@ -998,7 +1012,7 @@ impl ObjectImpl for TranscriberBin {
                     let old_transcriber = state.transcriber.clone();
                     state.transcriber = value.get().expect("type checked upstream");
                     if old_transcriber != state.transcriber {
-                        match self.relink_transcriber(state, &old_transcriber) {
+                        match self.relink_transcriber(state, old_transcriber.as_ref()) {
                             Ok(()) => (),
                             Err(err) => {
                                 gst::error!(CAT, "invalid transcriber: {}", err);
@@ -1254,7 +1268,7 @@ impl BinImpl for TranscriberBin {
                 let s = self.state.lock().unwrap();
 
                 if let Some(state) = s.as_ref() {
-                    if msg.src() == Some(state.transcriber.upcast_ref()) {
+                    if msg.src() == state.transcriber.as_ref().map(|t| t.upcast_ref()) {
                         gst::error!(
                             CAT,
                             imp: self,
