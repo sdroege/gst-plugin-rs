@@ -11,7 +11,6 @@
 
 use gst_video::prelude::*;
 
-#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
 use gst_gl::prelude::*;
 use gtk::{gdk, glib};
 use std::{
@@ -64,7 +63,6 @@ impl VideoInfo {
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum TextureCacheId {
     Memory(usize),
-    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
     GL(usize),
     #[cfg(all(target_os = "linux", feature = "dmabuf"))]
     DmaBuf([i32; 4]),
@@ -76,7 +74,6 @@ enum MappedFrame {
         frame: gst_video::VideoFrame<gst_video::video_frame::Readable>,
         orientation: Orientation,
     },
-    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
     GL {
         frame: gst_gl::GLVideoFrame<gst_gl::gl_video_frame::Readable>,
         wrapped_context: gst_gl::GLContext,
@@ -100,7 +97,6 @@ impl MappedFrame {
     fn buffer(&self) -> &gst::BufferRef {
         match self {
             MappedFrame::SysMem { frame, .. } => frame.buffer(),
-            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             MappedFrame::GL { frame, .. } => frame.buffer(),
             #[cfg(all(target_os = "linux", feature = "dmabuf"))]
             MappedFrame::DmaBuf { buffer, .. } => buffer,
@@ -110,7 +106,6 @@ impl MappedFrame {
     fn width(&self) -> u32 {
         match self {
             MappedFrame::SysMem { frame, .. } => frame.width(),
-            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             MappedFrame::GL { frame, .. } => frame.width(),
             #[cfg(all(target_os = "linux", feature = "dmabuf"))]
             MappedFrame::DmaBuf { info, .. } => info.width(),
@@ -120,7 +115,6 @@ impl MappedFrame {
     fn height(&self) -> u32 {
         match self {
             MappedFrame::SysMem { frame, .. } => frame.height(),
-            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             MappedFrame::GL { frame, .. } => frame.height(),
             #[cfg(all(target_os = "linux", feature = "dmabuf"))]
             MappedFrame::DmaBuf { info, .. } => info.height(),
@@ -130,7 +124,6 @@ impl MappedFrame {
     fn format_info(&self) -> gst_video::VideoFormatInfo {
         match self {
             MappedFrame::SysMem { frame, .. } => frame.format_info(),
-            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             MappedFrame::GL { frame, .. } => frame.format_info(),
             #[cfg(all(target_os = "linux", feature = "dmabuf"))]
             MappedFrame::DmaBuf { info, .. } => info.format_info(),
@@ -140,7 +133,6 @@ impl MappedFrame {
     fn orientation(&self) -> Orientation {
         match self {
             MappedFrame::SysMem { orientation, .. } => *orientation,
-            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             MappedFrame::GL { orientation, .. } => *orientation,
             #[cfg(all(target_os = "linux", feature = "dmabuf"))]
             MappedFrame::DmaBuf { orientation, .. } => *orientation,
@@ -284,7 +276,6 @@ fn video_frame_to_memory_texture(
     (texture, pixel_aspect_ratio)
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
 fn video_frame_to_gl_texture(
     frame: gst_gl::GLVideoFrame<gst_gl::gl_video_frame::Readable>,
     cached_textures: &mut HashMap<TextureCacheId, gdk::Texture>,
@@ -453,7 +444,6 @@ impl Frame {
             MappedFrame::SysMem { frame, .. } => {
                 video_frame_to_memory_texture(frame, cached_textures, &mut used_textures)
             }
-            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             MappedFrame::GL {
                 frame,
                 wrapped_context,
@@ -538,12 +528,7 @@ impl Frame {
         buffer: &gst::Buffer,
         info: &VideoInfo,
         orientation: Orientation,
-        #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))] wrapped_context: Option<
-            &gst_gl::GLContext,
-        >,
-        #[allow(unused_variables)]
-        #[cfg(not(any(target_os = "macos", target_os = "windows", feature = "gst-gl")))]
-        wrapped_context: Option<&()>,
+        wrapped_context: Option<&gst_gl::GLContext>,
     ) -> Result<Self, gst::FlowError> {
         // Empty buffers get filtered out in show_frame
         debug_assert!(buffer.n_memory() > 0);
@@ -606,7 +591,7 @@ impl Frame {
                     }
                 }
             }
-            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
+
             {
                 if frame.is_none() {
                     // Check we received a buffer with GL memory and if the context of that memory

@@ -17,9 +17,7 @@ use glib::thread_guard::ThreadGuard;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
-#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
 use gst_gl::prelude::GLContextExt as GstGLContextExt;
-#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
 use gst_gl::prelude::*;
 
 #[allow(unused_imports)]
@@ -39,7 +37,6 @@ use crate::utils;
 // Global GL context that is created by the first sink and kept around until the end of the
 // process. This is provided to other elements in the pipeline to make sure they create GL contexts
 // that are sharing with the GTK GL context.
-#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
 enum GLContext {
     Uninitialized,
     Unsupported,
@@ -50,7 +47,6 @@ enum GLContext {
     },
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
 static GL_CONTEXT: Mutex<GLContext> = Mutex::new(GLContext::Uninitialized);
 
 pub(crate) static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -269,12 +265,10 @@ impl ElementImpl for PaintableSink {
                 }
 
                 for features in [
-                    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
                     Some(gst::CapsFeatures::new([
                         gst_gl::CAPS_FEATURE_MEMORY_GL_MEMORY,
                         gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION,
                     ])),
-                    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
                     Some(gst::CapsFeatures::new([
                         gst_gl::CAPS_FEATURE_MEMORY_GL_MEMORY,
                     ])),
@@ -287,7 +281,6 @@ impl ElementImpl for PaintableSink {
                     ])),
                     None,
                 ] {
-                    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
                     {
                         const GL_FORMATS: &[gst_video::VideoFormat] =
                             &[gst_video::VideoFormat::Rgba, gst_video::VideoFormat::Rgb];
@@ -324,29 +317,6 @@ impl ElementImpl for PaintableSink {
                             if features.contains(gst_gl::CAPS_FEATURE_MEMORY_GL_MEMORY) {
                                 c.set("texture-target", "2D")
                             }
-                            c.set_features_simple(Some(features));
-                        }
-                        caps.append(c);
-                    }
-                    #[cfg(not(any(
-                        target_os = "macos",
-                        target_os = "windows",
-                        feature = "gst-gl"
-                    )))]
-                    {
-                        const FORMATS: &[gst_video::VideoFormat] = &[
-                            gst_video::VideoFormat::Bgra,
-                            gst_video::VideoFormat::Argb,
-                            gst_video::VideoFormat::Rgba,
-                            gst_video::VideoFormat::Abgr,
-                            gst_video::VideoFormat::Rgb,
-                            gst_video::VideoFormat::Bgr,
-                        ];
-
-                        let mut c = gst_video::video_make_raw_caps(FORMATS).build();
-
-                        if let Some(features) = features {
-                            let c = c.get_mut().unwrap();
                             c.set_features_simple(Some(features));
                         }
                         caps.append(c);
@@ -415,7 +385,6 @@ impl ElementImpl for PaintableSink {
                 // Notify the pipeline about the GL display and wrapped context so that any other
                 // elements in the pipeline ideally use the same / create GL contexts that are
                 // sharing with this one.
-                #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
                 {
                     let gl_context = GL_CONTEXT.lock().unwrap();
                     if let GLContext::Initialized {
@@ -573,7 +542,6 @@ impl BaseSinkImpl for PaintableSink {
 
         query.add_allocation_meta::<gst_video::VideoOverlayCompositionMeta>(s.as_deref());
 
-        #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
         {
             if let GLContext::Initialized {
                 wrapped_context, ..
@@ -594,7 +562,6 @@ impl BaseSinkImpl for PaintableSink {
         gst::log!(CAT, imp = self, "Handling query {:?}", query);
 
         match query.view_mut() {
-            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             gst::QueryViewMut::Context(q) => {
                 // Avoid holding the locks while we respond to the query
                 // The objects are ref-counted anyway.
@@ -685,11 +652,6 @@ impl VideoSinkImpl for PaintableSink {
             .unwrap_or(config.global_orientation);
 
         let wrapped_context = {
-            #[cfg(not(any(target_os = "macos", target_os = "windows", feature = "gst-gl")))]
-            {
-                None
-            }
-            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
             {
                 let gl_context = GL_CONTEXT.lock().unwrap();
                 if let GLContext::Initialized {
@@ -803,7 +765,6 @@ impl PaintableSink {
             }
         }
 
-        #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
         {
             // Filter out GL caps from the template pads if we have no context
             if !matches!(&*GL_CONTEXT.lock().unwrap(), GLContext::Initialized { .. }) {
@@ -863,7 +824,6 @@ impl PaintableSink {
     }
 
     fn create_paintable(&self, paintable_storage: &mut MutexGuard<Option<ThreadGuard<Paintable>>>) {
-        #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
         {
             self.initialize_gl_context();
         }
@@ -897,21 +857,13 @@ impl PaintableSink {
 
         // Create the paintable from the main thread
         let paintable = utils::invoke_on_main_thread(move || {
-            #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
-            {
-                let gdk_context = if let GLContext::Initialized { gdk_context, .. } =
-                    &*GL_CONTEXT.lock().unwrap()
-                {
+            let gdk_context =
+                if let GLContext::Initialized { gdk_context, .. } = &*GL_CONTEXT.lock().unwrap() {
                     Some(gdk_context.get_ref().clone())
                 } else {
                     None
                 };
-                ThreadGuard::new(Paintable::new(gdk_context))
-            }
-            #[cfg(not(any(target_os = "macos", target_os = "windows", feature = "gst-gl")))]
-            {
-                ThreadGuard::new(Paintable::new(None))
-            }
+            ThreadGuard::new(Paintable::new(gdk_context))
         });
 
         **paintable_storage = Some(paintable);
@@ -919,7 +871,6 @@ impl PaintableSink {
         *self.sender.lock().unwrap() = Some(sender);
     }
 
-    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
     fn initialize_gl_context(&self) {
         gst::debug!(CAT, imp = self, "Realizing GDK GL Context");
 
@@ -929,7 +880,6 @@ impl PaintableSink {
         });
     }
 
-    #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
     fn initialize_gl_context_main(&self) {
         gst::debug!(CAT, imp = self, "Realizing GDK GL Context from main thread");
 
@@ -998,7 +948,7 @@ impl PaintableSink {
 
         gdk_context.make_current();
 
-        let res = match gdk_context.type_().name() {
+        let res: Option<(gst_gl::GLDisplay, gst_gl::GLContext)> = match gdk_context.type_().name() {
             #[cfg(feature = "x11egl")]
             "GdkX11GLContextEGL" => self.initialize_x11egl(gdk_display),
             #[cfg(feature = "x11glx")]
@@ -1012,7 +962,7 @@ impl PaintableSink {
             #[cfg(all(target_os = "windows", feature = "winegl"))]
             "GdkWin32GLContextEGL" => self.initialize_winegl(gdk_display),
             display_type => {
-                unreachable!("Unsupported GDK display {display_type} for GL");
+                unreachable!("Unsupported GDK display {display_type} for GL. This might be due to not having enabled a backend for GL when building the plugin");
             }
         };
         let (display, wrapped_context) = res.unwrap();
