@@ -551,10 +551,10 @@ impl Frame {
         #[allow(unused_mut)]
         let mut frame = None;
 
-        #[cfg(all(target_os = "linux", feature = "dmabuf"))]
         {
             // Check we received a buffer with dmabuf memory and if so do some checks before
             // passing it onwards
+            #[cfg(all(target_os = "linux", feature = "dmabuf"))]
             if frame.is_none()
                 && buffer
                     .peek_memory(0)
