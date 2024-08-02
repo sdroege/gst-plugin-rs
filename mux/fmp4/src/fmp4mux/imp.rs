@@ -3707,6 +3707,11 @@ impl ElementImpl for CMAFMux {
                         .field("channels", gst::IntRange::new(1, u16::MAX as i32))
                         .field("rate", gst::IntRange::new(1, i32::MAX))
                         .build(),
+                    gst::Structure::builder("audio/x-opus")
+                        .field("channel-mapping-family", gst::IntRange::new(0i32, 255))
+                        .field("channels", gst::IntRange::new(1i32, 8))
+                        .field("rate", gst::IntRange::new(1, i32::MAX))
+                        .build(),
                 ]
                 .into_iter()
                 .collect::<gst::Caps>(),

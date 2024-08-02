@@ -161,6 +161,9 @@ fn cmaf_brands_from_caps(caps: &gst::CapsRef, compatible_brands: &mut Vec<&'stat
         "audio/mpeg" => {
             compatible_brands.push(b"caac");
         }
+        "audio/x-opus" => {
+            compatible_brands.push(b"opus");
+        }
         "video/x-av1" => {
             compatible_brands.push(b"av01");
             compatible_brands.push(b"cmf2");
