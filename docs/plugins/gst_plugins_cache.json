@@ -2111,7 +2111,15 @@
                         "presence": "always"
                     }
                 },
-                "rank": "primary"
+                "rank": "primary",
+                "signals": {
+                    "send-headers": {
+                        "action": true,
+                        "args": [],
+                        "return-type": "void",
+                        "when": "last"
+                    }
+                }
             },
             "dashmp4mux": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",

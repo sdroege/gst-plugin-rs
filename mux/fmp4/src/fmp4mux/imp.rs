@@ -2398,6 +2398,7 @@ impl FMP4Mux {
 
             fmp4_header = Some(buffer);
 
+            gst::debug!(CAT, imp = self, "Headers will be sent now");
             state.sent_headers = true;
         }
 
@@ -3631,6 +3632,8 @@ impl FMP4MuxImpl for ISOFMP4Mux {
     const VARIANT: super::Variant = super::Variant::ISO;
 }
 
+static CMAF_SIGNAL_SEND_HEADERS: &str = "send-headers";
+
 #[derive(Default)]
 pub(crate) struct CMAFMux;
 
@@ -3641,7 +3644,31 @@ impl ObjectSubclass for CMAFMux {
     type ParentType = super::FMP4Mux;
 }
 
-impl ObjectImpl for CMAFMux {}
+impl ObjectImpl for CMAFMux {
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+            vec![glib::subclass::Signal::builder(CMAF_SIGNAL_SEND_HEADERS)
+                .action()
+                .class_handler(|_token, args| {
+                    let element = args[0].get::<super::FMP4Mux>().expect("signal arg");
+                    let imp = element.imp();
+                    let mut state = imp.state.lock().unwrap();
+
+                    state.sent_headers = false;
+                    gst::debug!(
+                        CAT,
+                        obj = element,
+                        "Init headers will be re-sent alongside the next chunk"
+                    );
+
+                    None
+                })
+                .build()]
+        });
+
+        SIGNALS.as_ref()
+    }
+}
 
 impl GstObjectImpl for CMAFMux {}
 
