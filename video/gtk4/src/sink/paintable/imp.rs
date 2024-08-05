@@ -220,7 +220,7 @@ impl PaintableImpl for Paintable {
         let paintables = self.paintables.borrow();
 
         let Some(first_paintable) = paintables.first() else {
-            gst::trace!(CAT, imp = self, "Snapshotting black frame");
+            gst::trace!(CAT, imp = self, "Snapshotting black frame {width}x{height}");
             snapshot.append_color(
                 &background_color,
                 &graphene::Rect::new(0f32, 0f32, width as f32, height as f32),
@@ -229,7 +229,7 @@ impl PaintableImpl for Paintable {
             return;
         };
 
-        gst::trace!(CAT, imp = self, "Snapshotting frame");
+        gst::trace!(CAT, imp = self, "Snapshotting frame {width}x{height}");
 
         // The first paintable is the actual video frame and defines the overall size.
         //
