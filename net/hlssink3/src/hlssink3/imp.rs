@@ -561,7 +561,7 @@ impl HlsSink3 {
             }
         };
 
-        let duration = ((closed_at - opened_at).mseconds() as f32) / 1_000f32;
+        let duration = closed_at - opened_at;
         let running_time = state.fragment_running_time;
         drop(state);
 
@@ -571,9 +571,10 @@ impl HlsSink3 {
         let _ = base_imp.add_segment(
             &location,
             running_time,
+            duration,
             MediaSegment {
                 uri,
-                duration,
+                duration: duration.mseconds() as f32 / 1_000f32,
                 ..Default::default()
             },
         );

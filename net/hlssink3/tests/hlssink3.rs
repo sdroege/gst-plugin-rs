@@ -65,6 +65,7 @@ enum HlsSinkEvent {
     GetPlaylistStream(String),
     GetFragmentStream(String),
     DeleteFragment(String),
+    SegmentAddedMessage(String),
 }
 
 /// Represents a HLS playlist file that writes to a shared string.
@@ -166,12 +167,15 @@ fn test_hlssink3_element_with_video_content() -> Result<(), ()> {
         }
     });
 
-    hlssink3.connect("delete-fragment", false, move |args| {
-        let location = args[1].get::<String>().expect("No location given");
-        hls_events_sender
-            .try_send(HlsSinkEvent::DeleteFragment(location))
-            .expect("Send delete fragment event");
-        Some(true.to_value())
+    hlssink3.connect("delete-fragment", false, {
+        let hls_events_sender = hls_events_sender.clone();
+        move |args| {
+            let location = args[1].get::<String>().expect("No location given");
+            hls_events_sender
+                .try_send(HlsSinkEvent::DeleteFragment(location))
+                .expect("Send delete fragment event");
+            Some(true.to_value())
+        }
     });
 
     try_or_pause!(pipeline.add_many([&video_src, &x264enc, &h264parse, &hlssink3,]));
@@ -196,6 +200,16 @@ fn test_hlssink3_element_with_video_content() -> Result<(), ()> {
                 eos = true;
                 break;
             }
+            MessageView::Element(msg) => {
+                if let Some(structure) = msg.structure() {
+                    if structure.has_name("hls-segment-added") {
+                        let location = structure.get::<String>("location").unwrap();
+                        hls_events_sender
+                            .try_send(HlsSinkEvent::SegmentAddedMessage(location))
+                            .expect("Send segment added event");
+                    }
+                }
+            }
             MessageView::Error(..) => unreachable!(),
             _ => (),
         }
@@ -214,17 +228,22 @@ fn test_hlssink3_element_with_video_content() -> Result<(), ()> {
         vec![
             GetFragmentStream("segment00000.ts".to_string()),
             GetPlaylistStream("playlist.m3u8".to_string()),
+            SegmentAddedMessage("segment00000.ts".to_string()),
             GetFragmentStream("segment00001.ts".to_string()),
             GetPlaylistStream("playlist.m3u8".to_string()),
+            SegmentAddedMessage("segment00001.ts".to_string()),
             GetFragmentStream("segment00002.ts".to_string()),
             GetPlaylistStream("playlist.m3u8".to_string()),
             DeleteFragment("segment00000.ts".to_string()),
+            SegmentAddedMessage("segment00002.ts".to_string()),
             GetFragmentStream("segment00003.ts".to_string()),
             GetPlaylistStream("playlist.m3u8".to_string()),
             DeleteFragment("segment00001.ts".into()),
+            SegmentAddedMessage("segment00003.ts".to_string()),
             GetFragmentStream("segment00004.ts".to_string()),
             GetPlaylistStream("playlist.m3u8".to_string()),
             DeleteFragment("segment00002.ts".to_string()),
+            SegmentAddedMessage("segment00004.ts".to_string()),
             GetPlaylistStream("playlist.m3u8".to_string()),
         ]
     };
@@ -372,12 +391,15 @@ fn test_hlssink3_write_correct_playlist_content() -> Result<(), ()> {
         }
     });
 
-    hlssink3.connect("delete-fragment", false, move |args| {
-        let location = args[1].get::<String>().expect("No location given");
-        hls_events_sender
-            .try_send(HlsSinkEvent::DeleteFragment(location))
-            .expect("Send delete fragment event");
-        Some(true.to_value())
+    hlssink3.connect("delete-fragment", false, {
+        let hls_events_sender = hls_events_sender.clone();
+        move |args| {
+            let location = args[1].get::<String>().expect("No location given");
+            hls_events_sender
+                .try_send(HlsSinkEvent::DeleteFragment(location))
+                .expect("Send delete fragment event");
+            Some(true.to_value())
+        }
     });
 
     try_or_pause!(pipeline.add_many([&video_src, &x264enc, &h264parse, &hlssink3,]));
@@ -402,6 +424,16 @@ fn test_hlssink3_write_correct_playlist_content() -> Result<(), ()> {
                 eos = true;
                 break;
             }
+            MessageView::Element(msg) => {
+                if let Some(structure) = msg.structure() {
+                    if structure.has_name("hls-segment-added") {
+                        let location = structure.get::<String>("location").unwrap();
+                        hls_events_sender
+                            .try_send(HlsSinkEvent::SegmentAddedMessage(location))
+                            .expect("Send segment added event");
+                    }
+                }
+            }
             MessageView::Error(..) => unreachable!(),
             _ => (),
         }
@@ -420,6 +452,7 @@ fn test_hlssink3_write_correct_playlist_content() -> Result<(), ()> {
         vec![
             GetFragmentStream("/www/media/segments/my-own-filename-000.ts".to_string()),
             GetPlaylistStream("/www/media/main.m3u8".to_string()),
+            SegmentAddedMessage("/www/media/segments/my-own-filename-000.ts".to_string()),
             GetPlaylistStream("/www/media/main.m3u8".to_string()),
         ]
     };

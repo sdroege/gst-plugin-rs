@@ -407,7 +407,7 @@ impl HlsCmafSink {
 
     fn add_segment(
         &self,
-        duration: f32,
+        duration: gst::ClockTime,
         running_time: Option<gst::ClockTime>,
         location: String,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -424,9 +424,10 @@ impl HlsCmafSink {
         base_imp!(self).add_segment(
             &location,
             running_time,
+            duration,
             MediaSegment {
                 uri,
-                duration,
+                duration: duration.mseconds() as f32 / 1_000f32,
                 map,
                 ..Default::default()
             },
@@ -481,7 +482,7 @@ impl HlsCmafSink {
             .downcast_ref::<gst::ClockTime>()
             .unwrap();
         let running_time = segment.to_running_time(first.pts().unwrap());
-        let dur = first.duration().unwrap();
+        let duration = first.duration().unwrap();
 
         let (mut stream, location) = self.on_new_fragment().map_err(|err| {
             gst::error!(
@@ -506,6 +507,6 @@ impl HlsCmafSink {
             gst::FlowError::Error
         })?;
 
-        self.add_segment(dur.mseconds() as f32 / 1_000f32, running_time, location)
+        self.add_segment(duration, running_time, location)
     }
 }

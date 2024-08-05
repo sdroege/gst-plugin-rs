@@ -371,6 +371,7 @@ impl HlsBaseSink {
         &self,
         location: &str,
         running_time: Option<gst::ClockTime>,
+        duration: gst::ClockTime,
         mut segment: MediaSegment,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
@@ -435,7 +436,16 @@ impl HlsBaseSink {
             context.old_segment_locations.push(location.to_string());
         }
 
-        self.write_playlist(context)
+        self.write_playlist(context).map(|res| {
+            let s = gst::Structure::builder("hls-segment-added")
+                .field("location", location)
+                .field("running-time", running_time.unwrap())
+                .field("duration", duration)
+                .build();
+            self.post_message(gst::message::Element::builder(s).src(&*self.obj()).build());
+
+            res
+        })
     }
 
     fn write_playlist(
