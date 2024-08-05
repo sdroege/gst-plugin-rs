@@ -3515,7 +3515,7 @@ impl BaseWebRTCSink {
                             if let gst::EventView::Caps(caps) = event.view() {
                                 sink.post_message(gst::message::Application::new(
                                     gst::Structure::builder("payloaded_caps")
-                                        .field("caps", &caps.caps().to_owned())
+                                        .field("caps", caps.caps_owned())
                                         .build(),
                                 ))
                                 .expect("Could not send message");

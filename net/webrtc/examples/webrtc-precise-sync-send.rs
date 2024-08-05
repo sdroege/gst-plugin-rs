@@ -262,7 +262,7 @@ impl App {
         }
 
         if let Some(ref video_caps) = self.args.video_caps {
-            webrtcsink.set_property("video-caps", &gst::Caps::builder(video_caps).build());
+            webrtcsink.set_property("video-caps", gst::Caps::builder(video_caps).build());
         }
 
         Ok(())

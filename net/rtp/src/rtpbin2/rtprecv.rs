@@ -1215,7 +1215,7 @@ impl RtpRecv {
                         // TODO what to do with the ssrc?
                         let event = gst_video::UpstreamForceKeyUnitEvent::builder()
                             .all_headers(fir)
-                            .other_field("ssrcs", &gst::Array::new(ssrcs))
+                            .other_field("ssrcs", gst::Array::new(ssrcs))
                             .build();
 
                         let _ = rtp_send_sinkpad.push_event(event);

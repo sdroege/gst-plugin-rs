@@ -503,7 +503,7 @@ fn test_extra_headers() {
         |src| {
             src.set_property(
                 "extra-headers",
-                &gst::Structure::builder("headers")
+                gst::Structure::builder("headers")
                     .field("foo", "bar")
                     .field("baz", 1i32)
                     .field("list", gst::List::new([1i32, 2i32]))
