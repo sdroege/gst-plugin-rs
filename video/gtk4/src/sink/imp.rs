@@ -831,29 +831,11 @@ impl PaintableSink {
                 return;
             }
 
-            let paintable = match &*self_.paintable.lock().unwrap() {
-                Some(paintable) => paintable.get_ref().clone(),
-                None => return,
-            };
-
             let window = gtk::Window::new();
-            let picture = gtk::Picture::new();
-            picture.set_paintable(Some(&paintable));
 
-            #[cfg(feature = "gtk_v4_14")]
-            {
-                let offload = gtk::GraphicsOffload::new(Some(&picture));
-                offload.set_enabled(gtk::GraphicsOffloadEnabled::Enabled);
-                #[cfg(feature = "gtk_v4_16")]
-                {
-                    offload.set_black_background(true);
-                }
-                window.set_child(Some(&offload));
-            }
-            #[cfg(not(feature = "gtk_v4_14"))]
-            {
-                window.set_child(Some(&picture));
-            }
+            let gst_widget = crate::RenderWidget::new(self_.obj().as_ref().upcast_ref());
+            window.set_child(Some(&gst_widget));
+
             window.set_default_size(640, 480);
             if std::env::var("GST_GTK4_WINDOW_FULLSCREEN").as_deref() == Ok("1") {
                 window.set_fullscreened(true);

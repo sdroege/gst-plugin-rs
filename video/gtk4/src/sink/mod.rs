@@ -41,6 +41,7 @@ use gtk::glib::prelude::*;
 pub(super) mod frame;
 pub(super) mod imp;
 pub(super) mod paintable;
+pub(super) mod render_widget;
 
 enum SinkEvent {
     FrameChanged,

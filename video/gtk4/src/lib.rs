@@ -21,6 +21,10 @@ mod sink;
 mod utils;
 pub use sink::frame::Orientation;
 pub use sink::paintable::Paintable;
+// The widget needs to be public so it can be used by the example and element debug window but
+// we don't want it be part of the official API for now.
+#[doc(hidden)]
+pub use sink::render_widget::RenderWidget;
 pub use sink::PaintableSink;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {

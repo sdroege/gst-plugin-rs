@@ -62,23 +62,8 @@ fn create_ui(app: &gtk::Application) {
 
     let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
 
-    let picture = gtk::Picture::new();
-    picture.set_paintable(Some(&paintable));
-
-    #[cfg(feature = "gtk_v4_14")]
-    {
-        let offload = gtk::GraphicsOffload::new(Some(&picture));
-        offload.set_enabled(gtk::GraphicsOffloadEnabled::Enabled);
-        #[cfg(feature = "gtk_v4_16")]
-        {
-            offload.set_black_background(true);
-        }
-        vbox.append(&offload);
-    }
-    #[cfg(not(feature = "gtk_v4_14"))]
-    {
-        vbox.append(&picture);
-    }
+    let gst_widget = gstgtk4::RenderWidget::new(&gtksink);
+    vbox.append(&gst_widget);
 
     let label = gtk::Label::new(Some("Position: 00:00:00"));
     vbox.append(&label);
