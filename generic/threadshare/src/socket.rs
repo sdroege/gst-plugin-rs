@@ -33,7 +33,10 @@ use std::net::UdpSocket;
 use crate::runtime::Async;
 
 #[cfg(unix)]
-use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
+use std::os::{
+    fd::BorrowedFd,
+    unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd},
+};
 
 #[cfg(windows)]
 use std::os::windows::io::{AsRawSocket, FromRawSocket, IntoRawSocket, RawSocket};
@@ -231,8 +234,14 @@ impl GioSocketWrapper {
     }
 
     #[cfg(any(
-        bsd,
-        linux_like,
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "linux",
+        target_os = "android",
         target_os = "aix",
         target_os = "fuchsia",
         target_os = "haiku",
@@ -246,18 +255,30 @@ impl GioSocketWrapper {
 
         let socket = self.as_socket();
 
-        sockopt::set_ip_tos(socket, tos)?;
+        sockopt::set_ip_tos(
+            unsafe { BorrowedFd::borrow_raw(socket.as_raw_fd()) },
+            tos as u8,
+        )?;
 
         if socket.family() == gio::SocketFamily::Ipv6 {
-            sockopt::set_ipv6_tclass(socket, tos)?;
+            sockopt::set_ipv6_tclass(
+                unsafe { BorrowedFd::borrow_raw(socket.as_raw_fd()) },
+                tos as u32,
+            )?;
         }
 
         Ok(())
     }
 
     #[cfg(not(any(
-        bsd,
-        linux_like,
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "linux",
+        target_os = "android",
         target_os = "aix",
         target_os = "fuchsia",
         target_os = "haiku",

@@ -19,7 +19,7 @@ pub struct OriginalBufferSave {
 }
 
 use once_cell::sync::Lazy;
-#[cfg(unused_code)]
+#[allow(dead_code)]
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "originalbuffersave",
