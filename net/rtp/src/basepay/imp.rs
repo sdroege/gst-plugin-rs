@@ -1228,8 +1228,6 @@ impl RtpBasePay2 {
                 state.last_pts = None;
 
                 drop(state);
-
-                *self.stats.lock().unwrap() = None;
             }
             _ => (),
         }
