@@ -78,6 +78,9 @@ version = "0.11"
 name = "zerocopy"
 version = "0.6"
 [[bans.skip]]
+name = "zerocopy-derive"
+version = "0.6"
+[[bans.skip]]
 name = "multimap"
 version = "0.8"
 [[bans.skip]]
@@ -267,6 +270,19 @@ version = "0.21"
 [[bans.skip]]
 name = "system-deps"
 version = "6"
+
+# various crates depend on an older version of windows-sys
+[[bans.skip]]
+name = "windows-sys"
+version = "0.52"
+
+# derived-into-owned (via pcap-file) depends on old syn / quote
+[[bans.skip]]
+name = "syn"
+version = "0.11"
+[[bans.skip]]
+name = "quote"
+version = "0.3"
 
 [sources]
 unknown-registry = "deny"
