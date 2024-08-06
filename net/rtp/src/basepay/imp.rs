@@ -1258,7 +1258,11 @@ impl RtpBasePay2 {
             return;
         }
 
-        let new_ssrc = if let Ok(suggested_ssrc) = s.get::<u32>("suggested-ssrc") {
+        let new_ssrc = if let Some(suggested_ssrc) = s
+            .get::<u32>("suggested-ssrc")
+            .ok()
+            .filter(|suggested_ssrc| *suggested_ssrc != stats.ssrc)
+        {
             suggested_ssrc
         } else {
             use rand::prelude::*;
