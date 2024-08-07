@@ -347,7 +347,6 @@ impl RtpBasePay2Impl for RtpMpeg4GenericPay {
         let codec_data_str = hex::encode(&codec_data);
 
         let caps_builder = gst::Caps::builder("application/x-rtp")
-            .field("seqnum-base", self.obj().property::<u32>("seqnum") + 1)
             .field("mpegversion", 4i32)
             .field("encoding-name", "MPEG4-GENERIC")
             .field("config", codec_data_str);

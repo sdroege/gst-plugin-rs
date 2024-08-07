@@ -19,8 +19,8 @@ fn aac_hbr_not_fragmented() {
 
     let src =
         "audiotestsrc num-buffers=100 ! audio/x-raw,rate=48000,channels=2 ! fdkaacenc ! aacparse";
-    let pay = "rtpmp4gpay2";
-    let depay = "rtpmp4gdepay2";
+    let pay = "rtpmp4gpay2 seqnum-offset=1";
+    let depay = "capsfilter caps=application/x-rtp,seqnum-base=(uint)1 ! rtpmp4gdepay2";
 
     let mut expected_pay = Vec::with_capacity(102);
     for i in 0..102 {
@@ -68,8 +68,8 @@ fn aac_hbr_fragmented() {
 
     let src =
         "audiotestsrc num-buffers=100 ! audio/x-raw,rate=48000,channels=1 ! fdkaacenc ! aacparse";
-    let pay = "rtpmp4gpay2 mtu=288";
-    let depay = "rtpmp4gdepay2";
+    let pay = "rtpmp4gpay2 mtu=288 seqnum-offset=1";
+    let depay = "capsfilter caps=application/x-rtp,seqnum-base=(uint)1 ! rtpmp4gdepay2";
 
     let mut expected_pay = Vec::with_capacity(102);
     for i in 0..102 {
@@ -183,8 +183,8 @@ fn generic_not_fragmented() {
         buffers.push(buffer);
     }
 
-    let pay = format!("rtpmp4gpay2 mtu={MTU}");
-    let depay = "rtpmp4gdepay2";
+    let pay = format!("rtpmp4gpay2 mtu={MTU} seqnum-offset=1");
+    let depay = "capsfilter caps=application/x-rtp,seqnum-base=(uint)1 ! rtpmp4gdepay2";
 
     let mut expected_pay = Vec::with_capacity(BUFFER_NB);
     for i in 0..PACKETS_PER_BUFFER {
@@ -296,8 +296,8 @@ fn generic_fragmented() {
         buffers.push(buffer);
     }
 
-    let pay = format!("rtpmp4gpay2 mtu={MTU}");
-    let depay = "rtpmp4gdepay2";
+    let pay = format!("rtpmp4gpay2 mtu={MTU} seqnum-offset=1");
+    let depay = "capsfilter caps=application/x-rtp,seqnum-base=(uint)1 ! rtpmp4gdepay2";
 
     let mut expected_pay = Vec::with_capacity(BUFFER_NB);
     for i in 0..BUFFER_NB {
@@ -422,8 +422,8 @@ fn generic_variable_au_size() {
         buffers.push(buffer);
     }
 
-    let pay = format!("rtpmp4gpay2 mtu={MTU}");
-    let depay = "rtpmp4gdepay2";
+    let pay = format!("rtpmp4gpay2 mtu={MTU} seqnum-offset=1");
+    let depay = "capsfilter caps=application/x-rtp,seqnum-base=(uint)1 ! rtpmp4gdepay2";
 
     let mut expected_pay = Vec::with_capacity(AU_NB);
     let mut pending_size = 0;
