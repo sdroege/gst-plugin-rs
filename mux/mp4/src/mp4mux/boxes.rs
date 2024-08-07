@@ -12,6 +12,8 @@ use anyhow::{anyhow, bail, Context, Error};
 use std::convert::TryFrom;
 use std::str::FromStr;
 
+use super::{ImageOrientation, IDENTITY_MATRIX};
+
 fn write_box<T, F: FnOnce(&mut Vec<u8>) -> Result<T, Error>>(
     vec: &mut Vec<u8>,
     fourcc: impl std::borrow::Borrow<[u8; 4]>,
@@ -404,21 +406,14 @@ fn write_tkhd(
     v.extend([0u8; 2]);
 
     // Matrix
-    v.extend(
-        [
-            (1u32 << 16).to_be_bytes(),
-            0u32.to_be_bytes(),
-            0u32.to_be_bytes(),
-            0u32.to_be_bytes(),
-            (1u32 << 16).to_be_bytes(),
-            0u32.to_be_bytes(),
-            0u32.to_be_bytes(),
-            0u32.to_be_bytes(),
-            (16384u32 << 16).to_be_bytes(),
-        ]
-        .into_iter()
-        .flatten(),
-    );
+    let matrix = match s.name().as_str() {
+        x if x.starts_with("video/") || x.starts_with("image/") => stream
+            .orientation
+            .unwrap_or(ImageOrientation::Rotate0)
+            .transform_matrix(),
+        _ => &IDENTITY_MATRIX,
+    };
+    v.extend(matrix.iter().flatten());
 
     // Width/height
     match s.name().as_str() {

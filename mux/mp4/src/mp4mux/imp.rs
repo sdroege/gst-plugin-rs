@@ -18,7 +18,7 @@ use std::sync::Mutex;
 use crate::mp4mux::obu::read_seq_header_obu_bytes;
 use once_cell::sync::Lazy;
 
-use super::boxes;
+use super::{boxes, ImageOrientation};
 
 /// Offset between NTP and UNIX epoch in seconds.
 /// NTP = UNIX + NTP_UNIX_OFFSET.
@@ -138,6 +138,9 @@ struct Stream {
     running_time_utc_time_mapping: Option<(gst::Signed<gst::ClockTime>, gst::ClockTime)>,
 
     extra_header_data: Option<Vec<u8>>,
+
+    /// Orientation from tags
+    orientation: Option<ImageOrientation>,
 }
 
 #[derive(Default)]
@@ -1018,6 +1021,7 @@ impl MP4Mux {
                 end_pts: None,
                 running_time_utc_time_mapping: None,
                 extra_header_data: None,
+                orientation: None,
             });
         }
 
@@ -1250,6 +1254,33 @@ impl AggregatorImpl for MP4Mux {
                         }
                         state.language_code = Some(language_code);
                     }
+                } else if let Some(tag_value) = ev.tag().get::<gst::tags::ImageOrientation>() {
+                    let orientation = tag_value.get();
+                    gst::trace!(
+                        CAT,
+                        obj = aggregator_pad,
+                        "Received image orientation from tags: {:?}",
+                        orientation
+                    );
+
+                    let mut state = self.state.lock().unwrap();
+                    for stream in &mut state.streams {
+                        if &stream.sinkpad == aggregator_pad {
+                            stream.orientation = match orientation {
+                                "rotate-0" => Some(ImageOrientation::Rotate0),
+                                "rotate-90" => Some(ImageOrientation::Rotate90),
+                                "rotate-180" => Some(ImageOrientation::Rotate180),
+                                "rotate-270" => Some(ImageOrientation::Rotate270),
+                                // TODO:
+                                // "flip-rotate-0" => Some(ImageOrientation::FlipRotate0),
+                                // "flip-rotate-90" => Some(ImageOrientation::FlipRotate90),
+                                // "flip-rotate-180" => Some(ImageOrientation::FlipRotate180),
+                                // "flip-rotate-270" => Some(ImageOrientation::FlipRotate270),
+                                _ => None,
+                            };
+                            break;
+                        }
+                    }
                 }
 
                 self.parent_sink_event_pre_queue(aggregator_pad, event)
@@ -1455,6 +1486,7 @@ impl AggregatorImpl for MP4Mux {
                     end_pts,
                     chunks: stream.chunks,
                     extra_header_data: stream.extra_header_data.clone(),
+                    orientation: stream.orientation,
                 });
             }
 

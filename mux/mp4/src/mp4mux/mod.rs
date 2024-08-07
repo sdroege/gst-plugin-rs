@@ -52,6 +52,80 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 #[derive(Debug, Copy, Clone)]
+pub(crate) enum ImageOrientation {
+    Rotate0,
+    Rotate90,
+    Rotate180,
+    Rotate270,
+    // TODO:
+    // FlipRotate0,
+    // FlipRotate90,
+    // FlipRotate180,
+    // FlipRotate270,
+}
+
+type TransformMatrix = [[u8; 4]; 9];
+
+const IDENTITY_MATRIX: TransformMatrix = [
+    (1u32 << 16).to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    (1u32 << 16).to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    (1u32 << 30).to_be_bytes(),
+];
+
+const ROTATE_90_MATRIX: TransformMatrix = [
+    0u32.to_be_bytes(),
+    (1u32 << 16).to_be_bytes(),
+    0u32.to_be_bytes(),
+    (-1i32 << 16).to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    (1u32 << 30).to_be_bytes(),
+];
+
+const ROTATE_180_MATRIX: TransformMatrix = [
+    (-1i32 << 16).to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    (-1i32 << 16).to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    (1u32 << 30).to_be_bytes(),
+];
+
+const ROTATE_270_MATRIX: TransformMatrix = [
+    0u32.to_be_bytes(),
+    (-1i32 << 16).to_be_bytes(),
+    0u32.to_be_bytes(),
+    (1u32 << 16).to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    0u32.to_be_bytes(),
+    (1u32 << 30).to_be_bytes(),
+];
+
+impl ImageOrientation {
+    pub(crate) fn transform_matrix(&self) -> &'static TransformMatrix {
+        match self {
+            ImageOrientation::Rotate0 => &IDENTITY_MATRIX,
+            ImageOrientation::Rotate90 => &ROTATE_90_MATRIX,
+            ImageOrientation::Rotate180 => &ROTATE_180_MATRIX,
+            ImageOrientation::Rotate270 => &ROTATE_270_MATRIX,
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
 pub(crate) enum DeltaFrames {
     /// Only single completely decodable frames
     IntraOnly,
@@ -130,6 +204,9 @@ pub(crate) struct Stream {
 
     // More data to be included in the fragmented stream header
     extra_header_data: Option<Vec<u8>>,
+
+    /// Orientation from tags
+    orientation: Option<ImageOrientation>,
 }
 
 #[derive(Debug)]
