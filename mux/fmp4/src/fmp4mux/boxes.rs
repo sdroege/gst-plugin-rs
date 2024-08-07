@@ -582,7 +582,7 @@ fn write_trak(
 
 fn write_tkhd(
     v: &mut Vec<u8>,
-    _cfg: &super::HeaderConfiguration,
+    cfg: &super::HeaderConfiguration,
     idx: usize,
     stream: &super::HeaderStream,
     creation_time: u64,
@@ -619,7 +619,7 @@ fn write_tkhd(
 
     // Matrix
     let matrix = match s.name().as_str() {
-        x if x.starts_with("video/") || x.starts_with("image/") => _cfg
+        x if x.starts_with("video/") || x.starts_with("image/") => cfg
             .orientation
             .unwrap_or(ImageOrientation::Rotate0)
             .transform_matrix(),
