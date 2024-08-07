@@ -1762,6 +1762,9 @@ impl ObjectSubclass for RtpBasePay2 {
         class.src_query = |obj, query| obj.imp().src_query_default(query);
         class.transform_meta =
             |obj, in_buf, meta, out_buf| obj.imp().transform_meta_default(in_buf, meta, out_buf);
+
+        class.allowed_meta_tags = &[];
+        class.drop_header_buffers = false;
     }
 
     fn with_class(class: &Self::Class) -> Self {
