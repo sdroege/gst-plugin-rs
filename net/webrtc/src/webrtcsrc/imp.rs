@@ -13,6 +13,7 @@ use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::borrow::BorrowMut;
 use std::collections::{HashMap, HashSet};
+use std::mem;
 use std::str::FromStr;
 use std::sync::atomic::AtomicU16;
 use std::sync::atomic::Ordering;
@@ -897,8 +898,13 @@ impl BaseWebRTCSrc {
                 gst::error!(CAT, imp = self, "Error ending session : {e}");
             }
         }
-        state.sessions.clear();
+
+        // Drop all sessions after releasing the state lock. Dropping the sessions
+        // can release their bin, and during release of the bin its pads are removed
+        // but the pad-removed handler is also taking the state lock.
+        let sessions = mem::take(&mut state.sessions);
         drop(state);
+        drop(sessions);
 
         self.maybe_stop_signaller();
 
@@ -983,9 +989,13 @@ impl BaseWebRTCSrc {
                                 );
                                 return false;
                             }
-                            {
-                                this.state.lock().unwrap().sessions.remove(session_id);
-                            }
+
+                            // Drop session after releasing the state lock. Dropping the session can release its bin,
+                            // and during release of the bin its pads are removed but the pad-removed handler is also
+                            // taking the state lock.
+                            let session = this.state.lock().unwrap().sessions.remove(session_id);
+                            drop(session);
+
                             true
                         }
                     ),
