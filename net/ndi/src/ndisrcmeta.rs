@@ -5,7 +5,6 @@ use std::fmt;
 use std::mem;
 
 use crate::ndi::{AudioFrame, MetadataFrame, VideoFrame};
-use crate::TimestampMode;
 
 #[repr(transparent)]
 pub struct NdiSrcMeta(imp::NdiSrcMeta);
@@ -27,9 +26,7 @@ pub enum Buffer {
     },
     Metadata {
         frame: MetadataFrame,
-        #[allow(unused)]
         receive_time_gst: gst::ClockTime,
-        #[allow(unused)]
         receive_time_real: gst::ClockTime,
     },
 }
@@ -41,15 +38,11 @@ impl NdiSrcMeta {
     pub fn add(
         buffer: &mut gst::BufferRef,
         ndi_buffer: Buffer,
-        timestamp_mode: TimestampMode,
     ) -> gst::MetaRefMut<Self, gst::meta::Standalone> {
         unsafe {
             // Manually dropping because gst_buffer_add_meta() takes ownership of the
             // content of the struct
-            let mut params = mem::ManuallyDrop::new(imp::NdiSrcMetaParams {
-                ndi_buffer,
-                timestamp_mode,
-            });
+            let mut params = mem::ManuallyDrop::new(imp::NdiSrcMetaParams { ndi_buffer });
 
             let meta = gst::ffi::gst_buffer_add_meta(
                 buffer.as_mut_ptr(),
@@ -83,8 +76,6 @@ impl fmt::Debug for NdiSrcMeta {
 }
 
 mod imp {
-    use crate::TimestampMode;
-
     use super::Buffer;
     use glib::translate::*;
     use once_cell::sync::Lazy;
@@ -93,14 +84,12 @@ mod imp {
 
     pub(super) struct NdiSrcMetaParams {
         pub ndi_buffer: Buffer,
-        pub timestamp_mode: TimestampMode,
     }
 
     #[repr(C)]
     pub struct NdiSrcMeta {
         parent: gst::ffi::GstMeta,
         pub(super) ndi_buffer: Option<Buffer>,
-        pub(super) timestamp_mode: TimestampMode,
     }
 
     pub(super) fn ndi_src_meta_api_get_type() -> glib::Type {
@@ -129,7 +118,6 @@ mod imp {
         let params = ptr::read(params as *const NdiSrcMetaParams);
 
         ptr::write(&mut meta.ndi_buffer, Some(params.ndi_buffer));
-        ptr::write(&mut meta.timestamp_mode, params.timestamp_mode);
 
         true.into_glib()
     }
