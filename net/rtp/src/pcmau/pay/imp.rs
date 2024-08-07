@@ -115,14 +115,7 @@ impl ObjectSubclass for RtpPcmaPay {
     type ParentType = super::RtpPcmauPay;
 }
 
-impl ObjectImpl for RtpPcmaPay {
-    fn constructed(&self) {
-        self.parent_constructed();
-
-        // Default to payload type 8
-        self.obj().set_property("pt", 8u32);
-    }
-}
+impl ObjectImpl for RtpPcmaPay {}
 
 impl GstObjectImpl for RtpPcmaPay {}
 
@@ -183,7 +176,9 @@ impl ElementImpl for RtpPcmaPay {
     }
 }
 
-impl crate::basepay::RtpBasePay2Impl for RtpPcmaPay {}
+impl crate::basepay::RtpBasePay2Impl for RtpPcmaPay {
+    const DEFAULT_PT: u8 = 8;
+}
 
 impl crate::baseaudiopay::RtpBaseAudioPay2Impl for RtpPcmaPay {}
 
@@ -217,14 +212,7 @@ impl ObjectSubclass for RtpPcmuPay {
     type ParentType = super::RtpPcmauPay;
 }
 
-impl ObjectImpl for RtpPcmuPay {
-    fn constructed(&self) {
-        self.parent_constructed();
-
-        // Default to payload type 0
-        self.obj().set_property("pt", 0u32);
-    }
-}
+impl ObjectImpl for RtpPcmuPay {}
 
 impl GstObjectImpl for RtpPcmuPay {}
 
@@ -285,7 +273,9 @@ impl ElementImpl for RtpPcmuPay {
     }
 }
 
-impl crate::basepay::RtpBasePay2Impl for RtpPcmuPay {}
+impl crate::basepay::RtpBasePay2Impl for RtpPcmuPay {
+    const DEFAULT_PT: u8 = 0;
+}
 
 impl crate::baseaudiopay::RtpBaseAudioPay2Impl for RtpPcmuPay {}
 

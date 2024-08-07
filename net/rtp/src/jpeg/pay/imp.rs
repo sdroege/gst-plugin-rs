@@ -25,7 +25,7 @@ use atomic_refcell::AtomicRefCell;
  *
  * Since: plugins-rs-0.13.0
  */
-use gst::{glib, prelude::*, subclass::prelude::*};
+use gst::{glib, subclass::prelude::*};
 use smallvec::SmallVec;
 use std::{cmp, io};
 
@@ -64,14 +64,7 @@ impl ObjectSubclass for RtpJpegPay {
     type ParentType = crate::basepay::RtpBasePay2;
 }
 
-impl ObjectImpl for RtpJpegPay {
-    fn constructed(&self) {
-        self.parent_constructed();
-
-        // Default static payload type
-        self.obj().set_property("pt", 26u32);
-    }
-}
+impl ObjectImpl for RtpJpegPay {}
 
 impl GstObjectImpl for RtpJpegPay {}
 
@@ -138,6 +131,7 @@ impl ElementImpl for RtpJpegPay {
 
 impl crate::basepay::RtpBasePay2Impl for RtpJpegPay {
     const ALLOWED_META_TAGS: &'static [&'static str] = &["video"];
+    const DEFAULT_PT: u8 = 26;
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.borrow_mut();
