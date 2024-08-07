@@ -131,6 +131,9 @@ pub trait RtpBasePay2Impl: ElementImpl {
     /// to be implemented.
     const ALLOWED_META_TAGS: &'static [&'static str] = &[];
 
+    /// Default payload type for this subclass.
+    const DEFAULT_PT: u8 = 96;
+
     /// Called when streaming starts (READY -> PAUSED state change)
     ///
     /// Optional, can be used to initialise streaming state.
@@ -380,6 +383,7 @@ pub struct Class {
 
     allowed_meta_tags: &'static [&'static str],
     drop_header_buffers: bool,
+    default_pt: u8,
 }
 
 unsafe impl ClassStruct for Class {
@@ -462,6 +466,7 @@ unsafe impl<T: RtpBasePay2Impl> IsSubclassable<T> for RtpBasePay2 {
 
         class.allowed_meta_tags = T::ALLOWED_META_TAGS;
         class.drop_header_buffers = T::DROP_HEADER_BUFFERS;
+        class.default_pt = T::DEFAULT_PT;
     }
 }
 

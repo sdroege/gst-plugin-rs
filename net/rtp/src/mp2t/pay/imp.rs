@@ -26,7 +26,7 @@
  */
 use atomic_refcell::AtomicRefCell;
 
-use gst::{glib, prelude::*, subclass::prelude::*};
+use gst::{glib, subclass::prelude::*};
 
 use once_cell::sync::Lazy;
 
@@ -34,7 +34,7 @@ use std::num::NonZeroUsize;
 
 use crate::basepay::{PacketToBufferRelation, RtpBasePay2Ext};
 
-const RTP_MP2T_DEFAULT_PT: u32 = 33;
+const RTP_MP2T_DEFAULT_PT: u8 = 33;
 
 const RTP_MP2T_DEFAULT_PACKET_SIZE: usize = 188;
 
@@ -113,13 +113,7 @@ impl ObjectSubclass for RtpMP2TPay {
     type ParentType = crate::basepay::RtpBasePay2;
 }
 
-impl ObjectImpl for RtpMP2TPay {
-    fn constructed(&self) {
-        self.parent_constructed();
-
-        self.obj().set_property("pt", RTP_MP2T_DEFAULT_PT);
-    }
-}
+impl ObjectImpl for RtpMP2TPay {}
 
 impl GstObjectImpl for RtpMP2TPay {}
 
@@ -182,6 +176,7 @@ impl ElementImpl for RtpMP2TPay {
 
 impl crate::basepay::RtpBasePay2Impl for RtpMP2TPay {
     const ALLOWED_META_TAGS: &'static [&'static str] = &[];
+    const DEFAULT_PT: u8 = RTP_MP2T_DEFAULT_PT;
 
     fn set_sink_caps(&self, caps: &gst::Caps) -> bool {
         let s = caps.structure(0).unwrap();
