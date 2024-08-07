@@ -1103,7 +1103,7 @@ impl RtpBasePay2 {
                 timestamp_offset,
                 seqnum_offset,
                 use_stream_time: settings.onvif_no_rate_control || !settings.scale_rtptime,
-                last_seqnum: Wrapping(seqnum_offset),
+                last_seqnum: Wrapping(seqnum_offset) - Wrapping(1),
                 last_timestamp: Wrapping(timestamp_offset),
             };
 
