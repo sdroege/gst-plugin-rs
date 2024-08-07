@@ -230,11 +230,13 @@ impl RtpBasePay2 {
         let state = self.state.borrow_mut();
         let Some(ref src_caps) = state.src_caps else {
             gst::debug!(CAT, imp = self, "No src caps set yet, can't negotiate");
+            self.src_pad.mark_reconfigure();
             return;
         };
         let mut src_caps = src_caps.clone();
         drop(state);
 
+        self.src_pad.check_reconfigure();
         gst::debug!(CAT, imp = self, "Configured src caps: {src_caps:?}");
 
         let peer_caps = self.src_pad.peer_query_caps(Some(&src_caps));
