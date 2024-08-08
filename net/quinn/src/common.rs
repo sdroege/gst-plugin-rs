@@ -6,6 +6,7 @@
 // <https://mozilla.org/MPL/2.0/>.
 //
 // SPDX-License-Identifier: MPL-2.0
+use bytes::BufMut;
 use gst::glib;
 use quinn::VarInt;
 
@@ -82,5 +83,95 @@ impl Default for QuinnQuicTransportConfig {
             stream_receive_window: STREAM_RWND.into(),
             receive_window: VarInt::MAX,
         }
+    }
+}
+
+// Taken from quinn-rs.
+pub fn get_varint_size(val: u64) -> usize {
+    if val < 2u64.pow(6) {
+        1
+    } else if val < 2u64.pow(14) {
+        2
+    } else if val < 2u64.pow(30) {
+        4
+    } else if val < 2u64.pow(62) {
+        8
+    } else {
+        unreachable!("malformed VarInt");
+    }
+}
+
+// Adapted from quinn-rs.
+pub fn get_varint(data: &[u8]) -> Option<(u64 /* VarInt value */, usize /* VarInt length */)> {
+    if data.is_empty() {
+        return None;
+    }
+
+    let data_length = data.len();
+    let tag = data[0] >> 6;
+
+    match tag {
+        0b00 => {
+            let mut slice = [0; 1];
+            slice.clone_from_slice(&data[..1]);
+            slice[0] &= 0b0011_1111;
+
+            Some((u64::from(slice[0]), 1))
+        }
+        0b01 => {
+            if data_length < 2 {
+                return None;
+            }
+
+            let mut buf = [0; 2];
+            buf.clone_from_slice(&data[..2]);
+            buf[0] &= 0b0011_1111;
+
+            Some((
+                u64::from(u16::from_be_bytes(buf[..2].try_into().unwrap())),
+                2,
+            ))
+        }
+        0b10 => {
+            if data_length < 4 {
+                return None;
+            }
+
+            let mut buf = [0; 4];
+            buf.clone_from_slice(&data[..4]);
+            buf[0] &= 0b0011_1111;
+
+            Some((
+                u64::from(u32::from_be_bytes(buf[..4].try_into().unwrap())),
+                4,
+            ))
+        }
+        0b11 => {
+            if data_length < 8 {
+                return None;
+            }
+
+            let mut buf = [0; 8];
+            buf.clone_from_slice(&data[..8]);
+            buf[0] &= 0b0011_1111;
+
+            Some((u64::from_be_bytes(buf[..8].try_into().unwrap()), 8))
+        }
+        _ => unreachable!(),
+    }
+}
+
+// Taken from quinn-rs.
+pub fn set_varint<B: BufMut>(data: &mut B, val: u64) {
+    if val < 2u64.pow(6) {
+        data.put_u8(val as u8);
+    } else if val < 2u64.pow(14) {
+        data.put_u16(0b01 << 14 | val as u16);
+    } else if val < 2u64.pow(30) {
+        data.put_u32(0b10 << 30 | val as u32);
+    } else if val < 2u64.pow(62) {
+        data.put_u64(0b11 << 62 | val);
+    } else {
+        unreachable!("malformed varint");
     }
 }

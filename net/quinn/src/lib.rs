@@ -26,6 +26,8 @@ mod quinnquicmux;
 pub mod quinnquicquery;
 mod quinnquicsink;
 mod quinnquicsrc;
+mod quinnroqdemux;
+mod quinnroqmux;
 mod utils;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
@@ -36,6 +38,8 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     }
     quinnquicdemux::register(plugin)?;
     quinnquicmux::register(plugin)?;
+    quinnroqmux::register(plugin)?;
+    quinnroqdemux::register(plugin)?;
     quinnquicsink::register(plugin)?;
     quinnquicsrc::register(plugin)?;
 
