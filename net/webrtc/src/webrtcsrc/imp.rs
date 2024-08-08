@@ -879,7 +879,15 @@ impl BaseWebRTCSrc {
         gst::info!(CAT, imp = self, "unpreparing");
 
         let mut state = self.state.lock().unwrap();
-        let sessions = &state.sessions;
+        let sessions = mem::take(&mut state.sessions);
+        drop(state);
+
+        // FIXME: Needs a safer way to perform end_session.
+        // We had to release the lock during the session tear down
+        // to avoid blocking the session bin pad's chain function which could potentially
+        // block the end_session while removing the bin from webrtcsrc, causing a deadlock
+        // This looks unsafe to end a session without holding the state lock
+
         for (_, s) in sessions.iter() {
             let id = s.id.as_str();
             let bin = s.webrtcbin().parent().and_downcast::<gst::Bin>().unwrap();
@@ -891,8 +899,6 @@ impl BaseWebRTCSrc {
         // Drop all sessions after releasing the state lock. Dropping the sessions
         // can release their bin, and during release of the bin its pads are removed
         // but the pad-removed handler is also taking the state lock.
-        let sessions = mem::take(&mut state.sessions);
-        drop(state);
         drop(sessions);
 
         self.maybe_stop_signaller();
@@ -947,8 +953,8 @@ impl BaseWebRTCSrc {
                         instance,
                         move |_signaler: glib::Object, session_id: &str| {
                             let this = instance.imp();
-                            let state = this.state.lock().unwrap();
-                            let Some(session) = state.sessions.get(session_id) else {
+                            let mut state = this.state.lock().unwrap();
+                            let Some(session) = state.sessions.remove(session_id) else {
                                 gst::error!(
                                     CAT,
                                     imp = this,
@@ -982,7 +988,6 @@ impl BaseWebRTCSrc {
                             // Drop session after releasing the state lock. Dropping the session can release its bin,
                             // and during release of the bin its pads are removed but the pad-removed handler is also
                             // taking the state lock.
-                            let session = this.state.lock().unwrap().sessions.remove(session_id);
                             drop(session);
 
                             true
