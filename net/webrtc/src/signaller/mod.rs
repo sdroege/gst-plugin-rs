@@ -18,9 +18,9 @@ pub mod prelude {
 
 pub static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "webrtcsrc-signaller",
+        "webrtc-signaller",
         gst::DebugColorFlags::empty(),
-        Some("WebRTC src signaller"),
+        Some("WebRTC signaller"),
     )
 });
 
