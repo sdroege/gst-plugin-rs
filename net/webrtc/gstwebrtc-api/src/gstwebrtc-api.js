@@ -235,6 +235,24 @@ export default class GstWebRTCAPI {
     return null;
   }
 
+  /**
+   * Creates a consumer session by connecting the local client to a remote WebRTC producer and creating the offer.
+   * <p>See {@link GstWebRTCAPI#createConsumerSession} for more information</p>
+   * @method GstWebRTCAPI#createConsumerSessionWithOfferOptions
+   * @param {string} producerId - The unique identifier of the remote producer to connect to.
+   * @param {external:RTCOfferOptions} offerOptions - An object to use when creating the offer.
+   * @returns {GstWebRTCAPI.ConsumerSession} The WebRTC session between the selected remote producer and this local
+   * consumer, or null in case of error. To start connecting and receiving the remote streams, you still need to call
+   * {@link GstWebRTCAPI.ConsumerSession#connect} after adding on the returned session all the event listeners you may
+   * need.
+   */
+  createConsumerSessionWithOfferOptions(producerId, offerOptions) {
+    if (this._channel) {
+      return this._channel.createConsumerSession(producerId, offerOptions);
+    }
+    return null;
+  }
+
   connectChannel() {
     if (this._channel) {
       const oldChannel = this._channel;

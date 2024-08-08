@@ -314,6 +314,7 @@ impl Signaller {
 
             self.send(p::IncomingMessage::StartSession(p::StartSessionMessage {
                 peer_id: target_producer.clone(),
+                offer: None,
             }));
 
             gst::info!(
@@ -382,18 +383,42 @@ impl Signaller {
                         p::OutgoingMessage::StartSession {
                             session_id,
                             peer_id,
+                            offer,
                         } => {
                             assert!(matches!(
                                 self.obj().property::<WebRTCSignallerRole>("role"),
                                 super::WebRTCSignallerRole::Producer
                             ));
 
+                            let sdp = {
+                                if let Some(offer) = offer {
+                                    match gst_sdp::SDPMessage::parse_buffer(offer.as_bytes()) {
+                                        Ok(sdp) => Some(sdp),
+                                        Err(err) => {
+                                            self.obj().emit_by_name::<()>(
+                                                "error",
+                                                &[&format!("Error parsing SDP: {offer} {err:?}")],
+                                            );
+
+                                            return ControlFlow::Break(());
+                                        }
+                                    }
+                                } else {
+                                    None
+                                }
+                            };
+
                             self.obj().emit_by_name::<()>(
                                 "session-requested",
                                 &[
                                     &session_id,
                                     &peer_id,
-                                    &None::<gst_webrtc::WebRTCSessionDescription>,
+                                    &sdp.map(|sdp| {
+                                        gst_webrtc::WebRTCSessionDescription::new(
+                                            gst_webrtc::WebRTCSDPType::Offer,
+                                            sdp,
+                                        )
+                                    }),
                                 ],
                             );
                         }
@@ -700,20 +725,19 @@ impl SignallableImpl for Signaller {
     fn send_sdp(&self, session_id: &str, sdp: &gst_webrtc::WebRTCSessionDescription) {
         gst::debug!(CAT, imp = self, "Sending SDP {sdp:#?}");
 
-        let role = self.settings.lock().unwrap().role;
-        let is_consumer = matches!(role, super::WebRTCSignallerRole::Consumer);
-
         let msg = p::IncomingMessage::Peer(p::PeerMessage {
             session_id: session_id.to_owned(),
-            peer_message: p::PeerMessageInner::Sdp(if is_consumer {
-                p::SdpMessage::Answer {
-                    sdp: sdp.sdp().as_text().unwrap(),
-                }
-            } else {
-                p::SdpMessage::Offer {
-                    sdp: sdp.sdp().as_text().unwrap(),
-                }
-            }),
+            peer_message: p::PeerMessageInner::Sdp(
+                if sdp.type_() == gst_webrtc::WebRTCSDPType::Offer {
+                    p::SdpMessage::Offer {
+                        sdp: sdp.sdp().as_text().unwrap(),
+                    }
+                } else {
+                    p::SdpMessage::Answer {
+                        sdp: sdp.sdp().as_text().unwrap(),
+                    }
+                },
+            ),
         });
 
         self.send(msg);

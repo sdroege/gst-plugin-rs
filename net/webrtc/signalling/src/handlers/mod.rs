@@ -83,7 +83,7 @@ impl Handler {
             }
             p::IncomingMessage::SetPeerStatus(status) => self.set_peer_status(peer_id, &status),
             p::IncomingMessage::StartSession(message) => {
-                self.start_session(&message.peer_id, peer_id)
+                self.start_session(&message.peer_id, peer_id, message.offer.as_deref())
             }
             p::IncomingMessage::Peer(peermsg) => self.handle_peer_message(peer_id, peermsg),
             p::IncomingMessage::List => self.list_producers(peer_id),
@@ -262,7 +262,12 @@ impl Handler {
 
     /// Start a session between two peers
     #[instrument(level = "debug", skip(self))]
-    fn start_session(&mut self, producer_id: &str, consumer_id: &str) -> Result<(), Error> {
+    fn start_session(
+        &mut self,
+        producer_id: &str,
+        consumer_id: &str,
+        offer: Option<&str>,
+    ) -> Result<(), Error> {
         self.peers.get(producer_id).map_or_else(
             || Err(anyhow!("No producer with ID: '{producer_id}'")),
             |peer| {
@@ -310,6 +315,7 @@ impl Handler {
             p::OutgoingMessage::StartSession {
                 peer_id: consumer_id.to_string(),
                 session_id: session_id.clone(),
+                offer: offer.map(String::from),
             },
         ));
 
@@ -510,6 +516,7 @@ mod tests {
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
+            offer: None,
         });
         tx.send(("consumer".to_string(), Some(message)))
             .await
@@ -535,6 +542,7 @@ mod tests {
             p::OutgoingMessage::StartSession {
                 peer_id: "consumer".to_string(),
                 session_id: session_id.to_string(),
+                offer: None,
             }
         );
     }
@@ -559,6 +567,7 @@ mod tests {
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
+            offer: None,
         });
         tx.send(("consumer".to_string(), Some(message)))
             .await
@@ -582,7 +591,8 @@ mod tests {
                 "producer".into(),
                 p::OutgoingMessage::StartSession {
                     peer_id: "consumer".into(),
-                    session_id: session_id.clone()
+                    session_id: session_id.clone(),
+                    offer: None
                 }
             )
         );
@@ -641,6 +651,7 @@ mod tests {
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
+            offer: None,
         });
         tx.send(("consumer".to_string(), Some(message)))
             .await
@@ -696,6 +707,7 @@ mod tests {
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
+            offer: None,
         });
         tx.send(("consumer".to_string(), Some(message)))
             .await
@@ -745,6 +757,7 @@ mod tests {
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
+            offer: None,
         });
         tx.send(("consumer".to_string(), Some(message)))
             .await
@@ -799,6 +812,7 @@ mod tests {
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
+            offer: None,
         });
         tx.send(("consumer".to_string(), Some(message)))
             .await
@@ -873,6 +887,7 @@ mod tests {
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
+            offer: None,
         });
         tx.send(("consumer".to_string(), Some(message)))
             .await
@@ -935,6 +950,7 @@ mod tests {
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
+            offer: None,
         });
         tx.send(("consumer".to_string(), Some(message)))
             .await
@@ -1023,6 +1039,7 @@ mod tests {
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
+            offer: None,
         });
         tx.send(("consumer".to_string(), Some(message)))
             .await
@@ -1072,6 +1089,7 @@ mod tests {
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
+            offer: None,
         });
         tx.send(("consumer".to_string(), Some(message)))
             .await
@@ -1107,6 +1125,7 @@ mod tests {
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
+            offer: None,
         });
         tx.send(("consumer".to_string(), Some(message)))
             .await
@@ -1132,6 +1151,7 @@ mod tests {
             p::OutgoingMessage::StartSession {
                 peer_id: "consumer".to_string(),
                 session_id: session_id.clone(),
+                offer: None,
             }
         );
 
@@ -1196,6 +1216,7 @@ mod tests {
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
+            offer: None,
         });
         tx.send(("consumer".to_string(), Some(message)))
             .await
@@ -1222,6 +1243,7 @@ mod tests {
             p::OutgoingMessage::StartSession {
                 peer_id: "consumer".to_string(),
                 session_id: session_id.clone(),
+                offer: None,
             }
         );
 
@@ -1274,6 +1296,7 @@ mod tests {
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
+            offer: None,
         });
         tx.send(("consumer".to_string(), Some(message)))
             .await
@@ -1308,6 +1331,7 @@ mod tests {
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
+            offer: None,
         });
         tx.send(("consumer".to_string(), Some(message)))
             .await
@@ -1329,6 +1353,7 @@ mod tests {
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
+            offer: None,
         });
 
         tx.send(("consumer".to_string(), Some(message)))
@@ -1378,6 +1403,7 @@ mod tests {
 
         let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
             peer_id: "producer".to_string(),
+            offer: None,
         });
         tx.send(("producer-consumer".to_string(), Some(message)))
             .await

@@ -82,9 +82,8 @@
       outline: none;
     }
 
-    div.video {
+    div.video, div.offer-options {
       position: relative;
-      display: inline-block;
       margin: 1em;
     }
 
@@ -309,7 +308,11 @@
           if (!document.getElementById(producerId)) {
             remoteStreamsElement.insertAdjacentHTML("beforeend",
               `<li id="${producerId}">
-                                <div class="button">${producer.meta.name || producerId}</div>
+                                <div class="button">${producer.meta.name || producerId}
+                                </div>
+                                <div class="offer-options">
+                                  <textarea rows="5" cols="50" placeholder="offer options, empty to answer. For example:\n{\n  &quot;offerToReceiveAudio&quot;: 1\n  &quot;offerToReceiveVideo&quot;: 1\n}\n"></textarea>
+                                </div>
                                 <div class="video">
                                     <div class="spinner">
                                         <div></div>
@@ -325,6 +328,7 @@
 
             const entryElement = document.getElementById(producerId);
             const videoElement = entryElement.getElementsByTagName("video")[0];
+            const textareaElement = entryElement.getElementsByTagName("textarea")[0];
 
             videoElement.addEventListener("playing", () => {
               if (entryElement.classList.contains("has-session")) {
@@ -341,7 +345,19 @@
               if (entryElement._consumerSession) {
                 entryElement._consumerSession.close();
               } else {
-                const session = api.createConsumerSession(producerId);
+                let session = null;
+                if (textareaElement.value == '') {
+                  session = api.createConsumerSession(producerId);
+                } else {
+                  try {
+                    let offerOptions = JSON.parse(textareaElement.value);
+                    console.log("Offer options: ", offerOptions);
+                    session = api.createConsumerSessionWithOfferOptions(producerId, offerOptions);
+                  } catch (ex) {
+                    console.error("Failed to parse offer options:", ex);
+                    return;
+                  }
+                }
                 if (session) {
                   entryElement._consumerSession = session;
 

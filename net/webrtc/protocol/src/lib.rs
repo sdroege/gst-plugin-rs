@@ -21,9 +21,13 @@ pub enum OutgoingMessage {
     Welcome { peer_id: String },
     /// Notifies listeners that a peer status has changed
     PeerStatusChanged(PeerStatus),
-    /// Instructs a peer to generate an offer and inform about the session ID
+    /// Instructs a peer to generate an offer or an answer and inform about the session ID
     #[serde(rename_all = "camelCase")]
-    StartSession { peer_id: String, session_id: String },
+    StartSession {
+        peer_id: String,
+        session_id: String,
+        offer: Option<String>,
+    },
     /// Let consumer know that the requested session is starting with the specified identifier
     #[serde(rename_all = "camelCase")]
     SessionStarted { peer_id: String, session_id: String },
@@ -75,6 +79,8 @@ impl PeerStatus {
 pub struct StartSessionMessage {
     /// Identifies the peer
     pub peer_id: String,
+    /// An offer if the consumer peer wants the producer to answer
+    pub offer: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]

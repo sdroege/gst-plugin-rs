@@ -253,9 +253,13 @@ export default class ComChannel extends EventTarget {
     return session;
   }
 
-  createConsumerSession(producerId) {
+  createConsumerSession(producerId, offerOptions) {
     if (!this._ready || !producerId || (typeof (producerId) !== "string")) {
       return null;
+    }
+
+    if (offerOptions && (typeof(offerOptions) !== "object")) {
+      offerOptions = undefined;
     }
 
     if (producerId in this._consumerSessions) {
@@ -268,7 +272,7 @@ export default class ComChannel extends EventTarget {
       }
     }
 
-    const session = new ConsumerSession(producerId, this);
+    const session = new ConsumerSession(producerId, this, offerOptions);
     this._consumerSessions[producerId] = session;
 
     session.addEventListener("closed", (event) => {

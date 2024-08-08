@@ -39,13 +39,17 @@ import RemoteController from "./remote-controller.js";
  * @fires {@link GstWebRTCAPI#event:RemoteControllerChangedEvent}
  */
 export default class ConsumerSession extends WebRTCSession {
-  constructor(peerId, comChannel) {
+  constructor(peerId, comChannel, offerOptions) {
     super(peerId, comChannel);
     this._streams = [];
     this._remoteController = null;
+    this._pendingCandidates = [];
+
+    this._offerOptions = offerOptions;
 
     this.addEventListener("closed", () => {
       this._streams = [];
+      this._pendingCandidates = [];
 
       if (this._remoteController) {
         this._remoteController.close();
@@ -93,36 +97,79 @@ export default class ConsumerSession extends WebRTCSession {
       return true;
     }
 
-    const msg = {
-      type: "startSession",
-      peerId: this._peerId
-    };
-    if (!this._comChannel.send(msg)) {
-      this.dispatchEvent(new ErrorEvent("error", {
-        message: "cannot connect consumer session",
-        error: new Error("cannot send startSession message to signaling server")
-      }));
+    if (this._offerOptions) {
+      this.ensurePeerConnection();
 
-      this.close();
-      return false;
+      this._rtcPeerConnection.createOffer(this._offerOptions).then((desc) => {
+        if (this._rtcPeerConnection && desc) {
+          return this._rtcPeerConnection.setLocalDescription(desc);
+        } else {
+          throw new Error("cannot send local offer to WebRTC peer");
+        }
+      }).then(() => {
+        if (this._rtcPeerConnection && this._comChannel) {
+          const msg = {
+            type: "startSession",
+            peerId: this._peerId,
+            offer: this._rtcPeerConnection.localDescription.toJSON().sdp
+          };
+          if (!this._comChannel.send(msg)) {
+            throw new Error("cannot send startSession message to signaling server");
+          }
+          this._state = SessionState.connecting;
+          this.dispatchEvent(new Event("stateChanged"));
+        }
+      }).catch((ex) => {
+        if (this._state !== SessionState.closed) {
+          this.dispatchEvent(new ErrorEvent("error", {
+            message: "an unrecoverable error occurred during SDP handshake",
+            error: ex
+          }));
+
+          this.close();
+        }
+      });
+    } else {
+      const msg = {
+        type: "startSession",
+        peerId: this._peerId
+      };
+      if (!this._comChannel.send(msg)) {
+        this.dispatchEvent(new ErrorEvent("error", {
+          message: "cannot connect consumer session",
+          error: new Error("cannot send startSession message to signaling server")
+        }));
+
+        this.close();
+        return false;
+      }
+
+      this._state = SessionState.connecting;
+      this.dispatchEvent(new Event("stateChanged"));
     }
 
-    this._state = SessionState.connecting;
-    this.dispatchEvent(new Event("stateChanged"));
     return true;
   }
 
   onSessionStarted(peerId, sessionId) {
     if ((this._peerId === peerId) && (this._state === SessionState.connecting) && !this._sessionId) {
+      console.log("Session started", this._sessionId);
       this._sessionId = sessionId;
+
+      for (const candidate of this._pendingCandidates) {
+        console.log("Sending delayed ICE with session id", this._sessionId);
+        this._comChannel.send({
+          type: "peer",
+          sessionId: this._sessionId,
+          ice: candidate.toJSON()
+        });
+      }
+
+      this._pendingCandidates = [];
     }
   }
 
-  onSessionPeerMessage(msg) {
-    if ((this._state === SessionState.closed) || !this._comChannel || !this._sessionId) {
-      return;
-    }
-
+  ensurePeerConnection() {
     if (!this._rtcPeerConnection) {
       const connection = new RTCPeerConnection(this._comChannel.webrtcConfig);
       this._rtcPeerConnection = connection;
@@ -172,51 +219,80 @@ export default class ConsumerSession extends WebRTCSession {
 
       connection.onicecandidate = (event) => {
         if ((this._rtcPeerConnection === connection) && event.candidate && this._comChannel) {
-          this._comChannel.send({
-            type: "peer",
-            sessionId: this._sessionId,
-            ice: event.candidate.toJSON()
-          });
+          if (this._sessionId) {
+            console.log("Sending ICE with session id", this._sessionId);
+            this._comChannel.send({
+              type: "peer",
+              sessionId: this._sessionId,
+              ice: event.candidate.toJSON()
+            });
+          } else {
+            this._pendingCandidates.push(event.candidate);
+          }
         }
       };
 
       this.dispatchEvent(new Event("rtcPeerConnectionChanged"));
     }
+  }
+
+  onSessionPeerMessage(msg) {
+    if ((this._state === SessionState.closed) || !this._comChannel || !this._sessionId) {
+      return;
+    }
+
+    this.ensurePeerConnection();
 
     if (msg.sdp) {
-      this._rtcPeerConnection.setRemoteDescription(msg.sdp).then(() => {
-        if (this._rtcPeerConnection) {
-          return this._rtcPeerConnection.createAnswer();
-        } else {
-          return null;
-        }
-      }).then((desc) => {
-        if (this._rtcPeerConnection && desc) {
-          return this._rtcPeerConnection.setLocalDescription(desc);
-        } else {
-          return null;
-        }
-      }).then(() => {
-        if (this._rtcPeerConnection && this._comChannel) {
-          const sdp = {
-            type: "peer",
-            sessionId: this._sessionId,
-            sdp: this._rtcPeerConnection.localDescription.toJSON()
-          };
-          if (!this._comChannel.send(sdp)) {
-            throw new Error("cannot send local SDP configuration to WebRTC peer");
-          }
-        }
-      }).catch((ex) => {
-        if (this._state !== SessionState.closed) {
-          this.dispatchEvent(new ErrorEvent("error", {
-            message: "an unrecoverable error occurred during SDP handshake",
-            error: ex
-          }));
+      if (this._offerOptions) {
+        this._rtcPeerConnection.setRemoteDescription(msg.sdp).then(() => {
+          console.log("done");
+        }).catch((ex) => {
+          if (this._state !== SessionState.closed) {
+            this.dispatchEvent(new ErrorEvent("error", {
+              message: "an unrecoverable error occurred during SDP handshake",
+              error: ex
+            }));
 
-          this.close();
-        }
-      });
+            this.close();
+          }
+        });
+      } else {
+        this._rtcPeerConnection.setRemoteDescription(msg.sdp).then(() => {
+          if (this._rtcPeerConnection) {
+            return this._rtcPeerConnection.createAnswer();
+          } else {
+            return null;
+          }
+        }).then((desc) => {
+          if (this._rtcPeerConnection && desc) {
+            return this._rtcPeerConnection.setLocalDescription(desc);
+          } else {
+            return null;
+          }
+        }).then(() => {
+          if (this._rtcPeerConnection && this._comChannel) {
+            console.log("Sending SDP with session id", this._sessionId);
+            const sdp = {
+              type: "peer",
+              sessionId: this._sessionId,
+              sdp: this._rtcPeerConnection.localDescription.toJSON()
+            };
+            if (!this._comChannel.send(sdp)) {
+              throw new Error("cannot send local SDP configuration to WebRTC peer");
+            }
+          }
+        }).catch((ex) => {
+          if (this._state !== SessionState.closed) {
+            this.dispatchEvent(new ErrorEvent("error", {
+              message: "an unrecoverable error occurred during SDP handshake",
+              error: ex
+            }));
+
+            this.close();
+          }
+        });
+      }
     } else if (msg.ice) {
       const candidate = new RTCIceCandidate(msg.ice);
       this._rtcPeerConnection.addIceCandidate(candidate).catch((ex) => {
