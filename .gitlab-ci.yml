@@ -396,6 +396,8 @@ cerbero trigger:
   image: $CERBERO_TRIGGER_IMAGE
   needs: [ "trigger" ]
   timeout: '4h'
+  tags:
+    - placeholder-job
   variables:
     # We will build this cerbero branch in the cerbero trigger CI
     CERBERO_UPSTREAM_BRANCH: 'main'
