@@ -20,7 +20,7 @@ const config = {
   devServer: {
     open: true,
     static: false,
-    server: "https",
+    server: "http",
     port: 9090
   },
 
