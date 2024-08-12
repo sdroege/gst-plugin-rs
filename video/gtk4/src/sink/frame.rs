@@ -536,111 +536,106 @@ impl Frame {
         #[allow(unused_mut)]
         let mut frame = None;
 
+        // Check we received a buffer with dmabuf memory and if so do some checks before
+        // passing it onwards
+        #[cfg(all(target_os = "linux", feature = "dmabuf"))]
+        if frame.is_none()
+            && buffer
+                .peek_memory(0)
+                .is_memory_type::<gst_allocators::DmaBufMemory>()
         {
-            // Check we received a buffer with dmabuf memory and if so do some checks before
-            // passing it onwards
-            #[cfg(all(target_os = "linux", feature = "dmabuf"))]
-            if frame.is_none()
-                && buffer
-                    .peek_memory(0)
-                    .is_memory_type::<gst_allocators::DmaBufMemory>()
+            if let Some((vmeta, info)) =
+                Option::zip(buffer.meta::<gst_video::VideoMeta>(), info.dma_drm())
             {
-                if let Some((vmeta, info)) =
-                    Option::zip(buffer.meta::<gst_video::VideoMeta>(), info.dma_drm())
-                {
-                    let mut fds = [-1i32; 4];
-                    let mut offsets = [0; 4];
-                    let mut strides = [0; 4];
-                    let n_planes = vmeta.n_planes() as usize;
+                let mut fds = [-1i32; 4];
+                let mut offsets = [0; 4];
+                let mut strides = [0; 4];
+                let n_planes = vmeta.n_planes() as usize;
 
-                    let vmeta_offsets = vmeta.offset();
-                    let vmeta_strides = vmeta.stride();
+                let vmeta_offsets = vmeta.offset();
+                let vmeta_strides = vmeta.stride();
 
-                    for plane in 0..n_planes {
-                        let Some((range, skip)) =
-                            buffer.find_memory(vmeta_offsets[plane]..(vmeta_offsets[plane] + 1))
-                        else {
-                            break;
-                        };
+                for plane in 0..n_planes {
+                    let Some((range, skip)) =
+                        buffer.find_memory(vmeta_offsets[plane]..(vmeta_offsets[plane] + 1))
+                    else {
+                        break;
+                    };
 
-                        let mem = buffer.peek_memory(range.start);
-                        let Some(mem) = mem.downcast_memory_ref::<gst_allocators::DmaBufMemory>()
-                        else {
-                            break;
-                        };
+                    let mem = buffer.peek_memory(range.start);
+                    let Some(mem) = mem.downcast_memory_ref::<gst_allocators::DmaBufMemory>()
+                    else {
+                        break;
+                    };
 
-                        let fd = mem.fd();
-                        fds[plane] = fd;
-                        offsets[plane] = mem.offset() + skip;
-                        strides[plane] = vmeta_strides[plane] as usize;
-                    }
+                    let fd = mem.fd();
+                    fds[plane] = fd;
+                    offsets[plane] = mem.offset() + skip;
+                    strides[plane] = vmeta_strides[plane] as usize;
+                }
 
-                    // All fds valid?
-                    if fds[0..n_planes].iter().all(|fd| *fd != -1) {
-                        frame = Some(MappedFrame::DmaBuf {
-                            buffer: buffer.clone(),
-                            info: info.clone(),
-                            n_planes: n_planes as u32,
-                            fds,
-                            offsets,
-                            strides,
-                            width: vmeta.width(),
-                            height: vmeta.height(),
-                            orientation,
-                        });
-                    }
+                // All fds valid?
+                if fds[0..n_planes].iter().all(|fd| *fd != -1) {
+                    frame = Some(MappedFrame::DmaBuf {
+                        buffer: buffer.clone(),
+                        info: info.clone(),
+                        n_planes: n_planes as u32,
+                        fds,
+                        offsets,
+                        strides,
+                        width: vmeta.width(),
+                        height: vmeta.height(),
+                        orientation,
+                    });
                 }
             }
+        }
 
-            {
-                if frame.is_none() {
-                    // Check we received a buffer with GL memory and if the context of that memory
-                    // can share with the wrapped context around the GDK GL context.
-                    //
-                    // If not it has to be uploaded to the GPU.
-                    let memory_ctx = buffer
-                        .peek_memory(0)
-                        .downcast_memory_ref::<gst_gl::GLBaseMemory>()
-                        .and_then(|m| {
-                            let ctx = m.context();
-                            if wrapped_context
-                                .is_some_and(|wrapped_context| wrapped_context.can_share(ctx))
-                            {
-                                Some(ctx)
-                            } else {
-                                None
-                            }
-                        });
-
-                    if let Some(memory_ctx) = memory_ctx {
-                        // If there is no GLSyncMeta yet then we need to add one here now, which requires
-                        // obtaining a writable buffer.
-                        let mapped_frame = if buffer.meta::<gst_gl::GLSyncMeta>().is_some() {
-                            gst_gl::GLVideoFrame::from_buffer_readable(buffer.clone(), info)
-                                .map_err(|_| gst::FlowError::Error)?
-                        } else {
-                            let mut buffer = buffer.clone();
-                            {
-                                let buffer = buffer.make_mut();
-                                gst_gl::GLSyncMeta::add(buffer, memory_ctx);
-                            }
-                            gst_gl::GLVideoFrame::from_buffer_readable(buffer, info)
-                                .map_err(|_| gst::FlowError::Error)?
-                        };
-
-                        // Now that it's guaranteed that there is a sync meta and the frame is mapped, set
-                        // a sync point so we can ensure that the texture is ready later when making use of
-                        // it as gdk::GLTexture.
-                        let meta = mapped_frame.buffer().meta::<gst_gl::GLSyncMeta>().unwrap();
-                        meta.set_sync_point(memory_ctx);
-
-                        frame = Some(MappedFrame::GL {
-                            frame: mapped_frame,
-                            wrapped_context: wrapped_context.unwrap().clone(),
-                            orientation,
-                        });
+        if frame.is_none() {
+            // Check we received a buffer with GL memory and if the context of that memory
+            // can share with the wrapped context around the GDK GL context.
+            //
+            // If not it has to be uploaded to the GPU.
+            let memory_ctx = buffer
+                .peek_memory(0)
+                .downcast_memory_ref::<gst_gl::GLBaseMemory>()
+                .and_then(|m| {
+                    let ctx = m.context();
+                    if wrapped_context.is_some_and(|wrapped_context| wrapped_context.can_share(ctx))
+                    {
+                        Some(ctx)
+                    } else {
+                        None
                     }
-                }
+                });
+
+            if let Some(memory_ctx) = memory_ctx {
+                // If there is no GLSyncMeta yet then we need to add one here now, which requires
+                // obtaining a writable buffer.
+                let mapped_frame = if buffer.meta::<gst_gl::GLSyncMeta>().is_some() {
+                    gst_gl::GLVideoFrame::from_buffer_readable(buffer.clone(), info)
+                        .map_err(|_| gst::FlowError::Error)?
+                } else {
+                    let mut buffer = buffer.clone();
+                    {
+                        let buffer = buffer.make_mut();
+                        gst_gl::GLSyncMeta::add(buffer, memory_ctx);
+                    }
+                    gst_gl::GLVideoFrame::from_buffer_readable(buffer, info)
+                        .map_err(|_| gst::FlowError::Error)?
+                };
+
+                // Now that it's guaranteed that there is a sync meta and the frame is mapped, set
+                // a sync point so we can ensure that the texture is ready later when making use of
+                // it as gdk::GLTexture.
+                let meta = mapped_frame.buffer().meta::<gst_gl::GLSyncMeta>().unwrap();
+                meta.set_sync_point(memory_ctx);
+
+                frame = Some(MappedFrame::GL {
+                    frame: mapped_frame,
+                    wrapped_context: wrapped_context.unwrap().clone(),
+                    orientation,
+                });
             }
         }
 
