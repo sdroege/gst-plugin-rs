@@ -948,6 +948,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
+name = "byteorder-lite"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
+
+[[package]]
 name = "bytes"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1003,12 +1009,12 @@ checksum = "d254b2c9fc971518da5d652aee7edc6b9bb96fa32de28f166895faf69d9926e6"
 
 [[package]]
 name = "cdg_renderer"
-version = "0.7.1"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3753104c2ef8672021f3355a59ab5944d7aa5472f970b5d97e93bd741d79af96"
+checksum = "0070ec0e6be4ed55d28bcfc499ecd479cb3764181eee2018dc661d8efd4e3f71"
 dependencies = [
  "cdg",
- "image",
+ "image 0.25.2",
 ]
 
 [[package]]
@@ -2296,7 +2302,7 @@ dependencies = [
  "gstreamer-app",
  "gstreamer-base",
  "gstreamer-video",
- "image",
+ "image 0.25.2",
  "once_cell",
 ]
 
@@ -2990,7 +2996,7 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-check",
  "gstreamer-video",
- "image",
+ "image 0.24.9",
  "image_hasher",
  "once_cell",
  "rgb",
@@ -4059,13 +4065,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "image"
+version = "0.25.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99314c8a2152b8ddb211f924cdae532d8c5e4c8bb54728e12fff1b0cd5963a10"
+dependencies = [
+ "bytemuck",
+ "byteorder-lite",
+ "num-traits",
+]
+
+[[package]]
 name = "image_hasher"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f9e64a8c472ea9f81ac448e3b488fd82dcdfce6434cf880882bf36bfb5c268a"
 dependencies = [
  "base64 0.21.7",
- "image",
+ "image 0.24.9",
  "rustdct",
  "serde",
  "transpose",
