@@ -13,8 +13,8 @@ gst.workspace = true
 gst-base.workspace = true
 gst-video.workspace = true
 cdg = "0.1"
-cdg_renderer = "0.7"
-image = { version = "0.24", default-features = false }
+cdg_renderer = "0.8"
+image = { version = "0.25", default-features = false }
 once_cell.workspace = true
 
 [dev-dependencies]
