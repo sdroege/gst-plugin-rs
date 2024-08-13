@@ -134,10 +134,10 @@ gio = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "master" }
 cairo-rs = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "master", features=["use_glib"] }
 pango = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "master" }
 pangocairo = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "master" }
-gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", branch = "master"}
-gdk-wayland = { package = "gdk4-wayland", git = "https://github.com/gtk-rs/gtk4-rs", branch = "master"}
-gdk-x11 = { package = "gdk4-x11", git = "https://github.com/gtk-rs/gtk4-rs", branch = "master"}
-gdk-win32 = { package = "gdk4-win32", git = "https://github.com/gtk-rs/gtk4-rs", branch = "master"}
+gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", branch = "master", features = ["v4_6"]}
+gdk-wayland = { package = "gdk4-wayland", git = "https://github.com/gtk-rs/gtk4-rs", branch = "master", features = ["v4_4"]}
+gdk-x11 = { package = "gdk4-x11", git = "https://github.com/gtk-rs/gtk4-rs", branch = "master", features = ["v4_4"]}
+gdk-win32 = { package = "gdk4-win32", git = "https://github.com/gtk-rs/gtk4-rs", branch = "master", features = ["v4_4"]}
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main" }
 gst-allocators = { package = "gstreamer-allocators", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main" }
 gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main" }

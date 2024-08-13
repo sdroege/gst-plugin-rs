@@ -10,8 +10,8 @@ description = "GStreamer GTK 4 sink element"
 
 [dependencies]
 gtk.workspace = true
-gdk-wayland = { workspace = true, features = ["v4_4"], optional = true}
-gdk-x11 = { workspace = true, features = ["v4_4"], optional = true}
+gdk-wayland = { workspace = true, optional = true}
+gdk-x11 = { workspace = true, optional = true}
 
 gst = { workspace = true, features = ["v1_16"] }
 gst-base.workspace = true
@@ -27,13 +27,11 @@ once_cell.workspace = true
 
 
 [target.'cfg(target_os = "macos")'.dependencies]
-gtk = { workspace = true, features = ["v4_6"] }
 gst-gl = { workspace = true, features = ["v1_16"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-gtk = { workspace = true, features = ["v4_6"] }
+gdk-win32.workspace = true
 gst-gl = { workspace = true, features = ["v1_20"] }
-gdk-win32 = { workspace = true, features = ["v4_4"]}
 windows-sys = { version = "0.52", features = ["Win32_Graphics_OpenGL", "Win32_Foundation", "Win32_Graphics_Gdi"] }
 
 [lib]
@@ -47,9 +45,9 @@ gst-plugin-version-helper.workspace = true
 [features]
 default = []
 static = []
-wayland = ["gtk/v4_6", "gdk-wayland", "gst-gl-wayland"]
-x11glx = ["gtk/v4_6", "gdk-x11", "gst-gl-x11"]
-x11egl = ["gtk/v4_6", "gdk-x11", "gst-gl-egl"]
+wayland = ["gdk-wayland", "gst-gl-wayland"]
+x11glx = ["gdk-x11", "gst-gl-x11"]
+x11egl = ["gdk-x11", "gst-gl-egl"]
 winegl = ["gdk-win32/egl", "gst-gl-egl"]
 dmabuf = ["gst-allocators", "wayland", "gtk_v4_14", "gst-video/v1_24"]
 capi = []
