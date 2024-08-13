@@ -197,7 +197,7 @@ export default class ConsumerSession extends WebRTCSession {
 
       connection.ondatachannel = (event) => {
         const rtcDataChannel = event.channel;
-        if (rtcDataChannel && (rtcDataChannel.label === "input")) {
+        if (rtcDataChannel && (rtcDataChannel.label === "control")) {
           if (this._remoteController) {
             const previousController = this._remoteController;
             this._remoteController = null;

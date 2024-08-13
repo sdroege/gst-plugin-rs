@@ -3,7 +3,7 @@
 use gst::prelude::*;
 
 use crate::signaller::{prelude::*, Signallable, Signaller};
-use crate::utils::{Codec, Codecs, NavigationEvent, AUDIO_CAPS, RTP_CAPS, VIDEO_CAPS};
+use crate::utils::{self, Codec, Codecs, NavigationEvent, AUDIO_CAPS, RTP_CAPS, VIDEO_CAPS};
 use crate::webrtcsrc::WebRTCSrcPad;
 use anyhow::{Context, Error};
 use gst::glib;
@@ -22,6 +22,7 @@ use url::Url;
 
 const DEFAULT_STUN_SERVER: Option<&str> = Some("stun://stun.l.google.com:19302");
 const DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION: bool = false;
+const DEFAULT_ENABLE_CONTROL_DATA_CHANNEL: bool = false;
 const DEFAULT_DO_RETRANSMISSION: bool = true;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -40,6 +41,7 @@ struct Settings {
     video_codecs: Vec<Codec>,
     audio_codecs: Vec<Codec>,
     enable_data_channel_navigation: bool,
+    enable_control_data_channel: bool,
     do_retransmission: bool,
 }
 
@@ -68,62 +70,83 @@ impl ObjectImpl for BaseWebRTCSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPS: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecString::builder("stun-server")
-                    .nick("The STUN server to use")
-                    .blurb("The STUN server of the form stun://host:port")
-                    .flags(glib::ParamFlags::READWRITE)
-                    .default_value(DEFAULT_STUN_SERVER)
-                    .mutable_ready()
-                    .build(),
-                gst::ParamSpecArray::builder("turn-servers")
-                    .nick("List of TURN servers to use")
-                    .blurb("The TURN servers of the form <\"turn(s)://username:password@host:port\", \"turn(s)://username1:password1@host1:port1\">")
-                    .element_spec(&glib::ParamSpecString::builder("turn-server")
-                        .nick("TURN Server")
-                        .blurb("The TURN server of the form turn(s)://username:password@host:port.")
-                        .build()
-                    )
-                    .mutable_ready()
-                    .build(),
-                glib::ParamSpecObject::builder::<Signallable>("signaller")
-                    .flags(glib::ParamFlags::READWRITE | glib::ParamFlags::CONSTRUCT_ONLY)
-                    .blurb("The Signallable object to use to handle WebRTC Signalling")
-                    .build(),
-                glib::ParamSpecBoxed::builder::<gst::Structure>("meta")
-                    .flags(glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY)
-                    .blurb("Free form metadata about the consumer")
-                    .build(),
-                gst::ParamSpecArray::builder("video-codecs")
-                    .flags(glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY)
-                    .blurb(&format!("Names of video codecs to be be used during the SDP negotiation. Valid values: [{}]",
-                        Codecs::video_codecs()
-                            .map(|c| c.name.as_str())
-                            .join(", ")
-                    ))
-                    .element_spec(&glib::ParamSpecString::builder("video-codec-name").build())
-                    .build(),
-                gst::ParamSpecArray::builder("audio-codecs")
-                    .flags(glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY)
-                    .blurb(&format!("Names of audio codecs to be be used during the SDP negotiation. Valid values: [{}]",
-                        Codecs::audio_codecs()
-                            .map(|c| c.name.as_str())
-                            .join(", ")
-                    ))
-                    .element_spec(&glib::ParamSpecString::builder("audio-codec-name").build())
-                    .build(),
-                glib::ParamSpecBoolean::builder("enable-data-channel-navigation")
-                    .nick("Enable data channel navigation")
-                    .blurb("Enable navigation events through a dedicated WebRTCDataChannel")
-                    .default_value(DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION)
-                    .mutable_ready()
-                    .build(),
-                glib::ParamSpecBoolean::builder("do-retransmission")
-                    .nick("Enable retransmission")
-                    .blurb("Send retransmission events upstream when a packet is late")
-                    .default_value(DEFAULT_DO_RETRANSMISSION)
-                    .mutable_ready()
-                    .build(),
-             ]
+               glib::ParamSpecString::builder("stun-server")
+                   .nick("The STUN server to use")
+                   .blurb("The STUN server of the form stun://host:port")
+                   .flags(glib::ParamFlags::READWRITE)
+                   .default_value(DEFAULT_STUN_SERVER)
+                   .mutable_ready()
+                   .build(),
+               gst::ParamSpecArray::builder("turn-servers")
+                   .nick("List of TURN servers to use")
+                   .blurb("The TURN servers of the form <\"turn(s)://username:password@host:port\", \"turn(s)://username1:password1@host1:port1\">")
+                   .element_spec(&glib::ParamSpecString::builder("turn-server")
+                       .nick("TURN Server")
+                       .blurb("The TURN server of the form turn(s)://username:password@host:port.")
+                       .build()
+                   )
+                   .mutable_ready()
+                   .build(),
+               glib::ParamSpecObject::builder::<Signallable>("signaller")
+                   .flags(glib::ParamFlags::READWRITE | glib::ParamFlags::CONSTRUCT_ONLY)
+                   .blurb("The Signallable object to use to handle WebRTC Signalling")
+                   .build(),
+               glib::ParamSpecBoxed::builder::<gst::Structure>("meta")
+                   .flags(glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY)
+                   .blurb("Free form metadata about the consumer")
+                   .build(),
+               gst::ParamSpecArray::builder("video-codecs")
+                   .flags(glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY)
+                   .blurb(&format!("Names of video codecs to be be used during the SDP negotiation. Valid values: [{}]",
+                       Codecs::video_codecs()
+                           .map(|c| c.name.as_str())
+                           .join(", ")
+                   ))
+                   .element_spec(&glib::ParamSpecString::builder("video-codec-name").build())
+                   .build(),
+               gst::ParamSpecArray::builder("audio-codecs")
+                   .flags(glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY)
+                   .blurb(&format!("Names of audio codecs to be be used during the SDP negotiation. Valid values: [{}]",
+                       Codecs::audio_codecs()
+                           .map(|c| c.name.as_str())
+                           .join(", ")
+                   ))
+                   .element_spec(&glib::ParamSpecString::builder("audio-codec-name").build())
+                   .build(),
+               /**
+                * GstBaseWebRTCSrc:enable-data-channel-navigation:
+                *
+                * Enable navigation events through a dedicated WebRTCDataChannel.
+                *
+                * Deprecated:plugins-rs-0.14.0: Use #GstBaseWebRTCSrc:enable-control-data-channel
+                */
+               glib::ParamSpecBoolean::builder("enable-data-channel-navigation")
+                   .nick("Enable data channel navigation")
+                   .blurb("Enable navigation events through a dedicated WebRTCDataChannel")
+                   .default_value(DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION)
+                   .mutable_ready()
+                   .build(),
+               /**
+                * GstBaseWebRTCSink:enable-control-data-channel:
+                *
+                * Enable sending control requests through data channel.
+                * This includes but is not limited to the forwarding of navigation events.
+                *
+                * Since: plugins-rs-0.14.0
+                */
+               glib::ParamSpecBoolean::builder("enable-control-data-channel")
+                   .nick("Enable control data channel")
+                   .blurb("Enable sending control requests through a dedicated WebRTCDataChannel")
+                   .default_value(DEFAULT_ENABLE_CONTROL_DATA_CHANNEL)
+                   .mutable_ready()
+                   .build(),
+               glib::ParamSpecBoolean::builder("do-retransmission")
+                   .nick("Enable retransmission")
+                   .blurb("Send retransmission events upstream when a packet is late")
+                   .default_value(DEFAULT_DO_RETRANSMISSION)
+                   .mutable_ready()
+                   .build(),
+            ]
         });
 
         PROPS.as_ref()
@@ -181,6 +204,10 @@ impl ObjectImpl for BaseWebRTCSrc {
                 let mut settings = self.settings.lock().unwrap();
                 settings.enable_data_channel_navigation = value.get::<bool>().unwrap();
             }
+            "enable-control-data-channel" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.enable_control_data_channel = value.get::<bool>().unwrap();
+            }
             "do-retransmission" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.do_retransmission = value.get::<bool>().unwrap();
@@ -216,6 +243,10 @@ impl ObjectImpl for BaseWebRTCSrc {
             "enable-data-channel-navigation" => {
                 let settings = self.settings.lock().unwrap();
                 settings.enable_data_channel_navigation.to_value()
+            }
+            "enable-control-data-channel" => {
+                let settings = self.settings.lock().unwrap();
+                settings.enable_control_data_channel.to_value()
             }
             "do-retransmission" => self.settings.lock().unwrap().do_retransmission.to_value(),
             name => panic!("{} getter not implemented", name),
@@ -285,6 +316,7 @@ impl Default for Settings {
                 .cloned()
                 .collect(),
             enable_data_channel_navigation: DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION,
+            enable_control_data_channel: DEFAULT_ENABLE_CONTROL_DATA_CHANNEL,
             do_retransmission: DEFAULT_DO_RETRANSMISSION,
         }
     }
@@ -318,6 +350,7 @@ impl Session {
             n_video_pads: AtomicU16::new(0),
             n_audio_pads: AtomicU16::new(0),
             flow_combiner: Mutex::new(gst_base::UniqueFlowCombiner::new()),
+            request_counter: 0,
         })
     }
 
@@ -375,6 +408,40 @@ impl Session {
                         CAT,
                         obj = element,
                         "Sending navigation event to peer for session {}",
+                        self.id
+                    );
+                    data_channel.send_string(Some(str.as_str()));
+                }
+                None => {
+                    gst::error!(
+                        CAT,
+                        obj = element,
+                        "Could not serialize navigation event for session {}",
+                        self.id
+                    );
+                }
+            }
+        }
+    }
+
+    fn send_control_request(
+        &mut self,
+        request: utils::ControlRequest,
+        element: &super::BaseWebRTCSrc,
+    ) {
+        if let Some(data_channel) = &self.data_channel.borrow_mut() {
+            let msg = utils::ControlRequestMessage {
+                id: self.request_counter,
+                mid: None,
+                request,
+            };
+            self.request_counter += 1;
+            match serde_json::to_string(&msg).ok() {
+                Some(str) => {
+                    gst::trace!(
+                        CAT,
+                        obj = element,
+                        "Sending control request to peer for session {}",
                         self.id
                     );
                     data_channel.send_string(Some(str.as_str()));
@@ -482,13 +549,15 @@ impl Session {
             ))
             .build();
 
-        if element
-            .imp()
-            .settings
-            .lock()
-            .unwrap()
-            .enable_data_channel_navigation
-        {
+        let (enable_data_channel_navigation, enable_control_data_channel) = {
+            let settings = element.imp().settings.lock().unwrap();
+            (
+                settings.enable_data_channel_navigation,
+                settings.enable_control_data_channel,
+            )
+        };
+
+        if enable_data_channel_navigation || enable_control_data_channel {
             webrtcbin_pad.add_probe(
                 gst::PadProbeType::EVENT_UPSTREAM,
                 glib::clone!(
@@ -508,10 +577,18 @@ impl Session {
 
                         let mut state = element.imp().state.lock().unwrap();
                         if let Some(session) = state.sessions.get_mut(&sess_id) {
-                            session.send_navigation_event(
-                                gst_video::NavigationEvent::parse(ev).unwrap(),
-                                &element,
-                            );
+                            if enable_data_channel_navigation {
+                                session.send_navigation_event(
+                                    gst_video::NavigationEvent::parse(ev).unwrap(),
+                                    &element,
+                                );
+                            }
+                            if enable_control_data_channel {
+                                let request = utils::ControlRequest::NavigationEvent {
+                                    event: gst_video::NavigationEvent::parse(ev).unwrap(),
+                                };
+                                session.send_control_request(request, &element);
+                            }
                         } else {
                             gst::error!(CAT, obj = element, "session {sess_id:?} does not exist");
                         }
@@ -1432,7 +1509,14 @@ impl ElementImpl for BaseWebRTCSrc {
     fn send_event(&self, event: gst::Event) -> bool {
         match event.view() {
             gst::EventView::Navigation(ev) => {
+                let settings = self.settings.lock().unwrap();
                 let mut state = self.state.lock().unwrap();
+
+                // Return without potentially warning
+                if !settings.enable_data_channel_navigation && !settings.enable_control_data_channel
+                {
+                    return true;
+                }
 
                 if state.sessions.len() != 1 {
                     gst::warning!(
@@ -1444,15 +1528,29 @@ impl ElementImpl for BaseWebRTCSrc {
                     );
                     false
                 } else {
-                    state
-                        .sessions
-                        .values_mut()
-                        .next()
-                        .unwrap()
-                        .send_navigation_event(
-                            gst_video::NavigationEvent::parse(ev).unwrap(),
-                            &self.obj(),
-                        );
+                    if settings.enable_data_channel_navigation {
+                        state
+                            .sessions
+                            .values_mut()
+                            .next()
+                            .unwrap()
+                            .send_navigation_event(
+                                gst_video::NavigationEvent::parse(ev).unwrap(),
+                                &self.obj(),
+                            );
+                    }
+
+                    if settings.enable_control_data_channel {
+                        let request = utils::ControlRequest::NavigationEvent {
+                            event: gst_video::NavigationEvent::parse(ev).unwrap(),
+                        };
+                        state
+                            .sessions
+                            .values_mut()
+                            .next()
+                            .unwrap()
+                            .send_control_request(request, &self.obj());
+                    }
                     true
                 }
             }
@@ -1502,6 +1600,7 @@ struct Session {
     n_video_pads: AtomicU16,
     n_audio_pads: AtomicU16,
     flow_combiner: Mutex<gst_base::UniqueFlowCombiner>,
+    request_counter: u64,
 }
 struct State {
     sessions: HashMap<String, Session>,

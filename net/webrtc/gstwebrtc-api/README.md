@@ -135,7 +135,7 @@ You just need to click on the corresponding entry to connect as a consumer to th
 
 Launch the following GStreamer pipeline:
 ```shell
-$ gst-launch-1.0 wpesrc location=https://gstreamer.freedesktop.org/documentation ! queue ! webrtcsink enable-data-channel-navigation=true meta="meta,name=web-stream"
+$ gst-launch-1.0 wpesrc location=https://gstreamer.freedesktop.org/documentation ! queue ! webrtcsink enable-control-data-channel=true meta="meta,name=web-stream"
 ```
 
 Once the GStreamer pipeline launched, you will see a new producer with the name *web-stream*. When connecting to this

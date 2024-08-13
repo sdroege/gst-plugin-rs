@@ -70,6 +70,7 @@ const DEFAULT_DO_FEC: bool = true;
 const DEFAULT_DO_RETRANSMISSION: bool = true;
 const DEFAULT_DO_CLOCK_SIGNALLING: bool = false;
 const DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION: bool = false;
+const DEFAULT_ENABLE_CONTROL_DATA_CHANNEL: bool = false;
 const DEFAULT_ICE_TRANSPORT_POLICY: WebRTCICETransportPolicy = WebRTCICETransportPolicy::All;
 const DEFAULT_START_BITRATE: u32 = 2048000;
 #[cfg(feature = "web_server")]
@@ -109,6 +110,7 @@ struct Settings {
     do_retransmission: bool,
     do_clock_signalling: bool,
     enable_data_channel_navigation: bool,
+    enable_control_data_channel: bool,
     meta: Option<gst::Structure>,
     ice_transport_policy: WebRTCICETransportPolicy,
     signaller: Signallable,
@@ -501,6 +503,7 @@ struct State {
     streams: HashMap<String, InputStream>,
     discoveries: HashMap<String, Vec<DiscoveryInfo>>,
     navigation_handler: Option<NavigationEventHandler>,
+    control_events_handler: Option<ControlRequestHandler>,
     mids: HashMap<String, String>,
     signaller_signals: Option<SignallerSignals>,
     finalizing_sessions: Arc<(Mutex<HashSet<String>>, Condvar)>,
@@ -548,6 +551,111 @@ fn create_navigation_event(sink: &super::BaseWebRTCSink, msg: &str) {
     }
 }
 
+fn deserialize_serde_value(val: &serde_json::Value) -> Result<gst::glib::SendValue, Error> {
+    match val {
+        serde_json::Value::Null => {
+            return Err(anyhow!("Untyped null values are not handled"));
+        }
+        serde_json::Value::Bool(v) => Ok(v.to_send_value()),
+        serde_json::Value::Number(v) => {
+            if let Some(v) = v.as_i64() {
+                Ok(v.to_send_value())
+            } else if let Some(v) = v.as_u64() {
+                Ok(v.to_send_value())
+            } else if let Some(v) = v.as_f64() {
+                Ok(v.to_send_value())
+            } else {
+                unreachable!()
+            }
+        }
+        serde_json::Value::String(v) => Ok(v.to_send_value()),
+        serde_json::Value::Array(a) => {
+            let mut gst_array = gst::Array::default();
+
+            for val in a {
+                gst_array.append_value(deserialize_serde_value(&val)?);
+            }
+
+            Ok(gst_array.to_send_value())
+        }
+        serde_json::Value::Object(_) => {
+            Ok(deserialize_serde_object(val, "webrtcsink-deserialized")?.to_send_value())
+        }
+    }
+}
+
+fn deserialize_serde_object(obj: &serde_json::Value, name: &str) -> Result<gst::Structure, Error> {
+    let serde_json::Value::Object(map) = obj else {
+        return Err(anyhow!("not a serde object"));
+    };
+
+    let mut ret = gst::Structure::builder(name);
+
+    for (key, value) in map {
+        ret = ret.field(key, deserialize_serde_value(value)?);
+    }
+
+    Ok(ret.build())
+}
+
+fn handle_control_event(
+    sink: &super::BaseWebRTCSink,
+    msg: &str,
+) -> Result<utils::ControlResponseMessage, Error> {
+    let msg: utils::ControlRequestMessage = serde_json::from_str(msg)?;
+
+    let event = match msg.request {
+        utils::ControlRequest::NavigationEvent { event } => {
+            gst::event::Navigation::new(event.structure())
+        }
+        utils::ControlRequest::CustomUpstreamEvent {
+            structure_name,
+            structure,
+        } => {
+            gst::event::CustomUpstream::new(deserialize_serde_object(&structure, &structure_name)?)
+        }
+    };
+
+    gst::log!(CAT, obj = sink, "Processing control event: {:?}", event);
+
+    let mut ret = false;
+
+    if let Some(mid) = msg.mid {
+        let this = sink.imp();
+
+        let state = this.state.lock().unwrap();
+        if let Some(stream_name) = state.mids.get(&mid) {
+            if let Some(stream) = state.streams.get(stream_name) {
+                if !stream.sink_pad.push_event(event.clone()) {
+                    gst::info!(CAT, obj = sink, "Could not send event: {:?}", event);
+                } else {
+                    ret = true;
+                }
+            }
+        }
+    } else {
+        let this = sink.imp();
+
+        let state = this.state.lock().unwrap();
+        state.streams.iter().for_each(|(_, stream)| {
+            if !stream.sink_pad.push_event(event.clone()) {
+                gst::info!(CAT, obj = sink, "Could not send event: {:?}", event);
+            } else {
+                ret = true;
+            }
+        });
+    }
+
+    Ok(utils::ControlResponseMessage {
+        id: msg.id,
+        error: if ret {
+            None
+        } else {
+            Some("No sink pad could handle the request".to_string())
+        },
+    })
+}
+
 /// Simple utility for tearing down a pipeline cleanly
 struct PipelineWrapper(gst::Pipeline);
 
@@ -556,6 +664,11 @@ struct PipelineWrapper(gst::Pipeline);
 #[allow(dead_code)]
 #[derive(Debug)]
 struct NavigationEventHandler((glib::SignalHandlerId, WebRTCDataChannel));
+
+// Structure to generate arbitrary upstream events from a WebRTCDataChannel
+#[allow(dead_code)]
+#[derive(Debug)]
+struct ControlRequestHandler((glib::SignalHandlerId, WebRTCDataChannel));
 
 /// Our instance structure
 #[derive(Default)]
@@ -589,6 +702,7 @@ impl Default for Settings {
             do_retransmission: DEFAULT_DO_RETRANSMISSION,
             do_clock_signalling: DEFAULT_DO_CLOCK_SIGNALLING,
             enable_data_channel_navigation: DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION,
+            enable_control_data_channel: DEFAULT_ENABLE_CONTROL_DATA_CHANNEL,
             meta: None,
             ice_transport_policy: DEFAULT_ICE_TRANSPORT_POLICY,
             signaller: signaller.upcast(),
@@ -622,6 +736,7 @@ impl Default for State {
             streams: HashMap::new(),
             discoveries: HashMap::new(),
             navigation_handler: None,
+            control_events_handler: None,
             mids: HashMap::new(),
             signaller_signals: Default::default(),
             finalizing_sessions: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
@@ -1635,6 +1750,51 @@ impl NavigationEventHandler {
                     element,
                     move |_channel: &WebRTCDataChannel, msg: &str| {
                         create_navigation_event(element, msg);
+                    }
+                ),
+            ),
+            channel,
+        ))
+    }
+}
+
+impl ControlRequestHandler {
+    fn new(element: &super::BaseWebRTCSink, webrtcbin: &gst::Element) -> Self {
+        let channel = webrtcbin.emit_by_name::<WebRTCDataChannel>(
+            "create-data-channel",
+            &[
+                &"control",
+                &gst::Structure::builder("config")
+                    .field("priority", gst_webrtc::WebRTCPriorityType::High)
+                    .build(),
+            ],
+        );
+
+        Self((
+            channel.connect_closure(
+                "on-message-string",
+                false,
+                glib::closure!(
+                    #[watch]
+                    element,
+                    move |channel: &WebRTCDataChannel, msg: &str| {
+                        match handle_control_event(element, msg) {
+                            Err(err) => {
+                                gst::error!(CAT, "Failed to handle control event: {err:?}");
+                            }
+                            Ok(msg) => match serde_json::to_string(&msg).ok() {
+                                Some(s) => {
+                                    channel.send_string(Some(s.as_str()));
+                                }
+                                None => {
+                                    gst::error!(
+                                        CAT,
+                                        obj = element,
+                                        "Failed to serialize control response",
+                                    );
+                                }
+                            },
+                        }
                     }
                 ),
             ),
@@ -3176,6 +3336,7 @@ impl BaseWebRTCSink {
                 }
 
                 let enable_data_channel_navigation = settings_clone.enable_data_channel_navigation;
+                let enable_control_data_channel = settings_clone.enable_control_data_channel;
 
                 drop(settings_clone);
 
@@ -3205,6 +3366,12 @@ impl BaseWebRTCSink {
                     let mut state = this.state.lock().unwrap();
                     state.navigation_handler =
                         Some(NavigationEventHandler::new(&element, &webrtcbin));
+                }
+
+                if enable_control_data_channel {
+                    let mut state = this.state.lock().unwrap();
+                    state.control_events_handler =
+                        Some(ControlRequestHandler::new(&element, &webrtcbin));
                 }
 
                 // This is intentionally emitted with the pipeline in the Ready state,
@@ -4167,10 +4334,30 @@ impl ObjectImpl for BaseWebRTCSink {
                     .default_value(DEFAULT_DO_CLOCK_SIGNALLING)
                     .mutable_ready()
                     .build(),
+                /**
+                 * GstBaseWebRTCSink:enable-data-channel-navigation:
+                 *
+                 * Enable navigation events through a dedicated WebRTCDataChannel.
+                 *
+                 * Deprecated:plugins-rs-0.14.0: Use #GstBaseWebRTCSink:enable-control-data-channel
+                 */
                 glib::ParamSpecBoolean::builder("enable-data-channel-navigation")
                     .nick("Enable data channel navigation")
                     .blurb("Enable navigation events through a dedicated WebRTCDataChannel")
                     .default_value(DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION)
+                    .mutable_ready()
+                    .build(),
+                /**
+                 * GstBaseWebRTCSink:enable-control-data-channel:
+                 *
+                 * Enable receiving arbitrary events through data channel.
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
+                glib::ParamSpecBoolean::builder("enable-control-data-channel")
+                    .nick("Enable control data channel")
+                    .blurb("Enable receiving arbitrary events through data channel")
+                    .default_value(DEFAULT_ENABLE_CONTROL_DATA_CHANNEL)
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecBoxed::builder::<gst::Structure>("meta")
@@ -4342,6 +4529,11 @@ impl ObjectImpl for BaseWebRTCSink {
                 settings.enable_data_channel_navigation =
                     value.get::<bool>().expect("type checked upstream");
             }
+            "enable-control-data-channel" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.enable_control_data_channel =
+                    value.get::<bool>().expect("type checked upstream");
+            }
             "meta" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.meta = value
@@ -4455,6 +4647,10 @@ impl ObjectImpl for BaseWebRTCSink {
             "enable-data-channel-navigation" => {
                 let settings = self.settings.lock().unwrap();
                 settings.enable_data_channel_navigation.to_value()
+            }
+            "enable-control-data-channel" => {
+                let settings = self.settings.lock().unwrap();
+                settings.enable_control_data_channel.to_value()
             }
             "stats" => self.gather_stats().to_value(),
             "meta" => {

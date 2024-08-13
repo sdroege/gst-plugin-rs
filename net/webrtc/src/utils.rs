@@ -999,11 +999,43 @@ pub fn cleanup_codec_caps(mut caps: gst::Caps) -> gst::Caps {
     caps
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct NavigationEvent {
     pub mid: Option<String>,
     #[serde(flatten)]
     pub event: gst_video::NavigationEvent,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[serde(tag = "type")]
+#[serde(rename_all = "camelCase")]
+pub enum ControlRequest {
+    NavigationEvent {
+        event: gst_video::NavigationEvent,
+    },
+    #[serde(rename_all = "camelCase")]
+    CustomUpstreamEvent {
+        structure_name: String,
+        structure: serde_json::Value,
+    },
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ControlRequestMessage {
+    pub id: u64,
+    pub mid: Option<String>,
+    pub request: ControlRequest,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+#[serde(tag = "type")]
+pub struct ControlResponseMessage {
+    pub id: u64,
+    pub error: Option<String>,
 }
 
 pub fn find_smallest_available_ext_id(ids: impl IntoIterator<Item = u32>) -> u32 {

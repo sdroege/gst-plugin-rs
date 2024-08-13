@@ -93,6 +93,7 @@ export default class RemoteController extends EventTarget {
     this._videoElementComputedStyle = null;
     this._videoElementKeyboard = null;
     this._lastTouchEventTimestamp = 0;
+    this._requestCounter = 0;
 
     rtcDataChannel.addEventListener("close", () => {
       if (this._rtcDataChannel === rtcDataChannel) {
@@ -109,7 +110,23 @@ export default class RemoteController extends EventTarget {
         }));
       }
     });
+
+    rtcDataChannel.addEventListener("message", (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+
+        if (msg.type === "ControlResponseMessage") {
+          this.dispatchEvent(new CustomEvent("controlResponse", { detail: msg }));
+        }
+      } catch (ex) {
+        this.dispatchEvent(new ErrorEvent("error", {
+          message: "cannot parse control message from signaling server",
+          error: ex
+        }));
+      }
+    });
   }
+
 
   /**
      * The underlying WebRTC data channel connected to a remote GStreamer webrtcsink producer offering remote control.
@@ -180,6 +197,42 @@ export default class RemoteController extends EventTarget {
   }
 
   /**
+     * Send a request over the control data channel.<br>
+     *
+     * @method GstWebRTCAPI.RemoteController#sendControlRequest
+     * @fires {@link GstWebRTCAPI#event:ErrorEvent}
+     * @param {object} request - The request to stringify and send over the channel
+     * @param {string} request.type - The type of the request
+     * @returns {number} The identifier attributed to the request, or -1 if an exception occurred
+     */
+  sendControlRequest(request) {
+    try {
+      if (!request || (typeof (request) !== "object")) {
+        throw new Error("invalid request");
+      }
+
+      if (!this._rtcDataChannel) {
+        throw new Error("remote controller data channel is closed");
+      }
+
+      let message = {
+        id: this._requestCounter++,
+        request: request
+      };
+
+      this._rtcDataChannel.send(JSON.stringify(message));
+
+      return message.id;
+    } catch (ex) {
+      this.dispatchEvent(new ErrorEvent("error", {
+        message: `cannot send control message over session ${this._consumerSession.sessionId} remote controller`,
+        error: ex
+      }));
+      return -1;
+    }
+  }
+
+  /**
      * Closes the remote controller channel.<br>
      * It immediately shuts down the underlying WebRTC data channel connected to a remote GStreamer webrtcsink
      * producer and detaches any video element that may be used to relay mouse and keyboard events.
@@ -198,22 +251,11 @@ export default class RemoteController extends EventTarget {
   }
 
   _sendGstNavigationEvent(data) {
-    try {
-      if (!data || (typeof (data) !== "object")) {
-        throw new Error("invalid GstNavigation event");
-      }
-
-      if (!this._rtcDataChannel) {
-        throw new Error("remote controller data channel is closed");
-      }
-
-      this._rtcDataChannel.send(JSON.stringify(data));
-    } catch (ex) {
-      this.dispatchEvent(new ErrorEvent("error", {
-        message: `cannot send GstNavigation event over session ${this._consumerSession.sessionId} remote controller`,
-        error: ex
-      }));
-    }
+    let request = {
+      type: "navigationEvent",
+      event: data
+    };
+    this.sendControlRequest(request);
   }
 
   _computeVideoMousePosition(event) {
