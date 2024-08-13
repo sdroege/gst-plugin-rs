@@ -13,8 +13,8 @@ cairo-rs.workspace = true
 atomic_refcell = "0.1"
 color-thief = "0.2.2"
 color-name = "1.0.0"
-image = { version = "0.24.2", default-features = false }
-image_hasher = "1.0.0"
+image = { version = "0.25", default-features = false }
+image_hasher = "2.0.0"
 dssim-core = { version = "3.2.3", optional = true }
 rgb = { version = "0.8", optional = true }
 once_cell.workspace = true
