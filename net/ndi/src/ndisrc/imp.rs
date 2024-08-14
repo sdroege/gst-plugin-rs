@@ -363,6 +363,7 @@ impl ElementImpl for NdiSrc {
         PAD_TEMPLATES.as_ref()
     }
 
+    #[allow(clippy::single_match)]
     fn change_state(
         &self,
         transition: gst::StateChange,
@@ -389,10 +390,66 @@ impl ElementImpl for NdiSrc {
                     controller.shutdown();
                 }
             }
+            gst::StateChange::ReadyToPaused => {
+                *self.state.lock().unwrap() = Default::default();
+                let settings = self.settings.lock().unwrap().clone();
+
+                if settings.ndi_name.is_none() && settings.url_address.is_none() {
+                    gst::element_imp_error!(
+                        self,
+                        gst::LibraryError::Settings,
+                        ["No NDI name or URL/address given"]
+                    );
+
+                    return Err(gst::StateChangeError);
+                }
+
+                let receiver = Receiver::connect(
+                    self.obj().upcast_ref(),
+                    settings.ndi_name.as_deref(),
+                    settings.url_address.as_deref(),
+                    &settings.receiver_ndi_name,
+                    settings.connect_timeout,
+                    settings.bandwidth,
+                    settings.color_format.into(),
+                    settings.timeout,
+                    settings.max_queue_length as usize,
+                );
+
+                match receiver {
+                    None => {
+                        gst::element_imp_error!(
+                            self,
+                            gst::ResourceError::NotFound,
+                            ["Could not connect to this source"]
+                        );
+
+                        return Err(gst::StateChangeError);
+                    }
+                    Some(receiver) => {
+                        *self.receiver_controller.lock().unwrap() =
+                            Some(receiver.receiver_control_handle());
+                        let mut state = self.state.lock().unwrap();
+                        state.receiver = Some(receiver);
+                        state.timestamp_mode = settings.timestamp_mode;
+                    }
+                }
+            }
+
             _ => (),
         }
 
-        self.parent_change_state(transition)
+        let res = self.parent_change_state(transition)?;
+
+        match transition {
+            gst::StateChange::PausedToReady => {
+                *self.receiver_controller.lock().unwrap() = None;
+                *self.state.lock().unwrap() = State::default();
+            }
+            _ => (),
+        }
+
+        Ok(res)
     }
 }
 
@@ -416,54 +473,6 @@ impl BaseSrcImpl for NdiSrc {
         if let Some(ref controller) = *self.receiver_controller.lock().unwrap() {
             controller.set_flushing(false);
         }
-        Ok(())
-    }
-
-    fn start(&self) -> Result<(), gst::ErrorMessage> {
-        *self.state.lock().unwrap() = Default::default();
-        let settings = self.settings.lock().unwrap().clone();
-
-        if settings.ndi_name.is_none() && settings.url_address.is_none() {
-            return Err(gst::error_msg!(
-                gst::LibraryError::Settings,
-                ["No NDI name or URL/address given"]
-            ));
-        }
-
-        let receiver = Receiver::connect(
-            self.obj().upcast_ref(),
-            settings.ndi_name.as_deref(),
-            settings.url_address.as_deref(),
-            &settings.receiver_ndi_name,
-            settings.connect_timeout,
-            settings.bandwidth,
-            settings.color_format.into(),
-            settings.timeout,
-            settings.max_queue_length as usize,
-        );
-
-        match receiver {
-            None => Err(gst::error_msg!(
-                gst::ResourceError::NotFound,
-                ["Could not connect to this source"]
-            )),
-            Some(receiver) => {
-                *self.receiver_controller.lock().unwrap() =
-                    Some(receiver.receiver_control_handle());
-                let mut state = self.state.lock().unwrap();
-                state.receiver = Some(receiver);
-                state.timestamp_mode = settings.timestamp_mode;
-
-                Ok(())
-            }
-        }
-    }
-
-    fn stop(&self) -> Result<(), gst::ErrorMessage> {
-        if let Some(ref controller) = self.receiver_controller.lock().unwrap().take() {
-            controller.shutdown();
-        }
-        *self.state.lock().unwrap() = State::default();
         Ok(())
     }
 
