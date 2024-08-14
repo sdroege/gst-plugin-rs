@@ -108,7 +108,7 @@ fn test_hlssink3_element_with_video_content() -> Result<(), ()> {
     let pipeline = gst::Pipeline::with_name("video_pipeline");
 
     let video_src = try_create_element!("videotestsrc");
-    video_src.set_property("is-live", true);
+    video_src.set_property("is-live", false);
     video_src.set_property("num-buffers", BUFFER_NB);
 
     let x264enc = try_create_element!("x264enc");
@@ -257,7 +257,7 @@ fn test_hlssink3_element_with_audio_content() -> Result<(), ()> {
     let pipeline = gst::Pipeline::with_name("audio_pipeline");
 
     let audio_src = try_create_element!("audiotestsrc");
-    audio_src.set_property("is-live", true);
+    audio_src.set_property("is-live", false);
     audio_src.set_property("num-buffers", BUFFER_NB);
 
     let hls_avenc_aac = try_or_pause!(gst::ElementFactory::make("avenc_aac")
@@ -320,7 +320,7 @@ fn test_hlssink3_write_correct_playlist_content() -> Result<(), ()> {
     let pipeline = gst::Pipeline::with_name("video_pipeline");
 
     let video_src = try_create_element!("videotestsrc");
-    video_src.set_property("is-live", true);
+    video_src.set_property("is-live", false);
     video_src.set_property("num-buffers", BUFFER_NB);
 
     let x264enc = try_create_element!("x264enc");
