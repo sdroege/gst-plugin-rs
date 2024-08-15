@@ -48,6 +48,10 @@ import GstWebRTCAPI from "./gstwebrtc-api.js";
  * @external HTMLVideoElement
  * @see https://developer.mozilla.org/en-US/docs/Web/API/HTMLVideoElement
  */
+/**
+ * @external JSON.stringify
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify
+ */
 
 if (!window.GstWebRTCAPI) {
   window.GstWebRTCAPI = GstWebRTCAPI;

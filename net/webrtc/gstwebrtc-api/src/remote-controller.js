@@ -203,10 +203,18 @@ export default class RemoteController extends EventTarget {
      * @fires {@link GstWebRTCAPI#event:ErrorEvent}
      * @param {object} request - The request to stringify and send over the channel
      * @param {string} request.type - The type of the request
+     * @param {function} stringifier - An optional callback for stringifying,
+     * {@link external:JSON.stringify} will be used otherwise.
      * @returns {number} The identifier attributed to the request, or -1 if an exception occurred
      */
-  sendControlRequest(request) {
+  sendControlRequest(request, stringifier) {
     try {
+      if (stringifier && (typeof(stringifier) !== "function")) {
+        throw new Error("invalid stringifier");
+      } else if (!stringifier) {
+        stringifier = JSON.stringify;
+      }
+
       if (!request || (typeof (request) !== "object")) {
         throw new Error("invalid request");
       }
@@ -220,7 +228,7 @@ export default class RemoteController extends EventTarget {
         request: request
       };
 
-      this._rtcDataChannel.send(JSON.stringify(message));
+      this._rtcDataChannel.send(stringifier(message));
 
       return message.id;
     } catch (ex) {

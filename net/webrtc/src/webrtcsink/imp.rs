@@ -553,9 +553,7 @@ fn create_navigation_event(sink: &super::BaseWebRTCSink, msg: &str) {
 
 fn deserialize_serde_value(val: &serde_json::Value) -> Result<gst::glib::SendValue, Error> {
     match val {
-        serde_json::Value::Null => {
-            return Err(anyhow!("Untyped null values are not handled"));
-        }
+        serde_json::Value::Null => Err(anyhow!("Untyped null values are not handled")),
         serde_json::Value::Bool(v) => Ok(v.to_send_value()),
         serde_json::Value::Number(v) => {
             if let Some(v) = v.as_i64() {
@@ -573,7 +571,7 @@ fn deserialize_serde_value(val: &serde_json::Value) -> Result<gst::glib::SendVal
             let mut gst_array = gst::Array::default();
 
             for val in a {
-                gst_array.append_value(deserialize_serde_value(&val)?);
+                gst_array.append_value(deserialize_serde_value(val)?);
             }
 
             Ok(gst_array.to_send_value())
