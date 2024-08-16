@@ -1047,7 +1047,6 @@ impl FMP4Mux {
                 fragment_start_pts,
                 fragment_end_pts,
                 chunk_start_pts,
-                false,
             );
         }
 
@@ -1077,7 +1076,6 @@ impl FMP4Mux {
         fragment_start_pts: Option<gst::ClockTime>,
         fragment_end_pts: Option<gst::ClockTime>,
         chunk_start_pts: Option<gst::ClockTime>,
-        all_eos: bool,
     ) {
         // Either all are none or none are
         let (chunk_start_pts, fragment_start_pts, fragment_end_pts) =
@@ -1161,7 +1159,7 @@ impl FMP4Mux {
                     .queued_gops
                     .iter()
                     .enumerate()
-                    .find(|(_idx, gop)| gop.final_end_pts || all_eos || stream.sinkpad.is_eos())
+                    .find(|(_idx, gop)| gop.final_end_pts || stream.sinkpad.is_eos())
                 {
                     gst::trace!(
                         CAT,
@@ -1207,9 +1205,12 @@ impl FMP4Mux {
 
                 // We can only finish a chunk if a full GOP with final end PTS is queued and it
                 // ends at or after the fragment end PTS.
-                let (gop_idx, gop) = match stream.queued_gops.iter().enumerate().find(
-                    |(_idx, gop)| gop.final_earliest_pts || all_eos || stream.sinkpad.is_eos(),
-                ) {
+                let (gop_idx, gop) = match stream
+                    .queued_gops
+                    .iter()
+                    .enumerate()
+                    .find(|(_idx, gop)| gop.final_earliest_pts || stream.sinkpad.is_eos())
+                {
                     Some(res) => res,
                     None => {
                         gst::trace!(
@@ -1227,7 +1228,7 @@ impl FMP4Mux {
                     "GOP {gop_idx} start PTS {}, GOP end PTS {} (final {})",
                     gop.start_pts,
                     gop.end_pts,
-                    gop.final_end_pts || all_eos || stream.sinkpad.is_eos(),
+                    gop.final_end_pts || stream.sinkpad.is_eos(),
                 );
                 let last_pts = gop.buffers.last().map(|b| b.pts);
 
@@ -1280,7 +1281,7 @@ impl FMP4Mux {
                 .queued_gops
                 .iter()
                 .enumerate()
-                .find(|(_gop_idx, gop)| gop.final_end_pts || all_eos || stream.sinkpad.is_eos())
+                .find(|(_gop_idx, gop)| gop.final_end_pts || stream.sinkpad.is_eos())
             {
                 Some(gop) => gop,
                 None => {
@@ -1450,7 +1451,6 @@ impl FMP4Mux {
                 state.fragment_start_pts,
                 state.fragment_end_pts,
                 state.chunk_start_pts,
-                all_eos,
             );
         }
     }
@@ -1471,7 +1471,6 @@ impl FMP4Mux {
     ) -> Result<Vec<Gop>, gst::FlowError> {
         assert!(
             timeout
-                || all_eos
                 || stream.sinkpad.is_eos()
                 || stream.queued_gops.get(1).map(|gop| gop.final_earliest_pts) == Some(true)
                 || settings.chunk_duration.is_some()
@@ -1523,7 +1522,7 @@ impl FMP4Mux {
                         "Fragment filled, current GOP start {} end {} (final {})",
                         gop.start_pts,
                         gop.end_pts,
-                        gop.final_end_pts || all_eos || stream.sinkpad.is_eos()
+                        gop.final_end_pts || stream.sinkpad.is_eos()
                     );
 
                     // If we have a final GOP then include it as long as it's either
@@ -1532,7 +1531,7 @@ impl FMP4Mux {
                     //
                     // The second case would happen if no GOP ends between the last chunk of the
                     // fragment and the fragment duration.
-                    if (gop.final_end_pts || all_eos || stream.sinkpad.is_eos())
+                    if (gop.final_end_pts || stream.sinkpad.is_eos())
                         && (gop.end_pts <= dequeue_end_pts
                             || (gops.is_empty() && chunk_end_pts.is_none()))
                     {
@@ -1549,7 +1548,7 @@ impl FMP4Mux {
                     //
                     // If this is not the first stream then take an incomplete GOP.
                     if gop.start_pts >= dequeue_end_pts
-                        || (!gop.final_earliest_pts && !all_eos && !stream.sinkpad.is_eos())
+                        || (!gop.final_earliest_pts && !stream.sinkpad.is_eos())
                     {
                         gst::trace!(CAT, obj = stream.sinkpad, "GOP starts after fragment end",);
                         break;
@@ -1570,17 +1569,16 @@ impl FMP4Mux {
                         "Chunk filled, current GOP start {} end {} (final {})",
                         gop.start_pts,
                         gop.end_pts,
-                        gop.final_end_pts || all_eos || stream.sinkpad.is_eos()
+                        gop.final_end_pts || stream.sinkpad.is_eos()
                     );
                 }
 
-                if gop.end_pts <= dequeue_end_pts
-                    && (gop.final_end_pts || all_eos || stream.sinkpad.is_eos())
+                if gop.end_pts <= dequeue_end_pts && (gop.final_end_pts || stream.sinkpad.is_eos())
                 {
                     gst::trace!(CAT, obj = stream.sinkpad, "Pushing whole GOP",);
                     gops.push(stream.queued_gops.pop_back().unwrap());
                 } else if gop.start_pts >= dequeue_end_pts
-                    || (!gop.final_earliest_pts && !all_eos && !stream.sinkpad.is_eos())
+                    || (!gop.final_earliest_pts && !stream.sinkpad.is_eos())
                 {
                     gst::trace!(CAT, obj = stream.sinkpad, "GOP starts after chunk end",);
                     break;
@@ -1617,7 +1615,7 @@ impl FMP4Mux {
                     // The last buffer of the GOP starts before the chunk end but ends
                     // after the end. We still take it here and remove the whole GOP.
                     if split_index == gop.buffers.len() - 1 {
-                        if gop.final_end_pts || all_eos || stream.sinkpad.is_eos() {
+                        if gop.final_end_pts || stream.sinkpad.is_eos() {
                             gst::trace!(CAT, obj = stream.sinkpad, "Pushing whole GOP",);
                             gops.push(stream.queued_gops.pop_back().unwrap());
                         } else {
@@ -1704,7 +1702,7 @@ impl FMP4Mux {
                     "Current GOP start {} end {} (final {})",
                     gop.start_pts,
                     gop.end_pts,
-                    gop.final_end_pts || all_eos || stream.sinkpad.is_eos()
+                    gop.final_end_pts || stream.sinkpad.is_eos()
                 );
 
                 // If this GOP is not complete then we can't pop it yet.
@@ -1712,7 +1710,7 @@ impl FMP4Mux {
                 // If there was no complete GOP at all yet then it might be bigger than the
                 // fragment duration. In this case we might not be able to handle the latency
                 // requirements in a live pipeline.
-                if !gop.final_end_pts && !all_eos && !stream.sinkpad.is_eos() {
+                if !gop.final_end_pts && !stream.sinkpad.is_eos() {
                     gst::trace!(
                         CAT,
                         obj = stream.sinkpad,
@@ -2032,7 +2030,7 @@ impl FMP4Mux {
                                 chunk_start_pts + settings.chunk_duration.unwrap()
                             }
                     });
-                    if all_eos || stream.sinkpad.is_eos() || stream_after_chunk {
+                    if stream.sinkpad.is_eos() || stream_after_chunk {
                         // This is handled below generally if nothing was dequeued
                     } else {
                         if settings.chunk_duration.is_some() {
@@ -2655,7 +2653,6 @@ impl FMP4Mux {
                     fragment_start_pts,
                     fragment_end_pts,
                     chunk_start_pts,
-                    all_eos,
                 );
             }
 
@@ -3484,7 +3481,6 @@ impl AggregatorImpl for FMP4Mux {
                         fragment_start_pts,
                         fragment_end_pts,
                         chunk_start_pts,
-                        true,
                     );
                 }
             }
