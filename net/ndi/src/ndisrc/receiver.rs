@@ -321,72 +321,68 @@ impl Receiver {
                     gst::debug!(CAT, obj = element, "No frame received yet, retry");
                     continue;
                 }
-                Ok(Some(Frame::Video(frame))) => {
+                Ok(Some(frame)) => {
                     if let Some(receive_time_gst) = element.current_running_time() {
                         let receive_time_real = (glib::real_time() as u64 * 1000).nseconds();
 
-                        first_frame = false;
-                        let discont = first_video_frame;
-                        first_video_frame = false;
+                        if matches!(frame, Frame::Video(_) | Frame::Audio(_)) {
+                            first_frame = false;
+                        }
 
-                        gst::debug!(
-                            CAT,
-                            obj = element,
-                            "Received video frame at timecode {}: {:?}",
-                            (frame.timecode() as u64 * 100).nseconds(),
-                            frame,
-                        );
+                        match frame {
+                            Frame::Video(frame) => {
+                                let discont = first_video_frame;
+                                first_video_frame = false;
 
-                        Ok(Buffer::Video {
-                            frame,
-                            discont,
-                            receive_time_gst,
-                            receive_time_real,
-                        })
-                    } else {
-                        Err(gst::FlowError::Flushing)
-                    }
-                }
-                Ok(Some(Frame::Audio(frame))) => {
-                    if let Some(receive_time_gst) = element.current_running_time() {
-                        let receive_time_real = (glib::real_time() as u64 * 1000).nseconds();
-                        first_frame = false;
-                        let discont = first_audio_frame;
-                        first_audio_frame = false;
+                                gst::debug!(
+                                    CAT,
+                                    obj = element,
+                                    "Received video frame at timecode {}: {:?}",
+                                    (frame.timecode() as u64 * 100).nseconds(),
+                                    frame,
+                                );
 
-                        gst::debug!(
-                            CAT,
-                            obj = element,
-                            "Received audio frame at timecode {}: {:?}",
-                            (frame.timecode() as u64 * 100).nseconds(),
-                            frame,
-                        );
+                                Ok(Buffer::Video {
+                                    frame,
+                                    discont,
+                                    receive_time_gst,
+                                    receive_time_real,
+                                })
+                            }
+                            Frame::Audio(frame) => {
+                                let discont = first_audio_frame;
+                                first_audio_frame = false;
 
-                        Ok(Buffer::Audio {
-                            frame,
-                            discont,
-                            receive_time_gst,
-                            receive_time_real,
-                        })
-                    } else {
-                        Err(gst::FlowError::Flushing)
-                    }
-                }
-                Ok(Some(Frame::Metadata(frame))) => {
-                    if let Some(receive_time_gst) = element.current_running_time() {
-                        let receive_time_real = (glib::real_time() as u64 * 1000).nseconds();
-                        gst::debug!(
-                            CAT,
-                            obj = element,
-                            "Received metadata frame at timecode {}: {:?}",
-                            (frame.timecode() as u64 * 100).nseconds(),
-                            frame,
-                        );
-                        Ok(Buffer::Metadata {
-                            frame,
-                            receive_time_gst,
-                            receive_time_real,
-                        })
+                                gst::debug!(
+                                    CAT,
+                                    obj = element,
+                                    "Received audio frame at timecode {}: {:?}",
+                                    (frame.timecode() as u64 * 100).nseconds(),
+                                    frame,
+                                );
+
+                                Ok(Buffer::Audio {
+                                    frame,
+                                    discont,
+                                    receive_time_gst,
+                                    receive_time_real,
+                                })
+                            }
+                            Frame::Metadata(frame) => {
+                                gst::debug!(
+                                    CAT,
+                                    obj = element,
+                                    "Received metadata frame at timecode {}: {:?}",
+                                    (frame.timecode() as u64 * 100).nseconds(),
+                                    frame,
+                                );
+                                Ok(Buffer::Metadata {
+                                    frame,
+                                    receive_time_gst,
+                                    receive_time_real,
+                                })
+                            }
+                        }
                     } else {
                         Err(gst::FlowError::Flushing)
                     }
