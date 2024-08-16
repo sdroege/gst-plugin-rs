@@ -337,8 +337,10 @@ impl Receiver {
                                 gst::debug!(
                                     CAT,
                                     obj = element,
-                                    "Received video frame at timecode {}: {:?}",
+                                    "Received video frame with timecode {} at {} (wallclock: {}): {:?}",
                                     (frame.timecode() as u64 * 100).nseconds(),
+                                    receive_time_gst,
+                                    receive_time_real,
                                     frame,
                                 );
 
@@ -356,8 +358,10 @@ impl Receiver {
                                 gst::debug!(
                                     CAT,
                                     obj = element,
-                                    "Received audio frame at timecode {}: {:?}",
+                                    "Received audio frame with timecode {} at {} (wallclock: {}): {:?}",
                                     (frame.timecode() as u64 * 100).nseconds(),
+                                    receive_time_gst,
+                                    receive_time_real,
                                     frame,
                                 );
 
@@ -372,8 +376,10 @@ impl Receiver {
                                 gst::debug!(
                                     CAT,
                                     obj = element,
-                                    "Received metadata frame at timecode {}: {:?}",
+                                    "Received metadata frame with timecode {} at {} (wallclock: {}): {:?}",
                                     (frame.timecode() as u64 * 100).nseconds(),
+                                    receive_time_gst,
+                                    receive_time_real,
                                     frame,
                                 );
                                 Ok(Buffer::Metadata {

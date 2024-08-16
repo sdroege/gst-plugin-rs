@@ -644,8 +644,7 @@ impl NdiSrc {
         gst::log!(
             CAT,
             imp = self,
-            "Received frame with timecode {}, timestamp {}, duration {}, receive time {}, local time now {}",
-            timecode,
+            "Received frame of type {idx} with timecode {timecode}, timestamp {}, duration {}, receive time {}, local time now {}",
             timestamp.display(),
             duration.display(),
             receive_time_gst.display(),
