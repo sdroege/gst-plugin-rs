@@ -207,6 +207,7 @@ plugins = {
   },
   'gopbuffer': {'library': 'libgstgopbuffer'},
   'quinn': {'library': 'libgstquinn'},
+  'speechmatics': {'library': 'libgstspeechmatics'},
 }
 
 # Won't build on platforms where it bundles the sources because of:

@@ -6,6 +6,7 @@ option('claxon', type: 'feature', value: 'auto', description: 'Build claxon plug
 option('csound', type: 'feature', value: 'auto', description: 'Build csound plugin')
 option('lewton', type: 'feature', value: 'auto', description: 'Build lewton plugin')
 option('spotify', type: 'feature', value: 'auto', description: 'Build spotify plugin')
+option('speechmatics', type: 'feature', value: 'auto', description: 'Build speechmatics plugin')
 
 # generic
 option('file', type: 'feature', value: 'auto', description: 'Build file plugin')

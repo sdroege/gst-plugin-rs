@@ -2871,6 +2871,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "gst-plugin-speechmatics"
+version = "0.14.0-alpha.1"
+dependencies = [
+ "async-tungstenite",
+ "atomic_refcell",
+ "futures",
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "gstreamer-audio",
+ "gstreamer-base",
+ "http 1.1.0",
+ "once_cell",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "gst-plugin-spotify"
 version = "0.14.0-alpha.1"
 dependencies = [

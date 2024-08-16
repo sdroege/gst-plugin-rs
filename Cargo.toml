@@ -9,6 +9,7 @@ members = [
     "audio/claxon",
     "audio/csound",
     "audio/lewton",
+    "audio/speechmatics",
     "audio/spotify",
 
     "generic/file",

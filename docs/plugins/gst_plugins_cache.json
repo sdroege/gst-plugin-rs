@@ -11246,6 +11246,155 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "speechmatics": {
+        "description": "GStreamer Speechmatics plugin",
+        "elements": {
+            "speechmaticstranscriber": {
+                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
+                "description": "Speech to Text filter, using Speechmatics transcribe",
+                "hierarchy": [
+                    "GstSpeechmaticsTranscriber",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
+                "klass": "Audio/Text/Filter",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/x-raw:\n           rate: [ 8000, 48000 ]\n       channels: 1\n         layout: { (string)interleaved, (string)non-interleaved }\n         format: S16LE\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "direction": "src",
+                        "presence": "always",
+                        "type": "GstSpeechmaticsTranscriberSrcPad"
+                    },
+                    "translate_src_%%u": {
+                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "direction": "src",
+                        "presence": "request",
+                        "type": "GstSpeechmaticsTranscriberSrcPad"
+                    }
+                },
+                "properties": {
+                    "additional-vocabulary": {
+                        "blurb": "Additional vocabulary speechmatics should use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": true
+                    },
+                    "api-key": {
+                        "blurb": "Speechmatics API Key",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "language-code": {
+                        "blurb": "The Language of the Stream, ISO code",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "en",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "latency": {
+                        "blurb": "Amount of milliseconds to allow for transcription",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "8000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "lateness": {
+                        "blurb": "Amount of milliseconds to introduce as lateness",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "url": {
+                        "blurb": "URL of the transcription server",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "ws://0.0.0.0:9000",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstspeechmatics",
+        "license": "Proprietary",
+        "other-types": {
+            "GstSpeechmaticsTranscriberSrcPad": {
+                "hierarchy": [
+                    "GstSpeechmaticsTranscriberSrcPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "language-code": {
+                        "blurb": "The Language the Stream must be translated to",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                }
+            }
+        },
+        "package": "gst-plugin-speechmatics",
+        "source": "gst-plugin-speechmatics",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "spotify": {
         "description": "GStreamer Spotify Plugin",
         "elements": {
