@@ -433,7 +433,7 @@ impl Session {
             let msg = utils::ControlRequestMessage {
                 id: self.request_counter,
                 mid: None,
-                request,
+                request: utils::StringOrRequest::Request(request),
             };
             self.request_counter += 1;
             match serde_json::to_string(&msg).ok() {

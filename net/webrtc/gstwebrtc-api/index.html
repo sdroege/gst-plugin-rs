@@ -82,9 +82,17 @@
       outline: none;
     }
 
-    div.video, div.offer-options, div.mix-matrix {
+    div.video, div.offer-options, div.request-box {
       position: relative;
       margin: 1em;
+    }
+
+    div.request-box {
+      display: none;
+    }
+
+    #remote-streams>li.streaming.has-remote-control .request-box {
+      display: block;
     }
 
     div.video>div.fullscreen {
@@ -299,52 +307,6 @@
       });
     }
 
-    const beginFloat = "~begin~float~";
-    const endFloat = "~end~float~";
-
-    // Count the number of nested elements in array
-    function deepCount(arr = []) {
-       return arr
-       .reduce((acc, val) => {
-          return acc + (Array.isArray(val) ? deepCount(val) : 0);
-       }, arr.length);
-    };
-
-    // Adapted from https://www.npmjs.com/package/stringify-with-floats in order to
-    // target the mix matrix and make sure the JSON output contains floating point
-    // numbers no matter what
-    function stringifyMatrix(inputValue) {
-      let elementsInMatrix = 0;
-      const jsonReplacer = (key, val) => {
-        let value;
-        let inMatrix = false;
-
-        value = val;
-        if (key == "matrix") {
-          elementsInMatrix = deepCount(val);
-        } else if (elementsInMatrix > 0) {
-          elementsInMatrix--;
-          inMatrix = true;
-        }
-        const forceFloat =
-          inMatrix == true &&
-          (value || value === 0) &&
-          typeof value === "number" &&
-          !value.toString().toLowerCase().includes("e");
-        return forceFloat ? `${beginFloat}${value}${endFloat}` : value;
-      };
-      const json = JSON.stringify(inputValue, jsonReplacer, 2);
-      const regexReplacer = (match, num) => {
-        return num.includes(".") || Number.isNaN(num)
-          ? Number.isNaN(num)
-            ? num
-            : Number(num).toFixed(1)
-          : `${num}.${"0".repeat(1)}`;
-      };
-      const re = new RegExp(`"${beginFloat}(.+?)${endFloat}"`, "g");
-      return json.replace(re, regexReplacer);
-    };
-
     function initRemoteStreams(api) {
       const remoteStreamsElement = document.getElementById("remote-streams");
 
@@ -359,9 +321,9 @@
                                 <div class="offer-options">
                                   <textarea rows="5" cols="50" placeholder="offer options, empty to answer. For example:\n{\n  &quot;offerToReceiveAudio&quot;: 1\n  &quot;offerToReceiveVideo&quot;: 1\n}\n"></textarea>
                                 </div>
-                                <div class="mix-matrix">
-                                  <textarea rows="4" cols="50" placeholder="Mix matrix, if any, for example [[1.0, 0.0], [0.0, 1.0]]"></textarea>
-                                  <button disabled="disabled">Submit mix matrix</button>
+                                <div class="request-box">
+                                  <textarea rows="4" cols="50" placeholder="JSON request to send over"></textarea>
+                                  <button disabled="disabled">Submit request</button>
                                 </div>
                                 <div class="video">
                                     <div class="spinner">
@@ -379,19 +341,13 @@
             const entryElement = document.getElementById(producerId);
             const videoElement = entryElement.getElementsByTagName("video")[0];
             const offerTextareaElement = entryElement.getElementsByTagName("textarea")[0];
-            const mixmatrixTextAreaElement = entryElement.getElementsByTagName("textarea")[1];
-            const submitMixmatrixButtonElement = entryElement.getElementsByTagName("button")[0];
+            const requestTextAreaElement = entryElement.getElementsByTagName("textarea")[1];
+            const submitRequestButtonElement = entryElement.getElementsByTagName("button")[0];
 
-            submitMixmatrixButtonElement.addEventListener("click", (event) => {
+            submitRequestButtonElement.addEventListener("click", (event) => {
               try {
-                let matrix = JSON.parse(mixmatrixTextAreaElement.value);
-                let id = entryElement._consumerSession.remoteController.sendControlRequest({
-                  type: "customUpstreamEvent",
-                  structureName: "GstRequestMixMatrix",
-                  structure: {
-                    matrix: matrix
-                  }
-                }, stringifyMatrix);
+                let request = requestTextAreaElement.value;
+                let id = entryElement._consumerSession.remoteController.sendControlRequest(request);
               } catch (ex) {
                 console.error("Failed to parse mix matrix:", ex);
                 return;
@@ -458,18 +414,11 @@
                       const remoteController = session.remoteController;
                       if (remoteController) {
                         entryElement.classList.add("has-remote-control");
-                        submitMixmatrixButtonElement.disabled = false;
+                        submitRequestButtonElement.disabled = false;
                         remoteController.attachVideoElement(videoElement);
-                        let id = remoteController.sendControlRequest({
-                          type: "customUpstreamEvent",
-                          structureName: "GstRequestMixMatrix",
-                          structure: {
-                            matrix: [[1.0, 0.0], [0.0, 1.0]]
-                          }
-                        });
                       } else {
                         entryElement.classList.remove("has-remote-control");
-                        submitMixmatrixButtonElement.disabled = true;
+                        submitRequestButtonElement.disabled = true;
                       }
                     }
                   });

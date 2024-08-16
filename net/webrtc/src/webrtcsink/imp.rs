@@ -556,51 +556,6 @@ fn create_navigation_event(sink: &super::BaseWebRTCSink, msg: &str, session_id: 
     }
 }
 
-fn deserialize_serde_value(val: &serde_json::Value) -> Result<gst::glib::SendValue, Error> {
-    match val {
-        serde_json::Value::Null => Err(anyhow!("Untyped null values are not handled")),
-        serde_json::Value::Bool(v) => Ok(v.to_send_value()),
-        serde_json::Value::Number(v) => {
-            if let Some(v) = v.as_i64() {
-                Ok(v.to_send_value())
-            } else if let Some(v) = v.as_u64() {
-                Ok(v.to_send_value())
-            } else if let Some(v) = v.as_f64() {
-                Ok(v.to_send_value())
-            } else {
-                unreachable!()
-            }
-        }
-        serde_json::Value::String(v) => Ok(v.to_send_value()),
-        serde_json::Value::Array(a) => {
-            let mut gst_array = gst::Array::default();
-
-            for val in a {
-                gst_array.append_value(deserialize_serde_value(val)?);
-            }
-
-            Ok(gst_array.to_send_value())
-        }
-        serde_json::Value::Object(_) => {
-            Ok(deserialize_serde_object(val, "webrtcsink-deserialized")?.to_send_value())
-        }
-    }
-}
-
-fn deserialize_serde_object(obj: &serde_json::Value, name: &str) -> Result<gst::Structure, Error> {
-    let serde_json::Value::Object(map) = obj else {
-        return Err(anyhow!("not a serde object"));
-    };
-
-    let mut ret = gst::Structure::builder(name);
-
-    for (key, value) in map {
-        ret = ret.field(key, deserialize_serde_value(value)?);
-    }
-
-    Ok(ret.build())
-}
-
 fn handle_control_event(
     sink: &super::BaseWebRTCSink,
     msg: &str,
@@ -608,16 +563,22 @@ fn handle_control_event(
 ) -> Result<utils::ControlResponseMessage, Error> {
     let msg: utils::ControlRequestMessage = serde_json::from_str(msg)?;
 
-    let event = match msg.request {
+    let request = match msg.request {
+        utils::StringOrRequest::String(s) => serde_json::from_str(&s)?,
+        utils::StringOrRequest::Request(r) => r,
+    };
+
+    let event = match request {
         utils::ControlRequest::NavigationEvent { event } => {
             gst::event::Navigation::new(event.structure())
         }
         utils::ControlRequest::CustomUpstreamEvent {
             structure_name,
             structure,
-        } => {
-            gst::event::CustomUpstream::new(deserialize_serde_object(&structure, &structure_name)?)
-        }
+        } => gst::event::CustomUpstream::new(utils::deserialize_serde_object(
+            &structure,
+            &structure_name,
+        )?),
     };
 
     gst::log!(CAT, obj = sink, "Processing control event: {:?}", event);

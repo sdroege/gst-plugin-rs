@@ -4,7 +4,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use anyhow::{Context, Error};
+use anyhow::{anyhow, Context, Error};
 use gst::{glib, prelude::*};
 use once_cell::sync::Lazy;
 
@@ -1022,12 +1022,19 @@ pub enum ControlRequest {
     },
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum StringOrRequest {
+    String(String),
+    Request(ControlRequest),
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ControlRequestMessage {
     pub id: u64,
     pub mid: Option<String>,
-    pub request: ControlRequest,
+    pub request: StringOrRequest,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -1043,9 +1050,233 @@ pub fn find_smallest_available_ext_id(ids: impl IntoIterator<Item = u32>) -> u32
     (1..).find(|&num| !used_numbers.contains(&num)).unwrap()
 }
 
+#[derive(Clone, Debug)]
+enum CoerceTarget {
+    Undefined,
+    U64,
+    I64,
+    F64,
+    Other(serde_json::Value),
+}
+
+fn pick_coerce_target(
+    arr: &Vec<serde_json::Value>,
+    mut target: CoerceTarget,
+) -> Result<CoerceTarget, Error> {
+    for val in arr {
+        match val {
+            serde_json::Value::Null => {
+                return Err(anyhow!("Untyped null values are not handled"));
+            }
+            serde_json::Value::Bool(_) => match &target {
+                CoerceTarget::Undefined => {
+                    target = CoerceTarget::Other(val.clone());
+                }
+                CoerceTarget::Other(other) => {
+                    if !other.is_boolean() {
+                        return Err(anyhow!("Mixed types in arrays are not supported"));
+                    }
+                }
+                _ => {
+                    return Err(anyhow!("Mixed types in arrays are not supported"));
+                }
+            },
+            serde_json::Value::Number(v) => {
+                let v_target = if v.as_u64().is_some() {
+                    CoerceTarget::U64
+                } else if v.as_i64().is_some() {
+                    CoerceTarget::I64
+                } else {
+                    CoerceTarget::F64
+                };
+                match &target {
+                    CoerceTarget::Undefined => {
+                        target = v_target;
+                    }
+                    CoerceTarget::Other(_) => {
+                        return Err(anyhow!("Mixed types in arrays are not supported"));
+                    }
+                    CoerceTarget::U64 => {
+                        target = v_target;
+                    }
+                    CoerceTarget::I64 => {
+                        if matches!(v_target, CoerceTarget::F64) {
+                            target = CoerceTarget::F64;
+                        }
+                    }
+                    _ => (),
+                }
+            }
+            serde_json::Value::Array(a) => {
+                target = pick_coerce_target(a, target)?;
+            }
+            serde_json::Value::Object(_) => match &target {
+                CoerceTarget::Undefined => {
+                    target = CoerceTarget::Other(val.clone());
+                }
+                CoerceTarget::Other(other) => {
+                    if !other.is_object() {
+                        return Err(anyhow!("Mixed types in arrays are not supported"));
+                    }
+                }
+                _ => {
+                    return Err(anyhow!("Mixed types in arrays are not supported"));
+                }
+            },
+            serde_json::Value::String(_) => match &target {
+                CoerceTarget::Undefined => {
+                    target = CoerceTarget::Other(val.clone());
+                }
+                CoerceTarget::Other(other) => {
+                    if !other.is_object() {
+                        return Err(anyhow!("Mixed types in arrays are not supported"));
+                    }
+                }
+                _ => {
+                    return Err(anyhow!("Mixed types in arrays are not supported"));
+                }
+            },
+        }
+    }
+
+    Ok(target)
+}
+
+fn deserialize_serde_value(
+    val: &serde_json::Value,
+    mut target: CoerceTarget,
+) -> Result<gst::glib::SendValue, Error> {
+    match val {
+        serde_json::Value::Null => Err(anyhow!("Untyped null values are not handled")),
+        serde_json::Value::Bool(v) => Ok(v.to_send_value()),
+        serde_json::Value::Number(v) => match target {
+            CoerceTarget::U64 => Ok(v
+                .as_u64()
+                .ok_or(anyhow!("Mixed types in arrays are not supported"))?
+                .to_send_value()),
+            CoerceTarget::I64 => Ok(v
+                .as_i64()
+                .ok_or(anyhow!("Mixed types in arrays are not supported"))?
+                .to_send_value()),
+            CoerceTarget::F64 => Ok(v
+                .as_f64()
+                .expect("all numbers coerce to f64")
+                .to_send_value()),
+            CoerceTarget::Undefined => {
+                if let Some(u) = v.as_u64() {
+                    Ok(u.to_send_value())
+                } else if let Some(i) = v.as_i64() {
+                    Ok(i.to_send_value())
+                } else if let Some(f) = v.as_f64() {
+                    Ok(f.to_send_value())
+                } else {
+                    unreachable!()
+                }
+            }
+            _ => unreachable!(),
+        },
+        serde_json::Value::String(v) => Ok(v.to_send_value()),
+        serde_json::Value::Array(a) => {
+            let mut gst_array = gst::Array::default();
+
+            target = pick_coerce_target(a, target)?;
+
+            for val in a {
+                gst_array.append_value(deserialize_serde_value(val, target.to_owned())?);
+            }
+
+            Ok(gst_array.to_send_value())
+        }
+        serde_json::Value::Object(_) => {
+            Ok(deserialize_serde_object(val, "webrtcsink-deserialized")?.to_send_value())
+        }
+    }
+}
+
+pub fn deserialize_serde_object(
+    obj: &serde_json::Value,
+    name: &str,
+) -> Result<gst::Structure, Error> {
+    let serde_json::Value::Object(map) = obj else {
+        return Err(anyhow!("not a serde object"));
+    };
+
+    let mut ret = gst::Structure::builder(name);
+
+    for (key, value) in map {
+        ret = ret.field(
+            key,
+            deserialize_serde_value(value, CoerceTarget::Undefined)?,
+        );
+    }
+
+    Ok(ret.build())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_deserialize_array() -> Result<(), String> {
+        let arr = serde_json::from_str::<serde_json::Value>("[1, -1, 1.0]").unwrap();
+        let gst_arr = deserialize_serde_value(&arr, CoerceTarget::Undefined)
+            .unwrap()
+            .get::<gst::Array>()
+            .unwrap();
+        let gst_type = gst_arr.first().unwrap().value_type();
+        assert_eq!(gst_type, f64::static_type());
+
+        let arr = serde_json::from_str::<serde_json::Value>("[1, -1]").unwrap();
+        let gst_arr = deserialize_serde_value(&arr, CoerceTarget::Undefined)
+            .unwrap()
+            .get::<gst::Array>()
+            .unwrap();
+        let gst_type = gst_arr.first().unwrap().value_type();
+        assert_eq!(gst_type, i64::static_type());
+
+        let arr = serde_json::from_str::<serde_json::Value>("[1]").unwrap();
+        let gst_arr = deserialize_serde_value(&arr, CoerceTarget::Undefined)
+            .unwrap()
+            .get::<gst::Array>()
+            .unwrap();
+        let gst_type = gst_arr.first().unwrap().value_type();
+        assert_eq!(gst_type, u64::static_type());
+
+        // u64::MAX can't be represented as i64, mixed types
+        let arr = serde_json::from_str::<serde_json::Value>("[18446744073709551615, -1]").unwrap();
+        assert!(deserialize_serde_value(&arr, CoerceTarget::Undefined).is_err());
+
+        // we won't coerce bool to i64, mixed types
+        let arr = serde_json::from_str::<serde_json::Value>("[true, -1]").unwrap();
+        assert!(deserialize_serde_value(&arr, CoerceTarget::Undefined).is_err());
+
+        let arr = serde_json::from_str::<serde_json::Value>("[[0.2, 0], [0, 0]]").unwrap();
+        let gst_arr = deserialize_serde_value(&arr, CoerceTarget::Undefined)
+            .unwrap()
+            .get::<gst::Array>()
+            .unwrap();
+        let gst_type = gst_arr
+            .first()
+            .unwrap()
+            .get::<gst::Array>()
+            .unwrap()
+            .first()
+            .unwrap()
+            .value_type();
+        assert_eq!(gst_type, f64::static_type());
+        let gst_type = gst_arr
+            .last()
+            .unwrap()
+            .get::<gst::Array>()
+            .unwrap()
+            .first()
+            .unwrap()
+            .value_type();
+        assert_eq!(gst_type, f64::static_type());
+
+        Ok(())
+    }
 
     fn test_find_smallest_available_ext_id_case(
         ids: impl IntoIterator<Item = u32>,
