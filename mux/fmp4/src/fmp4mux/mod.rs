@@ -73,7 +73,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     Ok(())
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub(crate) enum ImageOrientation {
     Rotate0,
     Rotate90,
