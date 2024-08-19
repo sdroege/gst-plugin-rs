@@ -236,9 +236,9 @@ fn test_hlssink3_element_with_video_content() -> Result<(), ()> {
 #EXT-X-VERSION:3
 #EXT-X-TARGETDURATION:2
 #EXT-X-MEDIA-SEQUENCE:4
-#EXTINF:2,
+#EXTINF:1.999,
 segment00003.ts
-#EXTINF:0.3,
+#EXTINF:0.333,
 segment00004.ts
 #EXT-X-ENDLIST
 "###,
@@ -431,7 +431,7 @@ fn test_hlssink3_write_correct_playlist_content() -> Result<(), ()> {
 #EXT-X-VERSION:3
 #EXT-X-TARGETDURATION:15
 #EXT-X-MEDIA-SEQUENCE:1
-#EXTINF:1.633,
+#EXTINF:1.666,
 segments/my-own-filename-000.ts
 #EXT-X-ENDLIST
 "###,
