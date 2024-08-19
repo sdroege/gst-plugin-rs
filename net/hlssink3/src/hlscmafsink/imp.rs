@@ -27,6 +27,7 @@ const DEFAULT_SYNC: bool = true;
 const DEFAULT_LATENCY: gst::ClockTime =
     gst::ClockTime::from_mseconds((DEFAULT_TARGET_DURATION * 500) as u64);
 const SIGNAL_GET_INIT_STREAM: &str = "get-init-stream";
+const SIGNAL_NEW_PLAYLIST: &str = "new-playlist";
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -208,22 +209,60 @@ impl ObjectImpl for HlsCmafSink {
 
     fn signals() -> &'static [glib::subclass::Signal] {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
-            vec![glib::subclass::Signal::builder(SIGNAL_GET_INIT_STREAM)
-                .param_types([String::static_type()])
-                .return_type::<Option<gio::OutputStream>>()
-                .class_handler(|_, args| {
-                    let elem = args[0].get::<HlsBaseSink>().expect("signal arg");
-                    let init_location = args[1].get::<String>().expect("signal arg");
-                    let imp = elem.imp();
+            vec![
+                glib::subclass::Signal::builder(SIGNAL_GET_INIT_STREAM)
+                    .param_types([String::static_type()])
+                    .return_type::<Option<gio::OutputStream>>()
+                    .class_handler(|_, args| {
+                        let elem = args[0].get::<HlsBaseSink>().expect("signal arg");
+                        let init_location = args[1].get::<String>().expect("signal arg");
+                        let imp = elem.imp();
 
-                    Some(imp.new_file_stream(&init_location).ok().to_value())
-                })
-                .accumulator(|_hint, ret, value| {
-                    // First signal handler wins
-                    *ret = value.clone();
-                    false
-                })
-                .build()]
+                        Some(imp.new_file_stream(&init_location).ok().to_value())
+                    })
+                    .accumulator(|_hint, ret, value| {
+                        // First signal handler wins
+                        *ret = value.clone();
+                        false
+                    })
+                    .build(),
+                glib::subclass::Signal::builder(SIGNAL_NEW_PLAYLIST)
+                    .action()
+                    .class_handler(|_token, args| {
+                        // Forces hlscmafsink to finish the current playlist and start a new one.
+                        // Meant to be used after changing output location at runtime, which would
+                        // otherwise require changing playback state to READY to make sure that the
+                        // old playlist is closed correctly and new init segment is written.
+                        let elem = args[0].get::<super::HlsCmafSink>().expect("signal arg");
+                        let imp = elem.imp();
+
+                        gst::debug!(
+                            CAT,
+                            imp = imp,
+                            "Closing current playlist and starting a new one"
+                        );
+                        base_imp!(imp).close_playlist();
+
+                        let (target_duration, playlist_type, segment_template, cmafmux) = {
+                            let settings = imp.settings.lock().unwrap();
+                            (
+                                settings.target_duration,
+                                settings.playlist_type.clone(),
+                                settings.location.clone(),
+                                settings.cmafmux.clone(),
+                            )
+                        };
+
+                        let playlist = imp.start(target_duration, playlist_type);
+                        base_imp!(imp).open_playlist(playlist, segment_template);
+
+                        // This forces cmafmux to send the init headers again.
+                        cmafmux.emit_by_name::<()>("send-headers", &[]);
+
+                        None
+                    })
+                    .build(),
+            ]
         });
 
         SIGNALS.as_ref()

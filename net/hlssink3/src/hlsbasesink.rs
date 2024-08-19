@@ -307,7 +307,7 @@ impl HlsBaseSink {
         });
     }
 
-    fn close_playlist(&self) {
+    pub fn close_playlist(&self) {
         let mut state = self.state.lock().unwrap();
         if let Some(mut context) = state.context.take() {
             if context.playlist.is_rendering() {
