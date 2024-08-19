@@ -798,7 +798,6 @@ impl NdiSrc {
     }
 }
 
-const PREFILL_WINDOW_LENGTH: usize = 12;
 const WINDOW_LENGTH: u64 = 512;
 const WINDOW_DURATION: u64 = 2_000_000_000;
 
@@ -813,11 +812,6 @@ struct ObservationsInner {
     skew: i64,
     filling: bool,
     window_size: usize,
-
-    // Remote/local times for workaround around fundamentally wrong slopes
-    // This is not reset below and has a bigger window.
-    times: VecDeque<(u64, u64)>,
-    slope_correction: (u64, u64),
 }
 
 impl Default for ObservationsInner {
@@ -830,8 +824,6 @@ impl Default for ObservationsInner {
             skew: 0,
             filling: true,
             window_size: 0,
-            times: VecDeque::new(),
-            slope_correction: (1, 1),
         }
     }
 }
@@ -867,32 +859,10 @@ impl Observations {
         gst::trace!(
             CAT,
             obj = element,
-            "Local time {}, remote time {}, slope correct {}/{}",
+            "Local time {}, remote time {}",
             local_time.nseconds(),
             remote_time.nseconds(),
-            inner.slope_correction.0,
-            inner.slope_correction.1,
         );
-
-        inner.times.push_back((remote_time, local_time));
-        while inner
-            .times
-            .back()
-            .unwrap()
-            .1
-            .saturating_sub(inner.times.front().unwrap().1)
-            > WINDOW_DURATION
-        {
-            let _ = inner.times.pop_front();
-        }
-
-        // Static remote times
-        if inner.slope_correction.1 == 0 {
-            return None;
-        }
-
-        let remote_time =
-            remote_time.mul_div_round(inner.slope_correction.0, inner.slope_correction.1)?;
 
         let (base_remote_time, base_local_time) =
             match (inner.base_remote_time, inner.base_local_time) {
@@ -912,110 +882,47 @@ impl Observations {
                 }
             };
 
-        if inner.times.len() < PREFILL_WINDOW_LENGTH {
-            return Some((local_time.nseconds(), duration, false));
-        }
-
-        // Check if the slope is simply wrong and try correcting
-        {
-            let local_diff = inner
-                .times
-                .back()
-                .unwrap()
-                .1
-                .saturating_sub(inner.times.front().unwrap().1);
-            let remote_diff = inner
-                .times
-                .back()
-                .unwrap()
-                .0
-                .saturating_sub(inner.times.front().unwrap().0);
-
-            if remote_diff == 0 {
-                inner.reset();
-                inner.base_remote_time = Some(remote_time);
-                inner.base_local_time = Some(local_time);
-
-                // Static remote times
-                inner.slope_correction = (0, 0);
-                return None;
-            } else {
-                let slope = local_diff as f64 / remote_diff as f64;
-                let scaled_slope =
-                    slope * (inner.slope_correction.1 as f64) / (inner.slope_correction.0 as f64);
-
-                // Check for some obviously wrong slopes and try to correct for that
-                if !(0.5..1.5).contains(&scaled_slope) {
-                    gst::warning!(
-                        CAT,
-                        obj = element,
-                        "Too small/big slope {}, resetting",
-                        scaled_slope
-                    );
-
-                    let discont = !inner.deltas.is_empty();
-                    inner.reset();
-
-                    if (0.0005..0.0015).contains(&slope) {
-                        // Remote unit was actually 0.1ns
-                        inner.slope_correction = (1, 1000);
-                    } else if (0.005..0.015).contains(&slope) {
-                        // Remote unit was actually 1ns
-                        inner.slope_correction = (1, 100);
-                    } else if (0.05..0.15).contains(&slope) {
-                        // Remote unit was actually 10ns
-                        inner.slope_correction = (1, 10);
-                    } else if (5.0..15.0).contains(&slope) {
-                        // Remote unit was actually 1us
-                        inner.slope_correction = (10, 1);
-                    } else if (50.0..150.0).contains(&slope) {
-                        // Remote unit was actually 10us
-                        inner.slope_correction = (100, 1);
-                    } else if (50.0..150.0).contains(&slope) {
-                        // Remote unit was actually 100us
-                        inner.slope_correction = (1000, 1);
-                    } else if (50.0..150.0).contains(&slope) {
-                        // Remote unit was actually 1ms
-                        inner.slope_correction = (10000, 1);
-                    } else {
-                        inner.slope_correction = (1, 1);
-                    }
-
-                    let remote_time = inner
-                        .times
-                        .back()
-                        .unwrap()
-                        .0
-                        .mul_div_round(inner.slope_correction.0, inner.slope_correction.1)?;
-                    gst::debug!(
-                        CAT,
-                        obj = element,
-                        "Initializing base time: local {}, remote {}, slope correction {}/{}",
-                        local_time.nseconds(),
-                        remote_time.nseconds(),
-                        inner.slope_correction.0,
-                        inner.slope_correction.1,
-                    );
-                    inner.base_remote_time = Some(remote_time);
-                    inner.base_local_time = Some(local_time);
-
-                    return Some((local_time.nseconds(), duration, discont));
-                }
-            }
-        }
-
         let remote_diff = remote_time.saturating_sub(base_remote_time);
         let local_diff = local_time.saturating_sub(base_local_time);
         let delta = (local_diff as i64) - (remote_diff as i64);
+        let slope = local_diff as f64 / remote_diff as f64;
 
         gst::trace!(
             CAT,
             obj = element,
-            "Local diff {}, remote diff {}, delta {}",
+            "Local diff {}, remote diff {}, delta {}, slope {}",
             local_diff.nseconds(),
             remote_diff.nseconds(),
             delta,
+            slope,
         );
+
+        if local_diff > gst::ClockTime::from_mseconds(500).nseconds()
+            && !(0.5..1.5).contains(&slope)
+        {
+            gst::warning!(
+                CAT,
+                obj = element,
+                "Too small/big slope {}, resetting",
+                slope
+            );
+
+            let discont = !inner.deltas.is_empty();
+
+            gst::debug!(
+                CAT,
+                obj = element,
+                "Initializing base time: local {}, remote {}",
+                local_time.nseconds(),
+                remote_time.nseconds(),
+            );
+
+            inner.reset();
+            inner.base_remote_time = Some(remote_time);
+            inner.base_local_time = Some(local_time);
+
+            return Some((local_time.nseconds(), duration, discont));
+        }
 
         if (delta > inner.skew && delta - inner.skew > 1_000_000_000)
             || (delta < inner.skew && inner.skew - delta > 1_000_000_000)
