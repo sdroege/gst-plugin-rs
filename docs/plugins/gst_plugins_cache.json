@@ -4204,6 +4204,11 @@
                         "desc": "Receive Time",
                         "name": "receive-time",
                         "value": "5"
+                    },
+                    {
+                        "desc": "Clocked",
+                        "name": "clocked",
+                        "value": "6"
                     }
                 ]
             }

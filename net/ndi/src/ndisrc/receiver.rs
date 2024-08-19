@@ -322,7 +322,19 @@ impl Receiver {
                     continue;
                 }
                 Ok(Some(frame)) => {
-                    if let Some(receive_time_gst) = element.current_running_time() {
+                    // If TimestampMode::Clocked is used then directly use the clock time here,
+                    // otherwise work with the running time.
+                    let receive_time_gst = if let Some(clock) = element.provide_clock() {
+                        Some(clock.internal_time())
+                    } else if let Some((clock, base_time)) =
+                        Option::zip(element.clock(), element.base_time())
+                    {
+                        clock.time().map(|now| now.saturating_sub(base_time))
+                    } else {
+                        None
+                    };
+
+                    if let Some(receive_time_gst) = receive_time_gst {
                         let receive_time_real = (glib::real_time() as u64 * 1000).nseconds();
 
                         if matches!(frame, Frame::Video(_) | Frame::Audio(_)) {

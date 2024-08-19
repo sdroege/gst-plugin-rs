@@ -49,6 +49,8 @@ pub enum TimestampMode {
     Timestamp = 4,
     #[enum_value(name = "Receive Time", nick = "receive-time")]
     ReceiveTime = 5,
+    #[enum_value(name = "Clocked", nick = "clocked")]
+    Clocked = 6,
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
