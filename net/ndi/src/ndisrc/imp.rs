@@ -651,19 +651,33 @@ impl NdiSrc {
             receive_time_real,
         );
 
-        let res_timestamp = state.observations_timestamp[idx].process(
-            self.obj().upcast_ref(),
-            timestamp,
-            receive_time_gst,
-            duration,
-        );
+        let res_timestamp = if matches!(
+            state.timestamp_mode,
+            TimestampMode::ReceiveTimeTimestamp | TimestampMode::Auto
+        ) {
+            state.observations_timestamp[idx].process(
+                self.obj().upcast_ref(),
+                timestamp,
+                receive_time_gst,
+                duration,
+            )
+        } else {
+            None
+        };
 
-        let res_timecode = state.observations_timecode[idx].process(
-            self.obj().upcast_ref(),
-            Some(timecode),
-            receive_time_gst,
-            duration,
-        );
+        let res_timecode = if matches!(
+            state.timestamp_mode,
+            TimestampMode::ReceiveTimeTimecode | TimestampMode::Auto
+        ) {
+            state.observations_timecode[idx].process(
+                self.obj().upcast_ref(),
+                Some(timecode),
+                receive_time_gst,
+                duration,
+            )
+        } else {
+            None
+        };
 
         let (pts, duration, discont) = match state.timestamp_mode {
             TimestampMode::ReceiveTimeTimecode => match res_timecode {
