@@ -466,7 +466,7 @@ impl BinImpl for HlsSink3 {
                     "splitmuxsink-fragment-closed" => {
                         let s = msg.structure().unwrap();
                         if let Ok(fragment_closed_at) = s.get::<gst::ClockTime>("running-time") {
-                            self.on_fragment_closed(fragment_closed_at);
+                            self.on_fragment_closed(s, fragment_closed_at);
                         }
                     }
                     _ => {}
@@ -543,7 +543,7 @@ impl HlsSink3 {
         Ok(segment_file_location)
     }
 
-    fn on_fragment_closed(&self, closed_at: gst::ClockTime) {
+    fn on_fragment_closed(&self, s: &gst::StructureRef, closed_at: gst::ClockTime) {
         let mut state = self.state.lock().unwrap();
         let location = match state.current_segment_location.take() {
             Some(location) => location,
@@ -553,15 +553,30 @@ impl HlsSink3 {
             }
         };
 
-        let opened_at = match state.fragment_opened_at.take() {
-            Some(opened_at) => opened_at,
-            None => {
-                gst::error!(CAT, imp = self, "Unknown segment duration");
-                return;
+        let (duration, duration_msec) = {
+            if let Ok(fragment_duration) = s.get::<gst::ClockTime>("fragment-duration") {
+                (
+                    fragment_duration,
+                    fragment_duration.mseconds() as f32 / 1_000f32,
+                )
+            } else {
+                let opened_at = match state.fragment_opened_at.take() {
+                    Some(opened_at) => opened_at,
+                    None => {
+                        gst::error!(CAT, imp = self, "Unknown segment duration");
+                        return;
+                    }
+                };
+
+                let fragment_duration = closed_at - opened_at;
+
+                (
+                    fragment_duration,
+                    fragment_duration.mseconds() as f32 / 1_000f32,
+                )
             }
         };
 
-        let duration = closed_at - opened_at;
         let running_time = state.fragment_running_time;
         drop(state);
 
@@ -574,7 +589,7 @@ impl HlsSink3 {
             duration,
             MediaSegment {
                 uri,
-                duration: duration.mseconds() as f32 / 1_000f32,
+                duration: duration_msec,
                 ..Default::default()
             },
         );
