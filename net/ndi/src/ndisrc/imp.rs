@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
 
-use atomic_refcell::AtomicRefCell;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_base::prelude::*;
@@ -801,22 +800,22 @@ impl NdiSrc {
 const WINDOW_LENGTH: u64 = 512;
 const WINDOW_DURATION: u64 = 2_000_000_000;
 
-#[derive(Default)]
-struct Observations(AtomicRefCell<ObservationsInner>);
-
-struct ObservationsInner {
-    base_remote_time: Option<u64>,
+struct Observations {
     base_local_time: Option<u64>,
+    base_remote_time: Option<u64>,
+    // Difference between local and remote time
     deltas: VecDeque<i64>,
+    // Current minimum difference
     min_delta: i64,
+    // Running average of the minimum difference
     skew: i64,
     filling: bool,
     window_size: usize,
 }
 
-impl Default for ObservationsInner {
-    fn default() -> ObservationsInner {
-        ObservationsInner {
+impl Default for Observations {
+    fn default() -> Observations {
+        Observations {
             base_local_time: None,
             base_remote_time: None,
             deltas: VecDeque::new(),
@@ -828,7 +827,7 @@ impl Default for ObservationsInner {
     }
 }
 
-impl ObservationsInner {
+impl Observations {
     fn reset(&mut self) {
         self.base_local_time = None;
         self.base_remote_time = None;
@@ -838,14 +837,12 @@ impl ObservationsInner {
         self.filling = true;
         self.window_size = 0;
     }
-}
 
-impl Observations {
     // Based on the algorithm used in GStreamer's rtpjitterbuffer, which comes from
     // Fober, Orlarey and Letz, 2005, "Real Time Clock Skew Estimation over Network Delays":
     // http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.102.1546
     fn process(
-        &self,
+        &mut self,
         element: &gst::Element,
         remote_time: Option<gst::ClockTime>,
         local_time: gst::ClockTime,
@@ -853,8 +850,6 @@ impl Observations {
     ) -> Option<(gst::ClockTime, Option<gst::ClockTime>, bool)> {
         let remote_time = remote_time?.nseconds();
         let local_time = local_time.nseconds();
-
-        let mut inner = self.0.borrow_mut();
 
         gst::trace!(
             CAT,
@@ -865,7 +860,7 @@ impl Observations {
         );
 
         let (base_remote_time, base_local_time) =
-            match (inner.base_remote_time, inner.base_local_time) {
+            match (self.base_remote_time, self.base_local_time) {
                 (Some(remote), Some(local)) => (remote, local),
                 _ => {
                     gst::debug!(
@@ -875,8 +870,8 @@ impl Observations {
                         local_time.nseconds(),
                         remote_time.nseconds(),
                     );
-                    inner.base_remote_time = Some(remote_time);
-                    inner.base_local_time = Some(local_time);
+                    self.base_remote_time = Some(remote_time);
+                    self.base_local_time = Some(local_time);
 
                     return Some((local_time.nseconds(), duration, true));
                 }
@@ -907,7 +902,7 @@ impl Observations {
                 slope
             );
 
-            let discont = !inner.deltas.is_empty();
+            let discont = !self.deltas.is_empty();
 
             gst::debug!(
                 CAT,
@@ -917,25 +912,25 @@ impl Observations {
                 remote_time.nseconds(),
             );
 
-            inner.reset();
-            inner.base_remote_time = Some(remote_time);
-            inner.base_local_time = Some(local_time);
+            self.reset();
+            self.base_remote_time = Some(remote_time);
+            self.base_local_time = Some(local_time);
 
             return Some((local_time.nseconds(), duration, discont));
         }
 
-        if (delta > inner.skew && delta - inner.skew > 1_000_000_000)
-            || (delta < inner.skew && inner.skew - delta > 1_000_000_000)
+        if (delta > self.skew && delta - self.skew > 1_000_000_000)
+            || (delta < self.skew && self.skew - delta > 1_000_000_000)
         {
             gst::warning!(
                 CAT,
                 obj = element,
                 "Delta {} too far from skew {}, resetting",
                 delta,
-                inner.skew
+                self.skew
             );
 
-            let discont = !inner.deltas.is_empty();
+            let discont = !self.deltas.is_empty();
 
             gst::debug!(
                 CAT,
@@ -945,58 +940,58 @@ impl Observations {
                 remote_time.nseconds(),
             );
 
-            inner.reset();
-            inner.base_remote_time = Some(remote_time);
-            inner.base_local_time = Some(local_time);
+            self.reset();
+            self.base_remote_time = Some(remote_time);
+            self.base_local_time = Some(local_time);
 
             return Some((local_time.nseconds(), duration, discont));
         }
 
-        if inner.filling {
-            if inner.deltas.is_empty() || delta < inner.min_delta {
-                inner.min_delta = delta;
+        if self.filling {
+            if self.deltas.is_empty() || delta < self.min_delta {
+                self.min_delta = delta;
             }
-            inner.deltas.push_back(delta);
+            self.deltas.push_back(delta);
 
-            if remote_diff > WINDOW_DURATION || inner.deltas.len() as u64 == WINDOW_LENGTH {
-                inner.window_size = inner.deltas.len();
-                inner.skew = inner.min_delta;
-                inner.filling = false;
+            if remote_diff > WINDOW_DURATION || self.deltas.len() as u64 == WINDOW_LENGTH {
+                self.window_size = self.deltas.len();
+                self.skew = self.min_delta;
+                self.filling = false;
             } else {
                 let perc_time = remote_diff.mul_div_floor(100, WINDOW_DURATION).unwrap() as i64;
-                let perc_window = (inner.deltas.len() as u64)
+                let perc_window = (self.deltas.len() as u64)
                     .mul_div_floor(100, WINDOW_LENGTH)
                     .unwrap() as i64;
                 let perc = cmp::max(perc_time, perc_window);
 
-                inner.skew = (perc * inner.min_delta + ((10_000 - perc) * inner.skew)) / 10_000;
+                self.skew = (perc * self.min_delta + ((10_000 - perc) * self.skew)) / 10_000;
             }
         } else {
-            let old = inner.deltas.pop_front().unwrap();
-            inner.deltas.push_back(delta);
+            let old = self.deltas.pop_front().unwrap();
+            self.deltas.push_back(delta);
 
-            if delta <= inner.min_delta {
-                inner.min_delta = delta;
-            } else if old == inner.min_delta {
-                inner.min_delta = inner.deltas.iter().copied().min().unwrap();
+            if delta <= self.min_delta {
+                self.min_delta = delta;
+            } else if old == self.min_delta {
+                self.min_delta = self.deltas.iter().copied().min().unwrap();
             }
 
-            inner.skew = (inner.min_delta + (124 * inner.skew)) / 125;
+            self.skew = (self.min_delta + (124 * self.skew)) / 125;
         }
 
         let out_time = base_local_time + remote_diff;
-        let out_time = if inner.skew < 0 {
-            out_time.saturating_sub((-inner.skew) as u64)
+        let out_time = if self.skew < 0 {
+            out_time.saturating_sub((-self.skew) as u64)
         } else {
-            out_time + (inner.skew as u64)
+            out_time + (self.skew as u64)
         };
 
         gst::trace!(
             CAT,
             obj = element,
             "Skew {}, min delta {}",
-            inner.skew,
-            inner.min_delta
+            self.skew,
+            self.min_delta
         );
         gst::trace!(CAT, obj = element, "Outputting {}", out_time.nseconds());
 
