@@ -106,13 +106,24 @@ trigger:
   script:
     - rustc --version
     - CARGO_FLAGS="-j${FDO_CI_CONCURRENT:-$(nproc)} --locked --color=always --all --all-targets"
+    - new_report_dir="$CI_PROJECT_DIR/junit_reports"
+    - mkdir -p "$new_report_dir"
+
 
     - cargo build $CARGO_FLAGS
-    - RUST_BACKTRACE=1 G_DEBUG=fatal_warnings cargo test $CARGO_FLAGS
+    - RUST_BACKTRACE=1 G_DEBUG=fatal_warnings cargo nextest run --profile=ci $CARGO_FLAGS
+    - mv "$CI_PROJECT_DIR/target/nextest/ci/junit.xml" "$new_report_dir/junit-tests-default.xml"
+
     - cargo build $CARGO_FLAGS --all-features --exclude gst-plugin-gtk4
-    - RUST_BACKTRACE=1 G_DEBUG=fatal_warnings cargo test $CARGO_FLAGS --all-features --exclude gst-plugin-gtk4
+    - RUST_BACKTRACE=1 G_DEBUG=fatal_warnings cargo nextest run --profile=ci $CARGO_FLAGS --all-features --exclude gst-plugin-gtk4
+    - mv "$CI_PROJECT_DIR/target/nextest/ci/junit.xml" "$new_report_dir/junit-tests-all.xml"
+
     - cargo build $CARGO_FLAGS --no-default-features
-    - RUST_BACKTRACE=1 G_DEBUG=fatal_warnings cargo test $CARGO_FLAGS --no-default-features
+    - RUST_BACKTRACE=1 G_DEBUG=fatal_warnings cargo nextest run --profile=ci $CARGO_FLAGS --no-default-features
+    - mv "$CI_PROJECT_DIR/target/nextest/ci/junit.xml" "$new_report_dir/junit-tests-no-default.xml"
+  artifacts:
+    reports:
+      junit: "junit_reports/*.xml"
 
 test msrv:
   extends:
@@ -392,7 +403,12 @@ coverage:
   script:
     - CARGO_FLAGS="-j${FDO_CI_CONCURRENT:-$(nproc)} --locked --color=always --all"
 
-    - cargo test $CARGO_FLAGS --all-features --exclude gst-plugin-gtk4
+    - cargo nextest run --profile=ci $CARGO_FLAGS --all-features --exclude gst-plugin-gtk4
+
+    - new_report_dir="$CI_PROJECT_DIR/junit_reports"
+    - mkdir -p "$new_report_dir"
+    - mv "$CI_PROJECT_DIR/target/nextest/ci/junit.xml" "$new_report_dir/coverage-junit.xml"
+
     # generate html report
     - mkdir -p coverage
     - grcov . --binary-path ./target/debug/ -s . -t html,cobertura --branch --ignore-not-existing --ignore "*target*" --ignore "*/build.rs" -o ./coverage/
@@ -403,6 +419,7 @@ coverage:
     paths:
       - 'coverage'
     reports:
+      junit: "junit_reports/*.xml"
       coverage_report:
         coverage_format: cobertura
         path: "coverage/cobertura.xml"
