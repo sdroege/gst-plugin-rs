@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.12.9] - 2024-08-20
+### Fixed
+-  video/gtk4: Move the dmabuf cfg to the correct bracket level
+
 ## [0.12.8] - 2024-07-24
 ### Fixed
 - audioloudnorm: Fix limiter buffer index wraparound off-by-one for the last buffer
