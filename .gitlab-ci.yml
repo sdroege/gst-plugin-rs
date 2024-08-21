@@ -272,6 +272,7 @@ documentation:
     - 'docker'
     - 'windows'
     - '2022'
+    - "gstreamer-windows"
   script:
     # Set the code page to UTF-8
     - chcp 65001
