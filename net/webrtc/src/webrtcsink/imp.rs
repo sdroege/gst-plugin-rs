@@ -815,6 +815,13 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
                 enc.set_property("bitrate", start_bitrate / 1000);
                 enc.set_property("gop-size", 2560u32);
             }
+            "nvv4l2av1enc" => {
+                enc.set_property("bitrate", start_bitrate);
+                enc.set_property("maxperf-enable", true);
+                enc.set_property_from_str("control-rate", "constant_bitrate");
+                enc.set_property_from_str("preset-level", "UltraFastPreset");
+                add_nv4l2enc_force_keyunit_workaround(enc);
+            }
             _ => (),
         }
     }
@@ -1019,6 +1026,7 @@ impl VideoEncoder {
                 | "av1enc"
                 | "rav1enc"
                 | "vpuenc_h264"
+                | "nvv4l2av1enc"
         )
     }
 
@@ -1028,7 +1036,7 @@ impl VideoEncoder {
             "av1enc" => (self.element.property::<u32>("target-bitrate") * 1000) as i32,
             "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" | "qsvh264enc"
             | "nvav1enc" | "vpuenc_h264" => (self.element.property::<u32>("bitrate") * 1000) as i32,
-            "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" | "rav1enc" => {
+            "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" | "rav1enc" | "nvv4l2av1enc" => {
                 (self.element.property::<u32>("bitrate")) as i32
             }
             _ => return Err(WebRTCSinkError::BitrateNotSupported),
@@ -1066,7 +1074,7 @@ impl VideoEncoder {
                 self.element
                     .set_property("bitrate", (bitrate / 1000) as u32);
             }
-            "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" => {
+            "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" | "nvv4l2av1enc" => {
                 self.element.set_property("bitrate", bitrate as u32)
             }
             "rav1enc" => self.element.set_property("bitrate", bitrate),
