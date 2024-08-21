@@ -130,6 +130,7 @@ fn test_hlssink3_element_with_video_content() -> Result<(), ()> {
     hlssink3.set_property_from_str("playlist-type", "unspecified");
 
     let (hls_events_sender, hls_events_receiver) = mpsc::sync_channel(20);
+    let (hls_messages_sender, hls_messages_receiver) = mpsc::sync_channel(10);
     let playlist_content = Arc::new(Mutex::new(String::from("")));
 
     hlssink3.connect("get-playlist-stream", false, {
@@ -204,7 +205,7 @@ fn test_hlssink3_element_with_video_content() -> Result<(), ()> {
                 if let Some(structure) = msg.structure() {
                     if structure.has_name("hls-segment-added") {
                         let location = structure.get::<String>("location").unwrap();
-                        hls_events_sender
+                        hls_messages_sender
                             .try_send(HlsSinkEvent::SegmentAddedMessage(location))
                             .expect("Send segment added event");
                     }
@@ -228,26 +229,37 @@ fn test_hlssink3_element_with_video_content() -> Result<(), ()> {
         vec![
             GetFragmentStream("segment00000.ts".to_string()),
             GetPlaylistStream("playlist.m3u8".to_string()),
-            SegmentAddedMessage("segment00000.ts".to_string()),
             GetFragmentStream("segment00001.ts".to_string()),
             GetPlaylistStream("playlist.m3u8".to_string()),
-            SegmentAddedMessage("segment00001.ts".to_string()),
             GetFragmentStream("segment00002.ts".to_string()),
             GetPlaylistStream("playlist.m3u8".to_string()),
             DeleteFragment("segment00000.ts".to_string()),
-            SegmentAddedMessage("segment00002.ts".to_string()),
             GetFragmentStream("segment00003.ts".to_string()),
             GetPlaylistStream("playlist.m3u8".to_string()),
             DeleteFragment("segment00001.ts".into()),
-            SegmentAddedMessage("segment00003.ts".to_string()),
             GetFragmentStream("segment00004.ts".to_string()),
             GetPlaylistStream("playlist.m3u8".to_string()),
             DeleteFragment("segment00002.ts".to_string()),
-            SegmentAddedMessage("segment00004.ts".to_string()),
             GetPlaylistStream("playlist.m3u8".to_string()),
         ]
     };
     assert_eq!(expected_ordering_of_events, actual_events);
+
+    let mut actual_messages = Vec::new();
+    while let Ok(event) = hls_messages_receiver.recv_timeout(Duration::from_millis(1)) {
+        actual_messages.push(event);
+    }
+    let expected_messages = {
+        use self::HlsSinkEvent::*;
+        vec![
+            SegmentAddedMessage("segment00000.ts".to_string()),
+            SegmentAddedMessage("segment00001.ts".to_string()),
+            SegmentAddedMessage("segment00002.ts".to_string()),
+            SegmentAddedMessage("segment00003.ts".to_string()),
+            SegmentAddedMessage("segment00004.ts".to_string()),
+        ]
+    };
+    assert_eq!(expected_messages, actual_messages);
 
     let contents = playlist_content.lock().unwrap();
     assert_eq!(
@@ -354,6 +366,7 @@ fn test_hlssink3_write_correct_playlist_content() -> Result<(), ()> {
         .expect("Must be able to instantiate hlssink3");
 
     let (hls_events_sender, hls_events_receiver) = mpsc::sync_channel(20);
+    let (hls_messages_sender, hls_messages_receiver) = mpsc::sync_channel(10);
     let playlist_content = Arc::new(Mutex::new(String::from("")));
 
     hlssink3.connect("get-playlist-stream", false, {
@@ -428,7 +441,7 @@ fn test_hlssink3_write_correct_playlist_content() -> Result<(), ()> {
                 if let Some(structure) = msg.structure() {
                     if structure.has_name("hls-segment-added") {
                         let location = structure.get::<String>("location").unwrap();
-                        hls_events_sender
+                        hls_messages_sender
                             .try_send(HlsSinkEvent::SegmentAddedMessage(location))
                             .expect("Send segment added event");
                     }
@@ -452,11 +465,22 @@ fn test_hlssink3_write_correct_playlist_content() -> Result<(), ()> {
         vec![
             GetFragmentStream("/www/media/segments/my-own-filename-000.ts".to_string()),
             GetPlaylistStream("/www/media/main.m3u8".to_string()),
-            SegmentAddedMessage("/www/media/segments/my-own-filename-000.ts".to_string()),
             GetPlaylistStream("/www/media/main.m3u8".to_string()),
         ]
     };
     assert_eq!(expected_ordering_of_events, actual_events);
+
+    let mut actual_messages = Vec::new();
+    while let Ok(event) = hls_messages_receiver.recv_timeout(Duration::from_millis(1)) {
+        actual_messages.push(event);
+    }
+    let expected_messages = {
+        use self::HlsSinkEvent::*;
+        vec![SegmentAddedMessage(
+            "/www/media/segments/my-own-filename-000.ts".to_string(),
+        )]
+    };
+    assert_eq!(expected_messages, actual_messages);
 
     let contents = playlist_content.lock().unwrap();
     assert_eq!(
