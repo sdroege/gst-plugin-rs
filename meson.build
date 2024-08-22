@@ -130,6 +130,7 @@ plugins = {
     ],
   },
   'inter': {'library': 'libgstrsinter'},
+  'streamgrouper': {'library': 'libgststreamgrouper'},
 
   'mp4': {'library': 'libgstmp4'},
   'fmp4': {

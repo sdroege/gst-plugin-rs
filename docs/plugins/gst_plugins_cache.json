@@ -11921,6 +11921,43 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "streamgrouper": {
+        "description": "Filter element that makes all the incoming streams share a group-id",
+        "elements": {
+            "streamgrouper": {
+                "author": "Alicia Boya García <aboya@igalia.com>",
+                "description": "Modifies all input streams to use the same group-id",
+                "hierarchy": [
+                    "GstStreamGrouper",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Generic",
+                "pad-templates": {
+                    "sink_%%u": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "request"
+                    },
+                    "src_%%u": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gststreamgrouper",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-streamgrouper",
+        "source": "gst-plugin-streamgrouper",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "textahead": {
         "description": "GStreamer Plugin for displaying upcoming text buffers ahead of time",
         "elements": {

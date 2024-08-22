@@ -2883,6 +2883,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "gst-plugin-streamgrouper"
+version = "0.14.0-alpha.1"
+dependencies = [
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "gstreamer-check",
+]
+
+[[package]]
 name = "gst-plugin-textahead"
 version = "0.14.0-alpha.1"
 dependencies = [

@@ -18,6 +18,7 @@ option('sodium-source', type: 'combo',
        description: 'Whether to use libsodium from the system or the built-in version from the sodiumoxide crate')
 option('threadshare', type: 'feature', value: 'auto', description: 'Build threadshare plugin')
 option('inter', type: 'feature', value: 'auto', description: 'Build inter plugin')
+option('streamgrouper', type: 'feature', value: 'auto', description: 'Build streamgrouper plugin')
 
 # mux
 option('flavors', type: 'feature', value: 'auto', description: 'Build flavors plugin')
