@@ -1065,7 +1065,25 @@ impl Observations {
             };
 
         let local_diff = local_time.saturating_sub(base_local_time);
-        let remote_diff = remote_time.saturating_sub(base_remote_time);
+        let Some(remote_diff) = remote_time.checked_sub(base_remote_time) else {
+            gst::warning!(CAT, obj = element, "Backwards remote time, resetting",);
+
+            let discont = !self.deltas.is_empty();
+
+            gst::debug!(
+                CAT,
+                obj = element,
+                "Initializing base time: local {}, remote {}",
+                local_time,
+                remote_time,
+            );
+
+            self.reset();
+            self.base_local_time = Some(local_time);
+            self.base_remote_time = Some(remote_time);
+
+            return Some((local_time, duration, discont));
+        };
         let delta = (local_diff.nseconds() as i64) - (remote_diff.nseconds() as i64);
         let slope = local_diff.nseconds() as f64 / remote_diff.nseconds() as f64;
 
