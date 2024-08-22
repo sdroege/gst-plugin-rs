@@ -78,6 +78,7 @@ it might expose more interfaces to guide and tune the heuristics it employs.
 
 ``` shell
 cargo build
+npm --prefix gstwebrtc-api/ run build
 ```
 
 ## Usage
