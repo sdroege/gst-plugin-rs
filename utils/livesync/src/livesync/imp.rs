@@ -814,8 +814,27 @@ impl LiveSync {
                 let mut state = self.state.lock();
                 let latency = state.latency;
 
-                let (_live, min, max) = q.result();
+                let (live, min, max) = q.result();
+
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "Upstream latency query response: live {} min {} max {}",
+                    live,
+                    min,
+                    max.display()
+                );
+
                 q.set(true, min + latency, max.map(|max| max + latency));
+
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "Reporting latency: live {} min {} max {}",
+                    live,
+                    min + latency,
+                    max.map(|max| max + latency).display()
+                );
 
                 state.upstream_latency = Some(min);
                 true
