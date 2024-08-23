@@ -50,23 +50,38 @@ struct Settings {
 #[allow(clippy::derivable_impls)]
 impl Default for Settings {
     fn default() -> Self {
-        let video_caps = Some(
-            [
-                "video/x-vp8",
-                "video/x-h264",
-                "video/x-vp9",
-                "video/x-h265",
-                "video/x-av1",
-            ]
-            .into_iter()
-            .map(gst::Structure::new_empty)
-            .collect::<gst::Caps>(),
-        );
+        let video_caps = {
+            let video = [
+                ("VP8", 101),
+                ("VP9", 102),
+                ("H264", 103),
+                ("H265", 104),
+                ("AV1", 105),
+            ];
+
+            let mut video_caps = gst::Caps::new_empty();
+            let caps = video_caps.get_mut().unwrap();
+
+            for (encoding, pt) in video {
+                let s = gst::Structure::builder("application/x-rtp")
+                    .field("media", "video")
+                    .field("payload", pt)
+                    .field("encoding-name", encoding)
+                    .field("clock-rate", 90000)
+                    .build();
+                caps.append_structure(s);
+            }
+
+            Some(video_caps)
+        };
+
         let audio_caps = Some(
-            ["audio/x-opus"]
-                .into_iter()
-                .map(gst::Structure::new_empty)
-                .collect::<gst::Caps>(),
+            gst::Caps::builder("application/x-rtp")
+                .field("media", "audio")
+                .field("encoding-name", "OPUS")
+                .field("payload", 96)
+                .field("clock-rate", 48000)
+                .build(),
         );
 
         Self {
