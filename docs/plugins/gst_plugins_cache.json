@@ -10496,6 +10496,18 @@
                         "type": "gboolean",
                         "writable": true
                     },
+                    "forward-metas": {
+                        "blurb": "Comma-separated list of buffer meta names to forward over the control data channel. Currently supported names are: timecode",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "ice-transport-policy": {
                         "blurb": "The policy to apply for ICE transport",
                         "conditionally-available": false,

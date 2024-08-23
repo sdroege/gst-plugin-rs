@@ -85,6 +85,7 @@ const DEFAULT_WEB_SERVER_PATH: Option<&str> = None;
 const DEFAULT_WEB_SERVER_DIRECTORY: &str = "gstwebrtc-api/dist";
 #[cfg(feature = "web_server")]
 const DEFAULT_WEB_SERVER_HOST_ADDR: &str = "http://127.0.0.1:8080";
+const DEFAULT_FORWARD_METAS: &str = "";
 /* Start adding some FEC when the bitrate > 2Mbps as we found experimentally
  * that it is not worth it below that threshold */
 #[cfg(feature = "v1_22")]
@@ -126,6 +127,7 @@ struct Settings {
     web_server_directory: String,
     #[cfg(feature = "web_server")]
     web_server_host_addr: url::Url,
+    forward_metas: HashSet<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -512,6 +514,7 @@ struct State {
     #[cfg(feature = "web_server")]
     web_join_handle: Option<tokio::task::JoinHandle<()>>,
     session_mids: HashMap<String, HashMap<String, String>>,
+    session_stream_names: HashMap<String, HashMap<String, String>>,
 }
 
 fn create_navigation_event(sink: &super::BaseWebRTCSink, msg: &str, session_id: &str) {
@@ -687,6 +690,7 @@ impl Default for Settings {
             web_server_directory: String::from(DEFAULT_WEB_SERVER_DIRECTORY),
             #[cfg(feature = "web_server")]
             web_server_host_addr: url::Url::parse(DEFAULT_WEB_SERVER_HOST_ADDR).unwrap(),
+            forward_metas: HashSet::new(),
         }
     }
 }
@@ -713,6 +717,7 @@ impl Default for State {
             #[cfg(feature = "web_server")]
             web_join_handle: None,
             session_mids: HashMap::new(),
+            session_stream_names: HashMap::new(),
         }
     }
 }
@@ -2859,6 +2864,45 @@ impl BaseWebRTCSink {
         signaller.add_ice(&session_id, &candidate, sdp_m_line_index, None)
     }
 
+    fn send_buffer_metas(
+        &self,
+        state: &State,
+        settings: &Settings,
+        session_id: &str,
+        buffer: &gst::BufferRef,
+    ) {
+        // This should probably never happen as the transform
+        // function for the dye meta always copies, but we can't
+        // rely on the behavior of all encoders / payloaders.
+        let Ok(dye_meta) = gst::meta::CustomMeta::from_buffer(buffer, "webrtcsink-dye") else {
+            return;
+        };
+        let stream_name = dye_meta.structure().get::<String>("stream-name").unwrap();
+        let Some(mid) = state
+            .session_stream_names
+            .get(session_id)
+            .and_then(|names| names.get(&stream_name))
+        else {
+            return;
+        };
+
+        if let Some(ref handler) = state.control_events_handler {
+            for meta in utils::serialize_meta(buffer, &settings.forward_metas) {
+                match serde_json::to_string(&utils::InfoMessage {
+                    mid: mid.to_owned(),
+                    info: utils::Info::Meta(meta),
+                }) {
+                    Ok(msg) => {
+                        handler.0 .1.send_string(Some(msg.as_str()));
+                    }
+                    Err(err) => {
+                        gst::warning!(CAT, imp = self, "Failed to serialize info message: {err:?}",);
+                    }
+                }
+            }
+        }
+    }
+
     /// Called by the signaller to add a new session
     fn start_session(
         &self,
@@ -2995,6 +3039,64 @@ impl BaseWebRTCSink {
             }
             _ => None,
         };
+
+        webrtcbin.connect_closure(
+            "deep-element-added",
+            false,
+            glib::closure!(
+                #[strong]
+                session_id,
+                #[watch]
+                element,
+                move |_webrtcbin: gst::Element, _bin: gst::Bin, e: gst::Element| {
+                    if e.factory().map_or(false, |f| f.name() == "nicesink") {
+                        let sinkpad = e.static_pad("sink").unwrap();
+
+                        let session_id = session_id.clone();
+                        let element_clone = element.downgrade();
+                        sinkpad.add_probe(
+                            gst::PadProbeType::BUFFER
+                                | gst::PadProbeType::BUFFER_LIST
+                                | gst::PadProbeType::EVENT_DOWNSTREAM,
+                            move |_pad, info| {
+                                let Some(element) = element_clone.upgrade() else {
+                                    return gst::PadProbeReturn::Remove;
+                                };
+                                let this = element.imp();
+                                let settings = this.settings.lock().unwrap();
+                                if settings.forward_metas.is_empty() {
+                                    return gst::PadProbeReturn::Ok;
+                                }
+
+                                let state = this.state.lock().unwrap();
+                                match info.data {
+                                    Some(gst::PadProbeData::Buffer(ref buffer)) => {
+                                        this.send_buffer_metas(
+                                            &state,
+                                            &settings,
+                                            &session_id,
+                                            buffer,
+                                        );
+                                    }
+                                    Some(gst::PadProbeData::BufferList(ref list)) => {
+                                        for buffer in list.iter() {
+                                            this.send_buffer_metas(
+                                                &state,
+                                                &settings,
+                                                &session_id,
+                                                buffer,
+                                            );
+                                        }
+                                    }
+                                    _ => (),
+                                }
+                                gst::PadProbeReturn::Ok
+                            },
+                        );
+                    }
+                }
+            ),
+        );
 
         pipeline.add(&webrtcbin).unwrap();
 
@@ -3560,6 +3662,11 @@ impl BaseWebRTCSink {
                         .entry(session_id.clone())
                         .or_default()
                         .insert(mid.to_string(), stream_name.clone());
+                    state
+                        .session_stream_names
+                        .entry(session_id.clone())
+                        .or_default()
+                        .insert(stream_name.clone(), mid.to_string());
                 }
 
                 if let Some(producer) = state
@@ -4239,11 +4346,27 @@ impl BaseWebRTCSink {
         ));
     }
 
+    fn dye_buffer(&self, mut buffer: gst::Buffer, stream_name: &str) -> Result<gst::Buffer, Error> {
+        let buf_mut = buffer.make_mut();
+
+        let mut m = gst::meta::CustomMeta::add(buf_mut, "webrtcsink-dye")?;
+
+        m.mut_structure().set("stream-name", stream_name);
+
+        Ok(buffer)
+    }
+
     fn chain(
         &self,
         pad: &gst::GhostPad,
-        buffer: gst::Buffer,
+        mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        buffer = self
+            .dye_buffer(buffer, pad.name().as_str())
+            .map_err(|err| {
+                gst::error!(CAT, obj = pad, "Failed to dye buffer: {err}");
+                gst::FlowError::Error
+            })?;
         self.start_stream_discovery_if_needed(pad.name().as_str());
         self.feed_discoveries(pad.name().as_str(), &buffer);
 
@@ -4259,8 +4382,30 @@ impl ObjectSubclass for BaseWebRTCSink {
     type Interfaces = (gst::ChildProxy, gst_video::Navigation);
 }
 
+fn register_dye_meta() {
+    use std::sync::Once;
+    static INIT: Once = Once::new();
+
+    INIT.call_once(|| {
+        gst::meta::CustomMeta::register_with_transform(
+            "webrtcsink-dye",
+            &[],
+            move |outbuf, meta, _inbuf, _type| {
+                let stream_name = meta.structure().get::<String>("stream-name").unwrap();
+                if let Ok(mut m) = gst::meta::CustomMeta::add(outbuf, "webrtcsink-dye") {
+                    m.mut_structure().set("stream-name", stream_name);
+                    true
+                } else {
+                    false
+                }
+            },
+        );
+    });
+}
+
 unsafe impl<T: BaseWebRTCSinkImpl> IsSubclassable<T> for super::BaseWebRTCSink {
     fn class_init(class: &mut glib::Class<Self>) {
+        register_dye_meta();
         Self::parent_class_init::<T>(class);
     }
 }
@@ -4484,6 +4629,24 @@ impl ObjectImpl for BaseWebRTCSink {
                     .blurb("Address the web server should listen on")
                     .default_value(DEFAULT_WEB_SERVER_HOST_ADDR)
                     .build(),
+                /**
+                 * GstBaseWebRTCSink:forward-metas:
+                 *
+                 * Comma-separated list of buffer metas to forward over the
+                 * control data channel, if any.
+                 *
+                 * Currently supported names are:
+                 *
+                 * - timecode
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
+                glib::ParamSpecString::builder("forward-metas")
+                    .nick("Forward metas")
+                    .blurb("Comma-separated list of buffer meta names to forward over the control data channel. Currently supported names are: timecode")
+                    .default_value(DEFAULT_FORWARD_METAS)
+                    .mutable_playing()
+                    .build(),
             ]
         });
 
@@ -4616,6 +4779,15 @@ impl ObjectImpl for BaseWebRTCSink {
                 };
                 settings.web_server_host_addr = host_addr;
             }
+            "forward-metas" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.forward_metas = value
+                    .get::<String>()
+                    .expect("type checked upstream")
+                    .split(",")
+                    .map(String::from)
+                    .collect();
+            }
             _ => unimplemented!(),
         }
     }
@@ -4713,6 +4885,10 @@ impl ObjectImpl for BaseWebRTCSink {
             "web-server-host-addr" => {
                 let settings = self.settings.lock().unwrap();
                 settings.web_server_host_addr.to_string().to_value()
+            }
+            "forward-metas" => {
+                let settings = self.settings.lock().unwrap();
+                settings.forward_metas.iter().join(",").to_value()
             }
             _ => unimplemented!(),
         }

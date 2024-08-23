@@ -1213,6 +1213,92 @@ pub fn deserialize_serde_object(
     Ok(ret.build())
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct VideoTimeCodeFlags(gst_video::VideoTimeCodeFlags);
+
+impl serde::Serialize for VideoTimeCodeFlags {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if self.0.bits() == 0 {
+            serializer.serialize_str("none")
+        } else {
+            let mut ret = String::new();
+            if self.0.contains(gst_video::VideoTimeCodeFlags::DROP_FRAME) {
+                ret.push_str("drop-frame");
+                if self.0.contains(gst_video::VideoTimeCodeFlags::INTERLACED) {
+                    ret.push_str("+interlaced");
+                }
+            } else if self.0.contains(gst_video::VideoTimeCodeFlags::INTERLACED) {
+                ret.push_str("interlaced");
+            }
+            serializer.serialize_str(&ret)
+        }
+    }
+}
+
+#[derive(Serialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+#[serde(tag = "type")]
+pub enum Meta {
+    TimeCode {
+        hours: u32,
+        minutes: u32,
+        seconds: u32,
+        frames: u32,
+        field_count: u32,
+        fps: gst::Fraction,
+        flags: VideoTimeCodeFlags,
+        latest_daily_jam: Option<String>,
+    },
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum Info {
+    Meta(Meta),
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+#[serde(tag = "type")]
+pub struct InfoMessage {
+    pub mid: String,
+    pub info: Info,
+}
+
+pub fn serialize_meta(buffer: &gst::BufferRef, forward_metas: &HashSet<String>) -> Vec<Meta> {
+    let mut ret = vec![];
+
+    buffer.foreach_meta(|meta| {
+        if forward_metas.contains("timecode") {
+            if let Some(tc_meta) = meta.downcast_ref::<gst_video::VideoTimeCodeMeta>() {
+                let tc = tc_meta.tc();
+                ret.push(Meta::TimeCode {
+                    hours: tc.hours(),
+                    minutes: tc.minutes(),
+                    seconds: tc.seconds(),
+                    frames: tc.frames(),
+                    field_count: tc.field_count(),
+                    fps: tc.fps(),
+                    flags: VideoTimeCodeFlags(tc.flags()),
+                    latest_daily_jam: tc
+                        .latest_daily_jam()
+                        .and_then(|dt| {
+                            let gst_dt: gst::DateTime = dt.into();
+                            gst_dt.to_iso8601_string().ok()
+                        })
+                        .map(|s| s.to_string()),
+                });
+            }
+        }
+        std::ops::ControlFlow::Continue(())
+    });
+
+    ret
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1274,6 +1360,43 @@ mod tests {
             .unwrap()
             .value_type();
         assert_eq!(gst_type, f64::static_type());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_serialize_meta() -> Result<(), String> {
+        gst::init().unwrap();
+
+        let mut buffer = gst::Buffer::new();
+        let time_code = gst_video::VideoTimeCode::new(
+            gst::Fraction::new(30, 1),
+            None,
+            gst_video::VideoTimeCodeFlags::empty(),
+            10,
+            53,
+            17,
+            0,
+            0,
+        );
+        gst_video::VideoTimeCodeMeta::add(
+            buffer.get_mut().unwrap(),
+            &time_code.try_into().unwrap(),
+        );
+
+        assert_eq!(
+            serialize_meta(&buffer, &[String::from("timecode")].into()),
+            vec![Meta::TimeCode {
+                hours: 10,
+                minutes: 53,
+                seconds: 17,
+                frames: 0,
+                field_count: 0,
+                fps: gst::Fraction::new(30, 1),
+                flags: VideoTimeCodeFlags(gst_video::VideoTimeCodeFlags::empty()),
+                latest_daily_jam: None,
+            }]
+        );
 
         Ok(())
     }

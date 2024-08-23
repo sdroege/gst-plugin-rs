@@ -418,6 +418,9 @@
                         entryElement.classList.add("has-remote-control");
                         submitRequestButtonElement.disabled = false;
                         remoteController.attachVideoElement(videoElement);
+                        remoteController.addEventListener("info", (e) => {
+                          console.log("Received info message from producer: ", e.detail);
+                        });
                       } else {
                         entryElement.classList.remove("has-remote-control");
                         submitRequestButtonElement.disabled = true;

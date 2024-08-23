@@ -65,6 +65,23 @@ function getModifiers(event) {
 }
 
 /**
+ * Event name: "info".<br>
+ * Triggered when a remote peer sends an information message over the control data channel.
+ * @event GstWebRTCAPI#InfoEvent
+ * @type {external:CustomEvent}
+ * @property {object} detail - The info message
+ * @see GstWebRTCAPI.RemoteController
+ */
+/**
+ * Event name: "controlResponse".<br>
+ * Triggered when a remote peer sends a response after a control request.
+ * @event GstWebRTCAPI#ControlResponseEvent
+ * @type {external:CustomEvent}
+ * @property {object} detail - The response message
+ * @see GstWebRTCAPI.RemoteController
+ */
+
+/**
  * @class GstWebRTCAPI.RemoteController
  * @hideconstructor
  * @classdesc Manages a specific WebRTC data channel created by a remote GStreamer webrtcsink producer and offering
@@ -78,6 +95,8 @@ function getModifiers(event) {
  * @extends {external:EventTarget}
  * @fires {@link GstWebRTCAPI#event:ErrorEvent}
  * @fires {@link GstWebRTCAPI#event:ClosedEvent}
+ * @fires {@link GstWebRTCAPI#event:InfoEvent}
+ * @fires {@link GstWebRTCAPI#event:ControlResponseEvent}
  * @see GstWebRTCAPI.ConsumerSession#remoteController
  * @see GstWebRTCAPI.RemoteController#attachVideoElement
  * @see https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/tree/main/net/webrtc/gstwebrtc-api#produce-a-gstreamer-interactive-webrtc-stream-with-remote-control
@@ -117,6 +136,8 @@ export default class RemoteController extends EventTarget {
 
         if (msg.type === "ControlResponseMessage") {
           this.dispatchEvent(new CustomEvent("controlResponse", { detail: msg }));
+        } else if (msg.type === "InfoMessage") {
+          this.dispatchEvent(new CustomEvent("info", { detail: msg }));
         }
       } catch (ex) {
         this.dispatchEvent(new ErrorEvent("error", {

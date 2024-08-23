@@ -257,6 +257,48 @@ Code in [gstwebrtc-api](gstwebrtc-api) is also licensed under the
 
 [Mozilla Public License Version 2.0]: http://opensource.org/licenses/MPL-2.0
 
+## Control data channel
+
+When the control data channel is enabled using the `enable-control-data-channel`
+property, `webrtcsink` can optionally forward serialized metas and events to the
+consumer.
+
+Currently only timecode metas are supported, but other metas and events can easily
+be added in a backward-compatible manner.
+
+Here is an example for forwarding timecodes:
+
+```
+gst-launch-1.0 videotestsrc ! timecodestamper ! webrtcsink forward-metas="timecode" name=ws enable-control-data-channel=true run-signalling-server=true run-web-server=true
+```
+
+Point your web browser to `http://127.0.0.1:8080`, open the console and click
+on the producer ID, you should see such messages in the console once the video
+is displayed:
+
+```
+{
+    "type": "InfoMessage",
+    "mid": "video0",
+    "info": {
+        "meta": {
+            "type": "timeCode",
+            "hours": 0,
+            "minutes": 0,
+            "seconds": 5,
+            "frames": 17,
+            "field_count": 0,
+            "fps": [
+                30,
+                1
+            ],
+            "flags": "none",
+            "latest_daily_jam": "2024-08-23T17:51:42+0200"
+        }
+    }
+}
+```
+
 ## Using the AWS KVS signaller
 
 * Setup AWS Kinesis Video Streams
