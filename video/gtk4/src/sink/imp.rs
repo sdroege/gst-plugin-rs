@@ -24,8 +24,8 @@ use gst_video::subclass::prelude::*;
 
 use once_cell::sync::Lazy;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Mutex, MutexGuard,
+    atomic::{self, AtomicBool},
+    Mutex,
 };
 
 use crate::utils;
@@ -202,7 +202,7 @@ impl ObjectImpl for PaintableSink {
                 let mut settings = self.settings.lock().unwrap();
                 let value = value.get().expect("type checked upstream");
                 if settings.window_width != value {
-                    self.window_resized.store(true, Ordering::SeqCst);
+                    self.window_resized.store(true, atomic::Ordering::SeqCst);
                 }
                 settings.window_width = value;
             }
@@ -210,7 +210,7 @@ impl ObjectImpl for PaintableSink {
                 let mut settings = self.settings.lock().unwrap();
                 let value = value.get().expect("type checked upstream");
                 if settings.window_height != value {
-                    self.window_resized.store(true, Ordering::SeqCst);
+                    self.window_resized.store(true, atomic::Ordering::SeqCst);
                 }
                 settings.window_height = value;
             }
@@ -523,7 +523,7 @@ impl BaseSinkImpl for PaintableSink {
                     settings.window_height
                 );
 
-                self.window_resized.store(false, Ordering::SeqCst);
+                self.window_resized.store(false, atomic::Ordering::SeqCst);
 
                 Some(
                     gst::Structure::builder("GstVideoOverlayCompositionMeta")
@@ -621,7 +621,7 @@ impl VideoSinkImpl for PaintableSink {
     fn show_frame(&self, buffer: &gst::Buffer) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::trace!(CAT, imp = self, "Rendering buffer {:?}", buffer);
 
-        if self.window_resized.swap(false, Ordering::SeqCst) {
+        if self.window_resized.swap(false, atomic::Ordering::SeqCst) {
             gst::debug!(CAT, imp = self, "Window size changed, needs to reconfigure");
             let obj = self.obj();
             let sink = obj.sink_pad();
@@ -819,7 +819,7 @@ impl PaintableSink {
         });
     }
 
-    fn create_paintable(&self, paintable_storage: &mut MutexGuard<Option<ThreadGuard<Paintable>>>) {
+    fn create_paintable(&self, paintable_storage: &mut Option<ThreadGuard<Paintable>>) {
         {
             self.initialize_gl_context();
         }
@@ -828,10 +828,7 @@ impl PaintableSink {
         self.initialize_paintable(paintable_storage);
     }
 
-    fn initialize_paintable(
-        &self,
-        paintable_storage: &mut MutexGuard<Option<ThreadGuard<Paintable>>>,
-    ) {
+    fn initialize_paintable(&self, paintable_storage: &mut Option<ThreadGuard<Paintable>>) {
         gst::debug!(CAT, imp = self, "Initializing paintable");
 
         // The channel for the SinkEvents
@@ -862,7 +859,7 @@ impl PaintableSink {
             ThreadGuard::new(Paintable::new(gdk_context))
         });
 
-        **paintable_storage = Some(paintable);
+        *paintable_storage = Some(paintable);
 
         *self.sender.lock().unwrap() = Some(sender);
     }
