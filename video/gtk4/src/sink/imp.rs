@@ -17,14 +17,10 @@ use glib::thread_guard::ThreadGuard;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
-use gst_gl::prelude::GLContextExt as GstGLContextExt;
-use gst_gl::prelude::*;
-
-#[allow(unused_imports)]
-use gst::prelude::*;
-use gst::subclass::prelude::*;
+use gst::{prelude::*, subclass::prelude::*};
 use gst_base::subclass::prelude::*;
-use gst_video::{prelude::*, subclass::prelude::*};
+use gst_gl::prelude::{GLContextExt as _, *};
+use gst_video::subclass::prelude::*;
 
 use once_cell::sync::Lazy;
 use std::sync::{
@@ -918,25 +914,6 @@ impl PaintableSink {
             }
         };
 
-        match gdk_context.type_().name() {
-            #[cfg(feature = "x11egl")]
-            "GdkX11GLContextEGL" => (),
-            #[cfg(feature = "x11glx")]
-            "GdkX11GLContextGLX" => (),
-            #[cfg(feature = "wayland")]
-            "GdkWaylandGLContext" => (),
-            #[cfg(target_os = "macos")]
-            "GdkMacosGLContext" => (),
-            #[cfg(target_os = "windows")]
-            "GdkWin32GLContextWGL" => (),
-            #[cfg(all(windows, feature = "winegl"))]
-            "GdkWin32GLContextEGL" => (),
-            display => {
-                gst::error!(CAT, imp = self, "Unsupported GDK display {display} for GL");
-                return;
-            }
-        }
-
         gst::info!(CAT, imp = self, "Realizing GDK GL Context",);
 
         if let Err(err) = gdk_context.realize() {
@@ -944,28 +921,21 @@ impl PaintableSink {
             return;
         }
 
-        gst::info!(CAT, imp = self, "Successfully realized GDK GL Context");
+        gst::info!(
+            CAT,
+            imp = self,
+            "Successfully realized GDK GL Context of type {}",
+            gdk_context.type_().name()
+        );
 
         gdk_context.make_current();
 
-        let res: Option<(gst_gl::GLDisplay, gst_gl::GLContext)> = match gdk_context.type_().name() {
-            #[cfg(feature = "x11egl")]
-            "GdkX11GLContextEGL" => self.initialize_x11egl(gdk_display),
-            #[cfg(feature = "x11glx")]
-            "GdkX11GLContextGLX" => self.initialize_x11glx(gdk_display),
-            #[cfg(feature = "wayland")]
-            "GdkWaylandGLContext" => self.initialize_waylandegl(gdk_display),
-            #[cfg(target_os = "macos")]
-            "GdkMacosGLContext" => self.initialize_macosgl(gdk_display),
-            #[cfg(target_os = "windows")]
-            "GdkWin32GLContextWGL" => self.initialize_wgl(gdk_display, &gdk_context),
-            #[cfg(all(target_os = "windows", feature = "winegl"))]
-            "GdkWin32GLContextEGL" => self.initialize_winegl(gdk_display),
-            display_type => {
-                unreachable!("Unsupported GDK display {display_type} for GL. This might be due to not having enabled a backend for GL when building the plugin");
-            }
+        let Some((display, wrapped_context)) = self.initialize_gst_gl(&gdk_display, &gdk_context)
+        else {
+            gst::warning!(CAT, imp = self, "Failed to initialize GStreamer GL context");
+            return;
         };
-        let (display, wrapped_context) = res.unwrap();
+
         match wrapped_context.activate(true) {
             Ok(_) => gst::info!(CAT, imp = self, "Successfully activated GL Context"),
             Err(_) => {
@@ -1000,10 +970,40 @@ impl PaintableSink {
         };
     }
 
+    fn initialize_gst_gl(
+        &self,
+        gdk_display: &gdk::Display,
+        gdk_context: &gdk::GLContext,
+    ) -> Option<(gst_gl::GLDisplay, gst_gl::GLContext)> {
+        match gdk_context.type_().name() {
+            #[cfg(feature = "x11egl")]
+            "GdkX11GLContextEGL" => self.initialize_x11egl(gdk_display),
+            #[cfg(feature = "x11glx")]
+            "GdkX11GLContextGLX" => self.initialize_x11glx(gdk_display),
+            #[cfg(feature = "wayland")]
+            "GdkWaylandGLContext" => self.initialize_waylandegl(gdk_display),
+            #[cfg(target_os = "macos")]
+            "GdkMacosGLContext" => self.initialize_macosgl(gdk_display),
+            #[cfg(target_os = "windows")]
+            "GdkWin32GLContextWGL" => self.initialize_wgl(gdk_display, &gdk_context),
+            #[cfg(all(target_os = "windows", feature = "winegl"))]
+            "GdkWin32GLContextEGL" => self.initialize_winegl(gdk_display),
+            context_type => {
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Unsupported GDK context {context_type} with display type {} for GL. This might be due to not having enabled a backend for GL when building the plugin",
+                    gdk_display.type_().name(),
+                );
+                None
+            }
+        }
+    }
+
     #[cfg(feature = "x11egl")]
     fn initialize_x11egl(
         &self,
-        display: gdk::Display,
+        display: &gdk::Display,
     ) -> Option<(gst_gl::GLDisplay, gst_gl::GLContext)> {
         gst::info!(
             CAT,
@@ -1024,7 +1024,7 @@ impl PaintableSink {
         unsafe {
             use glib::translate::*;
 
-            let display = display.downcast::<gdk_x11::X11Display>().unwrap();
+            let display = display.downcast_ref::<gdk_x11::X11Display>().unwrap();
             let x11_display =
                 gdk_x11::ffi::gdk_x11_display_get_egl_display(display.to_glib_none().0);
             if x11_display.is_null() {
@@ -1053,7 +1053,7 @@ impl PaintableSink {
     #[cfg(feature = "x11glx")]
     fn initialize_x11glx(
         &self,
-        display: gdk::Display,
+        display: &gdk::Display,
     ) -> Option<(gst_gl::GLDisplay, gst_gl::GLContext)> {
         gst::info!(
             CAT,
@@ -1074,7 +1074,7 @@ impl PaintableSink {
         unsafe {
             use glib::translate::*;
 
-            let display = display.downcast::<gdk_x11::X11Display>().unwrap();
+            let display = display.downcast_ref::<gdk_x11::X11Display>().unwrap();
             let x11_display = gdk_x11::ffi::gdk_x11_display_get_xdisplay(display.to_glib_none().0);
             if x11_display.is_null() {
                 gst::error!(CAT, imp = self, "Failed to get X11 display");
@@ -1102,7 +1102,7 @@ impl PaintableSink {
     #[cfg(feature = "wayland")]
     fn initialize_waylandegl(
         &self,
-        display: gdk::Display,
+        display: &gdk::Display,
     ) -> Option<(gst_gl::GLDisplay, gst_gl::GLContext)> {
         gst::info!(
             CAT,
@@ -1125,7 +1125,9 @@ impl PaintableSink {
 
             // let wayland_display = gdk_wayland::WaylandDisplay::wl_display(display.downcast());
             // get the ptr directly since we are going to use it raw
-            let display = display.downcast::<gdk_wayland::WaylandDisplay>().unwrap();
+            let display = display
+                .downcast_ref::<gdk_wayland::WaylandDisplay>()
+                .unwrap();
             let wayland_display =
                 gdk_wayland::ffi::gdk_wayland_display_get_wl_display(display.to_glib_none().0);
             if wayland_display.is_null() {
@@ -1156,7 +1158,7 @@ impl PaintableSink {
     #[cfg(target_os = "macos")]
     fn initialize_macosgl(
         &self,
-        display: gdk::Display,
+        display: &gdk::Display,
     ) -> Option<(gst_gl::GLDisplay, gst_gl::GLContext)> {
         gst::info!(
             CAT,
@@ -1193,7 +1195,7 @@ impl PaintableSink {
     #[cfg(target_os = "windows")]
     fn initialize_wgl(
         &self,
-        _display: gdk::Display,
+        _display: &gdk::Display,
         context: &gdk::GLContext,
     ) -> Option<(gst_gl::GLDisplay, gst_gl::GLContext)> {
         gst::info!(
@@ -1244,7 +1246,7 @@ impl PaintableSink {
     #[cfg(all(target_os = "windows", feature = "winegl"))]
     fn initialize_winegl(
         &self,
-        display: gdk::Display,
+        display: &gdk::Display,
     ) -> Option<(gst_gl::GLDisplay, gst_gl::GLContext)> {
         gst::info!(
             CAT,
@@ -1267,7 +1269,7 @@ impl PaintableSink {
             use gdk_win32::prelude::*;
             use glib::translate::*;
 
-            let d = display.downcast::<gdk_win32::Win32Display>().unwrap();
+            let d = display.downcast_ref::<gdk_win32::Win32Display>().unwrap();
             let egl_display = d.egl_display().unwrap().as_ptr();
 
             // TODO: On the binary distribution of GStreamer for Windows, this symbol is not there
