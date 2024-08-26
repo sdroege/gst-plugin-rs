@@ -237,7 +237,7 @@ impl TranscriberStream {
         mut items: Vec<types::Item>,
         partial: bool,
     ) -> Option<Vec<TranscriptItem>> {
-        if items.len() <= self.partial_index {
+        if items.len() < self.partial_index {
             gst::error!(
                 CAT,
                 imp = self.imp,
