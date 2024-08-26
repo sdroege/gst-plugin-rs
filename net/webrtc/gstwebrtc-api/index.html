@@ -384,6 +384,8 @@
                 if (session) {
                   entryElement._consumerSession = session;
 
+                  session.mungeStereoHack = true;
+
                   session.addEventListener("error", (event) => {
                     if (entryElement._consumerSession === session) {
                       console.error(event.message, event.error);

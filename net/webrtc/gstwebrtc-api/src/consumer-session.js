@@ -44,6 +44,7 @@ export default class ConsumerSession extends WebRTCSession {
     this._streams = [];
     this._remoteController = null;
     this._pendingCandidates = [];
+    this._mungeStereoHack = false;
 
     this._offerOptions = offerOptions;
 
@@ -55,6 +56,16 @@ export default class ConsumerSession extends WebRTCSession {
         this._remoteController.close();
       }
     });
+  }
+
+  /**
+   * Defines whether the SDP should be munged in order to enable stereo with chrome.
+   * @param {boolean} enable - Enable or disable the hack, default is false
+   */
+  set mungeStereoHack(enable) {
+    if (typeof (enable) !== "boolean") { return; }
+
+    this._mungeStereoHack = enable;
   }
 
   /**
@@ -238,6 +249,36 @@ export default class ConsumerSession extends WebRTCSession {
     }
   }
 
+  // Work around Chrome not handling stereo Opus correctly.
+  // See
+  //   https://chromium.googlesource.com/external/webrtc/+/194e3bcc53ffa3e98045934377726cb25d7579d2/webrtc/media/engine/webrtcvoiceengine.cc#302
+  //   https://bugs.chromium.org/p/webrtc/issues/detail?id=8133
+  //
+  // Technically it's against the spec to modify the SDP
+  // but there's no other API for this and this seems to
+  // be the only possible workaround at this time.
+  mungeStereo(offerSdp, answerSdp) {
+    const stereoRegexp = /a=fmtp:.* sprop-stereo/g;
+    let stereoPayloads = new Set();
+    for (const m of offerSdp.matchAll(stereoRegexp)) {
+      const payloadMatch = m[0].match(/a=fmtp:(\d+) .*/);
+      if (payloadMatch) {
+        stereoPayloads.add(payloadMatch[1]);
+      }
+    }
+
+    for (const payload of stereoPayloads) {
+      const isStereoRegexp = new RegExp("a=fmtp:" + payload + ".*stereo");
+      const answerIsStereo = answerSdp.match(isStereoRegexp);
+
+      if (!answerIsStereo) {
+        answerSdp = answerSdp.replaceAll("a=fmtp:" + payload, "a=fmtp:" + payload + " stereo=1;");
+      }
+    }
+
+    return answerSdp;
+  }
+
   onSessionPeerMessage(msg) {
     if ((this._state === SessionState.closed) || !this._comChannel || !this._sessionId) {
       return;
@@ -268,6 +309,10 @@ export default class ConsumerSession extends WebRTCSession {
           }
         }).then((desc) => {
           if (this._rtcPeerConnection && desc) {
+            if (this._mungeStereoHack) {
+              desc.sdp = this.mungeStereo(msg.sdp.sdp, desc.sdp);
+            }
+
             return this._rtcPeerConnection.setLocalDescription(desc);
           } else {
             return null;
