@@ -23,6 +23,7 @@ You will find the following plugins in this repository:
 
     - `aws`: Various elements for Amazon AWS services using the [AWS SDK](https://awslabs.github.io/aws-sdk-rust/) library
       - `s3src`/`s3sink`: A source and sink element to talk to the Amazon S3 object storage system.
+      - `s3putobjectsink`: A sink element to talk to Amazon S3. Uses `PutObject` instead of multi-part upload like `s3sink`.
       - `s3hlssink`: A sink element to store HLS streams on Amazon S3.
       - `awstranscriber`: an element wrapping the AWS Transcriber service.
       - `awstranscribeparse`: an element parsing the packets of the AWS Transcriber service.
