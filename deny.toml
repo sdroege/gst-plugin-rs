@@ -78,6 +78,9 @@ version = "0.11"
 name = "zerocopy"
 version = "0.6"
 [[bans.skip]]
+name = "zerocopy-derive"
+version = "0.6"
+[[bans.skip]]
 name = "multimap"
 version = "0.8"
 [[bans.skip]]
@@ -201,15 +204,6 @@ version = "0.20"
 name = "http"
 version = "0.2"
 
-# proc-macro-crate depends on an older version of toml_edit
-# https://github.com/bkchr/proc-macro-crate/pull/50
-[[bans.skip]]
-name = "toml_edit"
-version = "0.21"
-[[bans.skip]]
-name = "winnow"
-version = "0.5"
-
 # Various crates depend on an older version of heck
 [[bans.skip]]
 name = "heck"
@@ -243,6 +237,12 @@ version = "1.0"
 [[bans.skip]]
 name = "winreg"
 version = "0.50"
+[[bans.skip]]
+name = "system-configuration"
+version = "0.5"
+[[bans.skip]]
+name = "system-configuration-sys"
+version = "0.5"
 
 # The AWS SDK uses old versions of rustls and related crates
 [[bans.skip]]
@@ -267,6 +267,26 @@ version = "0.21"
 [[bans.skip]]
 name = "system-deps"
 version = "6"
+
+# various crates depend on an older version of windows-sys
+[[bans.skip]]
+name = "windows-sys"
+version = "0.52"
+
+# dav1d depends on old system-deps which depends on old cfg-expr
+[[bans.skip]]
+name = "cfg-expr"
+version = "0.15"
+
+# backtrace and png depend on old miniz_oxide
+[[bans.skip]]
+name = "miniz_oxide"
+version = "0.7"
+
+# aws-smithy-runtime depends on old tokio-rustls
+[[bans.skip]]
+name = "tokio-rustls"
+version = "0.24"
 
 [sources]
 unknown-registry = "deny"
