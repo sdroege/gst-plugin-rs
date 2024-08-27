@@ -2239,7 +2239,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-audiofx"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "atomic_refcell",
@@ -2261,7 +2261,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-aws"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "async-stream",
  "aws-config",
@@ -2294,7 +2294,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-cdg"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "cdg",
  "cdg_renderer",
@@ -2309,7 +2309,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-claxon"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "atomic_refcell",
  "byte-slice-cast",
@@ -2323,7 +2323,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-closedcaption"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "atomic_refcell",
@@ -2352,7 +2352,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-csound"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "byte-slice-cast",
  "csound",
@@ -2366,7 +2366,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-dav1d"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "dav1d",
  "gst-plugin-version-helper",
@@ -2379,7 +2379,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-fallbackswitch"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "gio",
  "gst-plugin-gtk4",
@@ -2397,7 +2397,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-ffv1"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "byte-slice-cast",
  "ffv1",
@@ -2410,7 +2410,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-file"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
@@ -2421,7 +2421,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-flavors"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "byteorder",
  "flavors",
@@ -2437,7 +2437,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-fmp4"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "bitstream-io",
@@ -2459,7 +2459,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-gif"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "atomic_refcell",
  "gif",
@@ -2472,7 +2472,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-gopbuffer"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "gst-plugin-version-helper",
@@ -2485,7 +2485,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-gtk4"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "async-channel",
  "gdk4-wayland",
@@ -2507,7 +2507,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-hlssink3"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2526,7 +2526,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-hsv"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "byte-slice-cast",
  "gst-plugin-version-helper",
@@ -2541,7 +2541,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-inter"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "futures",
@@ -2559,7 +2559,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-json"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
@@ -2571,7 +2571,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-lewton"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "atomic_refcell",
  "byte-slice-cast",
@@ -2585,7 +2585,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-livesync"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "gio",
  "gst-plugin-gtk4",
@@ -2601,7 +2601,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-mp4"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "bitstream-io",
@@ -2618,7 +2618,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-mpegtslive"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "bitstream-io",
@@ -2629,7 +2629,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-ndi"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "atomic_refcell",
@@ -2651,7 +2651,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-onvif"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "cairo-rs",
  "chrono",
@@ -2669,7 +2669,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-originalbuffer"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "atomic_refcell",
  "glib",
@@ -2681,7 +2681,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-png"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
@@ -2694,7 +2694,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-quinn"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "bytes",
  "futures",
@@ -2716,7 +2716,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-raptorq"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
@@ -2730,7 +2730,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-rav1e"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "atomic_refcell",
  "gst-plugin-version-helper",
@@ -2743,7 +2743,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-regex"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
@@ -2754,7 +2754,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-reqwest"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "bytes",
  "futures",
@@ -2774,7 +2774,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-rtp"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "atomic_refcell",
@@ -2807,7 +2807,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-rtsp"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "atomic_refcell",
@@ -2831,7 +2831,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-sodium"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "clap",
  "gst-plugin-version-helper",
@@ -2851,7 +2851,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-spotify"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "futures",
@@ -2866,7 +2866,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-textahead"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
@@ -2875,7 +2875,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-textwrap"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
@@ -2887,7 +2887,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-threadshare"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "async-task",
  "cc",
@@ -2918,7 +2918,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-togglerecord"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "either",
  "gio",
@@ -2935,7 +2935,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-tracers"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "gst-plugin-version-helper",
@@ -2947,7 +2947,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-tutorial"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "byte-slice-cast",
  "gst-plugin-version-helper",
@@ -2961,7 +2961,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-uriplaylistbin"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -2984,7 +2984,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-videofx"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "atomic_refcell",
  "cairo-rs",
@@ -3004,7 +3004,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-webp"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
@@ -3017,7 +3017,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-webrtc"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -3075,7 +3075,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-webrtc-signalling"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "async-tungstenite",
@@ -3097,7 +3097,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-webrtc-signalling-protocol"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -3105,7 +3105,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-webrtchttp"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "async-recursion",
  "bytes",
