@@ -5,6 +5,37 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.13.1] - 2024-08-27
+### Fixed
+- transcriberbin: Fix gst-inspect with missing elements.
+- gtk4paintablesink: Move dmabuf cfg to the correct bracket level.
+- webrtcsrc: Don't hold the state lock while removing sessions.
+- rtpbasepay: Various fixes to payloader base class.
+- webrtcsink: Fix various assertions when finalizing.
+- webrtcsrc: Make sure to always call end_session() without state lock.
+- mpegtslivesrc: Handle PCR discontinuities as errors.
+- ndisrc: Calculate timestamps for metadata buffers too.
+- Various new clippy warnings.
+- webrtcsink: Fix segment format mismatch when using a remote offer.
+- awstranscriber: Fix sanity check in transcribe loop.
+- whepsrc: Fix incorrect default caps.
+
+### Changed
+- gtk4paintablesink: Enable `gtk::GraphicsOffload::black-background` when
+  building with GTK 4.16 or newer.
+- gstwebrtc-api: Always include index file in dist for convenience.
+- rtpbasepay: Negotiate SSRC/PT with downstream via caps for backwards
+  compatibility.
+- hlssink3: Use more accurate fragment duration from splitmuxsink if
+  available.
+
+### Added
+- gtk4paintablesink: Add `window-width` and `window-height` properties.
+- gtk4paintablesink: Add custom widget for automatically updating window size.
+- fmp4mux / mp4mux: Add image orientation tag support.
+- webrtcsink: Add nvv4l2av1enc support.
+- cmafmux: Add Opus support.
+
 ## [0.13.0] - 2024-07-16
 
 ### Added
@@ -504,7 +535,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.0...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.1...HEAD
+[0.13.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.0...0.13.1
 [0.13.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.7...0.13.0
 [0.12.7]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.6...0.12.7
 [0.12.6]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.5...0.12.6
