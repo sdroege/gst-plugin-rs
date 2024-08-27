@@ -2326,7 +2326,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "sprintf 0.2.1",
+ "sprintf",
  "test-with",
  "tokio",
  "url",
@@ -2561,7 +2561,7 @@ dependencies = [
  "gstreamer-video",
  "m3u8-rs",
  "once_cell",
- "sprintf 0.1.4",
+ "sprintf",
 ]
 
 [[package]]
@@ -6644,12 +6644,6 @@ dependencies = [
  "base64ct",
  "der",
 ]
-
-[[package]]
-name = "sprintf"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c0cdea5a20a06e7c57f627094e7b1618e5665592cd88f2d45fa4014e348db58"
 
 [[package]]
 name = "sprintf"
