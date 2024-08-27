@@ -6566,9 +6566,12 @@ dependencies = [
 
 [[package]]
 name = "sprintf"
-version = "0.1.4"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c0cdea5a20a06e7c57f627094e7b1618e5665592cd88f2d45fa4014e348db58"
+checksum = "f2819cb5194dfe9e6d102f4519a9fb9dc7106d2879b71b4fd4d4677f1175bd39"
+dependencies = [
+ "thiserror",
+]
 
 [[package]]
 name = "static_assertions"
