@@ -638,6 +638,11 @@ impl TranscriberBin {
                 for pad in state.audio_sink_pads.values() {
                     let ps = pad.imp().state.lock().unwrap();
                     let pad_state = ps.as_ref().unwrap();
+                    pad_state.transcription_bin.set_locked_state(false);
+                    pad_state
+                        .transcription_bin
+                        .sync_state_with_parent()
+                        .unwrap();
                     let audio_tee_pad = pad_state.audio_tee.request_pad_simple("src_%u").unwrap();
                     let transcription_sink_pad =
                         state.transcription_bin.static_pad(&pad.name()).unwrap();
