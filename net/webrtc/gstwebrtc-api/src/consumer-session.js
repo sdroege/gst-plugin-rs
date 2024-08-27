@@ -100,6 +100,8 @@ export default class ConsumerSession extends WebRTCSession {
     if (this._offerOptions) {
       this.ensurePeerConnection();
 
+      this._rtcPeerConnection.createDataChannel("control");
+
       this._rtcPeerConnection.createOffer(this._offerOptions).then((desc) => {
         if (this._rtcPeerConnection && desc) {
           return this._rtcPeerConnection.setLocalDescription(desc);
