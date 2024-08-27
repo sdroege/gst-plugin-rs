@@ -1449,9 +1449,9 @@ dependencies = [
 
 [[package]]
 name = "dash-mpd"
-version = "0.16.6"
+version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99b0f95b06e9614b114ecf24191b26a27d5980e0ce77b2019ba6e8b45514fc88"
+checksum = "d31301f78cca02c3c368726ae0e296ca62248c99421dce751600bd538c2a76dc"
 dependencies = [
  "base64 0.22.1",
  "base64-serde",
@@ -4308,7 +4308,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -5444,7 +5444,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22505a5c94da8e3b7c2996394d1c933236c4d743e81a410bcca4e6989fc066a4"
 dependencies = [
  "bytes",
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.12.1",
  "log",
  "multimap 0.10.0",
