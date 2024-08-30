@@ -21,6 +21,7 @@
 use gst::subclass::prelude::*;
 use gst::{glib, prelude::*};
 
+use aws_sdk_s3::config::StalledStreamProtectionConfig;
 use aws_sdk_transcribestreaming as aws_transcribe;
 
 use futures::channel::mpsc;
@@ -577,6 +578,9 @@ impl Transcriber {
             aws_config::meta::region::RegionProviderChain::default_provider()
                 .or_else(DEFAULT_TRANSCRIBER_REGION),
         );
+
+        let config_loader =
+            config_loader.stalled_stream_protection(StalledStreamProtectionConfig::disabled());
 
         let config = futures::executor::block_on(config_loader.load());
         gst::debug!(CAT, imp = self, "Using region {}", config.region().unwrap());
