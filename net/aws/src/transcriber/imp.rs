@@ -451,7 +451,15 @@ impl Transcriber {
                 // `transcriber_next` takes precedence over `timeout`
                 // because we don't want to loose any incoming items.
                 let res = futures::select_biased! {
-                    event = transcriber_next => Some(event?),
+                    event = transcriber_next => {
+                        match event {
+                            Ok(event) => Some(event),
+                            Err(err) => {
+                                gst::element_imp_error!(imp, gst::StreamError::Failed, ["Streaming failed: {err}"]);
+                                break;
+                            }
+                        }
+                    }
                     _ = timeout => None,
                 };
 
