@@ -2449,6 +2449,25 @@
                         "type": "gboolean",
                         "writable": true
                     }
+                },
+                "signals": {
+                    "send-headers": {
+                        "action": true,
+                        "args": [],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "split-at-running-time": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "guint64"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    }
                 }
             },
             "GstFMP4MuxHeaderUpdateMode": {
