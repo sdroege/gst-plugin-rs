@@ -1335,6 +1335,328 @@ fn test_buffer_multi_stream_short_gops() {
 }
 
 #[test]
+fn test_single_stream_manual_fragment() {
+    init();
+
+    let caps = gst::Caps::builder("video/x-h264")
+        .field("width", 1920i32)
+        .field("height", 1080i32)
+        .field("framerate", gst::Fraction::new(30, 1))
+        .field("stream-format", "avc")
+        .field("alignment", "au")
+        .field("codec_data", gst::Buffer::with_size(1).unwrap())
+        .build();
+
+    let mut h = gst_check::Harness::new("cmafmux");
+
+    // fragment duration long enough to be ignored, 1s chunk duration
+    h.element()
+        .unwrap()
+        .set_property("fragment-duration", 1.hours());
+
+    h.set_src_caps(caps);
+    h.play();
+
+    // request fragment at 4 seconds, should be created at 11th buffer
+    h.element()
+        .unwrap()
+        .emit_by_name::<()>("split-at-running-time", &[&4.seconds()]);
+
+    // Push 15 buffers of 0.5s each, 1st, 11th and 16th buffer without DELTA_UNIT flag
+    for i in 0..20 {
+        let mut buffer = gst::Buffer::with_size(1).unwrap();
+        {
+            let buffer = buffer.get_mut().unwrap();
+            buffer.set_pts(i * 500.mseconds());
+            buffer.set_dts(i * 500.mseconds());
+            buffer.set_duration(500.mseconds());
+            if i != 0 && i != 10 && i != 15 {
+                buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
+            }
+        }
+        assert_eq!(h.push(buffer), Ok(gst::FlowSuccess::Ok));
+
+        if i == 2 {
+            let ev = loop {
+                let ev = h.pull_upstream_event().unwrap();
+                if ev.type_() != gst::EventType::Reconfigure
+                    && ev.type_() != gst::EventType::Latency
+                {
+                    break ev;
+                }
+            };
+
+            assert_eq!(ev.type_(), gst::EventType::CustomUpstream);
+            assert_eq!(
+                gst_video::UpstreamForceKeyUnitEvent::parse(&ev).unwrap(),
+                gst_video::UpstreamForceKeyUnitEvent {
+                    running_time: Some(4.seconds()),
+                    all_headers: true,
+                    count: 0
+                }
+            );
+        }
+    }
+
+    // Crank the clock: this should bring us to the end of the first fragment
+    h.crank_single_clock_wait().unwrap();
+
+    let header = h.pull().unwrap();
+    assert_eq!(
+        header.flags(),
+        gst::BufferFlags::HEADER | gst::BufferFlags::DISCONT
+    );
+    assert_eq!(header.pts(), Some(gst::ClockTime::ZERO));
+    assert_eq!(header.dts(), Some(gst::ClockTime::ZERO));
+
+    // first fragment
+    let fragment_header = h.pull().unwrap();
+    assert_eq!(fragment_header.flags(), gst::BufferFlags::HEADER);
+    assert_eq!(fragment_header.pts(), Some(gst::ClockTime::ZERO));
+    assert_eq!(fragment_header.dts(), Some(gst::ClockTime::ZERO));
+    assert_eq!(fragment_header.duration(), Some(5.seconds()));
+
+    for buffer_idx in 0..10 {
+        let buffer = h.pull().unwrap();
+        if buffer_idx == 9 {
+            assert_eq!(
+                buffer.flags(),
+                gst::BufferFlags::DELTA_UNIT | gst::BufferFlags::MARKER
+            );
+        } else {
+            assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
+        }
+        assert_eq!(buffer.pts(), Some(buffer_idx * 500.mseconds()));
+        assert_eq!(buffer.dts(), Some(buffer_idx * 500.mseconds()));
+        assert_eq!(buffer.duration(), Some(500.mseconds()));
+    }
+
+    // second manual fragment
+    let fragment_header = h.pull().unwrap();
+    assert_eq!(fragment_header.flags(), gst::BufferFlags::HEADER);
+    assert_eq!(fragment_header.pts(), Some(5.seconds()));
+    assert_eq!(fragment_header.dts(), Some(5.seconds()));
+    assert_eq!(fragment_header.duration(), Some(2500.mseconds()));
+
+    for buffer_idx in 0..5 {
+        let buffer = h.pull().unwrap();
+        if buffer_idx == 4 {
+            assert_eq!(
+                buffer.flags(),
+                gst::BufferFlags::DELTA_UNIT | gst::BufferFlags::MARKER
+            );
+        } else {
+            assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
+        }
+        assert_eq!(
+            buffer.pts(),
+            Some(5.seconds() + buffer_idx * 500.mseconds())
+        );
+        assert_eq!(
+            buffer.dts(),
+            Some(5.seconds() + buffer_idx * 500.mseconds())
+        );
+        assert_eq!(buffer.duration(), Some(500.mseconds()));
+    }
+
+    h.push_event(gst::event::Eos::new());
+
+    // There should be the second fragment now
+    let fragment_header = h.pull().unwrap();
+    assert_eq!(fragment_header.flags(), gst::BufferFlags::HEADER);
+    assert_eq!(fragment_header.pts(), Some(7500.mseconds()));
+    assert_eq!(fragment_header.dts(), Some(7500.mseconds()));
+    assert_eq!(fragment_header.duration(), Some(2500.mseconds()));
+
+    for buffer_idx in 0..5 {
+        let buffer = h.pull().unwrap();
+        if buffer_idx == 4 {
+            assert_eq!(
+                buffer.flags(),
+                gst::BufferFlags::DELTA_UNIT | gst::BufferFlags::MARKER
+            );
+        } else {
+            assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
+        }
+        assert_eq!(
+            buffer.pts(),
+            Some(7500.mseconds() + buffer_idx * 500.mseconds())
+        );
+        assert_eq!(
+            buffer.dts(),
+            Some(7500.mseconds() + buffer_idx * 500.mseconds())
+        );
+        assert_eq!(buffer.duration(), Some(500.mseconds()));
+    }
+
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::StreamStart);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Caps);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Segment);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Eos);
+}
+
+#[test]
+fn test_chunking_single_stream_manual_fragment() {
+    init();
+
+    let caps = gst::Caps::builder("video/x-h264")
+        .field("width", 1920i32)
+        .field("height", 1080i32)
+        .field("framerate", gst::Fraction::new(30, 1))
+        .field("stream-format", "avc")
+        .field("alignment", "au")
+        .field("codec_data", gst::Buffer::with_size(1).unwrap())
+        .build();
+
+    let mut h = gst_check::Harness::new("cmafmux");
+
+    // fragment duration long enough to be ignored, 1s chunk duration
+    h.element()
+        .unwrap()
+        .set_property("fragment-duration", 1.hours());
+    h.element()
+        .unwrap()
+        .set_property("chunk-duration", 1.seconds());
+
+    h.set_src_caps(caps);
+    h.play();
+
+    // request fragment at 4 seconds, should be created at 11th buffer
+    h.element()
+        .unwrap()
+        .emit_by_name::<()>("split-at-running-time", &[&4.seconds()]);
+
+    // Push 15 buffers of 0.5s each, 1st and 11th buffer without DELTA_UNIT flag
+    for i in 0..15 {
+        let mut buffer = gst::Buffer::with_size(1).unwrap();
+        {
+            let buffer = buffer.get_mut().unwrap();
+            buffer.set_pts(i * 500.mseconds());
+            buffer.set_dts(i * 500.mseconds());
+            buffer.set_duration(500.mseconds());
+            if i != 0 && i != 10 {
+                buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
+            }
+        }
+        assert_eq!(h.push(buffer), Ok(gst::FlowSuccess::Ok));
+
+        if i == 2 {
+            let ev = loop {
+                let ev = h.pull_upstream_event().unwrap();
+                if ev.type_() != gst::EventType::Reconfigure
+                    && ev.type_() != gst::EventType::Latency
+                {
+                    break ev;
+                }
+            };
+
+            assert_eq!(ev.type_(), gst::EventType::CustomUpstream);
+            assert_eq!(
+                gst_video::UpstreamForceKeyUnitEvent::parse(&ev).unwrap(),
+                gst_video::UpstreamForceKeyUnitEvent {
+                    running_time: Some(4.seconds()),
+                    all_headers: true,
+                    count: 0
+                }
+            );
+        }
+    }
+
+    // Crank the clock: this should bring us to the end of the first fragment
+    h.crank_single_clock_wait().unwrap();
+
+    let header = h.pull().unwrap();
+    assert_eq!(
+        header.flags(),
+        gst::BufferFlags::HEADER | gst::BufferFlags::DISCONT
+    );
+    assert_eq!(header.pts(), Some(gst::ClockTime::ZERO));
+    assert_eq!(header.dts(), Some(gst::ClockTime::ZERO));
+
+    // There should be 7 chunks now, and the 1st and 6th are starting a fragment.
+    // Each chunk should have two buffers.
+    for chunk in 0..7 {
+        let chunk_header = h.pull().unwrap();
+        if chunk == 0 || chunk == 5 {
+            assert_eq!(chunk_header.flags(), gst::BufferFlags::HEADER);
+        } else {
+            assert_eq!(
+                chunk_header.flags(),
+                gst::BufferFlags::HEADER | gst::BufferFlags::DELTA_UNIT
+            );
+        }
+        assert_eq!(chunk_header.pts(), Some(chunk * 1.seconds()));
+        assert_eq!(chunk_header.dts(), Some(chunk * 1.seconds()));
+        assert_eq!(chunk_header.duration(), Some(1.seconds()));
+
+        for buffer_idx in 0..2 {
+            let buffer = h.pull().unwrap();
+            if buffer_idx == 1 {
+                assert_eq!(
+                    buffer.flags(),
+                    gst::BufferFlags::DELTA_UNIT | gst::BufferFlags::MARKER
+                );
+            } else {
+                assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
+            }
+            assert_eq!(
+                buffer.pts(),
+                Some((chunk * 2 + buffer_idx) * 500.mseconds())
+            );
+            assert_eq!(
+                buffer.dts(),
+                Some((chunk * 2 + buffer_idx) * 500.mseconds())
+            );
+            assert_eq!(buffer.duration(), Some(500.mseconds()));
+        }
+    }
+
+    h.push_event(gst::event::Eos::new());
+
+    // There should be the remaining chunk now, containing one 500ms buffer.
+    for chunk in 7..8 {
+        let chunk_header = h.pull().unwrap();
+        assert_eq!(
+            chunk_header.flags(),
+            gst::BufferFlags::HEADER | gst::BufferFlags::DELTA_UNIT
+        );
+        assert_eq!(chunk_header.pts(), Some(chunk * 1.seconds()));
+        assert_eq!(chunk_header.dts(), Some(chunk * 1.seconds()));
+        assert_eq!(chunk_header.duration(), Some(500.mseconds()));
+
+        for buffer_idx in 0..1 {
+            let buffer = h.pull().unwrap();
+            assert_eq!(
+                buffer.flags(),
+                gst::BufferFlags::DELTA_UNIT | gst::BufferFlags::MARKER
+            );
+            assert_eq!(
+                buffer.pts(),
+                Some((chunk * 2 + buffer_idx) * 500.mseconds())
+            );
+            assert_eq!(
+                buffer.dts(),
+                Some((chunk * 2 + buffer_idx) * 500.mseconds())
+            );
+            assert_eq!(buffer.duration(), Some(500.mseconds()));
+        }
+    }
+
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::StreamStart);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Caps);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Segment);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Eos);
+}
+
+#[test]
 fn test_chunking_single_stream() {
     init();
 
