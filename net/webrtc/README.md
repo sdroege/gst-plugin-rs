@@ -296,7 +296,7 @@ Testing the whip client as the signaller can be done by setting up janus and
 ``` shell
 gst-launch-1.0 -e uridecodebin uri=file:///home/meh/path/to/video/file ! \
   videoconvert ! video/x-raw ! queue ! \
-  whipwebrtcsink name=ws signaller::whip-endpoint="http://127.0.0.1:7080/whip/endpoint/room1234"
+  whipclientsink name=ws signaller::whip-endpoint="http://127.0.0.1:7080/whip/endpoint/room1234"
 ```
 
 You should see a second video displayed in the videoroomtest web page.
@@ -310,7 +310,7 @@ The WHIP Server as the signaller can be tested in two ways.
 Note: The initial version of `whipserversrc` does not check any auth or encryption.
 Host application using `whipserversrc` behind an HTTP(s) proxy to enforce the auth and encryption between the WHIP client and server
 
-#### 1. Using  the Gstreamer element `whipwebrtcsink`
+#### 1. Using  the GStreamer element `whipclientsink`
 
 a. In one tab of the terminal start the WHIP server using the below command
 
@@ -322,7 +322,7 @@ b. In the second tab start the WHIP Client by sending a test video as shown in t
 
 ``` shell
 RUST_BACKTRACE=full GST_DEBUG=webrtc*:6 GST_PLUGIN_PATH=target/x86_64-unknown-linux-gnu/debug:$GST_PLUGIN_PATH gst-launch-1.0 videotestsrc ! videoconvert ! video/x-raw ! queue ! \
-  whipwebrtcsink name=ws signaller::whip-endpoint="http://127.0.0.1:8190/whip/endpoint"
+  whipclientsink name=ws signaller::whip-endpoint="http://127.0.0.1:8190/whip/endpoint"
 ```
 
 #### 2. Using Meetecho's `simple-whip-client`
