@@ -18,6 +18,9 @@ glib::wrapper! {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "doc")]
+    imp::InloopFilterType::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+
     let rank = if gst::version() >= (1, 21, 2, 1) {
         // AOM av1dec rank was demoted in 1.22 dev cycle
         // https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/3287
