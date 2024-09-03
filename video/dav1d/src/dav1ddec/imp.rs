@@ -18,8 +18,40 @@ use once_cell::sync::Lazy;
 
 use std::sync::{Mutex, MutexGuard};
 
+#[glib::flags(name = "GstDav1dInloopFilterType")]
+pub(crate) enum InloopFilterType {
+    #[flags_value(name = "Enable deblocking filter", nick = "deblock")]
+    DEBLOCK = dav1d::InloopFilterType::DEBLOCK.bits(),
+    #[flags_value(
+        name = "Enable Constrained Directional Enhancement Filter",
+        nick = "cdef"
+    )]
+    CDEF = dav1d::InloopFilterType::CDEF.bits(),
+    #[flags_value(name = "Enable loop restoration filter", nick = "restoration")]
+    RESTORATION = dav1d::InloopFilterType::RESTORATION.bits(),
+}
+
+impl From<InloopFilterType> for dav1d::InloopFilterType {
+    fn from(inloop_filter_type: InloopFilterType) -> Self {
+        let mut dav1d_inloop_filter_type = dav1d::InloopFilterType::empty();
+        if inloop_filter_type.contains(InloopFilterType::DEBLOCK) {
+            dav1d_inloop_filter_type.set(dav1d::InloopFilterType::DEBLOCK, true);
+        }
+        if inloop_filter_type.contains(InloopFilterType::CDEF) {
+            dav1d_inloop_filter_type.set(dav1d::InloopFilterType::CDEF, true);
+        }
+        if inloop_filter_type.contains(InloopFilterType::RESTORATION) {
+            dav1d_inloop_filter_type.set(dav1d::InloopFilterType::RESTORATION, true);
+        }
+
+        dav1d_inloop_filter_type
+    }
+}
+
 const DEFAULT_N_THREADS: u32 = 0;
 const DEFAULT_MAX_FRAME_DELAY: i64 = -1;
+const DEFAULT_APPLY_GRAIN: bool = false;
+const DEFAULT_INLOOP_FILTERS: InloopFilterType = InloopFilterType::empty();
 
 struct State {
     decoder: dav1d::Decoder,
@@ -33,6 +65,8 @@ struct State {
 struct Settings {
     n_threads: u32,
     max_frame_delay: i64,
+    apply_grain: bool,
+    inloop_filters: InloopFilterType,
 }
 
 impl Default for Settings {
@@ -40,6 +74,8 @@ impl Default for Settings {
         Settings {
             n_threads: DEFAULT_N_THREADS,
             max_frame_delay: DEFAULT_MAX_FRAME_DELAY,
+            apply_grain: DEFAULT_APPLY_GRAIN,
+            inloop_filters: DEFAULT_INLOOP_FILTERS,
         }
     }
 }
@@ -656,6 +692,19 @@ impl ObjectImpl for Dav1dDec {
                     .default_value(DEFAULT_MAX_FRAME_DELAY)
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("apply-grain")
+                    .nick("Enable film grain synthesis")
+                    .blurb("Enable out-of-loop normative film grain filter")
+                    .default_value(DEFAULT_APPLY_GRAIN)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecFlags::builder("inloop-filters")
+                    .nick("Inloop filters")
+                    .blurb("Flags to enable in-loop post processing filters")
+                    .default_value(DEFAULT_INLOOP_FILTERS)
+                    .mutable_ready()
+                    .build()
+
             ]
         });
 
@@ -672,6 +721,12 @@ impl ObjectImpl for Dav1dDec {
             "max-frame-delay" => {
                 settings.max_frame_delay = value.get().expect("type checked upstream");
             }
+            "apply-grain" => {
+                settings.apply_grain = value.get().expect("type checked upstream");
+            }
+            "inloop-filters" => {
+                settings.inloop_filters = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -682,6 +737,8 @@ impl ObjectImpl for Dav1dDec {
         match pspec.name() {
             "n-threads" => settings.n_threads.to_value(),
             "max-frame-delay" => settings.max_frame_delay.to_value(),
+            "apply-grain" => settings.apply_grain.to_value(),
+            "inloop-filters" => settings.inloop_filters.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -841,6 +898,8 @@ impl VideoDecoderImpl for Dav1dDec {
         );
         decoder_settings.set_n_threads(settings.n_threads);
         decoder_settings.set_max_frame_delay(max_frame_delay);
+        decoder_settings.set_apply_grain(settings.apply_grain);
+        decoder_settings.set_inloop_filters(dav1d::InloopFilterType::from(settings.inloop_filters));
 
         let decoder = dav1d::Decoder::with_settings(&decoder_settings).map_err(|err| {
             gst::loggable_error!(CAT, "Failed to create decoder instance: {}", err)

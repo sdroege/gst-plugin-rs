@@ -1603,6 +1603,30 @@
                     }
                 },
                 "properties": {
+                    "apply-grain": {
+                        "blurb": "Enable out-of-loop normative film grain filter",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "inloop-filters": {
+                        "blurb": "Flags to enable in-loop post processing filters",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "(none)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstDav1dInloopFilterType",
+                        "writable": true
+                    },
                     "max-frame-delay": {
                         "blurb": "Maximum delay in frames for the decoder (set to 1 for low latency, 0 to be equal to the number of logical cores. -1 to choose between these two based on pipeline liveness)",
                         "conditionally-available": false,
@@ -1637,7 +1661,28 @@
         },
         "filename": "gstdav1d",
         "license": "MIT/X11",
-        "other-types": {},
+        "other-types": {
+            "GstDav1dInloopFilterType": {
+                "kind": "flags",
+                "values": [
+                    {
+                        "desc": "Enable deblocking filter",
+                        "name": "deblock",
+                        "value": "0x00000001"
+                    },
+                    {
+                        "desc": "Enable Constrained Directional Enhancement Filter",
+                        "name": "cdef",
+                        "value": "0x00000002"
+                    },
+                    {
+                        "desc": "Enable loop restoration filter",
+                        "name": "restoration",
+                        "value": "0x00000004"
+                    }
+                ]
+            }
+        },
         "package": "gst-plugin-dav1d",
         "source": "gst-plugin-dav1d",
         "tracers": {},
