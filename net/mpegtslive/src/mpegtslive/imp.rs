@@ -198,7 +198,15 @@ impl MpegTSLiveSourceState {
                     monotonic_time,
                 );
             } else {
-                gst::error!(CAT, "DISCONT detected, Picking new reference times (pcr:{pcr:#?}, monotonic:{monotonic_time}");
+                let (internal, external, num, denom) = self.external_clock.calibration();
+                let scaled_monotonic = gst::Clock::adjust_with_calibration(
+                    monotonic_time,
+                    internal,
+                    external,
+                    num,
+                    denom,
+                );
+                gst::warning!(CAT, "DISCONT detected, Picking new reference times (pcr:{pcr:#?}, monotonic:{monotonic_time}, scaled monotonic:{scaled_monotonic}");
                 new_pcr = MpegTsPcr::new(pcr);
                 self.base_pcr = Some(new_pcr);
                 self.base_monotonic = Some(monotonic_time);
