@@ -159,10 +159,7 @@ impl JsonGstEnc {
                     let mut state = self.state.lock().unwrap();
                     let caps = e.caps();
                     let s = caps.structure(0).unwrap();
-                    state.format = match s.get::<Option<String>>("format") {
-                        Err(_) => None,
-                        Ok(format) => format,
-                    };
+                    state.format = s.get::<Option<String>>("format").unwrap_or_default();
                 }
 
                 // We send our own caps downstream

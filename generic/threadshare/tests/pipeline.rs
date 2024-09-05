@@ -218,7 +218,7 @@ fn multiple_contexts_proxy() {
             .name(format!("proxysrc-{pipeline_index}").as_str())
             .property(
                 "context",
-                &format!("context-{}", (pipeline_index as u32) % CONTEXT_NB),
+                format!("context-{}", (pipeline_index as u32) % CONTEXT_NB),
             )
             .property("proxy-context", format!("proxy-{pipeline_index}"))
             .build()

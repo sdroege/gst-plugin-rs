@@ -74,10 +74,7 @@ impl Default for Settings {
             cookies: Vec::new(),
             iradio_mode: DEFAULT_IRADIO_MODE,
             keep_alive: DEFAULT_KEEP_ALIVE,
-            proxy: match proxy_from_str(std::env::var("http_proxy").ok()) {
-                Ok(a) => a,
-                Err(_) => None,
-            },
+            proxy: proxy_from_str(std::env::var("http_proxy").ok()).unwrap_or_default(),
             proxy_id: None,
             proxy_pw: None,
         }
