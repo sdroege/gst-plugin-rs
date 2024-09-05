@@ -194,8 +194,8 @@ impl MpegTSLiveSourceState {
                     monotonic_time,
                 );
                 self.external_clock.add_observation(
-                    gst::ClockTime::from(new_pcr.saturating_sub(base_pcr)) + base_monotonic,
                     monotonic_time,
+                    gst::ClockTime::from(new_pcr.saturating_sub(base_pcr)) + base_monotonic,
                 );
             } else {
                 let (internal, external, num, denom) = self.external_clock.calibration();
