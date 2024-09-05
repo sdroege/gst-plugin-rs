@@ -85,6 +85,23 @@ struct Connection {
     early_candidates: Option<Vec<String>>,
     channels: Option<Channels>,
     participants: HashMap<String, proto::ParticipantInfo>,
+    state: ConnectionState,
+}
+
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, glib::Enum)]
+#[enum_type(name = "GstWebRTCLiveKitConnectionState")]
+enum ConnectionState {
+    #[default]
+    #[enum_value(name = "server-disconnected")]
+    ServerDisconnected,
+    #[enum_value(name = "server-connected")]
+    ServerConnected,
+    #[enum_value(name = "publishing")]
+    Publishing,
+    #[enum_value(name = "published")]
+    Published,
+    #[enum_value(name = "subscribed")]
+    Subscribed,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -236,6 +253,10 @@ impl Signaller {
                 );
                 self.obj()
                     .emit_by_name::<()>("session-description", &[&"unique", &answer]);
+                if let Some(connection) = &mut *self.connection.lock().unwrap() {
+                    connection.state = ConnectionState::Published;
+                }
+                self.obj().notify("connection-state");
             }
 
             proto::signal_response::Message::Offer(offer) => {
@@ -339,6 +360,11 @@ impl Signaller {
                     ))
                     .await;
                 imp.send_delayed_ice_candidates().await;
+
+                if let Some(connection) = &mut *imp.connection.lock().unwrap() {
+                    connection.state = ConnectionState::Subscribed;
+                }
+                imp.obj().notify("connection-state");
             }
         });
     }
@@ -428,6 +454,11 @@ impl Signaller {
                         }
 
                         let cid = req.cid.clone();
+
+                        if let Some(connection) = &mut *imp.connection.lock().unwrap() {
+                            connection.state = ConnectionState::Publishing;
+                        }
+                        imp.obj().notify("connection-state");
 
                         signal_client
                             .send(proto::signal_request::Message::AddTrack(req))
@@ -679,8 +710,10 @@ impl SignallableImpl for Signaller {
                 early_candidates: Some(Vec::new()),
                 channels: None,
                 participants: HashMap::default(),
+                state: ConnectionState::ServerConnected,
             };
             *imp.connection.lock().unwrap() = Some(connection);
+            imp.obj().notify("connection-state");
 
             if imp.is_subscriber() {
                 imp.obj()
@@ -806,6 +839,7 @@ impl SignallableImpl for Signaller {
             block_on(connection.signal_task).unwrap();
             block_on(Self::close_signal_client(&connection.signal_client));
         }
+        self.obj().notify("connection-state");
     }
 
     fn end_session(&self, session_id: &str) {
@@ -899,6 +933,12 @@ impl ObjectImpl for Signaller {
                     .flags(glib::ParamFlags::READWRITE)
                     .element_spec(&glib::ParamSpecString::builder("producer-peer-id").build())
                     .build(),
+                glib::ParamSpecEnum::builder::<ConnectionState>("connection-state")
+                    .nick("Connection State")
+                    .blurb("Connection State with the LiveKit server")
+                    .default_value(ConnectionState::ServerDisconnected)
+                    .read_only()
+                    .build(),
             ]
         });
 
@@ -980,6 +1020,14 @@ impl ObjectImpl for Signaller {
             "producer-peer-id" => settings.producer_peer_id.to_value(),
             "excluded-producer-peer-ids" => {
                 gst::Array::new(&settings.excluded_produder_peer_ids).to_value()
+            }
+            "connection-state" => {
+                drop(settings);
+                let connection = self.connection.lock().unwrap();
+                let Some(connection) = connection.as_ref() else {
+                    return ConnectionState::ServerDisconnected.to_value();
+                };
+                connection.state.to_value()
             }
             _ => unimplemented!(),
         }
