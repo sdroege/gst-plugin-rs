@@ -319,11 +319,8 @@ impl MpegTsLiveSource {
             (monotonic_time, get_pcr_from_buffer(self, &buffer))
         {
             if state.store_observation(raw_pcr, monotonic_time) {
-                // FIXME: Handle PCR discontinuities more gracefully. This requires replacing the
-                // clock and making sure that the application selects the new clock, and making
-                // sure that tsdemux detects it correctly too.
-                gst::element_imp_error!(self, gst::StreamError::Format, ["PCR discontinuity"]);
-                return Err(gst::FlowError::Error);
+                let buffer = buffer.make_mut();
+                buffer.set_flags(gst::BufferFlags::DISCONT);
             }
         };
 
@@ -353,7 +350,6 @@ impl MpegTsLiveSource {
 
         // The last monotonic time
         let mut monotonic_time = None;
-        let mut discont = false;
 
         bufferlist.make_mut().foreach_mut(|mut buffer, _idx| {
             let this_buffer_timestamp = buffer.dts_or_pts();
@@ -369,7 +365,10 @@ impl MpegTsLiveSource {
             if let (Some(monotonic_time), Some(raw_pcr)) =
                 (monotonic_time, get_pcr_from_buffer(self, &buffer))
             {
-                discont = state.store_observation(raw_pcr, monotonic_time);
+                if state.store_observation(raw_pcr, monotonic_time) {
+                    let buffer = buffer.make_mut();
+                    buffer.set_flags(gst::BufferFlags::DISCONT);
+                }
             };
 
             // Update buffer timestamp if present
@@ -386,14 +385,6 @@ impl MpegTsLiveSource {
             };
             ControlFlow::Continue(Some(buffer))
         });
-
-        if discont {
-            // FIXME: Handle PCR discontinuities more gracefully. This requires replacing the
-            // clock and making sure that the application selects the new clock, and making
-            // sure that tsdemux detects it correctly too.
-            gst::element_imp_error!(self, gst::StreamError::Format, ["PCR discontinuity"]);
-            return Err(gst::FlowError::Error);
-        }
 
         gst::ProxyPad::chain_list_default(pad, Some(&*self.obj()), bufferlist)
     }
