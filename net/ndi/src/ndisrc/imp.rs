@@ -897,7 +897,7 @@ impl NdiSrc {
                     );
 
                     state.base_timecode = Some(current_min_delta.remote_time);
-                    state.base_receive_time = Some(current_min_delta.local_time);
+                    state.base_receive_time = Some(clock_time);
                     discont = true;
                 } else {
                     let (base_timecode, base_receive_time) =
