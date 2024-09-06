@@ -71,7 +71,11 @@ impl MpegTsPcr {
     // returned
     //
     // Note, this constructor will clamp value to be within MAX_PCR
-    fn new_with_reference(value: u64, reference: &MpegTsPcr) -> Option<MpegTsPcr> {
+    fn new_with_reference(
+        imp: &MpegTsLiveSource,
+        value: u64,
+        reference: &MpegTsPcr,
+    ) -> Option<MpegTsPcr> {
         // Clamp our value to maximum
         let value = value % (Self::MAX + 1);
         let ref_value = reference.value;
@@ -86,7 +90,11 @@ impl MpegTsPcr {
 
         // new value wrapped around
         if (value + Self::MAX + 1).abs_diff(ref_value) <= 15 * Self::RATE {
-            gst::debug!(CAT, "Wraparound detected %{value} vs %{ref_value}");
+            gst::debug!(
+                CAT,
+                imp = imp,
+                "Wraparound detected %{value} vs %{ref_value}"
+            );
             return Some(MpegTsPcr {
                 value,
                 wraparound: reference.wraparound + 1,
@@ -97,6 +105,7 @@ impl MpegTsPcr {
         if value.abs_diff(ref_value + Self::MAX + 1) <= 15 * Self::RATE {
             gst::debug!(
                 CAT,
+                imp = imp,
                 "Backward PCR within tolerance detected %{value} vs %{ref_value}"
             );
             return Some(MpegTsPcr {
@@ -105,7 +114,7 @@ impl MpegTsPcr {
             });
         }
 
-        gst::debug!(CAT, "Discont detected %{value} vs %{ref_value}");
+        gst::debug!(CAT, imp = imp, "Discont detected %{value} vs %{ref_value}");
         None
     }
 
@@ -168,7 +177,12 @@ impl MpegTSLiveSourceState {
     /// Grab time of our clock and controlled clock
     ///
     /// Returns `true` on PCR discontinuities.
-    fn store_observation(&mut self, pcr: u64, monotonic_time: gst::ClockTime) -> bool {
+    fn store_observation(
+        &mut self,
+        imp: &MpegTsLiveSource,
+        pcr: u64,
+        monotonic_time: gst::ClockTime,
+    ) -> bool {
         // If this is the first PCR we observe:
         // * Remember the PCR *and* the associated monotonic clock value when capture
         // * `base_pcr` `base_monotonic`
@@ -184,9 +198,9 @@ impl MpegTSLiveSourceState {
         if let (Some(base_pcr), Some(base_monotonic), Some(last_seen_pcr)) =
             (self.base_pcr, self.base_monotonic, self.last_seen_pcr)
         {
-            gst::trace!(CAT, "pcr:{pcr}, monotonic_time:{monotonic_time}");
+            gst::trace!(CAT, imp = imp, "pcr:{pcr}, monotonic_time:{monotonic_time}");
 
-            let mut handled_pcr = MpegTsPcr::new_with_reference(pcr, &last_seen_pcr);
+            let mut handled_pcr = MpegTsPcr::new_with_reference(imp, pcr, &last_seen_pcr);
             if let Some(new_pcr) = handled_pcr {
                 // First check if this is more than 1s off from the current clock calibration and
                 // if so consider it a discontinuity too.
@@ -204,6 +218,7 @@ impl MpegTSLiveSourceState {
                 if expected_external.absdiff(new_external) >= gst::ClockTime::SECOND {
                     gst::warning!(
                         CAT,
+                        imp = imp,
                         "New PCR clock estimation {new_external} too far from old estimation {expected_external}: {}",
                         new_external.into_positive() - expected_external,
                     );
@@ -215,6 +230,7 @@ impl MpegTSLiveSourceState {
                 new_pcr = handled_pcr;
                 gst::trace!(
                     CAT,
+                    imp = imp,
                     "Adding new observation internal: {} -> external: {}",
                     gst::ClockTime::from(new_pcr.saturating_sub(base_pcr)) + base_monotonic,
                     monotonic_time,
@@ -232,7 +248,7 @@ impl MpegTSLiveSourceState {
                     num,
                     denom,
                 );
-                gst::warning!(CAT, "DISCONT detected, Picking new reference times (pcr:{pcr:#?}, monotonic:{monotonic_time}, scaled monotonic:{scaled_monotonic}");
+                gst::warning!(CAT, imp = imp, "DISCONT detected, Picking new reference times (pcr:{pcr:#?}, monotonic:{monotonic_time}, scaled monotonic:{scaled_monotonic}");
                 new_pcr = MpegTsPcr::new(pcr);
                 self.base_pcr = Some(new_pcr);
                 self.base_monotonic = Some(monotonic_time);
@@ -241,6 +257,7 @@ impl MpegTSLiveSourceState {
         } else {
             gst::debug!(
                 CAT,
+                imp = imp,
                 "Picking initial reference times (pcr:{pcr:#?}, monotonic:{monotonic_time}"
             );
             new_pcr = MpegTsPcr::new(pcr);
@@ -272,7 +289,7 @@ fn find_pcr(slice: &[u8], imp: &MpegTsLiveSource) -> Result<Option<u64>> {
 
     for chunk in slice[pos..].chunks_exact(188) {
         if chunk[0] != 0x47 {
-            gst::error!(CAT, "Lost sync");
+            gst::error!(CAT, imp = imp, "Lost sync");
             break;
         }
         let mut reader = BitReader::endian(chunk, BigEndian);
@@ -352,7 +369,7 @@ impl MpegTsLiveSource {
         if let (Some(monotonic_time), Some(raw_pcr)) =
             (monotonic_time, get_pcr_from_buffer(self, &buffer))
         {
-            if state.store_observation(raw_pcr, monotonic_time) {
+            if state.store_observation(self, raw_pcr, monotonic_time) {
                 let buffer = buffer.make_mut();
                 buffer.set_flags(gst::BufferFlags::DISCONT);
             }
@@ -366,7 +383,12 @@ impl MpegTsLiveSource {
                 .adjust_unlocked(pts + base_time)
                 .expect("Couldn't adjust {pts}")
                 .saturating_sub(base_time);
-            gst::debug!(CAT, "Updating buffer pts from {pts} to {:?}", new_pts);
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Updating buffer pts from {pts} to {:?}",
+                new_pts
+            );
             buffer.set_pts(new_pts);
             buffer.set_dts(new_pts);
         };
@@ -399,7 +421,7 @@ impl MpegTsLiveSource {
             if let (Some(monotonic_time), Some(raw_pcr)) =
                 (monotonic_time, get_pcr_from_buffer(self, &buffer))
             {
-                if state.store_observation(raw_pcr, monotonic_time) {
+                if state.store_observation(self, raw_pcr, monotonic_time) {
                     let buffer = buffer.make_mut();
                     buffer.set_flags(gst::BufferFlags::DISCONT);
                 }
@@ -413,7 +435,12 @@ impl MpegTsLiveSource {
                     .adjust_unlocked(pts + base_time)
                     .expect("Couldn't adjust {pts}")
                     .saturating_sub(base_time);
-                gst::debug!(CAT, "Updating buffer pts from {pts} to {:?}", new_pts);
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "Updating buffer pts from {pts} to {:?}",
+                    new_pts
+                );
                 buffer.set_pts(new_pts);
                 buffer.set_dts(new_pts);
             };
@@ -703,12 +730,22 @@ mod tests {
 
     #[test]
     fn pcr_wraparound_test() {
+        gst::init().unwrap();
+        crate::plugin_register_static().expect("mpegtslivesrc test");
+
+        let element = gst::ElementFactory::make("mpegtslivesrc")
+            .build()
+            .unwrap()
+            .downcast::<super::super::MpegTsLiveSource>()
+            .unwrap();
+        let imp = element.imp();
+
         // Basic test going forward within 15s
         let ref_pcr = MpegTsPcr {
             value: 360 * MpegTsPcr::RATE,
             wraparound: 100,
         };
-        let pcr = MpegTsPcr::new_with_reference(370 * MpegTsPcr::RATE, &ref_pcr);
+        let pcr = MpegTsPcr::new_with_reference(imp, 370 * MpegTsPcr::RATE, &ref_pcr);
         assert!(pcr.is_some());
         if let Some(pcr) = pcr {
             assert_eq!(pcr.value, 370 * MpegTsPcr::RATE);
@@ -716,10 +753,10 @@ mod tests {
         };
 
         // Discont
-        let pcr = MpegTsPcr::new_with_reference(344 * MpegTsPcr::RATE, &ref_pcr);
+        let pcr = MpegTsPcr::new_with_reference(imp, 344 * MpegTsPcr::RATE, &ref_pcr);
         assert!(pcr.is_none());
 
-        let pcr = MpegTsPcr::new_with_reference(386 * MpegTsPcr::RATE, &ref_pcr);
+        let pcr = MpegTsPcr::new_with_reference(imp, 386 * MpegTsPcr::RATE, &ref_pcr);
         assert!(pcr.is_none());
 
         // Wraparound, ref is 10s before MAX
@@ -727,7 +764,7 @@ mod tests {
             value: MpegTsPcr::MAX - 10 * MpegTsPcr::RATE,
             wraparound: 600,
         };
-        let pcr = MpegTsPcr::new_with_reference(0, &ref_pcr);
+        let pcr = MpegTsPcr::new_with_reference(imp, 0, &ref_pcr);
         assert!(pcr.is_some());
         if let Some(pcr) = pcr {
             assert_eq!(pcr.value, 0);
@@ -735,7 +772,7 @@ mod tests {
         };
 
         // Discont
-        let pcr = MpegTsPcr::new_with_reference(10 * MpegTsPcr::RATE, &ref_pcr);
+        let pcr = MpegTsPcr::new_with_reference(imp, 10 * MpegTsPcr::RATE, &ref_pcr);
         assert!(pcr.is_none());
 
         // reference is 5s after wraparound
@@ -744,7 +781,8 @@ mod tests {
             wraparound: 600,
         };
         // value is 5s before wraparound
-        let pcr = MpegTsPcr::new_with_reference(MpegTsPcr::MAX + 1 - 5 * MpegTsPcr::RATE, &ref_pcr);
+        let pcr =
+            MpegTsPcr::new_with_reference(imp, MpegTsPcr::MAX + 1 - 5 * MpegTsPcr::RATE, &ref_pcr);
         assert!(pcr.is_some());
         if let Some(pcr) = pcr {
             assert_eq!(pcr.value, MpegTsPcr::MAX + 1 - 5 * MpegTsPcr::RATE);
