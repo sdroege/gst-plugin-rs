@@ -185,7 +185,33 @@ impl MpegTSLiveSourceState {
             (self.base_pcr, self.base_monotonic, self.last_seen_pcr)
         {
             gst::trace!(CAT, "pcr:{pcr}, monotonic_time:{monotonic_time}");
-            if let Some(handled_pcr) = MpegTsPcr::new_with_reference(pcr, &last_seen_pcr) {
+
+            let mut handled_pcr = MpegTsPcr::new_with_reference(pcr, &last_seen_pcr);
+            if let Some(new_pcr) = handled_pcr {
+                // First check if this is more than 1s off from the current clock calibration and
+                // if so consider it a discontinuity too.
+                let (internal, external, num, denom) = self.external_clock.calibration();
+
+                let expected_external = gst::Clock::adjust_with_calibration(
+                    monotonic_time,
+                    internal,
+                    external,
+                    num,
+                    denom,
+                );
+                let new_external =
+                    gst::ClockTime::from(new_pcr.saturating_sub(base_pcr)) + base_monotonic;
+                if expected_external.absdiff(new_external) >= gst::ClockTime::SECOND {
+                    gst::warning!(
+                        CAT,
+                        "New PCR clock estimation {new_external} too far from old estimation {expected_external}: {}",
+                        new_external.into_positive() - expected_external,
+                    );
+                    handled_pcr = None;
+                }
+            }
+
+            if let Some(handled_pcr) = handled_pcr {
                 new_pcr = handled_pcr;
                 gst::trace!(
                     CAT,
