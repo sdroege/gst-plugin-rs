@@ -78,6 +78,22 @@ struct IterationsChange {
     iterations: u32,
 }
 
+struct Pipeline(gst::Pipeline);
+
+impl std::ops::Deref for Pipeline {
+    type Target = gst::Pipeline;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Drop for Pipeline {
+    fn drop(&mut self) {
+        let _ = self.0.set_state(gst::State::Null);
+    }
+}
+
 fn test(
     medias: Vec<TestMedia>,
     n_streams: u32,
@@ -93,7 +109,7 @@ fn test(
 
     let uris: Vec<String> = medias.iter().map(|t| t.uri.clone()).collect();
 
-    let pipeline = gst::Pipeline::default();
+    let pipeline = Pipeline(gst::Pipeline::default());
     let playlist = gst::ElementFactory::make("uriplaylistbin")
         .property("uris", &uris)
         .property("iterations", iterations)
