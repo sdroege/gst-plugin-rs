@@ -242,10 +242,12 @@ fn test(
     (events, current_iteration, current_uri_index)
 }
 
+#[track_caller]
 fn assert_eos(msg: gst::Message) {
     assert!(matches!(msg.view(), MessageView::Eos(_)));
 }
 
+#[track_caller]
 fn assert_error(msg: gst::Message, failing: TestMedia) {
     match msg.view() {
         MessageView::Error(err) => {
@@ -258,6 +260,7 @@ fn assert_error(msg: gst::Message, failing: TestMedia) {
     }
 }
 
+#[track_caller]
 fn assert_stream_collection(msg: gst::Message, n_streams: usize) -> gst::Object {
     match msg.view() {
         MessageView::StreamCollection(sc) => {
@@ -271,6 +274,7 @@ fn assert_stream_collection(msg: gst::Message, n_streams: usize) -> gst::Object 
     }
 }
 
+#[track_caller]
 fn assert_stream_selected(msg: gst::Message, n_streams: usize) -> gst::Object {
     match msg.view() {
         MessageView::StreamsSelected(ss) => {
