@@ -17,6 +17,12 @@ struct TestMedia {
     len: gst::ClockTime,
 }
 
+impl PartialEq for TestMedia {
+    fn eq(&self, other: &Self) -> bool {
+        self.uri == other.uri
+    }
+}
+
 fn file_name_to_uri(name: &str) -> String {
     let input_path = {
         let mut r = PathBuf::new();
@@ -102,8 +108,6 @@ fn test(
     iterations_change: Option<IterationsChange>,
 ) -> (Vec<gst::Message>, u32, u64) {
     init();
-
-    let playlist_len = medias.len() * (iterations as usize);
 
     let total_len: gst::ClockTime = medias.iter().map(|t| t.len * (iterations as u64)).sum();
 
@@ -221,11 +225,27 @@ fn test(
 
         // check stream-collection and streams-selected message ordering
         let mut events = events.clone().into_iter();
+        let playlist = std::iter::repeat(medias.iter())
+            .take(iterations as usize)
+            .flatten();
+        let mut last_media = None;
 
-        for i in 0..playlist_len {
-            let decodebin = assert_stream_collection(events.next().unwrap(), n_streams as usize);
-            if i == 0 {
-                // decodebin3 sends StreamSelected only once, which is ok as the selected stream stays the same
+        for media in playlist {
+            let mut media_changed = false;
+
+            if last_media
+                .as_ref()
+                .map_or(true, |last_media| *last_media != media)
+            {
+                last_media = Some(media);
+                media_changed = true;
+            }
+
+            // decodebin3 only sends a new stream-collection and streams-selected if it actually
+            // changes, which only happens here if the actual underlying media is changing.
+            if media_changed {
+                let decodebin =
+                    assert_stream_collection(events.next().unwrap(), n_streams as usize);
                 assert_eq!(
                     assert_stream_selected(events.next().unwrap(), n_streams as usize),
                     decodebin
