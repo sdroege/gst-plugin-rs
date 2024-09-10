@@ -10,6 +10,9 @@ ignore = [
     "RUSTSEC-2021-0145",
     # sodiumoxide is deprecated
     "RUSTSEC-2021-0137",
+    # proc-macro-error is unmaintained
+    # https://github.com/yanganto/test-with/issues/91
+    "RUSTSEC-2024-0370",
 ]
 
 [licenses]
