@@ -582,7 +582,7 @@ impl HlsSink3 {
 
         let obj = self.obj();
         let base_imp = obj.upcast_ref::<HlsBaseSink>().imp();
-        let uri = base_imp.get_segment_uri(&location);
+        let uri = base_imp.get_segment_uri(&location, None);
         let _ = base_imp.add_segment(
             &location,
             running_time,

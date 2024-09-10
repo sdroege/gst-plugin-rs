@@ -50,6 +50,7 @@ struct HlsCmafSinkSettings {
     playlist_type: Option<MediaPlaylistType>,
     sync: bool,
     latency: gst::ClockTime,
+    playlist_root_init: Option<String>,
 
     cmafmux: gst::Element,
     appsink: gst_app::AppSink,
@@ -79,6 +80,7 @@ impl Default for HlsCmafSinkSettings {
             playlist_type: None,
             sync: DEFAULT_SYNC,
             latency: DEFAULT_LATENCY,
+            playlist_root_init: None,
             cmafmux,
             appsink,
         }
@@ -145,6 +147,10 @@ impl ObjectImpl for HlsCmafSink {
                     .maximum(i64::MAX as u64)
                     .default_value(DEFAULT_LATENCY.nseconds())
                     .build(),
+                glib::ParamSpecString::builder("playlist-root-init")
+                    .nick("Playlist Root Init")
+                    .blurb("Base path for the init fragment in the playlist file.")
+                    .build(),
             ]
         });
 
@@ -187,6 +193,11 @@ impl ObjectImpl for HlsCmafSink {
                 settings.latency = value.get().expect("type checked upstream");
                 settings.cmafmux.set_property("latency", settings.latency);
             }
+            "playlist-root-init" => {
+                settings.playlist_root_init = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream");
+            }
             _ => unimplemented!(),
         };
     }
@@ -203,6 +214,7 @@ impl ObjectImpl for HlsCmafSink {
             }
             "sync" => settings.sync.to_value(),
             "latency" => settings.latency.to_value(),
+            "playlist-root-init" => settings.playlist_root_init.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -419,7 +431,8 @@ impl HlsCmafSink {
             .ok_or_else(|| String::from("Error while getting fragment stream"))?
             .into_write();
 
-        let uri = base_imp!(self).get_segment_uri(&location);
+        let uri =
+            base_imp!(self).get_segment_uri(&location, settings.playlist_root_init.as_deref());
 
         state.init_segment = Some(m3u8_rs::Map {
             uri,
@@ -450,7 +463,7 @@ impl HlsCmafSink {
         running_time: Option<gst::ClockTime>,
         location: String,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let uri = base_imp!(self).get_segment_uri(&location);
+        let uri = base_imp!(self).get_segment_uri(&location, None);
         let mut state = self.state.lock().unwrap();
 
         let map = if state.new_header {

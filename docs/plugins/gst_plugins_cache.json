@@ -2923,6 +2923,18 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "playlist-root-init": {
+                        "blurb": "Base path for the init fragment in the playlist file.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "playlist-type": {
                         "blurb": "The type of the playlist to use. When VOD type is set, the playlist will be live until the pipeline ends execution.",
                         "conditionally-available": false,

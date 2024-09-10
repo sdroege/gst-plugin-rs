@@ -352,7 +352,7 @@ impl HlsBaseSink {
         Some((stream, location))
     }
 
-    pub fn get_segment_uri(&self, location: &str) -> String {
+    pub fn get_segment_uri(&self, location: &str, prefix: Option<&str>) -> String {
         let settings = self.settings.lock().unwrap();
         let file_name = path::Path::new(&location)
             .file_name()
@@ -360,7 +360,9 @@ impl HlsBaseSink {
             .to_str()
             .unwrap();
 
-        if let Some(playlist_root) = &settings.playlist_root {
+        if let Some(prefix) = prefix {
+            format!("{prefix}/{file_name}")
+        } else if let Some(playlist_root) = &settings.playlist_root {
             format!("{playlist_root}/{file_name}")
         } else {
             file_name.to_string()
