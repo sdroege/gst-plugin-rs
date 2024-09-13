@@ -2359,6 +2359,7 @@ version = "0.14.0-alpha.1"
 dependencies = [
  "anyhow",
  "atomic_refcell",
+ "bitstream-io",
  "byteorder",
  "cairo-rs",
  "cea608-types",
