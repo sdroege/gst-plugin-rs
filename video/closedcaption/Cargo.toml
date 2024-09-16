@@ -22,7 +22,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 cea708-types = "0.3.2"
 cea608-types = "0.1.1"
-gst = { workspace = true, features = ["v1_16"]}
+gst = { workspace = true, features = ["v1_20"]}
 gst-base = { workspace = true, features = ["v1_18"]}
 gst-video = { workspace = true, features = ["v1_16"]}
 winnow = "0.6"
@@ -47,6 +47,7 @@ gst-plugin-version-helper.workspace = true
 static = []
 capi = []
 doc = ["gst/v1_18"]
+v1_26 = ["gst-base/v1_26"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

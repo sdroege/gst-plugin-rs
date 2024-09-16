@@ -37,10 +37,31 @@ pub struct St2038AncDemux {
 
 #[derive(Default)]
 struct State {
-    streams: HashMap<AncDataHeader, AncStream>,
+    streams: HashMap<AncDataId, AncStream>,
     flow_combiner: UniqueFlowCombiner,
     segment: gst::FormattedSegment<gst::ClockTime>,
     last_inactivity_check: Option<gst::ClockTime>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct AncDataId {
+    c_not_y_channel_flag: bool,
+    did: u8,
+    sdid: u8,
+    line_number: u16,
+    horizontal_offset: u16,
+}
+
+impl From<AncDataHeader> for AncDataId {
+    fn from(value: AncDataHeader) -> Self {
+        AncDataId {
+            c_not_y_channel_flag: value.c_not_y_channel_flag,
+            did: value.did,
+            sdid: value.sdid,
+            line_number: value.line_number,
+            horizontal_offset: value.horizontal_offset,
+        }
+    }
 }
 
 struct AncStream {
@@ -71,7 +92,7 @@ impl St2038AncDemux {
             })
             .unwrap();
 
-        let stream = match state.streams.get_mut(&anc_hdr) {
+        let stream = match state.streams.get_mut(&AncDataId::from(anc_hdr)) {
             Some(stream) => stream,
             None => {
                 let pad_name = format!(
@@ -104,14 +125,17 @@ impl St2038AncDemux {
                 state.flow_combiner.add_pad(&anc_srcpad);
 
                 state.streams.insert(
-                    anc_hdr.clone(),
+                    AncDataId::from(anc_hdr),
                     AncStream {
                         pad: anc_srcpad,
                         last_used: running_time,
                     },
                 );
 
-                state.streams.get_mut(&anc_hdr).expect("stream")
+                state
+                    .streams
+                    .get_mut(&AncDataId::from(anc_hdr))
+                    .expect("stream")
             }
         };
 

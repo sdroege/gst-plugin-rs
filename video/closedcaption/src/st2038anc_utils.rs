@@ -8,13 +8,14 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct AncDataHeader {
     pub(crate) c_not_y_channel_flag: bool,
     pub(crate) did: u8,
     pub(crate) sdid: u8,
     pub(crate) line_number: u16,
     pub(crate) horizontal_offset: u16,
+    pub(crate) data_count: u8,
 }
 
 impl AncDataHeader {
@@ -34,7 +35,7 @@ impl AncDataHeader {
         // Top two bits are parity bits and can be stripped off
         let did = (r.read::<u16>(10).context("DID")? & 0xff) as u8;
         let sdid = (r.read::<u16>(10).context("SDID")? & 0xff) as u8;
-        let _data_count = (r.read::<u16>(10).context("data count")? & 0xff) as u8;
+        let data_count = (r.read::<u16>(10).context("data count")? & 0xff) as u8;
 
         Ok(AncDataHeader {
             c_not_y_channel_flag,
@@ -42,6 +43,7 @@ impl AncDataHeader {
             horizontal_offset,
             did,
             sdid,
+            data_count,
         })
     }
 }
