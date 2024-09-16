@@ -90,9 +90,8 @@ struct State {
     n_frames: u64,
 }
 
+#[derive(Default)]
 pub struct Cea708Mux {
-    srcpad: gst_base::AggregatorPad,
-
     state: Mutex<State>,
 }
 
@@ -345,7 +344,7 @@ impl AggregatorImpl for Cea708Mux {
 
             self.finish_buffer(buf)
         } else {
-            self.srcpad.push_event(
+            self.obj().src_pad().push_event(
                 gst::event::Gap::builder(start_running_time)
                     .duration(duration)
                     .build(),
@@ -572,19 +571,6 @@ impl ObjectSubclass for Cea708Mux {
     const NAME: &'static str = "GstCea708Mux";
     type Type = super::Cea708Mux;
     type ParentType = gst_base::Aggregator;
-
-    fn with_class(klass: &Self::Class) -> Self {
-        let templ = klass.pad_template("src").unwrap();
-        let srcpad = gst::Pad::builder_from_template(&templ)
-            .build()
-            .downcast::<gst_base::AggregatorPad>()
-            .expect("Not a GstAggregatorPad?!");
-
-        Self {
-            srcpad,
-            state: Mutex::new(State::default()),
-        }
-    }
 }
 
 #[derive(Default)]
