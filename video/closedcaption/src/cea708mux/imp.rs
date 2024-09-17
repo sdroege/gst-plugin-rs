@@ -127,6 +127,7 @@ impl AggregatorImpl for Cea708Mux {
             .nseconds();
         let end_running_time = start_running_time + duration;
         let mut need_data = false;
+        let mut all_eos = true;
         gst::debug!(
             CAT,
             imp = self,
@@ -144,15 +145,20 @@ impl AggregatorImpl for Cea708Mux {
                 .expect("Not a Cea708MuxSinkPad?!")
         }) {
             let mut pad_state = pad.imp().pad_state.lock().unwrap();
-            pad_state.pending_buffer = None;
             // any data we currently have stored
             let have_pending = pad_state
                 .pending_services
                 .values()
                 .any(|codes| !codes.is_empty());
+
             if pad.is_eos() {
+                if pad_state.pending_buffer.is_some() {
+                    all_eos = false;
+                }
                 continue;
             }
+            all_eos = false;
+
             let buffer = if let Some(buffer) = pad.peek_buffer() {
                 buffer
             } else {
@@ -228,6 +234,9 @@ impl AggregatorImpl for Cea708Mux {
 
         if need_data && !timeout {
             return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
+        }
+        if all_eos {
+            return Err(gst::FlowError::Eos);
         }
 
         self.obj()
