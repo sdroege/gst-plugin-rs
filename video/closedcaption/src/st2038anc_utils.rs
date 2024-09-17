@@ -68,3 +68,75 @@ impl AncDataHeader {
         })
     }
 }
+
+fn extend_with_even_odd_parity(v: u8, checksum: &mut u16) -> u16 {
+    let parity = v.count_ones() & 1;
+    let res = if parity == 0 {
+        0x1_00 | (v as u16)
+    } else {
+        0x2_00 | (v as u16)
+    };
+
+    *checksum = checksum.wrapping_add(res);
+
+    res
+}
+
+pub(crate) fn convert_to_st2038_buffer(
+    c_not_y_channel: bool,
+    line_number: u16,
+    horizontal_offset: u16,
+    did: u8,
+    sdid: u8,
+    payload: &[u8],
+) -> Result<gst::Buffer, anyhow::Error> {
+    if payload.len() > 255 {
+        anyhow::bail!(
+            "Payload needs to be less than 256 bytes, got {}",
+            payload.len()
+        );
+    }
+
+    use anyhow::Context;
+    use bitstream_io::{BigEndian, BitWrite, BitWriter};
+
+    let mut output = Vec::with_capacity((70 + payload.len() * 10) / 8 + 1);
+
+    let mut w = BitWriter::endian(&mut output, BigEndian);
+
+    w.write::<u8>(6, 0b00_0000).context("zero bits")?;
+    w.write_bit(c_not_y_channel).context("c_not_y_channel")?;
+    w.write::<u16>(11, line_number).context("line number")?;
+    w.write::<u16>(12, horizontal_offset)
+        .context("horizontal offset")?;
+
+    let mut checksum = 0u16;
+
+    w.write::<u16>(10, extend_with_even_odd_parity(did, &mut checksum))
+        .context("DID")?;
+    w.write::<u16>(10, extend_with_even_odd_parity(sdid, &mut checksum))
+        .context("SDID")?;
+    w.write::<u16>(
+        10,
+        extend_with_even_odd_parity(payload.len() as u8, &mut checksum),
+    )
+    .context("data count")?;
+
+    for &b in payload {
+        w.write::<u16>(10, extend_with_even_odd_parity(b, &mut checksum))
+            .context("payload")?;
+    }
+
+    checksum &= 0x1_ff;
+    checksum |= ((!(checksum >> 8)) & 0x0_01) << 9;
+
+    w.write::<u16>(10, checksum).context("checksum")?;
+
+    while !w.byte_aligned() {
+        w.write_bit(true).context("padding")?;
+    }
+
+    w.flush().context("flushing")?;
+
+    Ok(gst::Buffer::from_mut_slice(output))
+}

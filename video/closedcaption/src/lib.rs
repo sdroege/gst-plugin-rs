@@ -18,6 +18,7 @@ use gst::glib;
 use gst::prelude::*;
 
 mod ccdetect;
+mod cctost2038anc;
 mod ccutils;
 mod cea608overlay;
 mod cea608tocea708;
@@ -69,6 +70,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     st2038ancdemux::register(plugin)?;
     st2038ancmux::register(plugin)?;
     st2038anctocc::register(plugin)?;
+    cctost2038anc::register(plugin)?;
     Ok(())
 }
 
