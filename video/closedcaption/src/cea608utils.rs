@@ -373,7 +373,7 @@ impl Cea608Frame {
         }
         let n_rows = self.mode.unwrap().rollup_rows().unwrap();
         self.display_lines
-            .retain(|line| line.no > (self.base_row - n_rows + 1) as usize);
+            .retain(|line| line.no > self.base_row as usize + 1 - n_rows as usize);
         for line in self.display_lines.iter_mut() {
             line.no -= 1;
         }
