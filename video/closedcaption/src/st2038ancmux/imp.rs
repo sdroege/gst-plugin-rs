@@ -20,9 +20,17 @@ use once_cell::sync::Lazy;
 
 use crate::st2038anc_utils::AncDataHeader;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum Alignment {
+    #[default]
+    Packet,
+    Line,
+}
+
 #[derive(Default)]
 struct State {
     downstream_framerate: Option<gst::Fraction>,
+    alignment: Alignment,
 }
 
 #[derive(Default)]
@@ -66,6 +74,7 @@ impl AggregatorImpl for St2038AncMux {
             gst::ClockTime::ZERO
         };
         let end_running_time = start_running_time + duration;
+        let alignment = state.alignment;
         drop(state);
 
         gst::trace!(
@@ -186,76 +195,105 @@ impl AggregatorImpl for St2038AncMux {
                     continue;
                 }
 
-                let header = match AncDataHeader::from_buffer(&buffer) {
-                    Ok(header) => header,
-                    Err(err) => {
-                        gst::warning!(
-                            CAT,
-                            obj = pad,
-                            "Dropping buffer with invalid ST2038 data ({err})"
-                        );
-                        continue;
-                    }
+                let Ok(map) = buffer.map_readable() else {
+                    gst::trace!(CAT, obj = pad, "Dropping unmappable buffer");
+                    continue;
                 };
 
-                gst::trace!(CAT, obj = pad, "Parsed ST2038 header {header:?}");
+                let mut slice = map.as_slice();
+                while !slice.is_empty() {
+                    // Stop on stuffing bytes
+                    if slice[0] == 0b1111_1111 {
+                        break;
+                    }
 
-                // FIXME: One pixel per word of data? ADF header needs to be included in the
-                // calculation? Two words per pixel because 4:2:2 YUV? Nobody knows!
-                let buffer_clone = buffer.clone(); // FIXME: To appease the borrow checker
-                lines
-                    .entry(header.line_number)
-                    .and_modify(|line| {
-                        let new_offset = header.horizontal_offset;
-                        let new_offset_end = header.horizontal_offset + header.data_count as u16;
-
-                        for (offset, (offset_end, _pad, _buffer)) in &*line {
-                            // If one of the range starts is between the start/end of the other
-                            // then the two ranges are overlapping.
-                            if (new_offset >= *offset && new_offset < *offset_end)
-                                || (*offset >= new_offset && *offset < new_offset_end)
-                            {
-                                gst::trace!(
-                                    CAT,
-                                    obj = pad,
-                                    "Not including ST2038 packet at {}x{}",
-                                    header.line_number,
-                                    header.horizontal_offset
-                                );
-                                return;
-                            }
+                    let start_offset = map.len() - slice.len();
+                    let header = match AncDataHeader::from_slice(slice) {
+                        Ok(header) => header,
+                        Err(err) => {
+                            gst::warning!(
+                                CAT,
+                                obj = pad,
+                                "Dropping buffer with invalid ST2038 data ({err})"
+                            );
+                            continue;
                         }
+                    };
+                    let end_offset = start_offset + header.len;
 
-                        gst::trace!(
-                            CAT,
-                            obj = pad,
-                            "Including ST2038 packet at {}x{}",
-                            header.line_number,
-                            header.horizontal_offset
-                        );
+                    gst::trace!(CAT, obj = pad, "Parsed ST2038 header {header:?}");
 
-                        line.insert(new_offset, (new_offset_end, pad.clone(), buffer));
-                    })
-                    .or_insert_with(|| {
-                        gst::trace!(
-                            CAT,
-                            obj = pad,
-                            "Including ST2038 packet at {}x{}",
-                            header.line_number,
-                            header.horizontal_offset
-                        );
+                    let Ok(mut sub_buffer) =
+                        buffer.copy_region(gst::BufferCopyFlags::MEMORY, start_offset..end_offset)
+                    else {
+                        gst::error!(CAT, imp = self, "Failed to create sub-buffer");
+                        break;
+                    };
+                    {
+                        let sub_buffer = sub_buffer.make_mut();
+                        let _ = buffer.copy_into(sub_buffer, gst::BUFFER_COPY_METADATA, ..);
+                    }
 
-                        let mut line = BTreeMap::new();
-                        line.insert(
-                            header.horizontal_offset,
-                            (
-                                header.horizontal_offset + header.data_count as u16,
-                                pad.clone(),
-                                buffer_clone,
-                            ),
-                        );
-                        line
-                    });
+                    // FIXME: One pixel per word of data? ADF header needs to be included in the
+                    // calculation? Two words per pixel because 4:2:2 YUV? Nobody knows!
+                    let sub_buffer_clone = sub_buffer.clone(); // FIXME: To appease the borrow checker
+                    lines
+                        .entry(header.line_number)
+                        .and_modify(|line| {
+                            let new_offset = header.horizontal_offset;
+                            let new_offset_end =
+                                header.horizontal_offset + header.data_count as u16;
+
+                            for (offset, (offset_end, _pad, _buffer)) in &*line {
+                                // If one of the range starts is between the start/end of the other
+                                // then the two ranges are overlapping.
+                                if (new_offset >= *offset && new_offset < *offset_end)
+                                    || (*offset >= new_offset && *offset < new_offset_end)
+                                {
+                                    gst::trace!(
+                                        CAT,
+                                        obj = pad,
+                                        "Not including ST2038 packet at {}x{}",
+                                        header.line_number,
+                                        header.horizontal_offset
+                                    );
+                                    return;
+                                }
+                            }
+
+                            gst::trace!(
+                                CAT,
+                                obj = pad,
+                                "Including ST2038 packet at {}x{}",
+                                header.line_number,
+                                header.horizontal_offset
+                            );
+
+                            line.insert(new_offset, (new_offset_end, pad.clone(), sub_buffer));
+                        })
+                        .or_insert_with(|| {
+                            gst::trace!(
+                                CAT,
+                                obj = pad,
+                                "Including ST2038 packet at {}x{}",
+                                header.line_number,
+                                header.horizontal_offset
+                            );
+
+                            let mut line = BTreeMap::new();
+                            line.insert(
+                                header.horizontal_offset,
+                                (
+                                    header.horizontal_offset + header.data_count as u16,
+                                    pad.clone(),
+                                    sub_buffer_clone,
+                                ),
+                            );
+                            line
+                        });
+
+                    slice = &slice[header.len..];
+                }
             }
         }
 
@@ -268,7 +306,8 @@ impl AggregatorImpl for St2038AncMux {
 
             for (line_idx, line) in lines {
                 // If there are multiple buffers for a line then merge them into a single buffer
-                if line.len() == 1 {
+                // unless packet alignment is selected
+                if line.len() == 1 || alignment == Alignment::Packet {
                     for (horizontal_offset, (_, _pad, buffer)) in line {
                         gst::trace!(
                             CAT,
@@ -293,6 +332,7 @@ impl AggregatorImpl for St2038AncMux {
                         }
                         new_buffer.append(buffer);
                     }
+                    buffers_ref.add(new_buffer);
                 }
             }
 
@@ -435,13 +475,23 @@ impl AggregatorImpl for St2038AncMux {
         }
 
         peer_caps.fixate();
-        let framerate = peer_caps
-            .structure(0)
-            .unwrap()
-            .get::<gst::Fraction>("framerate")
-            .ok();
+
+        let s = peer_caps.structure(0).unwrap();
+        let framerate = s.get::<gst::Fraction>("framerate").ok();
+
+        let alignment = match s.get::<&str>("alignment").ok() {
+            Some("packet") => Alignment::Packet,
+            Some("line") => Alignment::Line,
+            _ => {
+                let peer_caps = peer_caps.make_mut();
+                peer_caps.set("alignment", "packet");
+                Alignment::Packet
+            }
+        };
 
         let mut state = self.state.lock().unwrap();
+        gst::debug!(CAT, imp = self, "Configuring alignment {alignment:?}");
+        state.alignment = alignment;
         if let Some(framerate) = framerate {
             gst::debug!(
                 CAT,
@@ -536,7 +586,9 @@ impl ElementImpl for St2038AncMux {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let caps = gst::Caps::new_empty_simple("meta/x-st-2038");
+            let caps = gst::Caps::builder("meta/x-st-2038")
+                .field("alignment", gst::List::new(["packet", "line"]))
+                .build();
             let src_pad_template = gst::PadTemplate::builder(
                 "src",
                 gst::PadDirection::Src,
@@ -547,6 +599,7 @@ impl ElementImpl for St2038AncMux {
             .build()
             .unwrap();
 
+            let caps = gst::Caps::builder("meta/x-st-2038").build();
             let sink_pad_template = gst::PadTemplate::builder(
                 "sink_%u",
                 gst::PadDirection::Sink,

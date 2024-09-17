@@ -43,7 +43,7 @@ struct State {
     last_inactivity_check: Option<gst::ClockTime>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct AncDataId {
     c_not_y_channel_flag: bool,
     did: u8,
@@ -72,7 +72,7 @@ struct AncStream {
 impl St2038AncDemux {
     fn sink_chain(
         &self,
-        pad: &gst::Pad,
+        _pad: &gst::Pad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.borrow_mut();
@@ -80,86 +80,130 @@ impl St2038AncDemux {
         let ts = buffer.dts_or_pts();
         let running_time = state.segment.to_running_time(ts);
 
-        let anc_hdr = AncDataHeader::from_buffer(&buffer)
-            .map_err(|err| {
-                gst::debug!(
-                    CAT,
-                    imp = self,
-                    "Failed to parse ancillary data header: {err:?}"
-                );
-                // Just push it out on the combined pad and be done with it
-                return self.srcpad.push(buffer.clone());
-            })
-            .unwrap();
+        let Ok(map) = buffer.map_readable() else {
+            gst::error!(CAT, imp = self, "Failed to map buffer",);
 
-        let stream = match state.streams.get_mut(&AncDataId::from(anc_hdr)) {
-            Some(stream) => stream,
-            None => {
-                let pad_name = format!(
-                    "anc_{:02x}_{:02x}_at_{}_{}",
-                    anc_hdr.did, anc_hdr.sdid, anc_hdr.line_number, anc_hdr.horizontal_offset
-                );
+            // Just push it out on the combined pad and be done with it
+            drop(state);
+            let res = self.srcpad.push(buffer);
+            state = self.state.borrow_mut();
 
-                gst::info!(
-                    CAT,
-                    imp = self,
-                    "New ancillary data stream {pad_name}: {anc_hdr:?}"
-                );
-
-                let anc_templ = self.obj().pad_template("anc_%02x_%02x_at_%u_%u").unwrap();
-                let anc_srcpad = gst::Pad::builder_from_template(&anc_templ)
-                    .name(pad_name)
-                    .build();
-
-                anc_srcpad.set_active(true).expect("set pad active");
-
-                // Forward sticky events from sink pad to new ancillary data source pad
-                // FIXME: do we want/need to modify the stream id here? caps?
-                pad.sticky_events_foreach(|event| {
-                    anc_srcpad.push_event(event.clone());
-                    std::ops::ControlFlow::Continue(gst::EventForeachAction::Keep)
-                });
-
-                self.obj().add_pad(&anc_srcpad).expect("add pad");
-
-                state.flow_combiner.add_pad(&anc_srcpad);
-
-                state.streams.insert(
-                    AncDataId::from(anc_hdr),
-                    AncStream {
-                        pad: anc_srcpad,
-                        last_used: running_time,
-                    },
-                );
-
-                state
-                    .streams
-                    .get_mut(&AncDataId::from(anc_hdr))
-                    .expect("stream")
-            }
+            return state.flow_combiner.update_pad_flow(&self.srcpad, res);
         };
 
-        stream.last_used = running_time;
+        let mut slice = map.as_slice();
 
-        // Clone pad, so the borrow on stream can be dropped, otherwise compiler will
-        // complain that stream and state are both borrowed mutably..
-        let anc_pad = stream.pad.clone();
-
-        let anc_flow = anc_pad.push(buffer.clone());
-
-        let _ = state.flow_combiner.update_pad_flow(&anc_pad, anc_flow);
-
-        // Todo: Check every now and then if any ancillary streams haven't seen any data for a while
-        if let Some((last_check, rt)) = Option::zip(state.last_inactivity_check, running_time) {
-            if gst::ClockTime::absdiff(rt, last_check) >= gst::ClockTime::from_seconds(10) {
-                // gst::fixme!(CAT, imp = self, "Check ancillary streams for inactivity");
-                state.last_inactivity_check = running_time;
+        while !slice.is_empty() {
+            // Stop on stuffing bytes
+            if slice[0] == 0b1111_1111 {
+                break;
             }
+
+            let start_offset = map.len() - slice.len();
+            let anc_hdr = match AncDataHeader::from_slice(slice) {
+                Ok(anc_hdr) => anc_hdr,
+                Err(err) => {
+                    gst::debug!(
+                        CAT,
+                        imp = self,
+                        "Failed to parse ancillary data header: {err:?}"
+                    );
+                    break;
+                }
+            };
+            let end_offset = start_offset + anc_hdr.len;
+
+            gst::trace!(CAT, imp = self, "Parsed ST2038 header {anc_hdr:?}");
+
+            let anc_id = AncDataId::from(anc_hdr);
+
+            let stream = match state.streams.get_mut(&anc_id) {
+                Some(stream) => stream,
+                None => {
+                    let pad_name = format!(
+                        "anc_{:02x}_{:02x}_at_{}_{}",
+                        anc_id.did, anc_id.sdid, anc_id.line_number, anc_id.horizontal_offset
+                    );
+
+                    gst::info!(
+                        CAT,
+                        imp = self,
+                        "New ancillary data stream {pad_name}: {anc_hdr:?}"
+                    );
+
+                    let anc_templ = self.obj().pad_template("anc_%02x_%02x_at_%u_%u").unwrap();
+                    let anc_srcpad = gst::Pad::builder_from_template(&anc_templ)
+                        .name(pad_name)
+                        .build();
+
+                    anc_srcpad.set_active(true).expect("set pad active");
+
+                    // Forward sticky events from main source pad to new ancillary data source pad
+                    // FIXME: do we want/need to modify the stream id here? caps?
+                    self.srcpad.sticky_events_foreach(|event| {
+                        let _ = anc_srcpad.store_sticky_event(event);
+                        std::ops::ControlFlow::Continue(gst::EventForeachAction::Keep)
+                    });
+
+                    drop(state);
+                    self.obj().add_pad(&anc_srcpad).expect("add pad");
+                    state = self.state.borrow_mut();
+
+                    state.flow_combiner.add_pad(&anc_srcpad);
+
+                    state.streams.insert(
+                        anc_id,
+                        AncStream {
+                            pad: anc_srcpad,
+                            last_used: running_time,
+                        },
+                    );
+
+                    state.streams.get_mut(&anc_id).expect("stream")
+                }
+            };
+
+            stream.last_used = running_time;
+
+            let Ok(mut sub_buffer) =
+                buffer.copy_region(gst::BufferCopyFlags::MEMORY, start_offset..end_offset)
+            else {
+                gst::error!(CAT, imp = self, "Failed to create sub-buffer");
+                break;
+            };
+            {
+                let sub_buffer = sub_buffer.make_mut();
+                let _ = buffer.copy_into(sub_buffer, gst::BUFFER_COPY_METADATA, ..);
+            }
+
+            let anc_pad = stream.pad.clone();
+
+            drop(state);
+            let anc_flow = anc_pad.push(sub_buffer.clone());
+            state = self.state.borrow_mut();
+
+            state.flow_combiner.update_pad_flow(&anc_pad, anc_flow)?;
+
+            // TODO: Check every now and then if any ancillary streams haven't seen any data for a while
+            if let Some((last_check, rt)) = Option::zip(state.last_inactivity_check, running_time) {
+                if gst::ClockTime::absdiff(rt, last_check) >= gst::ClockTime::from_seconds(10) {
+                    // gst::fixme!(CAT, imp = self, "Check ancillary streams for inactivity");
+                    state.last_inactivity_check = running_time;
+                }
+            }
+
+            drop(state);
+            let main_flow = self.srcpad.push(sub_buffer);
+            state = self.state.borrow_mut();
+
+            state
+                .flow_combiner
+                .update_pad_flow(&self.srcpad, main_flow)?;
+
+            slice = &slice[anc_hdr.len..];
         }
 
-        let main_flow = self.srcpad.push(buffer);
-
-        state.flow_combiner.update_pad_flow(&self.srcpad, main_flow)
+        Ok(gst::FlowSuccess::Ok)
     }
 
     fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
@@ -180,6 +224,32 @@ impl St2038AncDemux {
                     .clone()
                     .downcast::<gst::format::Time>()
                     .unwrap();
+            }
+            EventView::Caps(ev) => {
+                // Don't forward the caps event directly but set the alignment.
+                let mut caps = ev.caps_owned();
+                {
+                    let caps = caps.make_mut();
+                    caps.set("alignment", "packet");
+                }
+
+                let event = gst::event::Caps::builder(&caps)
+                    .seqnum(event.seqnum())
+                    .build();
+
+                let mut ret = self.srcpad.push_event(event.clone());
+                let state = self.state.borrow_mut();
+                let pads = state
+                    .streams
+                    .values()
+                    .map(|stream| stream.pad.clone())
+                    .collect::<Vec<_>>();
+                drop(state);
+                for pad in pads {
+                    ret |= pad.push_event(event.clone());
+                }
+
+                return ret;
             }
             _ => {}
         }
@@ -207,6 +277,9 @@ impl ElementImpl for St2038AncDemux {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
             let caps = gst::Caps::builder("meta/x-st-2038").build();
+            let caps_aligned = gst::Caps::builder("meta/x-st-2038")
+                .field("alignment", "packet")
+                .build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,
@@ -221,7 +294,7 @@ impl ElementImpl for St2038AncDemux {
                 "src",
                 gst::PadDirection::Src,
                 gst::PadPresence::Always,
-                &caps,
+                &caps_aligned,
             )
             .unwrap();
 
@@ -229,7 +302,7 @@ impl ElementImpl for St2038AncDemux {
                 "anc_%02x_%02x_at_%u_%u",
                 gst::PadDirection::Src,
                 gst::PadPresence::Sometimes,
-                &caps,
+                &caps_aligned,
             )
             .unwrap();
 
