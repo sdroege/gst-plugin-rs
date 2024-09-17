@@ -5080,6 +5080,67 @@
     "quinn": {
         "description": "GStreamer Plugin for QUIC",
         "elements": {
+            "quinnquicdemux": {
+                "author": "Sanchayan Maity <sanchayan@asymptotic.io>",
+                "description": "Demultiplexes multiple streams and datagram for QUIC",
+                "hierarchy": [
+                    "GstQuinnQuicDemux",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Source/Network/QUIC",
+                "pad-templates": {
+                    "datagram": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    },
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "stream_%%u": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    }
+                },
+                "rank": "none"
+            },
+            "quinnquicmux": {
+                "author": "Sanchayan Maity <sanchayan@asymptotic.io>",
+                "description": "Multiplexes multiple streams and datagram for QUIC",
+                "hierarchy": [
+                    "GstQuinnQuicMux",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Source/Network/QUIC",
+                "pad-templates": {
+                    "datagram": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "request"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    },
+                    "stream_%%u": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "QuinnQuicMuxPad"
+                    }
+                },
+                "rank": "none"
+            },
             "quinnquicsink": {
                 "author": "Sanchayan Maity <sanchayan@asymptotic.io>",
                 "description": "Send data over the network via QUIC",
@@ -5255,6 +5316,20 @@
                         "type": "guint64",
                         "writable": true
                     },
+                    "max-concurrent-uni-streams": {
+                        "blurb": "Maximum number of incoming unidirectional streams that may be open concurrently",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "32",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
                     "max-udp-payload-size": {
                         "blurb": "Maximum UDP payload size accepted from peers (excluding UDP and IP overhead)",
                         "conditionally-available": false,
@@ -5331,6 +5406,20 @@
                         "mutable": "null",
                         "readable": true,
                         "type": "gboolean",
+                        "writable": true
+                    },
+                    "send-window": {
+                        "blurb": "Maximum number of bytes to transmit to a peer without acknowledgment",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "10000000",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
                         "writable": true
                     },
                     "server-address": {
@@ -5431,6 +5520,7 @@
                 "description": "Receive data over the network via QUIC",
                 "hierarchy": [
                     "GstQuinnQuicSrc",
+                    "GstPushSrc",
                     "GstBaseSrc",
                     "GstElement",
                     "GstObject",
@@ -5575,6 +5665,20 @@
                         "type": "guint64",
                         "writable": true
                     },
+                    "max-concurrent-uni-streams": {
+                        "blurb": "Maximum number of incoming unidirectional streams that may be open concurrently",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "32",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
                     "max-udp-payload-size": {
                         "blurb": "Maximum UDP payload size accepted from peers (excluding UDP and IP overhead)",
                         "conditionally-available": false,
@@ -5627,6 +5731,20 @@
                         "mutable": "null",
                         "readable": true,
                         "type": "gchararray",
+                        "writable": true
+                    },
+                    "receive-window": {
+                        "blurb": "Maximum number of bytes the peer may transmit across all streams of a connection before becoming blocked",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "4611686018427387903",
+                        "max": "4611686018427387903",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
                         "writable": true
                     },
                     "role": {
@@ -5702,6 +5820,20 @@
                         "readable": true,
                         "type": "GstStructure",
                         "writable": false
+                    },
+                    "stream-receive-window": {
+                        "blurb": "Maximum number of bytes the peer may transmit without ACK on any one stream before becoming blocked",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1250000",
+                        "max": "4611686018427387903",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
                     },
                     "timeout": {
                         "blurb": "Value in seconds to timeout QUIC endpoint requests (0 = No timeout).",

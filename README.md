@@ -36,6 +36,7 @@ You will find the following plugins in this repository:
 
     - `quinn`: Transfer data over the network using QUIC
       - `quinnquicsink`/`quinnquicsrc`: Send and receive data using QUIC
+      - `quinnquicmux`/`quinnquicdemux`: Multiplex and de-multiplex streams and datagram using QUIC
 
     - `raptorq`: Encoder/decoder element for RaptorQ RTP FEC mechanism.
 
