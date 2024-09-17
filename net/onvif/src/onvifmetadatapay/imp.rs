@@ -4,6 +4,14 @@ use gst_rtp::prelude::*;
 use gst_rtp::subclass::prelude::*;
 use once_cell::sync::Lazy;
 
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
+        "rtponvifmetadatapay",
+        gst::DebugColorFlags::empty(),
+        Some("RTP ONVIF metadata payloader"),
+    )
+});
+
 #[derive(Default)]
 pub struct OnvifMetadataPay {}
 
@@ -186,7 +194,8 @@ impl RTPBasePayloadImpl for OnvifMetadataPay {
     fn set_caps(&self, _caps: &gst::Caps) -> Result<(), gst::LoggableError> {
         self.obj()
             .set_options("application", true, "VND.ONVIF.METADATA", 90000);
-
-        Ok(())
+        self.obj()
+            .set_outcaps(None)
+            .map_err(|_| gst::loggable_error!(CAT, "Failed to set output caps"))
     }
 }
