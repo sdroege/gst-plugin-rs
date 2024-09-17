@@ -18,6 +18,7 @@ use atomic_refcell::AtomicRefCell;
 use once_cell::sync::Lazy;
 
 use std::collections::HashMap;
+use std::mem;
 
 use crate::st2038anc_utils::AncDataHeader;
 
@@ -251,6 +252,12 @@ impl St2038AncDemux {
 
                 return ret;
             }
+            EventView::FlushStop(_) => {
+                let mut state = self.state.borrow_mut();
+                state.segment = gst::FormattedSegment::default();
+                state.last_inactivity_check = None;
+                state.flow_combiner.reset();
+            }
             _ => {}
         }
 
@@ -315,6 +322,35 @@ impl ElementImpl for St2038AncDemux {
 
         PAD_TEMPLATES.as_ref()
     }
+
+    #[allow(clippy::single_match)]
+    fn change_state(
+        &self,
+        transition: gst::StateChange,
+    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
+        match transition {
+            gst::StateChange::ReadyToPaused => {
+                let mut state = self.state.borrow_mut();
+                *state = State::default();
+                state.flow_combiner.add_pad(&self.srcpad);
+            }
+            _ => (),
+        }
+
+        let res = self.parent_change_state(transition)?;
+
+        match transition {
+            gst::StateChange::PausedToReady => {
+                let old_state = mem::take(&mut *self.state.borrow_mut());
+                for (_anc_id, stream) in old_state.streams {
+                    let _ = self.obj().remove_pad(&stream.pad);
+                }
+            }
+            _ => (),
+        }
+
+        Ok(res)
+    }
 }
 
 #[glib::object_subclass]
@@ -357,12 +393,8 @@ impl ObjectImpl for St2038AncDemux {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let mut state = self.state.borrow_mut();
-
         let obj = self.obj();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
-
-        state.flow_combiner.add_pad(&self.srcpad);
     }
 }
