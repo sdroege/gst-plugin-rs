@@ -37,6 +37,7 @@ mod scc_parse;
 mod st2038anc_utils;
 mod st2038ancdemux;
 mod st2038ancmux;
+mod st2038anctocc;
 mod transcriberbin;
 mod tttocea608;
 mod tttocea708;
@@ -67,6 +68,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     cea708overlay::register(plugin)?;
     st2038ancdemux::register(plugin)?;
     st2038ancmux::register(plugin)?;
+    st2038anctocc::register(plugin)?;
     Ok(())
 }
 
