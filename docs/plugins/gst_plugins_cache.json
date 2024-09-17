@@ -5879,6 +5879,75 @@
                     }
                 },
                 "rank": "marginal"
+            },
+            "quinnroqdemux": {
+                "author": "Sanchayan Maity <sanchayan@asymptotic.io>",
+                "description": "Demultiplexes multiple RTP streams over QUIC",
+                "hierarchy": [
+                    "GstQuinnQuicRtpDemux",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Source/Network/QUIC",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src_%%u": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    }
+                },
+                "rank": "none",
+                "signals": {
+                    "request-flow-id-map": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "guint64"
+                            }
+                        ],
+                        "return-type": "GstCaps",
+                        "when": "last"
+                    }
+                }
+            },
+            "quinnroqmux": {
+                "author": "Sanchayan Maity <sanchayan@asymptotic.io>",
+                "description": "Multiplexes multiple RTP streams over QUIC",
+                "hierarchy": [
+                    "GstQuinnRoqMux",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Source/Network/QUIC",
+                "pad-templates": {
+                    "datagram_%%u": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "QuinnRoqMuxPad"
+                    },
+                    "stream_%%u": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "QuinnRoqMuxPad"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "none"
             }
         },
         "filename": "gstquinn",
