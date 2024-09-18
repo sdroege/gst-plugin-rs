@@ -78,6 +78,8 @@ impl St2038AncDemux {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.borrow_mut();
 
+        gst::trace!(CAT, imp = self, "Handling buffer {buffer:?}");
+
         let ts = buffer.dts_or_pts();
         let running_time = state.segment.to_running_time(ts);
 
@@ -164,7 +166,14 @@ impl St2038AncDemux {
                 }
             };
 
-            stream.last_used = running_time;
+            if let Some(running_time) = running_time {
+                if stream
+                    .last_used
+                    .map_or(true, |last_used| last_used < running_time)
+                {
+                    stream.last_used = Some(running_time);
+                }
+            }
 
             let Ok(mut sub_buffer) =
                 buffer.copy_region(gst::BufferCopyFlags::MEMORY, start_offset..end_offset)
@@ -193,6 +202,49 @@ impl St2038AncDemux {
                 }
             }
 
+            let mut late_pads = Vec::new();
+            if let Some(running_time) = running_time {
+                let ts = ts.unwrap();
+
+                let State {
+                    ref mut streams,
+                    ref segment,
+                    ..
+                } = &mut *state;
+
+                for stream in streams.values_mut() {
+                    let Some(last_used) = stream.last_used else {
+                        continue;
+                    };
+
+                    if gst::ClockTime::absdiff(last_used, running_time)
+                        > gst::ClockTime::from_mseconds(500)
+                    {
+                        let Some(timestamp) = segment.position_from_running_time_full(last_used)
+                        else {
+                            continue;
+                        };
+
+                        let timestamp = timestamp.positive().unwrap_or(ts);
+                        let duration = ts.checked_sub(timestamp);
+
+                        gst::trace!(
+                            CAT,
+                            obj = stream.pad,
+                            "Advancing late stream from {last_used} to {running_time}"
+                        );
+
+                        late_pads.push((
+                            stream.pad.clone(),
+                            gst::event::Gap::builder(timestamp)
+                                .duration(duration)
+                                .build(),
+                        ));
+                        stream.last_used = Some(running_time);
+                    }
+                }
+            }
+
             drop(state);
             let main_flow = self.srcpad.push(sub_buffer);
             state = self.state.borrow_mut();
@@ -200,6 +252,10 @@ impl St2038AncDemux {
             state
                 .flow_combiner
                 .update_pad_flow(&self.srcpad, main_flow)?;
+
+            for (pad, event) in late_pads {
+                let _ = pad.push_event(event);
+            }
 
             slice = &slice[anc_hdr.len..];
         }
