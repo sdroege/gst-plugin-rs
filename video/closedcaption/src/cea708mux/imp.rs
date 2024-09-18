@@ -184,7 +184,7 @@ impl AggregatorImpl for Cea708Mux {
                 ));
                 return Err(gst::FlowError::Error);
             };
-            if buffer_start_ts > end_running_time {
+            if buffer_start_ts >= end_running_time {
                 // buffer is not for this output time, skip
                 continue;
             }
