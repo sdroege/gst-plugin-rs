@@ -419,6 +419,8 @@ impl Session {
                 self.id
             );
             webrtcbin_pad.store_sticky_event(&builder.build()).ok();
+
+            srcpad.imp().set_webrtc_pad(webrtcbin_pad.downgrade());
         }
 
         let ghostpad = gst::GhostPad::builder(gst::PadDirection::Src)

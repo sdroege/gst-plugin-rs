@@ -10996,7 +10996,21 @@
                     "GInitiallyUnowned",
                     "GObject"
                 ],
-                "kind": "object"
+                "kind": "object",
+                "properties": {
+                    "msid": {
+                        "blurb": "Remote MediaStream ID in use for this pad",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": false
+                    }
+                }
             }
         },
         "package": "gst-plugin-webrtc",
