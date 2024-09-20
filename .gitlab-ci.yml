@@ -105,13 +105,14 @@ trigger:
     RUST_BACKTRACE: 'full'
   script:
     - rustc --version
+    - CARGO_FLAGS="-j${FDO_CI_CONCURRENT:-$(nproc)} --locked --color=always --all --all-targets"
 
-    - cargo build --locked --color=always --workspace --all-targets
-    - RUST_BACKTRACE=1 G_DEBUG=fatal_warnings cargo test --locked --color=always --workspace --all-targets
-    - cargo build --locked --color=always --workspace --all-targets --all-features --exclude gst-plugin-gtk4
-    - RUST_BACKTRACE=1 G_DEBUG=fatal_warnings cargo test --locked --color=always --workspace --all-targets --all-features --exclude gst-plugin-gtk4
-    - cargo build --locked --color=always --workspace --all-targets --no-default-features
-    - RUST_BACKTRACE=1 G_DEBUG=fatal_warnings cargo test --locked --color=always --workspace --all-targets --no-default-features
+    - cargo build $CARGO_FLAGS
+    - RUST_BACKTRACE=1 G_DEBUG=fatal_warnings cargo test $CARGO_FLAGS
+    - cargo build $CARGO_FLAGS --all-features --exclude gst-plugin-gtk4
+    - RUST_BACKTRACE=1 G_DEBUG=fatal_warnings cargo test $CARGO_FLAGS --all-features --exclude gst-plugin-gtk4
+    - cargo build $CARGO_FLAGS --no-default-features
+    - RUST_BACKTRACE=1 G_DEBUG=fatal_warnings cargo test $CARGO_FLAGS --no-default-features
 
 test msrv:
   extends:
@@ -343,9 +344,10 @@ clippy:
     # csound-sys only looks at /usr/lib and /usr/local top levels
     CSOUND_LIB_DIR: '/usr/lib/x86_64-linux-gnu/'
   script:
-    - cargo clippy --locked --color=always --all --all-targets -- -D warnings -A unknown-lints
-    - cargo clippy --locked --color=always --all --all-features --all-targets --exclude gst-plugin-gtk4 -- -D warnings -A unknown-lints
-    - cargo clippy --locked --color=always --all --all-targets --no-default-features -- -D warnings -A unknown-lints
+    - CARGO_FLAGS="-j${FDO_CI_CONCURRENT:-$(nproc)} --locked --color=always --all --all-targets"
+    - cargo clippy $CARGO_FLAGS -- -D warnings -A unknown-lints
+    - cargo clippy $CARGO_FLAGS --all-features --exclude gst-plugin-gtk4 -- -D warnings -A unknown-lints
+    - cargo clippy $CARGO_FLAGS --no-default-features -- -D warnings -A unknown-lints
 
 deny:
   extends: .debian:12-stable
@@ -386,7 +388,9 @@ coverage:
     # csound-sys only looks at /usr/lib and /usr/local top levels
     CSOUND_LIB_DIR: '/usr/lib/x86_64-linux-gnu/'
   script:
-    - cargo test --locked --color=always --all --all-features --exclude gst-plugin-gtk4
+    - CARGO_FLAGS="-j${FDO_CI_CONCURRENT:-$(nproc)} --locked --color=always --all"
+
+    - cargo test $CARGO_FLAGS --all-features --exclude gst-plugin-gtk4
     # generate html report
     - grcov . --binary-path ./target/debug/ -s . -t html --branch --ignore-not-existing --ignore "*target*" --ignore "*/build.rs" -o ./coverage/
     # generate cobertura report for gitlab integration
