@@ -10195,7 +10195,7 @@
                         "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\n",
                         "direction": "src",
                         "presence": "sometimes",
-                        "type": "GstWebRTCSrcPad"
+                        "type": "GstLiveKitWebRTCSrcPad"
                     },
                     "audio_%%u": {
                         "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\n",
@@ -10207,7 +10207,7 @@
                         "caps": "video/x-raw(ANY):\napplication/x-rtp:\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\nvideo/x-av1:\n",
                         "direction": "src",
                         "presence": "sometimes",
-                        "type": "GstWebRTCSrcPad"
+                        "type": "GstLiveKitWebRTCSrcPad"
                     },
                     "video_%%u": {
                         "caps": "video/x-raw(ANY):\napplication/x-rtp:\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\nvideo/x-av1:\n",
@@ -11008,6 +11008,67 @@
                         ],
                         "return-type": "GstElement",
                         "when": "last"
+                    }
+                }
+            },
+            "GstLiveKitWebRTCSrcPad": {
+                "hierarchy": [
+                    "GstLiveKitWebRTCSrcPad",
+                    "GstWebRTCSrcPad",
+                    "GstGhostPad",
+                    "GstProxyPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "participant-info": {
+                        "blurb": "Participant Information",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": false
+                    },
+                    "participant-sid": {
+                        "blurb": "Participant ID",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": false
+                    },
+                    "track-info": {
+                        "blurb": "Track Information",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": false
+                    },
+                    "track-sid": {
+                        "blurb": "Track ID",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": false
                     }
                 }
             },

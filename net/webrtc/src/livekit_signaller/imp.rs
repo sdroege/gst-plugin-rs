@@ -84,6 +84,7 @@ struct Connection {
     signal_task: JoinHandle<()>,
     early_candidates: Option<Vec<String>>,
     channels: Option<Channels>,
+    participants: HashMap<String, proto::ParticipantInfo>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -487,6 +488,19 @@ impl Signaller {
             }
             _ => return,
         }
+
+        if participant.state != proto::participant_info::State::Disconnected as i32 {
+            if let Some(ref mut connection) = &mut *self.connection.lock().unwrap() {
+                if !connection.participants.contains_key(&participant.sid) {
+                    connection
+                        .participants
+                        .insert(participant.sid.clone(), participant.clone());
+                }
+            }
+        } else if let Some(ref mut connection) = &mut *self.connection.lock().unwrap() {
+            connection.participants.remove(&participant.sid);
+        }
+
         let meta = Some(&participant.metadata)
             .filter(|meta| !meta.is_empty())
             .and_then(|meta| gst::Structure::from_str(meta).ok());
@@ -536,6 +550,13 @@ impl Signaller {
             }))
             .await;
         signal_client.close().await;
+    }
+
+    pub(crate) fn participant_info(&self, participant_sid: &str) -> Option<proto::ParticipantInfo> {
+        let connection = self.connection.lock().unwrap();
+        let connection = connection.as_ref()?;
+        let participant = connection.participants.get(participant_sid)?;
+        Some(participant.clone())
     }
 }
 
@@ -692,6 +713,7 @@ impl SignallableImpl for Signaller {
                 pending_tracks: Default::default(),
                 early_candidates: Some(Vec::new()),
                 channels: None,
+                participants: HashMap::default(),
             };
 
             if let Ok(mut sc) = imp.connection.lock() {

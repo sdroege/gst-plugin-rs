@@ -63,10 +63,17 @@ glib::wrapper! {
     pub struct WebRTCSrcPad(ObjectSubclass<pad::WebRTCSrcPad>) @extends gst::GhostPad, gst::ProxyPad, gst::Pad, gst::Object;
 }
 
+#[cfg(feature = "livekit")]
+glib::wrapper! {
+    pub struct LiveKitWebRTCSrcPad(ObjectSubclass<imp::livekit::LiveKitWebRTCSrcPad>) @extends WebRTCSrcPad, gst::GhostPad, gst::ProxyPad, gst::Pad, gst::Object;
+}
+
 pub fn register(plugin: Option<&gst::Plugin>) -> Result<(), glib::BoolError> {
     BaseWebRTCSrc::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     WebRTCSignallerRole::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     WebRTCSrcPad::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    #[cfg(feature = "livekit")]
+    LiveKitWebRTCSrcPad::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     Signallable::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     gst::Element::register(
         plugin,

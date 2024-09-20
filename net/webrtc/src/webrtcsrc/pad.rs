@@ -73,3 +73,7 @@ impl GstObjectImpl for WebRTCSrcPad {}
 impl PadImpl for WebRTCSrcPad {}
 impl ProxyPadImpl for WebRTCSrcPad {}
 impl GhostPadImpl for WebRTCSrcPad {}
+
+unsafe impl<T: WebRTCSrcPadImpl> IsSubclassable<T> for super::WebRTCSrcPad {}
+
+pub trait WebRTCSrcPadImpl: GhostPadImpl {}

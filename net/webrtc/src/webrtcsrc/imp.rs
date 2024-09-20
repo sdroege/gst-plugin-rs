@@ -1785,7 +1785,7 @@ pub(super) mod whip {
 #[cfg(feature = "livekit")]
 pub(super) mod livekit {
     use super::*;
-    use crate::livekit_signaller::LiveKitSignaller;
+    use crate::{livekit_signaller::LiveKitSignaller, webrtcsrc::pad::WebRTCSrcPadImpl};
 
     #[derive(Default)]
     pub struct LiveKitWebRTCSrc;
@@ -1807,6 +1807,26 @@ pub(super) mod livekit {
     impl BinImpl for LiveKitWebRTCSrc {}
 
     impl ElementImpl for LiveKitWebRTCSrc {
+        fn pad_templates() -> &'static [gst::PadTemplate] {
+            static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+                super::BaseWebRTCSrc::pad_templates()
+                    .iter()
+                    .map(|pad_templ| {
+                        gst::PadTemplate::with_gtype(
+                            pad_templ.name_template(),
+                            pad_templ.direction(),
+                            pad_templ.presence(),
+                            pad_templ.caps(),
+                            super::super::LiveKitWebRTCSrcPad::static_type(),
+                        )
+                        .unwrap()
+                    })
+                    .collect()
+            });
+
+            PAD_TEMPLATES.as_ref()
+        }
+
         fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
             static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
                 gst::subclass::ElementMetadata::new(
@@ -1829,4 +1849,199 @@ pub(super) mod livekit {
         type Type = crate::webrtcsrc::LiveKitWebRTCSrc;
         type ParentType = crate::webrtcsrc::BaseWebRTCSrc;
     }
+
+    #[derive(Default)]
+    pub struct LiveKitWebRTCSrcPad {}
+
+    fn participant_permission_to_structure(
+        participant_permission: &livekit_protocol::ParticipantPermission,
+    ) -> gst::Structure {
+        gst::Structure::builder("livekit/participant-permission")
+            .field("can-subscribe", participant_permission.can_subscribe)
+            .field("can-publish", participant_permission.can_publish)
+            .field("can-publish-data", participant_permission.can_publish_data)
+            .field_from_iter::<gst::Array>(
+                "can-publish-sources",
+                participant_permission
+                    .can_publish_sources
+                    .iter()
+                    .map(|v| v.to_send_value()),
+            )
+            .field("hidden", participant_permission.hidden)
+            .field("recorder", participant_permission.recorder)
+            .field(
+                "can-update-metadata",
+                participant_permission.can_update_metadata,
+            )
+            .field("agent", participant_permission.agent)
+            .build()
+    }
+
+    fn track_info_to_structure(track_info: &livekit_protocol::TrackInfo) -> gst::Structure {
+        gst::Structure::builder("livekit/track-info")
+            .field("sid", &track_info.sid)
+            .field(
+                "type",
+                livekit_protocol::TrackType::try_from(track_info.r#type)
+                    .map(|t| t.as_str_name())
+                    .unwrap_or("unknown"),
+            )
+            .field("name", &track_info.name)
+            .field("muted", track_info.muted)
+            .field("width", track_info.width)
+            .field("height", track_info.height)
+            .field("simulcast", track_info.simulcast)
+            .field("disable-dtx", track_info.disable_dtx)
+            .field(
+                "source",
+                livekit_protocol::TrackSource::try_from(track_info.source)
+                    .map(|s| s.as_str_name())
+                    .unwrap_or("unknown"),
+            )
+            //.field_from_iter::<gst::Array>("layers", track_info.layers.iter().todo!())
+            .field("mime-type", &track_info.mime_type)
+            .field("mid", &track_info.mid)
+            //.field_from_iter::<gst::Array>("codecs", track_info.codecs.iter().todo!())
+            .field("stereo", track_info.stereo)
+            .field("disable-red", track_info.disable_red)
+            .field(
+                "encryption",
+                livekit_protocol::encryption::Type::try_from(track_info.encryption)
+                    .map(|e| e.as_str_name())
+                    .unwrap_or("unknown"),
+            )
+            .field("stream", &track_info.stream)
+            //.field("version", todo!())
+            .build()
+    }
+
+    fn participant_info_to_structure(
+        participant_info: &livekit_protocol::ParticipantInfo,
+    ) -> gst::Structure {
+        gst::Structure::builder("livekit/participant-info")
+            .field("sid", &participant_info.sid)
+            .field("identity", &participant_info.identity)
+            .field(
+                "state",
+                livekit_protocol::participant_info::State::try_from(participant_info.state)
+                    .map(|s| s.as_str_name())
+                    .unwrap_or("unknown"),
+            )
+            .field_from_iter::<gst::Array>(
+                "tracks",
+                participant_info.tracks.iter().map(track_info_to_structure),
+            )
+            .field("metadata", &participant_info.metadata)
+            .field("joined-at", participant_info.joined_at)
+            .field("name", &participant_info.name)
+            .field("version", participant_info.version)
+            .field_if_some(
+                "permission",
+                participant_info
+                    .permission
+                    .as_ref()
+                    .map(participant_permission_to_structure),
+            )
+            .field("region", &participant_info.region)
+            .field("is-publisher", participant_info.is_publisher)
+            .field(
+                "kind",
+                livekit_protocol::participant_info::Kind::try_from(participant_info.kind)
+                    .map(|k| k.as_str_name())
+                    .unwrap_or("unknown"),
+            )
+            .build()
+    }
+
+    impl LiveKitWebRTCSrcPad {
+        fn participant_track_sid(&self) -> Option<(String, String)> {
+            // msid format is "participant_sid|track_sid"
+            let msid = self.obj().property::<Option<String>>("msid")?;
+            let (participant_sid, track_sid) = msid.split_once('|')?;
+            Some((String::from(participant_sid), String::from(track_sid)))
+        }
+
+        fn participant_info(&self) -> Option<gst::Structure> {
+            let participant_sid = self.participant_sid()?;
+            let webrtcbin = self
+                .obj()
+                .parent()
+                .and_downcast::<super::super::BaseWebRTCSrc>()?;
+            let signaller = webrtcbin.property::<LiveKitSignaller>("signaller");
+            let participant_info = signaller.imp().participant_info(&participant_sid)?;
+            Some(participant_info_to_structure(&participant_info))
+        }
+
+        fn track_info(&self) -> Option<gst::Structure> {
+            let (participant_sid, track_sid) = self.participant_track_sid()?;
+            let webrtcbin = self
+                .obj()
+                .parent()
+                .and_downcast::<super::super::BaseWebRTCSrc>()?;
+            let signaller = webrtcbin.property::<LiveKitSignaller>("signaller");
+            let participant_info = signaller.imp().participant_info(&participant_sid)?;
+            participant_info
+                .tracks
+                .iter()
+                .find(|t| t.sid == track_sid)
+                .map(track_info_to_structure)
+        }
+
+        fn participant_sid(&self) -> Option<String> {
+            self.participant_track_sid()
+                .map(|(participant_sid, _track_sid)| participant_sid)
+        }
+
+        fn track_sid(&self) -> Option<String> {
+            self.participant_track_sid()
+                .map(|(_participant_sid, track_sid)| track_sid)
+        }
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for LiveKitWebRTCSrcPad {
+        const NAME: &'static str = "GstLiveKitWebRTCSrcPad";
+        type Type = super::super::LiveKitWebRTCSrcPad;
+        type ParentType = super::super::WebRTCSrcPad;
+    }
+
+    impl ObjectImpl for LiveKitWebRTCSrcPad {
+        fn properties() -> &'static [glib::ParamSpec] {
+            static PROPS: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+                vec![
+                    glib::ParamSpecBoxed::builder::<gst::Structure>("participant-info")
+                        .flags(glib::ParamFlags::READABLE)
+                        .blurb("Participant Information")
+                        .build(),
+                    glib::ParamSpecBoxed::builder::<gst::Structure>("track-info")
+                        .flags(glib::ParamFlags::READABLE)
+                        .blurb("Track Information")
+                        .build(),
+                    glib::ParamSpecString::builder("participant-sid")
+                        .flags(glib::ParamFlags::READABLE)
+                        .blurb("Participant ID")
+                        .build(),
+                    glib::ParamSpecString::builder("track-sid")
+                        .flags(glib::ParamFlags::READABLE)
+                        .blurb("Track ID")
+                        .build(),
+                ]
+            });
+            PROPS.as_ref()
+        }
+        fn property(&self, _sid: usize, pspec: &glib::ParamSpec) -> glib::Value {
+            match pspec.name() {
+                "participant-info" => self.participant_info().into(),
+                "track-info" => self.track_info().into(),
+                "participant-sid" => self.participant_sid().into(),
+                "track-sid" => self.track_sid().into(),
+                name => panic!("no readable property {name:?}"),
+            }
+        }
+    }
+    impl GstObjectImpl for LiveKitWebRTCSrcPad {}
+    impl PadImpl for LiveKitWebRTCSrcPad {}
+    impl ProxyPadImpl for LiveKitWebRTCSrcPad {}
+    impl GhostPadImpl for LiveKitWebRTCSrcPad {}
+    impl WebRTCSrcPadImpl for LiveKitWebRTCSrcPad {}
 }
