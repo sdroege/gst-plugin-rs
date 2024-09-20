@@ -20,7 +20,7 @@ use tokio::task::JoinHandle;
 
 use livekit_api::access_token::{AccessToken, VideoGrants};
 use livekit_api::signal_client;
-use livekit_protocol as proto;
+use livekit_protocol::{self as proto, UpdateTrackSettings};
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -557,6 +557,23 @@ impl Signaller {
         let connection = connection.as_ref()?;
         let participant = connection.participants.get(participant_sid)?;
         Some(participant.clone())
+    }
+
+    pub(crate) fn set_track_disabled(&self, track_sid: &str, disabled: bool) {
+        let update = proto::signal_request::Message::TrackSetting(UpdateTrackSettings {
+            track_sids: vec![String::from(track_sid)],
+            disabled,
+            ..Default::default()
+        });
+        let weak_imp = self.downgrade();
+        RUNTIME.spawn(async move {
+            let imp = match weak_imp.upgrade() {
+                Some(imp) => imp,
+                None => return,
+            };
+            let signal_client = imp.require_signal_client();
+            signal_client.send(update).await;
+        });
     }
 }
 

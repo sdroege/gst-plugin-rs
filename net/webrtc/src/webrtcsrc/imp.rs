@@ -1996,6 +1996,21 @@ pub(super) mod livekit {
             self.participant_track_sid()
                 .map(|(_participant_sid, track_sid)| track_sid)
         }
+
+        fn set_track_disabled(&self, disabled: bool) {
+            let Some(track_sid) = self.track_sid() else {
+                return;
+            };
+            let Some(webrtcbin) = self
+                .obj()
+                .parent()
+                .and_downcast::<super::super::BaseWebRTCSrc>()
+            else {
+                return;
+            };
+            let signaller = webrtcbin.property::<LiveKitSignaller>("signaller");
+            signaller.imp().set_track_disabled(&track_sid, disabled)
+        }
     }
 
     #[glib::object_subclass]
@@ -2006,6 +2021,27 @@ pub(super) mod livekit {
     }
 
     impl ObjectImpl for LiveKitWebRTCSrcPad {
+        fn signals() -> &'static [glib::subclass::Signal] {
+            static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+                vec![glib::subclass::Signal::builder("set-track-disabled")
+                    .param_types([bool::static_type()])
+                    .action()
+                    .class_handler(|_token, values| {
+                        let pad = values[0]
+                            .get::<&super::super::LiveKitWebRTCSrcPad>()
+                            .unwrap();
+                        let disabled = values[1].get::<bool>().unwrap();
+
+                        pad.imp().set_track_disabled(disabled);
+
+                        None
+                    })
+                    .build()]
+            });
+
+            SIGNALS.as_ref()
+        }
+
         fn properties() -> &'static [glib::ParamSpec] {
             static PROPS: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
                 vec![

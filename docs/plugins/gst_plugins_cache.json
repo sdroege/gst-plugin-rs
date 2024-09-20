@@ -11070,6 +11070,19 @@
                         "type": "gchararray",
                         "writable": false
                     }
+                },
+                "signals": {
+                    "set-track-disabled": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gboolean"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    }
                 }
             },
             "GstRSWebRTCSignallableIface": {
