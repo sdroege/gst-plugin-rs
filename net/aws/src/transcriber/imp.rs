@@ -1436,6 +1436,18 @@ impl TranslationPadTask {
                             "Updating item PTS ({pts} < {last_position}), consider increasing latency",
                         );
 
+                        let details = gst::Structure::builder("awstranscriber/late-item")
+                            .field("original-pts", pts)
+                            .field("last-position", last_position)
+                            .build();
+
+                        gst::element_warning!(
+                            self.pad.parent(),
+                            gst::LibraryError::Settings,
+                            ["Late transcription item, updating PTS"],
+                            details: details
+                        );
+
                         pts = last_position;
                         // FIXME if the resulting duration is zero, we might as well not push it.
                         duration = duration.saturating_sub(delta);
