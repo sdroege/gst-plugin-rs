@@ -3622,15 +3622,53 @@ impl BaseWebRTCSink {
             };
 
             let fec_percentage = fec_ratio * 50f64;
-            let encoders_bitrate =
-                ((bitrate as f64) / (1. + (fec_percentage / 100.)) / (n_encoders as f64)) as i32;
+            let encoders_bitrate = (bitrate as f64) / (1. + (fec_percentage / 100.));
+
+            let encoder_bitrate = (encoders_bitrate / (n_encoders as f64)) as i32;
 
             if let Some(rtpxsend) = session.rtprtxsend.as_ref() {
                 rtpxsend.set_property("stuffing-kbps", (bitrate as f64 / 1000.) as i32);
             }
 
+            let mut s_builder = gst::Structure::builder("webrtcsink/encoder-bitrates");
+            for encoder in session.encoders.iter() {
+                s_builder = s_builder.field(&encoder.stream_name, encoder_bitrate);
+            }
+            let s = s_builder.build();
+
+            let updated_bitrates = self.obj().emit_by_name::<gst::Structure>(
+                "define-encoder-bitrates",
+                &[&session.peer_id, &(encoders_bitrate as i32), &s],
+            );
+
             for encoder in session.encoders.iter_mut() {
-                if encoder.set_bitrate(&self.obj(), encoders_bitrate).is_ok() {
+                let defined_encoder_bitrate =
+                    match updated_bitrates.get::<i32>(&encoder.stream_name) {
+                        Ok(bitrate) => {
+                            gst::log!(
+                                CAT,
+                                imp = self,
+                                "using defined bitrate {bitrate} for encoder {}",
+                                encoder.stream_name
+                            );
+                            bitrate
+                        }
+                        Err(e) => {
+                            gst::log!(
+                                CAT,
+                                imp = self,
+                                "Error in defined bitrate: {e}, falling back to default bitrate \
+                            {encoder_bitrate} for encoder {}",
+                                encoder.stream_name
+                            );
+                            encoder_bitrate
+                        }
+                    };
+
+                if encoder
+                    .set_bitrate(&self.obj(), defined_encoder_bitrate)
+                    .is_ok()
+                {
                     encoder
                         .transceiver
                         .set_property("fec-percentage", (fec_percentage as u32).min(100));
@@ -5058,6 +5096,49 @@ impl ObjectImpl for BaseWebRTCSink {
                         gst::Caps::static_type(),
                     ])
                     .return_type::<gst::Element>()
+                    .build(),
+                /**
+                 * GstBaseWebRTCSink::define-encoder-bitrates:
+                 * @consumer_id: Identifier of the consumer
+                 * @overall_bitrate: The total bitrate to allocate
+                 * @structure: A structure describing the default per-encoder bitrates
+                 *
+                 * When a session carries multiple video streams, the congestion
+                 * control mechanism will simply divide the overall allocated bitrate
+                 * by the number of encoders and set the result as the bitrate for each
+                 * individual encoder.
+                 *
+                 * With this signal, the application can affect how the overall bitrate
+                 * gets allocated.
+                 *
+                 * The structure is named "webrtcsink/encoder-bitrates" and
+                 * contains one gchararray to gint32 mapping per video stream
+                 * name, for instance:
+                 *
+                 * "video_1234": 5000i32
+                 * "video_5678": 10000i32
+                 *
+                 * The total of the bitrates in the returned structure should match
+                 * the overall bitrate, as it does in the input structure.
+                 *
+                 * Returns: the updated encoder bitrates.
+                 * Since: plugins-rs-0.14.0
+                 */
+                glib::subclass::Signal::builder("define-encoder-bitrates")
+                    .param_types([
+                        String::static_type(),
+                        i32::static_type(),
+                        gst::Structure::static_type(),
+                    ])
+                    .return_type::<gst::Structure>()
+                    .run_last()
+                    .class_handler(|_token, args| {
+                        Some(args[3usize].get::<gst::Structure>().expect("wrong argument").to_value())
+                    })
+                    .accumulator(move |_hint, output, input| {
+                        *output = input.clone();
+                        false
+                    })
                     .build(),
             ]
         });

@@ -10766,6 +10766,24 @@
                         "return-type": "void",
                         "when": "last"
                     },
+                    "define-encoder-bitrates": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gint"
+                            },
+                            {
+                                "name": "arg2",
+                                "type": "GstStructure"
+                            }
+                        ],
+                        "return-type": "GstStructure",
+                        "when": "last"
+                    },
                     "encoder-setup": {
                         "args": [
                             {

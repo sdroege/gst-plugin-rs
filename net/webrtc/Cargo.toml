@@ -127,3 +127,6 @@ name = "webrtc-precise-sync-recv"
 [[example]]
 name = "whipserver"
 required-features = [ "whip" ]
+
+[[example]]
+name = "webrtcsink-define-encoder-bitrates"
