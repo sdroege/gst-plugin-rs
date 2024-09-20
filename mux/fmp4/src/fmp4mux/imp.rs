@@ -249,7 +249,7 @@ struct State {
 
     /// Set to true if the caps of *any* sinkpad have changed or on
     /// new language code or image orientation.
-    caps_changed: bool,
+    need_new_header: bool,
 
     /// Sequence number of the current fragment.
     sequence_number: u32,
@@ -1406,7 +1406,7 @@ impl FMP4Mux {
         for stream in &state.streams {
             let (stream_earliest_pts, stream_start_dts) = match stream.queued_gops.back() {
                 None => {
-                    if !all_eos && !timeout && !state.caps_changed {
+                    if !all_eos && !timeout && !state.need_new_header {
                         earliest_pts = None;
                         start_dts = None;
                         break;
@@ -1414,7 +1414,10 @@ impl FMP4Mux {
                     continue;
                 }
                 Some(oldest_gop) => {
-                    if !all_eos && !timeout && !state.caps_changed && !oldest_gop.final_earliest_pts
+                    if !all_eos
+                        && !timeout
+                        && !state.need_new_header
+                        && !oldest_gop.final_earliest_pts
                     {
                         earliest_pts = None;
                         start_dts = None;
@@ -1448,7 +1451,7 @@ impl FMP4Mux {
             "Got earliest PTS {}, start DTS {} (timeout: {timeout}, all eos: {all_eos}, caps changed: {})",
             earliest_pts,
             start_dts.display(),
-            state.caps_changed,
+            state.need_new_header,
         );
 
         let fragment_start_pts = earliest_pts;
@@ -1535,7 +1538,7 @@ impl FMP4Mux {
         &self,
         settings: &Settings,
         stream: &mut Stream,
-        caps_changed: bool,
+        need_new_header: bool,
         timeout: bool,
         all_eos: bool,
         fragment_end_pts: gst::ClockTime,
@@ -1546,7 +1549,7 @@ impl FMP4Mux {
     ) -> Result<Vec<Gop>, gst::FlowError> {
         assert!(
             timeout
-                || caps_changed
+                || need_new_header
                 || stream.sinkpad.is_eos()
                 || stream.queued_gops.get(1).map(|gop| gop.final_earliest_pts) == Some(true)
                 || settings.chunk_duration.is_some()
@@ -1598,7 +1601,7 @@ impl FMP4Mux {
                         "Fragment filled, current GOP start {} end {} (final {})",
                         gop.start_pts,
                         gop.end_pts,
-                        gop.final_end_pts || stream.sinkpad.is_eos() || caps_changed,
+                        gop.final_end_pts || stream.sinkpad.is_eos() || need_new_header,
                     );
 
                     // If we have a final GOP then include it as long as it's either
@@ -1607,7 +1610,7 @@ impl FMP4Mux {
                     //
                     // The second case would happen if no GOP ends between the last chunk of the
                     // fragment and the fragment duration.
-                    if (gop.final_end_pts || stream.sinkpad.is_eos() || caps_changed)
+                    if (gop.final_end_pts || stream.sinkpad.is_eos() || need_new_header)
                         && (gop.end_pts <= dequeue_end_pts
                             || (gops.is_empty() && chunk_end_pts.is_none()))
                     {
@@ -1624,7 +1627,7 @@ impl FMP4Mux {
                     //
                     // If this is not the first stream then take an incomplete GOP.
                     if gop.start_pts >= dequeue_end_pts
-                        || (!gop.final_earliest_pts && !stream.sinkpad.is_eos() && !caps_changed)
+                        || (!gop.final_earliest_pts && !stream.sinkpad.is_eos() && !need_new_header)
                     {
                         gst::trace!(CAT, obj = stream.sinkpad, "GOP starts after fragment end",);
                         break;
@@ -1645,17 +1648,17 @@ impl FMP4Mux {
                         "Chunk filled, current GOP start {} end {} (final {})",
                         gop.start_pts,
                         gop.end_pts,
-                        gop.final_end_pts || stream.sinkpad.is_eos() || caps_changed
+                        gop.final_end_pts || stream.sinkpad.is_eos() || need_new_header
                     );
                 }
 
                 if gop.end_pts <= dequeue_end_pts
-                    && (gop.final_end_pts || stream.sinkpad.is_eos() || caps_changed)
+                    && (gop.final_end_pts || stream.sinkpad.is_eos() || need_new_header)
                 {
                     gst::trace!(CAT, obj = stream.sinkpad, "Pushing whole GOP",);
                     gops.push(stream.queued_gops.pop_back().unwrap());
                 } else if gop.start_pts >= dequeue_end_pts
-                    || (!gop.final_earliest_pts && !stream.sinkpad.is_eos() && !caps_changed)
+                    || (!gop.final_earliest_pts && !stream.sinkpad.is_eos() && !need_new_header)
                 {
                     gst::trace!(CAT, obj = stream.sinkpad, "GOP starts after chunk end",);
                     break;
@@ -1692,7 +1695,7 @@ impl FMP4Mux {
                     // The last buffer of the GOP starts before the chunk end but ends
                     // after the end. We still take it here and remove the whole GOP.
                     if split_index == gop.buffers.len() - 1 {
-                        if gop.final_end_pts || stream.sinkpad.is_eos() || caps_changed {
+                        if gop.final_end_pts || stream.sinkpad.is_eos() || need_new_header {
                             gst::trace!(CAT, obj = stream.sinkpad, "Pushing whole GOP",);
                             gops.push(stream.queued_gops.pop_back().unwrap());
                         } else {
@@ -1779,7 +1782,7 @@ impl FMP4Mux {
                     "Current GOP start {} end {} (final {})",
                     gop.start_pts,
                     gop.end_pts,
-                    gop.final_end_pts || stream.sinkpad.is_eos() || caps_changed
+                    gop.final_end_pts || stream.sinkpad.is_eos() || need_new_header
                 );
 
                 // If this GOP is not complete then we can't pop it yet.
@@ -1787,7 +1790,7 @@ impl FMP4Mux {
                 // If there was no complete GOP at all yet then it might be bigger than the
                 // fragment duration. In this case we might not be able to handle the latency
                 // requirements in a live pipeline.
-                if !gop.final_end_pts && !stream.sinkpad.is_eos() && !caps_changed {
+                if !gop.final_end_pts && !stream.sinkpad.is_eos() && !need_new_header {
                     gst::trace!(
                         CAT,
                         obj = stream.sinkpad,
@@ -2073,7 +2076,7 @@ impl FMP4Mux {
             let gops = self.drain_buffers_one_stream(
                 settings,
                 stream,
-                state.caps_changed,
+                state.need_new_header,
                 timeout,
                 all_eos,
                 fragment_end_pts,
@@ -2422,7 +2425,7 @@ impl FMP4Mux {
             gst::info!(CAT, imp = self, "Draining at EOS");
         } else if timeout {
             gst::info!(CAT, imp = self, "Draining at timeout");
-        } else if state.caps_changed {
+        } else if state.need_new_header {
             gst::info!(CAT, imp = self, "Draining on caps change");
         } else {
             for stream in &state.streams {
@@ -2624,7 +2627,7 @@ impl FMP4Mux {
 
         // Update for the start PTS of the next fragment / chunk
 
-        if fragment_filled || state.caps_changed {
+        if fragment_filled || state.need_new_header {
             state.fragment_start_pts = Some(chunk_end_pts);
             state.fragment_end_pts = Some(self.get_fragment_end_pts(
                 &state.manual_fragment_boundaries,
@@ -3419,7 +3422,7 @@ impl AggregatorImpl for FMP4Mux {
                 // Only care of caps if streams have been setup
                 let mut state = self.state.lock().unwrap();
                 if !state.streams.is_empty() {
-                    state.caps_changed = if let Some(stream) = state
+                    state.need_new_header = if let Some(stream) = state
                         .streams
                         .iter_mut()
                         .find(|s| *aggregator_pad == s.sinkpad)
@@ -3471,7 +3474,7 @@ impl AggregatorImpl for FMP4Mux {
                             && self.caps_change_allowed()
                         {
                             state.language_code = language_code;
-                            state.caps_changed = true;
+                            state.need_new_header = true;
                         }
                     }
                 } else if let Some(tag_value) = ev.tag().get::<gst::tags::ImageOrientation>() {
@@ -3504,7 +3507,7 @@ impl AggregatorImpl for FMP4Mux {
                         && self.caps_change_allowed()
                     {
                         state.orientation = orientation;
-                        state.caps_changed = true;
+                        state.need_new_header = true;
                     }
                 }
 
@@ -3605,7 +3608,7 @@ impl AggregatorImpl for FMP4Mux {
         let mut caps = None;
         let mut buffers = vec![];
         let mut upstream_events = vec![];
-        let (caps_changed, res) = {
+        let (need_new_header, res) = {
             let mut state = self.state.lock().unwrap();
 
             // Create streams
@@ -3655,7 +3658,7 @@ impl AggregatorImpl for FMP4Mux {
                 &mut upstream_events,
             );
 
-            (state.caps_changed, res)
+            (state.need_new_header, res)
         };
 
         for (sinkpad, event) in upstream_events {
@@ -3672,15 +3675,15 @@ impl AggregatorImpl for FMP4Mux {
             self.obj().finish_buffer_list(buffer_list)?;
         }
 
-        // all drained then check if a caps change is pending
-        if caps_changed {
+        // all drained then check if a new header is needed
+        if need_new_header {
             let mut state = self.state.lock().unwrap();
             gst::info!(
                 CAT,
                 imp = self,
-                "Reset state, update stream caps and send new header on caps changed"
+                "Reset state, update stream caps and send new header"
             );
-            state.caps_changed = false;
+            state.need_new_header = false;
             state.stream_header = None;
             state.sent_headers = false;
             for stream in state.streams.iter_mut().filter(|s| s.next_caps.is_some()) {
