@@ -668,16 +668,28 @@ impl FMP4Mux {
         stream.pre_queue.pop_front().unwrap()
     }
 
-    // Caps changes are allowed only in case that the
-    // header-update-mode is None
-    fn caps_change_allowed(&self) -> bool {
+    // Caps/tag changes are allowed only in case that the
+    // header-update-mode is None.
+    //
+    // CAUTION: This function logs a warning if operation is not
+    // allowed so it should be evaluated only in case the caps/tags
+    // would change otherwise (e. g. right-most operand in boolean
+    // expressions).
+    fn header_update_allowed(&self, reason: &str) -> bool {
         if self.settings.lock().unwrap().header_update_mode == super::HeaderUpdateMode::None {
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Header update because incompatible change of {}",
+                reason
+            );
             true
         } else {
             gst::error!(
                 CAT,
                 imp = self,
-                "Caps change not allowed if header-update-mode is enabled"
+                "Incompatible {} change not allowed if header-update-mode is enabled",
+                reason
             );
             false
         }
@@ -3427,7 +3439,8 @@ impl AggregatorImpl for FMP4Mux {
                         .iter_mut()
                         .find(|s| *aggregator_pad == s.sinkpad)
                     {
-                        if self.caps_change_allowed() && !self.caps_compatible(stream, caps.caps())
+                        if !self.caps_compatible(stream, caps.caps())
+                            && self.header_update_allowed("caps")
                         {
                             gst::trace!(
                                 CAT,
@@ -3435,7 +3448,7 @@ impl AggregatorImpl for FMP4Mux {
                                 "Update caps and send new headers {:?}",
                                 caps
                             );
-                            stream.next_caps = Some(caps.caps().to_owned());
+                            stream.next_caps = Some(caps.caps_owned());
                             true
                         } else {
                             false
@@ -3471,7 +3484,7 @@ impl AggregatorImpl for FMP4Mux {
                         // trigger caps change
                         if state.language_code != language_code
                             && !state.streams.is_empty()
-                            && self.caps_change_allowed()
+                            && self.header_update_allowed("language code")
                         {
                             state.language_code = language_code;
                             state.need_new_header = true;
@@ -3497,14 +3510,22 @@ impl AggregatorImpl for FMP4Mux {
                         // "flip-rotate-90" => Some(ImageOrientation::FlipRotate90),
                         // "flip-rotate-180" => Some(ImageOrientation::FlipRotate180),
                         // "flip-rotate-270" => Some(ImageOrientation::FlipRotate270),
-                        _ => None,
+                        _ => {
+                            gst::info!(
+                                CAT,
+                                imp = self,
+                                "Orientation {:?} not yet supported",
+                                orientation
+                            );
+                            None
+                        }
                     };
 
                     // If the orientation changed and we have buffers
                     // trigger caps change
                     if state.orientation != orientation
                         && !state.streams.is_empty()
-                        && self.caps_change_allowed()
+                        && self.header_update_allowed("orientation")
                     {
                         state.orientation = orientation;
                         state.need_new_header = true;
