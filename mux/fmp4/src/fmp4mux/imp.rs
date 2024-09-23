@@ -2887,7 +2887,7 @@ impl ObjectImpl for FMP4Mux {
                 glib::ParamSpecBoolean::builder("write-mehd")
                     .nick("Write mehd box")
                     .blurb("Write movie extends header box with the duration at the end of the stream (needs a header-update-mode enabled)")
-                    .default_value(DEFAULT_WRITE_MFRA)
+                    .default_value(DEFAULT_WRITE_MEHD)
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecUInt64::builder("interleave-bytes")
