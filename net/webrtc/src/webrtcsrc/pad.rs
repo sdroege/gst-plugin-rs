@@ -64,7 +64,8 @@ impl ObjectImpl for WebRTCSrcPad {
                     .unwrap()
                     .as_ref()
                     .and_then(|p| p.upgrade())
-                    .map(|p| p.property::<String>("msid"));
+                    .map(|p| p.property::<String>("msid"))
+                    .unwrap_or_else(|| String::from(""));
 
                 msid.to_value()
             }
