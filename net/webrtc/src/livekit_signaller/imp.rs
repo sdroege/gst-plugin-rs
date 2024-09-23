@@ -672,6 +672,16 @@ impl SignallableImpl for Signaller {
                 }
             });
 
+            let connection = Connection {
+                signal_client,
+                signal_task,
+                pending_tracks: Default::default(),
+                early_candidates: Some(Vec::new()),
+                channels: None,
+                participants: HashMap::default(),
+            };
+            *imp.connection.lock().unwrap() = Some(connection);
+
             if imp.is_subscriber() {
                 imp.obj()
                     .emit_by_name::<()>("session-started", &[&"unique", &"unique"]);
@@ -723,19 +733,6 @@ impl SignallableImpl for Signaller {
                     }
                 ),
             );
-
-            let connection = Connection {
-                signal_client,
-                signal_task,
-                pending_tracks: Default::default(),
-                early_candidates: Some(Vec::new()),
-                channels: None,
-                participants: HashMap::default(),
-            };
-
-            if let Ok(mut sc) = imp.connection.lock() {
-                *sc = Some(connection);
-            }
 
             imp.obj().emit_by_name::<()>(
                 "session-requested",
