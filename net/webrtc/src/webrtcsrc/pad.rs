@@ -57,18 +57,14 @@ impl ObjectImpl for WebRTCSrcPad {
     }
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
-            "msid" => {
-                let msid = self
-                    .webrtcbin_pad
-                    .lock()
-                    .unwrap()
-                    .as_ref()
-                    .and_then(|p| p.upgrade())
-                    .map(|p| p.property::<String>("msid"))
-                    .unwrap_or_else(|| String::from(""));
-
-                msid.to_value()
-            }
+            "msid" => self
+                .webrtcbin_pad
+                .lock()
+                .unwrap()
+                .as_ref()
+                .and_then(|p| p.upgrade())
+                .and_then(|p| p.property::<Option<String>>("msid"))
+                .to_value(),
             name => panic!("no readable property {name:?}"),
         }
     }
