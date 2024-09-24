@@ -2167,13 +2167,13 @@ impl BaseWebRTCSink {
                 };
 
                 if let Some(ts_refclk) = ts_refclk.as_deref() {
-                    payloader_caps_mut.set("ts-refclk", Some(ts_refclk));
+                    payloader_caps_mut.set("a-ts-refclk", Some(ts_refclk));
                     // Set the offset to 0, we will adjust the payloader offsets
                     // when the payloaders are available.
-                    payloader_caps_mut.set("mediaclk", Some("direct=0"));
+                    payloader_caps_mut.set("a-mediaclk", Some("direct=0"));
                 } else {
-                    payloader_caps_mut.set("ts-refclk", Some("local"));
-                    payloader_caps_mut.set("mediaclk", Some("sender"));
+                    payloader_caps_mut.set("a-ts-refclk", Some("local"));
+                    payloader_caps_mut.set("a-mediaclk", Some("sender"));
                 }
             }
 
