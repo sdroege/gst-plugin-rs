@@ -80,7 +80,7 @@ path = "src/lib.rs"
 gst-plugin-version-helper.workspace = true
 
 [features]
-default = ["v1_22", "aws", "janus", "livekit", "whip", "web_server"]
+default = ["v1_22", "janus", "whip", "web_server"]
 static = []
 capi = []
 v1_22 = ["gst/v1_22", "gst-app/v1_22", "gst-video/v1_22", "gst-webrtc/v1_22", "gst-sdp/v1_22", "gst-rtp/v1_22"]
