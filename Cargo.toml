@@ -119,6 +119,7 @@ panic = 'unwind'
 
 [profile.dev]
 opt-level = 1
+lto = "off"
 
 [workspace.package]
 version = "0.13.1"
