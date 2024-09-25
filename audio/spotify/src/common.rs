@@ -12,9 +12,9 @@ use gst::glib;
 use gst::prelude::*;
 
 use librespot::core::{
-    cache::Cache, config::SessionConfig, session::Session, spotify_id::SpotifyId,
+    authentication::Credentials, cache::Cache, config::SessionConfig, session::Session,
+    spotify_id::SpotifyId,
 };
-use librespot::discovery::Credentials;
 
 #[derive(Default, Debug, Clone)]
 pub struct Settings {
