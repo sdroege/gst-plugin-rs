@@ -1010,9 +1010,15 @@ impl ToggleRecord {
 
                 // We're properly started, must have a start position and
                 // be actually after that start position
-                assert!(current_running_time
+                if !current_running_time
                     .opt_ge(rec_state.last_recording_start)
-                    .unwrap_or(false));
+                    .unwrap_or(false)
+                {
+                    panic!(
+                        "current RT ({current_running_time:?}) < last_recording_start ({:?})",
+                        rec_state.last_recording_start
+                    );
+                }
                 gst::log!(CAT, obj = pad, "Passing buffer (recording)");
                 Ok(HandleResult::Pass(data))
             }
