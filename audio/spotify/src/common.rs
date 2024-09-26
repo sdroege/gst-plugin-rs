@@ -11,7 +11,7 @@ use anyhow::bail;
 use gst::glib;
 use gst::prelude::*;
 
-use librespot::core::{
+use librespot_core::{
     authentication::Credentials, cache::Cache, config::SessionConfig, session::Session,
     spotify_id::SpotifyId,
 };

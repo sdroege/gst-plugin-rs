@@ -11,7 +11,8 @@ rust-version.workspace = true
 [dependencies]
 gst.workspace = true
 gst-base.workspace = true
-librespot = { version = "0.4", default-features = false }
+librespot-core = "0.4"
+librespot-playback = "0.4"
 tokio = "1.0"
 futures = "0.3"
 anyhow = "1.0"
