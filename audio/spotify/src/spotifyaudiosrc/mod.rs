@@ -29,7 +29,7 @@ impl Default for Bitrate {
     }
 }
 
-impl From<Bitrate> for librespot::playback::config::Bitrate {
+impl From<Bitrate> for librespot_playback::config::Bitrate {
     fn from(value: Bitrate) -> Self {
         match value {
             Bitrate::B96 => Self::Bitrate96,

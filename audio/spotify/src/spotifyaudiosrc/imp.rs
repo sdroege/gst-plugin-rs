@@ -17,7 +17,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_base::subclass::{base_src::CreateSuccess, prelude::*};
 
-use librespot::playback::{
+use librespot_playback::{
     audio_backend::{Sink, SinkResult},
     config::PlayerConfig,
     convert::Converter,
