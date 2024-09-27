@@ -2630,6 +2630,7 @@ dependencies = [
  "gstreamer",
  "gstreamer-check",
  "gstreamer-rtp",
+ "gstreamer-video",
  "once_cell",
  "smallvec",
  "time",

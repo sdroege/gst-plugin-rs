@@ -10,8 +10,9 @@ rust-version.workspace = true
 
 [dependencies]
 bitstream-io = "2.0"
-gst      = { workspace = true, features = ["v1_20"] }
-gst-rtp  = { workspace = true, features = ["v1_20"]}
+gst       = { workspace = true, features = ["v1_20"] }
+gst-rtp   = { workspace = true, features = ["v1_20"]}
+gst-video = { workspace = true, features = ["v1_20"]}
 time = { version = "0.3", default-features = false, features = ["std"] }
 once_cell.workspace = true
 smallvec = { version = "1.11", features = ["union", "write", "const_generics", "const_new"] }
