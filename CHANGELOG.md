@@ -5,6 +5,27 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.13.2] - 2024-09-28
+### Fixed
+- cea608overlay: Avoid overflow when deciding which lines to retain.
+- cea708mux: Actually push gap events downstream.
+- cea708mux: Stop with EOS once all pads are EOS.
+- cea708mux: Fix off-by-one when deciding if a buffer belongs to this or the
+  next frame.
+- mpegtslivesrc: Various timestamp tracking fixes.
+- onvifmetadatapay: Set output caps earlier.
+- transcriberbin: Fix passthrough state change.
+- webrtcsink: Fix setting of RFC7273 attributes in the SDP.
+
+### Added
+- dav1ddec: Add properties for film grain synthesis and in-loop filters.
+- mpegtslivesrc: Handle PCR discontinuities.
+- rtpav1depay: Add wait-for-keyframe and request-keyframe properties.
+- webrtcsrc: Expose msid property on source pads.
+
+### Changed
+- spotify: Reduce dependencies.
+
 ## [0.13.1] - 2024-08-27
 ### Fixed
 - transcriberbin: Fix gst-inspect with missing elements.
@@ -535,7 +556,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.1...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.2...HEAD
+[0.13.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.1...0.13.2
 [0.13.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.0...0.13.1
 [0.13.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.7...0.13.0
 [0.12.7]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.6...0.12.7
