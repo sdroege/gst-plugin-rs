@@ -767,15 +767,12 @@ impl Session {
         ghostpad
     }
 
-    fn handle_offer(
+    fn remote_description_set(
         &mut self,
-        offer: &gst_webrtc::WebRTCSessionDescription,
         element: &super::BaseWebRTCSrc,
+        offer: &gst_webrtc::WebRTCSessionDescription,
     ) -> (gst::Promise, gst::Bin) {
-        gst::log!(CAT, obj = element, "Got offer {}", offer.sdp().to_string());
-
         let sdp = offer.sdp();
-        let direction = gst_webrtc::WebRTCRTPTransceiverDirection::Recvonly;
         let webrtcbin = self.webrtcbin();
         for (i, media) in sdp.medias().enumerate() {
             let (codec_names, do_retransmission) = {
@@ -845,15 +842,16 @@ impl Session {
                     gst::info!(
                         CAT,
                         obj = element,
-                        "Adding transceiver for {stream_id} with caps: {caps:#?}"
+                        "Getting transceiver for {stream_id} and index {i} with caps: {caps:#?}"
                     );
                     let transceiver = webrtcbin.emit_by_name::<gst_webrtc::WebRTCRTPTransceiver>(
-                        "add-transceiver",
-                        &[&direction, &caps],
+                        "get-transceiver",
+                        &[&(i as i32)],
                     );
 
                     transceiver.set_property("do_nack", do_retransmission);
                     transceiver.set_property("fec-type", gst_webrtc::WebRTCFECType::UlpRed);
+                    transceiver.set_property("codec-preferences", caps);
                 }
             } else {
                 gst::info!(
@@ -863,10 +861,6 @@ impl Session {
                 );
             }
         }
-
-        webrtcbin.emit_by_name::<()>("set-remote-description", &[&offer, &None::<gst::Promise>]);
-
-        gst::info!(CAT, obj = element, "Set remote description");
 
         let promise = gst::Promise::with_change_func(glib::clone!(
             #[weak]
@@ -884,12 +878,45 @@ impl Session {
             }
         ));
 
-        // We cannot emit `create-answer` from here. The promise function
-        // of the answer needs the state lock which is held by the caller
-        // of `handle_offer`. So return the promise to the caller so that
-        // the it can drop the `state` and safely emit `create-answer`
-
         (promise, webrtcbin.clone())
+    }
+
+    fn handle_offer(
+        &mut self,
+        offer: &gst_webrtc::WebRTCSessionDescription,
+        element: &super::BaseWebRTCSrc,
+    ) -> (gst::Promise, gst::Bin) {
+        gst::log!(CAT, obj = element, "Got offer {}", offer.sdp().to_string());
+
+        let promise = gst::Promise::with_change_func(glib::clone!(
+            #[weak]
+            element,
+            #[strong]
+            offer,
+            #[strong(rename_to = session_id)]
+            self.id,
+            move |_| {
+                let mut state = element.imp().state.lock().unwrap();
+                gst::info!(CAT, obj = element, "got answer for session {session_id:?}");
+                let Some(session) = state.sessions.get_mut(&session_id) else {
+                    gst::error!(CAT, obj = element, "no session {session_id:?}");
+                    return;
+                };
+
+                let (promise, webrtcbin) = session.remote_description_set(&element, &offer);
+
+                drop(state);
+
+                webrtcbin.emit_by_name::<()>("create-answer", &[&None::<gst::Structure>, &promise]);
+            }
+        ));
+
+        // We cannot emit `set-remote-description` from here. The promise
+        // function needs the state lock which is held by the caller
+        // of `handle_offer`. So return the promise to the caller so that
+        // the it can drop the `state` and safely emit `set-remote-description`
+
+        (promise, self.webrtcbin().clone())
     }
 
     fn on_answer_created(
@@ -1158,10 +1185,8 @@ impl BaseWebRTCSrc {
 
                             let (promise, webrtcbin) = session.handle_offer(desc, &this.obj());
                             drop(state);
-                            webrtcbin.emit_by_name::<()>(
-                                "create-answer",
-                                &[&None::<gst::Structure>, &promise],
-                            );
+                            webrtcbin
+                                .emit_by_name::<()>("set-remote-description", &[&desc, &promise]);
                         }
                     ),
                 ),
