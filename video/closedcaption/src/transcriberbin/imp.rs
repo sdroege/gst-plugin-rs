@@ -62,6 +62,12 @@ impl TranscriptionChannel {
             }
         };
 
+        gst::debug!(
+            CAT,
+            obj = transcriber,
+            "Linking transcriber source pad {transcriber_src_pad:?} to channel"
+        );
+
         transcriber_src_pad.link(&self.bin.static_pad("sink").unwrap())?;
 
         Ok(())
@@ -710,6 +716,11 @@ impl TranscriberBin {
         );
 
         if let Some(old_transcriber) = old_transcriber {
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Unlinking old transcriber {old_transcriber:?}"
+            );
             pad_state.transcriber_aconv.unlink(old_transcriber);
             for channel in pad_state.transcription_channels.values() {
                 old_transcriber.unlink(&channel.bin);
