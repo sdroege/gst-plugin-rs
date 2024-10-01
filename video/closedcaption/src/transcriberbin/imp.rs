@@ -513,10 +513,17 @@ impl TranscriberBin {
 
             if let Some(ref transcriber) = pad_state.transcriber {
                 let latency_ms = settings.latency.mseconds() as u32;
-                transcriber.set_property("transcribe-latency", latency_ms);
 
-                let translate_latency_ms = settings.translate_latency.mseconds() as u32;
-                transcriber.set_property("translate-latency", translate_latency_ms);
+                if transcriber.has_property("transcribe-latency", None) {
+                    transcriber.set_property("transcribe-latency", latency_ms);
+                } else if transcriber.has_property("latency", None) {
+                    transcriber.set_property("latency", latency_ms);
+                }
+
+                if transcriber.has_property("translate-latency", None) {
+                    let translate_latency_ms = settings.translate_latency.mseconds() as u32;
+                    transcriber.set_property("translate-latency", translate_latency_ms);
+                }
             }
             pad_state
                 .queue_passthrough
