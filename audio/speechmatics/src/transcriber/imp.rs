@@ -364,6 +364,12 @@ impl TranscriberSrcPad {
                 }
 
                 if self.obj().sticky_event::<gst::event::Segment>(0).is_none() {
+                    gst::debug!(
+                        CAT,
+                        imp = self,
+                        "Constructing segment event from {:?}",
+                        state_guard.out_segment
+                    );
                     events.push(
                         gst::event::Segment::builder(&state_guard.out_segment)
                             .seqnum(state_guard.seqnum)
@@ -374,6 +380,7 @@ impl TranscriberSrcPad {
                 drop(state_guard);
 
                 for event in events {
+                    gst::debug!(CAT, imp = self, "Pushing event {event:?}");
                     self.obj().push_event(event);
                 }
 
