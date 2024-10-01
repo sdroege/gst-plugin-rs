@@ -737,7 +737,8 @@ impl TranscriberBin {
         }
 
         if let Some(ref transcriber) = pad_state.transcriber {
-            state.transcription_bin.add(transcriber)?;
+            gst::debug!(CAT, imp = self, "Linking new transcriber {transcriber:?}");
+            pad_state.transcription_bin.add(transcriber)?;
             transcriber.sync_state_with_parent().unwrap();
             pad_state.transcriber_aconv.link(transcriber)?;
 
