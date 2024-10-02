@@ -655,15 +655,13 @@ impl PaintableSink {
 
             if formats.is_empty() {
                 // Filter out dmabufs caps from the template pads if we have no supported formats
-                if !matches!(&*GL_CONTEXT.lock().unwrap(), GLContext::Initialized { .. }) {
-                    tmp_caps = tmp_caps
-                        .iter_with_features()
-                        .filter(|(_, features)| {
-                            !features.contains(gst_allocators::CAPS_FEATURE_MEMORY_DMABUF)
-                        })
-                        .map(|(s, c)| (s.to_owned(), c.to_owned()))
-                        .collect::<gst::Caps>();
-                }
+                tmp_caps = tmp_caps
+                    .iter_with_features()
+                    .filter(|(_, features)| {
+                        !features.contains(gst_allocators::CAPS_FEATURE_MEMORY_DMABUF)
+                    })
+                    .map(|(s, c)| (s.to_owned(), c.to_owned()))
+                    .collect::<gst::Caps>();
             } else {
                 let tmp_caps = tmp_caps.make_mut();
                 for (s, f) in tmp_caps.iter_with_features_mut() {
