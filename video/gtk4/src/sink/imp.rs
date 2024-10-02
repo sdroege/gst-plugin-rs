@@ -36,6 +36,7 @@ use crate::utils;
 enum GLContext {
     Uninitialized,
     Unsupported,
+    #[allow(unused)]
     Initialized {
         display: gst_gl::GLDisplay,
         wrapped_context: gst_gl::GLContext,
@@ -261,10 +262,24 @@ impl ElementImpl for PaintableSink {
                 }
 
                 for features in [
+                    #[cfg(any(
+                        feature = "x11egl",
+                        feature = "x11glx",
+                        feature = "waylandegl",
+                        target_os = "macos",
+                        target_os = "windows"
+                    ))]
                     Some(gst::CapsFeatures::new([
                         gst_gl::CAPS_FEATURE_MEMORY_GL_MEMORY,
                         gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION,
                     ])),
+                    #[cfg(any(
+                        feature = "x11egl",
+                        feature = "x11glx",
+                        feature = "waylandegl",
+                        target_os = "macos",
+                        target_os = "windows"
+                    ))]
                     Some(gst::CapsFeatures::new([
                         gst_gl::CAPS_FEATURE_MEMORY_GL_MEMORY,
                     ])),
@@ -818,8 +833,26 @@ impl PaintableSink {
     }
 
     fn create_paintable(&self, paintable_storage: &mut Option<ThreadGuard<Paintable>>) {
+        #[cfg(any(
+            feature = "x11egl",
+            feature = "x11glx",
+            feature = "waylandegl",
+            target_os = "macos",
+            target_os = "windows"
+        ))]
         {
             self.initialize_gl_context();
+        }
+        #[cfg(not(any(
+            feature = "x11egl",
+            feature = "x11glx",
+            feature = "waylandegl",
+            target_os = "macos",
+            target_os = "windows"
+        )))]
+        {
+            gst::debug!(CAT, imp = self, "No GL platform enabled");
+            *GL_CONTEXT.lock().unwrap() = GLContext::Unsupported;
         }
 
         self.configure_caps();
@@ -862,6 +895,13 @@ impl PaintableSink {
         *self.sender.lock().unwrap() = Some(sender);
     }
 
+    #[cfg(any(
+        feature = "x11egl",
+        feature = "x11glx",
+        feature = "waylandegl",
+        target_os = "macos",
+        target_os = "windows"
+    ))]
     fn initialize_gl_context(&self) {
         gst::debug!(CAT, imp = self, "Realizing GDK GL Context");
 
@@ -871,6 +911,13 @@ impl PaintableSink {
         });
     }
 
+    #[cfg(any(
+        feature = "x11egl",
+        feature = "x11glx",
+        feature = "waylandegl",
+        target_os = "macos",
+        target_os = "windows"
+    ))]
     fn initialize_gl_context_main(&self) {
         gst::debug!(CAT, imp = self, "Realizing GDK GL Context from main thread");
 
@@ -965,6 +1012,13 @@ impl PaintableSink {
         };
     }
 
+    #[cfg(any(
+        feature = "x11egl",
+        feature = "x11glx",
+        feature = "waylandegl",
+        target_os = "macos",
+        target_os = "windows"
+    ))]
     fn initialize_gst_gl(
         &self,
         gdk_display: &gdk::Display,
@@ -975,7 +1029,7 @@ impl PaintableSink {
             "GdkX11GLContextEGL" => self.initialize_x11egl(gdk_display),
             #[cfg(feature = "x11glx")]
             "GdkX11GLContextGLX" => self.initialize_x11glx(gdk_display),
-            #[cfg(feature = "wayland")]
+            #[cfg(feature = "waylandegl")]
             "GdkWaylandGLContext" => self.initialize_waylandegl(gdk_display),
             #[cfg(target_os = "macos")]
             "GdkMacosGLContext" => self.initialize_macosgl(gdk_display),
@@ -1094,7 +1148,7 @@ impl PaintableSink {
         }
     }
 
-    #[cfg(feature = "wayland")]
+    #[cfg(feature = "waylandegl")]
     fn initialize_waylandegl(
         &self,
         display: &gdk::Display,
