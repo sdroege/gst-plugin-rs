@@ -13,6 +13,17 @@ $env:ErrorActionPreference='Stop'
     "--all-features"
 )
 
+if ($env:FDO_CI_CONCURRENT)
+{
+    $ncpus = $env:FDO_CI_CONCURRENT
+}
+else
+{
+    $ncpus = (Get-WmiObject -Class Win32_ComputerSystem).NumberOfLogicalProcessors
+}
+Write-Host "Build Jobs: $ncpus"
+$cargo_opts = @("--color=always", "--jobs=$ncpus", "--all-targets")
+
 function Run-Tests {
     param (
         $Features
@@ -28,7 +39,7 @@ function Run-Tests {
     Write-Host "Features: $Features"
     Write-Host "Exclude string: $local_exclude"
 
-    cargo build --color=always --workspace $local_exclude --all-targets $Features
+    cargo build $cargo_opts --workspace $local_exclude $Features
 
     if (!$?) {
         Write-Host "Build failed"
@@ -37,7 +48,7 @@ function Run-Tests {
 
     $env:G_DEBUG="fatal_warnings"
     $env:RUST_BACKTRACE="1"
-    cargo nextest run --profile=ci --no-fail-fast --color=always --workspace $local_exclude --all-targets $Features
+    cargo nextest run $cargo_opts --profile=ci --no-fail-fast --workspace $local_exclude $Features
     if (!$?) {
         Write-Host "Tests failed"
         Exit 1
