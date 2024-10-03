@@ -4,7 +4,7 @@ GTK 4 provides `gtk::Video` & `gtk::Picture` for rendering media such as videos.
 offer the possibility to use a custom `gst::Pipeline`. The plugin provides a `gst_video::VideoSink` along with a `gdk::Paintable` that's capable of rendering the sink's frames.
 
 The sink can generate GL Textures if the system is capable of it, but it needs
-to be compiled with either `wayland`, `x11glx` or `x11egl` cargo features. On
+to be compiled with either `waylandegl`, `x11glx` or `x11egl` cargo features. On
 Windows and macOS this is enabled by default.
 
 Additionally, the sink can render DMABufs directly on Linux if GTK 4.14 or
@@ -52,7 +52,7 @@ To build and include the plugin in a Flatpak manifest, you can add the following
                 }
             },
             "build-commands": [
-                "cargo cinstall --offline --release --features=wayland,x11glx,x11egl,dmabuf --library-type=cdylib --prefix=/app"
+                "cargo cinstall --offline --release --features=waylandegl,x11glx,x11egl,dmabuf --library-type=cdylib --prefix=/app"
             ]
         }
     ]

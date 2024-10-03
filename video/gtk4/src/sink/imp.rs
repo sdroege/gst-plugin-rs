@@ -971,7 +971,7 @@ impl PaintableSink {
             "GdkX11GLContextEGL" => (),
             #[cfg(feature = "x11glx")]
             "GdkX11GLContextGLX" => (),
-            #[cfg(feature = "wayland")]
+            #[cfg(feature = "waylandegl")]
             "GdkWaylandGLContext" => (),
             #[cfg(target_os = "macos")]
             "GdkMacosGLContext" => (),
@@ -1001,7 +1001,7 @@ impl PaintableSink {
             "GdkX11GLContextEGL" => self.initialize_x11egl(gdk_display),
             #[cfg(feature = "x11glx")]
             "GdkX11GLContextGLX" => self.initialize_x11glx(gdk_display),
-            #[cfg(feature = "wayland")]
+            #[cfg(feature = "waylandegl")]
             "GdkWaylandGLContext" => self.initialize_waylandegl(gdk_display),
             #[cfg(target_os = "macos")]
             "GdkMacosGLContext" => self.initialize_macosgl(gdk_display),
@@ -1147,7 +1147,7 @@ impl PaintableSink {
         }
     }
 
-    #[cfg(feature = "wayland")]
+    #[cfg(feature = "waylandegl")]
     fn initialize_waylandegl(
         &self,
         display: gdk::Display,
