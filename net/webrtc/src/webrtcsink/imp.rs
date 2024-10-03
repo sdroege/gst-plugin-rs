@@ -3584,7 +3584,7 @@ impl BaseWebRTCSink {
                             gst::warning!(CAT, imp = self, "Error in discovery pipeline: {err:#?}");
                             pipe.0.debug_to_dot_file_with_ts(
                                 gst::DebugGraphDetails::all(),
-                                "webrtcsink-discovery-error",
+                                format!("webrtcsink-discovery-{}-error", pipe.0.name()),
                             );
                             break Err(err.error().into());
                         }
