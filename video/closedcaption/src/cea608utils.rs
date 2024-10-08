@@ -550,7 +550,7 @@ impl Cea608Renderer {
             self.layout.set_alignment(pango::Alignment::Left);
             let (max_layout_width, _max_layout_height) =
                 recalculate_pango_layout(&self.layout, width, height);
-            self.left_alignment = (width as i32 - max_layout_width) / 2 + width as i32 / 10;
+            self.left_alignment = (width as i32 - max_layout_width) / 2;
             self.rectangle.take();
         }
     }
