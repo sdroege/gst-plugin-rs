@@ -210,17 +210,6 @@ impl JitterBuffer {
 
         trace!("Polling at {:?}", now);
 
-        let Some((base_instant, base_ts)) = self.base_times else {
-            return PollResult::Empty;
-        };
-
-        let duration_since_base_instant = now - base_instant;
-
-        trace!(
-            "Duration since base instant {:?}",
-            duration_since_base_instant
-        );
-
         let Some(item) = self.items.first() else {
             return PollResult::Empty;
         };
@@ -233,6 +222,17 @@ impl JitterBuffer {
                 discont: false,
             };
         };
+
+        let Some((base_instant, base_ts)) = self.base_times else {
+            return PollResult::Empty;
+        };
+
+        let duration_since_base_instant = now - base_instant;
+
+        trace!(
+            "Duration since base instant {:?}",
+            duration_since_base_instant
+        );
 
         let ts = pts.checked_sub(base_ts).unwrap();
         let deadline = Duration::from_nanos(ts) + self.latency;
@@ -591,20 +591,7 @@ mod tests {
             unreachable!()
         };
 
-        let QueueResult::Queued(id_first) = jb.queue_packet(&packet, 0, now) else {
-            unreachable!()
-        };
-
-        let QueueResult::Queued(id_second_serialized_item) = jb.queue_serialized_item() else {
-            unreachable!()
-        };
-
-        let rtp_data = generate_rtp_packet(0x12345678, 1, 0, 4);
-        let packet = RtpPacket::parse(&rtp_data).unwrap();
-        let QueueResult::Queued(id_second) = jb.queue_packet(&packet, 0, now) else {
-            unreachable!()
-        };
-
+        // query should be forwarded immediately
         assert_eq!(
             jb.poll(now),
             PollResult::Forward {
@@ -612,6 +599,10 @@ mod tests {
                 discont: false
             }
         );
+
+        let QueueResult::Queued(id_first) = jb.queue_packet(&packet, 0, now) else {
+            unreachable!()
+        };
         assert_eq!(
             jb.poll(now),
             PollResult::Forward {
@@ -619,6 +610,10 @@ mod tests {
                 discont: true
             }
         );
+
+        let QueueResult::Queued(id_second_serialized_item) = jb.queue_serialized_item() else {
+            unreachable!()
+        };
         assert_eq!(
             jb.poll(now),
             PollResult::Forward {
@@ -626,6 +621,12 @@ mod tests {
                 discont: false
             }
         );
+
+        let rtp_data = generate_rtp_packet(0x12345678, 1, 0, 4);
+        let packet = RtpPacket::parse(&rtp_data).unwrap();
+        let QueueResult::Queued(id_second) = jb.queue_packet(&packet, 0, now) else {
+            unreachable!()
+        };
         assert_eq!(
             jb.poll(now),
             PollResult::Forward {
