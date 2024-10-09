@@ -5931,7 +5931,7 @@ pub(super) mod janus {
         /**
          * GstJanusVRWebRTCSink:use-string-ids:
          *
-         * By default Janus uses `u64` ids to identitify the room, the feed, etc.
+         * By default Janus uses `u64` ids to identify the room, the feed, etc.
          * But it can be changed to strings using the `strings_ids` option in `janus.plugin.videoroom.jcfg`.
          * In such case, `janusvrwebrtcsink` has to be created using `use-string-ids=true` so its signaller
          * uses the right types for such ids and properties.
