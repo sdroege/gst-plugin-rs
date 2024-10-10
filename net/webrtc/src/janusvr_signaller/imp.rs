@@ -271,6 +271,7 @@ struct State {
     transaction_id: Option<String>,
     room_id: Option<JanusId>,
     feed_id: Option<JanusId>,
+    leave_room_rx: Option<tokio::sync::oneshot::Receiver<()>>,
 }
 
 #[derive(Clone)]
@@ -568,20 +569,6 @@ impl Signaller {
         }
     }
 
-    // Only used at the end when cleaning up the resources.
-    // So that `SignallableImpl::stop` waits the last message
-    // to be sent properly.
-    fn send_blocking(&self, msg: OutgoingMessage) {
-        let state = self.state.lock().unwrap();
-        if let Some(mut sender) = state.ws_sender.clone() {
-            RUNTIME.block_on(async {
-                if let Err(err) = sender.send(msg).await {
-                    self.raise_error(err.to_string());
-                }
-            });
-        }
-    }
-
     fn set_transaction_id(&self, transaction: String) {
         self.state.lock().unwrap().transaction_id = Some(transaction);
     }
@@ -677,8 +664,8 @@ impl Signaller {
     }
 
     fn leave_room(&self) {
+        let mut state = self.state.lock().unwrap();
         let (transaction, session_id, handle_id, room, feed_id, display, apisecret) = {
-            let state = self.state.lock().unwrap();
             let settings = self.settings.lock().unwrap();
 
             if settings.room_id.is_none() {
@@ -696,20 +683,34 @@ impl Signaller {
                 settings.secret_key.clone(),
             )
         };
-        self.send_blocking(OutgoingMessage::RoomRequest(RoomRequestMsg {
-            janus: "message".to_string(),
-            transaction,
-            session_id,
-            handle_id,
-            apisecret,
-            body: RoomRequestBody {
-                request: "leave".to_string(),
-                ptype: "publisher".to_string(),
-                room,
-                id: Some(feed_id),
-                display,
-            },
-        }));
+        if let Some(mut sender) = state.ws_sender.clone() {
+            let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+            state.leave_room_rx = Some(rx);
+            let msg = OutgoingMessage::RoomRequest(RoomRequestMsg {
+                janus: "message".to_string(),
+                transaction,
+                session_id,
+                handle_id,
+                apisecret,
+                body: RoomRequestBody {
+                    request: "leave".to_string(),
+                    ptype: "publisher".to_string(),
+                    room,
+                    id: Some(feed_id),
+                    display,
+                },
+            });
+            RUNTIME.spawn(glib::clone!(
+                #[to_owned(rename_to = this)]
+                self,
+                async move {
+                    if let Err(err) = sender.send(msg).await {
+                        this.raise_error(err.to_string());
+                    }
+                    let _ = tx.send(());
+                }
+            ));
+        }
     }
 
     fn publish(&self, offer: &gst_webrtc::WebRTCSessionDescription) {
@@ -870,6 +871,12 @@ impl SignallableImpl for Signaller {
                     // if awaited instead, it hangs the plugin
                     handle.abort();
                 }
+            });
+        }
+
+        if let Some(rx) = state.leave_room_rx.take() {
+            RUNTIME.block_on(async move {
+                let _ = rx.await;
             });
         }
 

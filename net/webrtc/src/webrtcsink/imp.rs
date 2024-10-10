@@ -3273,12 +3273,6 @@ impl BaseWebRTCSink {
                             drop(settings);
                             signaller.end_session(session_id);
                         }
-
-                        gst::warning!(
-                            CAT,
-                            imp = self,
-                            "Consumer refused media {session_id}, {media_idx}"
-                        );
                         return;
                     }
                 }
