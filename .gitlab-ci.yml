@@ -177,6 +177,7 @@ meson static:
     expire_in: "7 days"
     paths:
     - 'build/meson-logs/'
+    - "test-static-link-all/build/meson-logs"
 
 # Check that the gstreamer documentation keeps working
 documentation:
