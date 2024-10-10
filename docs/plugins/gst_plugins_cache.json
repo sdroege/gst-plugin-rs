@@ -5115,6 +5115,7 @@
                 "description": "Multiplexes multiple streams and datagram for QUIC",
                 "hierarchy": [
                     "GstQuinnQuicMux",
+                    "GstAggregator",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -5125,7 +5126,8 @@
                     "datagram": {
                         "caps": "ANY",
                         "direction": "sink",
-                        "presence": "request"
+                        "presence": "request",
+                        "type": "GstAggregatorPad"
                     },
                     "src": {
                         "caps": "ANY",
@@ -5896,6 +5898,33 @@
                         "value": "1"
                     }
                 ]
+            },
+            "QuinnQuicMuxPad": {
+                "hierarchy": [
+                    "QuinnQuicMuxPad",
+                    "GstAggregatorPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "priority": {
+                        "blurb": "Priority of the stream",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "2147483647",
+                        "min": "-2147483648",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": true
+                    }
+                }
             }
         },
         "package": "gst-plugin-quinn",

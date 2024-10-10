@@ -2852,6 +2852,7 @@ dependencies = [
  "gstreamer",
  "gstreamer-base",
  "gstreamer-check",
+ "itertools 0.12.1",
  "quinn",
  "quinn-proto",
  "rcgen",
