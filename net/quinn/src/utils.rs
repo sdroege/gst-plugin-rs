@@ -238,18 +238,22 @@ fn configure_client(ep_config: &QuinnQuicEndpointConfig) -> Result<ClientConfig,
     let ring_provider = rustls::crypto::ring::default_provider();
 
     let mut crypto = if ep_config.secure_conn {
-        let (certs, key) = read_certs_from_file(
-            ep_config.certificate_file.clone(),
-            ep_config.private_key_file.clone(),
-        )?;
+        let certs = read_certs_from_file(ep_config.certificate_file.clone())?;
+
         let mut cert_store = rustls::RootCertStore::empty();
         cert_store.add_parsable_certificates(certs.clone());
 
-        rustls::ClientConfig::builder_with_provider(ring_provider.into())
+        let builder = rustls::ClientConfig::builder_with_provider(ring_provider.into())
             .with_protocol_versions(&[&rustls::version::TLS13])
             .unwrap()
-            .with_root_certificates(Arc::new(cert_store))
-            .with_client_auth_cert(certs, key)?
+            .with_root_certificates(Arc::new(cert_store));
+        match ep_config.private_key_file.clone() {
+            Some(key_file) => {
+                let key = read_private_key_from_file(Some(key_file))?;
+                builder.with_client_auth_cert(certs, key).unwrap()
+            }
+            None => builder.with_no_client_auth(),
+        }
     } else {
         rustls::ClientConfig::builder_with_provider(ring_provider.into())
             .with_protocol_versions(&[&rustls::version::TLS13])
@@ -277,14 +281,7 @@ fn configure_client(ep_config: &QuinnQuicEndpointConfig) -> Result<ClientConfig,
 
 fn read_certs_from_file(
     certificate_file: Option<PathBuf>,
-    private_key_file: Option<PathBuf>,
-) -> Result<
-    (
-        Vec<rustls_pki_types::CertificateDer<'static>>,
-        rustls_pki_types::PrivateKeyDer<'static>,
-    ),
-    Box<dyn Error>,
-> {
+) -> Result<Vec<rustls_pki_types::CertificateDer<'static>>, Box<dyn Error>> {
     /*
      * NOTE:
      *
@@ -302,7 +299,6 @@ fn read_certs_from_file(
     let cert_file = certificate_file
         .clone()
         .expect("Expected path to certificates be valid");
-    let key_file = private_key_file.expect("Expected path to certificates be valid");
 
     let certs: Vec<rustls_pki_types::CertificateDer<'static>> = {
         let cert_file = File::open(cert_file.as_path())?;
@@ -310,6 +306,13 @@ fn read_certs_from_file(
         let cert_vec = rustls_pemfile::certs(&mut cert_file_rdr);
         cert_vec.into_iter().map(|c| c.unwrap()).collect()
     };
+    Ok(certs)
+}
+
+fn read_private_key_from_file(
+    private_key_file: Option<PathBuf>,
+) -> Result<rustls_pki_types::PrivateKeyDer<'static>, Box<dyn Error>> {
+    let key_file = private_key_file.expect("Expected path to certificates be valid");
 
     let key: rustls_pki_types::PrivateKeyDer<'static> = {
         let key_file = File::open(key_file.as_path())?;
@@ -329,17 +332,17 @@ fn read_certs_from_file(
         }
     };
 
-    Ok((certs, key))
+    Ok(key)
 }
 
 fn configure_server(
     ep_config: &QuinnQuicEndpointConfig,
 ) -> Result<(ServerConfig, Vec<rustls_pki_types::CertificateDer>), Box<dyn Error>> {
     let (certs, key) = if ep_config.secure_conn {
-        read_certs_from_file(
-            ep_config.certificate_file.clone(),
-            ep_config.private_key_file.clone(),
-        )?
+        (
+            read_certs_from_file(ep_config.certificate_file.clone())?,
+            read_private_key_from_file(ep_config.private_key_file.clone())?,
+        )
     } else {
         let rcgen::CertifiedKey { cert, key_pair } =
             rcgen::generate_simple_self_signed(vec![ep_config.server_name.clone()]).unwrap();
