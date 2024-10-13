@@ -207,6 +207,33 @@ impl rustls::client::danger::ServerCertVerifier for SkipServerVerification {
     }
 }
 
+fn create_transport_config(
+    ep_config: &QuinnQuicEndpointConfig,
+    set_keep_alive: bool,
+) -> TransportConfig {
+    let mtu_config = MtuDiscoveryConfig::default()
+        .upper_bound(ep_config.transport_config.upper_bound_mtu)
+        .to_owned();
+    let mut transport_config = TransportConfig::default();
+
+    if ep_config.keep_alive_interval > 0 && set_keep_alive {
+        transport_config
+            .keep_alive_interval(Some(Duration::from_millis(ep_config.keep_alive_interval)));
+    }
+    transport_config.initial_mtu(ep_config.transport_config.initial_mtu);
+    transport_config.min_mtu(ep_config.transport_config.min_mtu);
+    transport_config.datagram_receive_buffer_size(Some(
+        ep_config.transport_config.datagram_receive_buffer_size,
+    ));
+    transport_config
+        .datagram_send_buffer_size(ep_config.transport_config.datagram_send_buffer_size);
+    transport_config.max_concurrent_bidi_streams(0u32.into());
+    transport_config.max_concurrent_uni_streams(1u32.into());
+    transport_config.mtu_discovery_config(Some(mtu_config));
+
+    transport_config
+}
+
 fn configure_client(ep_config: &QuinnQuicEndpointConfig) -> Result<ClientConfig, Box<dyn Error>> {
     let ring_provider = rustls::crypto::ring::default_provider();
 
@@ -240,32 +267,7 @@ fn configure_client(ep_config: &QuinnQuicEndpointConfig) -> Result<ClientConfig,
     crypto.alpn_protocols = alpn_protocols;
     crypto.key_log = Arc::new(rustls::KeyLogFile::new());
 
-    let transport_config = {
-        let mtu_config = MtuDiscoveryConfig::default()
-            .upper_bound(ep_config.transport_config.upper_bound_mtu)
-            .to_owned();
-        let mut transport_config = TransportConfig::default();
-
-        if ep_config.keep_alive_interval > 0 {
-            transport_config
-                .keep_alive_interval(Some(Duration::from_millis(ep_config.keep_alive_interval)));
-        }
-        transport_config.initial_mtu(ep_config.transport_config.initial_mtu);
-        transport_config.min_mtu(ep_config.transport_config.min_mtu);
-        transport_config.datagram_receive_buffer_size(Some(
-            ep_config.transport_config.datagram_receive_buffer_size,
-        ));
-        transport_config
-            .datagram_send_buffer_size(ep_config.transport_config.datagram_send_buffer_size);
-        transport_config.max_concurrent_bidi_streams(0u32.into());
-        transport_config
-            .max_concurrent_uni_streams(ep_config.transport_config.max_concurrent_uni_streams);
-        transport_config.mtu_discovery_config(Some(mtu_config));
-        transport_config.send_window(ep_config.transport_config.send_window);
-
-        transport_config
-    };
-
+    let transport_config = create_transport_config(ep_config, true);
     let client_config = ClientConfig::new(Arc::new(QuicClientConfig::try_from(crypto)?))
         .transport_config(Arc::new(transport_config))
         .to_owned();
@@ -381,29 +383,7 @@ fn configure_server(
     crypto.alpn_protocols = alpn_protocols;
     crypto.key_log = Arc::new(rustls::KeyLogFile::new());
 
-    let transport_config = {
-        let mtu_config = MtuDiscoveryConfig::default()
-            .upper_bound(ep_config.transport_config.upper_bound_mtu)
-            .to_owned();
-        let mut transport_config = TransportConfig::default();
-
-        transport_config.initial_mtu(ep_config.transport_config.initial_mtu);
-        transport_config.min_mtu(ep_config.transport_config.min_mtu);
-        transport_config.datagram_receive_buffer_size(Some(
-            ep_config.transport_config.datagram_receive_buffer_size,
-        ));
-        transport_config
-            .datagram_send_buffer_size(ep_config.transport_config.datagram_send_buffer_size);
-        transport_config.max_concurrent_bidi_streams(0u32.into());
-        transport_config
-            .max_concurrent_uni_streams(ep_config.transport_config.max_concurrent_uni_streams);
-        transport_config.mtu_discovery_config(Some(mtu_config));
-        transport_config.receive_window(ep_config.transport_config.receive_window);
-        transport_config.stream_receive_window(ep_config.transport_config.stream_receive_window);
-
-        transport_config
-    };
-
+    let transport_config = create_transport_config(ep_config, false);
     let server_config = ServerConfig::with_crypto(Arc::new(QuicServerConfig::try_from(crypto)?))
         .transport_config(Arc::new(transport_config))
         .to_owned();
