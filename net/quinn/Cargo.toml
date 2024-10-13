@@ -27,6 +27,9 @@ thiserror = "2"
 async-channel = "2.3"
 itertools = "0.12"
 env_logger = "0.11"
+web-transport-quinn = "0.3.3"
+url = "2.5.2"
+once_cell = "1.20.2"
 
 [dev-dependencies]
 gst-check = { workspace = true, features = ["v1_20"] }

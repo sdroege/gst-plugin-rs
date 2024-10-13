@@ -446,7 +446,7 @@ impl ObjectImpl for QuinnQuicSink {
                 match *state {
                     State::Started(ref state) => {
                         let connection = state.connection.clone();
-                        get_stats(Some(connection)).to_value()
+                        get_stats(Some(connection.stats())).to_value()
                     }
                     State::Stopped => get_stats(None).to_value(),
                 }
@@ -721,13 +721,14 @@ impl QuinnQuicSink {
                 QuinnQuicEndpointConfig {
                     server_addr,
                     server_name,
-                    client_addr,
+                    client_addr: Some(client_addr),
                     secure_conn,
                     alpns,
                     certificate_file,
                     private_key_file,
                     keep_alive_interval,
                     transport_config,
+                    with_client_auth: true,
                 },
             )
         };

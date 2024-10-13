@@ -24,6 +24,7 @@ pub(crate) static DEFAULT_MIN_UDP_PAYLOAD_SIZE: u16 = 1200;
 pub(crate) static DEFAULT_MAX_UDP_PAYLOAD_SIZE: u16 = 65527;
 pub(crate) static DEFAULT_DROP_BUFFER_FOR_DATAGRAM: bool = false;
 pub(crate) static DEFAULT_MAX_CONCURRENT_UNI_STREAMS: VarInt = VarInt::from_u32(32);
+pub(crate) static DEFAULT_USE_DATAGRAM: bool = false;
 
 /*
  * For QUIC transport parameters
@@ -36,6 +37,7 @@ pub(crate) static DEFAULT_MAX_CONCURRENT_UNI_STREAMS: VarInt = VarInt::from_u32(
 pub(crate) const DEFAULT_ALPN: &str = "gst-quinn";
 pub(crate) const DEFAULT_TIMEOUT: u32 = 15;
 pub(crate) const DEFAULT_SECURE_CONNECTION: bool = true;
+pub(crate) const HTTP3_ALPN: &str = "h3";
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]
@@ -56,6 +58,7 @@ pub struct QuinnQuicTransportConfig {
     pub max_udp_payload_size: u16,
     pub min_mtu: u16,
     pub upper_bound_mtu: u16,
+    pub max_concurrent_bidi_streams: VarInt,
     pub max_concurrent_uni_streams: VarInt,
     pub send_window: u64,
     pub stream_receive_window: VarInt,
@@ -78,6 +81,7 @@ impl Default for QuinnQuicTransportConfig {
             max_udp_payload_size: DEFAULT_MAX_UDP_PAYLOAD_SIZE,
             min_mtu: DEFAULT_MINIMUM_MTU,
             upper_bound_mtu: DEFAULT_UPPER_BOUND_MTU,
+            max_concurrent_bidi_streams: VarInt::from(0u32),
             max_concurrent_uni_streams: DEFAULT_MAX_CONCURRENT_UNI_STREAMS,
             send_window: (8 * STREAM_RWND).into(),
             stream_receive_window: STREAM_RWND.into(),

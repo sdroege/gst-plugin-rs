@@ -1,6 +1,8 @@
 // Copyright (C) 2024, Asymptotic Inc.
 //      Author: Sanchayan Maity <sanchayan@asymptotic.io>
-//G
+// Copyright (C) 2024, Fluendo S.A.
+//      Author: Andoni Morales Alastruey <amorales@fluendo.com>
+//
 // This Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at
 // <https://mozilla.org/MPL/2.0/>.
@@ -34,13 +36,14 @@ pub const CONNECTION_CLOSE_MSG: &str = "Stopped";
 pub struct QuinnQuicEndpointConfig {
     pub server_addr: SocketAddr,
     pub server_name: String,
-    pub client_addr: SocketAddr,
+    pub client_addr: Option<SocketAddr>,
     pub secure_conn: bool,
     pub alpns: Vec<String>,
     pub certificate_file: Option<PathBuf>,
     pub private_key_file: Option<PathBuf>,
     pub keep_alive_interval: u64,
     pub transport_config: QuinnQuicTransportConfig,
+    pub with_client_auth: bool,
 }
 
 #[derive(Error, Debug)]
@@ -227,8 +230,14 @@ fn create_transport_config(
     ));
     transport_config
         .datagram_send_buffer_size(ep_config.transport_config.datagram_send_buffer_size);
-    transport_config.max_concurrent_bidi_streams(0u32.into());
-    transport_config.max_concurrent_uni_streams(1u32.into());
+    transport_config.max_concurrent_bidi_streams(
+        ep_config
+            .transport_config
+            .max_concurrent_bidi_streams
+            .into(),
+    );
+    transport_config
+        .max_concurrent_uni_streams(ep_config.transport_config.max_concurrent_uni_streams.into());
     transport_config.mtu_discovery_config(Some(mtu_config));
 
     transport_config
@@ -312,7 +321,7 @@ fn read_certs_from_file(
 fn read_private_key_from_file(
     private_key_file: Option<PathBuf>,
 ) -> Result<rustls_pki_types::PrivateKeyDer<'static>, Box<dyn Error>> {
-    let key_file = private_key_file.expect("Expected path to certificates be valid");
+    let key_file = private_key_file.expect("Expected path to private key to be valid");
 
     let key: rustls_pki_types::PrivateKeyDer<'static> = {
         let key_file = File::open(key_file.as_path())?;
@@ -359,18 +368,25 @@ fn configure_server(
         let mut cert_store = rustls::RootCertStore::empty();
         cert_store.add_parsable_certificates(certs.clone());
 
-        let auth_client = rustls::server::WebPkiClientVerifier::builder_with_provider(
-            Arc::new(cert_store),
-            ring_provider.clone().into(),
-        )
-        .build()
-        .unwrap();
-
-        rustls::ServerConfig::builder_with_provider(ring_provider.into())
-            .with_protocol_versions(&[&rustls::version::TLS13])
-            .unwrap()
-            .with_client_cert_verifier(auth_client)
-            .with_single_cert(certs.clone(), key)
+        let config_builder =
+            rustls::ServerConfig::builder_with_provider(ring_provider.clone().into())
+                .with_protocol_versions(&[&rustls::version::TLS13])
+                .unwrap();
+        if ep_config.with_client_auth {
+            let auth_client = rustls::server::WebPkiClientVerifier::builder_with_provider(
+                Arc::new(cert_store),
+                ring_provider.into(),
+            )
+            .build()
+            .unwrap();
+            config_builder
+                .with_client_cert_verifier(auth_client)
+                .with_single_cert(certs.clone(), key)
+        } else {
+            config_builder
+                .with_no_client_auth()
+                .with_single_cert(certs.clone(), key)
+        }
     } else {
         rustls::ServerConfig::builder_with_provider(ring_provider.into())
             .with_protocol_versions(&[&rustls::version::TLS13])
@@ -414,18 +430,17 @@ pub fn server_endpoint(ep_config: &QuinnQuicEndpointConfig) -> Result<Endpoint, 
 
 pub fn client_endpoint(ep_config: &QuinnQuicEndpointConfig) -> Result<Endpoint, Box<dyn Error>> {
     let client_cfg = configure_client(ep_config)?;
-    let mut endpoint = Endpoint::client(ep_config.client_addr)?;
+    let mut endpoint = Endpoint::client(ep_config.client_addr.expect("client_addr not set"))?;
 
     endpoint.set_default_client_config(client_cfg);
 
     Ok(endpoint)
 }
 
-pub fn get_stats(connection: Option<Connection>) -> gst::Structure {
-    match connection {
-        Some(conn) => {
+pub fn get_stats(stats: Option<ConnectionStats>) -> gst::Structure {
+    match stats {
+        Some(stats) => {
             // See quinn_proto::ConnectionStats
-            let stats = conn.stats();
             let udp_stats = |udp: UdpStats, name: String| -> gst::Structure {
                 gst::Structure::builder(name)
                     .field("datagrams", udp.datagrams)
