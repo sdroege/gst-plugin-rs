@@ -328,6 +328,7 @@ fn read_private_key_from_file(
         match key_item {
             rustls_pemfile::Item::Pkcs1Key(key) => rustls_pki_types::PrivateKeyDer::from(key),
             rustls_pemfile::Item::Pkcs8Key(key) => rustls_pki_types::PrivateKeyDer::from(key),
+            rustls_pemfile::Item::Sec1Key(key) => rustls_pki_types::PrivateKeyDer::from(key),
             _ => unimplemented!(),
         }
     };
