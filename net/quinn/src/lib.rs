@@ -29,6 +29,7 @@ mod quinnquicsrc;
 mod quinnroqdemux;
 mod quinnroqmux;
 mod quinnwtclientsrc;
+mod quinnwtserversink;
 mod utils;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
@@ -44,6 +45,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     quinnquicsink::register(plugin)?;
     quinnquicsrc::register(plugin)?;
     quinnwtclientsrc::register(plugin)?;
+    quinnwtserversink::register(plugin)?;
 
     Ok(())
 }
