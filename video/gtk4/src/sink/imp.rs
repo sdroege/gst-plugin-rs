@@ -14,8 +14,11 @@ use crate::sink::frame::Frame;
 use crate::sink::paintable::Paintable;
 
 use glib::thread_guard::ThreadGuard;
+use gtk::glib;
 use gtk::prelude::*;
-use gtk::{gdk, glib};
+
+#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
+use gtk::gdk;
 
 #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
 use gst_gl::prelude::GLContextExt as GstGLContextExt;
@@ -147,7 +150,7 @@ impl ObjectImpl for PaintableSink {
                 // GtkBin was dropped for GTK4 https://gitlab.gnome.org/GNOME/gtk/-/commit/3c165b3b77
                 if glib::types::Type::from_name("GtkBin").is_some() {
                     gst::error!(CAT, imp = self, "Skipping the creation of paintable to avoid segfault between GTK3 and GTK4");
-                    return None::<&gdk::Paintable>.to_value();
+                    return None::<&Paintable>.to_value();
                 }
 
                 let mut paintable_guard = self.paintable.lock().unwrap();
@@ -161,7 +164,7 @@ impl ObjectImpl for PaintableSink {
                     Some(ref paintable) => paintable,
                     None => {
                         gst::error!(CAT, imp = self, "Failed to create paintable");
-                        return None::<&gdk::Paintable>.to_value();
+                        return None::<&Paintable>.to_value();
                     }
                 };
 
@@ -172,7 +175,7 @@ impl ObjectImpl for PaintableSink {
                         imp = self,
                         "Can't retrieve Paintable from non-main thread"
                     );
-                    return None::<&gdk::Paintable>.to_value();
+                    return None::<&Paintable>.to_value();
                 }
 
                 let paintable = paintable.get_ref().clone();
