@@ -5922,6 +5922,7 @@
                 "description": "Multiplexes multiple RTP streams over QUIC",
                 "hierarchy": [
                     "GstQuinnRoqMux",
+                    "GstAggregator",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",
@@ -5935,16 +5936,16 @@
                         "presence": "request",
                         "type": "QuinnRoqMuxPad"
                     },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    },
                     "stream_%%u": {
                         "caps": "application/x-rtp:\n",
                         "direction": "sink",
                         "presence": "request",
                         "type": "QuinnRoqMuxPad"
-                    },
-                    "src": {
-                        "caps": "ANY",
-                        "direction": "src",
-                        "presence": "always"
                     }
                 },
                 "rank": "none"
@@ -5981,6 +5982,47 @@
                 "properties": {
                     "priority": {
                         "blurb": "Priority of the stream",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "2147483647",
+                        "min": "-2147483648",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": true
+                    }
+                }
+            },
+            "QuinnRoqMuxPad": {
+                "hierarchy": [
+                    "QuinnRoqMuxPad",
+                    "GstAggregatorPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "flow-id": {
+                        "blurb": "Flow identifier",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1",
+                        "max": "4611686018427387903",
+                        "min": "1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "priority": {
+                        "blurb": "Priority of the stream, ignored by datagrams",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,

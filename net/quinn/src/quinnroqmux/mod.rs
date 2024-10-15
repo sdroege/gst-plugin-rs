@@ -22,10 +22,14 @@ glib::wrapper! {
 }
 
 glib::wrapper! {
-    pub(crate) struct QuinnRoqMuxPad(ObjectSubclass<imp::QuinnRoqMuxPad>) @extends gst::ProxyPad, gst::Pad, gst::Object;
+    pub(crate) struct QuinnRoqMuxPad(ObjectSubclass<imp::QuinnRoqMuxPad>) @extends gst_base::AggregatorPad, gst::ProxyPad, gst::Pad, gst::Object;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "doc")]
+    {
+        QuinnRoqMuxPad::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    }
     gst::Element::register(
         Some(plugin),
         "quinnroqmux",
