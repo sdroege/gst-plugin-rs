@@ -267,6 +267,7 @@ fn test_mpa_pay_depay_live() {
 //
 // Check basic payloading/depayloading with small MTU
 //
+// Also covered by test_mpa_pay_depay_fragmented_with_packet_loss arguably, but this is simpler.
 #[test]
 fn test_mpa_pay_depay_fragmented() {
     init();
@@ -274,7 +275,7 @@ fn test_mpa_pay_depay_fragmented() {
     let frames = parse_mpa_frames(MP3_DATA);
 
     let input_caps = {
-        let hdr = peek_frame_header(frames[0]).unwrap();
+        let hdr = peek_frame_header(FramedData(frames[0])).unwrap();
 
         gst::Caps::builder("audio/mpeg")
             .field("rate", hdr.sample_rate as i32)
@@ -376,6 +377,132 @@ fn test_mpa_pay_depay_fragmented() {
         expected_pay,
         expected_depay,
     );
+}
+
+// test_mpa_pay_depay_fragmented_with_packet_loss
+//
+// Check basic payloading/depayloading with small MTU and some packet loss
+//
+#[test]
+fn test_mpa_pay_depay_fragmented_with_packet_loss() {
+    init();
+
+    fn run_mpa_pay_depay_fragmented_with_packet_loss_with_drop_mask(
+        drop_mask: u32,
+        initial_seqnum: Option<u16>,
+    ) {
+        let frames = parse_mpa_frames(MP3_DATA);
+
+        let input_caps = {
+            let hdr = peek_frame_header(FramedData(frames[0])).unwrap();
+
+            gst::Caps::builder("audio/mpeg")
+                .field("rate", hdr.sample_rate as i32)
+                .field("channels", hdr.layer as i32)
+                .field("mpegversion", hdr.version as i32)
+                .field("layer", hdr.channels as i32)
+                .field("parsed", true)
+                .build()
+        };
+
+        let mut input_buffers = vec![];
+        let mut expected_pay = vec![];
+        let mut expected_depay = vec![];
+
+        for (i, frame) in frames.iter().enumerate() {
+            let packet_mask = (drop_mask >> (3 * i)) & 0b111;
+
+            let discont_flag = if i == 0 {
+                gst::BufferFlags::DISCONT
+            } else {
+                gst::BufferFlags::empty()
+            };
+            input_buffers.push(make_buffer(
+                frame,
+                gst::ClockTime::from_mseconds(24 * i as u64),
+                gst::ClockTime::from_mseconds(24),
+                discont_flag,
+            ));
+
+            let marker_flag = if i == 0 {
+                gst::BufferFlags::MARKER
+            } else {
+                gst::BufferFlags::empty()
+            };
+
+            // Each 96 byte MP3 frame will be split into 3 RTP packets with mtu=60.
+            // Each frame is 1152 samples, at 48kHz, but RTP clock-rate is 90kHz.
+            // MARKER = start of talk spurt, so first buffer should have it.
+            expected_pay.push(vec![
+                ExpectedPacket::builder()
+                    .pts(gst::ClockTime::from_mseconds(24 * i as u64))
+                    .flags(discont_flag | marker_flag)
+                    .pt(14)
+                    .rtp_time(1152 * i as u32 * 90000 / 48000)
+                    .marker_bit(marker_flag.contains(gst::BufferFlags::MARKER))
+                    .drop((packet_mask & 0b0001) == 0b0001)
+                    .build(),
+                ExpectedPacket::builder()
+                    .pts(gst::ClockTime::from_mseconds(24 * i as u64))
+                    .flags(gst::BufferFlags::empty())
+                    .pt(14)
+                    .rtp_time(1152 * i as u32 * 90000 / 48000)
+                    .marker_bit(false)
+                    .drop((packet_mask & 0b0010) == 0b0010)
+                    .build(),
+                ExpectedPacket::builder()
+                    .pts(gst::ClockTime::from_mseconds(24 * i as u64))
+                    .flags(gst::BufferFlags::empty())
+                    .pt(14)
+                    .rtp_time(1152 * i as u32 * 90000 / 48000)
+                    .marker_bit(false)
+                    .drop((packet_mask & 0b0100) == 0b0100)
+                    .build(),
+            ]);
+
+            // Expect discont on first packet and if previous packet got dropped
+            let expected_flags = if i == 0 {
+                gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC
+            } else if (drop_mask >> (3 * (i - 1))) & 0b111 != 0b0000 {
+                gst::BufferFlags::DISCONT
+            } else {
+                gst::BufferFlags::empty()
+            };
+
+            // If any of the fragments got dropped, we can't reconstruct the original payload
+            if packet_mask == 0b0000 {
+                expected_depay.push(vec![
+                    ExpectedBuffer::builder()
+                        .pts(gst::ClockTime::from_mseconds(24 * i as u64))
+                        .duration(gst::ClockTime::from_mseconds(24))
+                        .size(96)
+                        .flags(expected_flags)
+                        .build(),
+                ]);
+            }
+        }
+
+        let payloader = if let Some(seqnum_offset) = initial_seqnum {
+            format!("rtpmpapay2 mtu=60 seqnum-offset={seqnum_offset}")
+        } else {
+            "rtpmpapay2 mtu=60".to_string()
+        };
+
+        run_test_pipeline(
+            Source::Buffers(input_caps, input_buffers),
+            &payloader,
+            "rtpmpadepay2",
+            expected_pay,
+            expected_depay,
+        );
+    }
+
+    for drop_mask in 0..(1 << (6 * 2)) {
+        run_mpa_pay_depay_fragmented_with_packet_loss_with_drop_mask(drop_mask, None);
+        if drop_mask % 3 == 3 {
+            run_mpa_pay_depay_fragmented_with_packet_loss_with_drop_mask(drop_mask, Some(65533));
+        }
+    }
 }
 
 // test_mpa_pay_depay_multiframe_input_nonlive
