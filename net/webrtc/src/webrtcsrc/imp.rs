@@ -844,10 +844,15 @@ impl Session {
                         obj = element,
                         "Getting transceiver for {stream_id} and index {i} with caps: {caps:#?}"
                     );
-                    let transceiver = webrtcbin.emit_by_name::<gst_webrtc::WebRTCRTPTransceiver>(
+                    let transceiver = webrtcbin.emit_by_name::<Option<gst_webrtc::WebRTCRTPTransceiver>>(
                         "get-transceiver",
                         &[&(i as i32)],
-                    );
+                    ).unwrap_or_else(|| {
+                        gst::warning!(CAT, "Transceiver for idx {i} does not exist, GStreamer <= 1.24, adding it ourself");
+                        webrtcbin.emit_by_name::<gst_webrtc::WebRTCRTPTransceiver>(
+                            "add-transceiver",
+                            &[&gst_webrtc::WebRTCRTPTransceiverDirection::Recvonly, &caps])
+                    });
 
                     transceiver.set_property("do_nack", do_retransmission);
                     transceiver.set_property("fec-type", gst_webrtc::WebRTCFECType::UlpRed);
