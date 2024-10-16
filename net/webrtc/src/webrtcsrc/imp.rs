@@ -897,7 +897,7 @@ impl Session {
             self.id,
             move |_| {
                 let mut state = element.imp().state.lock().unwrap();
-                gst::info!(CAT, obj = element, "got answer for session {session_id:?}");
+                gst::info!(CAT, obj = element, "got offer for session {session_id:?}");
                 let Some(session) = state.sessions.get_mut(&session_id) else {
                     gst::error!(CAT, obj = element, "no session {session_id:?}");
                     return;
