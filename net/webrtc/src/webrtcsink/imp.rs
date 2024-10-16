@@ -4419,6 +4419,10 @@ impl ObjectSubclass for BaseWebRTCSink {
     type Type = super::BaseWebRTCSink;
     type ParentType = gst::Bin;
     type Interfaces = (gst::ChildProxy, gst_video::Navigation);
+
+    fn class_init(_klass: &mut Self::Class) {
+        register_dye_meta();
+    }
 }
 
 fn register_dye_meta() {
@@ -4442,12 +4446,7 @@ fn register_dye_meta() {
     });
 }
 
-unsafe impl<T: BaseWebRTCSinkImpl> IsSubclassable<T> for super::BaseWebRTCSink {
-    fn class_init(class: &mut glib::Class<Self>) {
-        register_dye_meta();
-        Self::parent_class_init::<T>(class);
-    }
-}
+unsafe impl<T: BaseWebRTCSinkImpl> IsSubclassable<T> for super::BaseWebRTCSink {}
 
 pub(crate) trait BaseWebRTCSinkImpl: BinImpl {}
 
