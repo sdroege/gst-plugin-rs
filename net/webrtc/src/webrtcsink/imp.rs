@@ -2420,7 +2420,7 @@ impl BaseWebRTCSink {
                 false,
                 glib::closure!(#[watch] instance, move |_signaler: glib::Object, session_id: &str, peer_id: &str, offer: Option<&gst_webrtc::WebRTCSessionDescription>|{
                     if let Err(err) = instance.imp().start_session(session_id, peer_id, offer) {
-                        gst::warning!(CAT, obj = instance, "{}", err);
+                        gst::warning!(CAT, obj = instance, "{:?}", err);
                     }
                 }),
             ),
