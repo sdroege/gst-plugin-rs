@@ -33,6 +33,7 @@ bitstream-io = "2.3"
 pretty_assertions = "1"
 rand = { version = "0.8", features = ["small_rng"] }
 gst-check.workspace = true
+clap = { version = "4", features = ["derive"] }
 
 [lib]
 name = "gstrsclosedcaption"
@@ -62,3 +63,6 @@ import_library = false
 
 [package.metadata.capi.pkg_config]
 requires_private = "gstreamer-1.0, gstreamer-base-1.0, gstreamer-video-1.0, gobject-2.0, glib-2.0, gmodule-2.0, pango, pangocairo, cairo-gobject"
+
+[[example]]
+name = "passthrough-notify"

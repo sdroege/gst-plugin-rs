@@ -2481,6 +2481,7 @@ dependencies = [
  "cea608-types",
  "cea708-types",
  "chrono",
+ "clap",
  "either",
  "gst-plugin-version-helper",
  "gstreamer",
