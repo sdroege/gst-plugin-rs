@@ -1,8 +1,11 @@
 use gst::glib;
+use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_webrtc::WebRTCSessionDescription;
 
 use gstrswebrtc::signaller::{Signallable, SignallableImpl};
+
+use once_cell::sync::Lazy;
 
 #[derive(Default)]
 pub struct Signaller {}
@@ -45,4 +48,23 @@ impl ObjectSubclass for Signaller {
     type Interfaces = (Signallable,);
 }
 
-impl ObjectImpl for Signaller {}
+impl ObjectImpl for Signaller {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPS: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![glib::ParamSpecBoolean::builder("manual-sdp-munging")
+                .nick("Manual SDP munging")
+                .blurb("Whether the signaller manages SDP munging itself")
+                .default_value(false)
+                .read_only()
+                .build()]
+        });
+
+        PROPS.as_ref()
+    }
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.name() {
+            "manual-sdp-munging" => false.to_value(),
+            _ => unimplemented!(),
+        }
+    }
+}
