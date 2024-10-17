@@ -735,6 +735,7 @@ impl WhipServer {
         Ok(warp::reply::reply().into_response())
     }
 
+    #[allow(clippy::single_match)]
     async fn options_handler(&self) -> Result<impl warp::Reply, warp::Rejection> {
         let settings = self.settings.lock().unwrap();
         drop(settings);
@@ -852,6 +853,7 @@ impl WhipServer {
         let settings = self.settings.lock().unwrap();
         let mut links = HeaderMap::new();
 
+        #[allow(clippy::single_match)]
         match &settings.stun_server {
             Some(stun) => match build_link_header(stun.as_str()) {
                 Ok(stun_link) => {
