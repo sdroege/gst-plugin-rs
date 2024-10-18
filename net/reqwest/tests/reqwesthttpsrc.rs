@@ -254,11 +254,16 @@ impl Harness {
     fn wait_for_segment(
         &mut self,
         allow_buffer: bool,
+        mut allow_server_error: bool,
     ) -> gst::FormattedSegment<gst::format::Bytes> {
         loop {
             match self.receiver.as_mut().unwrap().recv().unwrap() {
                 Message::ServerError(err) => {
-                    panic!("Got server error: {err}");
+                    if allow_server_error {
+                        allow_server_error = false;
+                    } else {
+                        panic!("Got server error: {err}");
+                    }
                 }
                 Message::Event(ev) => {
                     use gst::EventView;
@@ -939,7 +944,7 @@ fn test_seek_after_ready() {
         src.set_state(gst::State::Playing).unwrap();
     });
 
-    let segment = h.wait_for_segment(false);
+    let segment = h.wait_for_segment(false, true);
     assert_eq!(segment.start(), Some(123.bytes()));
 
     let mut expected_output = vec![0; 8192 - 123];
@@ -1015,7 +1020,7 @@ fn test_seek_after_buffer_received() {
         src.seek_simple(gst::SeekFlags::FLUSH, 123.bytes()).unwrap();
     });
 
-    let segment = h.wait_for_segment(true);
+    let segment = h.wait_for_segment(true, true);
     assert_eq!(segment.start(), Some(123.bytes()));
 
     let mut expected_output = vec![0; 8192 - 123];
@@ -1101,7 +1106,7 @@ fn test_seek_with_stop_position() {
         .unwrap();
     });
 
-    let segment = h.wait_for_segment(true);
+    let segment = h.wait_for_segment(true, true);
     assert_eq!(segment.start(), Some(start));
     assert_eq!(segment.stop(), Some(stop));
 
