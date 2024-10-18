@@ -5,6 +5,21 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.12.10] - 2024-10-18
+### Fixed
+- transcriberbin: fix panic during gst-inspect-1.0 -u
+- webrtcsink: fix segment format mismatch with remote offer
+- webrtcsink: fix assertions when finalizing
+- webrtcsink: Fix typo in "turn-servers" property description
+- whepsrc: Fix incorrect default caps
+
+### Changed
+- Build: turn lto off for dev profile for faster dev builds
+- fmp4 hls_live example: Don't set header-update-mode=update, no need to update the header in live mode
+- livesync: Log latency query results when handling latency query too
+- onvifmetadatapay: Set output caps earlier, so upstream can send gap events earlier
+- spotify: tweak dependencies
+
 ## [0.12.9] - 2024-08-20
 ### Fixed
 -  video/gtk4: Move the dmabuf cfg to the correct bracket level
