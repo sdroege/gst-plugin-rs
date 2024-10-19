@@ -2429,9 +2429,6 @@ fn test_caps_changed_verify(
 ) {
     for i in 0..num_bufs {
         let b = h.pull().unwrap();
-        // FIXME: Rust 1.71 does not detect that the match is exhaustive so a `_` pattern has to be
-        // added, but newer Rust warns (correctly) about that pattern being unreachable.
-        #[allow(unreachable_patterns)]
         match (caps_changed, i, chunk) {
             (true, 0, _) => assert_eq!(
                 b.flags(),
@@ -2452,7 +2449,6 @@ fn test_caps_changed_verify(
                     assert_eq!(b.flags(), gst::BufferFlags::DELTA_UNIT);
                 }
             }
-            _ => unreachable!(),
         }
     }
 }
