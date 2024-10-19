@@ -1683,9 +1683,6 @@ impl ToggleRecord {
         success
     }
 
-    // FIXME `matches!` was introduced in rustc 1.42.0, current MSRV is 1.41.0
-    // FIXME uncomment when CI can upgrade to 1.47.1
-    //#[allow(clippy::match_like_matches_macro)]
     fn src_event(&self, pad: &gst::Pad, mut event: gst::Event) -> bool {
         use gst::EventView;
 
