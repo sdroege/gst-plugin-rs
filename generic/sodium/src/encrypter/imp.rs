@@ -192,9 +192,8 @@ impl Encrypter {
         drop(state_guard);
 
         for buffer in buffers {
-            self.srcpad.push(buffer).map_err(|err| {
+            self.srcpad.push(buffer).inspect_err(|&err| {
                 gst::error!(CAT, imp = self, "Failed to push buffer {:?}", err);
-                err
             })?;
         }
 

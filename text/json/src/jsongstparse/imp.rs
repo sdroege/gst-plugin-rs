@@ -274,11 +274,10 @@ impl JsonGstParse {
                             self.srcpad.push_event(event);
                         }
 
-                        self.srcpad.push(buffer).map_err(|err| {
+                        self.srcpad.push(buffer).inspect_err(|&err| {
                             if err != gst::FlowError::Flushing {
                                 gst::error!(CAT, imp = self, "Pushing buffer returned {:?}", err);
                             }
-                            err
                         })?;
 
                         if send_eos {

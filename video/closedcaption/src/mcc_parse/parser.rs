@@ -291,18 +291,16 @@ impl MccParser {
 
         match self.state {
             State::Header => header(&mut line)
-                .map(|v| {
+                .inspect(|_v| {
                     self.state = State::EmptyAfterHeader;
-                    v
                 })
                 .map_err(|err| match err {
                     winnow::error::ErrMode::Incomplete(_) => unreachable!(),
                     winnow::error::ErrMode::Backtrack(e) | winnow::error::ErrMode::Cut(e) => e,
                 }),
             State::EmptyAfterHeader => empty_line(&mut line)
-                .map(|v| {
+                .inspect(|_v| {
                     self.state = State::Comments;
-                    v
                 })
                 .map_err(|err| match err {
                     winnow::error::ErrMode::Incomplete(_) => unreachable!(),
@@ -310,12 +308,10 @@ impl MccParser {
                 }),
             State::Comments => alt((empty_line, comment))
                 .parse_next(&mut line)
-                .map(|v| {
-                    if v == MccLine::Empty {
+                .inspect(|v| {
+                    if *v == MccLine::Empty {
                         self.state = State::Metadata;
                     }
-
-                    v
                 })
                 .map_err(|err| match err {
                     winnow::error::ErrMode::Incomplete(_) => unreachable!(),
@@ -323,12 +319,10 @@ impl MccParser {
                 }),
             State::Metadata => alt((empty_line, uuid, time_code_rate, metadata))
                 .parse_next(&mut line)
-                .map(|v| {
-                    if v == MccLine::Empty {
+                .inspect(|v| {
+                    if *v == MccLine::Empty {
                         self.state = State::Captions;
                     }
-
-                    v
                 })
                 .map_err(|err| match err {
                     winnow::error::ErrMode::Incomplete(_) => unreachable!(),

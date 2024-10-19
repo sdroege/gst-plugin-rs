@@ -444,11 +444,10 @@ impl SccParse {
             self.srcpad.push_event(event);
         }
 
-        self.srcpad.push_list(buffers).map_err(|err| {
+        self.srcpad.push_list(buffers).inspect_err(|&err| {
             if err != gst::FlowError::Flushing && err != gst::FlowError::Eos {
                 gst::error!(CAT, imp = self, "Pushing buffer returned {:?}", err);
             }
-            err
         })?;
 
         if send_eos {

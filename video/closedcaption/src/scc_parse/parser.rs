@@ -137,18 +137,16 @@ impl SccParser {
 
         match self.state {
             State::Header => header(&mut line)
-                .map(|v| {
+                .inspect(|_v| {
                     self.state = State::Empty;
-                    v
                 })
                 .map_err(|err| match err {
                     winnow::error::ErrMode::Incomplete(_) => unreachable!(),
                     winnow::error::ErrMode::Backtrack(e) | winnow::error::ErrMode::Cut(e) => e,
                 }),
             State::Empty => empty_line(&mut line)
-                .map(|v| {
+                .inspect(|_v| {
                     self.state = State::CaptionOrEmpty;
-                    v
                 })
                 .map_err(|err| match err {
                     winnow::error::ErrMode::Incomplete(_) => unreachable!(),

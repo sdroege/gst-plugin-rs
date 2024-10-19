@@ -194,9 +194,8 @@ impl TaskImpl for SrcTask {
                     }
                     buffer
                 })
-                .map_err(|err| {
+                .inspect_err(|&err| {
                     gst::error!(CAT, obj = self.elem, "Failed to acquire buffer {err}");
-                    err
                 })?;
 
             debug_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Forwarding buffer");

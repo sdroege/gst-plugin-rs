@@ -675,11 +675,11 @@ impl VideoSinkImpl for PaintableSink {
                 }
             }
         };
-        let frame =
-            Frame::new(buffer, info, orientation, wrapped_context.as_ref()).map_err(|err| {
+        let frame = Frame::new(buffer, info, orientation, wrapped_context.as_ref()).inspect_err(
+            |_err| {
                 gst::error!(CAT, imp = self, "Failed to map video frame");
-                err
-            })?;
+            },
+        )?;
         self.pending_frame.lock().unwrap().replace(frame);
 
         let sender = self.sender.lock().unwrap();

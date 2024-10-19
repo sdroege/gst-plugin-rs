@@ -224,14 +224,13 @@ impl PadSrcInner {
     pub async fn push(&self, buffer: gst::Buffer) -> Result<FlowSuccess, FlowError> {
         gst::log!(RUNTIME_CAT, obj = self.gst_pad, "Pushing {:?}", buffer);
 
-        let success = self.gst_pad.push(buffer).map_err(|err| {
+        let success = self.gst_pad.push(buffer).inspect_err(|&err| {
             gst::error!(
                 RUNTIME_CAT,
                 obj = self.gst_pad,
                 "Failed to push Buffer to PadSrc: {:?}",
                 err,
             );
-            err
         })?;
 
         gst::log!(
@@ -247,14 +246,13 @@ impl PadSrcInner {
     pub async fn push_list(&self, list: gst::BufferList) -> Result<FlowSuccess, FlowError> {
         gst::log!(RUNTIME_CAT, obj = self.gst_pad, "Pushing {:?}", list);
 
-        let success = self.gst_pad.push_list(list).map_err(|err| {
+        let success = self.gst_pad.push_list(list).inspect_err(|&err| {
             gst::error!(
                 RUNTIME_CAT,
                 obj = self.gst_pad,
                 "Failed to push BufferList to PadSrc: {:?}",
                 err,
             );
-            err
         })?;
 
         gst::log!(

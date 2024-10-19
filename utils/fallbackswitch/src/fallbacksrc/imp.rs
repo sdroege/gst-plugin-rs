@@ -768,15 +768,13 @@ impl ElementImpl for FallbackSrc {
             _ => (),
         }
 
-        self.parent_change_state(transition).map_err(|err| {
+        self.parent_change_state(transition).inspect_err(|_err| {
             gst::error!(
                 CAT,
                 imp = self,
                 "Parent state change transition {:?} failed",
                 transition
             );
-
-            err
         })?;
 
         // Change the source state manually here to be able to catch errors. State changes always

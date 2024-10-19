@@ -461,7 +461,7 @@ impl Decrypter {
 
         self.sinkpad
             .pull_range(pull_offset, total_size)
-            .map_err(|err| {
+            .inspect_err(|&err| {
                 match err {
                     gst::FlowError::Flushing => {
                         gst::debug!(
@@ -482,8 +482,6 @@ impl Decrypter {
                         );
                     }
                 };
-
-                err
             })
     }
 

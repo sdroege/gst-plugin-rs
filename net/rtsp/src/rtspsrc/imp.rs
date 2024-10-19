@@ -1085,9 +1085,8 @@ impl RtspSrc {
                             return Err(RtspError::InvalidMessage("Can't PLAY, no SETUP").into());
                         };
                         self.post_start("request", "PLAY request sent");
-                        let cseq = state.play(s).await.map_err(|err| {
+                        let cseq = state.play(s).await.inspect_err(|_err| {
                             self.post_cancelled("request", "PLAY request cancelled");
-                            err
                         })?;
                         expected_response = Some((Method::Play, cseq));
                     },

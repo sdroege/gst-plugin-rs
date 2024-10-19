@@ -218,14 +218,12 @@ impl Scheduler {
             tasks_checked = 0;
             while tasks_checked < Self::MAX_SUCCESSIVE_TASKS {
                 if let Ok(runnable) = self.tasks.pop_runnable() {
-                    panic::catch_unwind(|| runnable.run()).map_err(|err| {
+                    panic::catch_unwind(|| runnable.run()).inspect_err(|_err| {
                         gst::error!(
                             RUNTIME_CAT,
                             "A task has panicked within Context {}",
                             self.context_name
                         );
-
-                        err
                     })?;
 
                     tasks_checked += 1;
