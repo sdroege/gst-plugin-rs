@@ -384,8 +384,7 @@ outdated:
   script:
     - cargo update --color=always
     # Ignore bitstream-io until we can update MSRV to 1.80
-    # Ignore test-with until we can update MSRV to 1.77
-    - cargo outdated --color=always --root-deps-only --exit-code 1 -v -i bitstream-io -i test-with
+    - cargo outdated --color=always --root-deps-only --exit-code 1 -v -i bitstream-io
 
 coverage:
   allow_failure: true

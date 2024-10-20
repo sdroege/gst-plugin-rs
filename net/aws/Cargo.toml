@@ -40,7 +40,7 @@ chrono = { version = "0.4", features = [ "alloc" ] }
 env_logger = "0.11"
 gst-check = { workspace = true, features = ["v1_18"] }
 rand = "0.8"
-test-with = { version = "0.12", default-features = false }
+test-with = { version = "0.14", default-features = false }
 
 [lib]
 name = "gstaws"
