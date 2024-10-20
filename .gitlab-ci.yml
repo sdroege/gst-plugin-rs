@@ -383,8 +383,7 @@ outdated:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
   script:
     - cargo update --color=always
-    # Ignore bitstream-io until we can update MSRV to 1.80
-    - cargo outdated --color=always --root-deps-only --exit-code 1 -v -i bitstream-io
+    - cargo outdated --color=always --root-deps-only --exit-code 1 -v
 
 coverage:
   allow_failure: true

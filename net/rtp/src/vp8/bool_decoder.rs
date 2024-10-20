@@ -139,6 +139,13 @@ impl<R: io::Read> BitRead for BoolDecoder<R> {
         BigEndian::read_signed(self, bits)
     }
 
+    fn read_signed_in<const BITS: u32, S>(&mut self) -> std::io::Result<S>
+    where
+        S: bitstream_io::SignedNumeric,
+    {
+        BigEndian::read_signed(self, BITS)
+    }
+
     fn read_to<V>(&mut self) -> std::io::Result<V>
     where
         V: bitstream_io::Primitive,
