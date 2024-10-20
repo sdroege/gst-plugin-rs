@@ -30,11 +30,11 @@ pub(crate) enum OnError {
 }
 
 glib::wrapper! {
-    pub struct S3Sink(ObjectSubclass<multipartsink::S3Sink>) @extends gst_base::BaseSink, gst::Element, gst::Object;
+    pub struct S3Sink(ObjectSubclass<multipartsink::S3Sink>) @extends gst_base::BaseSink, gst::Element, gst::Object, @implements gst::URIHandler;
 }
 
 glib::wrapper! {
-    pub struct S3PutObjectSink(ObjectSubclass<putobjectsink::S3PutObjectSink>) @extends gst_base::BaseSink, gst::Element, gst::Object;
+    pub struct S3PutObjectSink(ObjectSubclass<putobjectsink::S3PutObjectSink>) @extends gst_base::BaseSink, gst::Element, gst::Object, @implements gst::URIHandler;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {

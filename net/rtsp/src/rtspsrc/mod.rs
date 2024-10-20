@@ -42,7 +42,7 @@ mod tcp_message;
 mod transport;
 
 glib::wrapper! {
-    pub struct RtspSrc(ObjectSubclass<imp::RtspSrc>) @extends gst::Bin, gst::Element, gst::Object;
+    pub struct RtspSrc(ObjectSubclass<imp::RtspSrc>) @extends gst::Bin, gst::Element, gst::Object, @implements gst::URIHandler;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {

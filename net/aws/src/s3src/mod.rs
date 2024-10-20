@@ -12,7 +12,7 @@ use gst::prelude::*;
 mod imp;
 
 glib::wrapper! {
-    pub struct S3Src(ObjectSubclass<imp::S3Src>) @extends gst_base::BaseSrc, gst::Element, gst::Object;
+    pub struct S3Src(ObjectSubclass<imp::S3Src>) @extends gst_base::BaseSrc, gst::Element, gst::Object, @implements gst::URIHandler;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
