@@ -10,9 +10,6 @@ ignore = [
     # sodiumoxide is deprecated
     # https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/530
     "RUSTSEC-2021-0137",
-    # proc-macro-error is unmaintained
-    # https://github.com/yanganto/test-with/issues/91
-    "RUSTSEC-2024-0370",
 ]
 
 [licenses]
@@ -115,10 +112,6 @@ version = "1.0"
 [[bans.skip]]
 name = "hashbrown"
 version = "0.12"
-# aws-sdk-s3, via lru, depends on an old version of hashbrown
-[[bans.skip]]
-name = "hashbrown"
-version = "0.14"
 
 # various livekit dependencies depend on an old version of itertools and sync_wrapper
 [[bans.skip]]
