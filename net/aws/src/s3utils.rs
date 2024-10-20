@@ -24,6 +24,7 @@ use tokio::runtime;
 
 pub const DEFAULT_S3_REGION: &str = "us-west-2";
 
+#[allow(deprecated)]
 pub static AWS_BEHAVIOR_VERSION: Lazy<aws_config::BehaviorVersion> =
     Lazy::new(aws_config::BehaviorVersion::v2023_11_09);
 

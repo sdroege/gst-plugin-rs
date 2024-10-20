@@ -33,6 +33,7 @@ use std::time::{Duration, SystemTime};
 const DEFAULT_AWS_REGION: &str = "us-east-1";
 const DEFAULT_PING_TIMEOUT: i32 = 30;
 
+#[allow(deprecated)]
 pub static AWS_BEHAVIOR_VERSION: Lazy<aws_config::BehaviorVersion> =
     Lazy::new(aws_config::BehaviorVersion::v2023_11_09);
 
