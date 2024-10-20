@@ -48,6 +48,7 @@ static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
         .unwrap()
 });
 
+#[allow(deprecated)]
 static AWS_BEHAVIOR_VERSION: Lazy<aws_config::BehaviorVersion> =
     Lazy::new(aws_config::BehaviorVersion::v2023_11_09);
 
