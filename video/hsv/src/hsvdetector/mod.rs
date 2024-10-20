@@ -14,7 +14,7 @@ use gst::prelude::*;
 mod imp;
 
 glib::wrapper! {
-    pub struct HsvDetector(ObjectSubclass<imp::HsvDetector>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
+    pub struct HsvDetector(ObjectSubclass<imp::HsvDetector>) @extends gst_video::VideoFilter, gst_base::BaseTransform, gst::Element, gst::Object;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {

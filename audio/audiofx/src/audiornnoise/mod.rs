@@ -13,7 +13,7 @@ use gst::prelude::*;
 mod imp;
 
 glib::wrapper! {
-    pub struct AudioRNNoise(ObjectSubclass<imp::AudioRNNoise>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
+    pub struct AudioRNNoise(ObjectSubclass<imp::AudioRNNoise>) @extends gst_audio::AudioFilter, gst_base::BaseTransform, gst::Element, gst::Object;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {

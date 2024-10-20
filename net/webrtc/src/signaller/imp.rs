@@ -791,5 +791,3 @@ impl SignallableImpl for Signaller {
         }
     }
 }
-
-impl GstObjectImpl for Signaller {}

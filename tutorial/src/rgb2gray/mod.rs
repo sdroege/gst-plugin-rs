@@ -15,7 +15,7 @@ mod imp;
 
 // The public Rust wrapper type for our element
 glib::wrapper! {
-    pub struct Rgb2Gray(ObjectSubclass<imp::Rgb2Gray>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
+    pub struct Rgb2Gray(ObjectSubclass<imp::Rgb2Gray>) @extends gst_video::VideoFilter, gst_base::BaseTransform, gst::Element, gst::Object;
 }
 
 // Registers the type for our element, and then registers in GStreamer under
