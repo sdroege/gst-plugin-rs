@@ -45,7 +45,7 @@ mod tests {
         )
         .or_default_provider();
 
-        let config = aws_config::defaults(AWS_BEHAVIOR_VERSION.clone())
+        let config = aws_config::defaults(*AWS_BEHAVIOR_VERSION)
             .region(region_provider)
             .load()
             .await;

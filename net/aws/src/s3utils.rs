@@ -149,12 +149,12 @@ pub fn wait_config(
         .or_default_provider()
         .or_else(Region::new(DEFAULT_S3_REGION));
     let config_future = match credentials {
-        Some(cred) => aws_config::defaults(AWS_BEHAVIOR_VERSION.clone())
+        Some(cred) => aws_config::defaults(*AWS_BEHAVIOR_VERSION)
             .timeout_config(timeout_config)
             .region(region_provider)
             .credentials_provider(cred)
             .load(),
-        None => aws_config::defaults(AWS_BEHAVIOR_VERSION.clone())
+        None => aws_config::defaults(*AWS_BEHAVIOR_VERSION)
             .timeout_config(timeout_config)
             .region(region_provider)
             .load(),

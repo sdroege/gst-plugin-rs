@@ -237,7 +237,7 @@ impl Signaller {
         };
 
         let client = Client::new(
-            &aws_config::defaults(AWS_BEHAVIOR_VERSION.clone())
+            &aws_config::defaults(*AWS_BEHAVIOR_VERSION)
                 .credentials_provider(credentials.clone())
                 .load()
                 .await,
@@ -307,7 +307,7 @@ impl Signaller {
         );
 
         let signaling_config = aws_sdk_kinesisvideosignaling::config::Builder::from(
-            &aws_config::defaults(AWS_BEHAVIOR_VERSION.clone())
+            &aws_config::defaults(*AWS_BEHAVIOR_VERSION)
                 .credentials_provider(credentials.clone())
                 .load()
                 .await,

@@ -559,7 +559,7 @@ impl Transcriber {
         let config_loader = match (access_key, secret_access_key) {
             (Some(key), Some(secret_key)) => {
                 gst::debug!(CAT, imp = self, "Using settings credentials");
-                aws_config::defaults(AWS_BEHAVIOR_VERSION.clone()).credentials_provider(
+                aws_config::defaults(*AWS_BEHAVIOR_VERSION).credentials_provider(
                     aws_transcribe::config::Credentials::new(
                         key,
                         secret_key,
@@ -571,7 +571,7 @@ impl Transcriber {
             }
             _ => {
                 gst::debug!(CAT, imp = self, "Attempting to get credentials from env...");
-                aws_config::defaults(AWS_BEHAVIOR_VERSION.clone())
+                aws_config::defaults(*AWS_BEHAVIOR_VERSION)
             }
         };
 
