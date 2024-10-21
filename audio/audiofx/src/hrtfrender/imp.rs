@@ -23,8 +23,8 @@ use byte_slice_cast::*;
 use rayon::prelude::*;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 
-use once_cell::sync::Lazy;
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+use std::sync::LazyLock;
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "hrtfrender",
         gst::DebugColorFlags::empty(),
@@ -32,7 +32,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-static THREAD_POOL: Lazy<Mutex<Weak<ThreadPool>>> = Lazy::new(|| Mutex::new(Weak::new()));
+static THREAD_POOL: LazyLock<Mutex<Weak<ThreadPool>>> = LazyLock::new(|| Mutex::new(Weak::new()));
 
 const DEFAULT_INTERPOLATION_STEPS: u64 = 8;
 const DEFAULT_BLOCK_LENGTH: u64 = 512;
@@ -400,7 +400,7 @@ impl HrtfRender {
 
 impl ObjectImpl for HrtfRender {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoxed::builder::<glib::Bytes>("hrir-raw")
                     .nick("Head Transform Impulse Response")
@@ -533,7 +533,7 @@ impl GstObjectImpl for HrtfRender {}
 
 impl ElementImpl for HrtfRender {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Head-Related Transfer Function (HRTF) renderer",
                 "Filter/Effect/Audio",
@@ -546,7 +546,7 @@ impl ElementImpl for HrtfRender {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let src_caps = gst_audio::AudioCapsBuilder::new_interleaved()
                 .channels(2)
                 .format(gst_audio::AUDIO_FORMAT_F32)

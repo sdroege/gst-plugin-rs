@@ -52,10 +52,10 @@ use std::sync::{Arc, Mutex};
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use once_cell::sync::Lazy;
 use regex::Regex;
+use std::sync::LazyLock;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "queue-levels",
         gst::DebugColorFlags::empty(),
@@ -63,7 +63,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-static QUEUE_TYPE: Lazy<glib::Type> = Lazy::new(|| {
+static QUEUE_TYPE: LazyLock<glib::Type> = LazyLock::new(|| {
     if let Some(queue) = gst::ElementFactory::find("queue").and_then(|f| f.load().ok()) {
         queue.element_type()
     } else {
@@ -72,7 +72,7 @@ static QUEUE_TYPE: Lazy<glib::Type> = Lazy::new(|| {
     }
 });
 
-static QUEUE2_TYPE: Lazy<glib::Type> = Lazy::new(|| {
+static QUEUE2_TYPE: LazyLock<glib::Type> = LazyLock::new(|| {
     if let Some(queue) = gst::ElementFactory::find("queue2").and_then(|f| f.load().ok()) {
         queue.element_type()
     } else {
@@ -81,7 +81,7 @@ static QUEUE2_TYPE: Lazy<glib::Type> = Lazy::new(|| {
     }
 });
 
-static MULTIQUEUE_TYPE: Lazy<glib::Type> = Lazy::new(|| {
+static MULTIQUEUE_TYPE: LazyLock<glib::Type> = LazyLock::new(|| {
     if let Some(queue) = gst::ElementFactory::find("multiqueue").and_then(|f| f.load().ok()) {
         queue.element_type()
     } else {
@@ -90,7 +90,7 @@ static MULTIQUEUE_TYPE: Lazy<glib::Type> = Lazy::new(|| {
     }
 });
 
-static APPSRC_TYPE: Lazy<glib::Type> = Lazy::new(|| {
+static APPSRC_TYPE: LazyLock<glib::Type> = LazyLock::new(|| {
     if let Some(queue) = gst::ElementFactory::find("appsrc").and_then(|f| f.load().ok()) {
         queue.element_type()
     } else {
@@ -215,9 +215,9 @@ impl ObjectImpl for QueueLevels {
             state.settings.update_from_params(self, params);
         }
 
-        Lazy::force(&QUEUE_TYPE);
-        Lazy::force(&QUEUE2_TYPE);
-        Lazy::force(&MULTIQUEUE_TYPE);
+        LazyLock::force(&QUEUE_TYPE);
+        LazyLock::force(&QUEUE2_TYPE);
+        LazyLock::force(&MULTIQUEUE_TYPE);
 
         self.register_hook(TracerHook::ElementNew);
         self.register_hook(TracerHook::ObjectDestroyed);

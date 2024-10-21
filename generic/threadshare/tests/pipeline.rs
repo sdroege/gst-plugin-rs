@@ -20,11 +20,11 @@
 use gst::glib;
 use gst::prelude::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::sync::mpsc;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ts-test",
         gst::DebugColorFlags::empty(),

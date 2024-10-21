@@ -13,7 +13,7 @@ use cea708_types::tables::*;
 use cea708_types::*;
 
 use gst::prelude::*;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::cea608utils::{Cea608Mode, TextStyle};
 use crate::cea708utils::{
@@ -25,7 +25,7 @@ use crate::ttutils::{Chunk, Lines};
 pub const DEFAULT_FPS_N: i32 = 30;
 pub const DEFAULT_FPS_D: i32 = 1;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "tttocea708translator",
         gst::DebugColorFlags::empty(),

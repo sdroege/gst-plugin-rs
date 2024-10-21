@@ -13,9 +13,9 @@ mod imp;
 mod transcribe;
 mod translate;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "awstranscribe",
         gst::DebugColorFlags::empty(),

@@ -19,7 +19,6 @@ gst.workspace = true
 gst-audio.workspace = true
 gst-net.workspace = true
 gst-rtp.workspace = true
-once_cell.workspace = true
 pin-project-lite = "0.2.0"
 polling = "3.1.0"
 rand = "0.8"

@@ -15,7 +15,6 @@ gst-base.workspace = true
 gst-audio = { workspace = true, features = ["v1_16"] }
 tokio = { version = "1", features = [ "full" ] }
 async-tungstenite = { version = "0.28", features = ["tokio", "tokio-runtime", "tokio-native-tls"] }
-once_cell.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 atomic_refcell = "0.1"

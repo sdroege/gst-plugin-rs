@@ -12,11 +12,11 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 // This module contains the private implementation details of our element
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rsidentity",
         gst::DebugColorFlags::empty(),
@@ -196,7 +196,7 @@ impl ElementImpl for Identity {
     // retrieved from the gst::Registry after initial registration
     // without having to load the plugin in memory.
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Identity",
                 "Generic",
@@ -215,7 +215,7 @@ impl ElementImpl for Identity {
     //
     // Actual instances can create pads based on those pad templates
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             // Our element can accept any possible caps on both pads
             let caps = gst::Caps::new_any();
             let src_pad_template = gst::PadTemplate::new(

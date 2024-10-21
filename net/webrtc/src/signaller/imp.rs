@@ -13,10 +13,10 @@ use gst::glib;
 use gst::glib::prelude::*;
 use gst::subclass::prelude::*;
 use gst_plugin_webrtc_protocol as p;
-use once_cell::sync::Lazy;
 use std::collections::{HashMap, HashSet};
 use std::ops::ControlFlow;
 use std::str::FromStr;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::time::Duration;
 use tokio::{task, time::timeout};
@@ -540,7 +540,7 @@ impl ObjectSubclass for Signaller {
 
 impl ObjectImpl for Signaller {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPS: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPS: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoolean::builder("manual-sdp-munging")
                     .nick("Manual SDP munging")

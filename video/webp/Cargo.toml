@@ -10,7 +10,6 @@ repository.workspace = true
 
 [dependencies]
 libwebp-sys2 = { version = "0.1.2", features = ["demux", "0_5"] }
-once_cell.workspace = true
 gst.workspace = true
 gst-video.workspace = true
 

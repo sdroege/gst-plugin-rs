@@ -22,7 +22,6 @@ libloading = "0.8"
 quick-xml = "0.31"
 smallvec = { version = "1.11", features = ["const_generics"] }
 thiserror = "1.0"
-once_cell.workspace = true
 
 [build-dependencies]
 gst-plugin-version-helper.workspace = true

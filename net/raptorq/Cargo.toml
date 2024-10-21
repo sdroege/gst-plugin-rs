@@ -12,7 +12,6 @@ rust-version.workspace = true
 gst.workspace = true
 gst-base.workspace = true
 gst-rtp.workspace = true
-once_cell.workspace = true
 raptorq = "1.7"
 
 [dev-dependencies]

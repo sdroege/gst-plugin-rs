@@ -14,7 +14,7 @@ use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::sync::{Mutex, MutexGuard};
 
@@ -86,7 +86,7 @@ pub struct Dav1dDec {
     settings: Mutex<Settings>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "dav1ddec",
         gst::DebugColorFlags::empty(),
@@ -676,7 +676,7 @@ impl ObjectSubclass for Dav1dDec {
 
 impl ObjectImpl for Dav1dDec {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecUInt::builder("n-threads")
                     .nick("Number of threads")
@@ -748,7 +748,7 @@ impl GstObjectImpl for Dav1dDec {}
 
 impl ElementImpl for Dav1dDec {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Dav1d AV1 Decoder",
                 "Codec/Decoder/Video",
@@ -761,7 +761,7 @@ impl ElementImpl for Dav1dDec {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_caps = if gst::version() >= (1, 19, 0, 0) {
                 gst::Caps::builder("video/x-av1")
                     .field("stream-format", "obu-stream")

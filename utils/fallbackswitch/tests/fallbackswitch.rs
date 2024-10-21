@@ -10,11 +10,11 @@
 use gst::debug;
 use gst::prelude::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 const LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(10);
 
-static TEST_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static TEST_CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "fallbackswitch-test",
         gst::DebugColorFlags::empty(),

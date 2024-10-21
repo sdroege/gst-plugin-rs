@@ -11,7 +11,6 @@ use crate::common::*;
 use futures::future;
 use futures::prelude::*;
 use gst::ErrorMessage;
-use once_cell::sync::Lazy;
 use quinn::{
     crypto::rustls::QuicClientConfig, crypto::rustls::QuicServerConfig, default_runtime,
     ClientConfig, Connection, Endpoint, EndpointConfig, MtuDiscoveryConfig, ServerConfig,
@@ -23,6 +22,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::LazyLock;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use thiserror::Error;
@@ -52,7 +52,7 @@ pub enum WaitError {
     FutureError(ErrorMessage),
 }
 
-pub static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
+pub static RUNTIME: LazyLock<runtime::Runtime> = LazyLock::new(|| {
     runtime::Builder::new_multi_thread()
         .enable_all()
         .worker_threads(1)

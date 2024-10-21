@@ -13,8 +13,8 @@ use cea608_types::{
     Cea608, Cea608State, Mode,
 };
 use gst::glib;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 
 use pango::prelude::*;
 
@@ -22,7 +22,7 @@ use crate::ccutils::recalculate_pango_layout;
 
 use gst::prelude::MulDiv;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "cea608utils",
         gst::DebugColorFlags::empty(),

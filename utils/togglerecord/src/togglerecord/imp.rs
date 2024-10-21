@@ -16,12 +16,12 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use once_cell::sync::Lazy;
 use parking_lot::{Condvar, Mutex, MutexGuard};
 use std::cmp;
 use std::collections::HashMap;
 use std::iter;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
 const DEFAULT_RECORD: bool = false;
 const DEFAULT_LIVE: bool = false;
@@ -338,7 +338,7 @@ pub struct ToggleRecord {
     pads: Mutex<HashMap<gst::Pad, Stream>>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "togglerecord",
         gst::DebugColorFlags::empty(),
@@ -1949,7 +1949,7 @@ impl ObjectSubclass for ToggleRecord {
 
 impl ObjectImpl for ToggleRecord {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoolean::builder("record")
                     .nick("Record")
@@ -2043,7 +2043,7 @@ impl GstObjectImpl for ToggleRecord {}
 
 impl ElementImpl for ToggleRecord {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Toggle Record",
                 "Generic",
@@ -2058,7 +2058,7 @@ impl ElementImpl for ToggleRecord {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::new_any();
             let src_pad_template = gst::PadTemplate::new(
                 "src",

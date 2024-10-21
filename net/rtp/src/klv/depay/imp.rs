@@ -29,7 +29,7 @@ use atomic_refcell::AtomicRefCell;
 
 use gst::{glib, subclass::prelude::*};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::basedepay::{
     Packet, PacketToBufferRelation, RtpBaseDepay2Ext, RtpBaseDepay2Impl, RtpBaseDepay2ImplExt,
@@ -67,7 +67,7 @@ impl State {
     }
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpklvdepay2",
         gst::DebugColorFlags::empty(),
@@ -88,7 +88,7 @@ impl GstObjectImpl for RtpKlvDepay {}
 
 impl ElementImpl for RtpKlvDepay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RTP KLV Metadata Depayloader",
                 "Codec/Depayloader/Network/RTP",
@@ -101,7 +101,7 @@ impl ElementImpl for RtpKlvDepay {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,

@@ -6,9 +6,9 @@ use std::{
 
 use anyhow::{anyhow, Context, Error};
 use gst::{glib, prelude::*};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "webrtcutils",
         gst::DebugColorFlags::empty(),
@@ -787,22 +787,29 @@ impl Codec {
     }
 }
 
-pub static AUDIO_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::new_empty_simple("audio/x-raw"));
-pub static OPUS_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::new_empty_simple("audio/x-opus"));
+pub static AUDIO_CAPS: LazyLock<gst::Caps> =
+    LazyLock::new(|| gst::Caps::new_empty_simple("audio/x-raw"));
+pub static OPUS_CAPS: LazyLock<gst::Caps> =
+    LazyLock::new(|| gst::Caps::new_empty_simple("audio/x-opus"));
 
-pub static VIDEO_CAPS: Lazy<gst::Caps> = Lazy::new(|| {
+pub static VIDEO_CAPS: LazyLock<gst::Caps> = LazyLock::new(|| {
     gst::Caps::builder_full_with_any_features()
         .structure(gst::Structure::new_empty("video/x-raw"))
         .build()
 });
-pub static VP8_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::new_empty_simple("video/x-vp8"));
-pub static VP9_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::new_empty_simple("video/x-vp9"));
-pub static H264_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::new_empty_simple("video/x-h264"));
-pub static H265_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::new_empty_simple("video/x-h265"));
-pub static AV1_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::new_empty_simple("video/x-av1"));
+pub static VP8_CAPS: LazyLock<gst::Caps> =
+    LazyLock::new(|| gst::Caps::new_empty_simple("video/x-vp8"));
+pub static VP9_CAPS: LazyLock<gst::Caps> =
+    LazyLock::new(|| gst::Caps::new_empty_simple("video/x-vp9"));
+pub static H264_CAPS: LazyLock<gst::Caps> =
+    LazyLock::new(|| gst::Caps::new_empty_simple("video/x-h264"));
+pub static H265_CAPS: LazyLock<gst::Caps> =
+    LazyLock::new(|| gst::Caps::new_empty_simple("video/x-h265"));
+pub static AV1_CAPS: LazyLock<gst::Caps> =
+    LazyLock::new(|| gst::Caps::new_empty_simple("video/x-av1"));
 
-pub static RTP_CAPS: Lazy<gst::Caps> =
-    Lazy::new(|| gst::Caps::new_empty_simple("application/x-rtp"));
+pub static RTP_CAPS: LazyLock<gst::Caps> =
+    LazyLock::new(|| gst::Caps::new_empty_simple("application/x-rtp"));
 
 #[derive(Debug, Clone)]
 pub struct Codecs(Vec<Codec>);
@@ -834,7 +841,7 @@ impl Codecs {
     }
 }
 
-static CODECS: Lazy<Codecs> = Lazy::new(|| {
+static CODECS: LazyLock<Codecs> = LazyLock::new(|| {
     let decoders = gst::ElementFactory::factories_with_type(
         gst::ElementFactoryType::DECODER,
         gst::Rank::MARGINAL,

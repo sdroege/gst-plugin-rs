@@ -9,7 +9,7 @@
 
 use gst::{glib, prelude::*, subclass::prelude::*};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::{
     baseaudiopay::RtpBaseAudioPay2Ext,
@@ -121,7 +121,7 @@ impl GstObjectImpl for RtpPcmaPay {}
 
 impl ElementImpl for RtpPcmaPay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RTP PCMA Payloader",
                 "Codec/Payloader/Network/RTP",
@@ -134,7 +134,7 @@ impl ElementImpl for RtpPcmaPay {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,
@@ -218,7 +218,7 @@ impl GstObjectImpl for RtpPcmuPay {}
 
 impl ElementImpl for RtpPcmuPay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RTP PCMU Payloader",
                 "Codec/Payloader/Network/RTP",
@@ -231,7 +231,7 @@ impl ElementImpl for RtpPcmuPay {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,

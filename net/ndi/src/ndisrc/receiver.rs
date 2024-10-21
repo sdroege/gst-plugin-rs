@@ -8,13 +8,13 @@ use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::thread;
 use std::time;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::ndi::*;
 use crate::ndisrcmeta::Buffer;
 use crate::ndisys::*;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ndireceiver",
         gst::DebugColorFlags::empty(),

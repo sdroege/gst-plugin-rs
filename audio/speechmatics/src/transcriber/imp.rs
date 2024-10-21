@@ -27,7 +27,7 @@ use std::time::Duration;
 
 use atomic_refcell::AtomicRefCell;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 #[derive(serde::Deserialize, Debug)]
 #[allow(dead_code)]
@@ -141,7 +141,7 @@ struct EndOfStream {
     last_seq_no: u64,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "speechmaticstranscribe",
         gst::DebugColorFlags::empty(),
@@ -149,7 +149,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
+static RUNTIME: LazyLock<runtime::Runtime> = LazyLock::new(|| {
     runtime::Builder::new_multi_thread()
         .enable_all()
         .worker_threads(1)
@@ -1351,7 +1351,7 @@ impl GstObjectImpl for Transcriber {}
 
 impl ObjectImpl for Transcriber {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecString::builder("language-code")
                     .nick("Language Code")
@@ -1545,7 +1545,7 @@ impl ObjectImpl for Transcriber {
 
 impl ElementImpl for Transcriber {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Transcriber",
                 "Audio/Text/Filter",
@@ -1558,7 +1558,7 @@ impl ElementImpl for Transcriber {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let src_caps = gst::Caps::builder("text/x-raw")
                 .field("format", "utf8")
                 .build();
@@ -1751,7 +1751,7 @@ const DEFAULT_OUTPUT_LANG_CODE: Option<&str> = None;
 
 impl ObjectImpl for TranscriberSrcPad {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![glib::ParamSpecString::builder(OUTPUT_LANG_CODE_PROPERTY)
                 .nick("Language Code")
                 .blurb("The Language the Stream must be translated to")

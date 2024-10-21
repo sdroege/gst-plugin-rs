@@ -14,13 +14,13 @@ use gst::subclass::prelude::*;
 use std::cmp;
 use std::sync::{Mutex, MutexGuard};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use super::parser::{SccLine, SccParser};
 use crate::line_reader::LineReader;
 use crate::parser_utils::TimeCode;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "sccparse",
         gst::DebugColorFlags::empty(),
@@ -1043,7 +1043,7 @@ impl GstObjectImpl for SccParse {}
 
 impl ElementImpl for SccParse {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
             "Scc Parse",
             "Parser/ClosedCaption",
@@ -1056,7 +1056,7 @@ impl ElementImpl for SccParse {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::builder("closedcaption/x-cea-608")
                 .field("format", "raw")
                 .field(

@@ -5,7 +5,7 @@ use gst_webrtc::WebRTCSessionDescription;
 
 use gstrswebrtc::signaller::{Signallable, SignallableImpl};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 #[derive(Default)]
 pub struct Signaller {}
@@ -50,7 +50,7 @@ impl ObjectSubclass for Signaller {
 
 impl ObjectImpl for Signaller {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPS: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPS: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![glib::ParamSpecBoolean::builder("manual-sdp-munging")
                 .nick("Manual SDP munging")
                 .blurb("Whether the signaller manages SDP munging itself")

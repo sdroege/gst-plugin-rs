@@ -12,11 +12,11 @@ use gst::subclass::prelude::*;
 use gst_base::subclass::prelude::*;
 
 use crate::ccutils::{extract_cdp, ParseError, ParseErrorCode};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::sync::Mutex;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ccdetect",
         gst::DebugColorFlags::empty(),
@@ -226,7 +226,7 @@ impl ObjectSubclass for CCDetect {
 
 impl ObjectImpl for CCDetect {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecUInt64::builder("window")
                     .nick("Window")
@@ -286,7 +286,7 @@ impl GstObjectImpl for CCDetect {}
 
 impl ElementImpl for CCDetect {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Closed Caption Detect",
                 "Filter/Video/ClosedCaption/Detect",
@@ -299,7 +299,7 @@ impl ElementImpl for CCDetect {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let mut caps = gst::Caps::new_empty();
             {
                 let caps = caps.get_mut().unwrap();

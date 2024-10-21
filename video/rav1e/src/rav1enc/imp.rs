@@ -13,10 +13,10 @@ use gst::glib;
 use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
-use once_cell::sync::Lazy;
 use rav1e::color;
 use rav1e::config;
 use rav1e::data;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, glib::Enum)]
@@ -226,7 +226,7 @@ pub struct Rav1Enc {
     settings: Mutex<Settings>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rav1enc",
         gst::DebugColorFlags::empty(),
@@ -243,7 +243,7 @@ impl ObjectSubclass for Rav1Enc {
 
 impl ObjectImpl for Rav1Enc {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecUInt::builder("speed-preset")
                     .nick("Speed Preset")
@@ -495,7 +495,7 @@ impl GstObjectImpl for Rav1Enc {}
 
 impl ElementImpl for Rav1Enc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "rav1e AV1 encoder",
                 "Encoder/Video",
@@ -508,7 +508,7 @@ impl ElementImpl for Rav1Enc {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_caps = gst_video::VideoCapsBuilder::new()
                 .format_list([
                     gst_video::VideoFormat::I420,

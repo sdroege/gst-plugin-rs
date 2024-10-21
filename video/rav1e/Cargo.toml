@@ -13,7 +13,6 @@ gst.workspace = true
 gst-video.workspace = true
 rav1e = { version = "0.7", default-features = false, features = ["threading"] }
 atomic_refcell = "0.1"
-once_cell.workspace = true
 
 [dev-dependencies]
 gst-check.workspace = true

@@ -12,10 +12,10 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_sdp::SDPMessage;
 use gst_webrtc::{WebRTCICEGatheringState, WebRTCSessionDescription};
-use once_cell::sync::Lazy;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
 use reqwest::StatusCode;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 
 use std::net::SocketAddr;
@@ -30,7 +30,7 @@ use warp::{
     Filter, Reply,
 };
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "webrtc-whip-signaller",
         gst::DebugColorFlags::empty(),
@@ -534,7 +534,7 @@ impl ObjectSubclass for WhipClient {
 
 impl ObjectImpl for WhipClient {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoolean::builder("manual-sdp-munging")
                     .nick("Manual SDP munging")
@@ -1099,7 +1099,7 @@ impl ObjectSubclass for WhipServer {
 
 impl ObjectImpl for WhipServer {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoolean::builder("manual-sdp-munging")
                     .nick("Manual SDP munging")

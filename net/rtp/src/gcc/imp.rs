@@ -18,8 +18,8 @@
  *
  */
 use gst::{glib, prelude::*, subclass::prelude::*};
-use once_cell::sync::Lazy;
 use smallvec::SmallVec;
+use std::sync::LazyLock;
 use std::{
     collections::{BTreeMap, VecDeque},
     fmt,
@@ -37,7 +37,7 @@ const DEFAULT_MIN_BITRATE: Bitrate = 1000;
 const DEFAULT_ESTIMATED_BITRATE: Bitrate = 2_048_000;
 const DEFAULT_MAX_BITRATE: Bitrate = 8_192_000;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpgccbwe",
         gst::DebugColorFlags::empty(),
@@ -1269,7 +1269,7 @@ impl ObjectImpl for BandwidthEstimator {
     }
 
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 /*
                  *  gcc:estimated-bitrate:
@@ -1367,7 +1367,7 @@ impl GstObjectImpl for BandwidthEstimator {}
 
 impl ElementImpl for BandwidthEstimator {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Google Congestion Control bandwidth estimator",
                 "Network/WebRTC/RTP/Filter",
@@ -1381,7 +1381,7 @@ impl ElementImpl for BandwidthEstimator {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::builder_full()
                 .structure(gst::Structure::builder("application/x-rtp").build())
                 .build();

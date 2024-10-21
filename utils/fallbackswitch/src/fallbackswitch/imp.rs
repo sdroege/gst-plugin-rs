@@ -12,7 +12,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{debug, log, trace};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use parking_lot::{Condvar, Mutex, MutexGuard};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -28,7 +28,7 @@ const PROP_MIN_UPSTREAM_LATENCY: &str = "min-upstream-latency";
 const PROP_TIMEOUT: &str = "timeout";
 const PROP_STOP_ON_EOS: &str = "stop-on-eos";
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "fallbackswitch",
         gst::DebugColorFlags::empty(),
@@ -151,7 +151,7 @@ impl GstObjectImpl for FallbackSwitchSinkPad {}
 
 impl ObjectImpl for FallbackSwitchSinkPad {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecUInt::builder(PROP_PRIORITY)
                     .nick("Stream Priority")
@@ -1319,7 +1319,7 @@ impl ObjectSubclass for FallbackSwitch {
 
 impl ObjectImpl for FallbackSwitch {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecObject::builder::<gst::Pad>(PROP_ACTIVE_PAD)
                     .nick("Active Pad")
@@ -1492,7 +1492,7 @@ impl ObjectImpl for FallbackSwitch {
 
 impl ElementImpl for FallbackSwitch {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Priority-based input selector",
                 "Generic",
@@ -1505,7 +1505,7 @@ impl ElementImpl for FallbackSwitch {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::new_any();
             let sink_pad_template = gst::PadTemplate::with_gtype(
                 "sink_%u",

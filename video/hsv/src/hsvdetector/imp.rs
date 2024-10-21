@@ -18,7 +18,7 @@ use gst_video::subclass::prelude::*;
 
 use std::sync::Mutex;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use super::super::hsvutils;
 
@@ -60,7 +60,7 @@ pub struct HsvDetector {
     settings: Mutex<Settings>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "hsvdetector",
         gst::DebugColorFlags::empty(),
@@ -162,7 +162,7 @@ impl HsvDetector {
 
 impl ObjectImpl for HsvDetector {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecFloat::builder("hue-ref")
                     .nick("Hue reference")
@@ -331,7 +331,7 @@ impl GstObjectImpl for HsvDetector {}
 
 impl ElementImpl for HsvDetector {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "HSV detector",
                 "Filter/Effect/Converter/Video",
@@ -344,7 +344,7 @@ impl ElementImpl for HsvDetector {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst_video::VideoCapsBuilder::new()
                 .format_list(video_output_formats())
                 .build();

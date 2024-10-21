@@ -9,7 +9,7 @@ use std::time::{Duration, Instant, SystemTime};
 use futures::future::{AbortHandle, Abortable};
 use futures::StreamExt;
 use gst::{glib, prelude::*, subclass::prelude::*};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use super::internal::{pt_clock_rate_from_caps, GstRustLogger, SharedRtpState, SharedSession};
 use super::session::{RtcpSendReply, RtpProfile, SendReply, RTCP_MIN_REPORT_INTERVAL};
@@ -20,7 +20,7 @@ use crate::rtpbin2::RUNTIME;
 const DEFAULT_MIN_RTCP_INTERVAL: Duration = RTCP_MIN_REPORT_INTERVAL;
 const DEFAULT_REDUCED_SIZE_RTCP: bool = false;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpsend",
         gst::DebugColorFlags::empty(),
@@ -503,7 +503,7 @@ impl ObjectSubclass for RtpSend {
 
 impl ObjectImpl for RtpSend {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecString::builder("rtp-id")
                     .nick("The RTP Connection ID")
@@ -590,7 +590,7 @@ impl ObjectImpl for RtpSend {
     }
 
     fn signals() -> &'static [glib::subclass::Signal] {
-        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
             vec![glib::subclass::Signal::builder("get-session")
                 .param_types([u32::static_type()])
                 .return_type::<crate::rtpbin2::config::Rtp2Session>()
@@ -615,7 +615,7 @@ impl GstObjectImpl for RtpSend {}
 
 impl ElementImpl for RtpSend {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RTP Session Sender",
                 "Network/RTP/Filter",
@@ -628,7 +628,7 @@ impl ElementImpl for RtpSend {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let rtp_caps = gst::Caps::builder_full()
                 .structure(gst::Structure::builder("application/x-rtp").build())
                 .build();

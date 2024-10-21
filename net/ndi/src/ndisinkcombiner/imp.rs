@@ -7,12 +7,12 @@ use gst::subclass::prelude::*;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::mem;
 use std::sync::Mutex;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ndisinkcombiner",
         gst::DebugColorFlags::empty(),
@@ -75,7 +75,7 @@ impl GstObjectImpl for NdiSinkCombiner {}
 
 impl ElementImpl for NdiSinkCombiner {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "NewTek NDI Sink Combiner",
                 "Combiner/Audio/Video",
@@ -88,7 +88,7 @@ impl ElementImpl for NdiSinkCombiner {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst_video::VideoCapsBuilder::new()
                 .format_list([
                     gst_video::VideoFormat::Uyvy,

@@ -25,9 +25,9 @@ use aws_sdk_s3::{
     Client,
 };
 
-use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::convert::From;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -188,7 +188,7 @@ pub struct S3Sink {
     abort_multipart_canceller: Mutex<s3utils::Canceller>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "awss3sink",
         gst::DebugColorFlags::empty(),
@@ -665,7 +665,7 @@ impl ObjectImpl for S3Sink {
     }
 
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecString::builder("bucket")
                     .nick("S3 Bucket")
@@ -978,7 +978,7 @@ impl GstObjectImpl for S3Sink {}
 
 impl ElementImpl for S3Sink {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             #[cfg(feature = "doc")]
             OnError::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
             gst::subclass::ElementMetadata::new(
@@ -993,7 +993,7 @@ impl ElementImpl for S3Sink {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::new_any();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",

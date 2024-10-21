@@ -29,8 +29,8 @@ use sodiumoxide::crypto::box_;
 
 use std::sync::Mutex;
 
-use once_cell::sync::Lazy;
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+use std::sync::LazyLock;
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "sodiumdecrypter",
         gst::DebugColorFlags::empty(),
@@ -581,7 +581,7 @@ impl ObjectSubclass for Decrypter {
 
 impl ObjectImpl for Decrypter {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoxed::builder::<glib::Bytes>("receiver-key")
                     .nick("Receiver Key")
@@ -638,7 +638,7 @@ impl GstObjectImpl for Decrypter {}
 
 impl ElementImpl for Decrypter {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Decrypter",
                 "Generic",
@@ -651,7 +651,7 @@ impl ElementImpl for Decrypter {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,

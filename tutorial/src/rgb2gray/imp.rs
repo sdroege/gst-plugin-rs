@@ -17,11 +17,11 @@ use gst_video::subclass::prelude::*;
 
 use std::sync::Mutex;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 // This module contains the private implementation details of our element
 //
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rsrgb2gray",
         gst::DebugColorFlags::empty(),
@@ -96,7 +96,7 @@ impl ObjectSubclass for Rgb2Gray {
 impl ObjectImpl for Rgb2Gray {
     fn properties() -> &'static [glib::ParamSpec] {
         // Metadata for the properties
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoolean::builder("invert")
                     .nick("Invert")
@@ -175,7 +175,7 @@ impl ElementImpl for Rgb2Gray {
     // retrieved from the gst::Registry after initial registration
     // without having to load the plugin in memory.
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RGB-GRAY Converter",
                 "Filter/Effect/Converter/Video",
@@ -194,7 +194,7 @@ impl ElementImpl for Rgb2Gray {
     //
     // Our element here can convert BGRx to BGRx or GRAY8, both being grayscale.
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             // On the src pad, we can produce BGRx and GRAY8 of any
             // width/height and with any framerate
             let caps = gst_video::VideoCapsBuilder::new()

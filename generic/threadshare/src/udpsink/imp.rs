@@ -26,7 +26,7 @@ use gst::subclass::prelude::*;
 use gst::EventView;
 use gst::{element_error, error_msg};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::runtime::executor::block_on_or_add_sub_task;
 use crate::runtime::prelude::*;
@@ -114,7 +114,7 @@ impl Default for Settings {
     }
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ts-udpsink",
         gst::DebugColorFlags::empty(),
@@ -858,7 +858,7 @@ impl ObjectSubclass for UdpSink {
 
 impl ObjectImpl for UdpSink {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecString::builder("context")
                     .nick("Context")
@@ -959,7 +959,7 @@ impl ObjectImpl for UdpSink {
     }
 
     fn signals() -> &'static [glib::subclass::Signal] {
-        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
             vec![
                 glib::subclass::Signal::builder("add")
                     .param_types([String::static_type(), i32::static_type()])
@@ -1181,7 +1181,7 @@ impl GstObjectImpl for UdpSink {}
 
 impl ElementImpl for UdpSink {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Thread-sharing UDP sink",
                 "Sink/Network",
@@ -1194,7 +1194,7 @@ impl ElementImpl for UdpSink {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::new_any();
 
             let sink_pad_template = gst::PadTemplate::new(

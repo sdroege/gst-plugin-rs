@@ -17,7 +17,7 @@ use std::{
 };
 
 use bitstream_io::{BitReader, BitWriter};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::{
     av1::common::{
@@ -73,7 +73,7 @@ pub struct RTPAv1Depay {
     settings: Mutex<Settings>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpav1depay",
         gst::DebugColorFlags::empty(),
@@ -100,7 +100,7 @@ impl ObjectSubclass for RTPAv1Depay {
 
 impl ObjectImpl for RTPAv1Depay {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoolean::builder("request-keyframe")
                     .nick("Request Keyframe")
@@ -145,7 +145,7 @@ impl GstObjectImpl for RTPAv1Depay {}
 
 impl ElementImpl for RTPAv1Depay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RTP AV1 Depayloader",
                 "Codec/Depayloader/Network/RTP",
@@ -158,7 +158,7 @@ impl ElementImpl for RTPAv1Depay {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,

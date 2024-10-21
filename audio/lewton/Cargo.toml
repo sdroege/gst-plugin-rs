@@ -14,7 +14,6 @@ gst-audio.workspace = true
 lewton = { version = "0.10", default-features = false }
 byte-slice-cast = "1.0"
 atomic_refcell = "0.1"
-once_cell.workspace = true
 
 [dev-dependencies]
 gst-check.workspace = true

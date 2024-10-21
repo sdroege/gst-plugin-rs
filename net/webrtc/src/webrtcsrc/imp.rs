@@ -10,13 +10,13 @@ use gst::glib;
 use gst::subclass::prelude::*;
 use gst_webrtc::WebRTCDataChannel;
 use itertools::Itertools;
-use once_cell::sync::Lazy;
 use std::borrow::BorrowMut;
 use std::collections::{HashMap, HashSet};
 use std::mem;
 use std::str::FromStr;
 use std::sync::atomic::AtomicU16;
 use std::sync::atomic::Ordering;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use url::Url;
 
@@ -25,7 +25,7 @@ const DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION: bool = false;
 const DEFAULT_ENABLE_CONTROL_DATA_CHANNEL: bool = false;
 const DEFAULT_DO_RETRANSMISSION: bool = true;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "webrtcsrc",
         gst::DebugColorFlags::empty(),
@@ -68,7 +68,7 @@ pub(crate) trait BaseWebRTCSrcImpl: BinImpl {}
 
 impl ObjectImpl for BaseWebRTCSrc {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPS: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPS: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                glib::ParamSpecString::builder("stun-server")
                    .nick("The STUN server to use")
@@ -254,7 +254,7 @@ impl ObjectImpl for BaseWebRTCSrc {
     }
 
     fn signals() -> &'static [glib::subclass::Signal] {
-        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
             vec![
                 /**
                  * GstBaseWebRTCSrc::request-encoded-filter:
@@ -1490,7 +1490,7 @@ impl BaseWebRTCSrc {
 
 impl ElementImpl for BaseWebRTCSrc {
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             // Ignore specific raw caps from Codecs: they are covered by VIDEO_CAPS & AUDIO_CAPS
 
             let mut video_caps_builder = gst::Caps::builder_full()
@@ -1692,7 +1692,7 @@ impl BinImpl for WebRTCSrc {}
 
 impl ElementImpl for WebRTCSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "WebRTCSrc",
                 "Source/Network/WebRTC",
@@ -1789,14 +1789,15 @@ pub(super) mod whip {
 
     impl ElementImpl for WhipServerSrc {
         fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-            static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
-                gst::subclass::ElementMetadata::new(
-                    "WhipServerSrc",
-                    "Source/Network/WebRTC",
-                    "WebRTC source element using WHIP Server as the signaller",
-                    "Taruntej Kanakamalla <taruntej@asymptotic.io>",
-                )
-            });
+            static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> =
+                LazyLock::new(|| {
+                    gst::subclass::ElementMetadata::new(
+                        "WhipServerSrc",
+                        "Source/Network/WebRTC",
+                        "WebRTC source element using WHIP Server as the signaller",
+                        "Taruntej Kanakamalla <taruntej@asymptotic.io>",
+                    )
+                });
 
             Some(&*ELEMENT_METADATA)
         }
@@ -1838,7 +1839,7 @@ pub(super) mod livekit {
 
     impl ElementImpl for LiveKitWebRTCSrc {
         fn pad_templates() -> &'static [gst::PadTemplate] {
-            static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
                 super::BaseWebRTCSrc::pad_templates()
                     .iter()
                     .map(|pad_templ| {
@@ -1858,14 +1859,15 @@ pub(super) mod livekit {
         }
 
         fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-            static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
-                gst::subclass::ElementMetadata::new(
-                    "LiveKitWebRTCSrc",
-                    "Source/Network/WebRTC",
-                    "WebRTC source with LiveKit signaller",
-                    "Jordan Yelloz <jordan.yelloz@collabora.com>",
-                )
-            });
+            static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> =
+                LazyLock::new(|| {
+                    gst::subclass::ElementMetadata::new(
+                        "LiveKitWebRTCSrc",
+                        "Source/Network/WebRTC",
+                        "WebRTC source with LiveKit signaller",
+                        "Jordan Yelloz <jordan.yelloz@collabora.com>",
+                    )
+                });
 
             Some(&*ELEMENT_METADATA)
         }
@@ -2052,7 +2054,7 @@ pub(super) mod livekit {
 
     impl ObjectImpl for LiveKitWebRTCSrcPad {
         fn signals() -> &'static [glib::subclass::Signal] {
-            static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+            static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
                 vec![glib::subclass::Signal::builder("set-track-disabled")
                     .param_types([bool::static_type()])
                     .action()
@@ -2073,7 +2075,7 @@ pub(super) mod livekit {
         }
 
         fn properties() -> &'static [glib::ParamSpec] {
-            static PROPS: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            static PROPS: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
                 vec![
                     glib::ParamSpecBoxed::builder::<gst::Structure>("participant-info")
                         .flags(glib::ParamFlags::READABLE)

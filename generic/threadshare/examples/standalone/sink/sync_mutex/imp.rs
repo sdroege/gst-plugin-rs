@@ -14,7 +14,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::EventView;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use gstthreadshare::runtime::{prelude::*, PadSink};
 
@@ -250,7 +250,7 @@ impl ObjectSubclass for DirectSink {
 
 impl ObjectImpl for DirectSink {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(Settings::properties);
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(Settings::properties);
         PROPERTIES.as_ref()
     }
 
@@ -275,7 +275,7 @@ impl GstObjectImpl for DirectSink {}
 
 impl ElementImpl for DirectSink {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Thread-sharing standalone test direct sink",
                 "Sink/Test",
@@ -288,7 +288,7 @@ impl ElementImpl for DirectSink {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::new_any();
 
             let sink_pad_template = gst::PadTemplate::new(

@@ -19,8 +19,8 @@ use byte_slice_cast::*;
 use num_traits::cast::{FromPrimitive, ToPrimitive};
 use num_traits::float::Float;
 
-use once_cell::sync::Lazy;
-static _CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+use std::sync::LazyLock;
+static _CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rsaudioecho",
         gst::DebugColorFlags::empty(),
@@ -94,7 +94,7 @@ impl ObjectSubclass for AudioEcho {
 
 impl ObjectImpl for AudioEcho {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecUInt64::builder("max-delay")
                     .nick("Maximum Delay")
@@ -183,7 +183,7 @@ impl GstObjectImpl for AudioEcho {}
 
 impl ElementImpl for AudioEcho {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Audio echo",
                 "Filter/Effect/Audio",
@@ -236,7 +236,7 @@ impl BaseTransformImpl for AudioEcho {
 
 impl AudioFilterImpl for AudioEcho {
     fn allowed_caps() -> &'static gst::Caps {
-        static CAPS: Lazy<gst::Caps> = Lazy::new(|| {
+        static CAPS: LazyLock<gst::Caps> = LazyLock::new(|| {
             gst_audio::AudioCapsBuilder::new_interleaved()
                 .format_list([gst_audio::AUDIO_FORMAT_F32, gst_audio::AUDIO_FORMAT_F64])
                 .build()

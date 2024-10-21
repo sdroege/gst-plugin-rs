@@ -13,12 +13,12 @@ use gst::glib::translate::IntoGlib;
 #[cfg(feature = "sink")]
 use gst_video::VideoVBIEncoder;
 use gst_video::{VideoAncillary, VideoAncillaryDID16, VideoVBIParser};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 #[cfg(feature = "sink")]
 use std::ffi::CString;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ndiccmeta",
         gst::DebugColorFlags::empty(),

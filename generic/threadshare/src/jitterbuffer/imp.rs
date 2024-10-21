@@ -26,7 +26,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_rtp::RTPBuffer;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, VecDeque};
@@ -1243,7 +1243,7 @@ pub struct JitterBuffer {
     settings: StdMutex<Settings>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ts-jitterbuffer",
         gst::DebugColorFlags::empty(),
@@ -1331,7 +1331,7 @@ impl ObjectSubclass for JitterBuffer {
 
 impl ObjectImpl for JitterBuffer {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecString::builder("context")
                     .nick("Context")
@@ -1376,7 +1376,7 @@ impl ObjectImpl for JitterBuffer {
     }
 
     fn signals() -> &'static [glib::subclass::Signal] {
-        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
             vec![
                 glib::subclass::Signal::builder("clear-pt-map")
                     .action()
@@ -1497,7 +1497,7 @@ impl GstObjectImpl for JitterBuffer {}
 
 impl ElementImpl for JitterBuffer {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Thread-sharing jitterbuffer",
                 "Generic",
@@ -1510,7 +1510,7 @@ impl ElementImpl for JitterBuffer {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::new_any();
 
             let sink_pad_template = gst::PadTemplate::new(

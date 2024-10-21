@@ -2,7 +2,7 @@
 
 use gst::glib;
 use gst::prelude::*;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 mod config;
 mod internal;
 mod jitterbuffer;
@@ -44,7 +44,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     )
 }
 
-pub static RUNTIME: Lazy<tokio::runtime::Runtime> = Lazy::new(|| {
+pub static RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
     tokio::runtime::Builder::new_multi_thread()
         .enable_time()
         .worker_threads(1)

@@ -4,7 +4,7 @@ use gst::subclass::prelude::*;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 use gst_base::AGGREGATOR_FLOW_NEED_DATA;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 
 #[derive(Default)]
@@ -25,7 +25,7 @@ pub struct OnvifMetadataCombiner {
     state: Mutex<State>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "onvifmetadatacombiner",
         gst::DebugColorFlags::empty(),
@@ -70,7 +70,7 @@ impl GstObjectImpl for OnvifMetadataCombiner {}
 
 impl ElementImpl for OnvifMetadataCombiner {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "ONVIF metadata combiner",
                 "Video/Metadata/Combiner",
@@ -83,7 +83,7 @@ impl ElementImpl for OnvifMetadataCombiner {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let media_caps = gst::Caps::new_any();
             let media_sink_pad_template = gst::PadTemplate::with_gtype(
                 "media",

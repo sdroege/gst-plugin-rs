@@ -10,7 +10,7 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::collections::BTreeMap;
 use std::sync::{Condvar, Mutex};
@@ -51,7 +51,7 @@ fn running_time_to_utc_time(
     }
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "onvifmetadataparse",
         gst::DebugColorFlags::empty(),
@@ -1492,7 +1492,7 @@ impl ObjectSubclass for OnvifMetadataParse {
 
 impl ObjectImpl for OnvifMetadataParse {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecUInt64::builder("latency")
                     .nick("Latency")
@@ -1563,7 +1563,7 @@ impl GstObjectImpl for OnvifMetadataParse {}
 
 impl ElementImpl for OnvifMetadataParse {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "ONVIF Metadata Parser",
                 "Metadata/Parser",
@@ -1576,7 +1576,7 @@ impl ElementImpl for OnvifMetadataParse {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::builder("application/x-onvif-metadata")
                 .field("parsed", true)
                 .build();

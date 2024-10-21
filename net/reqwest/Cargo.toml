@@ -17,7 +17,6 @@ mime = "0.3"
 gst.workspace = true
 gst-base.workspace = true
 tokio = { version = "1.0", default-features = false, features = ["time", "rt-multi-thread"] }
-once_cell.workspace = true
 
 [dev-dependencies]
 hyper = { version = "1.0", features = ["server"] }

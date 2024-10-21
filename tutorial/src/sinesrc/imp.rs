@@ -23,11 +23,11 @@ use std::sync::Mutex;
 use num_traits::cast::NumCast;
 use num_traits::float::Float;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 // This module contains the private implementation details of our element
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rssinesrc",
         gst::DebugColorFlags::empty(),
@@ -165,7 +165,7 @@ impl ObjectSubclass for SineSrc {
 impl ObjectImpl for SineSrc {
     // Metadata for the properties
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecUInt::builder("samples-per-buffer")
                     .nick("Samples Per Buffer")
@@ -329,7 +329,7 @@ impl ElementImpl for SineSrc {
     // retrieved from the gst::Registry after initial registration
     // without having to load the plugin in memory.
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Sine Wave Source",
                 "Source/Audio",
@@ -346,7 +346,7 @@ impl ElementImpl for SineSrc {
     // already provide information to GStreamer about all possible
     // pads that could exist for this type.
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             // On the src pad, we can produce F32/F64 with any sample rate
             // and any number of channels
             let caps = gst_audio::AudioCapsBuilder::new_interleaved()

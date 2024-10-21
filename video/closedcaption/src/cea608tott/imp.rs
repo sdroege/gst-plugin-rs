@@ -13,7 +13,7 @@ use gst::subclass::prelude::*;
 
 use atomic_refcell::AtomicRefCell;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::cea608utils::Cea608Frame;
 
@@ -53,7 +53,7 @@ pub struct Cea608ToTt {
     state: AtomicRefCell<State>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "cea608tott",
         gst::DebugColorFlags::empty(),
@@ -443,7 +443,7 @@ impl GstObjectImpl for Cea608ToTt {}
 
 impl ElementImpl for Cea608ToTt {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "CEA-608 to TT",
                 "Generic",
@@ -456,7 +456,7 @@ impl ElementImpl for Cea608ToTt {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let mut caps = gst::Caps::new_empty();
             {
                 let caps = caps.get_mut().unwrap();

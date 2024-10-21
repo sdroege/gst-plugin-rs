@@ -21,13 +21,13 @@ use futures::future::{self, abortable, AbortHandle};
 
 use gst::prelude::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 
-static DATA_QUEUE_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static DATA_QUEUE_CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ts-dataqueue",
         gst::DebugColorFlags::empty(),

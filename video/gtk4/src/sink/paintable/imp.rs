@@ -18,9 +18,9 @@ use crate::sink::frame::{self, Frame, Texture};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "gtk4paintable",
         gst::DebugColorFlags::empty(),
@@ -72,7 +72,7 @@ impl ObjectSubclass for Paintable {
 
 impl ObjectImpl for Paintable {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecObject::builder::<gdk::GLContext>("gl-context")
                     .nick("GL Context")

@@ -22,7 +22,7 @@ use gst_base::subclass::prelude::*;
 use gst_gl::prelude::{GLContextExt as _, *};
 use gst_video::subclass::prelude::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::sync::{
     atomic::{self, AtomicBool},
     Mutex,
@@ -46,7 +46,7 @@ enum GLContext {
 
 static GL_CONTEXT: Mutex<GLContext> = Mutex::new(GLContext::Uninitialized);
 
-pub(crate) static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+pub(crate) static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "gtk4paintablesink",
         gst::DebugColorFlags::empty(),
@@ -109,7 +109,7 @@ impl ObjectSubclass for PaintableSink {
 
 impl ObjectImpl for PaintableSink {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecObject::builder::<super::paintable::Paintable>("paintable")
                     .nick("Paintable")
@@ -224,7 +224,7 @@ impl GstObjectImpl for PaintableSink {}
 
 impl ElementImpl for PaintableSink {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "GTK 4 Paintable Sink",
                 "Sink/Video",
@@ -237,7 +237,7 @@ impl ElementImpl for PaintableSink {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             // Those are the supported formats by a gdk::Texture
             let mut caps = gst::Caps::new_empty();
             {

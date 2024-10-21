@@ -14,7 +14,7 @@ use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 use gst_video::VideoFormat;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::{
     io,
     io::Write,
@@ -131,7 +131,7 @@ pub struct GifEnc {
     settings: Mutex<Settings>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new("gifenc", gst::DebugColorFlags::empty(), Some("GIF encoder"))
 });
 
@@ -144,7 +144,7 @@ impl ObjectSubclass for GifEnc {
 
 impl ObjectImpl for GifEnc {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecInt::builder("repeat")
                     .nick("Repeat")
@@ -201,7 +201,7 @@ impl GstObjectImpl for GifEnc {}
 
 impl ElementImpl for GifEnc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "GIF encoder",
                 "Encoder/Video",
@@ -214,7 +214,7 @@ impl ElementImpl for GifEnc {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_caps = gst_video::VideoCapsBuilder::new()
                 .format_list([VideoFormat::Rgb, VideoFormat::Rgba])
                 // frame-delay timing in gif is a multiple of 10ms -> max 100fps

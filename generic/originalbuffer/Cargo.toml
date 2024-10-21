@@ -13,7 +13,6 @@ glib.workspace = true
 gst.workspace = true
 gst-video.workspace = true
 atomic_refcell = "0.1"
-once_cell.workspace = true
 
 [lib]
 name = "gstoriginalbuffer"

@@ -11,7 +11,7 @@ use gst::subclass::prelude::*;
 
 use gst_rtp::RTPBuffer;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::collections::BTreeMap;
 use std::iter;
@@ -22,7 +22,7 @@ use raptorq::{EncodingPacket, ObjectTransmissionInformation, PayloadId, SourceBl
 
 use crate::fecscheme::{self, DataUnitHeader, RepairPayloadId};
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "raptorqdec",
         gst::DebugColorFlags::empty(),
@@ -635,7 +635,7 @@ impl ObjectSubclass for RaptorqDec {
 
 impl ObjectImpl for RaptorqDec {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecUInt::builder("repair-window-tolerance")
                     .nick("Repair Window Tolerance (ms)")
@@ -729,7 +729,7 @@ impl GstObjectImpl for RaptorqDec {}
 
 impl ElementImpl for RaptorqDec {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RTP RaptorQ FEC Decoder",
                 "RTP RaptorQ FEC Decoding",
@@ -742,7 +742,7 @@ impl ElementImpl for RaptorqDec {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::builder("application/x-rtp").build();
 
             let srcpad_template = gst::PadTemplate::new(

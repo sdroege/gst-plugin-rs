@@ -2,7 +2,7 @@ use gst::glib;
 use gst::glib::subclass::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -59,7 +59,7 @@ impl prelude::ObjectInterface for Signallable {
     }
 
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![glib::ParamSpecBoolean::builder("manual-sdp-munging")
                 .nick("Manual SDP munging")
                 .blurb("Whether the signaller manages SDP munging itself")
@@ -72,7 +72,7 @@ impl prelude::ObjectInterface for Signallable {
     }
 
     fn signals() -> &'static [Signal] {
-        static SIGNALS: Lazy<Vec<Signal>> = Lazy::new(|| {
+        static SIGNALS: LazyLock<Vec<Signal>> = LazyLock::new(|| {
             vec![
                 /**
                  * GstRSWebRTCSignallableIface::session-ended:

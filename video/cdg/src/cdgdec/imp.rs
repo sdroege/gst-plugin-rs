@@ -13,12 +13,12 @@ use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 use image::GenericImageView;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 
 use crate::constants::{CDG_HEIGHT, CDG_WIDTH};
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new("cdgdec", gst::DebugColorFlags::empty(), Some("CDG decoder"))
 });
 
@@ -41,7 +41,7 @@ impl GstObjectImpl for CdgDec {}
 
 impl ElementImpl for CdgDec {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "CDG decoder",
                 "Decoder/Video",
@@ -54,7 +54,7 @@ impl ElementImpl for CdgDec {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_caps = gst::Caps::builder("video/x-cdg")
                 .field("parsed", true)
                 .build();

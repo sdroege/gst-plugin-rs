@@ -39,7 +39,7 @@ use atomic_refcell::AtomicRefCell;
 
 use gst::{glib, prelude::*, subclass::prelude::*};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::basepay::{RtpBasePay2Ext, RtpBasePay2Impl, RtpBasePay2ImplExt};
 
@@ -79,7 +79,7 @@ pub struct RtpOpusPay {
     settings: Settings,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpopuspay2",
         gst::DebugColorFlags::empty(),
@@ -96,7 +96,7 @@ impl ObjectSubclass for RtpOpusPay {
 
 impl ObjectImpl for RtpOpusPay {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![glib::ParamSpecBoolean::builder("dtx")
                 .nick("Discontinuous Transmission")
                 .blurb("Do not send out empty packets for transmission (requires opusenc dtx=true)")
@@ -133,7 +133,7 @@ impl GstObjectImpl for RtpOpusPay {}
 
 impl ElementImpl for RtpOpusPay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RTP Opus Payloader",
                 "Codec/Payloader/Network/RTP",
@@ -146,7 +146,7 @@ impl ElementImpl for RtpOpusPay {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,

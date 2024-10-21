@@ -30,7 +30,7 @@ mod ndi_cc_meta;
 #[cfg(feature = "doc")]
 use gst::prelude::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum, Default)]
 #[repr(u32)]
@@ -152,10 +152,10 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     Ok(())
 }
 
-static TIMECODE_CAPS: Lazy<gst::Caps> =
-    Lazy::new(|| gst::Caps::new_empty_simple("timestamp/x-ndi-timecode"));
-static TIMESTAMP_CAPS: Lazy<gst::Caps> =
-    Lazy::new(|| gst::Caps::new_empty_simple("timestamp/x-ndi-timestamp"));
+static TIMECODE_CAPS: LazyLock<gst::Caps> =
+    LazyLock::new(|| gst::Caps::new_empty_simple("timestamp/x-ndi-timecode"));
+static TIMESTAMP_CAPS: LazyLock<gst::Caps> =
+    LazyLock::new(|| gst::Caps::new_empty_simple("timestamp/x-ndi-timestamp"));
 
 gst::plugin_define!(
     ndi,

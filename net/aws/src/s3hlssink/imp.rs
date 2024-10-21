@@ -8,10 +8,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use once_cell::sync::Lazy;
 use std::io::Write;
 use std::str::FromStr;
 use std::sync::mpsc::{self, Receiver, SyncSender};
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
@@ -92,7 +92,7 @@ pub struct S3HlsSink {
     canceller: Mutex<s3utils::Canceller>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "awss3hlssink",
         gst::DebugColorFlags::empty(),
@@ -474,7 +474,7 @@ impl ObjectSubclass for S3HlsSink {
 
 impl ObjectImpl for S3HlsSink {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecString::builder("access-key")
                     .nick("Access Key")
@@ -777,7 +777,7 @@ impl GstObjectImpl for S3HlsSink {}
 
 impl ElementImpl for S3HlsSink {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "S3 HLS Sink",
                 "Generic",
@@ -790,7 +790,7 @@ impl ElementImpl for S3HlsSink {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::new_any();
 
             let audio_sink_pad_template = gst::PadTemplate::new(

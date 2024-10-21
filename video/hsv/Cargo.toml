@@ -15,7 +15,6 @@ gst-video.workspace = true
 gst-audio.workspace = true
 byte-slice-cast = "1.0"
 num-traits = "0.2"
-once_cell.workspace = true
 
 [dev-dependencies]
 gst-check.workspace = true

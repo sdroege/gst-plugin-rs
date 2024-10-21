@@ -17,7 +17,7 @@ use gst::subclass::prelude::*;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 #[derive(Default, Copy, Clone, PartialEq, Eq)]
 enum CeaFormat {
@@ -95,7 +95,7 @@ pub struct Cea708Mux {
     state: Mutex<State>,
 }
 
-pub(crate) static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+pub(crate) static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "cea708mux",
         gst::DebugColorFlags::empty(),
@@ -455,7 +455,7 @@ impl AggregatorImpl for Cea708Mux {
 
 impl ElementImpl for Cea708Mux {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "CEA-708 Mux",
                 "Muxer",
@@ -468,7 +468,7 @@ impl ElementImpl for Cea708Mux {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let framerates = gst::List::new([
                 gst::Fraction::new(60, 1),
                 gst::Fraction::new(60000, 1001),

@@ -10,7 +10,7 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::cmp;
 use std::sync::{Mutex, MutexGuard};
@@ -19,7 +19,7 @@ use serde::Deserialize;
 
 use crate::line_reader::LineReader;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "jsongstparse",
         gst::DebugColorFlags::empty(),
@@ -906,7 +906,7 @@ impl GstObjectImpl for JsonGstParse {}
 
 impl ElementImpl for JsonGstParse {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "JSON GStreamer parser",
                 "Parser/JSON",
@@ -919,7 +919,7 @@ impl ElementImpl for JsonGstParse {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::builder("application/x-json").build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",

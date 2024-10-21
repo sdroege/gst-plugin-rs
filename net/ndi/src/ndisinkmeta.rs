@@ -53,9 +53,9 @@ impl fmt::Debug for NdiSinkAudioMeta {
 
 mod imp {
     use glib::translate::*;
-    use once_cell::sync::Lazy;
     use std::mem;
     use std::ptr;
+    use std::sync::LazyLock;
 
     pub(super) struct NdiSinkAudioMetaParams {
         pub buffers: Vec<(gst::Buffer, gst_audio::AudioInfo, i64)>,
@@ -68,7 +68,7 @@ mod imp {
     }
 
     pub(super) fn ndi_sink_audio_meta_api_get_type() -> glib::Type {
-        static TYPE: Lazy<glib::Type> = Lazy::new(|| unsafe {
+        static TYPE: LazyLock<glib::Type> = LazyLock::new(|| unsafe {
             let t = from_glib(gst::ffi::gst_meta_api_type_register(
                 b"GstNdiSinkAudioMetaAPI\0".as_ptr() as *const _,
                 [ptr::null::<std::os::raw::c_char>()].as_ptr() as *mut *const _,
@@ -125,7 +125,7 @@ mod imp {
         unsafe impl Send for MetaInfo {}
         unsafe impl Sync for MetaInfo {}
 
-        static META_INFO: Lazy<MetaInfo> = Lazy::new(|| unsafe {
+        static META_INFO: LazyLock<MetaInfo> = LazyLock::new(|| unsafe {
             MetaInfo(
                 ptr::NonNull::new(gst::ffi::gst_meta_register(
                     ndi_sink_audio_meta_api_get_type().into_glib(),

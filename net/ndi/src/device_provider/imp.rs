@@ -8,11 +8,11 @@ use std::{
     thread,
 };
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::ndi;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ndideviceprovider",
         gst::DebugColorFlags::empty(),
@@ -50,7 +50,7 @@ impl GstObjectImpl for DeviceProvider {}
 
 impl DeviceProviderImpl for DeviceProvider {
     fn metadata() -> Option<&'static gst::subclass::DeviceProviderMetadata> {
-        static METADATA: Lazy<gst::subclass::DeviceProviderMetadata> = Lazy::new(|| {
+        static METADATA: LazyLock<gst::subclass::DeviceProviderMetadata> = LazyLock::new(|| {
             gst::subclass::DeviceProviderMetadata::new("NewTek NDI Device Provider",
             "Source/Audio/Video/Network",
             "NewTek NDI Device Provider",

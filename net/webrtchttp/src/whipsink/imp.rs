@@ -18,13 +18,13 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_sdp::*;
 use gst_webrtc::*;
-use once_cell::sync::Lazy;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
 use reqwest::StatusCode;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new("whipsink", gst::DebugColorFlags::empty(), Some("WHIP Sink"))
 });
 
@@ -99,7 +99,7 @@ impl GstObjectImpl for WhipSink {}
 
 impl ElementImpl for WhipSink {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "WHIP Sink Bin",
                 "Sink/Network/WebRTC",
@@ -111,7 +111,7 @@ impl ElementImpl for WhipSink {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_caps = gst::Caps::builder("application/x-rtp").build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink_%u",
@@ -218,7 +218,7 @@ impl ElementImpl for WhipSink {
 
 impl ObjectImpl for WhipSink {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![glib::ParamSpecString::builder("whip-endpoint")
                     .nick("WHIP Endpoint")
                     .blurb("The WHIP server endpoint to POST SDP offer to.

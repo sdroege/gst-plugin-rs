@@ -23,7 +23,7 @@ use futures::future::BoxFuture;
 use gst::glib;
 use gst::prelude::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::error;
 use std::fmt;
@@ -41,7 +41,7 @@ use std::os::{
 #[cfg(windows)]
 use std::os::windows::io::{AsRawSocket, FromRawSocket, IntoRawSocket, RawSocket};
 
-static SOCKET_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static SOCKET_CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ts-socket",
         gst::DebugColorFlags::empty(),

@@ -8,13 +8,13 @@ use std::{
 };
 
 use gst::glib;
-use once_cell::sync::{Lazy, OnceCell};
+use std::sync::{LazyLock, OnceLock};
 
 use super::config::Rtp2Session;
 use super::session::{RtpProfile, Session};
 use super::source::ReceivedRb;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpinternalsession",
         gst::DebugColorFlags::empty(),
@@ -22,7 +22,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-static SHARED_RTP_STATE: OnceCell<Mutex<HashMap<String, SharedRtpState>>> = OnceCell::new();
+static SHARED_RTP_STATE: OnceLock<Mutex<HashMap<String, SharedRtpState>>> = OnceLock::new();
 
 #[derive(Debug, Clone)]
 pub struct SharedRtpState {
@@ -369,7 +369,7 @@ pub fn pt_clock_rate_from_caps(caps: &gst::CapsRef) -> Option<(u8, u32)> {
     }
 }
 
-static RUST_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static RUST_CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rust-log",
         gst::DebugColorFlags::empty(),
@@ -377,7 +377,7 @@ static RUST_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-static GST_RUST_LOGGER_ONCE: once_cell::sync::OnceCell<()> = once_cell::sync::OnceCell::new();
+static GST_RUST_LOGGER_ONCE: std::sync::OnceLock<()> = std::sync::OnceLock::new();
 static GST_RUST_LOGGER: GstRustLogger = GstRustLogger {};
 
 pub(crate) struct GstRustLogger {}

@@ -15,14 +15,14 @@ use std::{
 };
 
 use bitstream_io::{BitReader, BitWriter};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::{
     av1::common::{err_flow, leb128_size, write_leb128, ObuType, SizedObu, CLOCK_RATE, ENDIANNESS},
     basepay::{PacketToBufferRelation, RtpBasePay2Ext},
 };
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpav1pay",
         gst::DebugColorFlags::empty(),
@@ -504,7 +504,7 @@ impl GstObjectImpl for RTPAv1Pay {}
 
 impl ElementImpl for RTPAv1Pay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RTP AV1 payloader",
                 "Codec/Payloader/Network/RTP",
@@ -517,7 +517,7 @@ impl ElementImpl for RTPAv1Pay {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,

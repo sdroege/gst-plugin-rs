@@ -9,7 +9,6 @@ description = "GStreamer JSON Plugin"
 repository.workspace = true
 
 [dependencies]
-once_cell.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 gst = { workspace = true, features = ["serde"]}

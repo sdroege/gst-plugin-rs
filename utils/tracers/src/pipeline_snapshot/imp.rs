@@ -45,9 +45,9 @@ use gst::glib;
 use gst::glib::translate::ToGlibPtr;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "pipeline-snapshot",
         gst::DebugColorFlags::empty(),

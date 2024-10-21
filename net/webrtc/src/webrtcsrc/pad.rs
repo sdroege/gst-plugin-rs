@@ -3,9 +3,9 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use once_cell::sync::Lazy;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 
 #[derive(Default)]
@@ -47,7 +47,7 @@ impl ObjectSubclass for WebRTCSrcPad {
 
 impl ObjectImpl for WebRTCSrcPad {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPS: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPS: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![glib::ParamSpecString::builder("msid")
                 .flags(glib::ParamFlags::READABLE)
                 .blurb("Remote MediaStream ID in use for this pad")

@@ -19,7 +19,6 @@ cairo-rs.workspace = true
 pango.workspace = true
 pangocairo.workspace = true
 xmltree = "0.10"
-once_cell.workspace = true
 
 [lib]
 name = "gstrsonvif"

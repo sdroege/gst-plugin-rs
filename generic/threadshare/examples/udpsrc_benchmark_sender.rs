@@ -20,13 +20,13 @@
 use gst::glib;
 use gst::prelude::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::net;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::{env, thread, time};
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ts-udpsrc-benchmark-sender",
         gst::DebugColorFlags::empty(),

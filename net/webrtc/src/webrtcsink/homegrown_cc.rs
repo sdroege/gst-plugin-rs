@@ -4,11 +4,11 @@ use gst::{
     glib::{self, value::FromValue},
     prelude::*,
 };
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use super::imp::VideoEncoder;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "webrtcsink-homegrowncc",
         gst::DebugColorFlags::empty(),

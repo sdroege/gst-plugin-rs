@@ -433,7 +433,7 @@ pub struct RemoteSendSource {
 }
 
 // The first time we recev a packet for jitter calculations
-static INITIAL_RECV_TIME: once_cell::sync::OnceCell<Instant> = once_cell::sync::OnceCell::new();
+static INITIAL_RECV_TIME: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
 
 impl RemoteSendSource {
     pub fn new(ssrc: u32) -> Self {

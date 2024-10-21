@@ -1,9 +1,9 @@
 use futures::future;
 use futures::prelude::*;
 use gst::{prelude::*, ErrorMessage};
-use once_cell::sync::Lazy;
 use reqwest::header::HeaderMap;
 use reqwest::redirect::Policy;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::time::Duration;
 use tokio::runtime;
@@ -14,7 +14,7 @@ pub enum WaitError {
     FutureError(ErrorMessage),
 }
 
-pub static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
+pub static RUNTIME: LazyLock<runtime::Runtime> = LazyLock::new(|| {
     runtime::Builder::new_multi_thread()
         .enable_all()
         .worker_threads(1)

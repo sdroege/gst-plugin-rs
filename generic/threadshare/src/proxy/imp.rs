@@ -25,7 +25,7 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Weak};
@@ -37,12 +37,12 @@ use crate::runtime::{Context, PadSink, PadSinkWeak, PadSrc, PadSrcWeak, Task};
 
 use crate::dataqueue::{DataQueue, DataQueueItem};
 
-static PROXY_CONTEXTS: Lazy<Mutex<HashMap<String, Weak<Mutex<ProxyContextInner>>>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-static PROXY_SRC_PADS: Lazy<Mutex<HashMap<String, PadSrcWeak>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-static PROXY_SINK_PADS: Lazy<Mutex<HashMap<String, PadSinkWeak>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+static PROXY_CONTEXTS: LazyLock<Mutex<HashMap<String, Weak<Mutex<ProxyContextInner>>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+static PROXY_SRC_PADS: LazyLock<Mutex<HashMap<String, PadSrcWeak>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+static PROXY_SINK_PADS: LazyLock<Mutex<HashMap<String, PadSinkWeak>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 const DEFAULT_PROXY_CONTEXT: &str = "";
 
@@ -304,7 +304,7 @@ pub struct ProxySink {
     settings: Mutex<SettingsSink>,
 }
 
-static SINK_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static SINK_CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ts-proxysink",
         gst::DebugColorFlags::empty(),
@@ -552,7 +552,7 @@ impl ObjectSubclass for ProxySink {
 
 impl ObjectImpl for ProxySink {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![glib::ParamSpecString::builder("proxy-context")
                 .nick("Proxy Context")
                 .blurb("Context name of the proxy to share with")
@@ -597,7 +597,7 @@ impl GstObjectImpl for ProxySink {}
 
 impl ElementImpl for ProxySink {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Thread-sharing proxy sink",
                 "Sink/Generic",
@@ -610,7 +610,7 @@ impl ElementImpl for ProxySink {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::new_any();
 
             let sink_pad_template = gst::PadTemplate::new(
@@ -927,7 +927,7 @@ pub struct ProxySrc {
     settings: Mutex<SettingsSrc>,
 }
 
-static SRC_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static SRC_CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ts-proxysrc",
         gst::DebugColorFlags::empty(),
@@ -1057,7 +1057,7 @@ impl ObjectSubclass for ProxySrc {
 
 impl ObjectImpl for ProxySrc {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecString::builder("context")
                     .nick("Context")
@@ -1156,7 +1156,7 @@ impl GstObjectImpl for ProxySrc {}
 
 impl ElementImpl for ProxySrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Thread-sharing proxy source",
                 "Source/Generic",
@@ -1169,7 +1169,7 @@ impl ElementImpl for ProxySrc {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::new_any();
 
             let src_pad_template = gst::PadTemplate::new(

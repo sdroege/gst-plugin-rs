@@ -33,7 +33,7 @@ use bitstream_io::{BigEndian, BitRead as _, BitReader, ByteRead as _, ByteReader
 
 use gst::{glib, prelude::*, subclass::prelude::*};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::basedepay::{PacketToBufferRelation, RtpBaseDepay2Ext};
 use crate::vp9::frame_header::FrameHeader;
@@ -108,7 +108,7 @@ pub struct RtpVp9Depay {
     settings: Mutex<Settings>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpvp9depay2",
         gst::DebugColorFlags::empty(),
@@ -133,7 +133,7 @@ impl ObjectSubclass for RtpVp9Depay {
 
 impl ObjectImpl for RtpVp9Depay {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoolean::builder("request-keyframe")
                     .nick("Request Keyframe")
@@ -178,7 +178,7 @@ impl GstObjectImpl for RtpVp9Depay {}
 
 impl ElementImpl for RtpVp9Depay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RTP VP9 Depayloader",
                 "Codec/Depayloader/Network/RTP",
@@ -191,7 +191,7 @@ impl ElementImpl for RtpVp9Depay {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,

@@ -19,7 +19,7 @@
 
 use gst::glib;
 use gst::prelude::*;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::env;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -29,7 +29,7 @@ use std::time::{Duration, Instant};
 
 const THROUGHPUT_PERIOD: Duration = Duration::from_secs(20);
 
-pub static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+pub static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ts-benchmark",
         gst::DebugColorFlags::empty(),

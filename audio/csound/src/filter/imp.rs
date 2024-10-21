@@ -22,9 +22,9 @@ use byte_slice_cast::*;
 
 use csound::{Csound, MessageType};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "csoundfilter",
         gst::DebugColorFlags::empty(),
@@ -323,7 +323,7 @@ impl ObjectSubclass for CsoundFilter {
 
 impl ObjectImpl for CsoundFilter {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoolean::builder("loop")
                     .nick("Loop")
@@ -415,7 +415,7 @@ impl GstObjectImpl for CsoundFilter {}
 
 impl ElementImpl for CsoundFilter {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Audio filter",
                 "Filter/Effect/Audio",
@@ -428,7 +428,7 @@ impl ElementImpl for CsoundFilter {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst_audio::AudioCapsBuilder::new_interleaved()
                 .format(gst_audio::AUDIO_FORMAT_F64)
                 .build();

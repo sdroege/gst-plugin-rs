@@ -12,14 +12,14 @@ use gst::{
     prelude::*,
     subclass::prelude::*,
 };
-use once_cell::sync::Lazy;
 use parking_lot::{Condvar, Mutex, MutexGuard};
+use std::sync::LazyLock;
 use std::{collections::VecDeque, sync::mpsc};
 
 /// Offset for the segment in single-segment mode, to handle negative DTS
 const SEGMENT_OFFSET: gst::ClockTime = gst::ClockTime::from_seconds(60 * 60 * 1000);
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "livesync",
         gst::DebugColorFlags::empty(),
@@ -296,7 +296,7 @@ impl ObjectSubclass for LiveSync {
 
 impl ObjectImpl for LiveSync {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<[glib::ParamSpec; 8]> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<[glib::ParamSpec; 8]> = LazyLock::new(|| {
             [
                 glib::ParamSpecUInt64::builder(PROP_LATENCY)
                     .nick("Latency")
@@ -407,7 +407,7 @@ impl GstObjectImpl for LiveSync {}
 
 impl ElementImpl for LiveSync {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Live Synchronizer",
                 "Filter",
@@ -420,7 +420,7 @@ impl ElementImpl for LiveSync {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<[gst::PadTemplate; 2]> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<[gst::PadTemplate; 2]> = LazyLock::new(|| {
             let caps = gst::Caps::new_any();
 
             [

@@ -14,12 +14,12 @@ use parking_lot::Mutex;
 use std::time::Instant;
 use std::{cmp, mem};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use super::custom_source::CustomSource;
 use super::{RetryReason, Status};
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "fallbacksrc",
         gst::DebugColorFlags::empty(),
@@ -230,7 +230,7 @@ impl ObjectSubclass for FallbackSrc {
 
 impl ObjectImpl for FallbackSrc {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoolean::builder("enable-audio")
                     .nick("Enable Audio")
@@ -657,7 +657,7 @@ impl ObjectImpl for FallbackSrc {
     }
 
     fn signals() -> &'static [glib::subclass::Signal] {
-        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
             vec![
                 glib::subclass::Signal::builder("update-uri")
                     .param_types([String::static_type()])
@@ -716,7 +716,7 @@ impl GstObjectImpl for FallbackSrc {}
 
 impl ElementImpl for FallbackSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             #[cfg(feature = "doc")]
             Status::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
             gst::subclass::ElementMetadata::new(
@@ -731,7 +731,7 @@ impl ElementImpl for FallbackSrc {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let audio_src_pad_template = gst::PadTemplate::new(
                 "audio",
                 gst::PadDirection::Src,

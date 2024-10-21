@@ -16,16 +16,16 @@ use gst::glib::{subclass::Signal, Properties};
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use http::Uri;
-use once_cell::sync::Lazy;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::ops::ControlFlow;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::time::Duration;
 use tokio::{task, time::timeout};
 use tungstenite::Message as WsMessage;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "webrtc-janusvr-signaller",
         gst::DebugColorFlags::empty(),
@@ -896,7 +896,7 @@ impl ObjectSubclass for Signaller {
 #[glib::derived_properties]
 impl ObjectImpl for Signaller {
     fn signals() -> &'static [glib::subclass::Signal] {
-        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
             vec![
                 /**
                  * GstJanusVRWebRTCSignaller::state-updated:
@@ -941,7 +941,7 @@ pub mod signaller_u64 {
     #[glib::derived_properties]
     impl ObjectImpl for SignallerU64 {
         fn signals() -> &'static [Signal] {
-            static SIGNALS: Lazy<Vec<Signal>> = Lazy::new(|| {
+            static SIGNALS: LazyLock<Vec<Signal>> = LazyLock::new(|| {
                 vec![
                     /**
                      * GstJanusVRWebRTCSignallerU64::talking:
@@ -1032,7 +1032,7 @@ pub mod signaller_str {
     #[glib::derived_properties]
     impl ObjectImpl for SignallerStr {
         fn signals() -> &'static [Signal] {
-            static SIGNALS: Lazy<Vec<Signal>> = Lazy::new(|| {
+            static SIGNALS: LazyLock<Vec<Signal>> = LazyLock::new(|| {
                 vec![
                     /**
                      * GstJanusVRWebRTCSignallerStr::talking:

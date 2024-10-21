@@ -28,7 +28,7 @@ use atomic_refcell::AtomicRefCell;
 
 use gst::{glib, subclass::prelude::*};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::num::NonZeroUsize;
 
@@ -98,7 +98,7 @@ impl State {
     }
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpmp2tpay2",
         gst::DebugColorFlags::empty(),
@@ -119,7 +119,7 @@ impl GstObjectImpl for RtpMP2TPay {}
 
 impl ElementImpl for RtpMP2TPay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RTP MPEG-TS Payloader",
                 "Codec/Payloader/Network/RTP",
@@ -132,7 +132,7 @@ impl ElementImpl for RtpMP2TPay {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,

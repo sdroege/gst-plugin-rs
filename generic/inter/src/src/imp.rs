@@ -8,7 +8,7 @@ use gst::subclass::prelude::*;
 
 use std::sync::Mutex;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 const DEFAULT_PRODUCER_NAME: &str = "default";
 
@@ -54,7 +54,7 @@ impl InterSrc {
     }
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new("intersrc", gst::DebugColorFlags::empty(), Some("Inter Src"))
 });
 
@@ -81,7 +81,7 @@ impl ObjectSubclass for InterSrc {
 
 impl ObjectImpl for InterSrc {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![glib::ParamSpecString::builder("producer-name")
                 .nick("Producer Name")
                 .blurb("Producer Name to consume from")
@@ -144,7 +144,7 @@ impl GstObjectImpl for InterSrc {}
 
 impl ElementImpl for InterSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Inter Src",
                 "Generic/Src",
@@ -157,7 +157,7 @@ impl ElementImpl for InterSrc {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::new_any();
 
             let src_pad_template = gst::PadTemplate::new(

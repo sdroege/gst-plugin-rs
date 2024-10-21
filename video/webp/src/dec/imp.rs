@@ -11,13 +11,13 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 
 use libwebp_sys as ffi;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::sync::Mutex;
 
 use std::marker::PhantomData;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rswebpdec",
         gst::DebugColorFlags::empty(),
@@ -319,7 +319,7 @@ impl GstObjectImpl for WebPDec {}
 
 impl ElementImpl for WebPDec {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "WebP decoder",
                 "Codec/Decoder/Video",
@@ -332,7 +332,7 @@ impl ElementImpl for WebPDec {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::builder("image/webp").build();
 
             let sink_pad_template = gst::PadTemplate::new(

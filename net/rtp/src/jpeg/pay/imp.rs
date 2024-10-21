@@ -30,14 +30,14 @@ use smallvec::SmallVec;
 use std::{cmp, io};
 
 use bitstream_io::{BigEndian, ByteRead as _, ByteReader, ByteWrite as _, ByteWriter};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::{
     basepay::RtpBasePay2Ext,
     jpeg::header::{detect_static_quant_table, JpegHeader, MainHeader, QuantizationTableHeader},
 };
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpjpegpay2",
         gst::DebugColorFlags::empty(),
@@ -70,7 +70,7 @@ impl GstObjectImpl for RtpJpegPay {}
 
 impl ElementImpl for RtpJpegPay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RTP JPEG payloader",
                 "Codec/Payloader/Network/RTP",
@@ -83,7 +83,7 @@ impl ElementImpl for RtpJpegPay {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,

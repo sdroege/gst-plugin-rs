@@ -17,7 +17,6 @@ image = { version = "0.25", default-features = false }
 image_hasher = "2.0.0"
 dssim-core = { version = "3.2.3", optional = true }
 rgb = { version = "0.8", optional = true }
-once_cell.workspace = true
 gst = { workspace = true, features = ["v1_16"] }
 gst-base = { workspace = true, features = ["v1_16"] }
 gst-video = { workspace = true, features = ["v1_16"] }

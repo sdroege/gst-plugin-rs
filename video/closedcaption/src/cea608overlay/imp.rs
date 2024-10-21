@@ -11,14 +11,14 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::sync::Mutex;
 
 use crate::ccutils::extract_cdp;
 use crate::cea608utils::Cea608Renderer;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "cea608overlay",
         gst::DebugColorFlags::empty(),
@@ -388,7 +388,7 @@ impl ObjectSubclass for Cea608Overlay {
 
 impl ObjectImpl for Cea608Overlay {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecInt::builder("field")
                     .nick("Field")
@@ -487,7 +487,7 @@ impl GstObjectImpl for Cea608Overlay {}
 
 impl ElementImpl for Cea608Overlay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Cea 608 overlay",
                 "Video/Overlay/Subtitle",
@@ -500,7 +500,7 @@ impl ElementImpl for Cea608Overlay {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst_video::VideoFormat::iter_raw()
                 .into_video_caps()
                 .unwrap()

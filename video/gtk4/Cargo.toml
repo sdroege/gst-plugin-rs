@@ -23,8 +23,6 @@ gst-gl-wayland = { workspace = true, features = ["v1_16"], optional = true }
 gst-gl-x11 = { workspace = true, features = ["v1_16"], optional = true }
 gst-gl-egl = { workspace = true, features = ["v1_16"], optional = true }
 async-channel = "2.0.0"
-once_cell.workspace = true
-
 
 [target.'cfg(target_os = "macos")'.dependencies]
 gst-gl = { workspace = true, features = ["v1_16"] }

@@ -18,7 +18,7 @@ use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 use gst_video::VideoFormat;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 
 #[derive(Default)]
@@ -277,7 +277,7 @@ impl Ffv1Dec {
     }
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ffv1dec",
         gst::DebugColorFlags::empty(),
@@ -298,7 +298,7 @@ impl GstObjectImpl for Ffv1Dec {}
 
 impl ElementImpl for Ffv1Dec {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "FFV1 Decoder",
                 "Codec/Decoder/Video",
@@ -311,7 +311,7 @@ impl ElementImpl for Ffv1Dec {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_caps = gst::Caps::builder("video/x-ffv")
                 .field("ffvversion", 1)
                 .field("width", gst::IntRange::new(1, i32::MAX))

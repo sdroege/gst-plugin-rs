@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use anyhow::{anyhow, Error};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 pub enum InterStreamProducer {
     Pending {
@@ -15,8 +15,8 @@ pub enum InterStreamProducer {
     },
 }
 
-static PRODUCERS: Lazy<Mutex<HashMap<String, InterStreamProducer>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+static PRODUCERS: LazyLock<Mutex<HashMap<String, InterStreamProducer>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 fn toplevel(obj: &gst::Object) -> gst::Object {
     if let Some(parent) = obj.parent() {

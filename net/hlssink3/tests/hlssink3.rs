@@ -9,12 +9,12 @@
 use gio::prelude::*;
 use gst::prelude::*;
 use gsthlssink3::hlssink3::HlsSink3PlaylistType;
-use once_cell::sync::Lazy;
 use std::io::Write;
+use std::sync::LazyLock;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "hlssink3-test",
         gst::DebugColorFlags::empty(),

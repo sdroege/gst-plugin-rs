@@ -11,8 +11,8 @@ use atomic_refcell::AtomicRefCell;
 use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_rtp::prelude::*;
 
-use once_cell::sync::Lazy;
 use smallvec::SmallVec;
+use std::sync::LazyLock;
 
 use std::{
     collections::{BTreeMap, VecDeque},
@@ -23,7 +23,7 @@ use std::{
 
 use super::PacketToBufferRelation;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpbasepay2",
         gst::DebugColorFlags::empty(),
@@ -1857,7 +1857,7 @@ impl ObjectSubclass for RtpBasePay2 {
 
 impl ObjectImpl for RtpBasePay2 {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecUInt::builder("mtu")
                     .nick("MTU")
@@ -1969,7 +1969,7 @@ impl ObjectImpl for RtpBasePay2 {
     }
 
     fn signals() -> &'static [glib::subclass::Signal] {
-        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
             vec![
                 glib::subclass::Signal::builder("add-extension")
                     .action()

@@ -31,15 +31,15 @@ use std::path::PathBuf;
 
 use pretty_assertions::assert_eq;
 
-use once_cell::sync::Lazy;
-static SENDER_PUBLIC: Lazy<glib::Bytes> = Lazy::new(|| {
+use std::sync::LazyLock;
+static SENDER_PUBLIC: LazyLock<glib::Bytes> = LazyLock::new(|| {
     let public = [
         66, 248, 199, 74, 216, 55, 228, 116, 52, 17, 147, 56, 65, 130, 134, 148, 157, 153, 235,
         171, 179, 147, 120, 71, 100, 243, 133, 120, 160, 14, 111, 65,
     ];
     glib::Bytes::from_owned(public)
 });
-static RECEIVER_PRIVATE: Lazy<glib::Bytes> = Lazy::new(|| {
+static RECEIVER_PRIVATE: LazyLock<glib::Bytes> = LazyLock::new(|| {
     let secret = [
         54, 221, 217, 54, 94, 235, 167, 2, 187, 249, 71, 31, 59, 27, 19, 166, 78, 236, 102, 48, 29,
         142, 41, 189, 22, 146, 218, 69, 147, 165, 240, 235,

@@ -9,7 +9,7 @@
 use std::sync::{mpsc, Arc, Mutex};
 
 use futures::future::{AbortHandle, Abortable, Aborted};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use tokio::{runtime, task::JoinHandle};
 
 use gst::glib;
@@ -28,7 +28,7 @@ use librespot_playback::{
 
 use super::Bitrate;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "spotifyaudiosrc",
         gst::DebugColorFlags::empty(),
@@ -36,7 +36,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
+static RUNTIME: LazyLock<runtime::Runtime> = LazyLock::new(|| {
     runtime::Builder::new_multi_thread()
         .enable_all()
         .worker_threads(1)
@@ -112,7 +112,7 @@ impl ObjectSubclass for SpotifyAudioSrc {
 
 impl ObjectImpl for SpotifyAudioSrc {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             let mut props = crate::common::Settings::properties();
             let default = Settings::default();
 
@@ -154,7 +154,7 @@ impl GstObjectImpl for SpotifyAudioSrc {}
 
 impl ElementImpl for SpotifyAudioSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Spotify source",
                 "Source/Audio",
@@ -167,7 +167,7 @@ impl ElementImpl for SpotifyAudioSrc {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::builder("application/ogg").build();
 
             let src_pad_template = gst::PadTemplate::new(

@@ -11,11 +11,11 @@ use gst::subclass::prelude::*;
 use gst::{element_imp_error, error_msg};
 use serde_derive::Deserialize;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::sync::Mutex;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "awstranscribeparse",
         gst::DebugColorFlags::empty(),
@@ -294,7 +294,7 @@ impl GstObjectImpl for TranscribeParse {}
 
 impl ElementImpl for TranscribeParse {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "AWS transcript parser",
                 "Text/Subtitle",
@@ -307,7 +307,7 @@ impl ElementImpl for TranscribeParse {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::builder("application/x-json").build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",

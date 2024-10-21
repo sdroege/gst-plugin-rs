@@ -10,7 +10,7 @@ use std::cmp;
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::ndisrcmeta::NdiSrcMeta;
 use crate::ndisys;
@@ -20,7 +20,7 @@ use crate::TimestampMode;
 use super::receiver::{Receiver, ReceiverControlHandle, ReceiverItem};
 use crate::ndisrcmeta::Buffer;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ndisrc",
         gst::DebugColorFlags::empty(),
@@ -28,7 +28,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-static DEFAULT_RECEIVER_NDI_NAME: Lazy<String> = Lazy::new(|| {
+static DEFAULT_RECEIVER_NDI_NAME: LazyLock<String> = LazyLock::new(|| {
     format!(
         "GStreamer NewTek NDI Source {}-{}",
         env!("CARGO_PKG_VERSION"),
@@ -113,7 +113,7 @@ impl ObjectSubclass for NdiSrc {
 
 impl ObjectImpl for NdiSrc {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             let receiver = glib::ParamSpecString::builder("receiver-ndi-name")
                 .nick("Receiver NDI Name")
                 .blurb("NDI stream name of this receiver");
@@ -350,7 +350,7 @@ impl GstObjectImpl for NdiSrc {}
 
 impl ElementImpl for NdiSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
             "NewTek NDI Source",
             "Source/Audio/Video/Network",
@@ -363,7 +363,7 @@ impl ElementImpl for NdiSrc {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,

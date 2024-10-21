@@ -15,7 +15,7 @@ use gst_base::prelude::*;
 use std::sync::atomic;
 use std::sync::Mutex;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use byte_slice_cast::*;
 
@@ -23,7 +23,7 @@ use smallvec::SmallVec;
 
 use atomic_refcell::AtomicRefCell;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ebur128level",
         gst::DebugColorFlags::empty(),
@@ -122,7 +122,7 @@ impl ObjectSubclass for EbuR128Level {
 
 impl ObjectImpl for EbuR128Level {
     fn signals() -> &'static [glib::subclass::Signal] {
-        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
             vec![glib::subclass::Signal::builder("reset")
                 .action()
                 .class_handler(|_token, args| {
@@ -141,7 +141,7 @@ impl ObjectImpl for EbuR128Level {
     }
 
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecFlags::builder::<Mode>("mode")
                     .nick("Mode")
@@ -223,7 +223,7 @@ impl GstObjectImpl for EbuR128Level {}
 
 impl ElementImpl for EbuR128Level {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "EBU R128 Loudness Level Measurement",
                 "Filter/Analyzer/Audio",
@@ -236,7 +236,7 @@ impl ElementImpl for EbuR128Level {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst_audio::AudioCapsBuilder::new()
                 .format_list([
                     gst_audio::AUDIO_FORMAT_S16,
@@ -486,7 +486,7 @@ impl BaseTransformImpl for EbuR128Level {
 
 impl AudioFilterImpl for EbuR128Level {
     fn allowed_caps() -> &'static gst::Caps {
-        static CAPS: Lazy<gst::Caps> = Lazy::new(|| {
+        static CAPS: LazyLock<gst::Caps> = LazyLock::new(|| {
             gst_audio::AudioCapsBuilder::new()
                 .format_list([
                     gst_audio::AUDIO_FORMAT_S16,

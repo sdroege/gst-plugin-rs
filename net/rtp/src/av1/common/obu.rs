@@ -235,89 +235,90 @@ impl From<ObuType> for u8 {
 mod tests {
     use super::*;
     use bitstream_io::{BigEndian, BitRead, BitReader};
-    use once_cell::sync::Lazy;
     use std::io::Cursor;
+    use std::sync::LazyLock;
 
     #[allow(clippy::type_complexity)]
-    static OBUS: Lazy<Vec<(SizedObu, Vec<u8>, u64, UnsizedObu, Vec<u8>)>> = Lazy::new(|| {
-        vec![
-            (
-                SizedObu {
-                    obu_type: ObuType::TemporalDelimiter,
-                    has_extension: false,
-                    has_size_field: true,
-                    temporal_id: 0,
-                    spatial_id: 0,
-                    size: 0,
-                    leb_size: 1,
-                    header_len: 1,
-                    is_fragment: false,
-                },
-                vec![0b0001_0010, 0b0000_0000],
-                2,
-                UnsizedObu {
-                    obu_type: ObuType::TemporalDelimiter,
-                    has_extension: false,
-                    temporal_id: 0,
-                    spatial_id: 0,
-                    header_len: 1,
-                    is_fragment: false,
-                    size: None,
-                },
-                vec![0b0001_0000],
-            ),
-            (
-                SizedObu {
-                    obu_type: ObuType::Padding,
-                    has_extension: false,
-                    has_size_field: true,
-                    temporal_id: 0,
-                    spatial_id: 0,
-                    size: 10,
-                    leb_size: 1,
-                    header_len: 1,
-                    is_fragment: false,
-                },
-                vec![0b0111_1010, 0b0000_1010, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                2,
-                UnsizedObu {
-                    obu_type: ObuType::Padding,
-                    has_extension: false,
-                    temporal_id: 0,
-                    spatial_id: 0,
-                    header_len: 1,
-                    is_fragment: false,
-                    size: None,
-                },
-                vec![0b0111_1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            ),
-            (
-                SizedObu {
-                    obu_type: ObuType::Frame,
-                    has_extension: true,
-                    has_size_field: true,
-                    temporal_id: 4,
-                    spatial_id: 3,
-                    size: 5,
-                    leb_size: 1,
-                    header_len: 2,
-                    is_fragment: false,
-                },
-                vec![0b0011_0110, 0b1001_1000, 0b0000_0101, 1, 2, 3, 4, 5],
-                3,
-                UnsizedObu {
-                    obu_type: ObuType::Frame,
-                    has_extension: true,
-                    temporal_id: 4,
-                    spatial_id: 3,
-                    header_len: 2,
-                    is_fragment: false,
-                    size: None,
-                },
-                vec![0b0011_0100, 0b1001_1000, 1, 2, 3, 4, 5],
-            ),
-        ]
-    });
+    static OBUS: LazyLock<Vec<(SizedObu, Vec<u8>, u64, UnsizedObu, Vec<u8>)>> =
+        LazyLock::new(|| {
+            vec![
+                (
+                    SizedObu {
+                        obu_type: ObuType::TemporalDelimiter,
+                        has_extension: false,
+                        has_size_field: true,
+                        temporal_id: 0,
+                        spatial_id: 0,
+                        size: 0,
+                        leb_size: 1,
+                        header_len: 1,
+                        is_fragment: false,
+                    },
+                    vec![0b0001_0010, 0b0000_0000],
+                    2,
+                    UnsizedObu {
+                        obu_type: ObuType::TemporalDelimiter,
+                        has_extension: false,
+                        temporal_id: 0,
+                        spatial_id: 0,
+                        header_len: 1,
+                        is_fragment: false,
+                        size: None,
+                    },
+                    vec![0b0001_0000],
+                ),
+                (
+                    SizedObu {
+                        obu_type: ObuType::Padding,
+                        has_extension: false,
+                        has_size_field: true,
+                        temporal_id: 0,
+                        spatial_id: 0,
+                        size: 10,
+                        leb_size: 1,
+                        header_len: 1,
+                        is_fragment: false,
+                    },
+                    vec![0b0111_1010, 0b0000_1010, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    2,
+                    UnsizedObu {
+                        obu_type: ObuType::Padding,
+                        has_extension: false,
+                        temporal_id: 0,
+                        spatial_id: 0,
+                        header_len: 1,
+                        is_fragment: false,
+                        size: None,
+                    },
+                    vec![0b0111_1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                ),
+                (
+                    SizedObu {
+                        obu_type: ObuType::Frame,
+                        has_extension: true,
+                        has_size_field: true,
+                        temporal_id: 4,
+                        spatial_id: 3,
+                        size: 5,
+                        leb_size: 1,
+                        header_len: 2,
+                        is_fragment: false,
+                    },
+                    vec![0b0011_0110, 0b1001_1000, 0b0000_0101, 1, 2, 3, 4, 5],
+                    3,
+                    UnsizedObu {
+                        obu_type: ObuType::Frame,
+                        has_extension: true,
+                        temporal_id: 4,
+                        spatial_id: 3,
+                        header_len: 2,
+                        is_fragment: false,
+                        size: None,
+                    },
+                    vec![0b0011_0100, 0b1001_1000, 1, 2, 3, 4, 5],
+                ),
+            ]
+        });
 
     #[test]
     fn test_parse() {

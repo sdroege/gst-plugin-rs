@@ -17,12 +17,12 @@ use bytes::Bytes;
 use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_sdp::*;
 use gst_webrtc::*;
-use once_cell::sync::Lazy;
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::StatusCode;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "whepsrc",
         gst::DebugColorFlags::empty(),
@@ -144,7 +144,7 @@ impl GstObjectImpl for WhepSrc {}
 
 impl ElementImpl for WhepSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "WHEP Source Bin",
                 "Source/Network/WebRTC",
@@ -156,7 +156,7 @@ impl ElementImpl for WhepSrc {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let src_pad_template = gst::PadTemplate::new(
                 "src_%u",
                 gst::PadDirection::Src,
@@ -256,7 +256,7 @@ impl ElementImpl for WhepSrc {
 
 impl ObjectImpl for WhepSrc {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoxed::builder::<gst::Caps>("video-caps")
                     .nick("Video caps")

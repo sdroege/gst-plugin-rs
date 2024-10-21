@@ -44,9 +44,9 @@ pub mod prelude {
     pub use super::task::TaskImpl;
 }
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
-static RUNTIME_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static RUNTIME_CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ts-runtime",
         gst::DebugColorFlags::empty(),

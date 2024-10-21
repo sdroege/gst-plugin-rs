@@ -10,7 +10,7 @@
 use atomic_refcell::AtomicRefCell;
 use gst::{glib, prelude::*, subclass::prelude::*};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::basedepay::RtpBaseDepay2Ext;
 
@@ -24,7 +24,7 @@ struct State {
     clock_rate: Option<u32>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtppcmaudepay2",
         gst::DebugColorFlags::empty(),
@@ -133,7 +133,7 @@ impl GstObjectImpl for RtpPcmaDepay {}
 
 impl ElementImpl for RtpPcmaDepay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RTP PCMA Depayloader",
                 "Codec/Depayloader/Network/RTP",
@@ -146,7 +146,7 @@ impl ElementImpl for RtpPcmaDepay {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,
@@ -226,7 +226,7 @@ impl GstObjectImpl for RtpPcmuDepay {}
 
 impl ElementImpl for RtpPcmuDepay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RTP PCMU Depayloader",
                 "Codec/Depayloader/Network/RTP",
@@ -239,7 +239,7 @@ impl ElementImpl for RtpPcmuDepay {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,

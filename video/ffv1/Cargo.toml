@@ -13,7 +13,6 @@ byte-slice-cast = "1"
 ffv1 = { git = "https://github.com/rust-av/ffv1.git", rev = "2afb025a327173ce891954c052e804d0f880368a" }
 gst = { workspace = true, features = ["v1_18"] }
 gst-video = { workspace = true, features = ["v1_18"] }
-once_cell.workspace = true
 
 [dev-dependencies]
 gst-check = { workspace = true, features = ["v1_18"] }

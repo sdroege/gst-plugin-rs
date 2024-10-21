@@ -10,7 +10,7 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::sync::Mutex;
 
@@ -66,7 +66,7 @@ impl Default for State {
     }
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "tttocea608",
         gst::DebugColorFlags::empty(),
@@ -406,7 +406,7 @@ impl ObjectSubclass for TtToCea608 {
 
 impl ObjectImpl for TtToCea608 {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecEnum::builder_with_default("mode", DEFAULT_MODE)
                     .nick("Mode")
@@ -516,7 +516,7 @@ impl GstObjectImpl for TtToCea608 {}
 
 impl ElementImpl for TtToCea608 {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "TT to CEA-608",
                 "Generic",
@@ -529,7 +529,7 @@ impl ElementImpl for TtToCea608 {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let mut caps = gst::Caps::new_empty();
             {
                 let caps = caps.get_mut().unwrap();

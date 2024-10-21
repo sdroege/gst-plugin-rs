@@ -21,7 +21,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use anyhow::Result;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use futures::{Sink, SinkExt, Stream, StreamExt};
 use socket2::Socket;
@@ -65,8 +65,8 @@ const MAX_BIND_PORT_RETRY: u16 = 100;
 const UDP_PACKET_MAX_SIZE: u32 = 65535 - 8;
 const RTCP_ADDR_CACHE_SIZE: usize = 100;
 
-static RTCP_CAPS: Lazy<gst::Caps> =
-    Lazy::new(|| gst::Caps::from(gst::Structure::new_empty("application/x-rtcp")));
+static RTCP_CAPS: LazyLock<gst::Caps> =
+    LazyLock::new(|| gst::Caps::from(gst::Structure::new_empty("application/x-rtcp")));
 
 // Hardcoded for now
 const DEFAULT_USER_AGENT: &str = concat!(
@@ -147,7 +147,7 @@ pub enum RtspError {
     Fatal(String),
 }
 
-pub(crate) static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+pub(crate) static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtspsrc2",
         gst::DebugColorFlags::empty(),
@@ -155,7 +155,7 @@ pub(crate) static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
+static RUNTIME: LazyLock<runtime::Runtime> = LazyLock::new(|| {
     runtime::Builder::new_multi_thread()
         .enable_all()
         .worker_threads(1)
@@ -270,7 +270,7 @@ impl RtspSrc {
 
 impl ObjectImpl for RtspSrc {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecUInt::builder("receive-mtu")
                     .nick("Receive packet size")
@@ -409,7 +409,7 @@ impl GstObjectImpl for RtspSrc {}
 
 impl ElementImpl for RtspSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RTSP Source",
                 "Source/Network",
@@ -422,7 +422,7 @@ impl ElementImpl for RtspSrc {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let src_pad_template = gst::PadTemplate::new(
                 "stream_%u",
                 gst::PadDirection::Src,

@@ -16,7 +16,6 @@ gst-plugin-gtk4 = { path = "../../video/gtk4", optional = true }
 gtk = { workspace = true, optional = true }
 gio = { workspace = true, optional = true }
 parking_lot = "0.12"
-once_cell.workspace = true
 
 [dev-dependencies]
 either = "1.0"

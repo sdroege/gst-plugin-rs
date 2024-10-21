@@ -40,7 +40,7 @@
  */
 use atomic_refcell::AtomicRefCell;
 use bitstream_io::{BigEndian, BitCounter, BitRead, BitReader, BitWrite, BitWriter};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use gst::{glib, prelude::*, subclass::prelude::*};
 use smallvec::SmallVec;
@@ -125,7 +125,7 @@ impl State {
     }
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpmp4gpay2",
         gst::DebugColorFlags::empty(),
@@ -142,7 +142,7 @@ impl ObjectSubclass for RtpMpeg4GenericPay {
 
 impl ObjectImpl for RtpMpeg4GenericPay {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecEnum::builder_with_default(
                     "aggregate-mode",
@@ -223,7 +223,7 @@ impl GstObjectImpl for RtpMpeg4GenericPay {}
 
 impl ElementImpl for RtpMpeg4GenericPay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RTP MPEG-4 Generic Payloader",
                 "Codec/Payloader/Network/RTP",
@@ -236,7 +236,7 @@ impl ElementImpl for RtpMpeg4GenericPay {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,

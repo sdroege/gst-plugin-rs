@@ -10,7 +10,6 @@ rust-version.workspace = true
 
 [dependencies]
 gst.workspace = true
-once_cell.workspace = true
 
 [lib]
 name = "gsttextahead"

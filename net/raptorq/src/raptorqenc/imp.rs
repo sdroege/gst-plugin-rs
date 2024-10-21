@@ -12,7 +12,7 @@ use gst::subclass::prelude::*;
 use gst_rtp::rtp_buffer::*;
 use gst_rtp::RTPBuffer;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::collections::HashSet;
 use std::sync::{mpsc, Mutex};
@@ -24,7 +24,7 @@ use raptorq::{
 
 use crate::fecscheme::{self, DataUnitHeader, RepairPayloadId};
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "raptorqenc",
         gst::DebugColorFlags::empty(),
@@ -729,7 +729,7 @@ impl ObjectSubclass for RaptorqEnc {
 
 impl ObjectImpl for RaptorqEnc {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecUInt::builder("protected-packets")
                     .nick("Protected Packets")
@@ -863,7 +863,7 @@ impl GstObjectImpl for RaptorqEnc {}
 
 impl ElementImpl for RaptorqEnc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RTP RaptorQ FEC Encoder",
                 "RTP RaptorQ FEC Encoding",
@@ -876,7 +876,7 @@ impl ElementImpl for RaptorqEnc {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::builder("application/x-rtp")
                 .field("clock-rate", gst::IntRange::new(0, i32::MAX))
                 .build();

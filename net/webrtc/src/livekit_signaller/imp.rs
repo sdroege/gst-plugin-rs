@@ -10,10 +10,10 @@ use futures::executor::block_on;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::LazyLock;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -22,7 +22,7 @@ use livekit_api::access_token::{AccessToken, VideoGrants};
 use livekit_api::signal_client;
 use livekit_protocol::{self as proto, UpdateTrackSettings};
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "webrtc-livekit-signaller",
         gst::DebugColorFlags::empty(),
@@ -823,7 +823,7 @@ impl ObjectSubclass for Signaller {
 
 impl ObjectImpl for Signaller {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoolean::builder("manual-sdp-munging")
                     .nick("Manual SDP munging")

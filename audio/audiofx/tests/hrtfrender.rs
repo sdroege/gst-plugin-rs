@@ -9,9 +9,9 @@
 use gst::glib;
 use gst::prelude::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
-static CONFIG: Lazy<glib::Bytes> = Lazy::new(|| {
+static CONFIG: LazyLock<glib::Bytes> = LazyLock::new(|| {
     let buff = include_bytes!("test.hrir");
     glib::Bytes::from_owned(buff)
 });

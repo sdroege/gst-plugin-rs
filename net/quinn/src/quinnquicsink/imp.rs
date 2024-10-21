@@ -16,14 +16,14 @@ use bytes::Bytes;
 use futures::future;
 use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_base::subclass::prelude::*;
-use once_cell::sync::Lazy;
 use quinn::{Connection, SendStream, TransportConfig};
 use std::path::PathBuf;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 
 const DEFAULT_ROLE: QuinnQuicRole = QuinnQuicRole::Client;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "quinnquicsink",
         gst::DebugColorFlags::empty(),
@@ -104,7 +104,7 @@ impl GstObjectImpl for QuinnQuicSink {}
 
 impl ElementImpl for QuinnQuicSink {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Quinn QUIC Sink",
                 "Source/Network/QUIC",
@@ -116,7 +116,7 @@ impl ElementImpl for QuinnQuicSink {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,
@@ -164,7 +164,7 @@ impl ObjectImpl for QuinnQuicSink {
     }
 
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecString::builder("server-name")
                     .nick("QUIC server name")

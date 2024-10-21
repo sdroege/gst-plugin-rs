@@ -11,7 +11,7 @@
  * Since: plugins-rs-0.9
  */
 use gst::glib;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use tokio::runtime;
 
 #[cfg(feature = "aws")]
@@ -46,7 +46,7 @@ gst::plugin_define!(
     env!("BUILD_REL_DATE")
 );
 
-pub static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
+pub static RUNTIME: LazyLock<runtime::Runtime> = LazyLock::new(|| {
     runtime::Builder::new_multi_thread()
         .enable_all()
         .worker_threads(1)

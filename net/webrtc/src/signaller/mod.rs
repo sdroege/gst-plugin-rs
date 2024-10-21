@@ -8,7 +8,7 @@ use gst::glib;
  *
  * Interface that WebRTC elements can implement their own protocol with.
  */
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 // Expose traits and objects from the module itself so it exactly looks like
 // generated bindings
 pub use imp::WebRTCSignallerRole;
@@ -16,7 +16,7 @@ pub mod prelude {
     pub use {super::SignallableExt, super::SignallableImpl};
 }
 
-pub static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+pub static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "webrtc-signaller",
         gst::DebugColorFlags::empty(),

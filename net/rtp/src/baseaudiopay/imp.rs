@@ -12,7 +12,7 @@ use std::{cmp, collections::VecDeque, sync::Mutex};
 use atomic_refcell::AtomicRefCell;
 use gst::{glib, prelude::*, subclass::prelude::*};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::{
     audio_discont::{AudioDiscont, AudioDiscontConfiguration},
@@ -72,7 +72,7 @@ pub struct RtpBaseAudioPay2 {
     state: AtomicRefCell<State>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpbaseaudiopay2",
         gst::DebugColorFlags::empty(),
@@ -90,7 +90,7 @@ impl ObjectSubclass for RtpBaseAudioPay2 {
 
 impl ObjectImpl for RtpBaseAudioPay2 {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             let mut properties = vec![
                 // Using same type/semantics as C payloaders
                 glib::ParamSpecInt64::builder("max-ptime")

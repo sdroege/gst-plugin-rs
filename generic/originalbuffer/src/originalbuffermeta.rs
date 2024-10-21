@@ -71,9 +71,9 @@ impl fmt::Debug for OriginalBufferMeta {
 
 mod imp {
     use gst::glib::translate::*;
-    use once_cell::sync::Lazy;
     use std::mem;
     use std::ptr;
+    use std::sync::LazyLock;
 
     pub(super) struct OriginalBufferMetaParams {
         pub original: gst::Buffer,
@@ -88,7 +88,7 @@ mod imp {
     }
 
     pub(super) fn original_buffer_meta_api_get_type() -> glib::Type {
-        static TYPE: Lazy<glib::Type> = Lazy::new(|| unsafe {
+        static TYPE: LazyLock<glib::Type> = LazyLock::new(|| unsafe {
             let t = from_glib(gst::ffi::gst_meta_api_type_register(
                 b"GstOriginalBufferMetaAPI\0".as_ptr() as *const _,
                 [ptr::null::<std::os::raw::c_char>()].as_ptr() as *mut *const _,
@@ -157,7 +157,7 @@ mod imp {
         unsafe impl Send for MetaInfo {}
         unsafe impl Sync for MetaInfo {}
 
-        static META_INFO: Lazy<MetaInfo> = Lazy::new(|| unsafe {
+        static META_INFO: LazyLock<MetaInfo> = LazyLock::new(|| unsafe {
             MetaInfo(
                 ptr::NonNull::new(gst::ffi::gst_meta_register(
                     original_buffer_meta_api_get_type().into_glib(),

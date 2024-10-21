@@ -32,7 +32,7 @@ use tokio::{runtime, sync::broadcast, task};
 use std::collections::{BTreeSet, VecDeque};
 use std::sync::{Arc, Mutex};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use super::transcribe::{TranscriberSettings, TranscriberStream, TranscriptEvent, TranscriptItem};
 use super::translate::{TranslateLoop, TranslatedItem};
@@ -41,7 +41,7 @@ use super::{
     TranslationTokenizationMethod, CAT,
 };
 
-static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
+static RUNTIME: LazyLock<runtime::Runtime> = LazyLock::new(|| {
     runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -49,8 +49,8 @@ static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
 });
 
 #[allow(deprecated)]
-static AWS_BEHAVIOR_VERSION: Lazy<aws_config::BehaviorVersion> =
-    Lazy::new(aws_config::BehaviorVersion::v2023_11_09);
+static AWS_BEHAVIOR_VERSION: LazyLock<aws_config::BehaviorVersion> =
+    LazyLock::new(aws_config::BehaviorVersion::v2023_11_09);
 
 const DEFAULT_TRANSCRIBER_REGION: &str = "us-east-1";
 
@@ -688,7 +688,7 @@ impl ObjectSubclass for Transcriber {
 
 impl ObjectImpl for Transcriber {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecString::builder("language-code")
                     .nick("Language Code")
@@ -931,7 +931,7 @@ impl GstObjectImpl for Transcriber {}
 
 impl ElementImpl for Transcriber {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
             "Transcriber",
             "Audio/Text/Filter",
@@ -944,7 +944,7 @@ impl ElementImpl for Transcriber {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let src_caps = gst::Caps::builder("text/x-raw")
                 .field("format", "utf8")
                 .build();
@@ -1771,7 +1771,7 @@ impl ObjectSubclass for TranslateSrcPad {
 
 impl ObjectImpl for TranslateSrcPad {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecString::builder(OUTPUT_LANG_CODE_PROPERTY)
                     .nick("Language Code")

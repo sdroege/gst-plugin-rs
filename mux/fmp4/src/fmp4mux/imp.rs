@@ -21,7 +21,7 @@ use std::sync::Mutex;
 
 use crate::fmp4mux::obu::read_seq_header_obu_bytes;
 use crate::fmp4mux::ImageOrientation;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use super::boxes;
 use super::Buffer;
@@ -40,10 +40,12 @@ const UNIX_1601_OFFSET: u64 = 11_644_473_600;
 const NTP_UNIX_OFFSET: u64 = 2_208_988_800;
 
 /// Reference timestamp meta caps for NTP timestamps.
-static NTP_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::builder("timestamp/x-ntp").build());
+static NTP_CAPS: LazyLock<gst::Caps> =
+    LazyLock::new(|| gst::Caps::builder("timestamp/x-ntp").build());
 
 /// Reference timestamp meta caps for UNIX timestamps.
-static UNIX_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::builder("timestamp/x-unix").build());
+static UNIX_CAPS: LazyLock<gst::Caps> =
+    LazyLock::new(|| gst::Caps::builder("timestamp/x-unix").build());
 
 /// Returns the UTC time of the buffer in the UNIX epoch.
 fn get_utc_time_from_buffer(buffer: &gst::BufferRef) -> Option<gst::ClockTime> {
@@ -92,7 +94,7 @@ fn utc_time_to_running_time(
         .and_then(|res| res.positive())
 }
 
-pub static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+pub static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "fmp4mux",
         gst::DebugColorFlags::empty(),
@@ -3254,7 +3256,7 @@ static FMP4_SIGNAL_SPLIT_AT_RUNNING_TIME: &str = "split-at-running-time";
 
 impl ObjectImpl for FMP4Mux {
     fn signals() -> &'static [glib::subclass::Signal] {
-        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
             vec![
                 glib::subclass::Signal::builder(FMP4_SIGNAL_SEND_HEADERS)
                     .action()
@@ -3298,7 +3300,7 @@ impl ObjectImpl for FMP4Mux {
     }
 
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecUInt64::builder("fragment-duration")
                     .nick("Fragment Duration")
@@ -3971,7 +3973,7 @@ impl ObjectSubclass for ISOFMP4Mux {
 
 impl ObjectImpl for ISOFMP4Mux {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![glib::ParamSpecBoolean::builder("offset-to-zero")
                 .nick("Offset to Zero")
                 .blurb("Offsets all streams so that the earliest stream starts at 0")
@@ -4015,7 +4017,7 @@ impl GstObjectImpl for ISOFMP4Mux {}
 
 impl ElementImpl for ISOFMP4Mux {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "ISOFMP4Mux",
                 "Codec/Muxer",
@@ -4028,7 +4030,7 @@ impl ElementImpl for ISOFMP4Mux {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,
@@ -4133,7 +4135,7 @@ impl GstObjectImpl for CMAFMux {}
 
 impl ElementImpl for CMAFMux {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "CMAFMux",
                 "Codec/Muxer",
@@ -4146,7 +4148,7 @@ impl ElementImpl for CMAFMux {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,
@@ -4234,7 +4236,7 @@ impl GstObjectImpl for DASHMP4Mux {}
 
 impl ElementImpl for DASHMP4Mux {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "DASHMP4Mux",
                 "Codec/Muxer",
@@ -4247,7 +4249,7 @@ impl ElementImpl for DASHMP4Mux {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,
@@ -4347,7 +4349,7 @@ impl GstObjectImpl for ONVIFFMP4Mux {}
 
 impl ElementImpl for ONVIFFMP4Mux {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "ONVIFFMP4Mux",
                 "Codec/Muxer",
@@ -4360,7 +4362,7 @@ impl ElementImpl for ONVIFFMP4Mux {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,
@@ -4461,7 +4463,7 @@ impl ObjectSubclass for FMP4MuxPad {
 
 impl ObjectImpl for FMP4MuxPad {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![glib::ParamSpecUInt::builder("trak-timescale")
                 .nick("Track Timescale")
                 .blurb("Timescale to use for the track (units per second, 0 is automatic)")

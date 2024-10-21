@@ -29,7 +29,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::EventView;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -73,7 +73,7 @@ mod imp_src {
         context: String,
     }
 
-    pub static SRC_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    pub static SRC_CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
         gst::DebugCategory::new(
             "ts-element-src-test",
             gst::DebugColorFlags::empty(),
@@ -294,7 +294,7 @@ mod imp_src {
 
     impl ObjectImpl for ElementSrcTest {
         fn properties() -> &'static [glib::ParamSpec] {
-            static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
                 vec![glib::ParamSpecString::builder("context")
                     .nick("Context")
                     .blurb("Context name to share threads with")
@@ -333,20 +333,21 @@ mod imp_src {
 
     impl ElementImpl for ElementSrcTest {
         fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-            static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
-                gst::subclass::ElementMetadata::new(
-                    "Thread-sharing Test Src Element",
-                    "Generic",
-                    "Src Element for Pad Src Test",
-                    "François Laignel <fengalin@free.fr>",
-                )
-            });
+            static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> =
+                LazyLock::new(|| {
+                    gst::subclass::ElementMetadata::new(
+                        "Thread-sharing Test Src Element",
+                        "Generic",
+                        "Src Element for Pad Src Test",
+                        "François Laignel <fengalin@free.fr>",
+                    )
+                });
 
             Some(&*ELEMENT_METADATA)
         }
 
         fn pad_templates() -> &'static [gst::PadTemplate] {
-            static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
                 let caps = gst::Caps::new_any();
                 let src_pad_template = gst::PadTemplate::new(
                     "src",
@@ -558,7 +559,7 @@ mod imp_sink {
         }
     }
 
-    static SINK_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    static SINK_CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
         gst::DebugCategory::new(
             "ts-element-sink-test",
             gst::DebugColorFlags::empty(),
@@ -586,7 +587,7 @@ mod imp_sink {
 
     impl ObjectImpl for ElementSinkTest {
         fn properties() -> &'static [glib::ParamSpec] {
-            static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
                 vec![glib::ParamSpecBoxed::builder::<ItemSender>("sender")
                     .nick("Sender")
                     .blurb("Channel sender to forward the incoming items to")
@@ -624,20 +625,21 @@ mod imp_sink {
 
     impl ElementImpl for ElementSinkTest {
         fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-            static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
-                gst::subclass::ElementMetadata::new(
-                    "Thread-sharing Test Sink Element",
-                    "Generic",
-                    "Sink Element for Pad Test",
-                    "François Laignel <fengalin@free.fr>",
-                )
-            });
+            static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> =
+                LazyLock::new(|| {
+                    gst::subclass::ElementMetadata::new(
+                        "Thread-sharing Test Sink Element",
+                        "Generic",
+                        "Sink Element for Pad Test",
+                        "François Laignel <fengalin@free.fr>",
+                    )
+                });
 
             Some(&*ELEMENT_METADATA)
         }
 
         fn pad_templates() -> &'static [gst::PadTemplate] {
-            static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
                 let caps = gst::Caps::new_any();
                 let sink_pad_template = gst::PadTemplate::new(
                     "sink",

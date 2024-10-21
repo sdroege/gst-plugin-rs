@@ -13,7 +13,7 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::mem::size_of;
 use std::sync::Mutex;
@@ -24,7 +24,7 @@ use std::time::Instant;
 use crate::runtime::prelude::*;
 use crate::runtime::{self, task, timer, PadSrc, Task};
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ts-audiotestsrc",
         gst::DebugColorFlags::empty(),
@@ -49,7 +49,7 @@ const RAMPUP_BUFFER_COUNT: u32 = 500;
 #[cfg(feature = "tuning")]
 const LOG_BUFFER_INTERVAL: u32 = 2000;
 
-static DEFAULT_CAPS: Lazy<gst::Caps> = Lazy::new(|| {
+static DEFAULT_CAPS: LazyLock<gst::Caps> = LazyLock::new(|| {
     gst_audio::AudioCapsBuilder::new_interleaved()
         .format(gst_audio::AUDIO_FORMAT_S16)
         .rate_range(8_000..i32::MAX)
@@ -554,7 +554,7 @@ impl ObjectSubclass for AudioTestSrc {
 
 impl ObjectImpl for AudioTestSrc {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecString::builder("context")
                     .nick("Context")
@@ -663,7 +663,7 @@ impl GstObjectImpl for AudioTestSrc {}
 
 impl ElementImpl for AudioTestSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Thread-sharing audio test source",
                 "Source/Test",
@@ -676,7 +676,7 @@ impl ElementImpl for AudioTestSrc {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,

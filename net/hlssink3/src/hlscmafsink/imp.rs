@@ -15,8 +15,8 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use m3u8_rs::{MediaPlaylist, MediaPlaylistType, MediaSegment};
-use once_cell::sync::Lazy;
 use std::io::Write;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 
 const DEFAULT_INIT_LOCATION: &str = "init%05d.mp4";
@@ -29,7 +29,7 @@ const DEFAULT_LATENCY: gst::ClockTime =
 const SIGNAL_GET_INIT_STREAM: &str = "get-init-stream";
 const SIGNAL_NEW_PLAYLIST: &str = "new-playlist";
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "hlscmafsink",
         gst::DebugColorFlags::empty(),
@@ -110,7 +110,7 @@ impl ObjectSubclass for HlsCmafSink {
 
 impl ObjectImpl for HlsCmafSink {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecString::builder("init-location")
                     .nick("Init Location")
@@ -220,7 +220,7 @@ impl ObjectImpl for HlsCmafSink {
     }
 
     fn signals() -> &'static [glib::subclass::Signal] {
-        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
             vec![
                 glib::subclass::Signal::builder(SIGNAL_GET_INIT_STREAM)
                     .param_types([String::static_type()])
@@ -315,7 +315,7 @@ impl GstObjectImpl for HlsCmafSink {}
 
 impl ElementImpl for HlsCmafSink {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "HTTP Live Streaming CMAF Sink",
                 "Sink/Muxer",
@@ -328,7 +328,7 @@ impl ElementImpl for HlsCmafSink {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,

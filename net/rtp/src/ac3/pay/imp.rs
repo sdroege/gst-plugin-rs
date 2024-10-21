@@ -47,7 +47,7 @@ use std::sync::{Arc, Mutex};
 
 use gst::{glib, prelude::*, subclass::prelude::*};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::basepay::{
     PacketToBufferRelation, RtpBasePay2Ext, RtpBasePay2Impl, RtpBasePay2ImplExt, TimestampOffset,
@@ -124,7 +124,7 @@ struct State {
     max_ptime: Option<gst::ClockTime>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpac3pay2",
         gst::DebugColorFlags::empty(),
@@ -141,7 +141,7 @@ impl ObjectSubclass for RtpAc3Pay {
 
 impl ObjectImpl for RtpAc3Pay {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecEnum::builder_with_default("aggregate-mode", Settings::default().aggregate_mode)
                     .nick("Aggregate Mode")
@@ -217,7 +217,7 @@ impl GstObjectImpl for RtpAc3Pay {}
 
 impl ElementImpl for RtpAc3Pay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RTP AC-3 Audio Payloader",
                 "Codec/Payloader/Network/RTP",
@@ -230,7 +230,7 @@ impl ElementImpl for RtpAc3Pay {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,

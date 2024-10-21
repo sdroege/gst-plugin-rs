@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use gst::{glib, prelude::*, subclass::prelude::*};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 
 #[derive(Default)]
@@ -23,7 +23,7 @@ impl ObjectSubclass for WebRTCSinkPad {
 
 impl ObjectImpl for WebRTCSinkPad {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPS: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPS: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![glib::ParamSpecString::builder("msid")
                 .flags(glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY)
                 .blurb("Remote MediaStream ID in use for this pad")

@@ -31,9 +31,9 @@ use std::ops::Add;
 use std::ops::ControlFlow;
 use std::sync::Mutex;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "mpegtslivesrc",
         gst::DebugColorFlags::empty(),
@@ -508,7 +508,7 @@ impl ObjectSubclass for MpegTsLiveSource {
 
 impl ObjectImpl for MpegTsLiveSource {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecObject::builder::<gst::Element>("source")
                     .nick("Source")
@@ -670,7 +670,7 @@ impl ElementImpl for MpegTsLiveSource {
     }
 
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "MpegTsLiveSource",
                 "Network",
@@ -683,7 +683,7 @@ impl ElementImpl for MpegTsLiveSource {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,

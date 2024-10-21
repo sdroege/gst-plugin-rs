@@ -2288,7 +2288,6 @@ dependencies = [
  "hrtf",
  "nnnoiseless",
  "num-traits",
- "once_cell",
  "rayon",
  "smallvec",
 ]
@@ -2316,7 +2315,6 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-check",
  "gstreamer-video",
- "once_cell",
  "percent-encoding",
  "rand",
  "serde",
@@ -2340,7 +2338,6 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-video",
  "image",
- "once_cell",
 ]
 
 [[package]]
@@ -2354,7 +2351,6 @@ dependencies = [
  "gstreamer",
  "gstreamer-audio",
  "gstreamer-check",
- "once_cell",
 ]
 
 [[package]]
@@ -2374,7 +2370,6 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-check",
  "gstreamer-video",
- "once_cell",
  "pango",
  "pangocairo",
  "pretty_assertions",
@@ -2397,7 +2392,6 @@ dependencies = [
  "gstreamer-audio",
  "gstreamer-base",
  "gstreamer-check",
- "once_cell",
 ]
 
 [[package]]
@@ -2410,7 +2404,6 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-video",
  "num_cpus",
- "once_cell",
 ]
 
 [[package]]
@@ -2427,7 +2420,6 @@ dependencies = [
  "gstreamer-check",
  "gstreamer-video",
  "gtk4",
- "once_cell",
  "parking_lot",
 ]
 
@@ -2441,7 +2433,6 @@ dependencies = [
  "gstreamer",
  "gstreamer-check",
  "gstreamer-video",
- "once_cell",
 ]
 
 [[package]]
@@ -2451,7 +2442,6 @@ dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-base",
- "once_cell",
  "url",
 ]
 
@@ -2467,7 +2457,6 @@ dependencies = [
  "gstreamer-base",
  "nom",
  "num-rational",
- "once_cell",
  "smallvec",
 ]
 
@@ -2488,7 +2477,6 @@ dependencies = [
  "gstreamer-pbutils",
  "gstreamer-video",
  "m3u8-rs",
- "once_cell",
  "quick-xml 0.31.0",
  "serde",
 ]
@@ -2503,7 +2491,6 @@ dependencies = [
  "gstreamer",
  "gstreamer-check",
  "gstreamer-video",
- "once_cell",
 ]
 
 [[package]]
@@ -2516,7 +2503,6 @@ dependencies = [
  "gstreamer-app",
  "gstreamer-check",
  "gstreamer-video",
- "once_cell",
 ]
 
 [[package]]
@@ -2537,7 +2523,6 @@ dependencies = [
  "gstreamer-gl-x11",
  "gstreamer-video",
  "gtk4",
- "once_cell",
  "windows-sys 0.52.0",
 ]
 
@@ -2556,7 +2541,6 @@ dependencies = [
  "gstreamer-pbutils",
  "gstreamer-video",
  "m3u8-rs",
- "once_cell",
  "sprintf",
 ]
 
@@ -2572,7 +2556,6 @@ dependencies = [
  "gstreamer-check",
  "gstreamer-video",
  "num-traits",
- "once_cell",
 ]
 
 [[package]]
@@ -2586,7 +2569,6 @@ dependencies = [
  "gstreamer-app",
  "gstreamer-check",
  "gstreamer-utils",
- "once_cell",
  "pretty_assertions",
  "serial_test",
  "tokio",
@@ -2600,7 +2582,6 @@ dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-check",
- "once_cell",
  "serde",
  "serde_json",
 ]
@@ -2616,7 +2597,6 @@ dependencies = [
  "gstreamer-audio",
  "gstreamer-check",
  "lewton",
- "once_cell",
 ]
 
 [[package]]
@@ -2631,7 +2611,6 @@ dependencies = [
  "gstreamer-check",
  "gtk4",
  "num-rational",
- "once_cell",
  "parking_lot",
 ]
 
@@ -2647,7 +2626,6 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-pbutils",
  "gstreamer-video",
- "once_cell",
  "tempfile",
  "url",
 ]
@@ -2660,7 +2638,6 @@ dependencies = [
  "bitstream-io",
  "gst-plugin-version-helper",
  "gstreamer",
- "once_cell",
 ]
 
 [[package]]
@@ -2678,7 +2655,6 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-video",
  "libloading",
- "once_cell",
  "quick-xml 0.31.0",
  "smallvec",
  "thiserror",
@@ -2695,7 +2671,6 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-rtp",
  "gstreamer-video",
- "once_cell",
  "pango",
  "pangocairo",
  "xmlparser",
@@ -2711,7 +2686,6 @@ dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-video",
- "once_cell",
 ]
 
 [[package]]
@@ -2722,7 +2696,6 @@ dependencies = [
  "gstreamer",
  "gstreamer-check",
  "gstreamer-video",
- "once_cell",
  "parking_lot",
  "png",
 ]
@@ -2737,7 +2710,6 @@ dependencies = [
  "gstreamer",
  "gstreamer-base",
  "gstreamer-check",
- "once_cell",
  "quinn",
  "quinn-proto",
  "rcgen",
@@ -2758,7 +2730,6 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-check",
  "gstreamer-rtp",
- "once_cell",
  "rand",
  "raptorq",
 ]
@@ -2772,7 +2743,6 @@ dependencies = [
  "gstreamer",
  "gstreamer-check",
  "gstreamer-video",
- "once_cell",
  "rav1e",
 ]
 
@@ -2783,7 +2753,6 @@ dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-check",
- "once_cell",
  "regex",
 ]
 
@@ -2800,7 +2769,6 @@ dependencies = [
  "http-body-util",
  "hyper 1.5.0",
  "mime",
- "once_cell",
  "pin-project-lite",
  "reqwest 0.12.8",
  "tokio",
@@ -2829,7 +2797,6 @@ dependencies = [
  "gstreamer-video",
  "hex",
  "log",
- "once_cell",
  "rand",
  "rtcp-types",
  "rtp-types",
@@ -2854,7 +2821,6 @@ dependencies = [
  "gstreamer-net",
  "gstreamer-pbutils",
  "lru",
- "once_cell",
  "rtsp-types",
  "sdp-types",
  "socket2",
@@ -2875,7 +2841,6 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-check",
  "hex",
- "once_cell",
  "pretty_assertions",
  "rand",
  "serde",
@@ -2896,7 +2861,6 @@ dependencies = [
  "gstreamer-audio",
  "gstreamer-base",
  "http 1.1.0",
- "once_cell",
  "serde",
  "serde_json",
  "tokio",
@@ -2914,7 +2878,6 @@ dependencies = [
  "gstreamer-base",
  "librespot-core",
  "librespot-playback",
- "once_cell",
  "tokio",
  "url",
 ]
@@ -2925,7 +2888,6 @@ version = "0.14.0-alpha.1"
 dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
- "once_cell",
 ]
 
 [[package]]
@@ -2936,7 +2898,6 @@ dependencies = [
  "gstreamer",
  "gstreamer-check",
  "hyphenation",
- "once_cell",
  "textwrap",
 ]
 
@@ -2959,7 +2920,6 @@ dependencies = [
  "gstreamer-check",
  "gstreamer-net",
  "gstreamer-rtp",
- "once_cell",
  "pin-project-lite",
  "pkg-config",
  "polling",
@@ -2984,7 +2944,6 @@ dependencies = [
  "gstreamer-check",
  "gstreamer-video",
  "gtk4",
- "once_cell",
  "parking_lot",
 ]
 
@@ -2997,7 +2956,6 @@ dependencies = [
  "etherparse",
  "gst-plugin-version-helper",
  "gstreamer",
- "once_cell",
  "pcap-file",
  "regex",
  "signal-hook",
@@ -3014,7 +2972,6 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-video",
  "num-traits",
- "once_cell",
 ]
 
 [[package]]
@@ -3027,7 +2984,6 @@ dependencies = [
  "gstreamer",
  "gstreamer-app",
  "more-asserts",
- "once_cell",
  "thiserror",
  "url",
 ]
@@ -3056,7 +3012,6 @@ dependencies = [
  "gstreamer-video",
  "image",
  "image_hasher",
- "once_cell",
  "rgb",
 ]
 
@@ -3069,7 +3024,6 @@ dependencies = [
  "gstreamer-check",
  "gstreamer-video",
  "libwebp-sys2",
- "once_cell",
  "pretty_assertions",
 ]
 
@@ -3113,7 +3067,6 @@ dependencies = [
  "itertools 0.12.1",
  "livekit-api",
  "livekit-protocol",
- "once_cell",
  "parse_link_header",
  "rand",
  "regex",
@@ -3174,7 +3127,6 @@ dependencies = [
  "gstreamer",
  "gstreamer-sdp",
  "gstreamer-webrtc",
- "once_cell",
  "parse_link_header",
  "reqwest 0.12.8",
  "tokio",

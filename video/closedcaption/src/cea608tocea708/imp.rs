@@ -22,7 +22,7 @@ use crate::cea708utils::{
 
 use cea608_types::{Cea608, Cea608State as Cea608StateTracker};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 #[derive(Debug, Copy, Clone)]
 enum Cea608Format {
@@ -481,7 +481,7 @@ pub struct Cea608ToCea708 {
     state: AtomicRefCell<State>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "cea608tocea708",
         gst::DebugColorFlags::empty(),
@@ -702,7 +702,7 @@ impl GstObjectImpl for Cea608ToCea708 {}
 
 impl ElementImpl for Cea608ToCea708 {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "CEA-608 to CEA-708",
                 "Converter",
@@ -715,7 +715,7 @@ impl ElementImpl for Cea608ToCea708 {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::builder("closedcaption/x-cea-708")
                 .field("format", "cc_data")
                 .build();

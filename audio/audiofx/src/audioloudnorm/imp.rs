@@ -21,11 +21,11 @@ use std::sync::Mutex;
 
 use byte_slice_cast::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use atomic_refcell::AtomicRefCell;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "audioloudnorm",
         gst::DebugColorFlags::empty(),
@@ -1722,7 +1722,7 @@ impl ObjectSubclass for AudioLoudNorm {
 
 impl ObjectImpl for AudioLoudNorm {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecDouble::builder("loudness-target")
                     .nick("Loudness Target")
@@ -1819,7 +1819,7 @@ impl GstObjectImpl for AudioLoudNorm {}
 
 impl ElementImpl for AudioLoudNorm {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Audio loudness normalizer",
                 "Filter/Effect/Audio",
@@ -1832,7 +1832,7 @@ impl ElementImpl for AudioLoudNorm {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst_audio::AudioCapsBuilder::new_interleaved()
                 .format(gst_audio::AUDIO_FORMAT_F64)
                 .rate(192_000)

@@ -4,12 +4,12 @@ use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use pango::prelude::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::collections::HashSet;
 use std::sync::Mutex;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "onvifmetadataoverlay",
         gst::DebugColorFlags::empty(),
@@ -751,7 +751,7 @@ impl ObjectSubclass for OnvifMetadataOverlay {
 
 impl ObjectImpl for OnvifMetadataOverlay {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![glib::ParamSpecString::builder("font-desc")
                 .nick("Font Description")
                 .blurb("Pango font description of font to be used for rendering")
@@ -795,7 +795,7 @@ impl GstObjectImpl for OnvifMetadataOverlay {}
 
 impl ElementImpl for OnvifMetadataOverlay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "ONVIF Metadata overlay",
                 "Video/Overlay",
@@ -808,7 +808,7 @@ impl ElementImpl for OnvifMetadataOverlay {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst_video::VideoFormat::iter_raw()
                 .into_video_caps()
                 .unwrap()

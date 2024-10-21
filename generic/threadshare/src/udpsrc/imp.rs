@@ -25,7 +25,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_net::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
@@ -677,7 +677,7 @@ pub struct UdpSrc {
     state: Mutex<State>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ts-udpsrc",
         gst::DebugColorFlags::empty(),
@@ -769,7 +769,7 @@ impl ObjectSubclass for UdpSrc {
 
 impl ObjectImpl for UdpSrc {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             let mut properties = vec![
                 glib::ParamSpecString::builder("context")
                     .nick("Context")
@@ -942,7 +942,7 @@ impl GstObjectImpl for UdpSrc {}
 
 impl ElementImpl for UdpSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Thread-sharing UDP source",
                 "Source/Network",
@@ -955,7 +955,7 @@ impl ElementImpl for UdpSrc {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::new_any();
             let src_pad_template = gst::PadTemplate::new(
                 "src",

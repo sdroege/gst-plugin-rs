@@ -10,8 +10,8 @@ use futures::prelude::*;
 use gst::glib;
 use gst::glib::prelude::*;
 use gst::subclass::prelude::*;
-use once_cell::sync::Lazy;
 use std::path::PathBuf;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use tokio::task;
 
@@ -34,10 +34,10 @@ const DEFAULT_AWS_REGION: &str = "us-east-1";
 const DEFAULT_PING_TIMEOUT: i32 = 30;
 
 #[allow(deprecated)]
-pub static AWS_BEHAVIOR_VERSION: Lazy<aws_config::BehaviorVersion> =
-    Lazy::new(aws_config::BehaviorVersion::v2023_11_09);
+pub static AWS_BEHAVIOR_VERSION: LazyLock<aws_config::BehaviorVersion> =
+    LazyLock::new(aws_config::BehaviorVersion::v2023_11_09);
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "webrtc-aws-kvs-signaller",
         gst::DebugColorFlags::empty(),
@@ -654,7 +654,7 @@ impl ObjectSubclass for Signaller {
 
 impl ObjectImpl for Signaller {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoolean::builder("manual-sdp-munging")
                     .nick("Manual SDP munging")

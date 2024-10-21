@@ -8,12 +8,12 @@ use gst_base::subclass::prelude::*;
 
 use std::sync::Mutex;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::ndi::SendInstance;
 use crate::ndi_cc_meta::NDICCMetaEncoder;
 
-static DEFAULT_SENDER_NDI_NAME: Lazy<String> = Lazy::new(|| {
+static DEFAULT_SENDER_NDI_NAME: LazyLock<String> = LazyLock::new(|| {
     format!(
         "GStreamer NewTek NDI Sink {}-{}",
         env!("CARGO_PKG_VERSION"),
@@ -46,7 +46,7 @@ pub struct NdiSink {
     state: Mutex<Option<State>>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new("ndisink", gst::DebugColorFlags::empty(), Some("NDI Sink"))
 });
 
@@ -66,7 +66,7 @@ impl ObjectSubclass for NdiSink {
 
 impl ObjectImpl for NdiSink {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![glib::ParamSpecString::builder("ndi-name")
                 .nick("NDI Name")
                 .blurb("NDI Name to use")
@@ -104,7 +104,7 @@ impl GstObjectImpl for NdiSink {}
 
 impl ElementImpl for NdiSink {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "NewTek NDI Sink",
                 "Sink/Audio/Video",
@@ -117,7 +117,7 @@ impl ElementImpl for NdiSink {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::builder_full()
                 .structure(
                     gst::Structure::builder("video/x-raw")

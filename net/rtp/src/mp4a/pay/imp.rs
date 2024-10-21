@@ -30,8 +30,8 @@
  * Since: plugins-rs-0.13.0
  */
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
-use once_cell::sync::Lazy;
 use smallvec::SmallVec;
+use std::sync::LazyLock;
 
 use gst::{glib, subclass::prelude::*};
 
@@ -43,7 +43,7 @@ use crate::mp4a::ENCODING_NAME;
 #[derive(Default)]
 pub struct RtpMpeg4AudioPay;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpmp4apay2",
         gst::DebugColorFlags::empty(),
@@ -63,7 +63,7 @@ impl GstObjectImpl for RtpMpeg4AudioPay {}
 
 impl ElementImpl for RtpMpeg4AudioPay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RTP MPEG-4 Audio Payloader",
                 "Codec/Payloader/Network/RTP",
@@ -76,7 +76,7 @@ impl ElementImpl for RtpMpeg4AudioPay {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,

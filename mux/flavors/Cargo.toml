@@ -17,7 +17,6 @@ nom = "7"
 flavors = { git = "https://github.com/rust-av/flavors" }
 byteorder = "1.0"
 smallvec = "1.0"
-once_cell.workspace = true
 
 [lib]
 name = "gstrsflv"

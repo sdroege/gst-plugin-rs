@@ -21,11 +21,11 @@ use nnnoiseless::DenoiseState;
 
 use byte_slice_cast::*;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use atomic_refcell::AtomicRefCell;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "audiornnoise",
         gst::DebugColorFlags::empty(),
@@ -257,7 +257,7 @@ impl ObjectSubclass for AudioRNNoise {
 
 impl ObjectImpl for AudioRNNoise {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![glib::ParamSpecFloat::builder("voice-activity-threshold")
                 .nick("Voice activity threshold")
                 .blurb("Threshold of the voice activity detector below which to mute the output")
@@ -296,7 +296,7 @@ impl GstObjectImpl for AudioRNNoise {}
 
 impl ElementImpl for AudioRNNoise {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Audio denoise",
                 "Filter/Effect/Audio",
@@ -389,7 +389,7 @@ impl BaseTransformImpl for AudioRNNoise {
 
 impl AudioFilterImpl for AudioRNNoise {
     fn allowed_caps() -> &'static gst::Caps {
-        static CAPS: Lazy<gst::Caps> = Lazy::new(|| {
+        static CAPS: LazyLock<gst::Caps> = LazyLock::new(|| {
             gst_audio::AudioCapsBuilder::new_interleaved()
                 .format(gst_audio::AUDIO_FORMAT_F32)
                 .rate(48000)

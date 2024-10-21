@@ -14,10 +14,10 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use m3u8_rs::MediaSegment;
-use once_cell::sync::Lazy;
 use std::fs;
 use std::io::Write;
 use std::path;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 
 const DEFAULT_PLAYLIST_LOCATION: &str = "playlist.m3u8";
@@ -31,7 +31,7 @@ const SIGNAL_GET_PLAYLIST_STREAM: &str = "get-playlist-stream";
 const SIGNAL_GET_FRAGMENT_STREAM: &str = "get-fragment-stream";
 const SIGNAL_DELETE_FRAGMENT: &str = "delete-fragment";
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "hlsbasesink",
         gst::DebugColorFlags::empty(),
@@ -106,7 +106,7 @@ impl ObjectImpl for HlsBaseSink {
     }
 
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecString::builder("playlist-location")
                     .nick("Playlist Location")
@@ -199,7 +199,7 @@ impl ObjectImpl for HlsBaseSink {
     }
 
     fn signals() -> &'static [glib::subclass::Signal] {
-        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
             vec![
                 glib::subclass::Signal::builder(SIGNAL_GET_PLAYLIST_STREAM)
                     .param_types([String::static_type()])

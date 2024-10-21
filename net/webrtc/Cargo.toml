@@ -36,7 +36,6 @@ fastrand = "2.0"
 gst_plugin_webrtc_protocol = { path="protocol", package = "gst-plugin-webrtc-signalling-protocol" }
 gst_plugin_webrtc_signalling = { path="signalling", package = "gst-plugin-webrtc-signalling" }
 human_bytes = "0.4"
-once_cell.workspace = true
 rand = "0.8"
 url = "2"
 

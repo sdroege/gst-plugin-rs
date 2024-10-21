@@ -1,5 +1,5 @@
 use gst::glib;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 mod args;
 use args::*;
@@ -13,7 +13,7 @@ mod src;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "ts-standalone-main",
         gst::DebugColorFlags::empty(),

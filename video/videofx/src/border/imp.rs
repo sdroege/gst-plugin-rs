@@ -14,12 +14,12 @@ use gst_base::{
 };
 use gst_video::{subclass::prelude::*, VideoFormat};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 
 const DEFAULT_BORDER_RADIUS: u32 = 0;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "roundedcorners",
         gst::DebugColorFlags::empty(),
@@ -277,7 +277,7 @@ impl ObjectSubclass for RoundedCorners {
 
 impl ObjectImpl for RoundedCorners {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![glib::ParamSpecUInt::builder("border-radius-px")
                 .nick("Border radius in pixels")
                 .blurb("Draw rounded corners with given border radius")
@@ -326,7 +326,7 @@ impl GstObjectImpl for RoundedCorners {}
 
 impl ElementImpl for RoundedCorners {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Rounded Corners",
                 "Filter/Effect/Converter/Video",
@@ -339,7 +339,7 @@ impl ElementImpl for RoundedCorners {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_caps = gst_video::VideoCapsBuilder::new()
                 .format(VideoFormat::I420)
                 .build();

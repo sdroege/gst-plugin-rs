@@ -12,15 +12,15 @@ use std::collections::VecDeque;
 
 use gst::glib;
 use gst::prelude::MulDiv;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 
 use pango::prelude::*;
 
 use crate::ccutils::recalculate_pango_layout;
 use crate::cea608utils::{Cea608Renderer, TextStyle};
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "cea708utils",
         gst::DebugColorFlags::empty(),

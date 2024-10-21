@@ -3,12 +3,12 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::sync::{Mutex, Weak};
 
 use crate::rtpbin2::internal::SharedSessionInner;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtp2-config",
         gst::DebugColorFlags::empty(),
@@ -113,7 +113,7 @@ mod imp {
 
     impl ObjectImpl for Rtp2Session {
         fn properties() -> &'static [glib::ParamSpec] {
-            static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
                 vec![glib::ParamSpecBoxed::builder::<gst::Structure>("pt-map")
                     .nick("RTP Payload Type Map")
                     .blurb("Mapping of RTP payload type to caps")
@@ -143,7 +143,7 @@ mod imp {
         }
 
         fn signals() -> &'static [glib::subclass::Signal] {
-            static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+            static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
                 vec![
                     glib::subclass::Signal::builder("new-ssrc")
                         .param_types([u32::static_type()])

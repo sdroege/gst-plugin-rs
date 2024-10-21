@@ -14,13 +14,13 @@ use gst_video::ValidVideoTimeCode;
 use std::cmp;
 use std::sync::{Mutex, MutexGuard};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use super::parser::{MccLine, MccParser};
 use crate::line_reader::LineReader;
 use crate::parser_utils::TimeCode;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "mccparse",
         gst::DebugColorFlags::empty(),
@@ -1142,7 +1142,7 @@ impl GstObjectImpl for MccParse {}
 
 impl ElementImpl for MccParse {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Mcc Parse",
                 "Parser/ClosedCaption",
@@ -1155,7 +1155,7 @@ impl ElementImpl for MccParse {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let mut caps = gst::Caps::new_empty();
             {
                 let caps = caps.get_mut().unwrap();

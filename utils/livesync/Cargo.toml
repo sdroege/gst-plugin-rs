@@ -15,7 +15,6 @@ gst-audio.workspace = true
 gst-plugin-gtk4 = { path = "../../video/gtk4", optional = true }
 gtk = { workspace = true, optional = true }
 num-rational = { version = "0.4", default-features = false, features = [] }
-once_cell.workspace = true
 parking_lot = "0.12"
 
 [dev-dependencies]

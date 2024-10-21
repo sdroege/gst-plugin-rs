@@ -21,8 +21,8 @@ use futures::prelude::*;
 
 use anyhow::{anyhow, Error};
 use itertools::Itertools;
-use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 use std::ops::DerefMut;
 use std::ops::Mul;
@@ -37,7 +37,7 @@ use crate::{utils, RUNTIME};
 use std::collections::{BTreeMap, HashSet};
 use tracing_subscriber::prelude::*;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "webrtcsink",
         gst::DebugColorFlags::empty(),
@@ -4318,7 +4318,7 @@ pub(crate) trait BaseWebRTCSinkImpl: BinImpl {}
 
 impl ObjectImpl for BaseWebRTCSink {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoxed::builder::<gst::Caps>("video-caps")
                     .nick("Video encoder caps")
@@ -4799,7 +4799,7 @@ impl ObjectImpl for BaseWebRTCSink {
     }
 
     fn signals() -> &'static [glib::subclass::Signal] {
-        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
             vec![
                 /**
                  * GstBaseWebRTCSink::consumer-added:
@@ -5028,7 +5028,7 @@ impl GstObjectImpl for BaseWebRTCSink {}
 
 impl ElementImpl for BaseWebRTCSink {
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let mut caps_builder = gst::Caps::builder_full()
                 .structure(gst::Structure::builder("video/x-raw").build())
                 .structure_with_features(
@@ -5318,8 +5318,8 @@ fn initialize_logging(envvar_name: &str) -> Result<(), Error> {
     Ok(())
 }
 
-pub static SIGNALLING_LOGGING: Lazy<Result<(), Error>> =
-    Lazy::new(|| initialize_logging("WEBRTCSINK_SIGNALLING_SERVER_LOG"));
+pub static SIGNALLING_LOGGING: LazyLock<Result<(), Error>> =
+    LazyLock::new(|| initialize_logging("WEBRTCSINK_SIGNALLING_SERVER_LOG"));
 
 #[cfg(feature = "web_server")]
 use warp::Filter;
@@ -5401,7 +5401,7 @@ impl WebRTCSink {
         let settings = self.settings.lock().unwrap().clone();
 
         if settings.run_signalling_server {
-            if let Err(err) = Lazy::force(&SIGNALLING_LOGGING) {
+            if let Err(err) = LazyLock::force(&SIGNALLING_LOGGING) {
                 Err(anyhow!(
                     "failed signalling server logging initialization: {}",
                     err
@@ -5443,7 +5443,7 @@ impl WebRTCSink {
 
 impl ObjectImpl for WebRTCSink {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 /**
                  * GstWebRTCSink:run-signalling-server:
@@ -5587,7 +5587,7 @@ impl GstObjectImpl for WebRTCSink {}
 
 impl ElementImpl for WebRTCSink {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "WebRTCSink",
                 "Sink/Network/WebRTC",
@@ -5659,14 +5659,15 @@ pub(super) mod aws {
 
     impl ElementImpl for AwsKvsWebRTCSink {
         fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-            static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
-                gst::subclass::ElementMetadata::new(
-                    "AwsKvsWebRTCSink",
-                    "Sink/Network/WebRTC",
-                    "WebRTC sink with kinesis video streams signaller",
-                    "Mathieu Duponchelle <mathieu@centricular.com>",
-                )
-            });
+            static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> =
+                LazyLock::new(|| {
+                    gst::subclass::ElementMetadata::new(
+                        "AwsKvsWebRTCSink",
+                        "Sink/Network/WebRTC",
+                        "WebRTC sink with kinesis video streams signaller",
+                        "Mathieu Duponchelle <mathieu@centricular.com>",
+                    )
+                });
 
             Some(&*ELEMENT_METADATA)
         }
@@ -5707,14 +5708,15 @@ pub(super) mod whip {
 
     impl ElementImpl for WhipWebRTCSink {
         fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-            static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
-                gst::subclass::ElementMetadata::new(
-                    "WhipWebRTCSink",
-                    "Sink/Network/WebRTC",
-                    "WebRTC sink with WHIP client signaller",
-                    "Taruntej Kanakamalla <taruntej@asymptotic.io>",
-                )
-            });
+            static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> =
+                LazyLock::new(|| {
+                    gst::subclass::ElementMetadata::new(
+                        "WhipWebRTCSink",
+                        "Sink/Network/WebRTC",
+                        "WebRTC sink with WHIP client signaller",
+                        "Taruntej Kanakamalla <taruntej@asymptotic.io>",
+                    )
+                });
 
             Some(&*ELEMENT_METADATA)
         }
@@ -5755,14 +5757,15 @@ pub(super) mod livekit {
 
     impl ElementImpl for LiveKitWebRTCSink {
         fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-            static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
-                gst::subclass::ElementMetadata::new(
-                    "LiveKitWebRTCSink",
-                    "Sink/Network/WebRTC",
-                    "WebRTC sink with LiveKit signaller",
-                    "Olivier Crête <olivier.crete@collabora.com>",
-                )
-            });
+            static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> =
+                LazyLock::new(|| {
+                    gst::subclass::ElementMetadata::new(
+                        "LiveKitWebRTCSink",
+                        "Sink/Network/WebRTC",
+                        "WebRTC sink with LiveKit signaller",
+                        "Olivier Crête <olivier.crete@collabora.com>",
+                    )
+                });
 
             Some(&*ELEMENT_METADATA)
         }
@@ -5868,14 +5871,15 @@ pub(super) mod janus {
 
     impl ElementImpl for JanusVRWebRTCSink {
         fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-            static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
-                gst::subclass::ElementMetadata::new(
-                    "JanusVRWebRTCSink",
-                    "Sink/Network/WebRTC",
-                    "WebRTC sink with Janus Video Room signaller",
-                    "Eva Pace <epace@igalia.com>",
-                )
-            });
+            static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> =
+                LazyLock::new(|| {
+                    gst::subclass::ElementMetadata::new(
+                        "JanusVRWebRTCSink",
+                        "Sink/Network/WebRTC",
+                        "WebRTC sink with Janus Video Room signaller",
+                        "Eva Pace <epace@igalia.com>",
+                    )
+                });
 
             Some(&*ELEMENT_METADATA)
         }

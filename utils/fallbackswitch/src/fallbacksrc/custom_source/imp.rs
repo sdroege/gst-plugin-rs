@@ -16,9 +16,9 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "fallbacksrc-custom-source",
         gst::DebugColorFlags::empty(),
@@ -58,7 +58,7 @@ impl ObjectSubclass for CustomSource {
 
 impl ObjectImpl for CustomSource {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![glib::ParamSpecObject::builder::<gst::Element>("source")
                 .nick("Source")
                 .blurb("Source")
@@ -95,7 +95,7 @@ impl GstObjectImpl for CustomSource {}
 
 impl ElementImpl for CustomSource {
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let audio_src_pad_template = gst::PadTemplate::new(
                 "audio_%u",
                 gst::PadDirection::Src,

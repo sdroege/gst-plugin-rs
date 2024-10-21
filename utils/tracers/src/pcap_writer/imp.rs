@@ -56,11 +56,11 @@ use gst::glib;
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 static MAX_PACKET_LEN: usize = 65535;
 static MAX_FAKE_HEADERS_LEN: usize = 54;
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "pcap-writer",
         gst::DebugColorFlags::empty(),

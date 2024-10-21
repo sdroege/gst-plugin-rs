@@ -15,11 +15,11 @@ use gst::subclass::prelude::*;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use super::{CaptionSource, MuxMethod};
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "transcriberbin",
         gst::DebugColorFlags::empty(),
@@ -1271,7 +1271,7 @@ impl ObjectSubclass for TranscriberBin {
 
 impl ObjectImpl for TranscriberBin {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoolean::builder("passthrough")
                     .nick("Passthrough")
@@ -1502,7 +1502,7 @@ impl GstObjectImpl for TranscriberBin {}
 
 impl ElementImpl for TranscriberBin {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "TranscriberBin",
                 "Audio / Video / Text",
@@ -1515,7 +1515,7 @@ impl ElementImpl for TranscriberBin {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::builder("video/x-raw").any_features().build();
             let video_src_pad_template = gst::PadTemplate::new(
                 "src_video",
@@ -1907,7 +1907,7 @@ impl ObjectSubclass for TranscriberSinkPad {
 
 impl ObjectImpl for TranscriberSinkPad {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoxed::builder::<gst::Structure>("translation-languages")
                     .nick("Translation languages")

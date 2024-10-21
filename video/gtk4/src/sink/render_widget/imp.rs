@@ -10,7 +10,7 @@
 use std::cell::{Cell, RefCell};
 
 use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 #[derive(Default)]
 pub struct RenderWidget {
@@ -31,7 +31,7 @@ impl ObjectSubclass for RenderWidget {
 
 impl ObjectImpl for RenderWidget {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecObject::builder::<crate::PaintableSink>("element")
                     .nick("Element")

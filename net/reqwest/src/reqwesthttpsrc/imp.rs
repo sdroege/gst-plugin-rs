@@ -16,7 +16,7 @@ use reqwest::{Client, Response, StatusCode};
 use tokio::runtime;
 use url::Url;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use gst::glib;
 use gst::prelude::*;
@@ -162,7 +162,7 @@ pub struct ReqwestHttpSrc {
     canceller: Mutex<Canceller>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "reqwesthttpsrc",
         gst::DebugColorFlags::empty(),
@@ -170,7 +170,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
+static RUNTIME: LazyLock<runtime::Runtime> = LazyLock::new(|| {
     runtime::Builder::new_multi_thread()
         .enable_all()
         .worker_threads(1)
@@ -683,7 +683,7 @@ impl ReqwestHttpSrc {
 
 impl ObjectImpl for ReqwestHttpSrc {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             #[allow(unused_mut)]
             let mut user_agent_pspec = glib::ParamSpecString::builder("user-agent")
                 .nick("User-Agent")
@@ -975,7 +975,7 @@ impl GstObjectImpl for ReqwestHttpSrc {}
 
 impl ElementImpl for ReqwestHttpSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "HTTP Source",
                 "Source/Network/HTTP",
@@ -988,7 +988,7 @@ impl ElementImpl for ReqwestHttpSrc {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::new_any();
             let src_pad_template = gst::PadTemplate::new(
                 "src",

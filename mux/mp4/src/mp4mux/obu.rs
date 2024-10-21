@@ -204,11 +204,11 @@ impl From<ObuType> for u8 {
 mod tests {
     use super::*;
     use bitstream_io::{BigEndian, BitReader};
-    use once_cell::sync::Lazy;
     use std::io::Cursor;
+    use std::sync::LazyLock;
 
     #[allow(clippy::type_complexity)]
-    static OBUS: Lazy<Vec<(SizedObu, Vec<u8>)>> = Lazy::new(|| {
+    static OBUS: LazyLock<Vec<(SizedObu, Vec<u8>)>> = LazyLock::new(|| {
         vec![
             (
                 SizedObu {
