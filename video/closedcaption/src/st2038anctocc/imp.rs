@@ -6,15 +6,13 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::mem;
+use std::{mem, sync::LazyLock};
 
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
 use atomic_refcell::AtomicRefCell;
-
-use once_cell::sync::Lazy;
 
 use crate::st2038anc_utils::AncDataHeader;
 
@@ -31,7 +29,7 @@ pub struct St2038AncToCc {
     state: AtomicRefCell<State>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "st2038anctocc",
         gst::DebugColorFlags::empty(),
@@ -261,7 +259,7 @@ impl GstObjectImpl for St2038AncToCc {}
 
 impl ElementImpl for St2038AncToCc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "ST-2038 ANC to CC",
                 "Generic",
@@ -274,7 +272,7 @@ impl ElementImpl for St2038AncToCc {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let src_cea608_pad_template = gst::PadTemplate::new(
                 "src_cea608",
                 gst::PadDirection::Src,

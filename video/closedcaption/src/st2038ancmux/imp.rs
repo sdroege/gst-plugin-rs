@@ -6,17 +6,17 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::collections::BTreeMap;
-use std::ops::ControlFlow;
-use std::sync::Mutex;
+use std::{
+    collections::BTreeMap,
+    ops::ControlFlow,
+    sync::{LazyLock, Mutex},
+};
 
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
-
-use once_cell::sync::Lazy;
 
 use crate::st2038anc_utils::AncDataHeader;
 
@@ -38,7 +38,7 @@ pub struct St2038AncMux {
     state: Mutex<State>,
 }
 
-pub(crate) static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+pub(crate) static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "st2038ancmux",
         gst::DebugColorFlags::empty(),
@@ -572,7 +572,7 @@ impl AggregatorImpl for St2038AncMux {
 
 impl ElementImpl for St2038AncMux {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "ST2038 Anc Mux",
                 "Muxer",
@@ -585,7 +585,7 @@ impl ElementImpl for St2038AncMux {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::builder("meta/x-st-2038")
                 .field("alignment", gst::List::new(["packet", "line"]))
                 .build();

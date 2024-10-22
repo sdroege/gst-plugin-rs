@@ -15,14 +15,11 @@ use gst_base::UniqueFlowCombiner;
 
 use atomic_refcell::AtomicRefCell;
 
-use once_cell::sync::Lazy;
-
-use std::collections::HashMap;
-use std::mem;
+use std::{collections::HashMap, mem, sync::LazyLock};
 
 use crate::st2038anc_utils::AncDataHeader;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "st2038ancdemux",
         gst::DebugColorFlags::empty(),
@@ -325,7 +322,7 @@ impl GstObjectImpl for St2038AncDemux {}
 
 impl ElementImpl for St2038AncDemux {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "SMPTE ST-2038 ancillary metadata demuxer",
                 "Metadata/Video/Demuxer",
@@ -338,7 +335,7 @@ impl ElementImpl for St2038AncDemux {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::builder("meta/x-st-2038").build();
             let caps_aligned = gst::Caps::builder("meta/x-st-2038")
                 .field("alignment", "packet")

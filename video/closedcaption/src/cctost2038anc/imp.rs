@@ -6,15 +6,13 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
 use atomic_refcell::AtomicRefCell;
-
-use once_cell::sync::Lazy;
 
 use crate::st2038anc_utils::convert_to_st2038_buffer;
 
@@ -54,7 +52,7 @@ pub struct CcToSt2038Anc {
     settings: Mutex<Settings>,
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "cctost2038anc",
         gst::DebugColorFlags::empty(),
@@ -197,7 +195,7 @@ impl ObjectSubclass for CcToSt2038Anc {
 
 impl ObjectImpl for CcToSt2038Anc {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoolean::builder("c-not-y-channel")
                     .nick("Y Not C Channel")
@@ -278,7 +276,7 @@ impl GstObjectImpl for CcToSt2038Anc {}
 
 impl ElementImpl for CcToSt2038Anc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "CC to ST-2038 ANC",
                 "Generic",
@@ -291,7 +289,7 @@ impl ElementImpl for CcToSt2038Anc {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,
