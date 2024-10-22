@@ -16,7 +16,10 @@ glib::wrapper! {
         @extends crate::baseaudiopay::RtpBaseAudioPay2, crate::basepay::RtpBasePay2, gst::Element, gst::Object;
 }
 
-pub trait RtpPcmauPayImpl: crate::baseaudiopay::RtpBaseAudioPay2Impl {}
+pub trait RtpPcmauPayImpl:
+    crate::baseaudiopay::RtpBaseAudioPay2Impl + ObjectSubclass<Type: IsA<RtpPcmauPay>>
+{
+}
 
 unsafe impl<T: RtpPcmauPayImpl> IsSubclassable<T> for RtpPcmauPay {
     fn class_init(class: &mut glib::Class<Self>) {

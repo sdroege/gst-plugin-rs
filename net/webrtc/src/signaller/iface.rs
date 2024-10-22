@@ -535,7 +535,9 @@ where
     }
 }
 
-pub trait SignallableImpl: object::ObjectImpl + Send + Sync + 'static {
+pub trait SignallableImpl:
+    ObjectImpl + ObjectSubclass<Type: IsA<super::Signallable>> + Send + Sync + 'static
+{
     fn start(&self) {}
     fn stop(&self) {}
     fn send_sdp(&self, _session_id: &str, _sdp: &gst_webrtc::WebRTCSessionDescription) {}
@@ -550,7 +552,7 @@ pub trait SignallableImpl: object::ObjectImpl + Send + Sync + 'static {
     fn end_session(&self, _session_id: &str) {}
 }
 
-pub trait SignallableExt: 'static {
+pub trait SignallableExt: IsA<super::Signallable> + 'static {
     fn start(&self);
     fn stop(&self);
     fn munge_sdp(

@@ -3957,7 +3957,9 @@ unsafe impl<T: FMP4MuxImpl> IsSubclassable<T> for super::FMP4Mux {
     }
 }
 
-pub(crate) trait FMP4MuxImpl: AggregatorImpl {
+pub(crate) trait FMP4MuxImpl:
+    AggregatorImpl + ObjectSubclass<Type: IsA<super::FMP4Mux>>
+{
     const VARIANT: super::Variant;
 }
 

@@ -10,7 +10,7 @@ glib::wrapper! {
     pub struct JanusVRSignaller(ObjectSubclass<imp::Signaller>) @implements Signallable;
 }
 
-trait JanusVRSignallerImpl: ObjectImpl {
+trait JanusVRSignallerImpl: ObjectImpl + ObjectSubclass<Type: IsA<JanusVRSignaller>> {
     fn emit_talking(&self, talking: bool, id: imp::JanusId, audio_level: f32);
 }
 

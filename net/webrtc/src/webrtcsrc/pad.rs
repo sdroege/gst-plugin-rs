@@ -76,4 +76,4 @@ impl GhostPadImpl for WebRTCSrcPad {}
 
 unsafe impl<T: WebRTCSrcPadImpl> IsSubclassable<T> for super::WebRTCSrcPad {}
 
-pub trait WebRTCSrcPadImpl: GhostPadImpl {}
+pub trait WebRTCSrcPadImpl: GhostPadImpl + ObjectSubclass<Type: IsA<super::WebRTCSrcPad>> {}

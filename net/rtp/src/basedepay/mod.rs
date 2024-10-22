@@ -19,7 +19,7 @@ glib::wrapper! {
 }
 
 /// Trait containing extension methods for `RtpBaseDepay2`.
-pub trait RtpBaseDepay2Ext: IsA<RtpBaseDepay2> {
+pub trait RtpBaseDepay2Ext: IsA<RtpBaseDepay2> + 'static {
     /// Sends a caps event with the given caps downstream before the next output buffer.
     fn set_src_caps(&self, src_caps: &gst::Caps) {
         assert!(src_caps.is_fixed());
@@ -121,7 +121,7 @@ pub trait RtpBaseDepay2Ext: IsA<RtpBaseDepay2> {
 impl<O: IsA<RtpBaseDepay2>> RtpBaseDepay2Ext for O {}
 
 /// Trait to implement in `RtpBaseDepay2` subclasses.
-pub trait RtpBaseDepay2Impl: ElementImpl {
+pub trait RtpBaseDepay2Impl: ElementImpl + ObjectSubclass<Type: IsA<RtpBaseDepay2>> {
     /// By default only metas without any tags are copied. Adding tags here will also copy the
     /// metas that *only* have exactly one of these tags.
     ///

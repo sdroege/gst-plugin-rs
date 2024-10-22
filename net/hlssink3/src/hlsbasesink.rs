@@ -92,7 +92,7 @@ impl ObjectSubclass for HlsBaseSink {
     type ParentType = gst::Bin;
 }
 
-pub trait HlsBaseSinkImpl: BinImpl {}
+pub trait HlsBaseSinkImpl: BinImpl + ObjectSubclass<Type: IsA<super::HlsBaseSink>> {}
 
 unsafe impl<T: HlsBaseSinkImpl> IsSubclassable<T> for super::HlsBaseSink {}
 

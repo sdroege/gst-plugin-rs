@@ -19,7 +19,7 @@ glib::wrapper! {
 }
 
 /// Trait containing extension methods for `RtpBaseAudioPay2`.
-pub trait RtpBaseAudioPay2Ext: IsA<RtpBaseAudioPay2> {
+pub trait RtpBaseAudioPay2Ext: IsA<RtpBaseAudioPay2> + 'static {
     /// Sets the number of bytes per frame.
     ///
     /// Should always be called together with `RtpBasePay2Ext::set_src_caps()`.
@@ -31,7 +31,10 @@ pub trait RtpBaseAudioPay2Ext: IsA<RtpBaseAudioPay2> {
 impl<O: IsA<RtpBaseAudioPay2>> RtpBaseAudioPay2Ext for O {}
 
 /// Trait to implement in `RtpBaseAudioPay2` subclasses.
-pub trait RtpBaseAudioPay2Impl: RtpBasePay2Impl {}
+pub trait RtpBaseAudioPay2Impl:
+    RtpBasePay2Impl + ObjectSubclass<Type: IsA<RtpBaseAudioPay2>>
+{
+}
 
 unsafe impl<T: RtpBaseAudioPay2Impl> IsSubclassable<T> for RtpBaseAudioPay2 {
     fn class_init(class: &mut glib::Class<Self>) {

@@ -64,7 +64,10 @@ unsafe impl<T: BaseWebRTCSrcImpl> IsSubclassable<T> for super::BaseWebRTCSrc {
         Self::parent_class_init::<T>(class);
     }
 }
-pub(crate) trait BaseWebRTCSrcImpl: BinImpl {}
+pub(crate) trait BaseWebRTCSrcImpl:
+    BinImpl + ObjectSubclass<Type: IsA<super::BaseWebRTCSrc>>
+{
+}
 
 impl ObjectImpl for BaseWebRTCSrc {
     fn properties() -> &'static [glib::ParamSpec] {

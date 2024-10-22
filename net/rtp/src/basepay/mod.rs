@@ -19,7 +19,7 @@ glib::wrapper! {
 }
 
 /// Trait containing extension methods for `RtpBasePay2`.
-pub trait RtpBasePay2Ext: IsA<RtpBasePay2> {
+pub trait RtpBasePay2Ext: IsA<RtpBasePay2> + 'static {
     /// Sends a caps event with the given caps downstream before the next output buffer.
     ///
     /// The caps must be `application/x-rtp` and contain the `clock-rate` field with a suitable
@@ -120,7 +120,7 @@ pub trait RtpBasePay2Ext: IsA<RtpBasePay2> {
 impl<O: IsA<RtpBasePay2>> RtpBasePay2Ext for O {}
 
 /// Trait to implement in `RtpBasePay2` subclasses.
-pub trait RtpBasePay2Impl: ElementImpl {
+pub trait RtpBasePay2Impl: ElementImpl + ObjectSubclass<Type: IsA<RtpBasePay2>> {
     /// Drop buffers with `HEADER` flag.
     const DROP_HEADER_BUFFERS: bool = false;
 

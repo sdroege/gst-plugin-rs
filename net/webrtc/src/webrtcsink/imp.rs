@@ -4314,7 +4314,10 @@ fn register_dye_meta() {
 
 unsafe impl<T: BaseWebRTCSinkImpl> IsSubclassable<T> for super::BaseWebRTCSink {}
 
-pub(crate) trait BaseWebRTCSinkImpl: BinImpl {}
+pub(crate) trait BaseWebRTCSinkImpl:
+    BinImpl + ObjectSubclass<Type: IsA<super::BaseWebRTCSink>>
+{
+}
 
 impl ObjectImpl for BaseWebRTCSink {
     fn properties() -> &'static [glib::ParamSpec] {
