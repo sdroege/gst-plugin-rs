@@ -7967,6 +7967,78 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "rsrelationmeta": {
+        "description": "GStreamer Rust Relation Meta Plugin",
+        "elements": {
+            "relationmeta2onvifmeta": {
+                "author": "Benjamin Gaignard <benjamin.gaignard@collabora.com>",
+                "description": "Convert relation metadata to ONVIF metadata",
+                "hierarchy": [
+                    "GstRelationMeta2OnvifMeta",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Metadata",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "time-source": {
+                        "blurb": "Time source for UTC timestamps",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "clock (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstRsOnvifNtpTimeSource",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstrsrelationmeta",
+        "license": "MPL-2.0",
+        "other-types": {
+            "GstRsOnvifNtpTimeSource": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "UNIX time based on realtime clock.",
+                        "name": "clock",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Running time is in UTC",
+                        "name": "running-time",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Pipeline clock is UTC",
+                        "name": "clock-time",
+                        "value": "2"
+                    }
+                ]
+            }
+        },
+        "package": "gst-plugin-relationmeta",
+        "source": "gst-plugin-relationmeta",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "rsrtp": {
         "description": "GStreamer Rust RTP Plugin",
         "elements": {

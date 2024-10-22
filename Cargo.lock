@@ -2757,6 +2757,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "gst-plugin-relationmeta"
+version = "0.14.0-alpha.1"
+dependencies = [
+ "chrono",
+ "glib",
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "gstreamer-analytics",
+ "gstreamer-base",
+ "gstreamer-rtp",
+ "gstreamer-video",
+ "xmltree",
+]
+
+[[package]]
 name = "gst-plugin-reqwest"
 version = "0.14.0-alpha.1"
 dependencies = [
@@ -3184,6 +3199,28 @@ source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#
 dependencies = [
  "glib-sys",
  "gobject-sys",
+ "gstreamer-sys",
+ "libc",
+ "system-deps 7.0.3",
+]
+
+[[package]]
+name = "gstreamer-analytics"
+version = "0.24.0"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#d1ece4bb12bba4cbe9cc933206caaa2b79c7011d"
+dependencies = [
+ "glib",
+ "gstreamer",
+ "gstreamer-analytics-sys",
+ "libc",
+]
+
+[[package]]
+name = "gstreamer-analytics-sys"
+version = "0.24.0"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#d1ece4bb12bba4cbe9cc933206caaa2b79c7011d"
+dependencies = [
+ "glib-sys",
  "gstreamer-sys",
  "libc",
  "system-deps 7.0.3",

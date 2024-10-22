@@ -24,6 +24,7 @@ RS_PREFIXED = [
     'rtp',
     'rtsp',
     'inter',
+    'relationmeta',
 ]
 
 OVERRIDE = {

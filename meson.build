@@ -91,6 +91,9 @@ endif
 if get_option('threadshare').allowed() or get_option('rtsp').allowed()
   deps += [['gstreamer-net-1.0', 'gstreamer', 'gst_net_dep', 'gst_net']]
 endif
+if get_option('relationmeta').allowed()
+  deps += [['gstreamer-analytics-1.0', 'gst-plugins-bad', 'gstanalytics_dep', 'gstanalytics']]
+endif
 
 glib_dep = dependency('glib-2.0', version: glib_req)
 deps_cache += {'glib-2.0': glib_dep}
@@ -155,6 +158,7 @@ plugins = {
   },
   'raptorq': {'library': 'libgstraptorq'},
   'reqwest': {'library': 'libgstreqwest'},
+  'relationmeta': {'library': 'libgstrsrelationmeta'},
   'rtsp': {'library': 'libgstrsrtsp'},
   'rtp': {'library': 'libgstrsrtp'},
   'webrtchttp': {'library': 'libgstwebrtchttp'},
