@@ -15,12 +15,14 @@ const DEFAULT_PRODUCER_NAME: &str = "default";
 #[derive(Debug)]
 struct Settings {
     producer_name: String,
+    event_types: Vec<gst::EventType>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Settings {
             producer_name: DEFAULT_PRODUCER_NAME.to_string(),
+            event_types: vec![gst::EventType::Eos],
         }
     }
 }
@@ -41,9 +43,9 @@ impl InterSink {
         let settings = self.settings.lock().unwrap();
         let state = self.state.lock().unwrap();
 
-        InterStreamProducer::acquire(&settings.producer_name, &state.appsink)?;
-
-        Ok(())
+        InterStreamProducer::acquire(&settings.producer_name, &state.appsink).map(|producer| {
+            producer.set_forward_events(settings.event_types.clone());
+        })
     }
 
     fn unprepare(&self) {
@@ -83,12 +85,28 @@ impl ObjectSubclass for InterSink {
 impl ObjectImpl for InterSink {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecString::builder("producer-name")
-                .nick("Producer Name")
-                .blurb("Producer Name to use")
-                .doc_show_default()
-                .mutable_playing()
-                .build()]
+            vec![
+                glib::ParamSpecString::builder("producer-name")
+                    .nick("Producer Name")
+                    .blurb("Producer Name to use")
+                    .doc_show_default()
+                    .mutable_playing()
+                    .build(),
+                gst::ParamSpecArray::builder("event-types")
+                    .element_spec(
+                        &glib::ParamSpecEnum::builder_with_default(
+                            "event-type",
+                            gst::EventType::Eos,
+                        )
+                        .nick("Event Type")
+                        .blurb("Event Type")
+                        .build(),
+                    )
+                    .nick("Forwarded Event Types")
+                    .blurb("Forward Event Types (default EOS)")
+                    .mutable_ready()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()
@@ -123,6 +141,16 @@ impl ObjectImpl for InterSink {
                     }
                 }
             }
+            "event-types" => {
+                let mut settings = self.settings.lock().unwrap();
+                let types = value
+                    .get::<gst::Array>()
+                    .expect("type checked upstream")
+                    .iter()
+                    .map(|v| v.get::<gst::EventType>().expect("type checked upstream"))
+                    .collect::<Vec<_>>();
+                settings.event_types = types;
+            }
             _ => unimplemented!(),
         };
     }
@@ -132,6 +160,15 @@ impl ObjectImpl for InterSink {
             "producer-name" => {
                 let settings = self.settings.lock().unwrap();
                 settings.producer_name.to_value()
+            }
+            "event-types" => {
+                let settings = self.settings.lock().unwrap();
+                settings
+                    .event_types
+                    .iter()
+                    .map(|x| x.to_send_value())
+                    .collect::<gst::Array>()
+                    .to_value()
             }
             _ => unimplemented!(),
         }

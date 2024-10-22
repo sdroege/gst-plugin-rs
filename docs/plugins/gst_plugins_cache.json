@@ -7716,6 +7716,17 @@
                     }
                 },
                 "properties": {
+                    "event-types": {
+                        "blurb": "Forward Event Types (default EOS)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": true
+                    },
                     "producer-name": {
                         "blurb": "Producer Name to use",
                         "conditionally-available": false,

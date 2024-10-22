@@ -136,3 +136,51 @@ fn test_change_producer_name() {
     element1.set_state(gst::State::Null).unwrap();
     element2.set_state(gst::State::Null).unwrap();
 }
+
+#[test]
+#[serial]
+fn test_event_forwarding() {
+    init();
+
+    let mut hc = start_consumer("p");
+    let (srcpad, intersink) = start_producer("p");
+
+    intersink.set_state(gst::State::Null).unwrap();
+    intersink.set_property(
+        "event-types",
+        gst::Array::new(vec![gst::EventType::Eos, gst::EventType::CustomDownstream]),
+    );
+    intersink.set_state(gst::State::Playing).unwrap();
+
+    // FYI necessary push b/c:
+    // https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/merge_requests/1875#note_2630453
+    push_one(&srcpad, gst::ClockTime::from_nseconds(1));
+
+    let s = gst::Structure::builder("MyEvent")
+        .field("unsigned", 100u64)
+        .build();
+    assert!(srcpad.push_event(gst::event::CustomDownstream::new(s)));
+    assert!(srcpad.push_event(gst::event::Eos::new()));
+
+    let mut found = false;
+    loop {
+        use gst::EventView;
+
+        if let Ok(event) = hc.pull_event() {
+            match event.view() {
+                EventView::CustomDownstream(e) => {
+                    let v = e.structure().unwrap().get::<u64>("unsigned");
+                    assert!(v.is_ok_and(|v| v == 100u64));
+                    found = true;
+                    break;
+                }
+                EventView::Eos(..) => {
+                    break;
+                }
+                _ => (),
+            };
+        }
+    }
+    intersink.set_state(gst::State::Null).unwrap();
+    assert!(found);
+}
