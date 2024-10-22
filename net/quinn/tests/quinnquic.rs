@@ -18,6 +18,9 @@ fn init() {
     INIT.call_once(|| {
         gst::init().unwrap();
         gstquinn::plugin_register_static().expect("QUIC source sink send receive tests");
+        rustls::crypto::ring::default_provider()
+            .install_default()
+            .expect("Failed to install ring crypto provider");
     });
 }
 
