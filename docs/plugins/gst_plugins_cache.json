@@ -6320,6 +6320,73 @@
                 },
                 "rank": "none"
             },
+            "cctost2038anc": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Converts Closed Captions to ST-2038 ANC",
+                "hierarchy": [
+                    "GstCcToSt2038Anc",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Generic",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "closedcaption/x-cea-608:\n         format: s334-1a\nclosedcaption/x-cea-708:\n         format: cdp\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "meta/x-st-2038:\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    }
+                },
+                "properties": {
+                    "c-not-y-channel": {
+                        "blurb": "Set the y_not_c_channel flag in the output",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "horizontal-offset": {
+                        "blurb": "Horizontal offset of the output",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "4095",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "line-number": {
+                        "blurb": "Line Number of the output",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "9",
+                        "max": "2047",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
             "cea608overlay": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Renders CEA 608 closed caption meta over raw video frames",
@@ -6760,6 +6827,94 @@
                     }
                 },
                 "rank": "primary"
+            },
+            "st2038ancdemux": {
+                "author": "Tim-Philipp Müller <tim centricular com>",
+                "description": "Splits individual ancillary metadata streams from an SMPTE ST-2038 stream",
+                "hierarchy": [
+                    "GstSt2038AncDemux",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Metadata/Video/Demuxer",
+                "pad-templates": {
+                    "anc_%%02x_%%02x_at_%%u_%%u": {
+                        "caps": "meta/x-st-2038:\n      alignment: packet\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    },
+                    "sink": {
+                        "caps": "meta/x-st-2038:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "meta/x-st-2038:\n      alignment: packet\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "none"
+            },
+            "st2038ancmux": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Combines multiple ST2038 Anc streams",
+                "hierarchy": [
+                    "GstSt2038AncMux",
+                    "GstAggregator",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Muxer",
+                "pad-templates": {
+                    "sink_%%u": {
+                        "caps": "meta/x-st-2038:\n",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "GstSt2038AncMuxSinkPad"
+                    },
+                    "src": {
+                        "caps": "meta/x-st-2038:\n      alignment: { (string)packet, (string)line }\n",
+                        "direction": "src",
+                        "presence": "always",
+                        "type": "GstAggregatorPad"
+                    }
+                },
+                "rank": "none"
+            },
+            "st2038anctocc": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Converts ST-2038 ANC to Closed Captions",
+                "hierarchy": [
+                    "GstSt2038AncToCc",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Generic",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "meta/x-st-2038:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src_cea608": {
+                        "caps": "closedcaption/x-cea-608:\n         format: s334-1a\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    },
+                    "src_cea708": {
+                        "caps": "closedcaption/x-cea-708:\n         format: cdp\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    }
+                },
+                "rank": "none"
             },
             "transcriberbin": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
@@ -7205,6 +7360,17 @@
             "GstCea708MuxSinkPad": {
                 "hierarchy": [
                     "GstCea708MuxSinkPad",
+                    "GstAggregatorPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object"
+            },
+            "GstSt2038AncMuxSinkPad": {
+                "hierarchy": [
+                    "GstSt2038AncMuxSinkPad",
                     "GstAggregatorPad",
                     "GstPad",
                     "GstObject",
