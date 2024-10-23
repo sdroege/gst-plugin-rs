@@ -19,6 +19,8 @@ use gst_base::subclass::prelude::*;
 
 use std::sync::LazyLock;
 
+const DEFAULT_FORCE_LIVE: bool = false;
+
 #[derive(Default, Copy, Clone, PartialEq, Eq)]
 enum CeaFormat {
     S334_1a,
@@ -127,7 +129,8 @@ impl AggregatorImpl for Cea708Mux {
             .nseconds();
         let end_running_time = start_running_time + duration;
         let mut need_data = false;
-        let mut all_eos = true;
+        // In force-live mode, we never go EOS
+        let mut all_eos = !self.obj().is_force_live();
         gst::debug!(
             CAT,
             imp = self,
@@ -353,11 +356,33 @@ impl AggregatorImpl for Cea708Mux {
 
             self.finish_buffer(buf)
         } else {
-            self.obj().src_pad().push_event(
-                gst::event::Gap::builder(start_running_time)
-                    .duration(duration)
-                    .build(),
+            gst::trace!(
+                CAT,
+                imp = self,
+                "pushing {} gap at {}",
+                duration,
+                start_running_time
             );
+
+            #[cfg(feature = "v1_26")]
+            {
+                self.obj().push_src_event(
+                    gst::event::Gap::builder(start_running_time)
+                        .duration(duration)
+                        .build(),
+                );
+            }
+
+            #[cfg(not(feature = "v1_26"))]
+            {
+                self.obj().src_pad().push_event(
+                    gst::event::Gap::builder(start_running_time)
+                        .duration(duration)
+                        .build(),
+                );
+            }
+
+            gst::trace!(CAT, imp = self, "Pushed gap");
             Ok(gst::FlowSuccess::Ok)
         };
 
@@ -573,7 +598,37 @@ impl ElementImpl for Cea708Mux {
 
 impl GstObjectImpl for Cea708Mux {}
 
-impl ObjectImpl for Cea708Mux {}
+impl ObjectImpl for Cea708Mux {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
+            vec![glib::ParamSpecBoolean::builder("force-live")
+                .nick("Force live")
+                .blurb("Always operate in live mode and aggregate on timeout")
+                .default_value(DEFAULT_FORCE_LIVE)
+                .construct_only()
+                .build()]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        match pspec.name() {
+            "force-live" => {
+                self.obj()
+                    .set_force_live(value.get().expect("type checked upstream"));
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.name() {
+            "force-live" => self.obj().is_force_live().to_value(),
+            _ => unimplemented!(),
+        }
+    }
+}
 
 #[glib::object_subclass]
 impl ObjectSubclass for Cea708Mux {
