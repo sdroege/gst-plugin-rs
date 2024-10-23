@@ -15,9 +15,9 @@ gst.workspace = true
 gst-base.workspace = true
 tokio = { version = "1.36.0", default-features = false, features = ["time", "rt-multi-thread"] }
 futures = "0.3.30"
-quinn = { version = "0.11.2", default-features = true, features = ["ring"]}
-quinn-proto = "0.11.2"
-rustls = { version = "0.23", default-features = false, features = ["ring", "std"]}
+quinn = { version = "0.11.5", default-features = false, features = ["ring", "rustls", "runtime-tokio"] }
+quinn-proto ={ version = "0.11.8", default-features = false, features = ["rustls"] }
+rustls = { version = "0.23", default-features = false, features = ["std"] }
 rustls-pemfile = "2"
 rustls-pki-types = "1"
 rcgen = "0.13"

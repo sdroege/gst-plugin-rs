@@ -12,9 +12,8 @@ use futures::future;
 use futures::prelude::*;
 use gst::ErrorMessage;
 use quinn::{
-    crypto::rustls::QuicClientConfig, crypto::rustls::QuicServerConfig, default_runtime,
-    ClientConfig, Connection, Endpoint, EndpointConfig, MtuDiscoveryConfig, ServerConfig,
-    TransportConfig,
+    crypto::rustls::QuicClientConfig, crypto::rustls::QuicServerConfig, ClientConfig, Connection,
+    Endpoint, EndpointConfig, MtuDiscoveryConfig, ServerConfig, TokioRuntime, TransportConfig,
 };
 use quinn_proto::{ConnectionStats, FrameStats, PathStats, UdpStats};
 use std::error::Error;
@@ -209,6 +208,8 @@ impl rustls::client::danger::ServerCertVerifier for SkipServerVerification {
 }
 
 fn configure_client(ep_config: &QuinnQuicEndpointConfig) -> Result<ClientConfig, Box<dyn Error>> {
+    let ring_provider = rustls::crypto::ring::default_provider();
+
     let mut crypto = if ep_config.secure_conn {
         let (certs, key) = read_certs_from_file(
             ep_config.certificate_file.clone(),
@@ -217,11 +218,15 @@ fn configure_client(ep_config: &QuinnQuicEndpointConfig) -> Result<ClientConfig,
         let mut cert_store = rustls::RootCertStore::empty();
         cert_store.add_parsable_certificates(certs.clone());
 
-        rustls::ClientConfig::builder()
+        rustls::ClientConfig::builder_with_provider(ring_provider.into())
+            .with_protocol_versions(&[&rustls::version::TLS13])
+            .unwrap()
             .with_root_certificates(Arc::new(cert_store))
             .with_client_auth_cert(certs, key)?
     } else {
-        rustls::ClientConfig::builder()
+        rustls::ClientConfig::builder_with_provider(ring_provider.into())
+            .with_protocol_versions(&[&rustls::version::TLS13])
+            .unwrap()
             .dangerous()
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_no_client_auth()
@@ -340,18 +345,28 @@ fn configure_server(
         (cert_chain, priv_key)
     };
 
+    let ring_provider = rustls::crypto::ring::default_provider();
+
     let mut crypto = if ep_config.secure_conn {
         let mut cert_store = rustls::RootCertStore::empty();
         cert_store.add_parsable_certificates(certs.clone());
 
-        let auth_client = rustls::server::WebPkiClientVerifier::builder(Arc::new(cert_store))
-            .build()
-            .unwrap();
-        rustls::ServerConfig::builder()
+        let auth_client = rustls::server::WebPkiClientVerifier::builder_with_provider(
+            Arc::new(cert_store),
+            ring_provider.clone().into(),
+        )
+        .build()
+        .unwrap();
+
+        rustls::ServerConfig::builder_with_provider(ring_provider.into())
+            .with_protocol_versions(&[&rustls::version::TLS13])
+            .unwrap()
             .with_client_cert_verifier(auth_client)
             .with_single_cert(certs.clone(), key)
     } else {
-        rustls::ServerConfig::builder()
+        rustls::ServerConfig::builder_with_provider(ring_provider.into())
+            .with_protocol_versions(&[&rustls::version::TLS13])
+            .unwrap()
             .with_no_client_auth()
             .with_single_cert(certs.clone(), key)
     }?;
@@ -394,13 +409,16 @@ fn configure_server(
 pub fn server_endpoint(ep_config: &QuinnQuicEndpointConfig) -> Result<Endpoint, Box<dyn Error>> {
     let (server_config, _) = configure_server(ep_config)?;
     let socket = std::net::UdpSocket::bind(ep_config.server_addr)?;
-    let runtime = default_runtime()
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "No async runtime found"))?;
     let endpoint_config = EndpointConfig::default()
         .max_udp_payload_size(ep_config.transport_config.max_udp_payload_size)
         .unwrap()
         .to_owned();
-    let endpoint = Endpoint::new(endpoint_config, Some(server_config), socket, runtime)?;
+    let endpoint = Endpoint::new(
+        endpoint_config,
+        Some(server_config),
+        socket,
+        Arc::new(TokioRuntime),
+    )?;
 
     Ok(endpoint)
 }
