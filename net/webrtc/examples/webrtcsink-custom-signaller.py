@@ -104,7 +104,12 @@ class WebRTCClient:
         elif msg['type'] == 'sessionStarted':
             pass
         elif msg['type'] == 'startSession':
-            self.signaller_emit_session_requested(msg['sessionId'], msg['peerId'], None)
+            offer = None
+            if msg['offer']:
+                _, sdpmsg = GstSdp.SDPMessage.new()
+                GstSdp.sdp_message_parse_buffer(bytes(msg['offer'].encode()), sdpmsg)
+                offer = GstWebRTC.WebRTCSessionDescription.new(GstWebRTC.WebRTCSDPType.OFFER, sdpmsg)
+            self.signaller_emit_session_requested(msg['sessionId'], msg['peerId'], offer)
         elif msg['type'] == 'endSession':
             self.signaller_emit_session_ended(msg['sessionId'])
         elif msg['type'] == 'peer':
@@ -147,9 +152,11 @@ class WebRTCClient:
         return True
 
     def signaller_on_send_session_description(self, _, session_id, offer):
+        typ = 'offer'
+        if offer.type == GstWebRTC.WebRTCSDPType.ANSWER:
+            typ = 'answer'
         sdp = offer.sdp.as_text()
-        assert offer.type == GstWebRTC.WebRTCSDPType.OFFER
-        self.send_soon({'type': 'peer', 'sessionId': session_id, 'sdp': { 'type': 'offer', 'sdp': sdp }})
+        self.send_soon({'type': 'peer', 'sessionId': session_id, 'sdp': { 'type': typ, 'sdp': sdp }})
         return True
 
     def signaller_on_send_ice(self, _, session_id, candidate, sdp_m_line_index, sdp_mid):
