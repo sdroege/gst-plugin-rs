@@ -8,7 +8,7 @@
 
 use std::sync::{mpsc, Arc, Mutex};
 
-use futures::future::{AbortHandle, Abortable, Aborted};
+use futures::future::{AbortHandle, Abortable};
 use std::sync::LazyLock;
 use tokio::{runtime, task::JoinHandle};
 
@@ -27,6 +27,7 @@ use librespot_playback::{
 };
 
 use super::Bitrate;
+use crate::common::SetupThread;
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -64,35 +65,6 @@ struct State {
 struct Settings {
     common: crate::common::Settings,
     bitrate: Bitrate,
-}
-
-#[derive(Default)]
-enum SetupThread {
-    #[default]
-    None,
-    Pending {
-        thread_handle: Option<std::thread::JoinHandle<Result<anyhow::Result<()>, Aborted>>>,
-        abort_handle: AbortHandle,
-    },
-    Cancelled,
-    Done,
-}
-
-impl SetupThread {
-    fn abort(&mut self) {
-        // Cancel setup thread if it is pending and not done yet
-        if matches!(self, SetupThread::None | SetupThread::Done) {
-            return;
-        }
-
-        if let SetupThread::Pending {
-            ref abort_handle, ..
-        } = *self
-        {
-            abort_handle.abort();
-        }
-        *self = SetupThread::Cancelled;
-    }
 }
 
 #[derive(Default)]

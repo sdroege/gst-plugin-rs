@@ -11,6 +11,7 @@ use anyhow::bail;
 use gst::glib;
 use gst::prelude::*;
 
+use futures::future::{AbortHandle, Aborted};
 use librespot_core::{
     authentication::Credentials, cache::Cache, config::SessionConfig, session::Session,
     spotify_id::SpotifyId,
@@ -165,5 +166,34 @@ impl Settings {
         let track = SpotifyId::from_uri(&self.track)?;
 
         Ok(track)
+    }
+}
+
+#[derive(Default)]
+pub enum SetupThread {
+    #[default]
+    None,
+    Pending {
+        thread_handle: Option<std::thread::JoinHandle<Result<anyhow::Result<()>, Aborted>>>,
+        abort_handle: AbortHandle,
+    },
+    Cancelled,
+    Done,
+}
+
+impl SetupThread {
+    pub fn abort(&mut self) {
+        // Cancel setup thread if it is pending and not done yet
+        if matches!(self, SetupThread::None | SetupThread::Done) {
+            return;
+        }
+
+        if let SetupThread::Pending {
+            ref abort_handle, ..
+        } = *self
+        {
+            abort_handle.abort();
+        }
+        *self = SetupThread::Cancelled;
     }
 }
