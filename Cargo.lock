@@ -1444,7 +1444,7 @@ dependencies = [
  "iso8601",
  "lazy_static",
  "num-traits",
- "quick-xml 0.36.2",
+ "quick-xml",
  "regex",
  "serde",
  "serde_path_to_error",
@@ -2428,7 +2428,7 @@ dependencies = [
  "gstreamer-video",
  "m3u8-rs",
  "once_cell",
- "quick-xml 0.31.0",
+ "quick-xml",
  "serde",
 ]
 
@@ -2619,7 +2619,7 @@ dependencies = [
  "gstreamer-video",
  "libloading",
  "once_cell",
- "quick-xml 0.31.0",
+ "quick-xml",
  "smallvec",
  "thiserror",
 ]
@@ -5315,16 +5315,6 @@ checksum = "96a8c1bda5ae1af7f99a2962e49df150414a43d62404644d98dd5c3a93d07457"
 dependencies = [
  "idna 0.3.0",
  "psl-types",
-]
-
-[[package]]
-name = "quick-xml"
-version = "0.31.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1004a344b30a54e2ee58d66a71b32d2db2feb0a31f9a2d302bf0536f15de2a33"
-dependencies = [
- "memchr",
- "serde",
 ]
 
 [[package]]
