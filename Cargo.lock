@@ -2277,14 +2277,13 @@ dependencies = [
 
 [[package]]
 name = "governor"
-version = "0.6.4"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a7ecdc5898f6a43e08a7e2c9e2266beb98fd4dfbf2634182540fbb715245093"
+checksum = "68a7f542ee6b35af73b06abc0dad1c1bae89964e4e253bc4b587b91c9637867b"
 dependencies = [
  "cfg-if",
- "futures-sink",
+ "futures",
  "futures-timer",
- "futures-util",
  "no-std-compat",
  "nonzero_ext",
  "parking_lot",
@@ -4430,7 +4429,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]

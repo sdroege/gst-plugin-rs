@@ -3,10 +3,8 @@ version = 2
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 ignore = [
-    # Waiting for https://github.com/librespot-org/librespot/issues/937
-    "RUSTSEC-2021-0059",
-    "RUSTSEC-2021-0060",
-    "RUSTSEC-2021-0061",
+    # librespot depends on a vulnerable version of rsa
+    "RUSTSEC-2023-0071",
     # sodiumoxide is deprecated
     # https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/530
     "RUSTSEC-2021-0137",
@@ -60,24 +58,6 @@ version = "1.8"
 
 # Ignore various duplicated dependencies because librespot depends on an old versions
 [[bans.skip]]
-name = "block-buffer"
-version = "0.9"
-[[bans.skip]]
-name = "digest"
-version = "0.9"
-[[bans.skip]]
-name = "sha-1"
-version = "0.9"
-[[bans.skip]]
-name = "hmac"
-version = "0.11"
-[[bans.skip]]
-name = "zerocopy"
-version = "0.6"
-[[bans.skip]]
-name = "zerocopy-derive"
-version = "0.6"
-[[bans.skip]]
 name = "hermit-abi"
 version = "0.3"
 
@@ -105,20 +85,29 @@ version = "0.6"
 name = "idna"
 version = "0.3"
 
-# Various crates depend on an older version of indexmap / hashbrown
-[[bans.skip]]
-name = "indexmap"
-version = "1.0"
-[[bans.skip]]
-name = "hashbrown"
-version = "0.12"
-
-# various livekit dependencies depend on an old version of itertools and sync_wrapper
+# various livekit dependencies depend on an older versions of various crates
 [[bans.skip]]
 name = "itertools"
 version = "0.11"
 [[bans.skip]]
 name = "sync_wrapper"
+version = "0.1"
+[[bans.skip]]
+name = "rustls-native-certs"
+version = "0.7"
+[[bans.skip]]
+name = "hyper-rustls"
+version = "0.26"
+[[bans.skip]]
+name = "tokio-rustls"
+version = "0.25"
+
+# chrono via iana-time-zone depends on old windows-core
+[[bans.skip]]
+name = "windows-core"
+version = "0.52"
+[[bans.skip]]
+name = "windows-result"
 version = "0.1"
 
 # various rav1e / dssim-core depend on an old version of itertools
@@ -269,6 +258,26 @@ version = "0.22"
 [[bans.skip]]
 name = "tokio-rustls"
 version = "0.24"
+
+# aws SDK depends on older version of various crypto crates
+[[bans.skip]]
+name = "der"
+version = "0.6"
+[[bans.skip]]
+name = "hyper-rustls"
+version = "0.24"
+[[bans.skip]]
+name = "pkcs8"
+version = "0.9"
+[[bans.skip]]
+name = "rustc-hash"
+version = "1"
+[[bans.skip]]
+name = "signature"
+version = "1"
+[[bans.skip]]
+name = "spki"
+version = "0.6"
 
 [sources]
 unknown-registry = "deny"
