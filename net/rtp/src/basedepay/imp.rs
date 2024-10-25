@@ -335,13 +335,13 @@ impl RtpBaseDepay2 {
 
         // Copy over metas and other metadata from the packets that made up this buffer
         let obj = self.obj();
+        let mut reference_timestamp_metas = BTreeMap::new();
         for front in state
             .pending_packets
             .iter()
             .take_while(|p| p.ext_seqnum <= ext_seqnum)
         {
             // Filter out reference timestamp metas that have the same timestamps
-            let mut reference_timestamp_metas = BTreeMap::new();
 
             front.buffer.foreach_meta(|meta| {
                 use std::ops::ControlFlow::*;
