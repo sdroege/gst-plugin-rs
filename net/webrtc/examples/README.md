@@ -17,10 +17,49 @@ cargo run --example webrtcsink-stats-server
 Once it is running, follow the instruction in the webrtcsink-stats folder to
 run an example client.
 
-## webrtcsink-custom-signaller
+## Rust webrtcsink-custom-signaller
 
-An example of custom signaller implementation, see the corresponding
-[README](webrtcsink-custom-signaller/README.md) for more details on code and usage. 
+An example of a custom signaller implementation in Rust, see the corresponding
+[README](webrtcsink-custom-signaller/README.md) for more details on code and
+usage.
+
+## Python webrtcsink-custom-signaller
+
+An example of a webrtcsink producer and custom signaller implemented in Python,
+see [webrtcsink-custom-signaller.py](webrtcsink-custom-signaller.py). Running
+the example requires the Python GStreamer bindings and the websockets library.
+To install these in Debian/Ubuntu:
+
+``` shell
+sudo apt install python3-gst-1.0 python3-websockets
+```
+
+Running the Python example is similar to the process described in "[README:
+Usage (standalone services)](../README#usage-standalone-services)", except
+in the third step `gst-launch-1.0` is replaced with the Python program. Open
+three terminals. In the first one, run the signalling server:
+
+``` shell
+cd net/webrtc/signalling
+WEBRTCSINK_SIGNALLING_SERVER_LOG=debug cargo run --bin gst-webrtc-signalling-server
+```
+
+In the second one, run a web browser client:
+
+``` shell
+cd net/webrtc/gstwebrtc-api
+npm install
+npm start
+```
+
+In the third one, run the Python code:
+
+``` shell
+# The Python code contains a hardcoded GStreamer pipeline, so unlike
+# gst-launch-1.0, there is no need to pass any extra arguments
+export GST_PLUGIN_PATH=<path-to-gst-plugins-rs>/target:${GST_PLUGIN_PATH}
+python3 net/webrtc/examples/webrtcsink-custom-signaller.py
+```
 
 ## WebRTC precise synchronization example
 
