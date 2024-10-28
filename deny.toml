@@ -7,9 +7,10 @@ ignore = [
     "RUSTSEC-2021-0059",
     "RUSTSEC-2021-0060",
     "RUSTSEC-2021-0061",
-    "RUSTSEC-2021-0145",
     # sodiumoxide is deprecated
     "RUSTSEC-2021-0137",
+    # proc-macro-error maintainer is unreachable
+    "RUSTSEC-2024-0370",
 ]
 
 [licenses]
@@ -69,9 +70,6 @@ version = "0.9"
 name = "sha-1"
 version = "0.9"
 [[bans.skip]]
-name = "env_logger"
-version = "0.9"
-[[bans.skip]]
 name = "hmac"
 version = "0.11"
 [[bans.skip]]
@@ -80,24 +78,8 @@ version = "0.6"
 [[bans.skip]]
 name = "zerocopy-derive"
 version = "0.6"
-[[bans.skip]]
-name = "multimap"
-version = "0.8"
-[[bans.skip]]
-name = "nix"
-version = "0.23"
-
-# field-offset and nix depend on an older memoffset
-# https://github.com/Diggsey/rust-field-offset/pull/23
-# https://github.com/nix-rust/nix/pull/1885
-[[bans.skip]]
-name = "memoffset"
-version = "0.6"
 
 # Various crates depend on an older version of hermit-abi
-[[bans.skip]]
-name = "hermit-abi"
-version = "0.1"
 [[bans.skip]]
 name = "hermit-abi"
 version = "0.3"
@@ -109,11 +91,6 @@ version = "0.13"
 [[bans.skip]]
 name = "base64"
 version = "0.21"
-
-# Various crates depend on an older version of socket2
-[[bans.skip]]
-name = "socket2"
-version = "0.4"
 
 # Various crates depend on an older version of bitflags
 [[bans.skip]]
@@ -277,11 +254,6 @@ version = "0.52"
 [[bans.skip]]
 name = "cfg-expr"
 version = "0.15"
-
-# backtrace and png depend on old miniz_oxide
-[[bans.skip]]
-name = "miniz_oxide"
-version = "0.7"
 
 # aws-smithy-runtime depends on old tokio-rustls
 [[bans.skip]]
