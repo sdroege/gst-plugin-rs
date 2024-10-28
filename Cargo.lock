@@ -1428,7 +1428,7 @@ dependencies = [
  "iso8601",
  "lazy_static",
  "num-traits",
- "quick-xml",
+ "quick-xml 0.36.2",
  "regex",
  "serde",
  "serde_path_to_error",
@@ -2412,7 +2412,7 @@ dependencies = [
  "gstreamer-video",
  "m3u8-rs",
  "once_cell",
- "quick-xml",
+ "quick-xml 0.37.0",
  "serde",
 ]
 
@@ -2603,7 +2603,7 @@ dependencies = [
  "gstreamer-video",
  "libloading",
  "once_cell",
- "quick-xml",
+ "quick-xml 0.37.0",
  "smallvec",
  "thiserror",
 ]
@@ -4204,7 +4204,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -5204,7 +5204,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22505a5c94da8e3b7c2996394d1c933236c4d743e81a410bcca4e6989fc066a4"
 dependencies = [
  "bytes",
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.12.1",
  "log",
  "multimap",
@@ -5286,6 +5286,16 @@ name = "quick-xml"
 version = "0.36.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7649a7b4df05aed9ea7ec6f628c67c9953a43869b8bc50929569b2999d443fe"
+dependencies = [
+ "memchr",
+ "serde",
+]
+
+[[package]]
+name = "quick-xml"
+version = "0.37.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffbfb3ddf5364c9cfcd65549a1e7b801d0e8d1b14c1a1590a6408aa93cfbfa84"
 dependencies = [
  "memchr",
  "serde",

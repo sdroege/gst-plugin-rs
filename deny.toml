@@ -83,6 +83,9 @@ version = "0.6"
 [[bans.skip]]
 name = "hermit-abi"
 version = "0.3"
+[[bans.skip]]
+name = "quick-xml"
+version = "0.36"
 
 # Various crates depend on an older version of base64
 [[bans.skip]]

@@ -20,7 +20,7 @@ byteorder = "1.0"
 data-encoding = "2.4.0"
 atomic_refcell = "0.1"
 libloading = "0.8"
-quick-xml = "0.36"
+quick-xml = "0.37"
 smallvec = { version = "1.11", features = ["const_generics"] }
 thiserror = "1.0"
 once_cell.workspace = true
