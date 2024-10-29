@@ -2536,6 +2536,380 @@ fn test_caps_change_at_gop_boundary() {
 }
 
 #[test]
+fn test_language_change_at_gop_boundary() {
+    init();
+
+    let mut h = gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"));
+
+    let caps = gst::Caps::builder("video/x-h264")
+        .field("width", 1920i32)
+        .field("height", 1080i32)
+        .field("framerate", gst::Fraction::new(30, 1))
+        .field("stream-format", "avc")
+        .field("alignment", "au")
+        .field("codec_data", gst::Buffer::from_slice([1, 2, 3, 4]))
+        .build();
+
+    h.element()
+        .unwrap()
+        .set_property("fragment-duration", 1.seconds());
+
+    h.set_src_caps(caps);
+    h.play();
+
+    for i in 0..30 {
+        let mut buffer = gst::Buffer::with_size(1).unwrap();
+        {
+            if i == 10 {
+                let mut tl = gst::TagList::new();
+                tl.make_mut()
+                    .add::<gst::tags::LanguageCode>(&"abc", gst::TagMergeMode::Append);
+                let ev = gst::event::Tag::builder(tl).build();
+                h.push_event(ev);
+            }
+
+            let buffer = buffer.get_mut().unwrap();
+            buffer.set_pts(i * 100.mseconds());
+            buffer.set_dts(i * 100.mseconds());
+            buffer.set_duration(100.mseconds());
+
+            if i % 10 != 0 {
+                buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
+            }
+        }
+        assert_eq!(h.push(buffer), Ok(gst::FlowSuccess::Ok));
+    }
+
+    //test_caps_changed_buffers(&mut h, 30, 10, 10, 100, true, false);
+
+    h.crank_single_clock_wait().unwrap();
+    // Initial fragment with HEADER and DISCONT
+    test_caps_changed_verify(&mut h, 1 + 1 + 10, true, false);
+
+    h.crank_single_clock_wait().unwrap();
+    // Full GOP with HEADER due to language change
+    test_caps_changed_verify(&mut h, 1 + 1 + 10, true, false);
+
+    h.crank_single_clock_wait().unwrap();
+    h.push_event(gst::event::Eos::new());
+    // Full GOP with HEADER but no DISCONT because no caps change
+    test_caps_changed_verify(&mut h, 1 + 10, false, false);
+
+    assert_eq!(h.buffers_in_queue(), 0);
+}
+
+#[test]
+fn test_caps_change_at_gop_boundary_multi_stream() {
+    init();
+
+    let mut h1 = gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"));
+    let mut h2 = gst_check::Harness::with_element(&h1.element().unwrap(), Some("sink_1"), None);
+
+    let caps1 = gst::Caps::builder("video/x-h264")
+        .field("width", 1920i32)
+        .field("height", 1080i32)
+        .field("framerate", gst::Fraction::new(30, 1))
+        .field("stream-format", "avc")
+        .field("alignment", "au")
+        .field("codec_data", gst::Buffer::from_slice([1, 2, 3, 4]))
+        .build();
+
+    let caps2 = gst::Caps::builder("video/x-h264")
+        .field("width", 640)
+        .field("height", 480)
+        .field("framerate", gst::Fraction::new(30, 1))
+        .field("stream-format", "avc")
+        .field("alignment", "au")
+        .field("codec_data", gst::Buffer::from_slice([4, 3, 2, 1]))
+        .build();
+
+    h1.element()
+        .unwrap()
+        .set_property("fragment-duration", 330.mseconds());
+
+    h1.set_src_caps(caps1);
+    h1.play();
+    h2.set_src_caps(caps2);
+    h2.play();
+
+    for i in 0..21 {
+        // caps change on 5th and 20th buffer
+        if let Some(caps) = match i {
+            5 => Some(
+                gst::Caps::builder("video/x-h264")
+                    .field("width", 1280i32)
+                    .field("height", 720i32)
+                    .field("framerate", gst::Fraction::new(30, 1))
+                    .field("stream-format", "avc")
+                    .field("alignment", "au")
+                    .field("codec_data", gst::Buffer::from_slice([1, 2, 3, 4]))
+                    .build(),
+            ),
+            20 => Some(
+                gst::Caps::builder("video/x-h264")
+                    .field("width", 1024)
+                    .field("height", 800)
+                    .field("framerate", gst::Fraction::new(30, 1))
+                    .field("stream-format", "avc")
+                    .field("alignment", "au")
+                    .field("codec_data", gst::Buffer::from_slice([1, 2, 3, 4]))
+                    .build(),
+            ),
+            _ => None,
+        } {
+            h1.push_event(gst::event::Caps::new(&caps));
+        }
+
+        let mut buffer = gst::Buffer::with_size(1).unwrap();
+        {
+            let buffer = buffer.get_mut().unwrap();
+            buffer.set_pts(i * 33.mseconds());
+            buffer.set_dts(i * 33.mseconds());
+            buffer.set_duration(33.mseconds());
+
+            // GOP size of 5
+            if i % 5 != 0 {
+                buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
+            }
+        }
+        assert_eq!(h1.push(buffer), Ok(gst::FlowSuccess::Ok));
+
+        let mut buffer = gst::Buffer::with_size(2).unwrap();
+        {
+            let buffer = buffer.get_mut().unwrap();
+            buffer.set_pts(i * 33.mseconds());
+            buffer.set_dts(i * 33.mseconds());
+            buffer.set_duration(33.mseconds());
+
+            // GOP size of 7
+            if i % 7 != 0 {
+                buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
+            }
+        }
+        assert_eq!(h2.push(buffer), Ok(gst::FlowSuccess::Ok));
+
+        if i != 5 {
+            continue;
+        }
+
+        // reconfigure event
+        h1.try_pull_upstream_event().unwrap();
+        h2.try_pull_upstream_event().unwrap();
+        let ev1 = h1.pull_upstream_event().unwrap();
+        assert_eq!(
+            gst_video::UpstreamForceKeyUnitEvent::parse(&ev1).unwrap(),
+            gst_video::UpstreamForceKeyUnitEvent {
+                running_time: Some(330.mseconds()),
+                all_headers: true,
+                count: 0
+            }
+        );
+        let ev2 = h2.pull_upstream_event().unwrap();
+        assert_eq!(
+            gst_video::UpstreamForceKeyUnitEvent::parse(&ev1).unwrap(),
+            gst_video::UpstreamForceKeyUnitEvent::parse(&ev2).unwrap()
+        );
+        let ev1 = h1.pull_upstream_event().unwrap();
+        assert_eq!(
+            gst_video::UpstreamForceKeyUnitEvent::parse(&ev1).unwrap(),
+            gst_video::UpstreamForceKeyUnitEvent {
+                running_time: Some(495.mseconds()),
+                all_headers: true,
+                count: 0
+            }
+        );
+        let ev2 = h2.pull_upstream_event().unwrap();
+        assert_eq!(
+            gst_video::UpstreamForceKeyUnitEvent::parse(&ev1).unwrap(),
+            gst_video::UpstreamForceKeyUnitEvent::parse(&ev2).unwrap()
+        );
+        let ev1 = h1.pull_upstream_event().unwrap();
+        assert_eq!(
+            gst_video::UpstreamForceKeyUnitEvent::parse(&ev1).unwrap(),
+            gst_video::UpstreamForceKeyUnitEvent {
+                running_time: Some(165.mseconds()),
+                all_headers: true,
+                count: 0
+            }
+        );
+        let ev2 = h2.pull_upstream_event().unwrap();
+        assert_eq!(
+            gst_video::UpstreamForceKeyUnitEvent::parse(&ev1).unwrap(),
+            gst_video::UpstreamForceKeyUnitEvent::parse(&ev2).unwrap()
+        );
+    }
+
+    h1.crank_single_clock_wait().unwrap();
+    // Caps change on 6th buffer, 1st stream has complete GOP but 2nd
+    // stream GOP is incomplete. Still 2nd stream buffers are pushed
+    // because the stream would be missing in the fragment otherwise.
+    test_caps_changed_verify(&mut h1, 1 + 1 + 5 + 4, true, false);
+
+    h1.crank_single_clock_wait().unwrap();
+    // Caps change on 20th buffer, both streams have complete GOPs, 3
+    // from stream #1 and the rest of the old GOP and one complete GOP
+    // from stream #2.
+    test_caps_changed_verify(&mut h1, 1 + 1 + 5 + 5 + 5 + 3 + 7, true, false);
+
+    // On stream #1 a FKU event for partial GOP and next GOP and on
+    // stream #2 just the next GOP FKU because no partial GOP has been
+    // pushed.
+    assert_eq!(h1.upstream_events_in_queue(), 2);
+    assert_eq!(h2.upstream_events_in_queue(), 1);
+
+    h1.push_event(gst::event::Eos::new());
+    h2.push_event(gst::event::Eos::new());
+
+    assert_eq!(h1.buffers_in_queue(), 0);
+}
+
+#[test]
+fn test_caps_change_at_gop_boundary_chunked_multi_stream() {
+    init();
+
+    let mut h1 = gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"));
+    let mut h2 = gst_check::Harness::with_element(&h1.element().unwrap(), Some("sink_1"), None);
+
+    let caps1 = gst::Caps::builder("video/x-h264")
+        .field("width", 1920i32)
+        .field("height", 1080i32)
+        .field("framerate", gst::Fraction::new(30, 1))
+        .field("stream-format", "avc")
+        .field("alignment", "au")
+        .field("codec_data", gst::Buffer::from_slice([1, 2, 3, 4]))
+        .build();
+
+    let caps2 = gst::Caps::builder("video/x-h264")
+        .field("width", 640)
+        .field("height", 480)
+        .field("framerate", gst::Fraction::new(30, 1))
+        .field("stream-format", "avc")
+        .field("alignment", "au")
+        .field("codec_data", gst::Buffer::from_slice([4, 3, 2, 1]))
+        .build();
+
+    h1.element()
+        .unwrap()
+        .set_property("fragment-duration", 1.seconds());
+    h1.element()
+        .unwrap()
+        .set_property("chunk-duration", 250.mseconds());
+
+    h1.set_src_caps(caps1);
+    h1.play();
+    h2.set_src_caps(caps2);
+    h2.play();
+
+    for i in 0..21 {
+        // caps change on 10th and 20th buffer
+        if let Some(caps) = match i {
+            10 => Some(
+                gst::Caps::builder("video/x-h264")
+                    .field("width", 1280i32)
+                    .field("height", 720i32)
+                    .field("framerate", gst::Fraction::new(30, 1))
+                    .field("stream-format", "avc")
+                    .field("alignment", "au")
+                    .field("codec_data", gst::Buffer::from_slice([1, 2, 3, 4]))
+                    .build(),
+            ),
+            _ => None,
+        } {
+            h1.push_event(gst::event::Caps::new(&caps));
+        }
+
+        let mut buffer = gst::Buffer::with_size(1).unwrap();
+        {
+            let buffer = buffer.get_mut().unwrap();
+            buffer.set_pts(i * 33.mseconds());
+            buffer.set_dts(i * 33.mseconds());
+            buffer.set_duration(33.mseconds());
+
+            // GOP size of 5
+            if i % 5 != 0 {
+                buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
+            }
+        }
+        assert_eq!(h1.push(buffer), Ok(gst::FlowSuccess::Ok));
+
+        let mut buffer = gst::Buffer::with_size(2).unwrap();
+        {
+            let buffer = buffer.get_mut().unwrap();
+            buffer.set_pts(i * 33.mseconds());
+            buffer.set_dts(i * 33.mseconds());
+            buffer.set_duration(33.mseconds());
+
+            // GOP size of 7
+            if i % 7 != 0 {
+                buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
+            }
+        }
+        assert_eq!(h2.push(buffer), Ok(gst::FlowSuccess::Ok));
+
+        if i != 5 {
+            continue;
+        }
+
+        // reconfigure event
+        h1.try_pull_upstream_event().unwrap();
+        h2.try_pull_upstream_event().unwrap();
+        let ev1 = h1.pull_upstream_event().unwrap();
+        assert_eq!(
+            gst_video::UpstreamForceKeyUnitEvent::parse(&ev1).unwrap(),
+            gst_video::UpstreamForceKeyUnitEvent {
+                running_time: Some(1.seconds()),
+                all_headers: true,
+                count: 0
+            }
+        );
+        let ev2 = h2.pull_upstream_event().unwrap();
+        assert_eq!(
+            gst_video::UpstreamForceKeyUnitEvent::parse(&ev1).unwrap(),
+            gst_video::UpstreamForceKeyUnitEvent::parse(&ev2).unwrap()
+        );
+    }
+
+    h1.crank_single_clock_wait().unwrap();
+    // Fragment start chunk
+    test_caps_changed_verify(&mut h1, 1 + 1 + 8 + 8, true, false);
+
+    h1.crank_single_clock_wait().unwrap();
+    // Early end of chunk due to caps change
+    test_caps_changed_verify(&mut h1, 1 + 2 + 1, false, true);
+
+    // Signalling new keyunit for next fragment
+    let ev1 = h1.pull_upstream_event().unwrap();
+    assert_eq!(
+        gst_video::UpstreamForceKeyUnitEvent::parse(&ev1).unwrap(),
+        gst_video::UpstreamForceKeyUnitEvent {
+            running_time: Some(1330.mseconds()),
+            all_headers: true,
+            count: 0
+        }
+    );
+
+    // Signalling new keyunit on stream with caps change
+    let ev1 = h1.pull_upstream_event().unwrap();
+    assert_eq!(
+        gst_video::UpstreamForceKeyUnitEvent::parse(&ev1).unwrap(),
+        gst_video::UpstreamForceKeyUnitEvent {
+            running_time: Some(330.mseconds()),
+            all_headers: true,
+            count: 0
+        }
+    );
+
+    h1.crank_single_clock_wait().unwrap();
+    // The first chunk of the new fragment
+    test_caps_changed_verify(&mut h1, 1 + 1 + 8 + 9, true, false);
+
+    h1.push_event(gst::event::Eos::new());
+    h2.push_event(gst::event::Eos::new());
+
+    assert_eq!(h1.buffers_in_queue(), 0);
+}
+
+#[test]
 fn test_caps_change_at_gop_boundary_compatible() {
     init();
 
@@ -2777,7 +3151,8 @@ fn test_caps_change_within_gop_no_key() {
 
     h.crank_single_clock_wait().unwrap();
     // Reduced GOP with HEADER and DISCONT due to caps change
-    test_caps_changed_verify(&mut h, 1 + 1 + 10, true, false);
+    test_caps_changed_verify(&mut h, 1 + 1 + 5, true, false);
+    test_caps_changed_verify(&mut h, 1 + 10, false, false);
 
     h.crank_single_clock_wait().unwrap();
     h.push_event(gst::event::Eos::new());
