@@ -1475,7 +1475,9 @@ impl SessionInner {
 
                 if let Some(rtpgccbwe) = self.rtpgccbwe.as_ref() {
                     let max_bitrate = self.cc_info.max_bitrate * (self.encoders.len() as u32);
+                    let min_bitrate = self.cc_info.min_bitrate * (self.encoders.len() as u32);
                     rtpgccbwe.set_property("max-bitrate", max_bitrate);
+                    rtpgccbwe.set_property("min-bitrate", min_bitrate);
                 }
             }
         }
