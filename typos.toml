@@ -12,6 +12,10 @@ trun = "trun"
 # net/rtp/src/ac3 - "5/8ths" - not sure how to allow this without also letting through all typos of 'this'
 ths = "ths"
 
+# net/aws
+ines = "ines"
+Ines = "Ines"
+
 [files]
 extend-exclude = [
     "*.mcc",

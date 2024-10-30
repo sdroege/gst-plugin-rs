@@ -27,7 +27,7 @@ use aws_sdk_transcribestreaming as aws_transcribe;
 use futures::channel::mpsc;
 use futures::future::AbortHandle;
 use futures::prelude::*;
-use tokio::{runtime, sync::broadcast, task};
+use tokio::{sync::broadcast, task};
 
 use std::collections::{BTreeSet, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -40,13 +40,7 @@ use super::{
     AwsTranscriberResultStability, AwsTranscriberVocabularyFilterMethod,
     TranslationTokenizationMethod, CAT,
 };
-
-static RUNTIME: LazyLock<runtime::Runtime> = LazyLock::new(|| {
-    runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-});
+use crate::s3utils::RUNTIME;
 
 #[allow(deprecated)]
 static AWS_BEHAVIOR_VERSION: LazyLock<aws_config::BehaviorVersion> =

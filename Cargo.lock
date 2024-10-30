@@ -419,6 +419,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-sdk-polly"
+version = "1.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6985182fbfde1ba022b4c3bd0c13fe28dd5cbaec6c2b326836c0c376afc0f373"
+dependencies = [
+ "aws-credential-types",
+ "aws-runtime",
+ "aws-sigv4",
+ "aws-smithy-async",
+ "aws-smithy-http",
+ "aws-smithy-json",
+ "aws-smithy-runtime",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "aws-types",
+ "bytes",
+ "http 0.2.12",
+ "once_cell",
+ "regex-lite",
+ "tracing",
+]
+
+[[package]]
 name = "aws-sdk-s3"
 version = "1.59.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2387,9 +2410,11 @@ dependencies = [
 name = "gst-plugin-aws"
 version = "0.14.0-alpha.1"
 dependencies = [
+ "anyhow",
  "async-stream",
  "aws-config",
  "aws-credential-types",
+ "aws-sdk-polly",
  "aws-sdk-s3",
  "aws-sdk-transcribestreaming",
  "aws-sdk-translate",

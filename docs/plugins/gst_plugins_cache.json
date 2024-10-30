@@ -2,6 +2,130 @@
     "aws": {
         "description": "GStreamer Amazon Web Services plugin",
         "elements": {
+            "awspolly": {
+                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
+                "description": "Text to Speech filter, using AWS polly",
+                "hierarchy": [
+                    "GstAwsPolly",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Audio/Text/Filter",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "text/x-raw:\n         format: utf8\napplication/ssml+xml:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "audio/x-raw:\n           rate: 16000\n       channels: 1\n         layout: interleaved\n         format: S16LE\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "access-key": {
+                        "blurb": "AWS Access Key",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "engine": {
+                        "blurb": "Defines what engine to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "neural (1)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstAwsPollyEngine",
+                        "writable": true
+                    },
+                    "language-code": {
+                        "blurb": "Defines what language code to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "none (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstAwsPollyLanguageCode",
+                        "writable": true
+                    },
+                    "latency": {
+                        "blurb": "Amount of milliseconds to allow AWS Polly",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "2000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "lexicon-names": {
+                        "blurb": "List of lexicon names to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": true
+                    },
+                    "secret-access-key": {
+                        "blurb": "AWS Secret Access Key",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "session-token": {
+                        "blurb": "AWS temporary Session Token from STS",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "voice-id": {
+                        "blurb": "Defines what voice id to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "aria (2)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstAwsPollyVoiceId",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
             "awss3hlssink": {
                 "author": "Daily. Co",
                 "description": "Streams HLS data to S3",
@@ -1226,6 +1350,571 @@
         "filename": "gstaws",
         "license": "MPL",
         "other-types": {
+            "GstAwsPollyEngine": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Standard",
+                        "name": "standard",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Neural",
+                        "name": "neural",
+                        "value": "1"
+                    }
+                ]
+            },
+            "GstAwsPollyLanguageCode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "None",
+                        "name": "none",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Arb",
+                        "name": "arb",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "CaEs",
+                        "name": "ca-ES",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "CmnCn",
+                        "name": "cmn-CN",
+                        "value": "3"
+                    },
+                    {
+                        "desc": "CyGb",
+                        "name": "cy-GB",
+                        "value": "4"
+                    },
+                    {
+                        "desc": "DaDk",
+                        "name": "da-DK",
+                        "value": "5"
+                    },
+                    {
+                        "desc": "DeAt",
+                        "name": "de-AT",
+                        "value": "6"
+                    },
+                    {
+                        "desc": "DeDe",
+                        "name": "de-DE",
+                        "value": "7"
+                    },
+                    {
+                        "desc": "EnAu",
+                        "name": "en-AU",
+                        "value": "8"
+                    },
+                    {
+                        "desc": "EnGb",
+                        "name": "en-GB",
+                        "value": "9"
+                    },
+                    {
+                        "desc": "EnGbWls",
+                        "name": "en-GB-WLS",
+                        "value": "10"
+                    },
+                    {
+                        "desc": "EnIn",
+                        "name": "en-IN",
+                        "value": "11"
+                    },
+                    {
+                        "desc": "EnNz",
+                        "name": "en-NZ",
+                        "value": "12"
+                    },
+                    {
+                        "desc": "EnUs",
+                        "name": "en-US",
+                        "value": "13"
+                    },
+                    {
+                        "desc": "EnZa",
+                        "name": "en-ZA",
+                        "value": "14"
+                    },
+                    {
+                        "desc": "EsEs",
+                        "name": "es-ES",
+                        "value": "15"
+                    },
+                    {
+                        "desc": "EsMx",
+                        "name": "es-MX",
+                        "value": "16"
+                    },
+                    {
+                        "desc": "EsUs",
+                        "name": "es-US",
+                        "value": "17"
+                    },
+                    {
+                        "desc": "FrCa",
+                        "name": "fr-CA",
+                        "value": "18"
+                    },
+                    {
+                        "desc": "FrFr",
+                        "name": "fr-FR",
+                        "value": "19"
+                    },
+                    {
+                        "desc": "HiIn",
+                        "name": "hi-IN",
+                        "value": "20"
+                    },
+                    {
+                        "desc": "IsIs",
+                        "name": "is-IS",
+                        "value": "21"
+                    },
+                    {
+                        "desc": "ItIt",
+                        "name": "it-IT",
+                        "value": "22"
+                    },
+                    {
+                        "desc": "JaJp",
+                        "name": "ja-JP",
+                        "value": "23"
+                    },
+                    {
+                        "desc": "KoKr",
+                        "name": "ko-KR",
+                        "value": "24"
+                    },
+                    {
+                        "desc": "NbNo",
+                        "name": "nb-NO",
+                        "value": "25"
+                    },
+                    {
+                        "desc": "NlNl",
+                        "name": "nl-NL",
+                        "value": "26"
+                    },
+                    {
+                        "desc": "PlPl",
+                        "name": "pl-PL",
+                        "value": "27"
+                    },
+                    {
+                        "desc": "PtBr",
+                        "name": "pt-BR",
+                        "value": "28"
+                    },
+                    {
+                        "desc": "PtPt",
+                        "name": "pt-PT",
+                        "value": "29"
+                    },
+                    {
+                        "desc": "RoRo",
+                        "name": "ro-RO",
+                        "value": "30"
+                    },
+                    {
+                        "desc": "RuRu",
+                        "name": "ru-RU",
+                        "value": "31"
+                    },
+                    {
+                        "desc": "SvSe",
+                        "name": "sv-SE",
+                        "value": "32"
+                    },
+                    {
+                        "desc": "TrTr",
+                        "name": "tr-TR",
+                        "value": "33"
+                    },
+                    {
+                        "desc": "YueCn",
+                        "name": "yue-CN",
+                        "value": "34"
+                    }
+                ]
+            },
+            "GstAwsPollyVoiceId": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Aditi",
+                        "name": "aditi",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Amy",
+                        "name": "amy",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Aria",
+                        "name": "aria",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "Arlet",
+                        "name": "arlet",
+                        "value": "3"
+                    },
+                    {
+                        "desc": "Arthur",
+                        "name": "arthur",
+                        "value": "4"
+                    },
+                    {
+                        "desc": "Astrid",
+                        "name": "astrid",
+                        "value": "5"
+                    },
+                    {
+                        "desc": "Ayanda",
+                        "name": "ayanda",
+                        "value": "6"
+                    },
+                    {
+                        "desc": "Bianca",
+                        "name": "bianca",
+                        "value": "7"
+                    },
+                    {
+                        "desc": "Brian",
+                        "name": "brian",
+                        "value": "8"
+                    },
+                    {
+                        "desc": "Camila",
+                        "name": "camila",
+                        "value": "9"
+                    },
+                    {
+                        "desc": "Carla",
+                        "name": "carla",
+                        "value": "10"
+                    },
+                    {
+                        "desc": "Carmen",
+                        "name": "carmen",
+                        "value": "11"
+                    },
+                    {
+                        "desc": "Celine",
+                        "name": "celine",
+                        "value": "12"
+                    },
+                    {
+                        "desc": "Chantal",
+                        "name": "chantal",
+                        "value": "13"
+                    },
+                    {
+                        "desc": "Conchita",
+                        "name": "conchita",
+                        "value": "14"
+                    },
+                    {
+                        "desc": "Cristiano",
+                        "name": "cristiano",
+                        "value": "15"
+                    },
+                    {
+                        "desc": "Daniel",
+                        "name": "daniel",
+                        "value": "16"
+                    },
+                    {
+                        "desc": "Dora",
+                        "name": "dora",
+                        "value": "17"
+                    },
+                    {
+                        "desc": "Emma",
+                        "name": "emma",
+                        "value": "18"
+                    },
+                    {
+                        "desc": "Enrique",
+                        "name": "enrique",
+                        "value": "19"
+                    },
+                    {
+                        "desc": "Ewa",
+                        "name": "ewa",
+                        "value": "20"
+                    },
+                    {
+                        "desc": "Filiz",
+                        "name": "filiz",
+                        "value": "21"
+                    },
+                    {
+                        "desc": "Gabrielle",
+                        "name": "gabrielle",
+                        "value": "22"
+                    },
+                    {
+                        "desc": "Geraint",
+                        "name": "geraint",
+                        "value": "23"
+                    },
+                    {
+                        "desc": "Giorgio",
+                        "name": "giorgio",
+                        "value": "24"
+                    },
+                    {
+                        "desc": "Gwyneth",
+                        "name": "gwyneth",
+                        "value": "25"
+                    },
+                    {
+                        "desc": "Hannah",
+                        "name": "hannah",
+                        "value": "26"
+                    },
+                    {
+                        "desc": "Hans",
+                        "name": "hans",
+                        "value": "27"
+                    },
+                    {
+                        "desc": "Hiujin",
+                        "name": "hiujin",
+                        "value": "28"
+                    },
+                    {
+                        "desc": "Ines",
+                        "name": "ines",
+                        "value": "29"
+                    },
+                    {
+                        "desc": "Ivy",
+                        "name": "ivy",
+                        "value": "30"
+                    },
+                    {
+                        "desc": "Jacek",
+                        "name": "jacek",
+                        "value": "31"
+                    },
+                    {
+                        "desc": "Jan",
+                        "name": "jan",
+                        "value": "32"
+                    },
+                    {
+                        "desc": "Joanna",
+                        "name": "joanna",
+                        "value": "33"
+                    },
+                    {
+                        "desc": "Joey",
+                        "name": "joey",
+                        "value": "34"
+                    },
+                    {
+                        "desc": "Justin",
+                        "name": "justin",
+                        "value": "35"
+                    },
+                    {
+                        "desc": "Kajal",
+                        "name": "kajal",
+                        "value": "36"
+                    },
+                    {
+                        "desc": "Karl",
+                        "name": "karl",
+                        "value": "37"
+                    },
+                    {
+                        "desc": "Kendra",
+                        "name": "kendra",
+                        "value": "38"
+                    },
+                    {
+                        "desc": "Kevin",
+                        "name": "kevin",
+                        "value": "39"
+                    },
+                    {
+                        "desc": "Kimberly",
+                        "name": "kimberly",
+                        "value": "40"
+                    },
+                    {
+                        "desc": "Lea",
+                        "name": "lea",
+                        "value": "41"
+                    },
+                    {
+                        "desc": "Liam",
+                        "name": "liam",
+                        "value": "42"
+                    },
+                    {
+                        "desc": "Liv",
+                        "name": "liv",
+                        "value": "43"
+                    },
+                    {
+                        "desc": "Lotte",
+                        "name": "lotte",
+                        "value": "44"
+                    },
+                    {
+                        "desc": "Lucia",
+                        "name": "lucia",
+                        "value": "45"
+                    },
+                    {
+                        "desc": "Lupe",
+                        "name": "lupe",
+                        "value": "46"
+                    },
+                    {
+                        "desc": "Mads",
+                        "name": "mads",
+                        "value": "47"
+                    },
+                    {
+                        "desc": "Maja",
+                        "name": "maja",
+                        "value": "48"
+                    },
+                    {
+                        "desc": "Marlene",
+                        "name": "marlene",
+                        "value": "49"
+                    },
+                    {
+                        "desc": "Mathieu",
+                        "name": "mathieu",
+                        "value": "50"
+                    },
+                    {
+                        "desc": "Matthew",
+                        "name": "matthew",
+                        "value": "51"
+                    },
+                    {
+                        "desc": "Maxim",
+                        "name": "maxim",
+                        "value": "52"
+                    },
+                    {
+                        "desc": "Mia",
+                        "name": "mia",
+                        "value": "53"
+                    },
+                    {
+                        "desc": "Miguel",
+                        "name": "miguel",
+                        "value": "54"
+                    },
+                    {
+                        "desc": "Mizuki",
+                        "name": "mizuki",
+                        "value": "55"
+                    },
+                    {
+                        "desc": "Naja",
+                        "name": "naja",
+                        "value": "56"
+                    },
+                    {
+                        "desc": "Nicole",
+                        "name": "nicole",
+                        "value": "57"
+                    },
+                    {
+                        "desc": "Olivia",
+                        "name": "olivia",
+                        "value": "58"
+                    },
+                    {
+                        "desc": "Pedro",
+                        "name": "pedro",
+                        "value": "59"
+                    },
+                    {
+                        "desc": "Penelope",
+                        "name": "penelope",
+                        "value": "60"
+                    },
+                    {
+                        "desc": "Raveena",
+                        "name": "raveena",
+                        "value": "61"
+                    },
+                    {
+                        "desc": "Ricardo",
+                        "name": "ricardo",
+                        "value": "62"
+                    },
+                    {
+                        "desc": "Ruben",
+                        "name": "ruben",
+                        "value": "63"
+                    },
+                    {
+                        "desc": "Russell",
+                        "name": "russell",
+                        "value": "64"
+                    },
+                    {
+                        "desc": "Salli",
+                        "name": "salli",
+                        "value": "65"
+                    },
+                    {
+                        "desc": "Seoyeon",
+                        "name": "seoyeon",
+                        "value": "66"
+                    },
+                    {
+                        "desc": "Takumi",
+                        "name": "takumi",
+                        "value": "67"
+                    },
+                    {
+                        "desc": "Tatyana",
+                        "name": "tatyana",
+                        "value": "68"
+                    },
+                    {
+                        "desc": "Vicki",
+                        "name": "vicki",
+                        "value": "69"
+                    },
+                    {
+                        "desc": "Vitoria",
+                        "name": "vitoria",
+                        "value": "70"
+                    },
+                    {
+                        "desc": "Zeina",
+                        "name": "zeina",
+                        "value": "71"
+                    },
+                    {
+                        "desc": "Zhiyu",
+                        "name": "zhiyu",
+                        "value": "72"
+                    }
+                ]
+            },
             "GstAwsTranscriberResultStability": {
                 "kind": "enum",
                 "values": [

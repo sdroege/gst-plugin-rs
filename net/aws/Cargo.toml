@@ -19,6 +19,7 @@ aws-sdk-transcribestreaming = "1.0"
 aws-sdk-translate = "1.0"
 aws-types = "1.0"
 aws-credential-types = "1.0"
+aws-sdk-polly = "1.0"
 bytes = "1.0"
 futures = "0.3"
 gio.workspace = true
@@ -33,6 +34,7 @@ serde_json = "1"
 url = "2"
 gst-video = { workspace = true, features = ["v1_22"] }
 sprintf = "0.2"
+anyhow = "1"
 
 [dev-dependencies]
 chrono = { version = "0.4", features = [ "alloc" ] }

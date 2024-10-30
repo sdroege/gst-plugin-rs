@@ -28,7 +28,7 @@ pub const DEFAULT_S3_REGION: &str = "us-west-2";
 pub static AWS_BEHAVIOR_VERSION: LazyLock<aws_config::BehaviorVersion> =
     LazyLock::new(aws_config::BehaviorVersion::v2023_11_09);
 
-static RUNTIME: LazyLock<runtime::Runtime> = LazyLock::new(|| {
+pub static RUNTIME: LazyLock<runtime::Runtime> = LazyLock::new(|| {
     runtime::Builder::new_multi_thread()
         .enable_all()
         .worker_threads(2)
