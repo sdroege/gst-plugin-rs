@@ -11,7 +11,7 @@
  *
  * This tracer provides an easy way to take a snapshot of all the pipelines without
  * having to modify the application.
- * One just have to load the tracer and send the `SIGUSR1` UNIX signal to take snapshots.
+ * One just has to load the tracer and send the `SIGUSR1` UNIX signal to take snapshots.
  * It currently only works on UNIX systems.
  *
  * When taking a snapshot pipelines are saved to DOT files, but the tracer may be
@@ -28,14 +28,35 @@
  * ```
  *
  * Parameters can be passed to configure the tracer:
- * - `dot-dir` (string, default: None): directory where to place dot files (overriding `GST_DEBUG_DUMP_DOT_DIR`). Set to `xdg-cache` to use the XDG cache directory.
+ * - `dot-dir` (string, default: None): directory where to place dot files (overriding `GST_DEBUG_DUMP_DOT_DIR`).
+ * - `xdg-cache`: Instead of using `GST_DEBUG_DUMP_DOT_DIR` or `dot-dir`, use `$XDG_CACHE_DIR/gstreamer-dots` to save dot files.
  * - `dot-prefix` (string, default: "pipeline-snapshot-"): when dumping pipelines to a `dot` file each file is named `$prefix$pipeline_name.dot`.
  * - `dot-ts` (boolean, default: "true"): if the current timestamp should be added as a prefix to each pipeline `dot` file.
+ * - `cleanup-mode` (enum, default: "none"): Determines how .dot files are cleaned up:
+ *     - "initial": Removes all existing .dot files from the target folder when the tracer starts
+ *     - "automatic": Performs cleanup before each snapshot. If folder-mode is enabled, cleans up .dot files within folders.
+ *                    If folder-mode is None, cleans up .dot files directly in the target directory
+ *     - "none": Never removes any .dot files
+ * - `folder-mode` (enum, default: "none"): Controls how .dot files are organized in folders:
+ *     - "none": All .dot files are stored directly in the target directory without subfolder organization
+ *     - "numbered": Creates a new numbered folder (starting from 0) for each snapshot operation
+ *     - "timed": Creates a new folder named with the current timestamp for each snapshot operation
  *
- * Example:
+ * Examples:
  *
+ * Basic usage with custom prefix and timestamp:
  * ```console
- * $ GST_TRACERS="pipeline-snapshot(dot-prefix="badger-",dot-ts=false)" GST_DEBUG_DUMP_DOT_DIR=. gst-launch-1.0 audiotestsrc ! fakesink
+ * $ GST_TRACERS="pipeline-snapshot(dot-prefix="badger-",dot-ts=true,xdg-cache=true)" GST_DEBUG_DUMP_DOT_DIR=. gst-launch-1.0 audiotestsrc ! fakesink
+ * ```
+ *
+ * Using numbered folders with automatic cleanup:
+ * ```console
+ * $ GST_TRACERS="pipeline-snapshot(folder-mode=numbered,cleanup-mode=automatic)" GST_DEBUG_DUMP_DOT_DIR=. gst-launch-1.0 audiotestsrc ! fakesink
+ * ```
+ *
+ * Using timestamped folders with initial cleanup:
+ * ```console
+ * $ GST_TRACERS="pipeline-snapshot(folder-mode=timed,cleanup-mode=initial)" GST_DEBUG_DUMP_DOT_DIR=. gst-launch-1.0 audiotestsrc ! fakesink
  * ```
  */
 use std::collections::HashMap;
