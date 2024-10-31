@@ -152,6 +152,7 @@ struct Settings {
     dot_ts: bool,
     dot_pipeline_ptr: bool,
     dot_dir: Option<String>,
+    xdg_cache: bool,
     cleanup_mode: CleanupMode,
     folder_mode: FolderMode,
 }
@@ -162,6 +163,7 @@ impl Default for Settings {
             dot_dir: None,
             dot_prefix: Some("pipeline-snapshot-".to_string()),
             dot_ts: true,
+            xdg_cache: false,
             cleanup_mode: CleanupMode::None,
             dot_pipeline_ptr: false,
             folder_mode: FolderMode::None,
@@ -170,15 +172,22 @@ impl Default for Settings {
 }
 
 impl Settings {
+    fn set_xdg_cache(&mut self, xdg_cache: bool) {
+        self.xdg_cache = xdg_cache;
+        if xdg_cache {
+            let mut path = dirs::cache_dir().expect("Failed to find cache directory");
+            path.push("gstreamer-dots");
+            self.dot_dir = path.to_str().map(|s| s.to_string());
+        }
+    }
+
     fn set_dot_dir(&mut self, dot_dir: Option<String>) {
-        if let Some(dot_dir) = dot_dir {
-            if dot_dir == "xdg-cache" {
-                let mut path = dirs::cache_dir().expect("Failed to find cache directory");
-                path.push("gstreamer-dots");
-                self.dot_dir = path.to_str().map(|s| s.to_string());
-            } else {
-                self.dot_dir = Some(dot_dir);
+        if self.xdg_cache {
+            if dot_dir.is_some() {
+                gst::warning!(CAT, "Trying to set a dot dir while using XDG cache");
             }
+        } else if let Some(dot_dir) = dot_dir {
+            self.dot_dir = Some(dot_dir);
         } else {
             self.dot_dir = std::env::var("GST_DEBUG_DUMP_DOT_DIR").ok();
         }
@@ -193,9 +202,19 @@ impl Settings {
             }
         };
 
+        if let Ok(xdg_cache) = s.get("xdg-cache") {
+            self.set_xdg_cache(xdg_cache);
+            gst::log!(
+                CAT,
+                imp = imp,
+                "Using xdg_cache -> dot-dir = {:?}",
+                self.dot_dir
+            );
+        }
+
         if let Ok(dot_dir) = s.get("dot-dir") {
             self.set_dot_dir(dot_dir);
-            gst::log!(CAT, imp = imp, "dot-prefix = {:?}", self.dot_dir);
+            gst::log!(CAT, imp = imp, "dot-dir = {:?}", self.dot_dir);
         }
 
         if let Ok(dot_prefix) = s.get("dot-prefix") {
@@ -245,6 +264,7 @@ struct State {
 #[properties(wrapper_type = super::PipelineSnapshot)]
 pub struct PipelineSnapshot {
     #[property(name="dot-dir", get, set = Self::set_dot_dir, construct_only, type = String, member = dot_dir, blurb = "Directory where to place dot files")]
+    #[property(name="xdg-cache", get, set = Self::set_xdg_cache, construct_only, type = bool, member = xdg_cache, blurb = "Use $XDG_CACHE_DIR/gstreamer-dots")]
     #[property(name="dot-prefix", get, set, type = String, member = dot_prefix, blurb = "Prefix for dot files")]
     #[property(name="dot-ts", get, set, type = bool, member = dot_ts, blurb = "Add timestamp to dot files")]
     #[property(name="dot-pipeline-ptr", get, set, type = bool, member = dot_pipeline_ptr, blurb = "Add pipeline ptr value to dot files")]
@@ -361,6 +381,11 @@ impl PipelineSnapshot {
     fn set_dot_dir(&self, dot_dir: Option<String>) {
         let mut settings = self.settings.write().unwrap();
         settings.set_dot_dir(dot_dir);
+    }
+
+    fn set_xdg_cache(&self, use_xdg_cache: bool) {
+        let mut settings = self.settings.write().unwrap();
+        settings.set_xdg_cache(use_xdg_cache);
     }
 
     pub(crate) fn snapshot(&self) {
