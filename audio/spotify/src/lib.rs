@@ -14,7 +14,7 @@
  */
 use gst::glib;
 
-mod common;
+pub mod common;
 mod spotifyaudiosrc;
 mod spotifylyricssrc;
 
