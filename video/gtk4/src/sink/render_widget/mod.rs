@@ -13,7 +13,7 @@ mod imp;
 
 /// Use a simple container widget to automatically pass the window size to gtk4paintablesink.
 glib::wrapper! {
-    pub struct RenderWidget(ObjectSubclass<imp::RenderWidget>) @extends gtk::Widget;
+    pub struct RenderWidget(ObjectSubclass<imp::RenderWidget>) @extends gtk::Widget, @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl RenderWidget {
