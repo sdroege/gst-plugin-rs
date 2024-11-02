@@ -5,6 +5,30 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.13.3] - 2024-11-02
+### Fixed
+- gtk4paintablesink: Don't check for a GL context when filtering dmabuf caps.
+- gtk4paintablesink: Use a correctly typed None value when retrieving
+  paintable property fails.
+- mpegtslivesrc: Parse PAT/PMT to lock to a single program/PCR in case
+  multiple are in the stream.
+- rtp: Fix reference timestamp meta de-duplication in depayloaders.
+- quinn: Specify a default crypto provider to avoid conflicts.
+- transcriberbin: Fix linking of user-provided transcriber.
+- webrtcsink: Allow pixel-aspect-ratio changes.
+- webrtcsink: Fix naming of error dot files of discovery pipelines.
+- webrtcsink: Fix session not in place errors.
+- webrtc: janus: Do not block in end_session().
+
+### Added
+- awstranscriber: Post warning message with details when items are too late.
+- transcriberbin: Support both latency and translate-latency properties.
+- webrtc: janus: Add janus-state property.
+
+### Changed
+- gtk4paintablesink: Deprecated "wayland" feature and call it "waylandegl" as
+  it has nothing to do with generic Wayland support.
+
 ## [0.13.2] - 2024-09-28
 ### Fixed
 - cea608overlay: Avoid overflow when deciding which lines to retain.
@@ -556,7 +580,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.2...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.3...HEAD
+[0.13.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.2...0.13.3
 [0.13.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.1...0.13.2
 [0.13.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.0...0.13.1
 [0.13.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.12.7...0.13.0
