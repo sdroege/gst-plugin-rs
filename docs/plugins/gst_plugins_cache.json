@@ -7735,6 +7735,20 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "lateness": {
+                        "blurb": "Amount of milliseconds to pass as lateness to the transcriber",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
                     "mode": {
                         "blurb": "Which closed caption mode to operate in",
                         "conditionally-available": false,

@@ -29,6 +29,7 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 
 const DEFAULT_PASSTHROUGH: bool = false;
 const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_seconds(4);
+const DEFAULT_LATENESS: gst::ClockTime = gst::ClockTime::from_seconds(0);
 const DEFAULT_TRANSLATE_LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(500);
 const DEFAULT_ACCUMULATE: gst::ClockTime = gst::ClockTime::ZERO;
 const DEFAULT_MODE: Cea608Mode = Cea608Mode::RollUp2;
@@ -100,6 +101,7 @@ struct State {
 struct Settings {
     cc_caps: gst::Caps,
     latency: gst::ClockTime,
+    lateness: gst::ClockTime,
     translate_latency: gst::ClockTime,
     accumulate_time: gst::ClockTime,
     caption_source: CaptionSource,
@@ -113,6 +115,7 @@ impl Default for Settings {
                 .field("format", "raw")
                 .build(),
             latency: DEFAULT_LATENCY,
+            lateness: DEFAULT_LATENESS,
             translate_latency: DEFAULT_TRANSLATE_LATENCY,
             accumulate_time: DEFAULT_ACCUMULATE,
             caption_source: DEFAULT_CAPTION_SOURCE,
@@ -517,15 +520,19 @@ impl TranscriberBin {
             if let Some(ref transcriber) = pad_state.transcriber {
                 let latency_ms = settings.latency.mseconds() as u32;
 
-                if transcriber.has_property("transcribe-latency", None) {
+                if transcriber.has_property("transcribe-latency", Some(u32::static_type())) {
                     transcriber.set_property("transcribe-latency", latency_ms);
-                } else if transcriber.has_property("latency", None) {
+                } else if transcriber.has_property("latency", Some(u32::static_type())) {
                     transcriber.set_property("latency", latency_ms);
                 }
 
-                if transcriber.has_property("translate-latency", None) {
+                if transcriber.has_property("translate-latency", Some(u32::static_type())) {
                     let translate_latency_ms = settings.translate_latency.mseconds() as u32;
                     transcriber.set_property("translate-latency", translate_latency_ms);
+                }
+                if transcriber.has_property("lateness", Some(u32::static_type())) {
+                    let lateness_ms = settings.lateness.mseconds() as u32;
+                    transcriber.set_property("lateness", lateness_ms);
                 }
             }
             pad_state
@@ -1372,6 +1379,12 @@ impl ObjectImpl for TranscriberBin {
                     .default_value(DEFAULT_LATENCY.mseconds() as u32)
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecUInt::builder("lateness")
+                    .nick("Lateness")
+                    .blurb("Amount of milliseconds to pass as lateness to the transcriber")
+                    .default_value(DEFAULT_LATENESS.mseconds() as u32)
+                    .mutable_ready()
+                    .build(),
                 glib::ParamSpecUInt::builder("accumulate-time")
                     .nick("accumulate-time")
                     .blurb("Cut-off time for textwrap accumulation, in milliseconds (0=do not accumulate). \
@@ -1436,6 +1449,12 @@ impl ObjectImpl for TranscriberBin {
             "latency" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.latency = gst::ClockTime::from_mseconds(
+                    value.get::<u32>().expect("type checked upstream").into(),
+                );
+            }
+            "lateness" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.lateness = gst::ClockTime::from_mseconds(
                     value.get::<u32>().expect("type checked upstream").into(),
                 );
             }
@@ -1515,6 +1534,10 @@ impl ObjectImpl for TranscriberBin {
             "latency" => {
                 let settings = self.settings.lock().unwrap();
                 (settings.latency.mseconds() as u32).to_value()
+            }
+            "lateness" => {
+                let settings = self.settings.lock().unwrap();
+                (settings.lateness.mseconds() as u32).to_value()
             }
             "accumulate-time" => {
                 let settings = self.settings.lock().unwrap();
