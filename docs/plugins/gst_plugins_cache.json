@@ -13362,6 +13362,30 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "enable-late-punctuation-hack": {
+                        "blurb": "Pass a reduced max-delay to speechmatics to make sure we always get punctuation in time for joining it with the preceding word.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "join-punctuation": {
+                        "blurb": "Whether punctuation should be joined with the preceding word",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "language-code": {
                         "blurb": "The Language of the Stream, ISO code",
                         "conditionally-available": false,

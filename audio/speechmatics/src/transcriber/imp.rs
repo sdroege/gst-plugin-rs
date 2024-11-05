@@ -159,6 +159,8 @@ static RUNTIME: LazyLock<runtime::Runtime> = LazyLock::new(|| {
 
 const DEFAULT_LATENCY_MS: u32 = 8000;
 const DEFAULT_LATENESS_MS: u32 = 0;
+const DEFAULT_JOIN_PUNCTUATION: bool = true;
+const DEFAULT_ENABLE_LATE_PUNCTUATION_HACK: bool = true;
 const GRANULARITY_MS: u32 = 100;
 
 #[derive(Debug, Clone)]
@@ -168,6 +170,8 @@ struct Settings {
     language_code: Option<String>,
     url: Option<String>,
     api_key: Option<String>,
+    join_punctuation: bool,
+    enable_late_punctuation_hack: bool,
 }
 
 impl Default for Settings {
@@ -178,6 +182,8 @@ impl Default for Settings {
             language_code: Some("en".to_string()),
             url: Some("ws://0.0.0.0:9000".to_string()),
             api_key: None,
+            join_punctuation: DEFAULT_JOIN_PUNCTUATION,
+            enable_late_punctuation_hack: DEFAULT_ENABLE_LATE_PUNCTUATION_HACK,
         }
     }
 }
@@ -455,7 +461,12 @@ impl TranscriberSrcPad {
         }
     }
 
-    fn enqueue_transcript(&self, state: &mut TranscriberSrcPadState, transcript: &Transcript) {
+    fn enqueue_transcript(
+        &self,
+        state: &mut TranscriberSrcPadState,
+        transcript: &Transcript,
+        join_punctuation: bool,
+    ) {
         gst::log!(CAT, "Enqueuing {:?}", transcript);
         for item in &transcript.results {
             if let Some(alternative) = item.alternatives.first() {
@@ -488,12 +499,33 @@ impl TranscriberSrcPad {
                             end_time,
                         });
                     }
-                } else {
+                } else if join_punctuation {
                     state.accumulator = Some(ItemAccumulator {
                         text: alternative.content.clone(),
                         start_time,
                         end_time,
                     });
+                } else {
+                    let text = alternative.content.clone();
+
+                    gst::debug!(
+                        CAT,
+                        imp = self,
+                        "Item is ready: \"{}\", start_time: {}, end_time: {}",
+                        text,
+                        start_time,
+                        end_time
+                    );
+
+                    let mut buf = gst::Buffer::from_slice(text.into_bytes());
+
+                    {
+                        let buf = buf.get_mut().unwrap();
+                        buf.set_pts(start_time);
+                        buf.set_duration(end_time - start_time);
+                    }
+
+                    state.push_buffer(buf);
                 }
             }
         }
@@ -663,9 +695,14 @@ impl TranscriberSrcPad {
                                 }
                             }
 
-                            let lateness = (transcriber.imp().settings.lock().unwrap().lateness_ms
-                                as f64
-                                / 1_000.) as f32;
+                            let (lateness, join_punctuation) = {
+                                let settings = transcriber.imp().settings.lock().unwrap();
+                                (
+                                    (settings.lateness_ms as f64 / 1_000.) as f32,
+                                    settings.join_punctuation,
+                                )
+                            };
+
                             let discont_offset =
                                 (transcriber
                                     .imp()
@@ -694,7 +731,7 @@ impl TranscriberSrcPad {
 
                             if !transcript.results.is_empty() {
                                 let mut state = self.state.lock().unwrap();
-                                self.enqueue_transcript(&mut state, &transcript);
+                                self.enqueue_transcript(&mut state, &transcript, join_punctuation);
                             }
                         }
                         "EndOfTranscript" => {
@@ -1134,15 +1171,25 @@ impl Transcriber {
 
         let (mut ws_sink, mut ws_stream) = ws.split();
 
-        if settings.latency_ms + settings.lateness_ms < 4000 {
+        let late_punctuation_factor = if settings.enable_late_punctuation_hack {
+            2
+        } else {
+            1
+        };
+
+        if settings.latency_ms + settings.lateness_ms < 2000 * late_punctuation_factor {
             gst::error!(
                 CAT,
                 imp = self,
-                "latency + lateness must be superior to 4000 milliseconds"
+                "latency + lateness must be above {} milliseconds",
+                2000 * late_punctuation_factor
             );
             return Err(gst::error_msg!(
                 gst::LibraryError::Settings,
-                ["latency + lateness must be superior to 4000 milliseconds"]
+                [
+                    "latency + lateness must be above {} milliseconds",
+                    2000 * late_punctuation_factor
+                ]
             ));
         }
 
@@ -1160,7 +1207,8 @@ impl Transcriber {
 
         // Workaround for speechmatics sometimes outputting
         // final punctuation in the next transcript
-        let max_delay = ((settings.latency_ms + settings.lateness_ms) as f32) / 2_000.;
+        let max_delay = ((settings.latency_ms + settings.lateness_ms) as f32)
+            / (1_000. * late_punctuation_factor as f32);
 
         let start_message = StartRecognition {
             message: "StartRecognition".to_string(),
@@ -1481,6 +1529,21 @@ impl ObjectImpl for Transcriber {
                     .blurb("Speechmatics API Key")
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("join-punctuation")
+                    .nick("Join punctuation")
+                    .blurb("Whether punctuation should be joined with the preceding word")
+                    .default_value(DEFAULT_JOIN_PUNCTUATION)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecBoolean::builder("enable-late-punctuation-hack")
+                    .nick("Enable late punctuation hack")
+                    .blurb(
+                        "Pass a reduced max-delay to speechmatics to make sure we \
+                        always get punctuation in time for joining it with the preceding word.",
+                    )
+                    .default_value(DEFAULT_ENABLE_LATE_PUNCTUATION_HACK)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -1596,6 +1659,14 @@ impl ObjectImpl for Transcriber {
                 let mut settings = self.settings.lock().unwrap();
                 settings.api_key = value.get().expect("type checked upstream");
             }
+            "join-punctuation" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.join_punctuation = value.get().expect("type checked upstream");
+            }
+            "enable-late-punctuation-hack" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.enable_late_punctuation_hack = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -1638,6 +1709,14 @@ impl ObjectImpl for Transcriber {
             "api-key" => {
                 let settings = self.settings.lock().unwrap();
                 settings.api_key.to_value()
+            }
+            "join-punctuation" => {
+                let settings = self.settings.lock().unwrap();
+                settings.join_punctuation.to_value()
+            }
+            "enable-late-punctuation-hack" => {
+                let settings = self.settings.lock().unwrap();
+                settings.enable_late_punctuation_hack.to_value()
             }
             _ => unimplemented!(),
         }
