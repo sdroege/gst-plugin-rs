@@ -23,6 +23,7 @@ allow = [
   "OpenSSL",
   "Zlib",
   "Unicode-DFS-2016",
+  "Unicode-3.0",
   "Apache-2.0",
   "Apache-2.0 WITH LLVM-exception",
   "MPL-2.0",
@@ -262,6 +263,28 @@ version = "0.15"
 [[bans.skip]]
 name = "tokio-rustls"
 version = "0.24"
+
+
+[[bans.skip]]
+name = "spki"
+version = "0.6"
+
+# Various crates depend on thiserror 1
+
+[[bans.skip]]
+name = "thiserror"
+version = "1"
+
+[[bans.skip]]
+name = "thiserror-impl"
+version = "1"
+
+# cookie_store depends on idna 0.5
+# https://github.com/pfernie/cookie_store/pull/47
+
+[[bans.skip]]
+name = "idna"
+version = "0.5"
 
 [sources]
 unknown-registry = "deny"
