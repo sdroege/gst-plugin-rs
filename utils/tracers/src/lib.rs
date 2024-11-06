@@ -15,6 +15,8 @@
 use gst::glib;
 
 mod buffer_lateness;
+#[cfg(feature = "v1_26")]
+mod memory_tracer;
 mod pad_push_timings;
 mod pcap_writer;
 #[cfg(unix)]
@@ -28,6 +30,8 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     buffer_lateness::register(plugin)?;
     pad_push_timings::register(plugin)?;
     pcap_writer::register(plugin)?;
+    #[cfg(feature = "v1_26")]
+    memory_tracer::register(plugin)?;
     Ok(())
 }
 

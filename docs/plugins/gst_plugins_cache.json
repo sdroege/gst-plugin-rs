@@ -12488,6 +12488,42 @@
                     }
                 }
             },
+            "memory-tracer": {
+                "hierarchy": [
+                    "GstMemoryTracer",
+                    "GstTracer",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "properties": {
+                    "file": {
+                        "blurb": "Path to the file to write memory usage information",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": false,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "signals": {
+                    "write-log": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    }
+                }
+            },
             "pad-push-timings": {
                 "hierarchy": [
                     "GstPadPushTimings",

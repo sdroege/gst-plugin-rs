@@ -35,6 +35,7 @@ static = []
 capi = []
 doc = ["gst/v1_18"]
 v1_22 = ["gst/v1_22"]
+v1_26 = ["gst/v1_26"]
 
 [package.metadata.capi]
 min_version = "0.9.21"
