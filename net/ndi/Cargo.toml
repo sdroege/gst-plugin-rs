@@ -21,7 +21,7 @@ data-encoding = "2.4.0"
 libloading = "0.8"
 quick-xml = "0.37"
 smallvec = { version = "1.11", features = ["const_generics"] }
-thiserror = "1.0"
+thiserror = "2"
 
 [build-dependencies]
 gst-plugin-version-helper.workspace = true

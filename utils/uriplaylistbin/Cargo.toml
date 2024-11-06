@@ -12,7 +12,7 @@ rust-version.workspace = true
 gst = { workspace = true, features = ["v1_24"] }
 anyhow = "1"
 clap = { version = "4", optional = true, features = ["derive"] }
-thiserror = "1"
+thiserror = "2"
 
 [dev-dependencies]
 gst-app.workspace = true
