@@ -44,7 +44,7 @@
  *
  * By default this is not set.
  */
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -139,6 +139,7 @@ struct State {
     pads: HashMap<usize, Pad>,
     log: Vec<LogLine>,
     settings: Settings,
+    logs_written: HashSet<PathBuf>,
 }
 
 struct Pad {
@@ -161,6 +162,51 @@ struct LogLine {
 #[derive(Default)]
 pub struct BufferLateness {
     state: Mutex<State>,
+}
+
+impl BufferLateness {
+    fn write_log(&self, file_path: Option<&str>) {
+        use std::io::prelude::*;
+
+        let mut state = self.state.lock().unwrap();
+        let path = file_path.map_or_else(|| state.settings.file.clone(), PathBuf::from);
+        let first_write = state.logs_written.contains(&path);
+
+        let mut file = match std::fs::OpenOptions::new()
+            .append(!first_write)
+            .create(true)
+            .open(path.clone())
+        {
+            Ok(file) => file,
+            Err(err) => {
+                gst::error!(CAT, imp = self, "Failed to create file: {err}");
+                return;
+            }
+        };
+
+        let log = std::mem::take(&mut state.log);
+        state.logs_written.insert(path);
+        drop(state);
+
+        gst::debug!(CAT, imp = self, "Writing file {:?}", file);
+
+        for LogLine {
+            timestamp,
+            element_name,
+            pad_name,
+            ptr,
+            buffer_clock_time,
+            pipeline_clock_time,
+            lateness,
+            min_latency,
+        } in &log
+        {
+            if let Err(err) = writeln!(&mut file, "{timestamp},{element_name}:{pad_name},0x{ptr:08x},{buffer_clock_time},{pipeline_clock_time},{lateness},{min_latency}") {
+                gst::error!(CAT, imp = self, "Failed to write to file: {err}");
+                return;
+            }
+        }
+    }
 }
 
 #[glib::object_subclass]
@@ -186,42 +232,26 @@ impl ObjectImpl for BufferLateness {
         self.register_hook(TracerHook::PadQueryPost);
     }
 
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
+            vec![glib::subclass::Signal::builder("write-log")
+                .action()
+                .param_types([Option::<String>::static_type()])
+                .class_handler(|_, args| {
+                    let obj = args[0].get::<super::BufferLateness>().unwrap();
+
+                    obj.imp().write_log(args[1].get::<Option<&str>>().unwrap());
+
+                    None
+                })
+                .build()]
+        });
+
+        SIGNALS.as_ref()
+    }
+
     fn dispose(&self) {
-        use std::io::prelude::*;
-
-        let state = self.state.lock().unwrap();
-
-        let mut file = match std::fs::File::create(&state.settings.file) {
-            Ok(file) => file,
-            Err(err) => {
-                gst::error!(CAT, imp = self, "Failed to create file: {err}");
-                return;
-            }
-        };
-
-        gst::debug!(
-            CAT,
-            imp = self,
-            "Writing file {}",
-            state.settings.file.display()
-        );
-
-        for LogLine {
-            timestamp,
-            element_name,
-            pad_name,
-            ptr,
-            buffer_clock_time,
-            pipeline_clock_time,
-            lateness,
-            min_latency,
-        } in &state.log
-        {
-            if let Err(err) = writeln!(&mut file, "{timestamp},{element_name}:{pad_name},0x{ptr:08x},{buffer_clock_time},{pipeline_clock_time},{lateness},{min_latency}") {
-                gst::error!(CAT, imp = self, "Failed to write to file: {err}");
-                return;
-            }
-        }
+        self.write_log(None);
     }
 }
 
