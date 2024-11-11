@@ -17,7 +17,12 @@ use glib::thread_guard::ThreadGuard;
 use gtk::glib;
 use gtk::prelude::*;
 
-#[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
+#[cfg(any(
+    target_os = "macos",
+    target_os = "windows",
+    feature = "gst-gl",
+    feature = "dmabuf"
+))]
 use gtk::gdk;
 
 #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
