@@ -56,7 +56,8 @@ struct TranscriptionChannel {
 }
 
 impl TranscriptionChannel {
-    fn link_transcriber(&self, transcriber: &gst::Element) -> Result<(), Error> {
+    // Returns the name of the transcriber source pad
+    fn link_transcriber(&self, transcriber: &gst::Element) -> Result<String, Error> {
         let transcriber_src_pad = match self.language.as_str() {
             "transcript" => transcriber
                 .static_pad("src")
@@ -72,13 +73,13 @@ impl TranscriptionChannel {
 
         gst::debug!(
             CAT,
-            obj = transcriber,
-            "Linking transcriber source pad {transcriber_src_pad:?} to channel"
+            obj = transcriber_src_pad,
+            "Linking transcriber source pad to channel"
         );
 
         transcriber_src_pad.link(&self.bin.static_pad("sink").unwrap())?;
 
-        Ok(())
+        Ok(transcriber_src_pad.name().to_string())
     }
 }
 
@@ -321,22 +322,8 @@ impl TranscriberBin {
             pad_state.transcription_bin.add(&channel.bin)?;
 
             if let Some(ref transcriber) = pad_state.transcriber {
-                channel.link_transcriber(transcriber)?;
-            }
-
-            let srcpad =
-                gst::GhostPad::builder_with_target(&channel.bin.static_pad("src").unwrap())
-                    .unwrap()
-                    .name(format!("src_{}", channel.language))
-                    .build();
-
-            pad_state.transcription_bin.add_pad(&srcpad)?;
-            if state.ccmux.static_pad(&channel.ccmux_pad_name).is_none() {
-                let ccmux_pad = state
-                    .ccmux
-                    .request_pad_simple(&channel.ccmux_pad_name)
-                    .ok_or(anyhow!("Failed to request ccmux sink pad"))?;
-                srcpad.link(&ccmux_pad)?;
+                let srcpad_name = channel.link_transcriber(transcriber)?;
+                pad_state.link_transcriber_pads(&self.obj(), &srcpad_name, channel, state)?;
             }
         }
 
@@ -936,10 +923,12 @@ impl TranscriberBin {
                 .static_pad(&pad.obj().name())
                 .unwrap();
             let peer = sinkpad.peer();
+            let mut relink_tee = false;
             if let Some(peer) = &peer {
                 gst::debug!(CAT, imp = self, "Unlinking {:?}", peer);
                 peer.unlink(&sinkpad)?;
                 pad_state.audio_tee.release_request_pad(peer);
+                relink_tee = true;
             }
 
             pad_state.transcription_bin.set_locked_state(true);
@@ -979,14 +968,39 @@ impl TranscriberBin {
                 let sinkpad = channel.bin.static_pad("sink").unwrap();
                 if let Some(peer) = sinkpad.peer() {
                     peer.unlink(&sinkpad)?;
-                    if channel.language != "transcript" {
-                        if let Some(ref transcriber) = pad_state.transcriber {
+                    if let Some(ref transcriber) = pad_state.transcriber {
+                        if channel.language != "transcript" {
                             transcriber.release_request_pad(&peer);
+                        }
+                        let mut unsynced_pad_name = format!("unsynced_{}", peer.name().as_str());
+                        if transcriber.static_pad(&unsynced_pad_name).is_some() {
+                            let srcpad = pad_state
+                                .transcription_bin
+                                .static_pad(&unsynced_pad_name)
+                                .unwrap();
+                            let _ = pad_state.transcription_bin.remove_pad(&srcpad);
+                            if let Some(serial) = pad_state.serial {
+                                unsynced_pad_name = format!("{}_{}", unsynced_pad_name, serial);
+                            }
+                            let srcpad = state
+                                .transcription_bin
+                                .static_pad(&unsynced_pad_name)
+                                .unwrap();
+                            let _ = state.transcription_bin.remove_pad(&srcpad);
+
+                            let srcpad = state.internal_bin.static_pad(&unsynced_pad_name).unwrap();
+                            let _ = state.internal_bin.remove_pad(&srcpad);
+                            let srcpad = self.obj().static_pad(&unsynced_pad_name).unwrap();
+                            let _ = self.obj().remove_pad(&srcpad);
                         }
                     }
                 }
 
-                let srcpad = channel.bin.static_pad("src").unwrap();
+                let srcpad = pad_state
+                    .transcription_bin
+                    .static_pad(&format!("src_{}", channel.language))
+                    .unwrap();
+
                 if let Some(peer) = srcpad.peer() {
                     // The source pad might not have been linked to the muxer initially, for
                     // instance in case of a collision with another source pad's
@@ -998,6 +1012,8 @@ impl TranscriberBin {
                         state.ccmux.release_request_pad(&peer);
                     }
                 }
+
+                let _ = pad_state.transcription_bin.remove_pad(&srcpad);
 
                 pad_state.transcription_bin.remove(&channel.bin)?;
             }
@@ -1014,25 +1030,8 @@ impl TranscriberBin {
                 pad_state.transcription_bin.add(&channel.bin)?;
 
                 if let Some(ref transcriber) = pad_state.transcriber {
-                    channel.link_transcriber(transcriber)?;
-                }
-
-                let srcpad = pad_state
-                    .transcription_bin
-                    .static_pad(&format!("src_{}", channel.language))
-                    .unwrap();
-
-                srcpad
-                    .downcast_ref::<gst::GhostPad>()
-                    .unwrap()
-                    .set_target(channel.bin.static_pad("src").as_ref())?;
-
-                if state.ccmux.static_pad(&channel.ccmux_pad_name).is_none() {
-                    let ccmux_pad = state
-                        .ccmux
-                        .request_pad_simple(&channel.ccmux_pad_name)
-                        .ok_or(anyhow!("Failed to request ccmux sink pad"))?;
-                    srcpad.link(&ccmux_pad)?;
+                    let srcpad_name = channel.link_transcriber(transcriber)?;
+                    pad_state.link_transcriber_pads(&self.obj(), &srcpad_name, channel, state)?;
                 }
             }
 
@@ -1041,14 +1040,16 @@ impl TranscriberBin {
             if !pad_settings.passthrough {
                 gst::debug!(CAT, imp = self, "Syncing state with parent");
 
-                let audio_tee_pad = pad_state.audio_tee.request_pad_simple("src_%u").unwrap();
-
                 drop(pad_settings);
                 drop(settings);
 
                 pad_state.transcription_bin.set_locked_state(false);
                 pad_state.transcription_bin.sync_state_with_parent()?;
-                audio_tee_pad.link(&sinkpad)?;
+                if relink_tee {
+                    let audio_tee_pad = pad_state.audio_tee.request_pad_simple("src_%u").unwrap();
+
+                    audio_tee_pad.link(&sinkpad)?;
+                }
             }
         }
 
@@ -1807,6 +1808,8 @@ impl ElementImpl for TranscriberBin {
                 )
                 .unwrap();
 
+                pad_state.serial = Some(state.audio_serial);
+
                 if let Err(e) = self.link_input_audio_stream(&name, pad_state, state) {
                     gst::error!(CAT, "Failed to link secondary audio stream: {e}");
                     return None;
@@ -1987,6 +1990,7 @@ struct TranscriberSinkPadState {
     transcription_channels: HashMap<String, TranscriptionChannel>,
     srcpad_name: Option<String>,
     target_passthrough_state: TargetPassthroughState,
+    serial: Option<u32>,
 }
 
 impl TranscriberSinkPadState {
@@ -2015,7 +2019,63 @@ impl TranscriberSinkPadState {
             transcription_channels: HashMap::new(),
             srcpad_name: None,
             target_passthrough_state: TargetPassthroughState::None,
+            serial: None,
         })
+    }
+
+    fn link_transcriber_pads(
+        &self,
+        elem: &super::TranscriberBin,
+        srcpad_name: &str,
+        channel: &TranscriptionChannel,
+        state: &State,
+    ) -> Result<(), Error> {
+        let Some(ref transcriber) = self.transcriber else {
+            return Ok(());
+        };
+
+        let mut unsynced_pad_name = format!("unsynced_{srcpad_name}");
+
+        if let Some(unsynced_pad) = transcriber.static_pad(&unsynced_pad_name) {
+            let srcpad = gst::GhostPad::builder_with_target(&unsynced_pad)
+                .unwrap()
+                .name(unsynced_pad_name.clone())
+                .build();
+            self.transcription_bin.add_pad(&srcpad)?;
+
+            if let Some(serial) = self.serial {
+                unsynced_pad_name = format!("{}_{}", unsynced_pad_name, serial);
+            }
+
+            let srcpad = gst::GhostPad::builder_with_target(&srcpad)
+                .unwrap()
+                .name(unsynced_pad_name.clone())
+                .build();
+            state.transcription_bin.add_pad(&srcpad)?;
+
+            let srcpad = gst::GhostPad::with_target(&srcpad).unwrap();
+            state.internal_bin.add_pad(&srcpad)?;
+
+            let srcpad = gst::GhostPad::with_target(&srcpad).unwrap();
+            elem.add_pad(&srcpad)?;
+        }
+
+        let srcpad = gst::GhostPad::builder_with_target(&channel.bin.static_pad("src").unwrap())
+            .unwrap()
+            .name(format!("src_{}", channel.language))
+            .build();
+
+        self.transcription_bin.add_pad(&srcpad)?;
+
+        if state.ccmux.static_pad(&channel.ccmux_pad_name).is_none() {
+            let ccmux_pad = state
+                .ccmux
+                .request_pad_simple(&channel.ccmux_pad_name)
+                .ok_or(anyhow!("Failed to request ccmux sink pad"))?;
+            srcpad.link(&ccmux_pad)?;
+        }
+
+        Ok(())
     }
 }
 
