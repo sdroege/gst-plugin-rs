@@ -44,6 +44,9 @@ fn test_send_receive_without_datagram() {
 
         assert!(h1.push(make_buffer(content)) == Ok(gst::FlowSuccess::Ok));
 
+        // Wait a bit before sending Eos and shutting down the pipeline
+        thread::sleep(std::time::Duration::from_secs(2));
+
         h1.push_event(gst::event::Eos::new());
 
         h1.element().unwrap().set_state(gst::State::Null).unwrap();

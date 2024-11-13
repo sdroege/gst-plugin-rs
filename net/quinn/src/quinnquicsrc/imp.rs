@@ -836,6 +836,9 @@ impl QuinnQuicSrc {
             }
         };
 
+        // TODO:
+        // Decide if the ordering matters when we might have a STREAM
+        // Close followed by a Connection Close almost immediately.
         let mut tasks: FuturesUnordered<BoxFuture<QuinnFuture>> = FuturesUnordered::new();
 
         tasks.push(Box::pin(datagram(connection.clone())));
