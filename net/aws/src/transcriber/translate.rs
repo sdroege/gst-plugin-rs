@@ -41,6 +41,12 @@ impl From<&TranscriptItem> for TranslatedItem {
     }
 }
 
+#[derive(Debug)]
+pub struct Translation {
+    pub items: Vec<TranslatedItem>,
+    pub translation: String,
+}
+
 pub struct TranslateLoop {
     pad: glib::subclass::ObjectImplRef<TranslateSrcPad>,
     client: aws_translate::Client,
@@ -48,7 +54,7 @@ pub struct TranslateLoop {
     output_lang: String,
     tokenization_method: TranslationTokenizationMethod,
     transcript_rx: mpsc::Receiver<Arc<Vec<TranscriptItem>>>,
-    translate_tx: mpsc::Sender<Vec<TranslatedItem>>,
+    translate_tx: mpsc::Sender<Translation>,
 }
 
 impl TranslateLoop {
@@ -59,7 +65,7 @@ impl TranslateLoop {
         output_lang: &str,
         tokenization_method: TranslationTokenizationMethod,
         transcript_rx: mpsc::Receiver<Arc<Vec<TranscriptItem>>>,
-        translate_tx: mpsc::Sender<Vec<TranslatedItem>>,
+        translate_tx: mpsc::Sender<Translation>,
     ) -> Self {
         let aws_config = imp.aws_config.lock().unwrap();
         let aws_config = aws_config
@@ -171,7 +177,7 @@ impl TranslateLoop {
                     vec![TranslatedItem {
                         pts: first_pts,
                         duration: last_pts.saturating_sub(first_pts) + last_duration,
-                        content: translated_text,
+                        content: translated_text.clone(),
                     }]
                 }
                 Tokenization::SpanBased => span_tokenize_items(&translated_text, ts_duration_list),
@@ -179,7 +185,15 @@ impl TranslateLoop {
 
             gst::trace!(CAT, imp = self.pad, "Sending {translated_items:?}");
 
-            if self.translate_tx.send(translated_items).await.is_err() {
+            if self
+                .translate_tx
+                .send(Translation {
+                    items: translated_items,
+                    translation: translated_text,
+                })
+                .await
+                .is_err()
+            {
                 gst::info!(
                     CAT,
                     imp = self.pad,

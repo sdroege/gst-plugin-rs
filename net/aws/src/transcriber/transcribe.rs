@@ -20,6 +20,7 @@ use futures::prelude::*;
 use std::sync::{Arc, Mutex};
 
 use super::imp::{Settings, Transcriber};
+use super::remote_types::TranscriptDef;
 use super::CAT;
 
 #[derive(Debug)]
@@ -81,14 +82,11 @@ impl TranscriptItem {
 
 #[derive(Clone)]
 pub enum TranscriptEvent {
-    Items(Arc<Vec<TranscriptItem>>),
+    Transcript {
+        items: Arc<Vec<TranscriptItem>>,
+        serialized: Option<String>,
+    },
     Eos,
-}
-
-impl From<Vec<TranscriptItem>> for TranscriptEvent {
-    fn from(transcript_items: Vec<TranscriptItem>) -> Self {
-        TranscriptEvent::Items(transcript_items.into())
-    }
 }
 
 struct DiscontOffsetTracker {
@@ -198,29 +196,36 @@ impl TranscriberStream {
                 return Ok(TranscriptEvent::Eos);
             };
 
-            if let types::TranscriptResultStream::TranscriptEvent(transcript_evt) = event {
-                let mut ready_items = None;
+            if let types::TranscriptResultStream::TranscriptEvent(mut transcript_evt) = event {
+                let Some(ref mut transcript) = transcript_evt.transcript else {
+                    continue;
+                };
 
-                if let Some(result) = transcript_evt
-                    .transcript
-                    .and_then(|transcript| transcript.results)
-                    .and_then(|mut results| results.drain(..).next())
-                {
-                    gst::trace!(CAT, imp = self.imp, "Received: {result:?}");
+                let t = TranscriptDef {
+                    results: transcript.results.clone(),
+                };
 
-                    if let Some(alternative) = result
-                        .alternatives
-                        .and_then(|mut alternatives| alternatives.drain(..).next())
-                    {
-                        ready_items = alternative.items.and_then(|items| {
-                            self.get_ready_transcript_items(items, result.is_partial)
-                        });
-                    }
-                }
+                let serialized = serde_json::to_string(&t).expect("serializable");
 
-                if let Some(ready_items) = ready_items {
-                    return Ok(ready_items.into());
-                }
+                let Some(result) = transcript
+                    .results
+                    .as_mut()
+                    .and_then(|results| results.drain(..).next())
+                else {
+                    continue;
+                };
+
+                let ready_items = result
+                    .alternatives
+                    .and_then(|mut alternatives| alternatives.drain(..).next())
+                    .and_then(|alternative| alternative.items)
+                    .map(|items| self.get_ready_transcript_items(items, result.is_partial))
+                    .unwrap_or(vec![]);
+
+                return Ok(TranscriptEvent::Transcript {
+                    items: ready_items.into(),
+                    serialized: Some(serialized),
+                });
             } else {
                 gst::warning!(
                     CAT,
@@ -236,7 +241,9 @@ impl TranscriberStream {
         &mut self,
         mut items: Vec<types::Item>,
         partial: bool,
-    ) -> Option<Vec<TranscriptItem>> {
+    ) -> Vec<TranscriptItem> {
+        let mut output = vec![];
+
         if items.len() < self.partial_index {
             gst::error!(
                 CAT,
@@ -250,10 +257,8 @@ impl TranscriberStream {
                 self.partial_index = 0;
             }
 
-            return None;
+            return output;
         }
-
-        let mut output = vec![];
 
         for item in items.drain(self.partial_index..) {
             if !item.stable().unwrap_or(false) {
@@ -281,10 +286,6 @@ impl TranscriberStream {
             self.partial_index = 0;
         }
 
-        if output.is_empty() {
-            return None;
-        }
-
-        Some(output)
+        output
     }
 }

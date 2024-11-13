@@ -10,6 +10,7 @@ use gst::glib;
 use gst::prelude::*;
 
 mod imp;
+mod remote_types;
 mod transcribe;
 mod translate;
 

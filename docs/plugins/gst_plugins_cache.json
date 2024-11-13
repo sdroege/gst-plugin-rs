@@ -1162,6 +1162,16 @@
                         "direction": "src",
                         "presence": "request",
                         "type": "GstTranslateSrcPad"
+                    },
+                    "unsynced_src": {
+                        "caps": "application/x-json:\n",
+                        "direction": "src",
+                        "presence": "always"
+                    },
+                    "unsynced_translate_src_%%u": {
+                        "caps": "application/x-json:\n",
+                        "direction": "src",
+                        "presence": "request"
                     }
                 },
                 "properties": {
