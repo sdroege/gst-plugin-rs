@@ -39,6 +39,7 @@ const DEFAULT_MUX_METHOD: MuxMethod = MuxMethod::Cea608;
 
 const CEAX08MUX_LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(100);
 
+#[derive(Debug)]
 enum TargetPassthroughState {
     None,
     Enabled,
@@ -567,11 +568,15 @@ impl TranscriberBin {
                 .transcription_bin
                 .sync_state_with_parent()
                 .unwrap();
-            let transcription_sink_pad = state.transcription_bin.static_pad(&pad.name()).unwrap();
-            // Might be linked already if "translation-languages" is set
-            if transcription_sink_pad.peer().is_none() {
-                let audio_tee_pad = pad_state.audio_tee.request_pad_simple("src_%u").unwrap();
-                audio_tee_pad.link(&transcription_sink_pad).unwrap();
+            let pad_settings = pad.imp().settings.lock().unwrap();
+            if !pad_settings.passthrough {
+                let transcription_sink_pad =
+                    state.transcription_bin.static_pad(&pad.name()).unwrap();
+                // Might be linked already if "translation-languages" is set
+                if transcription_sink_pad.peer().is_none() {
+                    let audio_tee_pad = pad_state.audio_tee.request_pad_simple("src_%u").unwrap();
+                    audio_tee_pad.link(&transcription_sink_pad).unwrap();
+                }
             }
         }
 
@@ -594,6 +599,9 @@ impl TranscriberBin {
         let bin_sink_pad = state.transcription_bin.static_pad(&pad.name()).unwrap();
         if let Some(audio_tee_pad) = bin_sink_pad.peer() {
             audio_tee_pad.unlink(&bin_sink_pad).unwrap();
+
+            gst::debug!(CAT, obj = pad, "releasing audio tee pad");
+
             pad_state.audio_tee.release_request_pad(&audio_tee_pad);
         }
 
@@ -622,11 +630,21 @@ impl TranscriberBin {
         state: &mut State,
         pad_state: &mut TranscriberSinkPadState,
     ) {
+        gst::debug!(CAT, imp = sinkpad, "enabling transcription bin");
+
         for channel in pad_state.transcription_channels.values() {
             let srcpad = pad_state
                 .transcription_bin
                 .static_pad(&format!("src_{}", channel.language))
                 .unwrap();
+
+            gst::log!(
+                CAT,
+                obj = srcpad,
+                "linking transcription channel for language {}",
+                channel.language
+            );
+
             let sinkpad = state
                 .ccmux
                 .static_pad(&channel.ccmux_pad_name)
@@ -685,6 +703,8 @@ impl TranscriberBin {
                         let Some(ref mut state) = s.as_mut() else {
                             return gst::PadProbeReturn::Remove;
                         };
+
+                        gst::debug!(CAT, imp = imp, "pad probed");
 
                         let pad_imp = pad
                             .downcast_ref::<super::TranscriberSinkPad>()
@@ -2077,6 +2097,13 @@ impl ObjectImpl for TranscriberSinkPad {
                     pad_state.target_passthrough_state = TargetPassthroughState::Disabled;
                 }
                 drop(pad_settings);
+
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "target passthrough state: {:?}",
+                    pad_state.target_passthrough_state
+                );
 
                 parent.imp().block_and_update(self, s, ps);
             }
