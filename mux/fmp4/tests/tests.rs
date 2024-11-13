@@ -2757,8 +2757,10 @@ fn test_caps_change_at_gop_boundary_multi_stream() {
     assert_eq!(h1.upstream_events_in_queue(), 2);
     assert_eq!(h2.upstream_events_in_queue(), 1);
 
+    h1.crank_single_clock_wait().unwrap();
     h1.push_event(gst::event::Eos::new());
     h2.push_event(gst::event::Eos::new());
+    test_caps_changed_verify(&mut h1, 1 + 1 + 8, true, false);
 
     assert_eq!(h1.buffers_in_queue(), 0);
 }
@@ -2800,7 +2802,7 @@ fn test_caps_change_at_gop_boundary_chunked_multi_stream() {
     h2.set_src_caps(caps2);
     h2.play();
 
-    for i in 0..21 {
+    for i in 0..19 {
         // caps change on 10th and 20th buffer
         if let Some(caps) = match i {
             10 => Some(
@@ -2903,8 +2905,11 @@ fn test_caps_change_at_gop_boundary_chunked_multi_stream() {
     // The first chunk of the new fragment
     test_caps_changed_verify(&mut h1, 1 + 1 + 8 + 9, true, false);
 
+    h1.crank_single_clock_wait().unwrap();
     h1.push_event(gst::event::Eos::new());
     h2.push_event(gst::event::Eos::new());
+    // The final chunk from EOS
+    test_caps_changed_verify(&mut h1, 1 + 1 + 1, false, true);
 
     assert_eq!(h1.buffers_in_queue(), 0);
 }
