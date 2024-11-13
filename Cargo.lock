@@ -2846,6 +2846,7 @@ version = "0.14.0-alpha.1"
 dependencies = [
  "async-channel",
  "bytes",
+ "env_logger",
  "futures",
  "glib",
  "gst-plugin-version-helper",

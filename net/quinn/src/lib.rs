@@ -29,6 +29,7 @@ mod quinnquicsrc;
 mod utils;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    env_logger::init();
     #[cfg(feature = "doc")]
     {
         common::QuinnQuicRole::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
