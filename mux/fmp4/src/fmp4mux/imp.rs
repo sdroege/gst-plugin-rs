@@ -1694,7 +1694,7 @@ impl FMP4Mux {
         fragment_end_pts: gst::ClockTime,
         chunk_start_pts: gst::ClockTime,
         chunk_end_pts: Option<gst::ClockTime>,
-        fragment_start: bool,
+        check_fragment_start: bool,
         fragment_filled: bool,
     ) -> Result<Vec<Gop>, gst::FlowError> {
         assert!(
@@ -1897,7 +1897,7 @@ impl FMP4Mux {
                 }
             }
 
-            if fragment_start {
+            if check_fragment_start {
                 if let Some(first_buffer) = gops.first().and_then(|gop| gop.buffers.first()) {
                     if first_buffer
                         .buffer
@@ -2254,7 +2254,11 @@ impl FMP4Mux {
                 fragment_end_pts,
                 chunk_start_pts,
                 chunk_end_pts,
-                fragment_start,
+                // Fragment start checks should only happen if there was no caps/tag change with
+                // incomplete GOP pushed before. This will become active only in case there was an
+                // incomplete GOP pushed before because otherwise the new fragment will not accept
+                // inter-frames before an intra-frame anyway.
+                state.sent_headers && fragment_start,
                 fragment_filled,
             )?;
             stream.fragment_filled = false;
