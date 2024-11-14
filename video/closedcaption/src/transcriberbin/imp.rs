@@ -1388,19 +1388,9 @@ impl ObjectImpl for TranscriberBin {
                     .default_value(DEFAULT_ACCUMULATE.mseconds() as u32)
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecEnum::builder_with_default("mode", DEFAULT_MODE)
-                    .nick("Mode")
-                    .blurb("Which closed caption mode to operate in")
-                    .mutable_playing()
-                    .build(),
                 glib::ParamSpecBoxed::builder::<gst::Caps>("cc-caps")
                     .nick("Closed Caption caps")
                     .blurb("The expected format of the closed captions")
-                    .mutable_ready()
-                    .build(),
-                glib::ParamSpecObject::builder::<gst::Element>("transcriber")
-                    .nick("Transcriber")
-                    .blurb("The transcriber element to use")
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecEnum::builder_with_default("caption-source", DEFAULT_CAPTION_SOURCE)
@@ -1410,23 +1400,11 @@ impl ObjectImpl for TranscriberBin {
                     of the other source will be dropped by transcriberbin")
                     .mutable_playing()
                     .build(),
-                glib::ParamSpecBoxed::builder::<gst::Structure>("translation-languages")
-                    .nick("Translation languages")
-                    .blurb("A map of language codes to caption channels, e.g. translation-languages=\"languages, transcript={CC1, 708_1}, fr={708_2, CC3}\" will map the French translation to CC1/service 1 and the original transcript to CC3/service 2")
-                    .construct()
-                    .mutable_playing()
-                    .build(),
                 glib::ParamSpecUInt::builder("translate-latency")
                     .nick("Translation Latency")
                     .blurb("Amount of extra milliseconds to allow for translating")
                     .default_value(DEFAULT_TRANSLATE_LATENCY.mseconds() as u32)
                     .mutable_ready()
-                    .build(),
-                glib::ParamSpecString::builder("language-code")
-                    .nick("Language Code")
-                    .blurb("The language of the input stream")
-                    .default_value(Some(DEFAULT_INPUT_LANG_CODE))
-                    .mutable_playing()
                     .build(),
                 glib::ParamSpecEnum::builder("mux-method")
                     .nick("Mux Method")
@@ -1470,12 +1448,6 @@ impl ObjectImpl for TranscriberBin {
                 let mut settings = self.settings.lock().unwrap();
                 settings.cc_caps = value.get().expect("type checked upstream");
             }
-            "transcriber" => {
-                self.audio_sinkpad.set_property(
-                    "transcriber",
-                    value.get::<gst::Element>().expect("type checked upstream"),
-                );
-            }
             "caption-source" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.caption_source = value.get().expect("type checked upstream");
@@ -1495,26 +1467,10 @@ impl ObjectImpl for TranscriberBin {
                     }
                 }
             }
-            "translation-languages" => {
-                self.audio_sinkpad.set_property(
-                    "translation-languages",
-                    value
-                        .get::<Option<gst::Structure>>()
-                        .expect("type checked upstream"),
-                );
-            }
             "translate-latency" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.translate_latency = gst::ClockTime::from_mseconds(
                     value.get::<u32>().expect("type checked upstream").into(),
-                );
-            }
-            "language-code" => {
-                self.audio_sinkpad.set_property(
-                    "language-code",
-                    value
-                        .get::<Option<String>>()
-                        .expect("type checked upstream"),
                 );
             }
             "mux-method" => {
@@ -1539,22 +1495,18 @@ impl ObjectImpl for TranscriberBin {
                 let settings = self.settings.lock().unwrap();
                 (settings.accumulate_time.mseconds() as u32).to_value()
             }
-            "mode" => self.audio_sinkpad.property("mode"),
             "cc-caps" => {
                 let settings = self.settings.lock().unwrap();
                 settings.cc_caps.to_value()
             }
-            "transcriber" => self.audio_sinkpad.property("transcriber"),
             "caption-source" => {
                 let settings = self.settings.lock().unwrap();
                 settings.caption_source.to_value()
             }
-            "translation-languages" => self.audio_sinkpad.property("translation-languages"),
             "translate-latency" => {
                 let settings = self.settings.lock().unwrap();
                 (settings.translate_latency.mseconds() as u32).to_value()
             }
-            "language-code" => self.audio_sinkpad.property("language-code"),
             "mux-method" => {
                 let settings = self.settings.lock().unwrap();
                 settings.mux_method.to_value()

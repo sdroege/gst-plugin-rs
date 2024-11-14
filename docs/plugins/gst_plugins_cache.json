@@ -7991,18 +7991,6 @@
                         "type": "GstCaps",
                         "writable": true
                     },
-                    "language-code": {
-                        "blurb": "The language of the input stream",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "en-US",
-                        "mutable": "playing",
-                        "readable": true,
-                        "type": "gchararray",
-                        "writable": true
-                    },
                     "latency": {
                         "blurb": "Amount of milliseconds to allow the transcriber",
                         "conditionally-available": false,
@@ -8031,18 +8019,6 @@
                         "type": "guint",
                         "writable": true
                     },
-                    "mode": {
-                        "blurb": "Which closed caption mode to operate in",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "roll-up2 (2)",
-                        "mutable": "playing",
-                        "readable": true,
-                        "type": "GstTtToCea608Mode",
-                        "writable": true
-                    },
                     "mux-method": {
                         "blurb": "The method for muxing multiple transcription streams",
                         "conditionally-available": false,
@@ -8053,17 +8029,6 @@
                         "mutable": "null",
                         "readable": true,
                         "type": "GstTranscriberBinMuxMethod",
-                        "writable": true
-                    },
-                    "transcriber": {
-                        "blurb": "The transcriber element to use",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "GstElement",
                         "writable": true
                     },
                     "translate-latency": {
@@ -8078,18 +8043,6 @@
                         "mutable": "ready",
                         "readable": true,
                         "type": "guint",
-                        "writable": true
-                    },
-                    "translation-languages": {
-                        "blurb": "A map of language codes to caption channels, e.g. translation-languages=\"languages, transcript={CC1, 708_1}, fr={708_2, CC3}\" will map the French translation to CC1/service 1 and the original transcript to CC3/service 2",
-                        "conditionally-available": false,
-                        "construct": true,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "languages, transcript=(string)cc1;",
-                        "mutable": "playing",
-                        "readable": true,
-                        "type": "GstStructure",
                         "writable": true
                     }
                 },
