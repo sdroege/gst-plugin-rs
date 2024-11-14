@@ -213,7 +213,7 @@ pub mod imp {
                 imr_multiaddr: in_addr {
                     s_addr: u32::from_ne_bytes(addr.octets()),
                 },
-                imr_address: in_addr {
+                imr_interface: in_addr {
                     s_addr: u32::from_ne_bytes(ip_addr.octets()),
                 },
             };
