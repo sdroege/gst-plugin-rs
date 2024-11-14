@@ -3071,6 +3071,7 @@ name = "gst-plugin-threadshare"
 version = "0.14.0-alpha.1"
 dependencies = [
  "async-task",
+ "bitflags 2.6.0",
  "cc",
  "cfg-if",
  "clap",

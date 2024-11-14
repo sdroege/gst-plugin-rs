@@ -39,6 +39,10 @@ use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+//FIXME: Remove this when https://github.com/mmastrac/getifaddrs/issues/5 is fixed in the `getifaddrs` crate
+#[cfg(target_os = "android")]
+use net::getifaddrs;
+
 const DEFAULT_HOST: Option<&str> = Some("127.0.0.1");
 const DEFAULT_PORT: i32 = 5004;
 const DEFAULT_SYNC: bool = true;
@@ -159,42 +163,46 @@ impl UdpSinkPadHandler {
                 // So we first get all the interfaces and then apply filter
                 // for name and description (Friendly Name) of each interface.
 
-                let ifaces = getifaddrs::getifaddrs().map_err(|err| {
-                    gst::error_msg!(
-                        gst::ResourceError::OpenRead,
-                        ["Failed to find interface {}: {}", multicast_iface, err]
-                    )
-                })?;
+                //FIXME: Remove this when https://github.com/mmastrac/getifaddrs/issues/5 is fixed in the `getifaddrs` crate
+                #[cfg(not(target_os = "android"))]
+                {
+                    let ifaces = getifaddrs::getifaddrs().map_err(|err| {
+                        gst::error_msg!(
+                            gst::ResourceError::OpenRead,
+                            ["Failed to find interface {}: {}", multicast_iface, err]
+                        )
+                    })?;
 
-                let iface_filter = ifaces.filter(|i| {
-                    let ip_ver = if i.address.is_ipv4() { "IPv4" } else { "IPv6" };
+                    let iface_filter = ifaces.filter(|i| {
+                        let ip_ver = if i.address.is_ipv4() { "IPv4" } else { "IPv6" };
 
-                    if &i.name == multicast_iface {
-                        gst::debug!(
-                            CAT,
-                            imp = imp,
-                            "Found interface: {}, version: {ip_ver}",
-                            i.name,
-                        );
-                        true
-                    } else {
-                        #[cfg(windows)]
-                        if &i.description == multicast_iface {
+                        if &i.name == multicast_iface {
                             gst::debug!(
                                 CAT,
                                 imp = imp,
                                 "Found interface: {}, version: {ip_ver}",
-                                i.description,
+                                i.name,
                             );
-                            return true;
+                            true
+                        } else {
+                            #[cfg(windows)]
+                            if &i.description == multicast_iface {
+                                gst::debug!(
+                                    CAT,
+                                    imp = imp,
+                                    "Found interface: {}, version: {ip_ver}",
+                                    i.description,
+                                );
+                                return true;
+                            }
+
+                            gst::trace!(CAT, imp = imp, "skipping interface {}", i.name);
+                            false
                         }
+                    });
 
-                        gst::trace!(CAT, imp = imp, "skipping interface {}", i.name);
-                        false
-                    }
-                });
-
-                inner.multicast_ifaces = iface_filter.collect();
+                    inner.multicast_ifaces = iface_filter.collect();
+                }
             }
 
             for addr in inner.clients.iter() {

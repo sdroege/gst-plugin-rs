@@ -26,9 +26,12 @@ rustix = { version = "0.38.2", default-features = false, features = ["std", "fs"
 slab = "0.4.7"
 socket2 = {features = ["all"], version = "0.5"}
 waker-fn = "1.1"
-getifaddrs = "0.1"
+bitflags = "2.6.0"
 libc = "0.2"
 windows-sys = "0.59.0"
+[target.'cfg(not(target_os = "android"))'.dependencies]
+getifaddrs = "0.1"
+
 
 # Used by examples
 clap = { version = "4", features = ["derive"], optional = true }
