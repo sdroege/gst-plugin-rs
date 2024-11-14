@@ -336,7 +336,7 @@ impl TranscriberSrcPad {
 
         /* We're EOS, we can pause and exit early */
         if send_eos {
-            let _ = self.obj().pause_task();
+            let _ = self.pause_task();
 
             return self
                 .obj()
@@ -511,7 +511,7 @@ impl TranscriberSrcPad {
                 Some(msg) => msg,
                 /* Sender was closed */
                 None => {
-                    let _ = self.obj().pause_task();
+                    let _ = self.pause_task();
                     return Ok(());
                 }
             };
@@ -679,7 +679,7 @@ impl TranscriberSrcPad {
                     if !self.dequeue() {
                         gst::info!(CAT, imp = self, "Failed to push gap event, pausing");
 
-                        let _ = self.obj().pause_task();
+                        let _ = self.pause_task();
                     }
                     Ok(())
                 }
@@ -687,7 +687,7 @@ impl TranscriberSrcPad {
                     if !self.dequeue() {
                         gst::info!(CAT, imp = self, "Failed to push gap event, pausing");
 
-                        let _ = self.obj().pause_task();
+                        let _ = self.pause_task();
                     }
                     res
                 }
@@ -707,7 +707,7 @@ impl TranscriberSrcPad {
         let res = self.obj().start_task(move || {
             let Some(this) = this_weak.upgrade() else {
                 if let Some(pad) = pad_weak.upgrade() {
-                    let _ = pad.pause_task();
+                    let _ = pad.imp().pause_task();
                 }
                 return;
             };
@@ -723,13 +723,19 @@ impl TranscriberSrcPad {
                     gst::StreamError::Failed,
                     ["Streaming failed: {}", err]
                 );
-                let _ = this.obj().pause_task();
+                let _ = this.pause_task();
             }
         });
         if res.is_err() {
             return Err(gst::loggable_error!(CAT, "Failed to start pad task"));
         }
         Ok(())
+    }
+
+    fn pause_task(&self) -> Result<(), glib::BoolError> {
+        self.state.lock().unwrap().sender = None;
+
+        self.obj().pause_task()
     }
 
     fn stop_task(&self) -> Result<(), glib::BoolError> {
