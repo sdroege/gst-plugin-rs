@@ -29,14 +29,11 @@ slab = "0.4.7"
 socket2 = {features = ["all"], version = "0.6"}
 thiserror = "2"
 waker-fn = "1.1"
-bitflags = "2.6.0"
+getifaddrs = "0.2"
 libc = "0.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = ">=0.52, <=0.60", features = ["Win32_Foundation"] }
-
-[target.'cfg(not(target_os = "android"))'.dependencies]
-getifaddrs = "0.2"
 
 [dev-dependencies]
 gst-check.workspace = true

@@ -3409,7 +3409,6 @@ version = "0.15.0-alpha.1"
 dependencies = [
  "async-lock",
  "async-task",
- "bitflags 2.9.1",
  "byte-slice-cast",
  "cc",
  "cfg-if",
