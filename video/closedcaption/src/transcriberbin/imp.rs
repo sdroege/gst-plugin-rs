@@ -247,6 +247,7 @@ impl TranscriberBin {
         pad_name: &str,
         pad_state: &TranscriberSinkPadState,
         state: &mut State,
+        pad_settings: &TranscriberSinkPadSettings,
     ) -> Result<(), Error> {
         gst::debug!(CAT, imp = self, "Linking input audio stream {pad_name}");
 
@@ -324,7 +325,13 @@ impl TranscriberBin {
 
             if let Some(ref transcriber) = pad_state.transcriber {
                 let srcpad_name = channel.link_transcriber(transcriber)?;
-                pad_state.link_transcriber_pads(&self.obj(), &srcpad_name, channel, state)?;
+                pad_state.link_transcriber_pads(
+                    &self.obj(),
+                    &srcpad_name,
+                    channel,
+                    state,
+                    pad_settings.passthrough,
+                )?;
             }
         }
 
@@ -438,8 +445,9 @@ impl TranscriberBin {
         // FIXME: replace this pattern with https://doc.rust-lang.org/nightly/std/sync/struct.MappedMutexGuard.html
         let ps = pad.imp().state.lock().unwrap();
         let pad_state = ps.as_ref().unwrap();
+        let pad_settings = pad.imp().settings.lock().unwrap();
 
-        self.link_input_audio_stream("sink_audio", pad_state, state)?;
+        self.link_input_audio_stream("sink_audio", pad_state, state, &pad_settings)?;
 
         let internal_audio_sinkpad =
             gst::GhostPad::builder_with_target(&pad_state.clocksync.static_pad("sink").unwrap())
@@ -551,13 +559,14 @@ impl TranscriberBin {
         for pad in state.audio_sink_pads.values() {
             let ps = pad.imp().state.lock().unwrap();
             let pad_state = ps.as_ref().unwrap();
-            pad_state.transcription_bin.set_locked_state(false);
-            pad_state
-                .transcription_bin
-                .sync_state_with_parent()
-                .unwrap();
             let pad_settings = pad.imp().settings.lock().unwrap();
+
             if !pad_settings.passthrough {
+                pad_state.transcription_bin.set_locked_state(false);
+                pad_state
+                    .transcription_bin
+                    .sync_state_with_parent()
+                    .unwrap();
                 let transcription_sink_pad =
                     state.transcription_bin.static_pad(&pad.name()).unwrap();
                 // Might be linked already if "translation-languages" is set
@@ -1008,7 +1017,13 @@ impl TranscriberBin {
 
                 if let Some(ref transcriber) = pad_state.transcriber {
                     let srcpad_name = channel.link_transcriber(transcriber)?;
-                    pad_state.link_transcriber_pads(&self.obj(), &srcpad_name, channel, state)?;
+                    pad_state.link_transcriber_pads(
+                        &self.obj(),
+                        &srcpad_name,
+                        channel,
+                        state,
+                        pad_settings.passthrough,
+                    )?;
                 }
             }
 
@@ -1713,7 +1728,8 @@ impl ElementImpl for TranscriberBin {
 
                 pad_state.serial = Some(state.audio_serial);
 
-                if let Err(e) = self.link_input_audio_stream(&name, pad_state, state) {
+                if let Err(e) = self.link_input_audio_stream(&name, pad_state, state, &pad_settings)
+                {
                     gst::error!(CAT, "Failed to link secondary audio stream: {e}");
                     return None;
                 }
@@ -2020,6 +2036,7 @@ impl TranscriberSinkPadState {
         srcpad_name: &str,
         channel: &TranscriptionChannel,
         state: &State,
+        passthrough: bool,
     ) -> Result<(), Error> {
         self.expose_unsynced_pads(topbin, state, srcpad_name)?;
 
@@ -2030,7 +2047,7 @@ impl TranscriberSinkPadState {
 
         self.transcription_bin.add_pad(&srcpad)?;
 
-        if state.ccmux.static_pad(&channel.ccmux_pad_name).is_none() {
+        if state.ccmux.static_pad(&channel.ccmux_pad_name).is_none() && !passthrough {
             let ccmux_pad = state
                 .ccmux
                 .request_pad_simple(&channel.ccmux_pad_name)
