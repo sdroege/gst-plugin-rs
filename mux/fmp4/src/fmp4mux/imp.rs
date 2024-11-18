@@ -3670,20 +3670,21 @@ impl AggregatorImpl for FMP4Mux {
 
                         let language_code = Some(language_code);
                         // If the language changed and we have buffers
-                        // trigger caps change
-                        if state.language_code != language_code
-                            && !state.streams.is_empty()
-                            && self.header_update_allowed("language code")
-                        {
-                            state.language_code = language_code;
-                            state.need_new_header = true;
+                        // trigger header update
+                        if state.language_code != language_code {
+                            if state.streams.is_empty() {
+                                state.language_code = language_code;
+                            } else if self.header_update_allowed("language code") {
+                                state.language_code = language_code;
+                                state.need_new_header = true;
 
-                            if let Some(stream) = state
-                                .streams
-                                .iter_mut()
-                                .find(|s| *aggregator_pad == s.sinkpad)
-                            {
-                                stream.tag_changed = true;
+                                if let Some(stream) = state
+                                    .streams
+                                    .iter_mut()
+                                    .find(|s| *aggregator_pad == s.sinkpad)
+                                {
+                                    stream.tag_changed = true;
+                                }
                             }
                         }
                     }
@@ -3720,12 +3721,21 @@ impl AggregatorImpl for FMP4Mux {
 
                     // If the orientation changed and we have buffers
                     // trigger caps change
-                    if state.orientation != orientation
-                        && !state.streams.is_empty()
-                        && self.header_update_allowed("orientation")
-                    {
-                        state.orientation = orientation;
-                        state.need_new_header = true;
+                    if state.orientation != orientation {
+                        if state.streams.is_empty() {
+                            state.orientation = orientation;
+                        } else if self.header_update_allowed("orientation") {
+                            state.orientation = orientation;
+                            state.need_new_header = true;
+
+                            if let Some(stream) = state
+                                .streams
+                                .iter_mut()
+                                .find(|s| *aggregator_pad == s.sinkpad)
+                            {
+                                stream.tag_changed = true;
+                            }
+                        }
                     }
                 }
 
