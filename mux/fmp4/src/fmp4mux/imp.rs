@@ -849,7 +849,7 @@ impl FMP4Mux {
     // Caps/tag changes are allowed only in case that the
     // header-update-mode is None.
     //
-    // CAUTION: This function logs a warning if operation is not
+    // CAUTION: This function logs an error if operation is not
     // allowed so it should be evaluated only in case the caps/tags
     // would change otherwise (e. g. right-most operand in boolean
     // expressions).

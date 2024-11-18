@@ -2580,8 +2580,6 @@ fn test_language_change_at_gop_boundary() {
         assert_eq!(h.push(buffer), Ok(gst::FlowSuccess::Ok));
     }
 
-    //test_caps_changed_buffers(&mut h, 30, 10, 10, 100, true, false);
-
     h.crank_single_clock_wait().unwrap();
     // Initial fragment with HEADER and DISCONT
     test_caps_changed_verify(&mut h, 1 + 1 + 10, true, false);
