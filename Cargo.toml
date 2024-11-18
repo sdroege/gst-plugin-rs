@@ -99,7 +99,7 @@ default-members = [
 ]
 
 [profile.release]
-lto = true
+lto = "thin"
 opt-level = 3
 debug = true
 panic = 'unwind'
