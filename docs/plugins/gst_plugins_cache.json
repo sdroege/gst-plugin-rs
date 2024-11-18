@@ -8402,6 +8402,17 @@
                         "type": "gboolean",
                         "writable": true
                     },
+                    "synthesis-languages": {
+                        "blurb": "A map of language codes to bin descriptions, e.g. synthesis-languages=\"languages, fr=awspolly\" will use the awspolly element to synthesize speech from French translations",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": true
+                    },
                     "transcriber": {
                         "blurb": "The transcriber element to use",
                         "conditionally-available": false,
