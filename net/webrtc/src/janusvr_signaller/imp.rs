@@ -186,6 +186,17 @@ struct InnerHangup {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+struct InnerSlowLink {
+    session_id: u64,
+    sender: u64,
+    opaque_id: Option<String>,
+    mid: String,
+    media: String,
+    uplink: bool,
+    lost: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 struct RoomJoined {
     room: JanusId,
     id: JanusId,
@@ -267,6 +278,7 @@ enum JsonReply {
     Media,
     Error(InnerError),
     HangUp(InnerHangup),
+    SlowLink(InnerSlowLink),
 }
 
 #[derive(Default)]
@@ -561,7 +573,7 @@ impl Signaller {
             }
             JsonReply::HangUp(hangup) => self.raise_error(format!("hangup: {}", hangup.reason)),
             // ignore for now
-            JsonReply::Ack | JsonReply::Media => {}
+            JsonReply::Ack | JsonReply::Media | JsonReply::SlowLink(_) => {}
         }
     }
 
