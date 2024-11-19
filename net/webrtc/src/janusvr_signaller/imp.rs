@@ -212,6 +212,12 @@ struct RoomTalking {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+struct SlowLink {
+    #[serde(rename = "current-bitrate")]
+    current_bitrate: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "videoroom", rename_all = "kebab-case")]
 enum VideoRoomData {
     Joined(RoomJoined),
@@ -219,6 +225,8 @@ enum VideoRoomData {
     Destroyed(RoomDestroyed),
     Talking(RoomTalking),
     StoppedTalking(RoomTalking),
+    #[serde(rename = "slow_link")]
+    SlowLink(SlowLink),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -541,6 +549,9 @@ impl Signaller {
                         }
                         VideoRoomData::StoppedTalking(talking) => {
                             self.emit_talking(false, talking.id, talking.audio_level);
+                        }
+                        VideoRoomData::SlowLink(_slow_link) => {
+                            // TODO: use to reduce the bitrate?
                         }
                     }
                 }
