@@ -1130,6 +1130,13 @@ impl ElementImpl for Transcriber {
         self.obj().remove_pad(pad).unwrap();
         self.state.lock().unwrap().srcpads.remove(pad);
 
+        let translate_srcpad = pad.downcast_ref::<super::TranslateSrcPad>().unwrap();
+
+        if let Some(unsynced_pad) = translate_srcpad.imp().take_unsynced_pad() {
+            unsynced_pad.set_active(false).unwrap();
+            self.obj().remove_pad(&unsynced_pad).unwrap();
+        }
+
         self.obj().child_removed(pad, &pad.name());
         let _ = self
             .obj()
@@ -1754,6 +1761,10 @@ pub struct TranslateSrcPad {
 impl TranslateSrcPad {
     fn set_unsynced_pad(&self, pad: &gst::Pad) {
         self.state.lock().unwrap().unsynced_pad = Some(pad.clone());
+    }
+
+    fn take_unsynced_pad(&self) -> Option<gst::Pad> {
+        self.state.lock().unwrap().unsynced_pad.take()
     }
 
     fn start_task(&self) -> Result<(), gst::LoggableError> {
