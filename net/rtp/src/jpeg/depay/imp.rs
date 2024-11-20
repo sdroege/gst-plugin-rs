@@ -355,7 +355,7 @@ impl RtpBaseDepay2Impl for RtpJpegDepay {
                 || state.dimensions != Some((width, height))
                 || state.framerate != state.sdp_framerate
             {
-                let mut caps_builder = gst::Caps::builder("image/jpeg")
+                let caps = gst::Caps::builder("image/jpeg")
                     .field("parsed", true)
                     .field("width", width)
                     .field("height", height)
@@ -368,12 +368,9 @@ impl RtpBaseDepay2Impl for RtpJpegDepay {
                         } else {
                             "YCbCr-4:2:0"
                         },
-                    );
-                if let Some(framerate) = state.sdp_framerate {
-                    caps_builder = caps_builder.field("framerate", framerate);
-                }
-
-                let caps = caps_builder.build();
+                    )
+                    .field_if_some("framerate", state.sdp_framerate)
+                    .build();
                 gst::debug!(CAT, imp = self, "Setting caps {caps:?}");
                 self.obj().set_src_caps(&caps);
                 state.dimensions = Some((width, height));

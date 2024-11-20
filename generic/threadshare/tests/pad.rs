@@ -715,9 +715,10 @@ fn setup(
 
     // Sink
     let (sender, receiver) = mpsc::channel::<Item>(10);
-    let sink_element = glib::Object::builder::<ElementSinkTest>()
+    let sink_element = gst::Object::builder::<ElementSinkTest>()
         .property("sender", ItemSender { sender })
-        .build();
+        .build()
+        .unwrap();
     pipeline.add(&sink_element).unwrap();
     last_element.link(&sink_element).unwrap();
 

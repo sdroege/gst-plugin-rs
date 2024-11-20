@@ -55,7 +55,7 @@ glib::wrapper! {
 
 impl PaintableSink {
     pub fn new(name: Option<&str>) -> Self {
-        glib::Object::builder().property("name", name).build()
+        gst::Object::builder().name_if_some(name).build().unwrap()
     }
 }
 

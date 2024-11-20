@@ -291,9 +291,10 @@ fn test_opus_payloader_get_caps() {
     fn get_allowed_opus_caps_for_rtp_caps_string(recv_caps_str: &str) -> gst::Caps {
         let src = gst::ElementFactory::make("appsrc").build().unwrap();
         let pay = gst::ElementFactory::make("rtpopuspay2").build().unwrap();
-        let sink = gst::ElementFactory::make("appsink").build().unwrap();
-
-        sink.set_property_from_str("caps", recv_caps_str);
+        let sink = gst::ElementFactory::make("appsink")
+            .property_from_str("caps", recv_caps_str)
+            .build()
+            .unwrap();
 
         gst::Element::link_many([&src, &pay, &sink]).unwrap();
 

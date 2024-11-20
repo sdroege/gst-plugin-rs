@@ -10,16 +10,14 @@ struct Args {
 }
 
 fn link_video(pad: &gst::Pad, pipeline: &gst::Pipeline) {
-    let q = gst::ElementFactory::make_with_name(
-        "queue",
-        Some(format!("queue_{}", pad.name()).as_str()),
-    )
-    .unwrap();
-    let vsink = gst::ElementFactory::make_with_name(
-        "autovideosink",
-        Some(format!("vsink_{}", pad.name()).as_str()),
-    )
-    .unwrap();
+    let q = gst::ElementFactory::make("queue")
+        .name(format!("queue_{}", pad.name()))
+        .build()
+        .unwrap();
+    let vsink = gst::ElementFactory::make("autovideosink")
+        .name(format!("vsink_{}", pad.name()))
+        .build()
+        .unwrap();
 
     pipeline.add_many([&q, &vsink]).unwrap();
     gst::Element::link_many([&q, &vsink]).unwrap();
@@ -45,17 +43,15 @@ fn unlink_video(pad: &gst::Pad, pipeline: &gst::Pipeline) {
 }
 
 fn link_audio(pad: &gst::Pad, pipeline: &gst::Pipeline) {
-    let aq = gst::ElementFactory::make_with_name(
-        "queue",
-        Some(format!("aqueue_{}", pad.name()).as_str()),
-    )
-    .unwrap();
+    let aq = gst::ElementFactory::make("queue")
+        .name(format!("aqueue_{}", pad.name()))
+        .build()
+        .unwrap();
 
-    let asink = gst::ElementFactory::make_with_name(
-        "autoaudiosink",
-        Some(format!("asink_{}", pad.name()).as_str()),
-    )
-    .unwrap();
+    let asink = gst::ElementFactory::make("autoaudiosink")
+        .name(format!("asink_{}", pad.name()))
+        .build()
+        .unwrap();
 
     pipeline.add_many([&aq, &asink]).unwrap();
     gst::Element::link_many([&aq, &asink]).unwrap();

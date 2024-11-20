@@ -125,23 +125,18 @@ fn spawn_consumer(
     pipeline.add(&bin).context("Adding consumer bin")?;
 
     let webrtcsrc = gst::ElementFactory::make("webrtcsrc")
-        .build()
-        .context("Creating webrtcsrc")?;
-
-    if args.expect_clock_signalling {
+        .name(
+            meta.as_ref()
+                .map_or_else(|| peer_id.clone(), serde_json::Value::to_string),
+        )
         // Discard retransmission in RFC 7273 mode. See:
         // * https://gitlab.freedesktop.org/gstreamer/gst-plugins-good/-/issues/914
         // * https://gitlab.freedesktop.org/gstreamer/gstreamer/-/issues/1574
-        webrtcsrc.set_property("do-retransmission", false);
-    }
-
-    if !args.audio_codecs.is_empty() {
-        webrtcsrc.set_property("audio-codecs", gst::Array::new(&args.audio_codecs));
-    }
-
-    if !args.video_codecs.is_empty() {
-        webrtcsrc.set_property("video-codecs", gst::Array::new(&args.video_codecs));
-    }
+        .property_if("do-retransmission", false, args.expect_clock_signalling)
+        .property_if_not_empty::<gst::Array>("audio-codecs", &args.audio_codecs)
+        .property_if_not_empty::<gst::Array>("video-codecs", &args.video_codecs)
+        .build()
+        .context("Creating webrtcsrc")?;
 
     bin.add(&webrtcsrc).context("Adding webrtcsrc")?;
 

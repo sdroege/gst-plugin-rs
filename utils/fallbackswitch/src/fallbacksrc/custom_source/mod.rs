@@ -16,6 +16,9 @@ glib::wrapper! {
 
 impl CustomSource {
     pub fn new(source: &gst::Element) -> CustomSource {
-        glib::Object::builder().property("source", source).build()
+        gst::Object::builder()
+            .property("source", source)
+            .build()
+            .unwrap()
     }
 }

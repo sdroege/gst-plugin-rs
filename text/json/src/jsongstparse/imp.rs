@@ -128,13 +128,11 @@ impl State {
         let mut events = Vec::new();
 
         if self.need_flush_stop {
-            let mut b = gst::event::FlushStop::builder(true);
-
-            if let Some(seek_seqnum) = self.seek_seqnum {
-                b = b.seqnum(seek_seqnum);
-            }
-
-            events.push(b.build());
+            events.push(
+                gst::event::FlushStop::builder(true)
+                    .seqnum_if_some(self.seek_seqnum)
+                    .build(),
+            );
             self.need_flush_stop = false;
         }
 
@@ -146,13 +144,9 @@ impl State {
         }
 
         if self.need_caps {
-            let mut caps_builder = gst::Caps::builder("application/x-json");
-
-            if let Some(format) = &self.format {
-                caps_builder = caps_builder.field("format", format);
-            }
-
-            let caps = caps_builder.build();
+            let caps = gst::Caps::builder("application/x-json")
+                .field_if_some("format", self.format.as_ref())
+                .build();
 
             events.push(gst::event::Caps::new(&caps));
             gst::info!(CAT, imp = imp, "Caps changed to {:?}", &caps);
@@ -160,13 +154,11 @@ impl State {
         }
 
         if self.need_segment {
-            let mut b = gst::event::Segment::builder(&self.segment);
-
-            if let Some(seek_seqnum) = self.seek_seqnum {
-                b = b.seqnum(seek_seqnum);
-            }
-
-            events.push(b.build());
+            events.push(
+                gst::event::Segment::builder(&self.segment)
+                    .seqnum_if_some(self.seek_seqnum)
+                    .build(),
+            );
             self.need_segment = false;
         }
 
@@ -486,13 +478,11 @@ impl JsonGstParse {
         }
 
         let mut events = state.create_events(self);
-        let mut eos_event = gst::event::Eos::builder();
-
-        if let Some(seek_seqnum) = state.seek_seqnum {
-            eos_event = eos_event.seqnum(seek_seqnum);
-        }
-
-        events.push(eos_event.build());
+        events.push(
+            gst::event::Eos::builder()
+                .seqnum_if_some(state.seek_seqnum)
+                .build(),
+        );
 
         // Drop our state mutex while we push out events
         drop(state);

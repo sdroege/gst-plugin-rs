@@ -27,9 +27,11 @@ fn start_consumer(producer_name: &str) -> gst_check::Harness {
 }
 
 fn start_producer(producer_name: &str) -> (gst::Pad, gst::Element) {
-    let element = gst::ElementFactory::make("intersink").build().unwrap();
+    let element = gst::ElementFactory::make("intersink")
+        .property("producer-name", producer_name)
+        .build()
+        .unwrap();
 
-    element.set_property("producer-name", producer_name);
     element.set_state(gst::State::Playing).unwrap();
 
     let sinkpad = element.static_pad("sink").unwrap();

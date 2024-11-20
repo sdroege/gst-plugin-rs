@@ -238,18 +238,16 @@ impl NdiSrcDemux {
 
                     #[allow(irrefutable_let_patterns)]
                     if let AudioInfo::Audio(ref info) = info {
-                        let mut builder = gst_audio::AudioInfo::builder(
+                        let non_interleaved_info = gst_audio::AudioInfo::builder(
                             info.format(),
                             info.rate(),
                             info.channels(),
                         )
-                        .layout(gst_audio::AudioLayout::NonInterleaved);
+                        .layout(gst_audio::AudioLayout::NonInterleaved)
+                        .positions_if_some(info.positions())
+                        .build()
+                        .unwrap();
 
-                        if let Some(positions) = info.positions() {
-                            builder = builder.positions(positions);
-                        }
-
-                        let non_interleaved_info = builder.build().unwrap();
                         state.audio_caps_non_interleaved =
                             Some(non_interleaved_info.to_caps().unwrap());
                         state.audio_info_non_interleaved = Some(non_interleaved_info);
@@ -640,22 +638,21 @@ impl NdiSrcDemux {
                   // supported by GStreamer
             };
 
-            let mut builder = gst_video::VideoInfo::builder(
+            let info = gst_video::VideoInfo::builder(
                 format,
                 video_frame.xres() as u32,
                 video_frame.yres() as u32,
             )
             .fps(gst::Fraction::from(video_frame.frame_rate()))
             .par(par)
-            .interlace_mode(interlace_mode);
-
-            if video_frame.frame_format_type()
-                == ndisys::NDIlib_frame_format_type_e::NDIlib_frame_format_type_interleaved
-            {
-                builder = builder.field_order(gst_video::VideoFieldOrder::TopFieldFirst);
-            }
-
-            return Ok(VideoInfo::Video(builder.build().map_err(|_| {
+            .interlace_mode(interlace_mode)
+            .field_order_if(
+                gst_video::VideoFieldOrder::TopFieldFirst,
+                video_frame.frame_format_type()
+                    == ndisys::NDIlib_frame_format_type_e::NDIlib_frame_format_type_interleaved,
+            )
+            .build()
+            .map_err(|_| {
                 gst::element_imp_error!(
                     self,
                     gst::StreamError::Format,
@@ -663,7 +660,9 @@ impl NdiSrcDemux {
                 );
 
                 gst::FlowError::NotNegotiated
-            })?));
+            })?;
+
+            return Ok(VideoInfo::Video(info));
         }
 
         #[cfg(feature = "advanced-sdk")]
@@ -1211,14 +1210,14 @@ impl NdiSrcDemux {
                 );
             }
 
-            let builder = gst_audio::AudioInfo::builder(
+            let info = gst_audio::AudioInfo::builder(
                 gst_audio::AUDIO_FORMAT_F32,
                 audio_frame.sample_rate() as u32,
                 channels,
             )
-            .positions(&positions[..channels as usize]);
-
-            let info = builder.build().map_err(|_| {
+            .positions(&positions[..channels as usize])
+            .build()
+            .map_err(|_| {
                 gst::element_imp_error!(
                     self,
                     gst::StreamError::Format,

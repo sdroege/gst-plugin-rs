@@ -212,11 +212,12 @@ impl GstObjectImpl for Device {}
 impl DeviceImpl for Device {
     fn create_element(&self, name: Option<&str>) -> Result<gst::Element, gst::LoggableError> {
         let source_info = self.source.get().unwrap();
-        let element = glib::Object::builder::<crate::ndisrc::NdiSrc>()
-            .property("name", name)
+        let element = gst::Object::builder::<crate::ndisrc::NdiSrc>()
+            .name_if_some(name)
             .property("ndi-name", source_info.ndi_name())
             .property("url-address", source_info.url_address())
             .build()
+            .unwrap()
             .upcast::<gst::Element>();
 
         Ok(element)
@@ -239,12 +240,13 @@ impl super::Device {
             .field("url-address", source.url_address())
             .build();
 
-        let device = glib::Object::builder::<super::Device>()
+        let device = gst::Object::builder::<super::Device>()
             .property("caps", caps)
             .property("display-name", display_name)
             .property("device-class", device_class)
             .property("properties", extra_properties)
-            .build();
+            .build()
+            .unwrap();
 
         let imp = device.imp();
         imp.source.set(source.to_owned()).unwrap();

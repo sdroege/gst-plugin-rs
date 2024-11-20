@@ -402,12 +402,8 @@ pub fn build_link_header(url_str: &str) -> Result<String, url::ParseError> {
 /// Wrapper around `gst::ElementFactory::make` with a better error
 /// message
 pub fn make_element(element: &str, name: Option<&str>) -> Result<gst::Element, Error> {
-    let mut builder = gst::ElementFactory::make(element);
-    if let Some(name) = name {
-        builder = builder.name(name);
-    }
-
-    builder
+    gst::ElementFactory::make(element)
+        .name_if_some(name)
         .build()
         .with_context(|| format!("Failed to make element {element}"))
 }

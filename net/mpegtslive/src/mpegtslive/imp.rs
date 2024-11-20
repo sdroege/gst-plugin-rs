@@ -922,14 +922,16 @@ impl ObjectSubclass for MpegTsLiveSource {
                     | gst::PadFlags::PROXY_SCHEDULING,
             )
             .build();
-        let internal_clock = glib::Object::builder::<gst::SystemClock>()
+        let internal_clock = gst::Object::builder::<gst::SystemClock>()
+            .name("mpegts-internal-clock")
             .property("clock-type", gst::ClockType::Monotonic)
-            .property("name", "mpegts-internal-clock")
-            .build();
-        let external_clock = glib::Object::builder::<gst::SystemClock>()
+            .build()
+            .unwrap();
+        let external_clock = gst::Object::builder::<gst::SystemClock>()
+            .name("mpegts-live-clock")
             .property("clock-type", gst::ClockType::Monotonic)
-            .property("name", "mpegts-live-clock")
-            .build();
+            .build()
+            .unwrap();
         // Return an instance of our struct
         Self {
             srcpad,

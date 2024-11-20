@@ -114,12 +114,9 @@ fn main() {
                     .property("port", 5004i32 + i as i32)
                     .property("context", &context)
                     .property("context-wait", wait)
+                    .property_if("caps", &rtp_caps, is_rtp)
                     .build()
                     .unwrap();
-
-                if is_rtp {
-                    source.set_property("caps", &rtp_caps);
-                }
 
                 (source, Some(context))
             }
@@ -177,11 +174,9 @@ fn main() {
                 .name(format!("jb-{i}").as_str())
                 .property("context-wait", wait)
                 .property("latency", wait)
+                .property_if_some("context", context.as_ref())
                 .build()
                 .unwrap();
-            if let Some(context) = context {
-                jb.set_property("context", &context);
-            }
 
             let elements = &[&source, &jb, &sink];
             pipeline.add_many(elements).unwrap();

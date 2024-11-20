@@ -492,15 +492,10 @@ fn setup_pipeline(
     let switch = gst::ElementFactory::make("fallbackswitch")
         .name("switch")
         .property("timeout", 3.seconds())
+        .property_if_some("immediate-fallback", immediate_fallback)
+        .property_if_some("auto-switch", auto_switch)
         .build()
         .unwrap();
-
-    if let Some(imm) = immediate_fallback {
-        switch.set_property("immediate-fallback", imm);
-    }
-    if let Some(auto_switch) = auto_switch {
-        switch.set_property("auto-switch", auto_switch);
-    }
 
     let sink = gst_app::AppSink::builder().name("sink").sync(false).build();
 

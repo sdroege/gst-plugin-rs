@@ -448,9 +448,10 @@ impl ElementImpl for NdiSrc {
                         state.receiver = Some(receiver);
                         state.timestamp_mode = settings.timestamp_mode;
                         if state.timestamp_mode == TimestampMode::Clocked {
-                            let clock = glib::Object::builder::<gst::SystemClock>()
-                                .property("name", format!("{}-clock", self.obj().name()))
+                            let clock = gst::Object::builder::<gst::SystemClock>()
+                                .name(format!("{}-clock", self.obj().name()))
                                 .build()
+                                .unwrap()
                                 .upcast::<gst::Clock>();
                             state.clock_state = Some(ClockState {
                                 clock: clock.clone(),

@@ -94,12 +94,9 @@ fn send_test_buffers(n_streams: u16, num_buffers: Option<i32>) {
             .property("context-wait", 20u32)
             .property("is-live", true)
             .property("do-timestamp", true)
+            .property_if_some("num-buffers", num_buffers)
             .build()
             .unwrap();
-
-        if let Some(num_buffers) = num_buffers {
-            src.set_property("num-buffers", num_buffers);
-        }
 
         #[cfg(feature = "tuning")]
         if i == 0 {
@@ -129,12 +126,9 @@ fn send_rtp_buffers(n_streams: u16, num_buffers: Option<i32>) {
             .property("context-wait", 20u32)
             .property("is-live", true)
             .property("do-timestamp", true)
+            .property_if_some("num-buffers", num_buffers)
             .build()
             .unwrap();
-
-        if let Some(num_buffers) = num_buffers {
-            src.set_property("num-buffers", num_buffers);
-        }
 
         #[cfg(feature = "tuning")]
         if i == 0 {
