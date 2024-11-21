@@ -1910,6 +1910,8 @@ impl BaseWebRTCSink {
         drop(settings);
         let mut state = self.state.lock().unwrap();
 
+        let mut join_handles = vec![];
+
         let session_ids: Vec<_> = state.sessions.keys().map(|k| k.to_owned()).collect();
 
         let sessions: Vec<_> = session_ids
@@ -1930,9 +1932,12 @@ impl BaseWebRTCSink {
         gst::debug!(CAT, imp = self, "Waiting for codec discoveries to finish");
         let codecs_done_receiver = std::mem::take(&mut state.codecs_done_receivers);
         codecs_done_receiver.into_iter().for_each(|receiver| {
-            RUNTIME.block_on(async {
-                let _ = receiver.await;
-            });
+            join_handles.push(
+                async {
+                    let _ = receiver.await;
+                }
+                .boxed_local(),
+            );
         });
         gst::debug!(CAT, imp = self, "No codec discovery is running anymore");
 
@@ -1945,6 +1950,14 @@ impl BaseWebRTCSink {
         }
 
         drop(state);
+
+        // only wait for all handles after the state lock has been dropped.  Some of the futures may
+        // be waiting on the state lock to make forward progress before being able to be cancelled
+        // from calls above.
+        for handle in join_handles {
+            RUNTIME.block_on(handle);
+        }
+
         gst::debug!(CAT, imp = self, "Ending sessions");
         for session in sessions {
             signaller.end_session(&session.0.lock().unwrap().id);
