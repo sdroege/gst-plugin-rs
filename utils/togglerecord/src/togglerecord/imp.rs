@@ -26,6 +26,12 @@ use std::sync::LazyLock;
 const DEFAULT_RECORD: bool = false;
 const DEFAULT_LIVE: bool = false;
 
+// Mutex order:
+// - self.state (used with self.main_stream_cond)
+// - self.main_stream.state
+// - stream.state with stream coming from either self.state.pads or self.state.other_streams
+// - self.settings
+
 #[derive(Debug, Clone, Copy)]
 struct Settings {
     record: bool,
@@ -367,7 +373,7 @@ impl ToggleRecord {
         &self,
         pad: &gst::Pad,
         mut settings: Settings,
-        stream: &Stream,
+        stream: &Stream, // main stream
         upstream_live: bool,
     ) -> Result<bool, gst::FlowError> {
         if !upstream_live {
@@ -394,6 +400,7 @@ impl ToggleRecord {
             state.segment_pending = true;
             state.discont_pending = true;
             for other_stream in &rec_state.other_streams.0 {
+                // safe from deadlock as `state` is a lock on the main stream which is not in `other_streams`
                 let mut other_state = other_stream.state.lock();
                 other_state.segment_pending = true;
                 other_state.discont_pending = true;
@@ -556,6 +563,7 @@ impl ToggleRecord {
 
                 while !state.flushing
                     && !rec_state.other_streams.0.iter().all(|s| {
+                        // safe from deadlock as `state` is a lock on the main stream which is not in `other_streams`
                         let s = s.state.lock();
                         s.eos
                             || s.current_running_time
@@ -662,6 +670,7 @@ impl ToggleRecord {
                 state.segment_pending = true;
                 state.discont_pending = true;
                 for other_stream in &rec_state.other_streams.0 {
+                    // safe from deadlock as `state` is a lock on the main stream which is not in `other_streams`
                     let mut other_state = other_stream.state.lock();
                     other_state.segment_pending = true;
                     other_state.discont_pending = true;
@@ -785,13 +794,12 @@ impl ToggleRecord {
 
         drop(state);
 
-        let mut rec_state = self.state.lock();
-        let mut main_state = self.main_stream.state.lock();
-
         // Wake up, in case the main stream is waiting for us to progress up to here. We progressed
         // above but all notifying must happen while the main_stream state is locked as per above.
         self.main_stream_cond.notify_all();
 
+        let mut rec_state = self.state.lock();
+        let mut main_state = self.main_stream.state.lock();
         state = stream.state.lock();
 
         // Wait until the main stream advanced completely past our current running time in
