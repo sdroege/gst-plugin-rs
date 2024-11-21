@@ -517,17 +517,17 @@ impl TranscriberBin {
             if let Some(ref transcriber) = pad_state.transcriber {
                 let latency_ms = settings.latency.mseconds() as u32;
 
-                if transcriber.has_property("transcribe-latency", Some(u32::static_type())) {
+                if transcriber.has_property_with_type("transcribe-latency", u32::static_type()) {
                     transcriber.set_property("transcribe-latency", latency_ms);
-                } else if transcriber.has_property("latency", Some(u32::static_type())) {
+                } else if transcriber.has_property_with_type("latency", u32::static_type()) {
                     transcriber.set_property("latency", latency_ms);
                 }
 
-                if transcriber.has_property("translate-latency", Some(u32::static_type())) {
+                if transcriber.has_property_with_type("translate-latency", u32::static_type()) {
                     let translate_latency_ms = settings.translate_latency.mseconds() as u32;
                     transcriber.set_property("translate-latency", translate_latency_ms);
                 }
-                if transcriber.has_property("lateness", Some(u32::static_type())) {
+                if transcriber.has_property_with_type("lateness", u32::static_type()) {
                     let lateness_ms = settings.lateness.mseconds() as u32;
                     transcriber.set_property("lateness", lateness_ms);
                 }
@@ -1185,7 +1185,7 @@ impl TranscriberBin {
                 .and_then(|f| f.load().ok())
                 .map(|f| f.element_type())
                 .and_then(glib::Class::<gst::Element>::from_type)
-                .map(|k| k.has_property("force-live", Some(bool::static_type())))
+                .map(|k| k.has_property_with_type("force-live", bool::static_type()))
                 .unwrap_or(false)
         };
 

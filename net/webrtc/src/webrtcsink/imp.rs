@@ -1744,7 +1744,7 @@ impl BaseWebRTCSink {
         match extension_configuration_type {
             ExtensionConfigurationType::Auto => {
                 // GstRTPBasePayload::extensions property is only available since GStreamer 1.24
-                if !payloader.has_property("extensions", Some(gst::Array::static_type())) {
+                if !payloader.has_property_with_type("extensions", gst::Array::static_type()) {
                     if self.has_connected_payloader_setup_slots() {
                         gst::warning!(CAT, imp = self, "'extensions' property is not available: TWCC extension ID will default to 1. \
         Application code must ensure to pick non-conflicting IDs for any additionally configured extensions. \
@@ -2389,7 +2389,7 @@ impl BaseWebRTCSink {
             drop(state);
 
             let maybe_munged_offer = if signaller
-                .has_property("manual-sdp-munging", Some(bool::static_type()))
+                .has_property_with_type("manual-sdp-munging", bool::static_type())
                 && signaller.property("manual-sdp-munging")
             {
                 // Don't munge, signaller will manage this
@@ -2425,7 +2425,7 @@ impl BaseWebRTCSink {
                 .emit_by_name::<()>("set-local-description", &[&answer, &None::<gst::Promise>]);
 
             let maybe_munged_answer = if signaller
-                .has_property("manual-sdp-munging", Some(bool::static_type()))
+                .has_property_with_type("manual-sdp-munging", bool::static_type())
                 && signaller.property("manual-sdp-munging")
             {
                 // Don't munge, signaller will manage this
@@ -2885,7 +2885,7 @@ impl BaseWebRTCSink {
                         session_id,
                         move |_webrtcbin: gst::Element, _bin: gst::Bin, e: gst::Element| {
                             if e.factory().map_or(false, |f| f.name() == "rtprtxsend") {
-                                if e.has_property("stuffing-kbps", Some(i32::static_type())) {
+                                if e.has_property_with_type("stuffing-kbps", i32::static_type()) {
                                     element.imp().set_rtptrxsend(&session_id, e);
                                 } else {
                                     gst::warning!(

@@ -656,7 +656,7 @@ impl Session {
             // continue to use that or fallback to webrtcbin pad's msid if the
             // peer-producer-id is None.
             let producer_id = if signaller
-                .has_property("producer-peer-id", Some(Option::<String>::static_type()))
+                .has_property_with_type("producer-peer-id", Option::<String>::static_type())
             {
                 signaller
                     .property::<Option<String>>("producer-peer-id")

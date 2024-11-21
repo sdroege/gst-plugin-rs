@@ -96,7 +96,7 @@ impl Default for HlsSink3Settings {
         // giostreamsink doesn't let go of its stream until the element is finalized, which might
         // be too late for the calling application. Let's try to force it to close while tearing
         // down the pipeline.
-        if giostreamsink.has_property("close-on-stop", Some(bool::static_type())) {
+        if giostreamsink.has_property_with_type("close-on-stop", bool::static_type()) {
             giostreamsink.set_property("close-on-stop", true);
         } else {
             gst::warning!(
