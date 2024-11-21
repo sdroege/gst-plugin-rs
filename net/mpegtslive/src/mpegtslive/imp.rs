@@ -167,9 +167,9 @@ struct State {
     // Last observed PCR (for handling wraparound)
     last_seen_pcr: Option<MpegTsPcr>,
 
-    // First observed PCR and associated timestamp
+    // First observed PCR since discont and associated external clock time
     base_pcr: Option<MpegTsPcr>,
-    base_monotonic: Option<gst::ClockTime>,
+    base_external: Option<gst::ClockTime>,
 
     // If the next outgoing packet should have the discont flag set
     discont_pending: bool,
@@ -377,50 +377,55 @@ impl FromBitStream for ProgramMappingTable {
 }
 
 impl State {
-    /// Store PCR / monotonic time observation
+    /// Store PCR / internal (monotonic) clock time observation
     fn store_observation(
         &mut self,
         imp: &MpegTsLiveSource,
         pcr: u64,
-        monotonic_time: gst::ClockTime,
+        observation_internal: gst::ClockTime,
     ) {
         // If this is the first PCR we observe:
-        // * Remember the PCR *and* the associated monotonic clock value when capture
-        // * `base_pcr` `base_monotonic`
+        // * Remember the PCR *and* the associated internal (monotonic) == external (scaled
+        //   monotonic) clock value when capture
+        // * Store base_pcr = pcr, base_external = observation_internal
 
         // If we have a PCR we need to store an observation
-        // * Subtract the base PCR from that value and add the base monotonic value
-        //   * observation_monotonic = pcr - base_pcr + base_monotonic
-        // * Store (observation_monotonic, buffer_pts)
+        // * Subtract the base PCR from that value and add the base external clock value
+        //   * observation_external = pcr - base_pcr + base_external
+        // * Store (observation_internal, observation_external)
 
         let new_pcr: MpegTsPcr;
 
-        if let (Some(base_pcr), Some(base_monotonic), Some(last_seen_pcr)) =
-            (self.base_pcr, self.base_monotonic, self.last_seen_pcr)
+        if let (Some(base_pcr), Some(base_external), Some(last_seen_pcr)) =
+            (self.base_pcr, self.base_external, self.last_seen_pcr)
         {
-            gst::trace!(CAT, imp = imp, "pcr:{pcr}, monotonic_time:{monotonic_time}");
+            gst::trace!(
+                CAT,
+                imp = imp,
+                "pcr:{pcr}, observation_internal:{observation_internal}"
+            );
 
             let mut handled_pcr = MpegTsPcr::new_with_reference(imp, pcr, &last_seen_pcr);
             if let Some(new_pcr) = handled_pcr {
                 // First check if this is more than 1s off from the current clock calibration and
                 // if so consider it a discontinuity too.
-                let (internal, external, num, denom) = imp.external_clock.calibration();
+                let (cinternal, cexternal, cnum, cdenom) = imp.external_clock.calibration();
 
                 let expected_external = gst::Clock::adjust_with_calibration(
-                    monotonic_time,
-                    internal,
-                    external,
-                    num,
-                    denom,
+                    observation_internal,
+                    cinternal,
+                    cexternal,
+                    cnum,
+                    cdenom,
                 );
-                let new_external =
-                    gst::ClockTime::from(new_pcr.saturating_sub(base_pcr)) + base_monotonic;
-                if expected_external.absdiff(new_external) >= gst::ClockTime::SECOND {
+                let observation_external =
+                    gst::ClockTime::from(new_pcr.saturating_sub(base_pcr)) + base_external;
+                if expected_external.absdiff(observation_external) >= gst::ClockTime::SECOND {
                     gst::warning!(
                         CAT,
                         imp = imp,
-                        "New PCR clock estimation {new_external} too far from old estimation {expected_external}: {}",
-                        new_external.into_positive() - expected_external,
+                        "New PCR clock estimation {observation_external} too far from old estimation {expected_external}: {}",
+                        observation_external.into_positive() - expected_external,
                     );
                     handled_pcr = None;
                 }
@@ -432,41 +437,41 @@ impl State {
                     CAT,
                     imp = imp,
                     "Adding new observation internal: {} -> external: {}",
-                    gst::ClockTime::from(new_pcr.saturating_sub(base_pcr)) + base_monotonic,
-                    monotonic_time,
+                    observation_internal,
+                    gst::ClockTime::from(new_pcr.saturating_sub(base_pcr)) + base_external,
                 );
                 imp.external_clock.add_observation(
-                    monotonic_time,
-                    gst::ClockTime::from(new_pcr.saturating_sub(base_pcr)) + base_monotonic,
+                    observation_internal,
+                    gst::ClockTime::from(new_pcr.saturating_sub(base_pcr)) + base_external,
                 );
             } else {
-                let (internal, external, num, denom) = imp.external_clock.calibration();
-                let scaled_monotonic = gst::Clock::adjust_with_calibration(
-                    monotonic_time,
-                    internal,
-                    external,
-                    num,
-                    denom,
+                let (cinternal, cexternal, cnum, cdenom) = imp.external_clock.calibration();
+                let base_external = gst::Clock::adjust_with_calibration(
+                    observation_internal,
+                    cinternal,
+                    cexternal,
+                    cnum,
+                    cdenom,
                 );
                 gst::warning!(
                     CAT,
                     imp = imp,
-                    "DISCONT detected, Picking new reference times (pcr:{pcr:#?}, monotonic:{monotonic_time}, scaled monotonic:{scaled_monotonic}",
+                    "DISCONT detected, Picking new reference times (pcr:{pcr:#?}, observation_internal:{observation_internal}, base_external:{base_external}",
                 );
                 new_pcr = MpegTsPcr::new(pcr);
                 self.base_pcr = Some(new_pcr);
-                self.base_monotonic = Some(monotonic_time);
+                self.base_external = Some(observation_internal);
                 self.discont_pending = true;
             }
         } else {
             gst::debug!(
                 CAT,
                 imp = imp,
-                "Picking initial reference times (pcr:{pcr:#?}, monotonic:{monotonic_time}"
+                "Picking initial reference times (pcr:{pcr:#?}, observation_internal:{observation_internal}"
             );
             new_pcr = MpegTsPcr::new(pcr);
             self.base_pcr = Some(new_pcr);
-            self.base_monotonic = Some(monotonic_time);
+            self.base_external = Some(observation_internal);
             self.discont_pending = true;
         }
         self.last_seen_pcr = Some(new_pcr);
