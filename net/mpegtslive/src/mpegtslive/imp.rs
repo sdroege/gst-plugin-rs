@@ -460,7 +460,7 @@ impl State {
                 );
                 new_pcr = MpegTsPcr::new(pcr);
                 self.base_pcr = Some(new_pcr);
-                self.base_external = Some(observation_internal);
+                self.base_external = Some(base_external);
                 self.discont_pending = true;
             }
         } else {
