@@ -347,6 +347,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 impl ToggleRecord {
+    // called while holding stream.state
     fn block_if_upstream_not_live(
         &self,
         pad: &gst::Pad,
@@ -405,6 +406,7 @@ impl ToggleRecord {
         }
     }
 
+    // called without lock
     fn handle_main_stream<T: HandleData>(
         &self,
         pad: &gst::Pad,
@@ -693,6 +695,7 @@ impl ToggleRecord {
     }
 
     #[allow(clippy::blocks_in_conditions)]
+    // called without lock
     fn handle_secondary_stream<T: HandleData>(
         &self,
         pad: &gst::Pad,
@@ -838,6 +841,8 @@ impl ToggleRecord {
                     obj = pad,
                     "Main stream EOS and recording never started",
                 );
+                drop(main_state);
+
                 return Ok(HandleResult::Eos(self.check_and_update_eos(
                     pad,
                     stream,
@@ -1179,6 +1184,8 @@ impl ToggleRecord {
     }
 
     // should be called only if main stream is in eos state
+    // Called while holding stream.state on either the primary or a secondary stream (stream_state)
+    // and self.state (rec_state).
     fn check_and_update_eos(
         &self,
         pad: &gst::Pad,
@@ -1222,6 +1229,8 @@ impl ToggleRecord {
     }
 
     // should be called only if main stream stops being in eos state
+    // Called while holding stream.state on either the primary or a secondary stream (stream_state)
+    // and self.state (rec_state).
     fn check_and_update_stream_start(
         &self,
         pad: &gst::Pad,
@@ -1261,6 +1270,7 @@ impl ToggleRecord {
         false
     }
 
+    // called without lock
     fn sink_chain(
         &self,
         pad: &gst::Pad,
@@ -1405,6 +1415,7 @@ impl ToggleRecord {
         stream.srcpad.push(buffer)
     }
 
+    // called without lock
     fn sink_event(&self, pad: &gst::Pad, mut event: gst::Event) -> bool {
         use gst::EventView;
 
@@ -1584,6 +1595,7 @@ impl ToggleRecord {
                 let main_is_eos = main_state
                     .as_ref()
                     .map_or(true, |main_state| main_state.eos);
+                drop(main_state);
 
                 if main_is_eos {
                     let mut rec_state = self.state.lock();
@@ -1653,6 +1665,7 @@ impl ToggleRecord {
         }
     }
 
+    // called without lock
     fn sink_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         let stream = match self.pads.lock().get(pad) {
             None => {
@@ -1683,6 +1696,7 @@ impl ToggleRecord {
         success
     }
 
+    // called without lock
     fn src_event(&self, pad: &gst::Pad, mut event: gst::Event) -> bool {
         use gst::EventView;
 
@@ -1718,6 +1732,7 @@ impl ToggleRecord {
         }
     }
 
+    // called without lock
     fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
@@ -1845,6 +1860,7 @@ impl ToggleRecord {
         }
     }
 
+    // called without lock
     fn iterate_internal_links(&self, pad: &gst::Pad) -> gst::Iterator<gst::Pad> {
         let stream = match self.pads.lock().get(pad) {
             None => {
