@@ -3252,7 +3252,7 @@ impl ObjectImpl for FMP4Mux {
             vec![
                 glib::subclass::Signal::builder(FMP4_SIGNAL_SEND_HEADERS)
                     .action()
-                    .class_handler(|_token, args| {
+                    .class_handler(|args| {
                         let element = args[0].get::<super::FMP4Mux>().expect("signal arg");
                         let imp = element.imp();
                         let mut state = imp.state.lock().unwrap();
@@ -3270,7 +3270,7 @@ impl ObjectImpl for FMP4Mux {
                 glib::subclass::Signal::builder(FMP4_SIGNAL_SPLIT_AT_RUNNING_TIME)
                     .param_types([gst::ClockTime::static_type()])
                     .action()
-                    .class_handler(|_token, args| {
+                    .class_handler(|args| {
                         let element = args[0].get::<super::FMP4Mux>().expect("signal arg");
                         let imp = element.imp();
                         let mut state = imp.state.lock().unwrap();

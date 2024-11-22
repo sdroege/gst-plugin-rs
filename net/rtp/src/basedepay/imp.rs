@@ -1936,7 +1936,7 @@ impl ObjectImpl for RtpBaseDepay2 {
                 glib::subclass::Signal::builder("add-extension")
                     .action()
                     .param_types([gst_rtp::RTPHeaderExtension::static_type()])
-                    .class_handler(|_token, args| {
+                    .class_handler(|args| {
                         let s = args[0].get::<super::RtpBaseDepay2>().unwrap();
                         let ext = args[1].get::<&gst_rtp::RTPHeaderExtension>().unwrap();
                         s.imp().add_extension(ext);
@@ -1955,7 +1955,7 @@ impl ObjectImpl for RtpBaseDepay2 {
                             true
                         }
                     })
-                    .class_handler(|_token, args| {
+                    .class_handler(|args| {
                         let s = args[0].get::<super::RtpBaseDepay2>().unwrap();
                         let ext_id = args[1].get::<u32>().unwrap();
                         let uri = args[2].get::<&str>().unwrap();
@@ -1966,7 +1966,7 @@ impl ObjectImpl for RtpBaseDepay2 {
                     .build(),
                 glib::subclass::Signal::builder("clear-extensions")
                     .action()
-                    .class_handler(|_token, args| {
+                    .class_handler(|args| {
                         let s = args[0].get::<super::RtpBaseDepay2>().unwrap();
                         s.imp().clear_extensions();
 

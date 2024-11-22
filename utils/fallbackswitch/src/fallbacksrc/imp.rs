@@ -662,7 +662,7 @@ impl ObjectImpl for FallbackSrc {
                 glib::subclass::Signal::builder("update-uri")
                     .param_types([String::static_type()])
                     .return_type::<String>()
-                    .class_handler(|_token, args| {
+                    .class_handler(|args| {
                         // Simply return the input by default
                         Some(args[1].clone())
                     })
@@ -674,7 +674,7 @@ impl ObjectImpl for FallbackSrc {
                     .build(),
                 glib::subclass::Signal::builder("unblock")
                     .action()
-                    .class_handler(|_token, args| {
+                    .class_handler(|args| {
                         let element = args[0].get::<super::FallbackSrc>().expect("signal arg");
                         let imp = element.imp();
                         let mut state_guard = imp.state.lock();

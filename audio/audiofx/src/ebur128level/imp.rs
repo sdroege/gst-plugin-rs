@@ -125,7 +125,7 @@ impl ObjectImpl for EbuR128Level {
         static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
             vec![glib::subclass::Signal::builder("reset")
                 .action()
-                .class_handler(|_token, args| {
+                .class_handler(|args| {
                     let this = args[0].get::<super::EbuR128Level>().unwrap();
                     let imp = this.imp();
 

@@ -204,7 +204,7 @@ impl ObjectImpl for HlsBaseSink {
                 glib::subclass::Signal::builder(SIGNAL_GET_PLAYLIST_STREAM)
                     .param_types([String::static_type()])
                     .return_type::<Option<gio::OutputStream>>()
-                    .class_handler(|_, args| {
+                    .class_handler(|args| {
                         let elem = args[0].get::<super::HlsBaseSink>().expect("signal arg");
                         let playlist_location = args[1].get::<String>().expect("signal arg");
                         let imp = elem.imp();
@@ -220,7 +220,7 @@ impl ObjectImpl for HlsBaseSink {
                 glib::subclass::Signal::builder(SIGNAL_GET_FRAGMENT_STREAM)
                     .param_types([String::static_type()])
                     .return_type::<Option<gio::OutputStream>>()
-                    .class_handler(|_, args| {
+                    .class_handler(|args| {
                         let elem = args[0].get::<super::HlsBaseSink>().expect("signal arg");
                         let fragment_location = args[1].get::<String>().expect("signal arg");
                         let imp = elem.imp();
@@ -236,7 +236,7 @@ impl ObjectImpl for HlsBaseSink {
                 glib::subclass::Signal::builder(SIGNAL_DELETE_FRAGMENT)
                     .param_types([String::static_type()])
                     .return_type::<bool>()
-                    .class_handler(|_, args| {
+                    .class_handler(|args| {
                         let elem = args[0].get::<super::HlsBaseSink>().expect("signal arg");
                         let fragment_location = args[1].get::<String>().expect("signal arg");
                         let imp = elem.imp();

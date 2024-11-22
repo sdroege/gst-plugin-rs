@@ -225,7 +225,7 @@ impl ObjectImpl for HlsCmafSink {
                 glib::subclass::Signal::builder(SIGNAL_GET_INIT_STREAM)
                     .param_types([String::static_type()])
                     .return_type::<Option<gio::OutputStream>>()
-                    .class_handler(|_, args| {
+                    .class_handler(|args| {
                         let elem = args[0].get::<HlsBaseSink>().expect("signal arg");
                         let init_location = args[1].get::<String>().expect("signal arg");
                         let imp = elem.imp();
@@ -240,7 +240,7 @@ impl ObjectImpl for HlsCmafSink {
                     .build(),
                 glib::subclass::Signal::builder(SIGNAL_NEW_PLAYLIST)
                     .action()
-                    .class_handler(|_token, args| {
+                    .class_handler(|args| {
                         // Forces hlscmafsink to finish the current playlist and start a new one.
                         // Meant to be used after changing output location at runtime, which would
                         // otherwise require changing playback state to READY to make sure that the

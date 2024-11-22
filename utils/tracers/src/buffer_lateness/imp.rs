@@ -237,7 +237,7 @@ impl ObjectImpl for BufferLateness {
             vec![glib::subclass::Signal::builder("write-log")
                 .action()
                 .param_types([Option::<String>::static_type()])
-                .class_handler(|_, args| {
+                .class_handler(|args| {
                     let obj = args[0].get::<super::BufferLateness>().unwrap();
 
                     obj.imp().write_log(args[1].get::<Option<&str>>().unwrap());

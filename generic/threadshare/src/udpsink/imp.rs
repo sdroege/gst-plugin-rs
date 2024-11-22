@@ -1109,7 +1109,7 @@ impl ObjectImpl for UdpSink {
                 glib::subclass::Signal::builder("add")
                     .param_types([String::static_type(), i32::static_type()])
                     .action()
-                    .class_handler(|_, args| {
+                    .class_handler(|args| {
                         let elem = args[0].get::<super::UdpSink>().expect("signal arg");
                         let host = args[1].get::<String>().expect("signal arg");
                         let port = args[2].get::<i32>().expect("signal arg");
@@ -1125,7 +1125,7 @@ impl ObjectImpl for UdpSink {
                 glib::subclass::Signal::builder("remove")
                     .param_types([String::static_type(), i32::static_type()])
                     .action()
-                    .class_handler(|_, args| {
+                    .class_handler(|args| {
                         let elem = args[0].get::<super::UdpSink>().expect("signal arg");
                         let host = args[1].get::<String>().expect("signal arg");
                         let port = args[2].get::<i32>().expect("signal arg");
@@ -1140,7 +1140,7 @@ impl ObjectImpl for UdpSink {
                     .build(),
                 glib::subclass::Signal::builder("clear")
                     .action()
-                    .class_handler(|_, args| {
+                    .class_handler(|args| {
                         let elem = args[0].get::<super::UdpSink>().expect("signal arg");
 
                         let imp = elem.imp();

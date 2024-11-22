@@ -485,7 +485,7 @@ impl ObjectImpl for AppSrc {
                     .param_types([gst::Buffer::static_type()])
                     .return_type::<bool>()
                     .action()
-                    .class_handler(|_, args| {
+                    .class_handler(|args| {
                         let elem = args[0].get::<super::AppSrc>().expect("signal arg");
                         let buffer = args[1].get::<gst::Buffer>().expect("signal arg");
 
@@ -501,7 +501,7 @@ impl ObjectImpl for AppSrc {
                 glib::subclass::Signal::builder("end-of-stream")
                     .return_type::<bool>()
                     .action()
-                    .class_handler(|_, args| {
+                    .class_handler(|args| {
                         let elem = args[0].get::<super::AppSrc>().expect("signal arg");
 
                         Some(elem.imp().end_of_stream().to_value())

@@ -2061,7 +2061,7 @@ pub(super) mod livekit {
                 vec![glib::subclass::Signal::builder("set-track-disabled")
                     .param_types([bool::static_type()])
                     .action()
-                    .class_handler(|_token, values| {
+                    .class_handler(|values| {
                         let pad = values[0]
                             .get::<&super::super::LiveKitWebRTCSrcPad>()
                             .unwrap();

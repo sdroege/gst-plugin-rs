@@ -341,7 +341,7 @@ impl ObjectImpl for PipelineSnapshot {
         static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
             vec![glib::subclass::Signal::builder("snapshot")
                 .action()
-                .class_handler(|_, args| {
+                .class_handler(|args| {
                     args[0].get::<super::PipelineSnapshot>().unwrap().snapshot();
 
                     None

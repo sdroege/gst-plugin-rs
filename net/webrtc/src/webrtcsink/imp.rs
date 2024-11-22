@@ -4864,7 +4864,7 @@ impl ObjectImpl for BaseWebRTCSink {
                  */
                 glib::subclass::Signal::builder("get-sessions")
                     .action()
-                    .class_handler(|_, args| {
+                    .class_handler(|args| {
                         let element = args[0].get::<super::BaseWebRTCSink>().expect("signal arg");
                         let this = element.imp();
 
@@ -4902,7 +4902,7 @@ impl ObjectImpl for BaseWebRTCSink {
                     ])
                     .return_type::<bool>()
                     .accumulator(setup_signal_accumulator)
-                    .class_handler(|_, args| {
+                    .class_handler(|args| {
                         let element = args[0].get::<super::BaseWebRTCSink>().expect("signal arg");
                         let enc = args[3].get::<gst::Element>().unwrap();
 
@@ -4947,7 +4947,7 @@ impl ObjectImpl for BaseWebRTCSink {
                     ])
                     .return_type::<bool>()
                     .accumulator(setup_signal_accumulator)
-                    .class_handler(|_, args| {
+                    .class_handler(|args| {
                         let pay = args[3].get::<gst::Element>().unwrap();
 
                         configure_payloader(&pay);
@@ -5014,7 +5014,7 @@ impl ObjectImpl for BaseWebRTCSink {
                     ])
                     .return_type::<gst::Structure>()
                     .run_last()
-                    .class_handler(|_token, args| {
+                    .class_handler(|args| {
                         Some(args[3usize].get::<gst::Structure>().expect("wrong argument").to_value())
                     })
                     .accumulator(move |_hint, output, input| {

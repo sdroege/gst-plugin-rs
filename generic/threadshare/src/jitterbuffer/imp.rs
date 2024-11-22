@@ -1380,7 +1380,7 @@ impl ObjectImpl for JitterBuffer {
             vec![
                 glib::subclass::Signal::builder("clear-pt-map")
                     .action()
-                    .class_handler(|_, args| {
+                    .class_handler(|args| {
                         let element = args[0].get::<super::JitterBuffer>().expect("signal arg");
                         let jb = element.imp();
                         jb.clear_pt_map();

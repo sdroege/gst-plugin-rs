@@ -1659,7 +1659,7 @@ impl ObjectImpl for RtpRecv {
                 .param_types([u32::static_type()])
                 .return_type::<crate::rtpbin2::config::Rtp2Session>()
                 .action()
-                .class_handler(|_token, args| {
+                .class_handler(|args| {
                     let element = args[0].get::<super::RtpRecv>().expect("signal arg");
                     let id = args[1].get::<u32>().expect("signal arg");
                     let bin = element.imp();
