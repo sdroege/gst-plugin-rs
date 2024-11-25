@@ -112,3 +112,114 @@ fn test_lines() {
         std::str::from_utf8(expected_output.as_ref())
     );
 }
+
+#[test]
+fn test_accumulate_time_gaps() {
+    init();
+
+    let input = b"First buffer content";
+
+    let mut h = gst_check::Harness::new("textwrap");
+
+    {
+        let wrap = h.element().expect("Could not create textwrap");
+        wrap.set_property("accumulate-time", 2_000_000_000u64);
+        wrap.set_property("columns", u32::MAX);
+    }
+
+    h.set_src_caps_str("text/x-raw, format=utf8");
+
+    let buf = {
+        let mut buf = gst::Buffer::from_mut_slice(Vec::from(&input[..]));
+        let buf_ref = buf.get_mut().unwrap();
+        buf_ref.set_pts(gst::ClockTime::ZERO);
+        buf_ref.set_duration(1.seconds());
+        buf
+    };
+
+    assert_eq!(h.push(buf), Ok(gst::FlowSuccess::Ok));
+
+    assert_eq!(h.buffers_in_queue(), 0);
+
+    // A long-enough gap should cause the first buffer to come out
+
+    let gap = gst::event::Gap::builder(1.seconds())
+        .duration(1_000.mseconds())
+        .build();
+
+    assert!(h.push_event(gap));
+
+    assert_eq!(h.buffers_in_queue(), 1);
+    let buf = h.pull().expect("Couldn't pull buffer");
+
+    assert_eq!(buf.pts(), Some(gst::ClockTime::ZERO));
+    assert_eq!(buf.duration(), Some(2.seconds()));
+
+    let map = buf.map_readable().expect("Couldn't map buffer readable");
+
+    let expected_output = b"First buffer content";
+
+    assert_eq!(
+        std::str::from_utf8(map.as_ref()),
+        std::str::from_utf8(expected_output.as_ref())
+    );
+}
+
+#[test]
+fn test_accumulate_time_long_second_buffer() {
+    init();
+
+    let input = b"First buffer content";
+
+    let mut h = gst_check::Harness::new("textwrap");
+
+    {
+        let wrap = h.element().expect("Could not create textwrap");
+        wrap.set_property("accumulate-time", 2_000_000_000u64);
+        wrap.set_property("columns", u32::MAX);
+    }
+
+    h.set_src_caps_str("text/x-raw, format=utf8");
+
+    let buf = {
+        let mut buf = gst::Buffer::from_mut_slice(Vec::from(&input[..]));
+        let buf_ref = buf.get_mut().unwrap();
+        buf_ref.set_pts(gst::ClockTime::ZERO);
+        buf_ref.set_duration(1.seconds());
+        buf
+    };
+
+    assert_eq!(h.push(buf), Ok(gst::FlowSuccess::Ok));
+
+    assert_eq!(h.buffers_in_queue(), 0);
+
+    let input = b"Second buffer content";
+
+    let buf = {
+        let mut buf = gst::Buffer::from_mut_slice(Vec::from(&input[..]));
+        let buf_ref = buf.get_mut().unwrap();
+        buf_ref.set_pts(1.seconds());
+        buf_ref.set_duration(2.seconds());
+        buf
+    };
+
+    assert_eq!(h.push(buf), Ok(gst::FlowSuccess::Ok));
+
+    assert_eq!(h.buffers_in_queue(), 1);
+
+    let buf = h.pull().expect("Couldn't pull buffer");
+
+    // The contents of the second buffer should not be broken up
+
+    assert_eq!(buf.pts(), Some(gst::ClockTime::ZERO));
+    assert_eq!(buf.duration(), Some(3.seconds()));
+
+    let map = buf.map_readable().expect("Couldn't map buffer readable");
+
+    let expected_output = b"First buffer content Second buffer content";
+
+    assert_eq!(
+        std::str::from_utf8(map.as_ref()),
+        std::str::from_utf8(expected_output.as_ref())
+    );
+}

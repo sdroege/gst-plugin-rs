@@ -125,6 +125,43 @@ impl TextWrap {
         state.options = Some(options);
     }
 
+    fn try_drain(
+        &self,
+        state: &mut State,
+        pts: gst::ClockTime,
+        accumulate_time: gst::ClockTime,
+        bufferlist: &mut gst::BufferList,
+    ) {
+        let add_buffer = state
+            .start_ts
+            .opt_add(accumulate_time)
+            .opt_le(pts)
+            .unwrap_or(false);
+
+        if add_buffer {
+            let drained = mem::take(&mut state.current_text);
+            let duration = state.end_ts.opt_checked_sub(state.start_ts).ok().flatten();
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Outputting contents {}, ts: {}, duration: {}",
+                drained,
+                state.start_ts.display(),
+                duration.display(),
+            );
+            let mut buf = gst::Buffer::from_mut_slice(drained.into_bytes());
+            {
+                let buf_mut = buf.get_mut().unwrap();
+                buf_mut.set_pts(state.start_ts);
+                buf_mut.set_duration(duration);
+            }
+            bufferlist.get_mut().unwrap().add(buf);
+
+            state.start_ts = None;
+            state.end_ts = None;
+        }
+    }
+
     fn sink_chain(
         &self,
         _pad: &gst::Pad,
@@ -166,6 +203,8 @@ impl TextWrap {
             let mut bufferlist = gst::BufferList::new();
             let n_lines = std::cmp::max(self.settings.lock().unwrap().lines, 1);
 
+            self.try_drain(&mut state, pts, accumulate_time, &mut bufferlist);
+
             let add_buffer = state
                 .start_ts
                 .opt_add(accumulate_time)
@@ -199,10 +238,10 @@ impl TextWrap {
             let duration_per_word = (num_words != 0).then(|| duration / num_words);
 
             if state.start_ts.is_none() {
-                state.start_ts = buffer.pts();
+                state.start_ts = Some(pts);
             }
 
-            state.end_ts = buffer.pts();
+            state.end_ts = Some(pts);
 
             let words = data.split_ascii_whitespace();
             let mut current_text = state.current_text.to_string();
@@ -260,6 +299,11 @@ impl TextWrap {
             }
 
             state.current_text = current_text;
+            state.end_ts = Some(pts + duration);
+
+            if let Some(pts) = state.end_ts {
+                self.try_drain(&mut state, pts, accumulate_time, &mut bufferlist);
+            }
 
             if state.current_text.is_empty() {
                 state.start_ts = None;
