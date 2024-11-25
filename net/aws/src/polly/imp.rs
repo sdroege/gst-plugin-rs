@@ -34,6 +34,7 @@ const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_seconds(2);
 const DEFAULT_ENGINE: AwsPollyEngine = AwsPollyEngine::Neural;
 const DEFAULT_LANGUAGE_CODE: AwsPollyLanguageCode = AwsPollyLanguageCode::None;
 const DEFAULT_VOICE_ID: AwsPollyVoiceId = AwsPollyVoiceId::Aria;
+const DEFAULT_SSML_SET_MAX_DURATION: bool = false;
 
 #[derive(Debug, Clone)]
 pub(super) struct Settings {
@@ -45,6 +46,7 @@ pub(super) struct Settings {
     language_code: AwsPollyLanguageCode,
     voice_id: AwsPollyVoiceId,
     lexicon_names: gst::Array,
+    ssml_set_max_duration: bool,
 }
 
 impl Default for Settings {
@@ -58,6 +60,7 @@ impl Default for Settings {
             language_code: DEFAULT_LANGUAGE_CODE,
             voice_id: DEFAULT_VOICE_ID,
             lexicon_names: gst::Array::default(),
+            ssml_set_max_duration: DEFAULT_SSML_SET_MAX_DURATION,
         }
     }
 }
@@ -181,13 +184,23 @@ impl Polly {
 
         let job = {
             let settings = self.settings.lock().unwrap();
-
             let mut task = client
                 .synthesize_speech()
                 .engine(settings.engine.into())
                 .output_format(aws_sdk_polly::types::OutputFormat::Pcm)
-                .text_type(in_format)
-                .text(data)
+                .text_type(if settings.ssml_set_max_duration {
+                    aws_sdk_polly::types::TextType::Ssml
+                } else {
+                    in_format
+                })
+                .text(if settings.ssml_set_max_duration {
+                    format!(
+                        "<speak><prosody amazon:max-duration=\"{}ms\">{data}</prosody></speak>",
+                        duration.mseconds()
+                    )
+                } else {
+                    data.to_owned()
+                })
                 .voice_id(settings.voice_id.into())
                 .set_lexicon_names(Some(
                     settings
@@ -216,6 +229,12 @@ impl Polly {
 
         let mut buf = gst::Buffer::from_slice(blob.into_bytes());
         let mut state = self.state.lock().unwrap();
+
+        let duration = gst::ClockTime::from_nseconds(
+            (buf.size() as u64)
+                .mul_div_round(1_000_000_000, 32_000)
+                .unwrap(),
+        );
 
         let discont = state
             .out_segment
@@ -496,6 +515,12 @@ impl ObjectImpl for Polly {
                     )
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("ssml-set-max-duration")
+                    .nick("SSML set max duration")
+                    .blurb("Wrap plain text as SSML and set the max-duration attribute")
+                    .default_value(DEFAULT_SSML_SET_MAX_DURATION)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -552,6 +577,10 @@ impl ObjectImpl for Polly {
                 let mut settings = self.settings.lock().unwrap();
                 settings.lexicon_names = value.get::<gst::Array>().expect("type checked upstream");
             }
+            "ssml-set-max-duration" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.ssml_set_max_duration = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -589,6 +618,10 @@ impl ObjectImpl for Polly {
             "lexicon-names" => {
                 let settings = self.settings.lock().unwrap();
                 settings.lexicon_names.to_value()
+            }
+            "ssml-set-max-duration" => {
+                let settings = self.settings.lock().unwrap();
+                settings.ssml_set_max_duration.to_value()
             }
             _ => unimplemented!(),
         }

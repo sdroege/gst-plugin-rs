@@ -111,6 +111,18 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "ssml-set-max-duration": {
+                        "blurb": "Wrap plain text as SSML and set the max-duration attribute",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "voice-id": {
                         "blurb": "Defines what voice id to use",
                         "conditionally-available": false,
