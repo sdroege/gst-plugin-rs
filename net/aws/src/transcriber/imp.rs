@@ -74,6 +74,7 @@ pub const GRANULARITY: gst::ClockTime = gst::ClockTime::from_mseconds(100);
 
 const OUTPUT_LANG_CODE_PROPERTY: &str = "language-code";
 const DEFAULT_OUTPUT_LANG_CODE: Option<&str> = None;
+const DEFAULT_POST_LATE_WARNINGS: bool = false;
 
 const TRANSLATION_TOKENIZATION_PROPERTY: &str = "tokenization-method";
 
@@ -92,6 +93,7 @@ pub(super) struct Settings {
     session_token: Option<String>,
     pub vocabulary_filter: Option<String>,
     pub vocabulary_filter_method: AwsTranscriberVocabularyFilterMethod,
+    post_late_warnings: bool,
 }
 
 impl Default for Settings {
@@ -110,6 +112,7 @@ impl Default for Settings {
             session_token: None,
             vocabulary_filter: None,
             vocabulary_filter_method: DEFAULT_VOCABULARY_FILTER_METHOD,
+            post_late_warnings: DEFAULT_POST_LATE_WARNINGS,
         }
     }
 }
@@ -1557,17 +1560,28 @@ impl TranslationPadTask {
                             "Updating item PTS ({pts} < {last_position}), consider increasing latency",
                         );
 
-                        let details = gst::Structure::builder("awstranscriber/late-item")
-                            .field("original-pts", pts)
-                            .field("last-position", last_position)
-                            .build();
+                        let post_late_warnings = self
+                            .pad
+                            .parent()
+                            .imp()
+                            .settings
+                            .lock()
+                            .unwrap()
+                            .post_late_warnings;
 
-                        gst::element_warning!(
-                            self.pad.parent(),
-                            gst::LibraryError::Settings,
-                            ["Late transcription item, updating PTS"],
-                            details: details
-                        );
+                        if post_late_warnings {
+                            let details = gst::Structure::builder("awstranscriber/late-item")
+                                .field("original-pts", pts)
+                                .field("last-position", last_position)
+                                .build();
+
+                            gst::element_warning!(
+                                self.pad.parent(),
+                                gst::LibraryError::Settings,
+                                ["Late transcription item, updating PTS"],
+                                details: details
+                            );
+                        }
 
                         pts = last_position;
                         // FIXME if the resulting duration is zero, we might as well not push it.
