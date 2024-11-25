@@ -14,17 +14,24 @@ fn link_video(pad: &gst::Pad, pipeline: &gst::Pipeline) {
         .name(format!("queue_{}", pad.name()))
         .build()
         .unwrap();
+
+    let vc = gst::ElementFactory::make("videoconvert")
+        .name(format!("videoconvert_{}", pad.name()))
+        .build()
+        .unwrap();
+
     let vsink = gst::ElementFactory::make("autovideosink")
         .name(format!("vsink_{}", pad.name()))
         .build()
         .unwrap();
 
-    pipeline.add_many([&q, &vsink]).unwrap();
-    gst::Element::link_many([&q, &vsink]).unwrap();
+    pipeline.add_many([&q, &vc, &vsink]).unwrap();
+    gst::Element::link_many([&q, &vc, &vsink]).unwrap();
     let qsinkpad = q.static_pad("sink").unwrap();
     pad.link(&qsinkpad).expect("linking should work");
 
     q.sync_state_with_parent().unwrap();
+    vc.sync_state_with_parent().unwrap();
     vsink.sync_state_with_parent().unwrap();
 }
 
@@ -32,11 +39,15 @@ fn unlink_video(pad: &gst::Pad, pipeline: &gst::Pipeline) {
     let q = pipeline
         .by_name(format!("queue_{}", pad.name()).as_str())
         .unwrap();
+    let vc = pipeline
+        .by_name(format!("videoconvert_{}", pad.name()).as_str())
+        .unwrap();
     let vsink = pipeline
         .by_name(format!("vsink_{}", pad.name()).as_str())
         .unwrap();
 
     q.set_state(gst::State::Null).unwrap();
+    vc.set_state(gst::State::Null).unwrap();
     vsink.set_state(gst::State::Null).unwrap();
 
     pipeline.remove_many([&q, &vsink]).unwrap();
@@ -48,17 +59,23 @@ fn link_audio(pad: &gst::Pad, pipeline: &gst::Pipeline) {
         .build()
         .unwrap();
 
+    let ac = gst::ElementFactory::make("audioconvert")
+        .name(format!("audioconvert_{}", pad.name()))
+        .build()
+        .unwrap();
+
     let asink = gst::ElementFactory::make("autoaudiosink")
         .name(format!("asink_{}", pad.name()))
         .build()
         .unwrap();
 
-    pipeline.add_many([&aq, &asink]).unwrap();
-    gst::Element::link_many([&aq, &asink]).unwrap();
+    pipeline.add_many([&aq, &ac, &asink]).unwrap();
+    gst::Element::link_many([&aq, &ac, &asink]).unwrap();
     let qsinkpad = aq.static_pad("sink").unwrap();
     pad.link(&qsinkpad).expect("linking should work");
 
     aq.sync_state_with_parent().unwrap();
+    ac.sync_state_with_parent().unwrap();
     asink.sync_state_with_parent().unwrap();
 }
 
@@ -66,11 +83,15 @@ fn unlink_audio(pad: &gst::Pad, pipeline: &gst::Pipeline) {
     let aq = pipeline
         .by_name(format!("aqueue_{}", pad.name()).as_str())
         .unwrap();
+    let ac = pipeline
+        .by_name(format!("audioconvert_{}", pad.name()).as_str())
+        .unwrap();
     let asink = pipeline
         .by_name(format!("asink_{}", pad.name()).as_str())
         .unwrap();
 
     aq.set_state(gst::State::Null).unwrap();
+    ac.set_state(gst::State::Null).unwrap();
     asink.set_state(gst::State::Null).unwrap();
 
     pipeline.remove_many([&aq, &asink]).unwrap();
