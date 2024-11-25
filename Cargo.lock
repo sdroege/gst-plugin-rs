@@ -2866,6 +2866,8 @@ version = "0.14.0-alpha.1"
 dependencies = [
  "async-channel",
  "bytes",
+ "clap",
+ "ctrlc",
  "env_logger",
  "futures",
  "glib",

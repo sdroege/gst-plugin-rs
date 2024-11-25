@@ -211,7 +211,13 @@ plugins = {
     'extra-deps': {'cairo-gobject': []},
   },
   'gopbuffer': {'library': 'libgstgopbuffer'},
-  'quinn': {'library': 'libgstquinn'},
+  'quinn': {
+    'library': 'libgstquinn',
+    'examples': [
+      'quic_mux',
+      'quic_roq',
+    ],
+  },
   'speechmatics': {'library': 'libgstspeechmatics'},
 }
 
