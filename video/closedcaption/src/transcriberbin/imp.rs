@@ -117,6 +117,26 @@ pub struct TranscriberBin {
 }
 
 impl TranscriberBin {
+    fn configure_transcriber(&self, transcriber: &gst::Element) {
+        let settings = self.settings.lock().unwrap();
+        let latency_ms = settings.latency.mseconds() as u32;
+
+        if transcriber.has_property_with_type("transcribe-latency", u32::static_type()) {
+            transcriber.set_property("transcribe-latency", latency_ms);
+        } else if transcriber.has_property_with_type("latency", u32::static_type()) {
+            transcriber.set_property("latency", latency_ms);
+        }
+
+        if transcriber.has_property_with_type("translate-latency", u32::static_type()) {
+            let translate_latency_ms = settings.translate_latency.mseconds() as u32;
+            transcriber.set_property("translate-latency", translate_latency_ms);
+        }
+        if transcriber.has_property_with_type("lateness", u32::static_type()) {
+            let lateness_ms = settings.lateness.mseconds() as u32;
+            transcriber.set_property("lateness", lateness_ms);
+        }
+    }
+
     fn link_transcriber_to_channel(
         &self,
         topbin: &super::TranscriberBin,
@@ -1645,16 +1665,53 @@ impl ObjectImpl for TranscriberBin {
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "latency" => {
+                let state = self.state.lock().unwrap();
                 let mut settings = self.settings.lock().unwrap();
                 settings.latency = gst::ClockTime::from_mseconds(
                     value.get::<u32>().expect("type checked upstream").into(),
                 );
+
+                if let Some(state) = state.as_ref() {
+                    for pad in state.audio_sink_pads.values() {
+                        let ps = pad.imp().state.lock().unwrap();
+                        let pad_state = ps.as_ref().unwrap();
+
+                        if let Some(ref transcriber) = pad_state.transcriber {
+                            let latency_ms = settings.latency.mseconds() as u32;
+
+                            if transcriber
+                                .has_property_with_type("transcribe-latency", u32::static_type())
+                            {
+                                transcriber.set_property("transcribe-latency", latency_ms);
+                            } else if transcriber
+                                .has_property_with_type("latency", u32::static_type())
+                            {
+                                transcriber.set_property("latency", latency_ms);
+                            }
+                        }
+                    }
+                }
             }
             "lateness" => {
+                let state = self.state.lock().unwrap();
                 let mut settings = self.settings.lock().unwrap();
                 settings.lateness = gst::ClockTime::from_mseconds(
                     value.get::<u32>().expect("type checked upstream").into(),
                 );
+
+                if let Some(state) = state.as_ref() {
+                    for pad in state.audio_sink_pads.values() {
+                        let ps = pad.imp().state.lock().unwrap();
+                        let pad_state = ps.as_ref().unwrap();
+
+                        if let Some(ref transcriber) = pad_state.transcriber {
+                            if transcriber.has_property_with_type("lateness", u32::static_type()) {
+                                let lateness_ms = settings.lateness.mseconds() as u32;
+                                transcriber.set_property("lateness", lateness_ms);
+                            }
+                        }
+                    }
+                }
             }
             "accumulate-time" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -1692,10 +1749,27 @@ impl ObjectImpl for TranscriberBin {
                 }
             }
             "translate-latency" => {
+                let state = self.state.lock().unwrap();
                 let mut settings = self.settings.lock().unwrap();
                 settings.translate_latency = gst::ClockTime::from_mseconds(
                     value.get::<u32>().expect("type checked upstream").into(),
                 );
+                if let Some(state) = state.as_ref() {
+                    for pad in state.audio_sink_pads.values() {
+                        let ps = pad.imp().state.lock().unwrap();
+                        let pad_state = ps.as_ref().unwrap();
+
+                        if let Some(ref transcriber) = pad_state.transcriber {
+                            if transcriber
+                                .has_property_with_type("translate-latency", u32::static_type())
+                            {
+                                let translate_latency_ms =
+                                    settings.translate_latency.mseconds() as u32;
+                                transcriber.set_property("translate-latency", translate_latency_ms);
+                            }
+                        }
+                    }
+                }
             }
             "mux-method" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -2524,14 +2598,19 @@ impl ObjectImpl for TranscriberSinkPad {
             }
             "transcriber" => {
                 if let Some(this) = self.obj().parent().and_downcast::<super::TranscriberBin>() {
+                    let new_transcriber: Option<gst::Element> =
+                        value.get().expect("type checked upstream");
+
+                    if let Some(ref transcriber) = new_transcriber {
+                        this.imp().configure_transcriber(transcriber);
+                    }
+
                     let mut s = this.imp().state.lock().unwrap();
                     let mut ps = self.state.lock().unwrap();
                     let Ok(pad_state) = ps.as_mut() else {
                         return;
                     };
                     let old_transcriber = pad_state.transcriber.clone();
-                    let new_transcriber: Option<gst::Element> =
-                        value.get().expect("type checked upstream");
                     pad_state.transcriber.clone_from(&new_transcriber);
 
                     if old_transcriber != new_transcriber {
