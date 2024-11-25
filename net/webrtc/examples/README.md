@@ -271,3 +271,22 @@ https://github.com/M0Rf30/android-udev-rules
    cargo r --example webrtc-precise-sync-send
    ```
 4. Click the `Refresh` button on the Producer List view of the app.
+
+# webrtchttp examples
+
+Collection of webrtchttp examples
+
+## whipserversrc and whipclientsink
+
+An couple of examples to demonstrate how a simple pipeline with both audio and video
+use these elements
+
+1.- Run the WHIP server
+```shell
+  cargo r --example whipserver --features whip http://127.0.0.1:8190
+```
+
+2.- Run the WHIP client
+```shell
+  cargo r --example whipclient --features whip http://127.0.0.1:8190/whip/endpoint
+```

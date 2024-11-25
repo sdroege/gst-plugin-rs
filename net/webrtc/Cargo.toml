@@ -129,3 +129,7 @@ required-features = [ "whip" ]
 
 [[example]]
 name = "webrtcsink-define-encoder-bitrates"
+
+[[example]]
+name = "whipclient"
+required-features = [ "whip" ]
