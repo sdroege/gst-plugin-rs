@@ -12,6 +12,7 @@ use gst_plugin_webrtc_signalling::server::{Server, ServerError};
 use gst_rtp::prelude::*;
 use gst_utils::StreamProducer;
 use gst_video::subclass::prelude::*;
+use gst_video::VideoMultiviewMode;
 use gst_webrtc::{WebRTCDataChannel, WebRTCICETransportPolicy};
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpListener;
@@ -4085,11 +4086,30 @@ impl BaseWebRTCSink {
         // a renegotiation.
         let caps_type = current.name();
         if caps_type.starts_with("video/") {
-            const VIDEO_ALLOWED_CHANGES: &[&str] =
-                &["width", "height", "framerate", "pixel-aspect-ratio"];
+            const VIDEO_ALLOWED_CHANGES: &[&str] = &[
+                "width",
+                "height",
+                "framerate",
+                "pixel-aspect-ratio",
+                "colorimetry",
+                "chroma-site",
+            ];
 
             current.remove_fields(VIDEO_ALLOWED_CHANGES.iter().copied());
             new.remove_fields(VIDEO_ALLOWED_CHANGES.iter().copied());
+
+            // Multiview can be part of SDP, but missing field should be treated the same as mono view.
+            fn remove_multiview(s: &mut gst::Structure) {
+                let is_mono = match s.get::<VideoMultiviewMode>("multiview-mode") {
+                    Ok(mode) => mode == VideoMultiviewMode::Mono,
+                    Err(_) => true,
+                };
+                if is_mono {
+                    s.remove_fields(["multiview-mode", "multiview-flags"])
+                }
+            }
+            remove_multiview(&mut current);
+            remove_multiview(&mut new);
         } else if caps_type.starts_with("audio/") {
             // TODO
         }
