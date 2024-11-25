@@ -1511,7 +1511,7 @@ impl TranslationPadTask {
                 /* Safe unwrap, we know we have an item */
                 let OutputItem {
                     pts: item_pts,
-                    mut duration,
+                    duration,
                     content,
                 } = self.output_items.pop_front().unwrap();
 
@@ -1552,7 +1552,6 @@ impl TranslationPadTask {
                         // The buffer we are about to push was expected to start
                         // before the end of last item previously pushed to the stream.
                         // => update it to fit in stream.
-                        let delta = last_position - pts;
 
                         gst::warning!(
                             CAT,
@@ -1584,8 +1583,6 @@ impl TranslationPadTask {
                         }
 
                         pts = last_position;
-                        // FIXME if the resulting duration is zero, we might as well not push it.
-                        duration = duration.saturating_sub(delta);
 
                         {
                             let buf_mut = buf.get_mut().unwrap();
