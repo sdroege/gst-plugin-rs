@@ -472,6 +472,7 @@ impl BaseSinkImpl for QuinnWebTransportServerSink {
             },
         }
     }
+
     fn unlock(&self) -> Result<(), gst::ErrorMessage> {
         let mut canceller = self.canceller.lock().unwrap();
         canceller.abort();
