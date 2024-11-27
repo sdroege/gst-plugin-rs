@@ -65,6 +65,8 @@ class CargoAnalyzer:
         wanted_features = set()
         gst_version_major = int(self.gst_version.split('.')[0])
         gst_version_minor = int(self.gst_version.split('.')[1])
+        if gst_version_minor % 2:
+            gst_version_minor += 1
         for (name, value) in features.items():
             version = self.extract_version(name)
 
