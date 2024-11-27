@@ -10,13 +10,16 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use crate::quinnquicmeta::QuinnQuicMeta;
+use crate::quinnquicquery::*;
 use crate::utils::{
     client_endpoint, get_stats, make_socket_addr, server_endpoint, wait, Canceller,
-    QuinnQuicEndpointConfig, WaitError, CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG,
+    QuinnQuicEndpointConfig, WaitError, CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG, RUNTIME,
 };
 use crate::{common::*, utils};
+use async_channel::{unbounded, Receiver, Sender};
 use bytes::{buf, Bytes};
-use futures::future;
+use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_base::prelude::*;
 use gst_base::subclass::base_src::CreateSuccess;
@@ -27,9 +30,14 @@ use std::borrow::Borrow;
 use std::fmt::Error;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex};
+use std::thread::{spawn, Builder, JoinHandle};
 use tokio::net::lookup_host;
-use web_transport_quinn::{ReadError, RecvStream, Session, SessionError, ALPN};
+use tokio::sync::oneshot;
+use web_transport_quinn::*;
+
+const DATA_HANDLER_THREAD: &str = "data-handler";
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -39,9 +47,23 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     )
 });
 
+enum QuinnData {
+    Datagram(Bytes),
+    Stream(u64, Bytes),
+    Closed(u64),
+    Eos,
+}
+
 struct Started {
     session: Session,
-    stream: Option<RecvStream>,
+    data_handler: Option<JoinHandle<()>>,
+    // TODO: Use tokio channel
+    //
+    // We use async-channel to keep a clone of the receive channel around
+    // for use in every `create` call. tokio's UnboundedReceiver does not
+    // implement clone.
+    data_rx: Option<Receiver<QuinnData>>,
+    thread_quit: Option<oneshot::Sender<()>>,
 }
 
 #[derive(Default)]
@@ -61,18 +83,11 @@ struct Settings {
     timeout: u32,
     transport_config: QuinnQuicTransportConfig,
     url: String,
-    use_datagram: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        // Required for the WebTransport handshake
-        let transport_config = QuinnQuicTransportConfig {
-            max_concurrent_bidi_streams: 2u32.into(),
-            max_concurrent_uni_streams: 1u32.into(),
-            ..Default::default()
-        };
-
+        let transport_config = QuinnQuicTransportConfig::default();
         Settings {
             bind_address: DEFAULT_BIND_ADDR.to_string(),
             bind_port: DEFAULT_BIND_PORT,
@@ -82,7 +97,6 @@ impl Default for Settings {
             timeout: DEFAULT_TIMEOUT,
             transport_config,
             url: DEFAULT_ADDR.to_string(),
-            use_datagram: DEFAULT_USE_DATAGRAM,
         }
     }
 }
@@ -173,10 +187,10 @@ impl ObjectImpl for QuinnWebTransportClientSrc {
                     .nick("Certificate file")
                     .blurb("Path to certificate chain in single file")
                     .build(),
-		        glib::ParamSpecUInt64::builder("keep-alive-interval")
+		glib::ParamSpecUInt64::builder("keep-alive-interval")
                     .nick("QUIC connection keep alive interval in ms")
                     .blurb("Keeps QUIC connection alive by periodically pinging the server. Value set in ms, 0 disables this feature")
-		            .default_value(0)
+		    .default_value(0)
                     .readwrite()
                     .build(),
                 glib::ParamSpecUInt::builder("timeout")
@@ -189,11 +203,6 @@ impl ObjectImpl for QuinnWebTransportClientSrc {
                 glib::ParamSpecString::builder("url")
                     .nick("Server URL")
                     .blurb("URL of the HTTP/3 server to connect to.")
-                    .build(),
-                glib::ParamSpecBoolean::builder("use-datagram")
-                    .nick("Use datagram")
-                    .blurb("Use datagram for lower latency, unreliable messaging")
-                    .default_value(false)
                     .build(),
                 glib::ParamSpecBoxed::builder::<gst::Structure>("stats")
                     .nick("Connection statistics")
@@ -231,9 +240,6 @@ impl ObjectImpl for QuinnWebTransportClientSrc {
             "url" => {
                 settings.url = value.get::<String>().expect("type checked upstream");
             }
-            "use-datagram" => {
-                settings.use_datagram = value.get::<bool>().expect("type checked upstream");
-            }
             _ => unimplemented!(),
         }
     }
@@ -249,7 +255,6 @@ impl ObjectImpl for QuinnWebTransportClientSrc {
             "keep-alive-interval" => settings.keep_alive_interval.to_value(),
             "timeout" => settings.timeout.to_value(),
             "url" => settings.url.to_value(),
-            "use-datagram" => settings.use_datagram.to_value(),
             "secure-connection" => settings.secure_conn.to_value(),
             "stats" => {
                 let state = self.state.lock().unwrap();
@@ -287,10 +292,27 @@ impl BaseSrcImpl for QuinnWebTransportClientSrc {
         }
 
         match wait(&self.canceller, self.init_session(), timeout) {
-            Ok(Ok((c, s))) => {
+            Ok(Ok(sess)) => {
+                let sess_clone = sess.clone();
+
+                let (tx_quit, rx_quit): (oneshot::Sender<()>, oneshot::Receiver<()>) =
+                    oneshot::channel();
+                let (data_tx, data_rx): (Sender<QuinnData>, Receiver<QuinnData>) = unbounded();
+
+                let self_ = self.ref_counted();
+                let data_handler = Builder::new()
+                    .name(DATA_HANDLER_THREAD.to_string())
+                    .spawn(move || {
+                        self_.handle_data(sess_clone, data_tx, rx_quit);
+                        gst::debug!(CAT, imp = self_, "Data handler thread exit");
+                    })
+                    .unwrap();
+
                 *state = State::Started(Started {
-                    session: c,
-                    stream: s,
+                    session: sess,
+                    data_handler: Some(data_handler),
+                    data_rx: Some(data_rx),
+                    thread_quit: Some(tx_quit),
                 });
 
                 gst::info!(CAT, imp = self, "Started");
@@ -317,9 +339,24 @@ impl BaseSrcImpl for QuinnWebTransportClientSrc {
         let mut state = self.state.lock().unwrap();
 
         if let State::Started(ref mut state) = *state {
-            let session = &state.session;
+            if let Some(channel) = state.thread_quit.take() {
+                gst::debug!(CAT, imp = self, "Signalling threads to exit");
+                let _ = channel.send(());
+            }
 
-            session.close(CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG.as_bytes());
+            gst::debug!(CAT, imp = self, "Joining data handler thread");
+            if let Some(handle) = state.data_handler.take() {
+                match handle.join() {
+                    Ok(_) => gst::debug!(CAT, imp = self, "Joined data handler thread"),
+                    Err(e) => {
+                        gst::error!(CAT, imp = self, "Failed to join data handler thread: {e:?}")
+                    }
+                }
+            }
+
+            state
+                .session
+                .close(CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG.as_bytes());
         }
 
         *state = State::Stopped;
@@ -343,111 +380,76 @@ impl BaseSrcImpl for QuinnWebTransportClientSrc {
 }
 
 impl PushSrcImpl for QuinnWebTransportClientSrc {
-    fn create(&self, buffer: Option<&mut gst::BufferRef>) -> Result<CreateSuccess, gst::FlowError> {
-        let data = self.get();
-
-        match data {
-            Ok(bytes) => {
-                if bytes.is_empty() {
+    fn create(
+        &self,
+        _buffer: Option<&mut gst::BufferRef>,
+    ) -> Result<CreateSuccess, gst::FlowError> {
+        loop {
+            // We do not want `create` to return when a stream is closed,
+            // but, wait for one of the other streams to receive data.
+            match self.get() {
+                Ok(Some(QuinnData::Stream(stream_id, bytes))) => {
+                    break Ok(self.create_buffer(bytes, Some(stream_id)));
+                }
+                Ok(Some(QuinnData::Datagram(bytes))) => {
+                    break Ok(self.create_buffer(bytes, None));
+                }
+                Ok(Some(QuinnData::Eos)) => {
                     gst::debug!(CAT, imp = self, "End of stream");
-                    return Err(gst::FlowError::Eos);
+                    break Err(gst::FlowError::Eos);
                 }
-
-                if let Some(buffer) = buffer {
-                    if let Err(copied_bytes) = buffer.copy_from_slice(0, bytes.as_ref()) {
-                        buffer.set_size(copied_bytes);
-                    }
-                    Ok(CreateSuccess::FilledBuffer)
-                } else {
-                    Ok(CreateSuccess::NewBuffer(gst::Buffer::from_slice(bytes)))
+                Ok(None) => {
+                    gst::debug!(CAT, imp = self, "End of stream");
+                    break Err(gst::FlowError::Eos);
                 }
-            }
-            Err(None) => Err(gst::FlowError::Flushing),
-            Err(Some(err)) => {
-                gst::error!(CAT, imp = self, "Could not GET: {}", err);
-                Err(gst::FlowError::Error)
+                Err(None) => {
+                    gst::debug!(CAT, imp = self, "Flushing");
+                    break Err(gst::FlowError::Flushing);
+                }
+                Err(Some(err)) => {
+                    gst::error!(CAT, imp = self, "Could not GET: {}", err);
+                    break Err(gst::FlowError::Error);
+                }
+                Ok(Some(QuinnData::Closed(stream_id))) => {
+                    // Send custom downstream event for demuxer to close
+                    // and remove the stream.
+                    let srcpad = self.obj().static_pad("src").expect("source pad expected");
+                    close_stream(&srcpad, stream_id);
+                }
             }
         }
     }
 }
 
 impl QuinnWebTransportClientSrc {
-    async fn read_stream(
-        &self,
-        stream: &mut RecvStream,
-        length: usize,
-    ) -> Result<Bytes, WaitError> {
-        match stream.read_chunk(length, true).await {
-            Ok(Some(chunk)) => Ok(chunk.bytes),
-            Ok(None) => Ok(Bytes::new()),
-            Err(err) => match err {
-                ReadError::SessionError(conn_err) => match conn_err {
-                    SessionError::ConnectionError(ce) => {
-                        gst::info!(CAT, imp = self, "Connection error, {}", ce);
-                        Ok(Bytes::new())
-                    }
-                    SessionError::SendDatagramError(sde) => {
-                        gst::info!(CAT, imp = self, "Send datagram error, {}", sde);
-                        Ok(Bytes::new())
-                    }
-                    SessionError::WebTransportError(wte) => {
-                        gst::info!(CAT, imp = self, "WebTransport error, {}", wte);
-                        Ok(Bytes::new())
-                    }
-                },
-                ReadError::ClosedStream => {
-                    gst::info!(CAT, imp = self, "Stream closed");
-                    Ok(Bytes::new())
-                }
-                ReadError::Reset(r) => {
-                    gst::info!(CAT, imp = self, "Reset, {}", r);
-                    Ok(Bytes::new())
-                }
-                ReadError::InvalidReset(ir) => {
-                    gst::info!(CAT, imp = self, "Invalid Reset, {}", ir);
-                    Ok(Bytes::new())
-                }
-                _ => Err(WaitError::FutureError(gst::error_msg!(
-                    gst::ResourceError::Failed,
-                    ["Stream read error: {}", err]
-                ))),
-            },
+    fn create_buffer(&self, bytes: Bytes, stream_id: Option<u64>) -> CreateSuccess {
+        gst::trace!(
+            CAT,
+            imp = self,
+            "Pushing buffer of {} bytes for stream: {stream_id:?}",
+            bytes.len()
+        );
+
+        let mut buffer = gst::Buffer::from_slice(bytes);
+        {
+            let buffer = buffer.get_mut().unwrap();
+            match stream_id {
+                Some(id) => QuinnQuicMeta::add(buffer, id, false),
+                None => QuinnQuicMeta::add(buffer, 0, true),
+            };
         }
+
+        CreateSuccess::NewBuffer(buffer.to_owned())
     }
 
-    async fn read_datagram(&self, session: &Session) -> Result<Bytes, WaitError> {
-        match session.read_datagram().await {
-            Ok(bytes) => Ok(bytes),
-            Err(err) => match err {
-                SessionError::ConnectionError(ce) => {
-                    gst::info!(CAT, imp = self, "Connection error, {}", ce);
-                    Ok(Bytes::new())
-                }
-                SessionError::SendDatagramError(de) => {
-                    gst::info!(CAT, imp = self, "Error sending datagram, {}", de);
-                    Ok(Bytes::new())
-                }
-                SessionError::WebTransportError(we) => {
-                    gst::info!(CAT, imp = self, "WebTransport error, {}", we);
-                    Ok(Bytes::new())
-                }
-            },
-        }
-    }
-
-    fn get(&self) -> Result<Bytes, Option<gst::ErrorMessage>> {
+    fn get(&self) -> Result<Option<QuinnData>, Option<gst::ErrorMessage>> {
         let settings = self.settings.lock().unwrap();
         let timeout = settings.timeout;
-        let use_datagram = settings.use_datagram;
         drop(settings);
 
-        let mut state = self.state.lock().unwrap();
-
-        let (session, stream) = match *state {
-            State::Started(Started {
-                ref session,
-                ref mut stream,
-            }) => (session, stream),
+        let state = self.state.lock().unwrap();
+        let rx_chan = match *state {
+            State::Started(ref started) => started.data_rx.clone(),
             State::Stopped => {
                 return Err(Some(gst::error_msg!(
                     gst::LibraryError::Failed,
@@ -455,19 +457,14 @@ impl QuinnWebTransportClientSrc {
                 )));
             }
         };
+        drop(state);
 
-        let future = async {
-            if use_datagram {
-                self.read_datagram(session).await
-            } else {
-                let recv = stream.as_mut().unwrap();
-                self.read_stream(recv, 1024usize).await
-            }
-        };
+        let rx_chan = rx_chan.expect("Channel must be valid here");
 
-        match wait(&self.canceller, future, timeout) {
-            Ok(Ok(bytes)) => Ok(bytes),
-            Ok(Err(e)) | Err(e) => match e {
+        match wait(&self.canceller, rx_chan.recv(), timeout) {
+            Ok(Ok(bytes)) => Ok(Some(bytes)),
+            Ok(Err(_)) => Ok(None),
+            Err(e) => match e {
                 WaitError::FutureAborted => {
                     gst::warning!(CAT, imp = self, "Read from stream request aborted");
                     Err(None)
@@ -480,8 +477,8 @@ impl QuinnWebTransportClientSrc {
         }
     }
 
-    async fn init_session(&self) -> Result<(Session, Option<RecvStream>), WaitError> {
-        let (use_datagram, url, mut endpoint_config) = {
+    async fn init_session(&self) -> Result<Session, WaitError> {
+        let (url, mut endpoint_config) = {
             let settings = self.settings.lock().unwrap();
 
             let client_addr = make_socket_addr(
@@ -496,7 +493,6 @@ impl QuinnWebTransportClientSrc {
             })?;
 
             (
-                settings.use_datagram,
                 url.clone(),
                 QuinnQuicEndpointConfig {
                     server_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 4443), // This will be filled in correctly later
@@ -555,24 +551,6 @@ impl QuinnWebTransportClientSrc {
                 ))
             })?;
 
-        let stream = if !use_datagram {
-            let (_, stream) = session.accept_bi().await.map_err(|err| {
-                WaitError::FutureError(gst::error_msg!(
-                    gst::ResourceError::Failed,
-                    ["Failed to open stream: {}", err]
-                ))
-            })?;
-            Some(stream)
-        } else {
-            let max_datagram_size = session.max_datagram_size();
-            gst::info!(
-                CAT,
-                imp = self,
-                "Datagram size reported by peer: {max_datagram_size}"
-            );
-            None
-        };
-
         gst::info!(
             CAT,
             imp = self,
@@ -580,6 +558,157 @@ impl QuinnWebTransportClientSrc {
             session.remote_address()
         );
 
-        Ok((session, stream))
+        Ok(session)
+    }
+
+    fn handle_connection_error(&self, session_err: SessionError) {
+        match session_err {
+            SessionError::ConnectionError(err) => {
+                gst::error!(CAT, imp = self, "Connection error: {err:?}");
+            }
+            SessionError::WebTransportError(err) => {
+                gst::error!(CAT, imp = self, "WebTransport error: {err:?}");
+            }
+            SessionError::SendDatagramError(err) => {
+                gst::error!(CAT, imp = self, "Send Datagram error: {err:?}");
+            }
+        }
+    }
+
+    fn handle_data(
+        &self,
+        session: Session,
+        sender: Sender<QuinnData>,
+        receiver: oneshot::Receiver<()>,
+    ) {
+        // Unifies the Future return types
+        enum QuinnFuture {
+            Datagram(Bytes),
+            StreamData(RecvStream, QuinnData),
+            Stream(RecvStream, u64),
+            Stop,
+        }
+
+        let blocksize = self.obj().blocksize() as usize;
+        gst::info!(CAT, imp = self, "Using a blocksize of {blocksize} for read",);
+
+        let stream_idx = AtomicU64::new(0);
+
+        let incoming_stream = |sess: Session, sidx: u64| async move {
+            match sess.accept_uni().await {
+                Ok(recv_stream) => QuinnFuture::Stream(recv_stream, sidx),
+                Err(err) => {
+                    self.handle_connection_error(err);
+                    QuinnFuture::Stop
+                }
+            }
+        };
+
+        let datagram = |sess: Session| async move {
+            match sess.read_datagram().await {
+                Ok(bytes) => QuinnFuture::Datagram(bytes),
+                Err(err) => {
+                    self.handle_connection_error(err);
+                    QuinnFuture::Stop
+                }
+            }
+        };
+
+        let recv_stream = |mut s: RecvStream, stream_id: u64| async move {
+            match s.read_chunk(blocksize, true).await {
+                Ok(Some(chunk)) => {
+                    QuinnFuture::StreamData(s, QuinnData::Stream(stream_id, chunk.bytes))
+                }
+                Ok(None) => QuinnFuture::StreamData(s, QuinnData::Closed(stream_id)),
+                Err(err) => match err {
+                    ReadError::ClosedStream => {
+                        gst::debug!(CAT, "Stream closed: {stream_id}");
+                        QuinnFuture::StreamData(s, QuinnData::Closed(stream_id))
+                    }
+                    ReadError::SessionError(err) => {
+                        gst::error!(CAT, "Connection lost: {err:?}");
+                        QuinnFuture::StreamData(s, QuinnData::Eos)
+                    }
+                    rerr => {
+                        gst::error!(CAT, "Read error on stream {stream_id}: {rerr:?}");
+                        QuinnFuture::StreamData(s, QuinnData::Eos)
+                    }
+                },
+            }
+        };
+
+        let tx_send = |sender: Sender<QuinnData>, data: QuinnData| async move {
+            if let Err(err) = sender.send(data).await {
+                gst::error!(CAT, imp = self, "Error sending data: {err:?}");
+            }
+        };
+
+        // TODO:
+        // Decide if the ordering matters when we might have a STREAM
+        // Close followed by a Connection Close almost immediately.
+        let mut tasks: FuturesUnordered<BoxFuture<QuinnFuture>> = FuturesUnordered::new();
+
+        tasks.push(Box::pin(datagram(session.clone())));
+
+        let idx = stream_idx.load(Ordering::Relaxed);
+        stream_idx.fetch_add(1, Ordering::Relaxed);
+
+        tasks.push(Box::pin(incoming_stream(session.clone(), idx)));
+        // We only ever expect to receive on this channel once, so we
+        // need not push this in the loop below.
+        tasks.push(Box::pin(async {
+            let _ = receiver.await;
+            gst::debug!(CAT, imp = self, "Quitting");
+            QuinnFuture::Stop
+        }));
+
+        RUNTIME.block_on(async {
+            while let Some(stream) = tasks.next().await {
+                match stream {
+                    QuinnFuture::Stop => {
+                        tx_send(sender.clone(), QuinnData::Eos).await;
+                        break;
+                    }
+                    QuinnFuture::StreamData(s, data) => match data {
+                        d @ QuinnData::Stream(stream_id, _) => {
+                            gst::trace!(CAT, imp = self, "Sending data for stream: {stream_id}");
+                            tx_send(sender.clone(), d).await;
+                            tasks.push(Box::pin(recv_stream(s, stream_id)));
+                        }
+                        eos @ QuinnData::Eos => {
+                            tx_send(sender.clone(), eos).await;
+                            drop(s);
+                            break;
+                        }
+                        c @ QuinnData::Closed(stream_id) => {
+                            gst::trace!(CAT, imp = self, "Stream closed: {stream_id}");
+                            tx_send(sender.clone(), c).await;
+                            drop(s);
+                        }
+                        QuinnData::Datagram(_) => unreachable!(),
+                    },
+                    QuinnFuture::Stream(s, stream_id) => {
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "Incoming stream connection, {stream_id}, {s:?}"
+                        );
+                        tasks.push(Box::pin(recv_stream(s, stream_id)));
+
+                        let idx = stream_idx.load(Ordering::Relaxed);
+                        stream_idx.fetch_add(1, Ordering::Relaxed);
+
+                        tasks.push(Box::pin(incoming_stream(session.clone(), idx)));
+                    }
+                    QuinnFuture::Datagram(b) => {
+                        gst::trace!(CAT, imp = self, "Received {} bytes on datagram", b.len());
+                        tx_send(sender.clone(), QuinnData::Datagram(b)).await;
+                        tasks.push(Box::pin(datagram(session.clone())));
+                    }
+                }
+            }
+        });
+
+        gst::info!(CAT, imp = self, "Quit data handler thread");
     }
 }

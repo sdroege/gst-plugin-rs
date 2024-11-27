@@ -6106,18 +6106,6 @@
                         "readable": true,
                         "type": "gchararray",
                         "writable": true
-                    },
-                    "use-datagram": {
-                        "blurb": "Use datagram for lower latency, unreliable messaging",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "false",
-                        "mutable": "null",
-                        "readable": true,
-                        "type": "gboolean",
-                        "writable": true
                     }
                 },
                 "rank": "marginal"

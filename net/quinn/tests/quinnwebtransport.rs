@@ -58,6 +58,9 @@ fn send_receive(src_pipeline_props: &str, sink_pipeline_props: &str) {
 
         assert!(h1.push(make_buffer(content)) == Ok(gst::FlowSuccess::Ok));
 
+        // Wait a bit before sending Eos and shutting down the pipeline
+        thread::sleep(std::time::Duration::from_secs(2));
+
         h1.push_event(gst::event::Eos::new());
 
         drop(h1);
@@ -94,10 +97,7 @@ fn test_send_receive_without_datagram() {
 #[test]
 #[serial]
 fn test_send_receive_with_datagram() {
-    send_receive(
-        "use-datagram=true url=https://127.0.0.1:7771",
-        "use-datagram=true port=7771",
-    );
+    send_receive("url=https://127.0.0.1:7771", "use-datagram=true port=7771");
 }
 
 #[test]

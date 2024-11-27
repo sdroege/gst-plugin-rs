@@ -23,6 +23,7 @@ pub(crate) static DEFAULT_UDP_PAYLOAD_SIZE: u16 = 1452;
 pub(crate) static DEFAULT_MIN_UDP_PAYLOAD_SIZE: u16 = 1200;
 pub(crate) static DEFAULT_MAX_UDP_PAYLOAD_SIZE: u16 = 65527;
 pub(crate) static DEFAULT_DROP_BUFFER_FOR_DATAGRAM: bool = false;
+pub(crate) static DEFAULT_MAX_CONCURRENT_BI_STREAMS: VarInt = VarInt::from_u32(1);
 pub(crate) static DEFAULT_MAX_CONCURRENT_UNI_STREAMS: VarInt = VarInt::from_u32(32);
 pub(crate) static DEFAULT_USE_DATAGRAM: bool = false;
 
@@ -81,7 +82,7 @@ impl Default for QuinnQuicTransportConfig {
             max_udp_payload_size: DEFAULT_MAX_UDP_PAYLOAD_SIZE,
             min_mtu: DEFAULT_MINIMUM_MTU,
             upper_bound_mtu: DEFAULT_UPPER_BOUND_MTU,
-            max_concurrent_bidi_streams: VarInt::from(0u32),
+            max_concurrent_bidi_streams: DEFAULT_MAX_CONCURRENT_BI_STREAMS,
             max_concurrent_uni_streams: DEFAULT_MAX_CONCURRENT_UNI_STREAMS,
             send_window: (8 * STREAM_RWND).into(),
             stream_receive_window: STREAM_RWND.into(),
