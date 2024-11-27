@@ -20,7 +20,7 @@ PARSER = ArgumentParser()
 PARSER.add_argument('src_dir', type=Path)
 PARSER.add_argument('plugins', nargs='*')
 PARSER.add_argument('--features', action="store_true", help="Get list of features to activate")
-PARSER.add_argument('--gst-version', help="Get list of features to activate")
+PARSER.add_argument('--gst-version', help="GStreamer version used")
 
 
 # Map plugin name to directory name, for those that does not match.
