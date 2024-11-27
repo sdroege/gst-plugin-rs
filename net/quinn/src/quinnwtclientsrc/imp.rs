@@ -21,18 +21,17 @@ use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_base::prelude::*;
 use gst_base::subclass::base_src::CreateSuccess;
 use gst_base::subclass::prelude::*;
-use once_cell::sync::Lazy;
 use quinn::{Connection, ConnectionError, TransportConfig};
 use rustls::server;
 use std::borrow::Borrow;
 use std::fmt::Error;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 use tokio::net::lookup_host;
 use web_transport_quinn::{ReadError, RecvStream, Session, SessionError, ALPN};
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "quinnwtclientsrc",
         gst::DebugColorFlags::empty(),
@@ -106,7 +105,7 @@ impl GstObjectImpl for QuinnWebTransportClientSrc {}
 
 impl ElementImpl for QuinnWebTransportClientSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "Quinn WebTransport Client Source",
                 "Source/Network/QUIC",
@@ -118,7 +117,7 @@ impl ElementImpl for QuinnWebTransportClientSrc {
     }
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,
@@ -143,7 +142,7 @@ impl ObjectImpl for QuinnWebTransportClientSrc {
     }
 
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoxed::builder::<gst::Caps>("caps")
                     .nick("caps")
