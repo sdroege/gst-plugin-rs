@@ -335,6 +335,15 @@ impl Stream {
     fn caps_or_tag_change(&self) -> bool {
         self.next_caps.is_some() || self.tag_changed
     }
+
+    fn flush(&mut self) {
+        self.queued_gops.clear();
+        self.dts_offset = None;
+        self.current_position = gst::ClockTime::ZERO;
+        self.fragment_filled = false;
+        self.pre_queue.clear();
+        self.running_time_utc_time_mapping = None;
+    }
 }
 
 #[derive(Default)]
@@ -387,6 +396,22 @@ struct State {
 
     /// Manually requested fragment boundaries
     manual_fragment_boundaries: BTreeSet<gst::ClockTime>,
+}
+
+impl State {
+    fn flush(&mut self) {
+        for stream in &mut self.streams {
+            stream.flush();
+        }
+
+        self.current_offset = 0;
+        self.fragment_offsets.clear();
+        self.manual_fragment_boundaries.clear();
+        self.end_pts = None;
+        self.fragment_start_pts = None;
+        self.fragment_end_pts = None;
+        self.chunk_start_pts = None;
+    }
 }
 
 #[derive(Default)]
@@ -3772,23 +3797,8 @@ impl AggregatorImpl for FMP4Mux {
     }
 
     fn flush(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let mut state = self.state.lock().unwrap();
-
-        for stream in &mut state.streams {
-            stream.queued_gops.clear();
-            stream.dts_offset = None;
-            stream.current_position = gst::ClockTime::ZERO;
-            stream.fragment_filled = false;
-            stream.pre_queue.clear();
-            stream.running_time_utc_time_mapping = None;
-        }
-
-        state.current_offset = 0;
-        state.fragment_offsets.clear();
-        state.manual_fragment_boundaries.clear();
-
-        drop(state);
-
+        gst::trace!(CAT, imp = self, "Flush");
+        self.state.lock().unwrap().flush();
         self.parent_flush()
     }
 
@@ -4544,16 +4554,12 @@ impl AggregatorPadImpl for FMP4MuxPad {
         let mux = aggregator.downcast_ref::<super::FMP4Mux>().unwrap();
         let mut mux_state = mux.imp().state.lock().unwrap();
 
-        for stream in &mut mux_state.streams {
-            if stream.sinkpad == *self.obj() {
-                stream.queued_gops.clear();
-                stream.dts_offset = None;
-                stream.current_position = gst::ClockTime::ZERO;
-                stream.fragment_filled = false;
-                stream.pre_queue.clear();
-                stream.running_time_utc_time_mapping = None;
-                break;
-            }
+        if let Some(stream) = mux_state
+            .streams
+            .iter_mut()
+            .find(|s| s.sinkpad == *self.obj())
+        {
+            stream.flush();
         }
 
         drop(mux_state);
