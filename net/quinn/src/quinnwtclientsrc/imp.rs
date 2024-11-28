@@ -57,6 +57,7 @@ struct Settings {
     bind_port: u16,
     certificate_file: Option<PathBuf>,
     keep_alive_interval: u64,
+    secure_conn: bool,
     timeout: u32,
     transport_config: QuinnQuicTransportConfig,
     url: String,
@@ -77,6 +78,7 @@ impl Default for Settings {
             bind_port: DEFAULT_BIND_PORT,
             certificate_file: None,
             keep_alive_interval: 0,
+            secure_conn: DEFAULT_SECURE_CONNECTION,
             timeout: DEFAULT_TIMEOUT,
             transport_config,
             url: DEFAULT_ADDR.to_string(),
@@ -131,6 +133,29 @@ impl ElementImpl for QuinnWebTransportClientSrc {
 
         PAD_TEMPLATES.as_ref()
     }
+
+    fn change_state(
+        &self,
+        transition: gst::StateChange,
+    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
+        if transition == gst::StateChange::NullToReady {
+            let settings = self.settings.lock().unwrap();
+
+            /*
+             * Fail the state change if a secure connection was requested but
+             * no certificate path was provided.
+             */
+            if settings.secure_conn && settings.certificate_file.is_none() {
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Certificate or private key file not provided for secure connection"
+                );
+                return Err(gst::StateChangeError);
+            }
+        }
+        self.parent_change_state(transition)
+    }
 }
 
 impl ObjectImpl for QuinnWebTransportClientSrc {
@@ -175,6 +200,11 @@ impl ObjectImpl for QuinnWebTransportClientSrc {
                     .blurb("Connection statistics")
                     .read_only()
                     .build(),
+                glib::ParamSpecBoolean::builder("secure-connection")
+                    .nick("Use secure connection.")
+                    .blurb("Use certificates for QUIC connection. False: Insecure connection, True: Secure connection.")
+                    .default_value(DEFAULT_SECURE_CONNECTION)
+                    .build(),
             ]
         });
 
@@ -194,6 +224,9 @@ impl ObjectImpl for QuinnWebTransportClientSrc {
             }
             "timeout" => {
                 settings.timeout = value.get().expect("type checked upstream");
+            }
+            "secure-connection" => {
+                settings.secure_conn = value.get().expect("type checked upstream");
             }
             "url" => {
                 settings.url = value.get::<String>().expect("type checked upstream");
@@ -217,6 +250,7 @@ impl ObjectImpl for QuinnWebTransportClientSrc {
             "timeout" => settings.timeout.to_value(),
             "url" => settings.url.to_value(),
             "use-datagram" => settings.use_datagram.to_value(),
+            "secure-connection" => settings.secure_conn.to_value(),
             "stats" => {
                 let state = self.state.lock().unwrap();
                 match *state {
@@ -471,7 +505,7 @@ impl QuinnWebTransportClientSrc {
                     server_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 4443), // This will be filled in correctly later
                     server_name: DEFAULT_SERVER_NAME.to_string(),
                     client_addr: Some(client_addr),
-                    secure_conn: true,
+                    secure_conn: settings.secure_conn,
                     alpns: vec![HTTP3_ALPN.to_string()],
                     certificate_file: settings.certificate_file.clone(),
                     private_key_file: None,

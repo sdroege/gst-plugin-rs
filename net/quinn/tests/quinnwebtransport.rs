@@ -9,7 +9,7 @@
 
 use gst::prelude::*;
 use serial_test::serial;
-use std::{path::PathBuf, thread};
+use std::thread;
 
 fn init() {
     use std::sync::Once;
@@ -27,40 +27,19 @@ fn make_buffer(content: &[u8]) -> gst::Buffer {
     buf
 }
 
-fn get_certificates_paths() -> (String, String) {
-    let mut certs_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    certs_dir.push("tests");
-    certs_dir.push("certs");
-
-    (
-        certs_dir
-            .join("localhost.crt")
-            .into_os_string()
-            .into_string()
-            .unwrap(),
-        certs_dir
-            .join("localhost.key")
-            .into_os_string()
-            .into_string()
-            .unwrap(),
-    )
-}
-
 fn send_receive(src_pipeline_props: &str, sink_pipeline_props: &str) {
     init();
 
     let content = "Hello, world!\n".as_bytes();
 
-    let (cert_path, key_path) = get_certificates_paths();
-
     let src_pipeline = format!(
-        "quinnwtclientsrc {} certificate-file={} caps=text/plain",
-        src_pipeline_props, cert_path
+        "quinnwtclientsrc {} secure-connection=false",
+        src_pipeline_props
     );
     let sink_pipeline = format!(
         "quinnwtserversink {} server-name=localhost \
-            address=127.0.0.1 certificate-file={} private-key-file={}",
-        sink_pipeline_props, cert_path, key_path
+            address=127.0.0.1 secure-connection=false",
+        sink_pipeline_props
     );
 
     thread::spawn(move || {

@@ -21,7 +21,6 @@ use futures::future;
 use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_base::subclass::prelude::*;
 use quinn::{Connection, TransportConfig};
-use web_transport_quinn::{Request, SendStream, Session};
 use std::path::PathBuf;
 use std::sync::{LazyLock, Mutex};
 use web_transport_quinn::{Request, SendStream, Session};
@@ -55,6 +54,7 @@ struct Settings {
     use_datagram: bool,
     certificate_file: Option<PathBuf>,
     private_key_file: Option<PathBuf>,
+    secure_conn: bool,
     transport_config: QuinnQuicTransportConfig,
     drop_buffer_for_datagram: bool,
 }
@@ -74,6 +74,7 @@ impl Default for Settings {
             use_datagram: false,
             certificate_file: None,
             private_key_file: None,
+            secure_conn: DEFAULT_SECURE_CONNECTION,
             transport_config,
             drop_buffer_for_datagram: DEFAULT_DROP_BUFFER_FOR_DATAGRAM,
         }
@@ -133,11 +134,14 @@ impl ElementImpl for QuinnWebTransportServerSink {
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         if transition == gst::StateChange::NullToReady {
             let settings = self.settings.lock().unwrap();
+
             /*
-             * WebTransport requires a secure connection, fail the state change if
-             * no certificate paths were provided.
+             * Fail the state change if a secure connection was requested but
+             * no certificate path was provided.
              */
-            if settings.certificate_file.is_none() || settings.private_key_file.is_none() {
+            if settings.secure_conn
+                && (settings.certificate_file.is_none() || settings.private_key_file.is_none())
+            {
                 gst::error!(
                     CAT,
                     imp = self,
@@ -237,6 +241,11 @@ impl ObjectImpl for QuinnWebTransportServerSink {
                     .blurb("Drop buffers when using datagram if buffer size > max datagram size")
                     .default_value(DEFAULT_DROP_BUFFER_FOR_DATAGRAM)
                     .build(),
+                glib::ParamSpecBoolean::builder("secure-connection")
+                    .nick("Use secure connection.")
+                    .blurb("Use certificates for QUIC connection. False: Insecure connection, True: Secure connection.")
+                    .default_value(DEFAULT_SECURE_CONNECTION)
+                    .build(),
             ]
         });
 
@@ -299,6 +308,9 @@ impl ObjectImpl for QuinnWebTransportServerSink {
             "drop-buffer-for-datagram" => {
                 settings.drop_buffer_for_datagram = value.get().expect("type checked upstream");
             }
+            "secure-connection" => {
+                settings.secure_conn = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -335,6 +347,7 @@ impl ObjectImpl for QuinnWebTransportServerSink {
             "datagram-send-buffer-size" => {
                 (settings.transport_config.datagram_send_buffer_size as u64).to_value()
             }
+            "secure-connection" => settings.secure_conn.to_value(),
             "stats" => {
                 let state = self.state.lock().unwrap();
                 match *state {
@@ -564,6 +577,7 @@ impl QuinnWebTransportServerSink {
         let (use_datagram, endpoint_config) = {
             let settings = self.settings.lock().unwrap();
 
+            let secure_conn = settings.secure_conn;
             let server_addr =
                 make_socket_addr(format!("{}:{}", settings.address, settings.port).as_str())?;
 
@@ -573,7 +587,7 @@ impl QuinnWebTransportServerSink {
                     server_addr,
                     server_name: settings.server_name.clone(),
                     client_addr: None,
-                    secure_conn: true,
+                    secure_conn,
                     alpns: vec![HTTP3_ALPN.to_string()],
                     certificate_file: settings.certificate_file.clone(),
                     private_key_file: settings.private_key_file.clone(),
