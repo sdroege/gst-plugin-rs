@@ -650,6 +650,7 @@ impl Codec {
 
         gst::ElementFactory::make("capsfilter")
             .property("caps", &caps)
+            .property_from_str("caps-change-mode", "delayed")
             .build()
             .with_context(|| "Creating capsfilter caps")
     }
