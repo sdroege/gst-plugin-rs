@@ -759,6 +759,14 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
                 enc.set_property("b-adapt", false);
                 enc.set_property("vbv-buf-capacity", 120u32);
             }
+            "openh264enc" => {
+                enc.set_property("bitrate", start_bitrate);
+                enc.set_property("gop-size", 2560u32);
+                enc.set_property("rate-control", 1);
+                enc.set_property("complexity", 0);
+                enc.set_property("background-detection", false);
+                enc.set_property("scene-change-detection", false);
+            }
             "nvh264enc" => {
                 enc.set_property("bitrate", start_bitrate / 1000);
                 enc.set_property("gop-size", 2560i32);
@@ -1029,6 +1037,7 @@ impl VideoEncoder {
             "vp8enc"
                 | "vp9enc"
                 | "x264enc"
+                | "openh264enc"
                 | "nvh264enc"
                 | "vaapih264enc"
                 | "vaapivp8enc"
@@ -1050,9 +1059,8 @@ impl VideoEncoder {
             "av1enc" => (self.element.property::<u32>("target-bitrate") * 1000) as i32,
             "x264enc" | "nvh264enc" | "vaapih264enc" | "vaapivp8enc" | "qsvh264enc"
             | "nvav1enc" | "vpuenc_h264" => (self.element.property::<u32>("bitrate") * 1000) as i32,
-            "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" | "rav1enc" | "nvv4l2av1enc" => {
-                (self.element.property::<u32>("bitrate")) as i32
-            }
+            "openh264enc" | "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" | "rav1enc"
+            | "nvv4l2av1enc" => (self.element.property::<u32>("bitrate")) as i32,
             _ => return Err(WebRTCSinkError::BitrateNotSupported),
         };
 
@@ -1088,7 +1096,7 @@ impl VideoEncoder {
                 self.element
                     .set_property("bitrate", (bitrate / 1000) as u32);
             }
-            "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" | "nvv4l2av1enc" => {
+            "openh264enc" | "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" | "nvv4l2av1enc" => {
                 self.element.set_property("bitrate", bitrate as u32)
             }
             "rav1enc" => self.element.set_property("bitrate", bitrate),
