@@ -17,7 +17,7 @@ use std::mem;
 use std::sync::Mutex;
 
 use crate::fmp4mux::obu::read_seq_header_obu_bytes;
-use crate::fmp4mux::ImageOrientation;
+use crate::fmp4mux::TransformMatrix;
 use once_cell::sync::Lazy;
 
 use super::boxes;
@@ -88,7 +88,7 @@ fn utc_time_to_running_time(
         .and_then(|res| res.positive())
 }
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+pub static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "fmp4mux",
         gst::DebugColorFlags::empty(),
@@ -228,6 +228,12 @@ struct Stream {
     running_time_utc_time_mapping: Option<(gst::Signed<gst::ClockTime>, gst::ClockTime)>,
 
     extra_header_data: Option<Vec<u8>>,
+
+    /// Language code from tags
+    language_code: Option<[u8; 3]>,
+    /// Orientation from tags, stream orientation takes precedence over global orientation
+    global_orientation: &'static TransformMatrix,
+    stream_orientation: Option<&'static TransformMatrix>,
 }
 
 impl Stream {
@@ -238,6 +244,22 @@ impl Stream {
         self.fragment_filled = false;
         self.pre_queue.clear();
         self.running_time_utc_time_mapping = None;
+    }
+
+    fn orientation(&self) -> &'static TransformMatrix {
+        self.stream_orientation.unwrap_or(self.global_orientation)
+    }
+
+    fn parse_language_code(lang: &str) -> Option<[u8; 3]> {
+        if lang.len() == 3 && lang.chars().all(|c| c.is_ascii_lowercase()) {
+            let mut language_code: [u8; 3] = [0; 3];
+            for (out, c) in Iterator::zip(language_code.iter_mut(), lang.chars()) {
+                *out = c as u8;
+            }
+            Some(language_code)
+        } else {
+            None
+        }
     }
 }
 
@@ -265,10 +287,6 @@ struct State {
     end_pts: Option<gst::ClockTime>,
     /// Start DTS of the whole stream
     start_dts: Option<gst::ClockTime>,
-    /// Language code from tags
-    language_code: Option<[u8; 3]>,
-    /// Orientation from tags
-    orientation: Option<ImageOrientation>,
 
     /// Start PTS of the current fragment
     fragment_start_pts: Option<gst::ClockTime>,
@@ -295,6 +313,9 @@ impl State {
         self.end_pts = None;
         self.fragment_start_pts = None;
         self.chunk_start_pts = None;
+    }
+    fn mut_stream_from_pad(&mut self, pad: &gst_base::AggregatorPad) -> Option<&mut Stream> {
+        self.streams.iter_mut().find(|s| *pad == s.sinkpad)
     }
 }
 
@@ -2657,6 +2678,38 @@ impl FMP4Mux {
                 }
             };
 
+            // Check if language or orientation tags have already been
+            // received
+            let mut stream_orientation = Default::default();
+            let mut global_orientation = Default::default();
+            let mut language_code = None;
+            pad.sticky_events_foreach(|ev| {
+                if let gst::EventView::Tag(ev) = ev.view() {
+                    let tag = ev.tag();
+                    if let Some(l) = tag.get::<gst::tags::LanguageCode>() {
+                        // There is no header field for global
+                        // language code, maybe because it does not
+                        // really make sense, global language tags are
+                        // considered to be stream local
+                        if tag.scope() == gst::TagScope::Global {
+                            gst::info!(
+                                CAT,
+                                obj = pad,
+                                "Language tags scoped 'global' are considered stream tags",
+                            );
+                        }
+                        language_code = Stream::parse_language_code(l.get());
+                    } else if tag.get::<gst::tags::ImageOrientation>().is_some() {
+                        if tag.scope() == gst::TagScope::Global {
+                            global_orientation = TransformMatrix::from_tag(self, ev);
+                        } else {
+                            stream_orientation = Some(TransformMatrix::from_tag(self, ev));
+                        }
+                    }
+                }
+                std::ops::ControlFlow::Continue(gst::EventForeachAction::Keep)
+            });
+
             gst::info!(CAT, obj = pad, "Configuring caps {:?}", caps);
 
             let s = caps.structure(0).unwrap();
@@ -2737,6 +2790,9 @@ impl FMP4Mux {
                 current_position: gst::ClockTime::ZERO,
                 running_time_utc_time_mapping: None,
                 extra_header_data: None,
+                language_code,
+                global_orientation,
+                stream_orientation,
             });
         }
 
@@ -2805,6 +2861,8 @@ impl FMP4Mux {
                 delta_frames: s.delta_frames,
                 caps: s.caps.clone(),
                 extra_header_data: s.extra_header_data.clone(),
+                language_code: s.language_code,
+                orientation: s.orientation(),
             })
             .collect::<Vec<_>>();
 
@@ -2815,8 +2873,6 @@ impl FMP4Mux {
             streams,
             write_mehd: settings.write_mehd,
             duration: if at_eos { duration } else { None },
-            language_code: state.language_code,
-            orientation: state.orientation,
             start_utc_time: if variant == super::Variant::ONVIF {
                 state
                     .earliest_pts
@@ -3251,7 +3307,8 @@ impl AggregatorImpl for FMP4Mux {
                 self.parent_sink_event(aggregator_pad, event)
             }
             EventView::Tag(ev) => {
-                if let Some(tag_value) = ev.tag().get::<gst::tags::LanguageCode>() {
+                let tag = ev.tag();
+                if let Some(tag_value) = tag.get::<gst::tags::LanguageCode>() {
                     let lang = tag_value.get();
                     gst::trace!(
                         CAT,
@@ -3261,16 +3318,23 @@ impl AggregatorImpl for FMP4Mux {
                     );
 
                     // Language as ISO-639-2/T
-                    if lang.len() == 3 && lang.chars().all(|c| c.is_ascii_lowercase()) {
+                    if let Some(language_code) = Stream::parse_language_code(lang) {
                         let mut state = self.state.lock().unwrap();
 
-                        let mut language_code: [u8; 3] = [0; 3];
-                        for (out, c) in Iterator::zip(language_code.iter_mut(), lang.chars()) {
-                            *out = c as u8;
+                        if !state.streams.is_empty() {
+                            if tag.scope() == gst::TagScope::Global {
+                                gst::info!(
+                                    CAT,
+                                    imp = self,
+                                    "Language tags scoped 'global' are considered stream tags",
+                                );
+                            }
+
+                            let stream = state.mut_stream_from_pad(aggregator_pad).unwrap();
+                            stream.language_code = Some(language_code);
                         }
-                        state.language_code = Some(language_code);
                     }
-                } else if let Some(tag_value) = ev.tag().get::<gst::tags::ImageOrientation>() {
+                } else if let Some(tag_value) = tag.get::<gst::tags::ImageOrientation>() {
                     let orientation = tag_value.get();
                     gst::trace!(
                         CAT,
@@ -3280,17 +3344,14 @@ impl AggregatorImpl for FMP4Mux {
                     );
 
                     let mut state = self.state.lock().unwrap();
-                    state.orientation = match orientation {
-                        "rotate-0" => Some(ImageOrientation::Rotate0),
-                        "rotate-90" => Some(ImageOrientation::Rotate90),
-                        "rotate-180" => Some(ImageOrientation::Rotate180),
-                        "rotate-270" => Some(ImageOrientation::Rotate270),
-                        // TODO:
-                        // "flip-rotate-0" => Some(ImageOrientation::FlipRotate0),
-                        // "flip-rotate-90" => Some(ImageOrientation::FlipRotate90),
-                        // "flip-rotate-180" => Some(ImageOrientation::FlipRotate180),
-                        // "flip-rotate-270" => Some(ImageOrientation::FlipRotate270),
-                        _ => None,
+
+                    if !state.streams.is_empty() {
+                        let stream = state.mut_stream_from_pad(aggregator_pad).unwrap();
+                        if tag.scope() == gst::TagScope::Stream {
+                            stream.stream_orientation = Some(TransformMatrix::from_tag(self, ev));
+                        } else {
+                            stream.global_orientation = TransformMatrix::from_tag(self, ev);
+                        }
                     }
                 }
 
@@ -4022,10 +4083,8 @@ impl AggregatorPadImpl for FMP4MuxPad {
         let mux = aggregator.downcast_ref::<super::FMP4Mux>().unwrap();
         let mut mux_state = mux.imp().state.lock().unwrap();
 
-        if let Some(stream) = mux_state
-            .streams
-            .iter_mut()
-            .find(|s| s.sinkpad == *self.obj())
+        if let Some(stream) =
+            mux_state.mut_stream_from_pad(self.obj().upcast_ref::<gst_base::AggregatorPad>())
         {
             stream.flush();
         }

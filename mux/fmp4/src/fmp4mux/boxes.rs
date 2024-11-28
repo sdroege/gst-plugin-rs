@@ -11,7 +11,8 @@ use gst::prelude::*;
 use anyhow::{anyhow, bail, Context, Error};
 use std::convert::TryFrom;
 
-use super::{Buffer, ImageOrientation, IDENTITY_MATRIX};
+use super::Buffer;
+use super::IDENTITY_MATRIX;
 
 fn write_box<T, F: FnOnce(&mut Vec<u8>) -> Result<T, Error>>(
     vec: &mut Vec<u8>,
@@ -521,21 +522,7 @@ fn write_mvhd(
     v.extend([0u8; 2 + 2 * 4]);
 
     // Matrix
-    v.extend(
-        [
-            (1u32 << 16).to_be_bytes(),
-            0u32.to_be_bytes(),
-            0u32.to_be_bytes(),
-            0u32.to_be_bytes(),
-            (1u32 << 16).to_be_bytes(),
-            0u32.to_be_bytes(),
-            0u32.to_be_bytes(),
-            0u32.to_be_bytes(),
-            (16384u32 << 16).to_be_bytes(),
-        ]
-        .into_iter()
-        .flatten(),
-    );
+    v.extend(IDENTITY_MATRIX.iter().flatten());
 
     // Pre defined
     v.extend([0u8; 6 * 4]);
@@ -568,7 +555,7 @@ fn write_trak(
         b"tkhd",
         FULL_BOX_VERSION_1,
         TKHD_FLAGS_TRACK_ENABLED | TKHD_FLAGS_TRACK_IN_MOVIE | TKHD_FLAGS_TRACK_IN_PREVIEW,
-        |v| write_tkhd(v, cfg, idx, stream, creation_time),
+        |v| write_tkhd(v, idx, stream, creation_time),
     )?;
 
     // TODO: write edts if necessary: for audio tracks to remove initialization samples
@@ -585,7 +572,6 @@ fn write_trak(
 
 fn write_tkhd(
     v: &mut Vec<u8>,
-    cfg: &super::HeaderConfiguration,
     idx: usize,
     stream: &super::HeaderStream,
     creation_time: u64,
@@ -620,16 +606,8 @@ fn write_tkhd(
     // Reserved
     v.extend([0u8; 2]);
 
-    // Matrix
-    let matrix = match s.name().as_str() {
-        x if x.starts_with("video/") || x.starts_with("image/") => cfg
-            .orientation
-            .unwrap_or(ImageOrientation::Rotate0)
-            .transform_matrix(),
-        _ => &IDENTITY_MATRIX,
-    };
-
-    v.extend(matrix.iter().flatten());
+    // Per stream orientation matrix.
+    v.extend(stream.orientation.iter().flatten());
 
     // Width/height
     match s.name().as_str() {
@@ -667,7 +645,7 @@ fn write_mdia(
     creation_time: u64,
 ) -> Result<(), Error> {
     write_full_box(v, b"mdhd", FULL_BOX_VERSION_1, FULL_BOX_FLAGS_NONE, |v| {
-        write_mdhd(v, cfg, stream, creation_time)
+        write_mdhd(v, stream, creation_time)
     })?;
     write_full_box(v, b"hdlr", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
         write_hdlr(v, cfg, stream)
@@ -710,7 +688,6 @@ fn language_code(lang: impl std::borrow::Borrow<[u8; 3]>) -> u16 {
 
 fn write_mdhd(
     v: &mut Vec<u8>,
-    cfg: &super::HeaderConfiguration,
     stream: &super::HeaderStream,
     creation_time: u64,
 ) -> Result<(), Error> {
@@ -724,7 +701,7 @@ fn write_mdhd(
     v.extend(0u64.to_be_bytes());
 
     // Language as ISO-639-2/T
-    if let Some(lang) = cfg.language_code {
+    if let Some(lang) = stream.language_code {
         v.extend(language_code(lang).to_be_bytes());
     } else {
         v.extend(language_code(b"und").to_be_bytes());
