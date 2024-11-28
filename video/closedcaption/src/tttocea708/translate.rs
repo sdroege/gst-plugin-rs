@@ -260,8 +260,6 @@ impl TextToCea708 {
     fn cc_data(&mut self) {
         self.check_erase_display();
 
-        self.last_frame_no += 1;
-
         let seq_no = self.sequence_no;
         self.sequence_no = (self.sequence_no + 1) & 0x3;
 
@@ -300,6 +298,8 @@ impl TextToCea708 {
             packet: cc_data[2..].to_vec(),
             frame_no: self.last_frame_no,
         });
+
+        self.last_frame_no += 1;
     }
 
     fn pad(&mut self, frame_no: u64) {
