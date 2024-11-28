@@ -316,6 +316,12 @@ impl AggregatorImpl for Cea708Mux {
                             }
                         }
                     }
+
+                    if let Some(cea608) = pad_state.ccp_parser.cea608() {
+                        for pair in cea608 {
+                            state.writer.push_cea608(*pair);
+                        }
+                    }
                 }
                 _ => (),
             }
@@ -643,12 +649,24 @@ impl ObjectSubclass for Cea708Mux {
     type ParentType = gst_base::Aggregator;
 }
 
-#[derive(Default)]
 struct PadState {
     format: CeaFormat,
     ccp_parser: CCDataParser,
     pending_services: HashMap<u8, VecDeque<cea708_types::tables::Code>>,
     pending_buffer: Option<gst::Buffer>,
+}
+
+impl Default for PadState {
+    fn default() -> Self {
+        let mut ccp_parser = CCDataParser::default();
+        ccp_parser.handle_cea608();
+        Self {
+            format: CeaFormat::default(),
+            ccp_parser,
+            pending_services: HashMap::default(),
+            pending_buffer: None,
+        }
+    }
 }
 
 #[derive(Default)]
