@@ -418,6 +418,8 @@ impl AggregatorImpl for Cea708Mux {
         let format = state.out_format;
         let fps = state.fps;
         *state = State::default();
+        state.writer.set_output_padding(true);
+        state.writer.set_output_cea608_padding(true);
         state.out_format = format;
         state.fps = fps;
         state.n_frames = 0;
@@ -578,6 +580,8 @@ impl ElementImpl for Cea708Mux {
             gst::StateChange::ReadyToPaused => {
                 let mut state = self.state.lock().unwrap();
                 *state = State::default();
+                state.writer.set_output_padding(true);
+                state.writer.set_output_cea608_padding(true);
             }
             _ => (),
         }
@@ -588,6 +592,8 @@ impl ElementImpl for Cea708Mux {
             gst::StateChange::PausedToReady => {
                 let mut state = self.state.lock().unwrap();
                 *state = State::default();
+                state.writer.set_output_padding(true);
+                state.writer.set_output_cea608_padding(true);
             }
             _ => (),
         }
