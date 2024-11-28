@@ -74,77 +74,73 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     Ok(())
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub(crate) enum ImageOrientation {
-    Rotate0,
-    Rotate90,
-    Rotate180,
-    Rotate270,
-    // TODO:
-    // FlipRotate0,
-    // FlipRotate90,
-    // FlipRotate180,
-    // FlipRotate270,
+type TransformMatrix = [[u8; 4]; 9];
+macro_rules! tm {
+    ( $($v:expr),* ) => {
+        [
+            $(
+                (($v << 16) as i32).to_be_bytes(),
+            )*
+        ]
+    }
 }
 
-type TransformMatrix = [[u8; 4]; 9];
+// Point (p, q, 1) -> (p', q')
+// Matrix (a, b, u,
+//         c, d, v,
+//         x, y, w)
+// Where a, b, c, d, x, y are FP 16.16 and u, v, w are FP 2.30
+// m = ap + cq + x
+// n = bp + dq + y
+// z = up + vq + w
+// p' = m/z
+// q' = n/z
+#[rustfmt::skip]
+const IDENTITY_MATRIX: TransformMatrix = tm!(1, 0, 0,
+                                             0, 1, 0,
+                                             0, 0, (1 << 14));
+#[rustfmt::skip]
+const FLIP_VERT_MATRIX: TransformMatrix = tm!(1,  0, 0,
+                                              0, -1, 0,
+                                              0,  0, (1 << 14));
+#[rustfmt::skip]
+const FLIP_HORZ_MATRIX: TransformMatrix = tm!(-1, 0, 0,
+                                               0, 1, 0,
+                                               0, 0, (1 << 14));
+#[rustfmt::skip]
+const ROTATE_90R_MATRIX: TransformMatrix = tm!( 0, 1, 0,
+                                               -1, 0, 0,
+                                                0, 0, (1 << 14));
+#[rustfmt::skip]
+const ROTATE_180_MATRIX: TransformMatrix = tm!(-1,  0, 0,
+                                                0, -1, 0,
+                                                0,  0, (1 << 14));
+#[rustfmt::skip]
+const ROTATE_90L_MATRIX: TransformMatrix = tm!(0, -1, 0,
+                                               1,  0, 0,
+                                               0,  0, (1 << 14));
+#[rustfmt::skip]
+const FLIP_ROTATE_90R_MATRIX: TransformMatrix = tm!( 0, -1, 0,
+                                                    -1,  0, 0,
+                                                     0,  0, (1 << 14));
+#[rustfmt::skip]
+const FLIP_ROTATE_90L_MATRIX: TransformMatrix = tm!(0, 1, 0,
+                                                    1, 0, 0,
+                                                    0, 0, (1 << 14));
 
-const IDENTITY_MATRIX: TransformMatrix = [
-    (1u32 << 16).to_be_bytes(),
-    0u32.to_be_bytes(),
-    0u32.to_be_bytes(),
-    0u32.to_be_bytes(),
-    (1u32 << 16).to_be_bytes(),
-    0u32.to_be_bytes(),
-    0u32.to_be_bytes(),
-    0u32.to_be_bytes(),
-    (1u32 << 30).to_be_bytes(),
-];
-
-const ROTATE_90_MATRIX: TransformMatrix = [
-    0u32.to_be_bytes(),
-    (1u32 << 16).to_be_bytes(),
-    0u32.to_be_bytes(),
-    (-1i32 << 16).to_be_bytes(),
-    0u32.to_be_bytes(),
-    0u32.to_be_bytes(),
-    0u32.to_be_bytes(),
-    0u32.to_be_bytes(),
-    (1u32 << 30).to_be_bytes(),
-];
-
-const ROTATE_180_MATRIX: TransformMatrix = [
-    (-1i32 << 16).to_be_bytes(),
-    0u32.to_be_bytes(),
-    0u32.to_be_bytes(),
-    0u32.to_be_bytes(),
-    (-1i32 << 16).to_be_bytes(),
-    0u32.to_be_bytes(),
-    0u32.to_be_bytes(),
-    0u32.to_be_bytes(),
-    (1u32 << 30).to_be_bytes(),
-];
-
-const ROTATE_270_MATRIX: TransformMatrix = [
-    0u32.to_be_bytes(),
-    (-1i32 << 16).to_be_bytes(),
-    0u32.to_be_bytes(),
-    (1u32 << 16).to_be_bytes(),
-    0u32.to_be_bytes(),
-    0u32.to_be_bytes(),
-    0u32.to_be_bytes(),
-    0u32.to_be_bytes(),
-    (1u32 << 30).to_be_bytes(),
-];
-
-impl ImageOrientation {
-    pub(crate) fn transform_matrix(&self) -> &'static TransformMatrix {
-        match self {
-            ImageOrientation::Rotate0 => &IDENTITY_MATRIX,
-            ImageOrientation::Rotate90 => &ROTATE_90_MATRIX,
-            ImageOrientation::Rotate180 => &ROTATE_180_MATRIX,
-            ImageOrientation::Rotate270 => &ROTATE_270_MATRIX,
-        }
+pub(crate) fn transform_matrix(
+    orientation: &gst_video::VideoOrientationMethod,
+) -> &'static TransformMatrix {
+    match orientation {
+        gst_video::VideoOrientationMethod::Identity => &IDENTITY_MATRIX,
+        gst_video::VideoOrientationMethod::_90r => &ROTATE_90R_MATRIX,
+        gst_video::VideoOrientationMethod::_180 => &ROTATE_180_MATRIX,
+        gst_video::VideoOrientationMethod::_90l => &ROTATE_90L_MATRIX,
+        gst_video::VideoOrientationMethod::Horiz => &FLIP_HORZ_MATRIX,
+        gst_video::VideoOrientationMethod::Vert => &FLIP_VERT_MATRIX,
+        gst_video::VideoOrientationMethod::UrLl => &FLIP_ROTATE_90R_MATRIX,
+        gst_video::VideoOrientationMethod::UlLr => &FLIP_ROTATE_90L_MATRIX,
+        _ => &IDENTITY_MATRIX,
     }
 }
 
@@ -162,8 +158,7 @@ pub(crate) struct HeaderConfiguration {
 
     write_mehd: bool,
     duration: Option<gst::ClockTime>,
-    language_code: Option<[u8; 3]>,
-    orientation: Option<ImageOrientation>,
+    orientation: gst_video::VideoOrientationMethod,
 
     /// Start UTC time in ONVIF mode.
     /// Since Jan 1 1601 in 100ns units.
@@ -192,6 +187,10 @@ pub(crate) struct HeaderStream {
 
     // More data to be included in the fragmented stream header
     extra_header_data: Option<Vec<u8>>,
+
+    // Tags meta for audio language and video orientation
+    language_code: Option<[u8; 3]>,
+    orientation: gst_video::VideoOrientationMethod,
 
     /// Edit list clipping information
     elst_infos: Vec<ElstInfo>,
