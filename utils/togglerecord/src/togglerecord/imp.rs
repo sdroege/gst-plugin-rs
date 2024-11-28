@@ -41,7 +41,7 @@ impl Default for Settings {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Stream {
     sinkpad: gst::Pad,
     srcpad: gst::Pad,
@@ -66,6 +66,7 @@ impl Stream {
     }
 }
 
+#[derive(Debug)]
 struct StreamState {
     in_segment: gst::FormattedSegment<gst::ClockTime>,
     out_segment: gst::FormattedSegment<gst::ClockTime>,
