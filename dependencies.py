@@ -63,6 +63,7 @@ class CargoAnalyzer:
 
     def extract_features(self, cargo_data):
         features = cargo_data['features']
+        print(f'Available features: {features!r}', file=sys.stderr)
         wanted_features = set()
         gst_version_major = int(self.gst_version.split('.')[0])
         gst_version_minor = int(self.gst_version.split('.')[1])
@@ -77,11 +78,13 @@ class CargoAnalyzer:
 
             if gst_version_major < majver or gst_version_minor < minver:
                 continue
+            wanted_features |= set([name])
             wanted_features |= set(value)
             if name.startswith("gst"):
                 # Required for some reason for rswebrtc which has a specific feature
                 wanted_features |= {f"{cargo_data['package']['name']}/{name}"}
 
+        print(f'Enabling features: {wanted_features!r}', file=sys.stderr)
         return wanted_features
 
     def run(self):
