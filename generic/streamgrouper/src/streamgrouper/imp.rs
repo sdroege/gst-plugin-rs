@@ -65,10 +65,8 @@ impl State {
         use std::collections::btree_map::Entry::{Occupied, Vacant};
         match self.streams_by_number.entry(number) {
             Occupied(_) => panic!("Stream {number} already exists!"),
-            Vacant(entry) => {
-                return entry.insert(stream);
-            }
-        };
+            Vacant(entry) => entry.insert(stream),
+        }
     }
 
     fn remove_stream_or_panic(&mut self, number: usize) {

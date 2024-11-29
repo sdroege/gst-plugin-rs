@@ -151,7 +151,7 @@ impl FromByteStream for RestartHeader {
     }
 }
 
-impl<'a> ToByteStreamWith<'a> for RestartHeader {
+impl ToByteStreamWith<'_> for RestartHeader {
     type Error = anyhow::Error;
 
     type Context = MainHeader;
@@ -216,7 +216,7 @@ impl Default for QuantizationTableHeader {
     }
 }
 
-impl<'a> FromByteStreamWith<'a> for QuantizationTableHeader {
+impl FromByteStreamWith<'_> for QuantizationTableHeader {
     type Error = anyhow::Error;
     type Context = MainHeader;
 
@@ -267,7 +267,7 @@ impl<'a> FromByteStreamWith<'a> for QuantizationTableHeader {
     }
 }
 
-impl<'a> ToByteStreamWith<'a> for QuantizationTableHeader {
+impl ToByteStreamWith<'_> for QuantizationTableHeader {
     type Error = anyhow::Error;
 
     type Context = MainHeader;

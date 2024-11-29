@@ -70,7 +70,7 @@ mod imp {
     pub(super) fn ndi_sink_audio_meta_api_get_type() -> glib::Type {
         static TYPE: LazyLock<glib::Type> = LazyLock::new(|| unsafe {
             let t = from_glib(gst::ffi::gst_meta_api_type_register(
-                b"GstNdiSinkAudioMetaAPI\0".as_ptr() as *const _,
+                c"GstNdiSinkAudioMetaAPI".as_ptr() as *const _,
                 [ptr::null::<std::os::raw::c_char>()].as_ptr() as *mut *const _,
             ));
 
@@ -129,7 +129,7 @@ mod imp {
             MetaInfo(
                 ptr::NonNull::new(gst::ffi::gst_meta_register(
                     ndi_sink_audio_meta_api_get_type().into_glib(),
-                    b"GstNdiSinkAudioMeta\0".as_ptr() as *const _,
+                    c"GstNdiSinkAudioMeta".as_ptr() as *const _,
                     mem::size_of::<NdiSinkAudioMeta>(),
                     Some(ndi_sink_audio_meta_init),
                     Some(ndi_sink_audio_meta_free),

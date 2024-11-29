@@ -95,7 +95,7 @@ mod imp {
     pub(super) fn ndi_src_meta_api_get_type() -> glib::Type {
         static TYPE: LazyLock<glib::Type> = LazyLock::new(|| unsafe {
             let t = from_glib(gst::ffi::gst_meta_api_type_register(
-                b"GstNdiSrcMetaAPI\0".as_ptr() as *const _,
+                c"GstNdiSrcMetaAPI".as_ptr() as *const _,
                 [ptr::null::<std::os::raw::c_char>()].as_ptr() as *mut *const _,
             ));
 
@@ -150,7 +150,7 @@ mod imp {
             MetaInfo(
                 ptr::NonNull::new(gst::ffi::gst_meta_register(
                     ndi_src_meta_api_get_type().into_glib(),
-                    b"GstNdiSrcMeta\0".as_ptr() as *const _,
+                    c"GstNdiSrcMeta".as_ptr() as *const _,
                     mem::size_of::<NdiSrcMeta>(),
                     Some(ndi_src_meta_init),
                     Some(ndi_src_meta_free),

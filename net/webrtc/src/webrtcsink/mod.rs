@@ -18,14 +18,12 @@ use crate::signaller::Signallable;
  * See the [documentation of the plugin](plugin-rswebrtc) for more information
  * on features and usage.
  */
-
 /**
  * GstBaseWebRTCSink:
  * @title: Base class for WebRTC producers
  *
  * Base class for WebRTC sinks to implement and provide their own protocol for.
  */
-
 /**
  * GstRSWebRTCSignallableIface:
  * @title: Interface for WebRTC signalling protocols

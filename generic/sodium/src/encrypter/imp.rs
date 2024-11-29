@@ -303,7 +303,7 @@ impl Encrypter {
                 };
 
                 // calculate the number of chunks that exist in the stream
-                let total_chunks = (size + state.block_size as u64 - 1) / state.block_size as u64;
+                let total_chunks = size.div_ceil(state.block_size as u64);
                 // add the MAC of each block
                 let size = size + total_chunks * box_::MACBYTES as u64;
 

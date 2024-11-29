@@ -1324,10 +1324,10 @@ impl FMP4Mux {
         let fragment_end_pts = fragment_start_pts + settings.fragment_duration;
 
         // If we have a manual fragment boundary set then use that
-        return *manual_fragment_boundaries
+        *manual_fragment_boundaries
             .range((Excluded(fragment_start_pts), Excluded(fragment_end_pts)))
             .next()
-            .unwrap_or(&fragment_end_pts);
+            .unwrap_or(&fragment_end_pts)
     }
 
     /// Check if the stream is filled enough for the current chunk / fragment.

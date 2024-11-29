@@ -240,7 +240,7 @@ fn generic_fragmented() {
     const BUFFER_SIZE: usize = 2000;
     const MTU: usize = 1400;
     // Enough overhead in the MTU to use this approximation:
-    const FRAGMENTS_PER_BUFFER: usize = (BUFFER_SIZE + MTU - 1) / MTU;
+    const FRAGMENTS_PER_BUFFER: usize = BUFFER_SIZE.div_ceil(MTU);
     const RTP_CLOCK_RATE: u64 = 90_000;
     const LAST_FRAGMENT: usize = FRAGMENTS_PER_BUFFER - 1;
     const FRAME_RATE: u64 = 30;
@@ -357,7 +357,7 @@ fn generic_variable_au_size() {
     const AU_NB: usize = 5;
     const SMALL_AU_SIZE: usize = 500;
     const LARGE_AU_SIZE: usize = 2000;
-    const FRAGMENTS_PER_LARGE_BUFFER: usize = (LARGE_AU_SIZE + MTU - 1) / MTU;
+    const FRAGMENTS_PER_LARGE_BUFFER: usize = LARGE_AU_SIZE.div_ceil(MTU);
     const LAST_FRAGMENT: usize = FRAGMENTS_PER_LARGE_BUFFER - 1;
     const RTP_CLOCK_RATE: u64 = 90_000;
     const FRAME_RATE: u64 = 30;

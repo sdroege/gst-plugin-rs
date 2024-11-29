@@ -81,7 +81,7 @@ mod imp {
 
         *TYPE.get_or_init(|| unsafe {
             let t = glib::Type::from_glib(gst::ffi::gst_meta_api_type_register(
-                b"QuinnQuicMetaAPI\0".as_ptr() as *const _,
+                c"QuinnQuicMetaAPI".as_ptr() as *const _,
                 [ptr::null::<std::os::raw::c_int>()].as_ptr() as *mut *const _,
             ));
 
@@ -147,7 +147,7 @@ mod imp {
                 MetaInfo(
                     ptr::NonNull::new(gst::ffi::gst_meta_register(
                         custom_meta_api_get_type().into_glib(),
-                        b"QuinnQuicMeta\0".as_ptr() as *const _,
+                        c"QuinnQuicMeta".as_ptr() as *const _,
                         mem::size_of::<QuinnQuicMeta>(),
                         Some(custom_meta_init),
                         Some(custom_meta_free),

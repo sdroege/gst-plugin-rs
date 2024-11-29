@@ -530,7 +530,7 @@ impl RtpAc3Pay {
                     };
 
                     // The number fragments (and therefore packets) that make up the current frame
-                    let n = (first.header.frame_len + max_payload_size - 1) / max_payload_size;
+                    let n = first.header.frame_len.div_ceil(max_payload_size);
 
                     let ac3_specific_header = ((frame_type << 8) | (n as u16)).to_be_bytes();
 

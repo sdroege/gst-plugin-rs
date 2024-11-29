@@ -47,8 +47,8 @@ struct Info {
     frame_count: u32,
 }
 
-impl<'a> Decoder<'_> {
-    fn from_data(data: &'a [u8]) -> Option<Self> {
+impl Decoder<'_> {
+    fn from_data(data: &[u8]) -> Option<Self> {
         unsafe {
             let mut options = std::mem::MaybeUninit::zeroed();
             if ffi::WebPAnimDecoderOptionsInit(options.as_mut_ptr()) == 0 {
