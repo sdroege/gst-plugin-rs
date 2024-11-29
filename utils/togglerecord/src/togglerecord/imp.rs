@@ -131,7 +131,8 @@ enum RecordingState {
 
 #[derive(Debug)]
 struct State {
-    other_streams: (Vec<Stream>, u32),
+    other_streams: Vec<Stream>,
+    next_pad_id: u32,
     pads: HashMap<gst::Pad, Stream>,
 
     recording_state: RecordingState,
@@ -158,7 +159,8 @@ struct State {
 impl State {
     fn new(pads: HashMap<gst::Pad, Stream>) -> Self {
         Self {
-            other_streams: (Vec::new(), 0),
+            other_streams: Vec::new(),
+            next_pad_id: 0,
             pads,
             recording_state: RecordingState::Stopped,
             last_recording_start: None,
@@ -400,7 +402,7 @@ impl ToggleRecord {
             }
             state.segment_pending = true;
             state.discont_pending = true;
-            for other_stream in &rec_state.other_streams.0 {
+            for other_stream in &rec_state.other_streams {
                 // safe from deadlock as `state` is a lock on the main stream which is not in `other_streams`
                 let mut other_state = other_stream.state.lock();
                 other_state.segment_pending = true;
@@ -564,7 +566,7 @@ impl ToggleRecord {
                 // instead.
 
                 while !state.flushing
-                    && !rec_state.other_streams.0.iter().all(|s| {
+                    && !rec_state.other_streams.iter().all(|s| {
                         // safe from deadlock as `state` is a lock on the main stream which is not in `other_streams`
                         let s = s.state.lock();
                         s.eos
@@ -673,7 +675,7 @@ impl ToggleRecord {
 
                 state.segment_pending = true;
                 state.discont_pending = true;
-                for other_stream in &rec_state.other_streams.0 {
+                for other_stream in &rec_state.other_streams {
                     // safe from deadlock as `state` is a lock on the main stream which is not in `other_streams`
                     let mut other_state = other_stream.state.lock();
                     other_state.segment_pending = true;
@@ -685,7 +687,7 @@ impl ToggleRecord {
                 // go EOS instead.
 
                 while !state.flushing
-                    && !rec_state.other_streams.0.iter().all(|s| {
+                    && !rec_state.other_streams.iter().all(|s| {
                         let s = s.state.lock();
                         s.eos
                             || s.current_running_time
@@ -1229,7 +1231,7 @@ impl ToggleRecord {
             let mut all_others_eos = true;
 
             // Check eos state of all secondary streams
-            rec_state.other_streams.0.iter().all(|s| {
+            rec_state.other_streams.iter().all(|s| {
                 if s == stream {
                     return true;
                 }
@@ -1274,7 +1276,7 @@ impl ToggleRecord {
             let mut all_others_not_eos = false;
 
             // Check eos state of all secondary streams
-            rec_state.other_streams.0.iter().any(|s| {
+            rec_state.other_streams.iter().any(|s| {
                 if s == stream {
                     return false;
                 }
@@ -2163,7 +2165,6 @@ impl ElementImpl for ToggleRecord {
 
                 for s in rec_state
                     .other_streams
-                    .0
                     .iter()
                     .chain(iter::once(&self.main_stream))
                 {
@@ -2177,7 +2178,7 @@ impl ElementImpl for ToggleRecord {
             gst::StateChange::PausedToReady => {
                 let rec_state = self.state.lock();
 
-                for s in &rec_state.other_streams.0 {
+                for s in &rec_state.other_streams {
                     let mut state = s.state.lock();
                     state.flushing = true;
                 }
@@ -2196,7 +2197,6 @@ impl ElementImpl for ToggleRecord {
 
             for s in rec_state
                 .other_streams
-                .0
                 .iter()
                 .chain(iter::once(&self.main_stream))
             {
@@ -2220,8 +2220,8 @@ impl ElementImpl for ToggleRecord {
         _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
         let mut rec_state = self.state.lock();
-        let id = rec_state.other_streams.1;
-        rec_state.other_streams.1 += 1;
+        let id = rec_state.next_pad_id;
+        rec_state.next_pad_id += 1;
 
         let templ = self.obj().pad_template("sink_%u").unwrap();
         let sinkpad = gst::Pad::builder_from_template(&templ)
@@ -2292,7 +2292,7 @@ impl ElementImpl for ToggleRecord {
             .insert(stream.sinkpad.clone(), stream.clone());
         rec_state.pads.insert(stream.srcpad.clone(), stream.clone());
 
-        rec_state.other_streams.0.push(stream);
+        rec_state.other_streams.push(stream);
 
         drop(rec_state);
 
@@ -2314,8 +2314,8 @@ impl ElementImpl for ToggleRecord {
         rec_state.pads.remove(&stream.srcpad).unwrap();
 
         // TODO: Replace with Vec::remove_item() once stable
-        let pos = rec_state.other_streams.0.iter().position(|x| *x == stream);
-        pos.map(|pos| rec_state.other_streams.0.swap_remove(pos));
+        let pos = rec_state.other_streams.iter().position(|x| *x == stream);
+        pos.map(|pos| rec_state.other_streams.swap_remove(pos));
 
         drop(rec_state);
 
