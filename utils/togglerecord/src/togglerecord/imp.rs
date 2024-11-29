@@ -32,7 +32,7 @@ const DEFAULT_LIVE: bool = false;
 // - stream.state with stream coming from either self.state.pads or self.state.other_streams
 // - self.settings
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 struct Settings {
     record: bool,
     live: bool,
@@ -372,7 +372,6 @@ impl ToggleRecord {
     fn block_if_upstream_not_live(
         &self,
         pad: &gst::Pad,
-        mut settings: Settings,
         stream: &Stream, // main stream
         upstream_live: bool,
     ) -> Result<bool, gst::FlowError> {
@@ -380,6 +379,7 @@ impl ToggleRecord {
             let clock = self.obj().clock();
             let mut rec_state = self.state.lock();
             let mut state = stream.state.lock();
+            let mut settings = self.settings.lock();
 
             if rec_state.time_start_block.is_none() {
                 rec_state.time_start_block = clock
@@ -389,9 +389,10 @@ impl ToggleRecord {
             while !settings.record && !state.flushing {
                 gst::debug!(CAT, obj = pad, "Waiting for record=true");
                 drop(state);
+                drop(settings);
                 self.main_stream_cond.wait(&mut rec_state);
                 state = stream.state.lock();
-                settings = *self.settings.lock();
+                settings = self.settings.lock();
             }
             if state.flushing {
                 gst::debug!(CAT, obj = pad, "Flushing");
@@ -494,7 +495,7 @@ impl ToggleRecord {
             dts_or_pts_end,
         );
 
-        let settings = *self.settings.lock();
+        let settings = self.settings.lock();
 
         // First check if we need to block for non-live input
 
@@ -514,6 +515,7 @@ impl ToggleRecord {
             }
             _ => false,
         };
+        drop(settings);
 
         match rec_state.recording_state {
             RecordingState::Recording => {
@@ -601,7 +603,7 @@ impl ToggleRecord {
                 drop(state);
                 drop(rec_state);
 
-                let ret = self.block_if_upstream_not_live(pad, settings, stream, upstream_live)?;
+                let ret = self.block_if_upstream_not_live(pad, stream, upstream_live)?;
                 self.obj().notify("recording");
 
                 if ret {
@@ -616,7 +618,7 @@ impl ToggleRecord {
                 }
                 drop(rec_state);
                 drop(state);
-                if self.block_if_upstream_not_live(pad, settings, stream, upstream_live)? {
+                if self.block_if_upstream_not_live(pad, stream, upstream_live)? {
                     Ok(HandleResult::Pass(data))
                 } else {
                     Ok(HandleResult::Drop)
@@ -650,6 +652,7 @@ impl ToggleRecord {
                 // Remember the time when we started: now!
                 rec_state.last_recording_start = current_running_time;
                 // We made sure a few lines above, but let's be sure again
+                let settings = self.settings.lock();
                 if !settings.live || upstream_live {
                     rec_state.running_time_offset =
                         0 - current_running_time.map_or(0, |current_running_time| {
@@ -658,6 +661,7 @@ impl ToggleRecord {
                                 .nseconds()
                         }) as i64
                 };
+                drop(settings);
                 gst::debug!(
                     CAT,
                     obj = pad,
@@ -2035,6 +2039,7 @@ impl ObjectImpl for ToggleRecord {
                 );
 
                 settings.record = record;
+                drop(settings);
                 self.main_stream_cond.notify_all();
             }
             "is-live" => {
@@ -2166,7 +2171,7 @@ impl ElementImpl for ToggleRecord {
                     *state = StreamState::default();
                 }
 
-                let settings = *self.settings.lock();
+                let settings = self.settings.lock();
                 rec_state.live = settings.live;
             }
             gst::StateChange::PausedToReady => {
