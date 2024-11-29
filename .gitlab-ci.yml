@@ -21,7 +21,6 @@ variables:
   # The tag name is included above from the main repo.
   GSTREAMER_DOC_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer/amd64/fedora:$FEDORA_TAG-main"
   # Use the gstreamer image to trigger the cerbero job, same as the monorepo
-  CERBERO_TRIGGER_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer/amd64/fedora:$FEDORA_TAG-main"
   WINDOWS_BASE: "registry.freedesktop.org/gstreamer/gstreamer-rs/windows"
   WINDOWS_RUST_MINIMUM_IMAGE: "$WINDOWS_BASE:$GST_RS_IMG_WINDOWS_TAG-main-$GST_RS_MSRV"
   WINDOWS_RUST_STABLE_IMAGE: "$WINDOWS_BASE:$GST_RS_IMG_WINDOWS_TAG-main-$GST_RS_STABLE"
@@ -423,7 +422,7 @@ coverage:
         path: "coverage/cobertura.xml"
 
 cerbero trigger:
-  image: $CERBERO_TRIGGER_IMAGE
+  image: python:alpine
   needs: [ "trigger" ]
   timeout: '4h'
   tags:
@@ -432,7 +431,8 @@ cerbero trigger:
     # We will build this cerbero branch in the cerbero trigger CI
     CERBERO_UPSTREAM_BRANCH: 'main'
   script:
-    - ci/cerbero/trigger_cerbero_pipeline.py
+    - pip install python-gitlab
+    - python ci/cerbero/trigger_cerbero_pipeline.py
   rules:
     # Never run post merge
     - if: '$CI_PROJECT_NAMESPACE == "gstreamer"'
