@@ -2416,7 +2416,9 @@ impl BaseWebRTCSink {
         let signaller = settings.signaller.clone();
         drop(settings);
 
-        if let Some(session) = self.state.lock().unwrap().sessions.get(session_id).cloned() {
+        let session = self.state.lock().unwrap().sessions.get(session_id).cloned();
+
+        if let Some(session) = session {
             let mut session = session.0.lock().unwrap();
             let sdp = answer.sdp();
 
