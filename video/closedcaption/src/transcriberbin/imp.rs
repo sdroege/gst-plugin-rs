@@ -628,10 +628,7 @@ impl TranscriberBin {
 
         state.ccmux_filter.set_property("caps", ccmux_caps);
 
-        let max_size_time = settings.latency
-            + settings.translate_latency
-            + settings.accumulate_time
-            + CEAX08MUX_LATENCY;
+        let max_size_time = self.our_latency(state, &settings);
 
         gst::debug!(
             CAT,
@@ -1377,6 +1374,23 @@ impl TranscriberBin {
         ret
     }
 
+    fn our_latency(&self, state: &State, settings: &Settings) -> gst::ClockTime {
+        self.synthesis_latency(state)
+            + settings.latency
+            + settings.accumulate_time
+            + CEAX08MUX_LATENCY
+            + settings.translate_latency
+            + CCCOMBINER_LATENCY
+            + state
+                .framerate
+                .map(|f| {
+                    2 * gst::ClockTime::SECOND
+                        .mul_div_floor(f.denom() as u64, f.numer() as u64)
+                        .unwrap()
+                })
+                .unwrap_or(gst::ClockTime::from_seconds(0))
+    }
+
     #[allow(clippy::single_match)]
     fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
@@ -1388,23 +1402,8 @@ impl TranscriberBin {
                 let state = self.state.lock().unwrap();
                 if let Some(state) = state.as_ref() {
                     let upstream_min = self.query_upstream_latency(state);
-                    let synthesis_min = self.synthesis_latency(state);
-                    let settings = self.settings.lock().unwrap();
-                    let min = upstream_min
-                        + synthesis_min
-                        + settings.latency
-                        + settings.accumulate_time
-                        + CEAX08MUX_LATENCY
-                        + settings.translate_latency
-                        + CCCOMBINER_LATENCY
-                        + state
-                            .framerate
-                            .map(|f| {
-                                2 * gst::ClockTime::SECOND
-                                    .mul_div_floor(f.denom() as u64, f.numer() as u64)
-                                    .unwrap()
-                            })
-                            .unwrap_or(gst::ClockTime::from_seconds(0));
+                    let min =
+                        upstream_min + self.our_latency(state, &self.settings.lock().unwrap());
 
                     gst::debug!(CAT, imp = self, "calculated latency: {}", min);
 
