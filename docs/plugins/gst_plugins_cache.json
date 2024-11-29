@@ -1183,7 +1183,7 @@
                     "unsynced_translate_src_%%u": {
                         "caps": "application/x-json:\n",
                         "direction": "src",
-                        "presence": "request"
+                        "presence": "sometimes"
                     }
                 },
                 "properties": {

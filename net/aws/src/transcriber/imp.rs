@@ -1007,7 +1007,7 @@ impl ElementImpl for Transcriber {
             let unsynced_sometimes_src_pad_template = gst::PadTemplate::new(
                 "unsynced_translate_src_%u",
                 gst::PadDirection::Src,
-                gst::PadPresence::Request,
+                gst::PadPresence::Sometimes,
                 &src_caps,
             )
             .unwrap();
