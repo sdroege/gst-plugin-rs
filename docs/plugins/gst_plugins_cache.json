@@ -12661,6 +12661,18 @@
                         "type": "gboolean",
                         "writable": true
                     },
+                    "dots-viewer-ws-url": {
+                        "blurb": "gst-dots-viewer websocket URL",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": true,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "folder-mode": {
                         "blurb": "How to create folder each time a snapshot of all pipelines is made",
                         "conditionally-available": false,

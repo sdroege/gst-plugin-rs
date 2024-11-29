@@ -220,9 +220,9 @@ dependencies = [
 
 [[package]]
 name = "async-tungstenite"
-version = "0.29.0"
+version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2640e8a18087635fa4a69fa080027f35a079b36f1282903e9ae605a31663117c"
+checksum = "ef0f7efedeac57d9b26170f72965ecfd31473ca52ca7a64e925b0b6f5f079886"
 dependencies = [
  "atomic-waker",
  "futures-core",
@@ -3233,15 +3233,22 @@ name = "gst-plugin-tracers"
 version = "0.14.0-alpha.1"
 dependencies = [
  "anyhow",
+ "async-tungstenite",
  "atomic_refcell",
  "chrono",
  "dirs",
  "etherparse",
+ "futures",
  "gst-plugin-version-helper",
  "gstreamer",
  "pcap-file",
  "regex",
+ "serde",
+ "serde_json",
  "signal-hook",
+ "tokio",
+ "tokio-stream",
+ "url",
  "walkdir",
 ]
 
