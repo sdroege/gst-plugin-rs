@@ -14,7 +14,6 @@
  *
  * Since: plugins-rs-0.9.0
  */
-
 #[macro_use]
 extern crate log;
 

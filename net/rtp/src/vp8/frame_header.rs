@@ -117,7 +117,7 @@ trait BitReadExt: BitRead {
 
 impl<T: BitRead + ?Sized> BitReadExt for T {}
 
-impl<'a> FromBitStreamWith<'a> for FrameHeader {
+impl FromBitStreamWith<'_> for FrameHeader {
     type Error = anyhow::Error;
     /// Keyframe?
     type Context = bool;

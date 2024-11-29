@@ -6,7 +6,6 @@
  *
  * Since: plugins-rs-0.9
  */
-
 #[allow(dead_code)]
 mod ndi;
 #[allow(dead_code)]

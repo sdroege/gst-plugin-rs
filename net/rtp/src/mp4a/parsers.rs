@@ -265,7 +265,7 @@ impl<'a> Subframes<'a> {
     }
 }
 
-impl<'a> Iterator for Subframes<'a> {
+impl Iterator for Subframes<'_> {
     type Item = Result<gst::Buffer, MPEG4AudioParserError>;
 
     fn next(&mut self) -> Option<Self::Item> {

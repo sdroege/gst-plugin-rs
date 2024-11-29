@@ -98,7 +98,7 @@ pub struct KeyframeInfo {
     pub render_size: Option<(u32, u32)>,
 }
 
-impl<'a> FromBitStreamWith<'a> for KeyframeInfo {
+impl FromBitStreamWith<'_> for KeyframeInfo {
     type Error = anyhow::Error;
 
     /// Profile
@@ -173,7 +173,7 @@ pub struct ColorConfig {
     pub sub_sampling_y: u8,
 }
 
-impl<'a> FromBitStreamWith<'a> for ColorConfig {
+impl FromBitStreamWith<'_> for ColorConfig {
     type Error = anyhow::Error;
 
     /// Profile

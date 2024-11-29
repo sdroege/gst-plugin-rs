@@ -320,7 +320,7 @@ pub struct PadSrcRef<'a> {
     phantom: PhantomData<&'a Self>,
 }
 
-impl<'a> PadSrcRef<'a> {
+impl PadSrcRef<'_> {
     fn new(inner_arc: Arc<PadSrcInner>) -> Self {
         PadSrcRef {
             strong: inner_arc,
@@ -333,7 +333,7 @@ impl<'a> PadSrcRef<'a> {
     }
 }
 
-impl<'a> Deref for PadSrcRef<'a> {
+impl Deref for PadSrcRef<'_> {
     type Target = PadSrcInner;
 
     fn deref(&self) -> &Self::Target {
@@ -714,7 +714,7 @@ pub struct PadSinkRef<'a> {
     phantom: PhantomData<&'a Self>,
 }
 
-impl<'a> PadSinkRef<'a> {
+impl PadSinkRef<'_> {
     fn new(inner_arc: Arc<PadSinkInner>) -> Self {
         PadSinkRef {
             strong: inner_arc,
@@ -727,7 +727,7 @@ impl<'a> PadSinkRef<'a> {
     }
 }
 
-impl<'a> Deref for PadSinkRef<'a> {
+impl Deref for PadSinkRef<'_> {
     type Target = PadSinkInner;
 
     fn deref(&self) -> &Self::Target {

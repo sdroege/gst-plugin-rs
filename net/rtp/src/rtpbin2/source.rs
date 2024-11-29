@@ -70,7 +70,7 @@ impl Rb {
     }
 }
 
-impl<'a> From<ReportBlock<'a>> for Rb {
+impl From<ReportBlock<'_>> for Rb {
     fn from(value: ReportBlock) -> Self {
         Self {
             ssrc: value.ssrc(),

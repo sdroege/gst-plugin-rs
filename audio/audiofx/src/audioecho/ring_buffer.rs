@@ -77,7 +77,7 @@ impl<'a> Iterator for RingBufferIter<'a> {
     }
 }
 
-impl<'a> Drop for RingBufferIter<'a> {
+impl Drop for RingBufferIter<'_> {
     fn drop(&mut self) {
         *self.buffer_pos = self.write_pos;
     }

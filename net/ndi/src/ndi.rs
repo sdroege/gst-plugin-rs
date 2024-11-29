@@ -23,7 +23,7 @@ pub struct FindBuilder<'a> {
     extra_ips: Option<&'a str>,
 }
 
-impl<'a> Default for FindBuilder<'a> {
+impl Default for FindBuilder<'_> {
     fn default() -> Self {
         Self {
             show_local_sources: true,
@@ -129,10 +129,10 @@ pub enum Source<'a> {
     Owned(NDIlib_source_t, ffi::CString, ffi::CString),
 }
 
-unsafe impl<'a> Send for Source<'a> {}
-unsafe impl<'a> Sync for Source<'a> {}
+unsafe impl Send for Source<'_> {}
+unsafe impl Sync for Source<'_> {}
 
-impl<'a> Source<'a> {
+impl Source<'_> {
     pub fn ndi_name(&self) -> &str {
         unsafe {
             let ptr = match *self {
@@ -198,7 +198,7 @@ pub struct RecvBuilder<'a> {
     ndi_recv_name: &'a str,
 }
 
-impl<'a> RecvBuilder<'a> {
+impl RecvBuilder<'_> {
     pub fn allow_video_fields(self, allow_video_fields: bool) -> Self {
         Self {
             allow_video_fields,
@@ -362,7 +362,7 @@ pub struct SendBuilder<'a> {
     clock_video: bool,
 }
 
-impl<'a> SendBuilder<'a> {
+impl SendBuilder<'_> {
     pub fn clock_audio(self) -> Self {
         Self {
             clock_audio: true,

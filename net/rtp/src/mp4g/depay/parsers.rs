@@ -159,7 +159,7 @@ pub struct AccessUnitIter<'a> {
     cur: u32,
 }
 
-impl<'a> Iterator for AccessUnitIter<'a> {
+impl Iterator for AccessUnitIter<'_> {
     type Item = anyhow::Result<AccessUnit>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -172,7 +172,7 @@ impl<'a> Iterator for AccessUnitIter<'a> {
     }
 }
 
-impl<'a> AccessUnitIter<'a> {
+impl AccessUnitIter<'_> {
     fn next_priv(&mut self) -> Option<anyhow::Result<AccessUnit>> {
         use Mpeg4GenericDepayError::*;
 

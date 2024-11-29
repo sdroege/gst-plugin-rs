@@ -310,7 +310,7 @@ pub struct LayerIndex {
     pub temporal_layer_zero_index: Option<u8>,
 }
 
-impl<'a> FromByteStreamWith<'a> for LayerIndex {
+impl FromByteStreamWith<'_> for LayerIndex {
     type Error = anyhow::Error;
     /// Flexible mode?
     type Context = bool;
@@ -345,7 +345,7 @@ impl<'a> FromByteStreamWith<'a> for LayerIndex {
     }
 }
 
-impl<'a> ToByteStreamWith<'a> for LayerIndex {
+impl ToByteStreamWith<'_> for LayerIndex {
     type Error = anyhow::Error;
 
     /// Flexible mode?
