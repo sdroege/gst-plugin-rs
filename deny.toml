@@ -50,12 +50,6 @@ multiple-versions = "deny"
 highlight = "all"
 wildcards = "allow"
 
-# ignore duplicated crc dependency because ffv1 depends on an old version
-# https://github.com/rust-av/ffv1/issues/21
-[[bans.skip]]
-name = "crc"
-version = "1.8"
-
 # Ignore various duplicated dependencies because librespot depends on an old versions
 [[bans.skip]]
 name = "hermit-abi"
@@ -194,9 +188,6 @@ version = "0.11"
 [[bans.skip]]
 name = "rustls-pemfile"
 version = "1.0"
-[[bans.skip]]
-name = "winreg"
-version = "0.50"
 [[bans.skip]]
 name = "system-configuration"
 version = "0.5"
