@@ -110,15 +110,15 @@ trigger:
 
 
     - cargo build $CARGO_FLAGS
-    - RUST_BACKTRACE=1 G_DEBUG=fatal_warnings cargo nextest run --profile=ci $CARGO_FLAGS
+    - RUST_BACKTRACE=1 G_DEBUG=fatal_warnings cargo nextest run --profile=ci --no-tests=pass $CARGO_FLAGS
     - mv "$CI_PROJECT_DIR/target/nextest/ci/junit.xml" "$new_report_dir/junit-tests-default.xml"
 
     - cargo build $CARGO_FLAGS --all-features --exclude gst-plugin-gtk4
-    - RUST_BACKTRACE=1 G_DEBUG=fatal_warnings cargo nextest run --profile=ci $CARGO_FLAGS --all-features --exclude gst-plugin-gtk4
+    - RUST_BACKTRACE=1 G_DEBUG=fatal_warnings cargo nextest run --profile=ci --no-tests=pass $CARGO_FLAGS --all-features --exclude gst-plugin-gtk4
     - mv "$CI_PROJECT_DIR/target/nextest/ci/junit.xml" "$new_report_dir/junit-tests-all.xml"
 
     - cargo build $CARGO_FLAGS --no-default-features
-    - RUST_BACKTRACE=1 G_DEBUG=fatal_warnings cargo nextest run --profile=ci $CARGO_FLAGS --no-default-features
+    - RUST_BACKTRACE=1 G_DEBUG=fatal_warnings cargo nextest run --profile=ci --no-tests=pass $CARGO_FLAGS --no-default-features
     - mv "$CI_PROJECT_DIR/target/nextest/ci/junit.xml" "$new_report_dir/junit-tests-no-default.xml"
   artifacts:
     reports:
@@ -400,7 +400,7 @@ coverage:
   script:
     - CARGO_FLAGS="-j${FDO_CI_CONCURRENT:-$(nproc)} --locked --color=always --all"
 
-    - cargo nextest run --profile=ci $CARGO_FLAGS --all-features --exclude gst-plugin-gtk4
+    - cargo nextest run --profile=ci --no-tests=pass $CARGO_FLAGS --all-features --exclude gst-plugin-gtk4
 
     - new_report_dir="$CI_PROJECT_DIR/junit_reports"
     - mkdir -p "$new_report_dir"
