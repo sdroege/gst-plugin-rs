@@ -48,7 +48,7 @@ function Run-Tests {
 
     $env:G_DEBUG="fatal_warnings"
     $env:RUST_BACKTRACE="1"
-    cargo nextest run $cargo_opts --profile=ci --no-fail-fast --workspace $local_exclude $Features
+    cargo nextest run $cargo_opts --profile=ci --no-tests=pass --no-fail-fast --workspace $local_exclude $Features
     if (!$?) {
         Write-Host "Tests failed"
         Exit 1
