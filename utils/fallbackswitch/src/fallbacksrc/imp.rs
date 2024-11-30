@@ -666,10 +666,9 @@ impl ObjectImpl for FallbackSrc {
                         // Simply return the input by default
                         Some(args[1].clone())
                     })
-                    .accumulator(|_hint, ret, value| {
+                    .accumulator(|_hint, _acc, value| {
                         // First signal handler wins
-                        *ret = value.clone();
-                        false
+                        std::ops::ControlFlow::Break(value.clone())
                     })
                     .build(),
                 glib::subclass::Signal::builder("unblock")

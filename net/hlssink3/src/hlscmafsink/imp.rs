@@ -232,10 +232,9 @@ impl ObjectImpl for HlsCmafSink {
 
                         Some(imp.new_file_stream(&init_location).ok().to_value())
                     })
-                    .accumulator(|_hint, ret, value| {
+                    .accumulator(|_hint, _acc, value| {
                         // First signal handler wins
-                        *ret = value.clone();
-                        false
+                        std::ops::ControlFlow::Break(value.clone())
                     })
                     .build(),
                 glib::subclass::Signal::builder(SIGNAL_NEW_PLAYLIST)

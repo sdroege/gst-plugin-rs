@@ -167,9 +167,9 @@ impl prelude::ObjectInterface for Signallable {
                             });
                         Some(Signallable::request_meta(this).to_value())
                     })
-                    .accumulator(move |_hint, output, input| {
-                        *output = input.clone();
-                        false
+                    .accumulator(move |_hint, _acc, value| {
+                        // First signal handler wins
+                        std::ops::ControlFlow::Break(value.clone())
                     })
                     .build(),
                 /**
@@ -227,9 +227,9 @@ impl prelude::ObjectInterface for Signallable {
 
                         Some(false.into())
                     })
-                    .accumulator(move |_hint, output, input| {
-                        *output = input.clone();
-                        false
+                    .accumulator(move |_hint, _acc, value| {
+                        // First signal handler wins
+                        std::ops::ControlFlow::Break(value.clone())
                     })
                     .build(),
                 /**
@@ -253,9 +253,9 @@ impl prelude::ObjectInterface for Signallable {
 
                         Some(false.into())
                     })
-                    .accumulator(move |_hint, output, input| {
-                        *output = input.clone();
-                        false
+                    .accumulator(move |_hint, _acc, value| {
+                        // First signal handler wins
+                        std::ops::ControlFlow::Break(value.clone())
                     })
                     .build(),
                 /**
@@ -291,9 +291,9 @@ impl prelude::ObjectInterface for Signallable {
 
                         Some(false.into())
                     })
-                    .accumulator(move |_hint, output, input| {
-                        *output = input.clone();
-                        false
+                    .accumulator(move |_hint, _acc, value| {
+                        // First signal handler wins
+                        std::ops::ControlFlow::Break(value.clone())
                     })
                     .build(),
                 /**
@@ -358,9 +358,9 @@ impl prelude::ObjectInterface for Signallable {
 
                         Some(desc.clone().into())
                     })
-                    .accumulator(move |_hint, output, input| {
-                        *output = input.clone();
-                        false
+                    .accumulator(move |_hint, _acc, value| {
+                        // First signal handler wins
+                        std::ops::ControlFlow::Break(value.clone())
                     })
                     .build(),
                 /**
@@ -398,9 +398,9 @@ impl prelude::ObjectInterface for Signallable {
 
                         Some(false.into())
                     })
-                    .accumulator(move |_hint, output, input| {
-                        *output = input.clone();
-                        false
+                    .accumulator(move |_hint, _acc, value| {
+                        // First signal handler wins
+                        std::ops::ControlFlow::Break(value.clone())
                     })
                     .build(),
                 /**
@@ -445,9 +445,9 @@ impl prelude::ObjectInterface for Signallable {
 
                         Some(false.into())
                     })
-                    .accumulator(move |_hint, output, input| {
-                        *output = input.clone();
-                        false
+                    .accumulator(move |_hint, _acc, value| {
+                        // First signal handler wins
+                        std::ops::ControlFlow::Break(value.clone())
                     })
                     .build(),
                 /**

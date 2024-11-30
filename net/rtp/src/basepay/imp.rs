@@ -1985,12 +1985,11 @@ impl ObjectImpl for RtpBasePay2 {
                 glib::subclass::Signal::builder("request-extension")
                     .param_types([u32::static_type(), String::static_type()])
                     .return_type::<gst_rtp::RTPHeaderExtension>()
-                    .accumulator(|_hint, acc, val| {
-                        if matches!(val.get::<Option<glib::Object>>(), Ok(Some(_))) {
-                            *acc = val.clone();
-                            false
+                    .accumulator(|_hint, _acc, value| {
+                        if matches!(value.get::<Option<glib::Object>>(), Ok(Some(_))) {
+                            std::ops::ControlFlow::Break(value.clone())
                         } else {
-                            true
+                            std::ops::ControlFlow::Continue(value.clone())
                         }
                     })
                     .class_handler(|args| {

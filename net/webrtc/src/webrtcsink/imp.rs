@@ -859,15 +859,15 @@ fn configure_payloader(pay: &gst::Element) {
 
 fn setup_signal_accumulator(
     _hint: &glib::subclass::SignalInvocationHint,
-    ret: &mut glib::Value,
+    _acc: glib::Value,
     value: &glib::Value,
-) -> bool {
+) -> std::ops::ControlFlow<glib::Value, glib::Value> {
     let is_configured = value.get::<bool>().unwrap();
-    let continue_emission = !is_configured;
-
-    *ret = value.clone();
-
-    continue_emission
+    if !is_configured {
+        std::ops::ControlFlow::Continue(value.clone())
+    } else {
+        std::ops::ControlFlow::Break(value.clone())
+    }
 }
 
 /// Set of elements used in an EncodingChain
@@ -5047,9 +5047,9 @@ impl ObjectImpl for BaseWebRTCSink {
                     .class_handler(|args| {
                         Some(args[3usize].get::<gst::Structure>().expect("wrong argument").to_value())
                     })
-                    .accumulator(move |_hint, output, input| {
-                        *output = input.clone();
-                        false
+                    .accumulator(move |_hint, _acc, value| {
+                        // First signal handler wins
+                        std::ops::ControlFlow::Break(value.clone())
                     })
                     .build(),
             ]

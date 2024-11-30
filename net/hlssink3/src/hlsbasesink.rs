@@ -211,10 +211,9 @@ impl ObjectImpl for HlsBaseSink {
 
                         Some(imp.new_file_stream(&playlist_location).ok().to_value())
                     })
-                    .accumulator(|_hint, ret, value| {
+                    .accumulator(|_hint, _acc, value| {
                         // First signal handler wins
-                        *ret = value.clone();
-                        false
+                        std::ops::ControlFlow::Break(value.clone())
                     })
                     .build(),
                 glib::subclass::Signal::builder(SIGNAL_GET_FRAGMENT_STREAM)
@@ -227,10 +226,9 @@ impl ObjectImpl for HlsBaseSink {
 
                         Some(imp.new_file_stream(&fragment_location).ok().to_value())
                     })
-                    .accumulator(|_hint, ret, value| {
+                    .accumulator(|_hint, _acc, value| {
                         // First signal handler wins
-                        *ret = value.clone();
-                        false
+                        std::ops::ControlFlow::Break(value.clone())
                     })
                     .build(),
                 glib::subclass::Signal::builder(SIGNAL_DELETE_FRAGMENT)
@@ -244,10 +242,9 @@ impl ObjectImpl for HlsBaseSink {
                         imp.delete_fragment(&fragment_location);
                         Some(true.to_value())
                     })
-                    .accumulator(|_hint, ret, value| {
+                    .accumulator(|_hint, _acc, value| {
                         // First signal handler wins
-                        *ret = value.clone();
-                        false
+                        std::ops::ControlFlow::Break(value.clone())
                     })
                     .build(),
             ]
