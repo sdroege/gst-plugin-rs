@@ -1351,8 +1351,6 @@ impl ToggleRecord {
             self.handle_main_stream(pad, &stream, buffer, upstream_live)
         }?;
 
-        let rec_state = self.state.lock();
-
         let mut buffer = match handle_result {
             HandleResult::Drop => {
                 return Ok(gst::FlowSuccess::Ok);
@@ -1377,6 +1375,7 @@ impl ToggleRecord {
         };
 
         let out_running_time = {
+            let rec_state = self.state.lock();
             let main_state = if stream != self.main_stream {
                 Some(self.main_stream.state.lock())
             } else {
@@ -1427,6 +1426,7 @@ impl ToggleRecord {
             let out_running_time = state.out_segment.to_running_time(buffer.pts());
 
             // Unlock before pushing
+            drop(rec_state);
             drop(state);
             drop(main_state);
 
