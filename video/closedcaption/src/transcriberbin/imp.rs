@@ -1904,6 +1904,36 @@ impl ElementImpl for TranscriberBin {
             )
             .unwrap();
 
+            let src_caps = gst::Caps::builder("application/x-json").build();
+            let unsynced_src_pad_template = gst::PadTemplate::new(
+                "unsynced_src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Sometimes,
+                &src_caps,
+            )
+            .unwrap();
+            let unsynced_translate_src_pad_template = gst::PadTemplate::new(
+                "unsynced_translate_src_%u",
+                gst::PadDirection::Src,
+                gst::PadPresence::Sometimes,
+                &src_caps,
+            )
+            .unwrap();
+            let unsynced_secondary_src_pad_template = gst::PadTemplate::new(
+                "unsynced_src_%u",
+                gst::PadDirection::Src,
+                gst::PadPresence::Sometimes,
+                &src_caps,
+            )
+            .unwrap();
+            let unsynced_secondary_translate_src_pad_template = gst::PadTemplate::new(
+                "unsynced_translate_src_%u_%u",
+                gst::PadDirection::Src,
+                gst::PadPresence::Sometimes,
+                &src_caps,
+            )
+            .unwrap();
+
             vec![
                 video_src_pad_template,
                 video_sink_pad_template,
@@ -1911,6 +1941,10 @@ impl ElementImpl for TranscriberBin {
                 audio_sink_pad_template,
                 secondary_audio_sink_pad_template,
                 secondary_audio_src_pad_template,
+                unsynced_src_pad_template,
+                unsynced_translate_src_pad_template,
+                unsynced_secondary_src_pad_template,
+                unsynced_secondary_translate_src_pad_template,
             ]
         });
 

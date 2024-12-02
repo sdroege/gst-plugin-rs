@@ -7962,6 +7962,26 @@
                         "caps": "video/x-raw(ANY):\n",
                         "direction": "src",
                         "presence": "always"
+                    },
+                    "unsynced_src": {
+                        "caps": "application/x-json:\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    },
+                    "unsynced_src_%%u": {
+                        "caps": "application/x-json:\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    },
+                    "unsynced_translate_src_%%u": {
+                        "caps": "application/x-json:\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    },
+                    "unsynced_translate_src_%%u_%%u": {
+                        "caps": "application/x-json:\n",
+                        "direction": "src",
+                        "presence": "sometimes"
                     }
                 },
                 "properties": {
