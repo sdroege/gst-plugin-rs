@@ -87,6 +87,18 @@
                         "type": "GstValueArray",
                         "writable": true
                     },
+                    "overflow": {
+                        "blurb": "Defines how output audio with a longer duration than input text should be handled",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "clip (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstAwsOverflow",
+                        "writable": true
+                    },
                     "secret-access-key": {
                         "blurb": "AWS Secret Access Key",
                         "conditionally-available": false,
@@ -1372,6 +1384,26 @@
         "filename": "gstaws",
         "license": "MPL",
         "other-types": {
+            "GstAwsOverflow": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Clip",
+                        "name": "clip",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Overlap",
+                        "name": "overlap",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Shift",
+                        "name": "shift",
+                        "value": "2"
+                    }
+                ]
+            },
             "GstAwsPollyEngine": {
                 "kind": "enum",
                 "values": [

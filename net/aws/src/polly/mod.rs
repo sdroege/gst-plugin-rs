@@ -398,6 +398,19 @@ impl From<AwsPollyLanguageCode> for LanguageCode {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
+#[repr(u32)]
+#[enum_type(name = "GstAwsOverflow")]
+#[non_exhaustive]
+pub enum AwsOverflow {
+    #[enum_value(name = "Clip", nick = "clip")]
+    Clip = 0,
+    #[enum_value(name = "Overlap", nick = "overlap")]
+    Overlap = 1,
+    #[enum_value(name = "Shift", nick = "shift")]
+    Shift = 2,
+}
+
 glib::wrapper! {
     pub struct Polly(ObjectSubclass<imp::Polly>) @extends gst::Element, gst::Object;
 }
@@ -408,6 +421,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         AwsPollyEngine::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
         AwsPollyVoiceId::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
         AwsPollyLanguageCode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        AwsOverflow::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }
     gst::Element::register(
         Some(plugin),
