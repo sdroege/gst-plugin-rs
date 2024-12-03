@@ -15,6 +15,12 @@ GST_PLUGIN_PATH=target/debug cargo run -p gst-plugin-quinn --example quic_mux
 GST_PLUGIN_PATH=target/debug cargo run -p gst-plugin-quinn --example quic_mux -- --receiver
 ```
 
+QUIC multiplexing example with WebTransport can be tested as follows.
+```bash
+GST_PLUGIN_PATH=target/debug cargo run -p gst-plugin-quinn --example quic_mux -- --webtransport
+GST_PLUGIN_PATH=target/debug cargo run -p gst-plugin-quinn --example quic_mux -- --receiver --webtransport
+```
+
 RoQ example can be tested as follows. This tests H264 by default.
 ```bash
 GST_PLUGIN_PATH=target/debug cargo run -p gst-plugin-quinn --example quic_roq

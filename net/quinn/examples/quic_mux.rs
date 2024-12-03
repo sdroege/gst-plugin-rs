@@ -19,6 +19,8 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 struct Cli {
     #[clap(long, short, action)]
     receiver: bool,
+    #[clap(long, short, action)]
+    webtransport: bool,
 }
 
 fn video_bin(text: String) -> gst::Bin {
@@ -133,8 +135,14 @@ fn depay_bin(pipeline: &gst::Pipeline, bin_name: String) -> gst::Bin {
     bin
 }
 
-fn receive_pipeline(pipeline: &gst::Pipeline) {
-    let quicsrc = gst::ElementFactory::make("quinnquicsrc").build().unwrap();
+fn receive_pipeline(pipeline: &gst::Pipeline, use_webtransport: bool) {
+    let quicsrc = if use_webtransport {
+        gst::ElementFactory::make("quinnwtclientsrc")
+            .build()
+            .unwrap()
+    } else {
+        gst::ElementFactory::make("quinnquicsrc").build().unwrap()
+    };
     let demux = gst::ElementFactory::make("quinnquicdemux").build().unwrap();
     let compositor = gst::ElementFactory::make("compositor")
         .name("compositor")
@@ -145,13 +153,17 @@ fn receive_pipeline(pipeline: &gst::Pipeline) {
         .build()
         .unwrap();
 
-    quicsrc.set_property("initial-mtu", 1200u32);
-    quicsrc.set_property("min-mtu", 1200u32);
-    quicsrc.set_property("upper-bound-mtu", 65527u32);
-    quicsrc.set_property("max-udp-payload-size", 65527u32);
-    quicsrc.set_property("use-datagram", false);
+    if use_webtransport {
+        quicsrc.set_property("url", "https://127.0.0.1:4445");
+    } else {
+        quicsrc.set_property("initial-mtu", 1200u32);
+        quicsrc.set_property("min-mtu", 1200u32);
+        quicsrc.set_property("upper-bound-mtu", 65527u32);
+        quicsrc.set_property("max-udp-payload-size", 65527u32);
+        quicsrc.set_property("server-name", "quinnmux-test");
+    }
+
     quicsrc.set_property("secure-connection", false);
-    quicsrc.set_property("server-name", "quinnmux-test");
 
     pipeline
         .add_many([&quicsrc, &demux, &compositor, &sink])
@@ -240,7 +252,7 @@ fn receive_pipeline(pipeline: &gst::Pipeline) {
     });
 }
 
-fn send_pipeline(pipeline: &gst::Pipeline) {
+fn send_pipeline(pipeline: &gst::Pipeline, use_webtransport: bool) {
     let video1 = video_bin("Stream 1".to_string());
     let video2 = video_bin("Stream 2".to_string());
     let video3 = video_bin("Stream 3".to_string());
@@ -249,10 +261,17 @@ fn send_pipeline(pipeline: &gst::Pipeline) {
         .name("quic-mux")
         .build()
         .unwrap();
-    let sink = gst::ElementFactory::make("quinnquicsink")
-        .name("quic-sink")
-        .build()
-        .unwrap();
+    let sink = if use_webtransport {
+        gst::ElementFactory::make("quinnwtserversink")
+            .name("wt-sink")
+            .build()
+            .unwrap()
+    } else {
+        gst::ElementFactory::make("quinnquicsink")
+            .name("quic-sink")
+            .build()
+            .unwrap()
+    };
 
     sink.set_property("drop-buffer-for-datagram", true);
     sink.set_property("initial-mtu", 1200u32);
@@ -262,6 +281,11 @@ fn send_pipeline(pipeline: &gst::Pipeline) {
     sink.set_property("use-datagram", false);
     sink.set_property("secure-connection", false);
     sink.set_property("server-name", "quinnmux-test");
+
+    if use_webtransport {
+        sink.set_property("address", "127.0.0.1");
+        sink.set_property("port", 4445u32);
+    }
 
     pipeline
         .add_many([&video1, &video2, &video3, &video4])
@@ -365,10 +389,10 @@ fn main() {
     let main_loop = glib::MainLoop::new(Some(&context), false);
 
     if !cli.receiver {
-        send_pipeline(&pipeline);
+        send_pipeline(&pipeline, cli.webtransport);
         pipeline.debug_to_dot_file_with_ts(gst::DebugGraphDetails::all(), "quic-mux-send-pipeline");
     } else {
-        receive_pipeline(&pipeline);
+        receive_pipeline(&pipeline, cli.webtransport);
         pipeline.debug_to_dot_file_with_ts(gst::DebugGraphDetails::all(), "quic-mux-recv-pipeline");
     }
 
