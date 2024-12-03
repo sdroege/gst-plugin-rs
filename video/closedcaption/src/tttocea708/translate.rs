@@ -73,6 +73,9 @@ pub struct TextToCea708 {
 
 impl Default for TextToCea708 {
     fn default() -> Self {
+        let mut cc_data_writer = CCDataWriter::default();
+        cc_data_writer.set_output_padding(true);
+        cc_data_writer.set_output_cea608_padding(true);
         Self {
             cea608: TextToCea608::default(),
             mode: Cea708Mode::RollUp,
@@ -85,7 +88,7 @@ impl Default for TextToCea708 {
             output_packets: VecDeque::new(),
             sequence_no: 0,
             service_writer: Cea708ServiceWriter::new(1),
-            cc_data_writer: CCDataWriter::default(),
+            cc_data_writer,
             pen_location: SetPenLocationArgs::new(0, 0),
             pen_color: textstyle_to_pen_color(TextStyle::White),
             pen_attributes: SetPenAttributesArgs::new(
