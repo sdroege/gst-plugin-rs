@@ -1047,14 +1047,13 @@ dependencies = [
 
 [[package]]
 name = "cea708-types"
-version = "0.3.4"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "153def07bde9a894c7535db4f623dedd89d453b57bad6a96684fe304086c5961"
+checksum = "711a98fc25dbb1c2a76505ac7ede42a5ed81aa36360939ad7709e92eff7f8fe3"
 dependencies = [
  "log",
  "muldiv",
- "once_cell",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
 ]
 
 [[package]]
