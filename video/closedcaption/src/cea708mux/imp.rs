@@ -83,13 +83,27 @@ fn fps_from_caps(caps: &gst::CapsRef) -> Result<Framerate, gst::LoggableError> {
     ))
 }
 
-#[derive(Default)]
 struct State {
     out_format: CeaFormat,
     fps: Option<Framerate>,
     dtvcc_seq_no: u8,
     writer: CCDataWriter,
     n_frames: u64,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        let mut writer = CCDataWriter::default();
+        writer.set_output_padding(true);
+        writer.set_output_cea608_padding(true);
+        Self {
+            out_format: CeaFormat::default(),
+            fps: None,
+            dtvcc_seq_no: 0,
+            writer,
+            n_frames: 0,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -424,8 +438,6 @@ impl AggregatorImpl for Cea708Mux {
         let format = state.out_format;
         let fps = state.fps;
         *state = State::default();
-        state.writer.set_output_padding(true);
-        state.writer.set_output_cea608_padding(true);
         state.out_format = format;
         state.fps = fps;
         state.n_frames = 0;
@@ -586,8 +598,6 @@ impl ElementImpl for Cea708Mux {
             gst::StateChange::ReadyToPaused => {
                 let mut state = self.state.lock().unwrap();
                 *state = State::default();
-                state.writer.set_output_padding(true);
-                state.writer.set_output_cea608_padding(true);
             }
             _ => (),
         }
@@ -598,8 +608,6 @@ impl ElementImpl for Cea708Mux {
             gst::StateChange::PausedToReady => {
                 let mut state = self.state.lock().unwrap();
                 *state = State::default();
-                state.writer.set_output_padding(true);
-                state.writer.set_output_cea608_padding(true);
             }
             _ => (),
         }
