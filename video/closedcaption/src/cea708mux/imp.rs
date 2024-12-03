@@ -81,13 +81,27 @@ fn fps_from_caps(caps: &gst::CapsRef) -> Result<Framerate, gst::LoggableError> {
     ))
 }
 
-#[derive(Default)]
 struct State {
     out_format: CeaFormat,
     fps: Option<Framerate>,
     dtvcc_seq_no: u8,
     writer: CCDataWriter,
     n_frames: u64,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        let mut writer = CCDataWriter::default();
+        writer.set_output_padding(true);
+        writer.set_output_cea608_padding(true);
+        Self {
+            out_format: CeaFormat::default(),
+            fps: None,
+            dtvcc_seq_no: 0,
+            writer,
+            n_frames: 0,
+        }
+    }
 }
 
 #[derive(Default)]
