@@ -83,9 +83,16 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-fn cc_data_buffer(data: &[u8], pts: gst::ClockTime, duration: gst::ClockTime) -> gst::Buffer {
+fn cc_data_buffer(
+    imp: &TtToCea708,
+    data: &[u8],
+    pts: gst::ClockTime,
+    duration: gst::ClockTime,
+) -> gst::Buffer {
     let mut ret = gst::Buffer::with_size(data.len()).unwrap();
     let buf_mut = ret.get_mut().unwrap();
+
+    gst::log!(CAT, imp = imp, "{pts} -> {}: {data:x?}", pts + duration);
 
     buf_mut.copy_from_slice(0, data).unwrap();
     buf_mut.set_pts(pts);
@@ -145,7 +152,7 @@ impl TtToCea708 {
                 .mul_div_round(fps_d * gst::ClockTime::SECOND.nseconds(), fps_n)
                 .unwrap()
                 .nseconds();
-            mut_list.add(cc_data_buffer(&cea708.packet, pts, duration));
+            mut_list.add(cc_data_buffer(self, &cea708.packet, pts, duration));
         }
         bufferlist
     }
