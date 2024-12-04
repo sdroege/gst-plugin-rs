@@ -178,7 +178,7 @@ impl Cea708ServiceWriter {
             true,
             true,
             false,
-            1,
+            2,
             1,
         );
         gst::trace!(CAT, "active window {:?}", self.active_window);
@@ -227,7 +227,7 @@ impl Cea708ServiceWriter {
                 true,
                 true,
                 true,
-                1,
+                2,
                 1,
             )),
         ])
@@ -254,7 +254,7 @@ impl Cea708ServiceWriter {
                 true,
                 true,
                 true,
-                1,
+                2,
                 1,
             )),
             Code::SetPenLocation(SetPenLocationArgs::new(rollup_count - 1, 0)),
