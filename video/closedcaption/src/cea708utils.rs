@@ -689,7 +689,7 @@ fn pango_foreground_opacity_from_708(args: &SetPenColorArgs) -> pango::AttrInt {
 }
 
 fn pango_background_color_from_708(args: &SetPenColorArgs) -> pango::AttrColor {
-    pango::AttrColor::new_foreground(
+    pango::AttrColor::new_background(
         color_value_as_u16(args.background_color.r),
         color_value_as_u16(args.background_color.g),
         color_value_as_u16(args.background_color.b),
