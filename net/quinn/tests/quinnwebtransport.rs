@@ -93,6 +93,7 @@ fn test_send_receive_with_datagram() {
 
 #[test]
 #[serial]
+#[ignore = "CI runners resolve localhost to an IPv6 address only which are not handled correctly yet"]
 fn test_send_receive_with_hostname() {
     send_receive("url=https://localhost:7772", "port=7772");
 }
