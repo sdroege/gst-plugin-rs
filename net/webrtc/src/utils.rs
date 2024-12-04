@@ -436,6 +436,7 @@ pub struct Codec {
     pub is_raw: bool,
 
     payload_type: Option<i32>,
+    clock_rate: Option<i32>,
     decoding_info: Option<DecodingInfo>,
     encoding_info: Option<EncodingInfo>,
 }
@@ -450,8 +451,9 @@ impl Codec {
         encoders: &glib::List<gst::ElementFactory>,
         payloaders: &glib::List<gst::ElementFactory>,
     ) -> Self {
+        let mut clock_rate: Option<i32> = None;
         let has_decoder = Self::has_decoder_for_caps(caps, decoders);
-        let has_depayloader = Self::has_depayloader_for_codec(name, depayloaders);
+        let has_depayloader = Self::has_depayloader_for_codec(name, depayloaders, &mut clock_rate);
 
         let decoding_info = if has_depayloader && has_decoder {
             Some(DecodingInfo {
@@ -480,6 +482,7 @@ impl Codec {
             name: name.into(),
             is_raw: false,
             payload_type: None,
+            clock_rate,
             decoding_info,
             encoding_info,
         }
@@ -491,7 +494,9 @@ impl Codec {
         depayloaders: &glib::List<gst::ElementFactory>,
         payloaders: &glib::List<gst::ElementFactory>,
     ) -> Self {
-        let decoding_info = if Self::has_depayloader_for_codec(name, depayloaders) {
+        let mut clock_rate: Option<i32> = None;
+        let decoding_info = if Self::has_depayloader_for_codec(name, depayloaders, &mut clock_rate)
+        {
             Some(DecodingInfo {
                 has_decoder: AtomicBool::new(false),
             })
@@ -523,6 +528,7 @@ impl Codec {
             name: name.into(),
             is_raw: true,
             payload_type: None,
+            clock_rate,
             decoding_info,
             encoding_info,
         }
@@ -632,6 +638,7 @@ impl Codec {
     fn has_depayloader_for_codec(
         codec: &str,
         depayloaders: &glib::List<gst::ElementFactory>,
+        clock_rate: &mut Option<i32>,
     ) -> bool {
         depayloaders.iter().any(|factory| {
             factory.static_pad_templates().iter().any(|template| {
@@ -646,7 +653,22 @@ impl Codec {
                         && s.get::<gst::List>("encoding-name").map_or_else(
                             |_| {
                                 if let Ok(encoding_name) = s.get::<&str>("encoding-name") {
-                                    encoding_name == codec
+                                    if encoding_name == codec {
+                                        if s.has_field("clock-rate") {
+                                            match s.get_optional::<i32>("clock-rate") {
+                                                Ok(Some(rate)) => {
+                                                    *clock_rate = Some(rate);
+                                                }
+                                                _ => {
+                                                    // if None or Err or IntRange
+                                                    *clock_rate = None;
+                                                }
+                                            };
+                                        }
+                                        true
+                                    } else {
+                                        false
+                                    }
                                 } else {
                                     false
                                 }
@@ -666,6 +688,10 @@ impl Codec {
 
     pub fn payload(&self) -> Option<i32> {
         self.payload_type
+    }
+
+    pub fn clock_rate(&self) -> Option<i32> {
+        self.clock_rate
     }
 
     pub fn build_encoder(&self) -> Option<Result<gst::Element, Error>> {
