@@ -2509,6 +2509,27 @@ impl ObjectImpl for TranscriberSinkPad {
                     .blurb("A map of language codes to bin descriptions, e.g. synthesis-languages=\"languages, fr=awspolly\" will use the awspolly element to synthesize speech from French translations")
                     .mutable_playing()
                     .build(),
+                gst::ParamSpecArray::builder("transcription-mix-matrix")
+                    .nick("Transcription mix matrix")
+                    .blurb("Initial transformation matrix for the transcriber audioconvert")
+                    .element_spec(
+                        &gst::ParamSpecArray::builder("rows")
+                            .nick("Rows")
+                            .blurb("A row in the matrix")
+                            .element_spec(
+                                &glib::ParamSpecFloat::builder("columns")
+                                .nick("Columns")
+                                .blurb("A column in the matrix")
+                                .minimum(-1.)
+                                .maximum(1.)
+                                .default_value(0.)
+                                .build()
+                            )
+                            .build(),
+                    )
+                    .mutable_ready()
+                    .build()
+
         ]
         });
 
@@ -2664,6 +2685,15 @@ impl ObjectImpl for TranscriberSinkPad {
                     }
                 }
             }
+            "transcription-mix-matrix" => {
+                let mut ps = self.state.lock().unwrap();
+                let Ok(pad_state) = ps.as_mut() else {
+                    return;
+                };
+                pad_state
+                    .transcriber_aconv
+                    .set_property("mix-matrix", value);
+            }
             _ => unimplemented!(),
         }
     }
@@ -2695,6 +2725,16 @@ impl ObjectImpl for TranscriberSinkPad {
                 match ps.as_ref() {
                     Ok(ps) => ps.transcriber.to_value(),
                     Err(_) => None::<gst::Element>.to_value(),
+                }
+            }
+            "transcription-mix-matrix" => {
+                let ps = self.state.lock().unwrap();
+                match ps.as_ref() {
+                    Ok(ps) => ps.transcriber_aconv.property_value("mix-matrix"),
+                    Err(_) => {
+                        let v: Vec<gst::Array> = vec![];
+                        gst::Array::new(&v).to_value()
+                    }
                 }
             }
             _ => unimplemented!(),
