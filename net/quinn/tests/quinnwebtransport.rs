@@ -9,6 +9,8 @@
 
 use gst::prelude::*;
 use serial_test::serial;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread;
 
 fn init() {
@@ -41,9 +43,13 @@ fn send_receive(src_pipeline_props: &str, sink_pipeline_props: &str) {
             address=127.0.0.1 secure-connection=false",
         sink_pipeline_props
     );
+    let h1_orig = Arc::new(Mutex::new(gst_check::Harness::new_empty()));
+
+    let h11 = h1_orig.clone();
 
     thread::spawn(move || {
-        let mut h1 = gst_check::Harness::new_empty();
+        let mut h1 = h11.lock().unwrap();
+
         h1.add_parse(&sink_pipeline);
 
         h1.set_src_caps(gst::Caps::builder("text/plain").build());
@@ -53,8 +59,6 @@ fn send_receive(src_pipeline_props: &str, sink_pipeline_props: &str) {
         assert!(h1.push(make_buffer(content)) == Ok(gst::FlowSuccess::Ok));
 
         h1.push_event(gst::event::Eos::new());
-
-        h1.element().unwrap().set_state(gst::State::Null).unwrap();
 
         drop(h1);
     });
@@ -71,8 +75,13 @@ fn send_receive(src_pipeline_props: &str, sink_pipeline_props: &str) {
         buf.into_mapped_buffer_readable().unwrap().as_slice()
     );
 
-    h2.element().unwrap().set_state(gst::State::Null).unwrap();
+    // Close the server now that the client has finished reading the data
+    let h11 = h1_orig.clone();
+    let h1 = h11.lock().unwrap();
+    h1.element().unwrap().set_state(gst::State::Null).unwrap();
+    drop(h1);
 
+    h2.element().unwrap().set_state(gst::State::Null).unwrap();
     drop(h2);
 }
 
