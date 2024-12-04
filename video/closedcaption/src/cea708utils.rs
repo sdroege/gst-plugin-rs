@@ -313,9 +313,11 @@ pub struct Cea708Renderer {
 
 impl Cea708Renderer {
     pub fn new() -> Self {
+        let mut cea608 = Cea608Renderer::new();
+        cea608.set_black_background(true);
         Self {
             selected: None,
-            cea608: Cea608Renderer::new(),
+            cea608,
             service: None,
             video_width: 0,
             video_height: 0,
