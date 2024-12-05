@@ -319,10 +319,7 @@ impl BaseSrcImpl for QuinnWebTransportClientSrc {
         if let State::Started(ref mut state) = *state {
             let session = &state.session;
 
-            session.close(
-                CONNECTION_CLOSE_CODE.into(),
-                CONNECTION_CLOSE_MSG.as_bytes(),
-            );
+            session.close(CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG.as_bytes());
         }
 
         *state = State::Stopped;

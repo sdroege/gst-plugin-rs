@@ -61,10 +61,12 @@ struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        let mut transport_config = QuinnQuicTransportConfig::default();
-        // Required for the WebTransport handshake
-        transport_config.max_concurrent_bidi_streams = 2u32.into();
-        transport_config.max_concurrent_uni_streams = 1u32.into();
+        let transport_config = QuinnQuicTransportConfig {
+            // Required for the WebTransport handshake
+            max_concurrent_bidi_streams: 2u32.into(),
+            max_concurrent_uni_streams: 1u32.into(),
+            ..Default::default()
+        };
 
         Settings {
             address: DEFAULT_ADDR.to_string(),
@@ -447,7 +449,7 @@ impl BaseSinkImpl for QuinnWebTransportServerSink {
                 };
             }
 
-            session.close(CONNECTION_CLOSE_CODE.into(), close_msg.as_bytes());
+            session.close(CONNECTION_CLOSE_CODE, close_msg.as_bytes());
         }
 
         *state = State::Stopped;

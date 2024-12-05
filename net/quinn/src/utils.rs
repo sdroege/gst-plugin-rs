@@ -230,14 +230,10 @@ fn create_transport_config(
     ));
     transport_config
         .datagram_send_buffer_size(ep_config.transport_config.datagram_send_buffer_size);
-    transport_config.max_concurrent_bidi_streams(
-        ep_config
-            .transport_config
-            .max_concurrent_bidi_streams
-            .into(),
-    );
     transport_config
-        .max_concurrent_uni_streams(ep_config.transport_config.max_concurrent_uni_streams.into());
+        .max_concurrent_bidi_streams(ep_config.transport_config.max_concurrent_bidi_streams);
+    transport_config
+        .max_concurrent_uni_streams(ep_config.transport_config.max_concurrent_uni_streams);
     transport_config.mtu_discovery_config(Some(mtu_config));
 
     transport_config
