@@ -762,8 +762,8 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
             "openh264enc" => {
                 enc.set_property("bitrate", start_bitrate);
                 enc.set_property("gop-size", 2560u32);
-                enc.set_property("rate-control", 1);
-                enc.set_property("complexity", 0);
+                enc.set_property_from_str("rate-control", "bitrate");
+                enc.set_property_from_str("complexity", "low");
                 enc.set_property("background-detection", false);
                 enc.set_property("scene-change-detection", false);
             }
