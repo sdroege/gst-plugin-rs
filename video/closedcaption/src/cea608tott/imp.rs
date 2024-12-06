@@ -124,6 +124,7 @@ impl Cea608ToTt {
                                     | cea608_types::Cea608::Backspace(_)
                                     | cea608_types::Cea608::EndOfCaption(_)
                                     | cea608_types::Cea608::DeleteToEndOfRow(_)
+                                    | cea608_types::Cea608::CarriageReturn(_)
                             )
                         {
                             // only in some specific circumstances do we want to actually change
