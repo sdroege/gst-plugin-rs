@@ -2647,6 +2647,7 @@ dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
  "once_cell",
+ "smallvec",
 ]
 
 [[package]]
