@@ -12,6 +12,7 @@ rust-version.workspace = true
 gst.workspace = true
 bitstream-io = "2.3"
 anyhow = "1"
+smallvec = "1"
 
 [dev-dependencies]
 

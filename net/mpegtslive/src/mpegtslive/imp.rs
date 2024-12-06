@@ -21,18 +21,20 @@
  *
  * Since: plugins-rs-0.13.0
  */
-use anyhow::Context;
-use anyhow::{bail, Result};
-use bitstream_io::{BigEndian, BitRead, BitReader, FromBitStream};
-use gst::glib;
-use gst::prelude::*;
-use gst::subclass::prelude::*;
-use std::mem;
-use std::ops::Add;
-use std::ops::ControlFlow;
-use std::sync::Mutex;
+use anyhow::{bail, Context, Result};
 
-use std::sync::LazyLock;
+use bitstream_io::{BigEndian, BitRead, BitReader};
+
+use gst::{glib, prelude::*, subclass::prelude::*};
+
+use std::{
+    mem,
+    ops::{Add, ControlFlow},
+    sync::LazyLock,
+    sync::Mutex,
+};
+
+use super::parser::*;
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -174,206 +176,15 @@ struct State {
     // If the next outgoing packet should have the discont flag set
     discont_pending: bool,
 
-    // Continuity counter for PAT PID
-    pat_cc: Option<u8>,
-    // Pending PAT payload data from last PAT packet
-    pat_pending: Vec<u8>,
-    // Pending data starts on pointer field, otherwise on table header
-    pat_pending_pusi: bool,
-    // PID used for the PMT of the selected program
-    pmt_pid: Option<u16>,
-    // Program number of the selected program
-    pmt_program_num: Option<u16>,
-    // Continuity counter for PMT PID
-    pmt_cc: Option<u8>,
-    // Pending PMT payload data from last PMT packet
-    pmt_pending: Vec<u8>,
-    // Pending data starts on pointer fiel, otherwise on table header
-    pmt_pending_pusi: bool,
-    // PID used for the PCR of the selected program
-    pcr_pid: Option<u16>,
-}
+    // Section parser for PAT
+    pat_parser: SectionParser,
+    // Current PAT, first program is the selected one
+    pat: Option<ProgramAccessTable>,
 
-#[derive(Debug)]
-#[allow(unused)]
-struct PacketHeader {
-    tei: bool,
-    pusi: bool,
-    tp: bool,
-    pid: u16,
-    tsc: u8,
-    afc: u8,
-    cc: u8,
-}
-
-impl FromBitStream for PacketHeader {
-    type Error = anyhow::Error;
-
-    fn from_reader<R: BitRead + ?Sized>(r: &mut R) -> std::result::Result<Self, Self::Error>
-    where
-        Self: Sized,
-    {
-        if r.read_to::<u8>().context("sync_byte")? != 0x47 {
-            bail!("Lost sync");
-        }
-
-        let tei = r.read_bit().context("tei")?;
-        let pusi = r.read_bit().context("pusi")?;
-        let tp = r.read_bit().context("tp")?;
-        let pid = r.read::<u16>(13).context("pid")?;
-
-        let tsc = r.read::<u8>(2).context("tsc")?;
-        let afc = r.read::<u8>(2).context("afc")?;
-        let cc = r.read::<u8>(4).context("cc")?;
-
-        Ok(PacketHeader {
-            tei,
-            pusi,
-            tp,
-            pid,
-            tsc,
-            afc,
-            cc,
-        })
-    }
-}
-
-#[derive(Debug)]
-struct AdaptionField {
-    pcr: Option<u64>,
-    // Add other fields as needed
-}
-
-impl FromBitStream for AdaptionField {
-    type Error = anyhow::Error;
-
-    fn from_reader<R: BitRead + ?Sized>(r: &mut R) -> std::result::Result<Self, Self::Error>
-    where
-        Self: Sized,
-    {
-        r.skip(3).context("flags")?;
-        let pcr_present = r.read_bit().context("pcr_present")?;
-        r.skip(4).context("flags")?;
-
-        // PCR present
-        let pcr = if pcr_present {
-            let pcr = r.read::<u64>(33).context("pcr_base")? * 300;
-            r.skip(6).context("pcr_reserved")?;
-            let pcr = pcr + r.read::<u64>(9).context("pcr_extension")? % 300;
-            Some(pcr)
-        } else {
-            None
-        };
-
-        // Skip all other parts of the adaptation field for now
-
-        Ok(AdaptionField { pcr })
-    }
-}
-
-#[derive(Debug)]
-struct TableHeader {
-    table_id: u8,
-    section_syntax_indicator: bool,
-    section_length: u16,
-}
-
-impl FromBitStream for TableHeader {
-    type Error = anyhow::Error;
-
-    fn from_reader<R: BitRead + ?Sized>(r: &mut R) -> std::result::Result<Self, Self::Error>
-    where
-        Self: Sized,
-    {
-        let table_id = r.read_to::<u8>().context("table_id")?;
-        let section_syntax_indicator = r.read_bit().context("table_syntax_indicator")?;
-        r.skip(5).context("reserved")?;
-        let section_length = r.read::<u16>(10).context("section_length")?;
-
-        Ok(TableHeader {
-            table_id,
-            section_syntax_indicator,
-            section_length,
-        })
-    }
-}
-
-#[derive(Debug)]
-#[allow(unused)]
-struct TableSyntaxSection {
-    table_id_extension: u16,
-    version_number: u8,
-    current_next_indicator: bool,
-    section_number: u8,
-    last_section_number: u8,
-}
-
-impl FromBitStream for TableSyntaxSection {
-    type Error = anyhow::Error;
-
-    fn from_reader<R: BitRead + ?Sized>(r: &mut R) -> std::result::Result<Self, Self::Error>
-    where
-        Self: Sized,
-    {
-        let table_id_extension = r.read_to::<u16>().context("table_id_extension")?;
-        r.skip(2).context("reserved")?;
-        let version_number = r.read::<u8>(5).context("version_number")?;
-        let current_next_indicator = r.read_bit().context("current_next_indicator")?;
-        let section_number = r.read_to::<u8>().context("section_number")?;
-        let last_section_number = r.read_to::<u8>().context("last_section_number")?;
-
-        Ok(TableSyntaxSection {
-            table_id_extension,
-            version_number,
-            current_next_indicator,
-            section_number,
-            last_section_number,
-        })
-    }
-}
-
-#[derive(Debug)]
-struct ProgramAccessTable {
-    program_num: u16,
-    program_map_pid: u16,
-}
-
-impl FromBitStream for ProgramAccessTable {
-    type Error = anyhow::Error;
-
-    fn from_reader<R: BitRead + ?Sized>(r: &mut R) -> std::result::Result<Self, Self::Error>
-    where
-        Self: Sized,
-    {
-        let program_num = r.read_to::<u16>().context("program_num")?;
-        r.skip(3).context("reserved")?;
-        let program_map_pid = r.read::<u16>(13).context("program_map_pid")?;
-
-        Ok(ProgramAccessTable {
-            program_num,
-            program_map_pid,
-        })
-    }
-}
-
-#[derive(Debug)]
-struct ProgramMappingTable {
-    pcr_pid: u16,
-    // Add other fields as needed
-}
-
-impl FromBitStream for ProgramMappingTable {
-    type Error = anyhow::Error;
-
-    fn from_reader<R: BitRead + ?Sized>(r: &mut R) -> std::result::Result<Self, Self::Error>
-    where
-        Self: Sized,
-    {
-        r.skip(3).context("reserved")?;
-        let pcr_pid = r.read::<u16>(13).context("pcr_pid")?;
-
-        Ok(ProgramMappingTable { pcr_pid })
-    }
+    // Section parser for PMT
+    pmt_parser: SectionParser,
+    // Currently selected PMT
+    pmt: Option<ProgramMappingTable>,
 }
 
 impl State {
@@ -483,111 +294,106 @@ impl State {
         self.last_seen_pcr = Some(new_pcr);
     }
 
-    /// Parses an MPEG-TS section and updates the internal state
+    /// Parses and handles a section
     fn handle_section(
         &mut self,
         imp: &MpegTsLiveSource,
         header: &PacketHeader,
-        table_header: &TableHeader,
-        slice: &[u8],
+        payload: &[u8],
     ) -> Result<()> {
-        gst::trace!(
-            CAT,
-            imp = imp,
-            "Parsing section with header {table_header:?}"
-        );
+        // Read PAT or our selected program's PMT
+        if header.pid == 0x00_00 {
+            self.pat_parser.push(header, payload);
 
-        // Skip non-PAT/PMT
-        if table_header.table_id != 0x00 && table_header.table_id != 0x02
-            || !table_header.section_syntax_indicator
-        {
-            return Ok(());
-        }
-
-        let mut section_reader = BitReader::endian(slice, BigEndian);
-
-        let table_syntax_section = section_reader
-            .parse::<TableSyntaxSection>()
-            .context("section")?;
-
-        gst::trace!(
-            CAT,
-            imp = imp,
-            "Parsing section with table syntax section {table_syntax_section:?}"
-        );
-
-        if header.pid == 0x00_00 && table_header.table_id == 0x00 {
-            // PAT
-            let remaining_length = section_reader.reader().unwrap().len();
-            if remaining_length < 4 {
-                bail!("too short PAT");
-            }
-            let n_pats = (remaining_length - 4) / 4;
-            if n_pats == 0 {
-                gst::warning!(CAT, imp = imp, "No programs in PAT");
-                return Ok(());
-            }
-
-            let mut first = true;
-            let mut warned = false;
-            for idx in 0..n_pats {
-                let pat = section_reader
-                    .parse::<ProgramAccessTable>()
-                    .context("pat")?;
-                gst::trace!(CAT, imp = imp, "Parsed PAT {idx}: {pat:?}");
-                if pat.program_map_pid == 0 {
-                    // Skip NIT
-                } else if first {
-                    first = false;
-                    // Our program we select
-                    if Option::zip(self.pmt_pid, self.pmt_program_num)
-                        .map_or(true, |(pid, prog_num)| {
-                            pid != pat.program_map_pid || prog_num != pat.program_num
-                        })
-                    {
+            loop {
+                match self.pat_parser.parse() {
+                    Ok(Some(Section::ProgramAccessTable {
+                        table_header,
+                        table_syntax_section,
+                        pat,
+                    })) => {
                         gst::trace!(
                             CAT,
                             imp = imp,
-                            "Selecting program with PID {} and program number {}",
-                            pat.program_map_pid,
-                            pat.program_num,
+                            "Parsed PAT: {table_header:?} {table_syntax_section:?} {pat:?}"
                         );
-                        self.pmt_pid = Some(pat.program_map_pid);
-                        self.pmt_program_num = Some(pat.program_num);
-                        self.pmt_pending.clear();
-                        self.pmt_cc = None;
-                        self.pcr_pid = None;
-                        self.last_seen_pcr = None;
+
+                        if pat.is_empty() {
+                            gst::warning!(CAT, imp = imp, "No programs in PAT");
+                            continue;
+                        } else if pat.len() > 1 {
+                            gst::warning!(
+                                    CAT,
+                                    imp = imp,
+                                    "MPEG-TS stream with multiple programs - timing will be wrong for all but first program",
+                                );
+                        }
+
+                        let selected_pat = &pat[0];
+                        if header.pid == 0x00_00 && Some(selected_pat) != self.pat.as_ref() {
+                            gst::trace!(
+                                CAT,
+                                imp = imp,
+                                "Selecting program with PID {} and program number {}",
+                                selected_pat.program_map_pid,
+                                selected_pat.program_num,
+                            );
+                            self.pat = Some(selected_pat.clone());
+                            self.pmt_parser.clear();
+                            self.pmt = None;
+                            self.last_seen_pcr = None;
+                        }
                     }
-                } else {
-                    // Other programs we ignore
-                    if !warned {
-                        gst::warning!(
+                    Ok(Some(section)) => {
+                        gst::trace!(
                             CAT,
                             imp = imp,
-                            "MPEG-TS stream with multiple programs - timing will be wrong for all but first program",
+                            "Parsed unhandled section {section:?} on PAT PID"
                         );
-                        warned = true;
+                    }
+                    Ok(None) => break,
+                    Err(err) => {
+                        gst::warning!(CAT, imp = imp, "Failed parsing section: {err:?}");
                     }
                 }
             }
-        } else if Some(header.pid) == self.pmt_pid
-            && Some(table_syntax_section.table_id_extension) == self.pmt_program_num
-            && table_header.table_id == 0x02
-        {
-            // PMT
-            let pmt = section_reader
-                .parse::<ProgramMappingTable>()
-                .context("pmt")?;
-            gst::trace!(
-                CAT,
-                imp = imp,
-                "Parsed PMT for selected program number {}: {pmt:?}",
-                table_syntax_section.table_id_extension
-            );
-            if self.pcr_pid.map_or(true, |pcr_pid| pcr_pid != pmt.pcr_pid) {
-                self.pcr_pid = Some(pmt.pcr_pid);
-                self.last_seen_pcr = None;
+        } else if self.pat.as_ref().map(|pat| pat.program_map_pid) == Some(header.pid) {
+            self.pmt_parser.push(header, payload);
+
+            loop {
+                match self.pmt_parser.parse() {
+                    Ok(Some(Section::ProgramMappingTable {
+                        table_header,
+                        table_syntax_section,
+                        pmt,
+                    })) => {
+                        gst::trace!(
+                            CAT,
+                            imp = imp,
+                            "Parsed PMT: {table_header:?} {table_syntax_section:?} {pmt:?}"
+                        );
+
+                        if self.pat.as_ref().map(|pat| pat.program_num)
+                            == Some(table_syntax_section.table_id_extension)
+                            && self.pmt.as_ref() != Some(&pmt)
+                        {
+                            gst::trace!(CAT, imp = imp, "Selecting PCR PID {}", pmt.pcr_pid);
+                            self.pmt = Some(pmt);
+                            self.last_seen_pcr = None;
+                        }
+                    }
+                    Ok(Some(section)) => {
+                        gst::trace!(
+                            CAT,
+                            imp = imp,
+                            "Parsed unhandled section {section:?} on PMT PID"
+                        );
+                    }
+                    Ok(None) => break,
+                    Err(err) => {
+                        gst::warning!(CAT, imp = imp, "Failed parsing section: {err:?}");
+                    }
+                }
             }
         }
 
@@ -626,7 +432,7 @@ impl State {
             reader.skip(8 * length as u32).context("af")?;
 
             // Parse adaption field and update PCR if it's the PID of our selected program
-            if self.pcr_pid == Some(header.pid) {
+            if self.pmt.as_ref().map(|pmt| pmt.pcr_pid) == Some(header.pid) {
                 let mut af_reader = BitReader::endian(af, BigEndian);
                 let adaptation_field = af_reader.parse::<AdaptionField>().context("af")?;
 
@@ -649,106 +455,10 @@ impl State {
         if header.afc & 0x1 != 0 {
             let new_payload = *reader.reader().unwrap();
 
-            // Read PAT or our selected program's PMT
-            if header.pid == 0x00_00 || self.pmt_pid == Some(header.pid) {
-                let (cc, mut pending, pending_pusi) = if header.pid == 0x00_00 {
-                    (
-                        &mut self.pat_cc,
-                        mem::take(&mut self.pat_pending),
-                        self.pat_pending_pusi,
-                    )
-                } else {
-                    (
-                        &mut self.pmt_cc,
-                        mem::take(&mut self.pmt_pending),
-                        self.pmt_pending_pusi,
-                    )
-                };
-
-                // Clear any pending data if necessary
-                if header.pusi || cc.map_or(true, |cc| (cc + 1) & 0xf != header.cc) {
-                    pending.clear();
-                }
-                *cc = Some(header.cc);
-
-                // Skip packet if this is not the start of a section
-                if !header.pusi && pending.is_empty() {
-                    return Ok(());
-                }
-
-                // Store payload for parsing, in case it's split over multiple packets
-                pending.extend_from_slice(new_payload);
-
-                // No payload
-                if pending.is_empty() {
-                    return Ok(());
-                }
-
-                let payload = pending.as_slice();
-                let mut pusi = header.pusi || pending_pusi;
-                let mut payload_reader = BitReader::endian(payload, BigEndian);
-                loop {
-                    let remaining_payload = payload_reader.reader().unwrap();
-
-                    let table_header;
-                    if pusi {
-                        assert!(!remaining_payload.is_empty());
-                        let pointer_field = remaining_payload[0] as usize;
-                        // Need more data
-                        if payload_reader.reader().unwrap().len() < 1 + pointer_field + 3 {
-                            break;
-                        }
-
-                        // Skip padding
-                        payload_reader.skip(8 + 8 * pointer_field as u32).unwrap();
-                        pusi = false;
-                        // Peek table header, payload_reader stays at beginning of section header
-                        table_header = payload_reader.clone().parse::<TableHeader>().unwrap();
-                    } else if remaining_payload.len() < 3 {
-                        // Need more data for table header
-                        break;
-                    } else {
-                        // Peek table header, payload_reader stays at beginning of section header
-                        table_header = payload_reader.clone().parse::<TableHeader>().unwrap();
-                    }
-
-                    // Need more data for this section. payload_reader is still at beginning of
-                    // section header so require 3 extra bytes
-                    let remaining_length = payload_reader.reader().unwrap().len();
-                    if remaining_length < 3 + table_header.section_length as usize {
-                        break;
-                    }
-
-                    // Skip table header
-                    payload_reader.skip(8 * 3).unwrap();
-                    let section =
-                        &payload_reader.reader().unwrap()[..table_header.section_length as usize];
-                    // Skip whole section so the reader is at the beginning of the next section header
-                    payload_reader
-                        .skip(8 * table_header.section_length as u32)
-                        .unwrap();
-
-                    if let Err(err) = self.handle_section(imp, &header, &table_header, section) {
-                        gst::warning!(
-                            CAT,
-                            imp = imp,
-                            "Failed parsing section {table_header:?}: {err:?}"
-                        );
-                    }
-                }
-
-                // Skip all already parsed sections
-                let remaining_length = payload_reader.reader().unwrap().len();
-                let new_pending_range = (pending.len() - remaining_length)..pending.len();
-                pending.copy_within(new_pending_range, 0);
-                pending.resize(remaining_length, 0u8);
-                if header.pid == 0x00_00 {
-                    self.pat_pending = pending;
-                    self.pat_pending_pusi = pusi;
-                } else {
-                    self.pmt_pending = pending;
-                    self.pmt_pending_pusi = pusi;
-                }
+            if header.pid == 0x00_00
+                || self.pat.as_ref().map(|pat| pat.program_map_pid) == Some(header.pid)
+            {
+                self.handle_section(imp, &header, new_payload)?;
             }
 
             // Skip everything else

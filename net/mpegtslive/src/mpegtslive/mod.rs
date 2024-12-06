@@ -10,6 +10,7 @@ use gst::glib;
 use gst::prelude::*;
 
 mod imp;
+mod parser;
 
 glib::wrapper! {
     pub struct MpegTsLiveSource(ObjectSubclass<imp::MpegTsLiveSource>) @extends gst::Bin, gst::Element, gst::Object;

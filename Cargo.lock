@@ -2824,6 +2824,7 @@ dependencies = [
  "bitstream-io",
  "gst-plugin-version-helper",
  "gstreamer",
+ "smallvec",
 ]
 
 [[package]]
