@@ -552,12 +552,13 @@ if pkg_config.found()
   extra_env += {'PKG_CONFIG': pkg_config.full_path()}
 endif
 
+pathsep = ':'
+if host_system == 'windows'
+  pathsep = ';'
+endif
+
 pkg_config_path = get_option('pkg_config_path')
 if pkg_config_path.length() > 0
-  pathsep = ':'
-  if host_system == 'windows'
-    pathsep = ';'
-  endif
   extra_env += {'PKG_CONFIG_PATH': pathsep.join(pkg_config_path)}
 endif
 

@@ -86,42 +86,27 @@ foreach extension: required_hotdoc_extensions
 endforeach
 
 build_hotdoc = true
-plugins_doc = []
-
-
-list_plugin_res = run_command(python, '-c',
-'''
-import sys
-import json
-
-with open("@0@") as f:
-    print(':'.join(json.load(f).keys()), end='')
-'''.format(plugins_cache),
-  check: true)
-foreach plugin_name: list_plugin_res.stdout().split(':')
-    plugins_doc += [hotdoc.generate_doc(plugin_name,
-        project_version: '1.0',
-        sitemap: 'plugins/sitemap.txt',
-        index: 'plugins/index.md',
-        gst_index: 'plugins/index.md',
-        include_paths: join_paths(meson.current_source_dir(), '..'),
-        extra_assets: [join_paths(meson.current_source_dir(), 'images')],
-        gst_smart_index: true,
-        gst_c_source_filters: [
-            '../target/*/*.rs',
-            '../target/*/*/*.rs',
-            '../target/*/*/*/*.rs',
-            '../target/*/*/*/*/*.rs',
-            '../target/*/*/*/*/*/*.rs',
-        ],
-        gst_c_sources: [
-          '../*/*/*/*.rs',
-          '../*/*/*/*/*.rs',
-          '../*/*/*/*/*/*.rs',
-        ],
-        dependencies: [gst_dep],
-        gst_order_generated_subpages: true,
-        gst_cache_file: plugins_cache,
-        gst_plugin_name: plugin_name,
-    )]
-endforeach
+cdir = meson.current_source_dir()
+gst_plugins_doc = run_command(
+    plugins_cache_generator,
+    'hotdoc-config',
+    '--builddir', meson.current_build_dir(),
+    '--project_version', '1.0',
+    '--sitemap', cdir / 'plugins/sitemap.txt',
+    '--index', cdir / 'plugins/index.md',
+    '--include_paths', meson.current_source_dir() / '..',
+    '--gst_index', cdir / 'plugins/index.md',
+    '--gst_c_source_filters', cdir / '../target/*/*.rs',
+    '--gst_c_source_filters',
+      cdir / '../target/*/*/*.rs',
+      cdir / '../target/*/*/*/*.rs',
+      cdir / '../target/*/*/*/*/*.rs',
+      cdir / '../target/*/*/*/*/*/*.rs',
+    '--gst_c_sources',
+      cdir / '../*/*/*/*.rs',
+      cdir / '../*/*/*/*/*.rs',
+      cdir / '../*/*/*/*/*/*.rs',
+    '--gst_cache_file', plugins_cache,
+    '--extra_assets', join_paths(meson.current_source_dir(), 'images'),
+    check: true,
+).stdout().split(pathsep)
