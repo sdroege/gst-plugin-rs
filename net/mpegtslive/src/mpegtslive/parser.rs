@@ -9,7 +9,9 @@
 #![allow(unused)]
 
 use anyhow::{bail, Context, Result};
-use bitstream_io::{BigEndian, BitRead, BitReader, FromBitStream};
+use bitstream_io::{
+    BigEndian, BitRead, BitReader, ByteRead, ByteReader, FromBitStream, FromByteStream,
+};
 use smallvec::SmallVec;
 
 pub struct SectionParser {
@@ -386,6 +388,205 @@ impl FromBitStream for ProgramMappingTable {
             elementary_pids,
         })
     }
+}
+
+#[derive(Debug)]
+pub struct PESParser {
+    /// Current value of the continuity counter
+    cc: Option<u8>,
+    /// Pending PES data
+    pending: Vec<u8>,
+    /// If we skip data until the next PUSI
+    waiting_for_pusi: bool,
+}
+
+impl Default for PESParser {
+    fn default() -> Self {
+        Self {
+            cc: None,
+            pending: Vec::new(),
+            waiting_for_pusi: true,
+        }
+    }
+}
+
+impl PESParser {
+    /// Push PES `payload`.
+    ///
+    /// After this call `parse()` until `None` is returned.
+    pub fn push(&mut self, header: &PacketHeader, payload: &[u8]) {
+        if header.pusi {
+            self.clear();
+        } else if self.cc.map_or(true, |cc| (cc + 1) & 0xf != header.cc) {
+            self.clear();
+            self.waiting_for_pusi = true;
+            // Not start of a payload and we didn't see the start, just return
+            return;
+        } else if self.waiting_for_pusi {
+            // Not start of a payload and we didn't see the start, just return
+            return;
+        }
+        self.cc = Some(header.cc);
+
+        // Store payload for parsing, in case it's split over multiple packets
+        if header.pusi {
+            self.waiting_for_pusi = false;
+        }
+        self.pending.extend_from_slice(payload);
+    }
+
+    /// Parse PES payload that is currently queued up.
+    ///
+    /// Call until `None` is returned, which means that more data is required to continue parsing.
+    ///
+    /// It is safe to call this again after an error.
+    pub fn parse(&mut self) -> Result<Option<(PESHeader, Option<OptionalPESHeader>)>> {
+        match self.parse_internal() {
+            Ok(res) => Ok(res),
+            Err(err) => {
+                self.clear();
+                Err(err)
+            }
+        }
+    }
+
+    fn parse_internal(&mut self) -> Result<Option<(PESHeader, Option<OptionalPESHeader>)>> {
+        // No payload to handle right now
+        if self.pending.is_empty() {
+            return Ok(None);
+        }
+
+        let payload = self.pending.as_slice();
+
+        // Size of PES header
+        if payload.len() < 3 {
+            return Ok(None);
+        }
+
+        let mut reader = ByteReader::endian(payload, BigEndian);
+        let header = reader.parse::<PESHeader>().context("PES header")?;
+
+        // Stream IDs without optional PES header
+        if header.stream_id == 0xbc
+            || header.stream_id == 0xbe
+            || header.stream_id == 0xbf
+            || (0xf0..=0xf2).contains(&header.stream_id)
+            || header.stream_id == 0xff
+            || header.stream_id == 0xf8
+        {
+            // We only care about the header so stop parsing now
+            self.pending.clear();
+            self.waiting_for_pusi = true;
+            return Ok(Some((header, None)));
+        }
+
+        // Size of PES header + size of optional PES header
+        if payload.len() < 6 {
+            return Ok(None);
+        }
+
+        let optional_pes_header_flags =
+            reader.read::<u16>().context("optional_pes_header_flags")?;
+        if optional_pes_header_flags & 0b1100_0000_0000_0000 != 0b1000_0000_0000_0000 {
+            bail!("Missing marker bits");
+        }
+        if optional_pes_header_flags & 0b0000_0000_1100_0000 == 0b0000_0000_0100_0000 {
+            bail!("DTS without PTS is forbidden");
+        }
+
+        let optional_pes_header_length =
+            reader.read::<u8>().context("optional_pes_header_length")?;
+
+        let remaining_length = reader.reader().len();
+        if remaining_length < optional_pes_header_length as usize {
+            return Ok(None);
+        }
+
+        fn read_pes_ts<R: ByteRead + ?Sized>(r: &mut R) -> std::result::Result<u64, anyhow::Error> {
+            let mut ts = [0u8; 5];
+            r.read_bytes(&mut ts).context("pes_ts")?;
+
+            if ts[0] & 0x01 != 0x01 || ts[2] & 0x01 != 0x01 || ts[4] & 0x01 != 0x01 {
+                bail!("lost PTS sync");
+            }
+
+            let ts = ((ts[0] as u64 & 0x0e) << 29)
+                | ((ts[1] as u64) << 22)
+                | ((ts[2] as u64 & 0xfe) << 14)
+                | ((ts[3] as u64) << 7)
+                | ((ts[4] as u64 & 0xfe) >> 1);
+
+            Ok(ts)
+        }
+
+        let pts = if optional_pes_header_flags & 0b0000_0000_1000_0000 != 0 {
+            let pts = read_pes_ts(&mut reader).context("pts")?;
+            Some(pts)
+        } else {
+            None
+        };
+
+        let dts = if optional_pes_header_flags & 0b0000_0000_0100_0000 != 0 {
+            let dts = read_pes_ts(&mut reader).context("dts")?;
+            Some(dts)
+        } else {
+            None
+        };
+
+        let optional_pes_header = OptionalPESHeader {
+            flags: optional_pes_header_flags,
+            length: optional_pes_header_length,
+            pts,
+            dts,
+        };
+
+        // We only care about the header so stop parsing now
+        self.pending.clear();
+        self.waiting_for_pusi = true;
+
+        Ok(Some((header, Some(optional_pes_header))))
+    }
+
+    pub fn clear(&mut self) {
+        self.cc = None;
+        self.pending.clear();
+        self.waiting_for_pusi = true;
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PESHeader {
+    pub stream_id: u8,
+    pub length: u16,
+}
+
+impl FromByteStream for PESHeader {
+    type Error = anyhow::Error;
+
+    fn from_reader<R: ByteRead + ?Sized>(r: &mut R) -> std::result::Result<Self, Self::Error>
+    where
+        Self: Sized,
+    {
+        let start_code = r.read::<u32>().context("packet_start_code")?;
+
+        if start_code >> 8 != 0x00_00_01 {
+            bail!("Lost sync");
+        }
+
+        let stream_id = (start_code & 0xff) as u8;
+        let length = r.read::<u16>().context("packet_length")?;
+
+        Ok(PESHeader { stream_id, length })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct OptionalPESHeader {
+    pub flags: u16,
+    pub length: u8,
+    pub pts: Option<u64>,
+    pub dts: Option<u64>,
+    // Add other fields as needed
 }
 
 #[derive(Debug, Clone)]
