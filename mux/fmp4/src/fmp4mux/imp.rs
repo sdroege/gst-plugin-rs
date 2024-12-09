@@ -426,7 +426,7 @@ impl State {
         self.fragment_end_pts = None;
         self.chunk_start_pts = None;
     }
-    fn stream_from_pad(&mut self, pad: &gst_base::AggregatorPad) -> Option<&mut Stream> {
+    fn mut_stream_from_pad(&mut self, pad: &gst_base::AggregatorPad) -> Option<&mut Stream> {
         self.streams.iter_mut().find(|s| *pad == s.sinkpad)
     }
 }
@@ -3704,22 +3704,24 @@ impl AggregatorImpl for FMP4Mux {
                 let mut state = self.state.lock().unwrap();
                 if !state.streams.is_empty() {
                     state.need_new_header =
-                        state.stream_from_pad(aggregator_pad).is_some_and(|stream| {
-                            if !self.caps_compatible(stream, caps.caps())
-                                && self.header_update_allowed("caps")
-                            {
-                                gst::trace!(
-                                    CAT,
-                                    obj = aggregator_pad,
-                                    "Update caps and send new headers {:?}",
-                                    caps
-                                );
-                                stream.next_caps = Some(caps.caps_owned());
-                                true
-                            } else {
-                                false
-                            }
-                        });
+                        state
+                            .mut_stream_from_pad(aggregator_pad)
+                            .is_some_and(|stream| {
+                                if !self.caps_compatible(stream, caps.caps())
+                                    && self.header_update_allowed("caps")
+                                {
+                                    gst::trace!(
+                                        CAT,
+                                        obj = aggregator_pad,
+                                        "Update caps and send new headers {:?}",
+                                        caps
+                                    );
+                                    stream.next_caps = Some(caps.caps_owned());
+                                    true
+                                } else {
+                                    false
+                                }
+                            });
                 }
                 drop(state);
                 self.parent_sink_event(aggregator_pad, event)
@@ -3750,7 +3752,7 @@ impl AggregatorImpl for FMP4Mux {
                             }
 
                             state.need_new_header = true;
-                            let stream = state.stream_from_pad(aggregator_pad).unwrap();
+                            let stream = state.mut_stream_from_pad(aggregator_pad).unwrap();
                             stream.language_code = Some(language_code);
                             stream.tag_changed = true;
                         }
@@ -3769,7 +3771,7 @@ impl AggregatorImpl for FMP4Mux {
                     if !state.streams.is_empty() && self.header_update_allowed("orientation") {
                         state.need_new_header = true;
                         if tag.scope() == gst::TagScope::Stream {
-                            let stream = state.stream_from_pad(aggregator_pad).unwrap();
+                            let stream = state.mut_stream_from_pad(aggregator_pad).unwrap();
                             stream.orientation = gst_video::VideoOrientationMethod::from_tag(tag);
                             stream.tag_changed = true;
                         } else {
@@ -4574,7 +4576,7 @@ impl AggregatorPadImpl for FMP4MuxPad {
         let mut mux_state = mux.imp().state.lock().unwrap();
 
         if let Some(stream) =
-            mux_state.stream_from_pad(self.obj().upcast_ref::<gst_base::AggregatorPad>())
+            mux_state.mut_stream_from_pad(self.obj().upcast_ref::<gst_base::AggregatorPad>())
         {
             stream.flush();
         }
