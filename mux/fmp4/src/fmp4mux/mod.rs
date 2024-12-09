@@ -6,6 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use crate::fmp4mux::imp::CAT;
 use gst::glib;
 use gst::prelude::*;
 
@@ -140,7 +141,10 @@ pub(crate) fn transform_matrix(
         gst_video::VideoOrientationMethod::Vert => &FLIP_VERT_MATRIX,
         gst_video::VideoOrientationMethod::UrLl => &FLIP_ROTATE_90R_MATRIX,
         gst_video::VideoOrientationMethod::UlLr => &FLIP_ROTATE_90L_MATRIX,
-        _ => &IDENTITY_MATRIX,
+        _ => {
+            gst::info!(CAT, "Orientation {:?} not yet supported", orientation);
+            &IDENTITY_MATRIX
+        }
     }
 }
 
