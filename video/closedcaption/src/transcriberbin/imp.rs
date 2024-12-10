@@ -154,9 +154,13 @@ impl TranscriberBin {
             .get(language)
             .expect("language tee created");
 
-        let tee_sinkpad = language_tee.static_pad("sink").unwrap();
+        let sinkpad = if let Some(filter) = pad_state.language_filters.get(language) {
+            filter.static_pad("sink").unwrap()
+        } else {
+            language_tee.static_pad("sink").unwrap()
+        };
 
-        if !tee_sinkpad.is_linked() {
+        if !sinkpad.is_linked() {
             let transcriber_src_pad = match language {
                 "transcript" => transcriber
                     .static_pad("src")
@@ -176,7 +180,7 @@ impl TranscriberBin {
                 "Linking transcriber source pad to language tee"
             );
 
-            transcriber_src_pad.link(&tee_sinkpad)?;
+            transcriber_src_pad.link(&sinkpad)?;
 
             pad_state.expose_unsynced_pads(topbin, state, transcriber_src_pad.name().as_str())?;
         }
@@ -993,6 +997,32 @@ impl TranscriberBin {
 
                 pad_state.transcription_bin.add(&tee)?;
 
+                if let Some(val) = pad_settings
+                    .language_filters
+                    .as_ref()
+                    .and_then(|f| f.value(k).ok())
+                {
+                    let filter = if val.is::<String>() {
+                        let bin_description = val.get::<String>().unwrap();
+                        gst::parse::bin_from_description_full(
+                            &bin_description,
+                            true,
+                            None,
+                            gst::ParseFlags::NO_SINGLE_ELEMENT_BINS,
+                        )?
+                    } else if val.is::<gst::Element>() {
+                        val.get::<gst::Element>().unwrap()
+                    } else {
+                        return Err(anyhow!(
+                            "Value for language filter map must be string or element"
+                        ));
+                    };
+
+                    pad_state.transcription_bin.add(&filter)?;
+                    filter.link(&tee)?;
+                    pad_state.language_filters.insert(k.clone(), filter);
+                }
+
                 e.insert(tee);
             };
         }
@@ -1011,7 +1041,15 @@ impl TranscriberBin {
 
         self.tear_down_synthesis_channels(&self.obj(), state, pad_state)?;
 
-        for (_, tee) in pad_state.language_tees.drain() {
+        for (language, tee) in pad_state.language_tees.drain() {
+            if let Some(filter) = pad_state.language_filters.remove(&language) {
+                let _ = pad_state.transcription_bin.remove(&filter);
+                let _ = filter.set_state(gst::State::Null);
+                // At this point the filter is unlinked, removed from the bin and
+                // its state is reset. If it was directly provided by the user then
+                // it remains reffed in the settings structure, otherwise it goes
+                // out of scope here and will get recreated.
+            }
             let _ = pad_state.transcription_bin.remove(&tee);
         }
 
@@ -2223,6 +2261,7 @@ impl BinImpl for TranscriberBin {
 struct TranscriberSinkPadSettings {
     translation_languages: Option<gst::Structure>,
     synthesis_languages: Option<gst::Structure>,
+    language_filters: Option<gst::Structure>,
     language_code: String,
     mode: Cea608Mode,
     passthrough: bool,
@@ -2233,6 +2272,7 @@ impl Default for TranscriberSinkPadSettings {
         Self {
             translation_languages: None,
             synthesis_languages: None,
+            language_filters: None,
             language_code: String::from(DEFAULT_INPUT_LANG_CODE),
             mode: DEFAULT_MODE,
             passthrough: DEFAULT_PASSTHROUGH,
@@ -2255,6 +2295,7 @@ struct TranscriberSinkPadState {
     target_passthrough_state: TargetPassthroughState,
     serial: Option<u32>,
     language_tees: HashMap<String, gst::Element>,
+    language_filters: HashMap<String, gst::Element>,
 }
 
 impl TranscriberSinkPadState {
@@ -2286,6 +2327,7 @@ impl TranscriberSinkPadState {
             target_passthrough_state: TargetPassthroughState::None,
             serial: None,
             language_tees: HashMap::new(),
+            language_filters: HashMap::new(),
         })
     }
 
@@ -2329,8 +2371,12 @@ impl TranscriberSinkPadState {
         state: &State,
         pad_state: &TranscriberSinkPadState,
     ) {
-        for tee in pad_state.language_tees.values() {
-            let sinkpad = tee.static_pad("sink").unwrap();
+        for (language, tee) in pad_state.language_tees.iter() {
+            let sinkpad = if let Some(filter) = pad_state.language_filters.get(language) {
+                filter.static_pad("sink").unwrap()
+            } else {
+                tee.static_pad("sink").unwrap()
+            };
 
             if let Some(srcpad) = sinkpad.peer() {
                 let _ = srcpad.unlink(&sinkpad);
@@ -2528,8 +2574,12 @@ impl ObjectImpl for TranscriberSinkPad {
                             .build(),
                     )
                     .mutable_ready()
-                    .build()
-
+                    .build(),
+                glib::ParamSpecBoxed::builder::<gst::Structure>("language-filters")
+                    .nick("Language filters")
+                    .blurb("A map of language codes to bin descriptions, e.g. text-filters=\"languages, fr=regex\" will filter words out of the transcriber through the regex element")
+                    .mutable_playing()
+                    .build(),
         ]
         });
 
@@ -2596,6 +2646,24 @@ impl ObjectImpl for TranscriberSinkPad {
                     imp = self,
                     "Updated synthesis-languages {:?}",
                     settings.synthesis_languages
+                );
+
+                drop(settings);
+
+                if let Some(this) = self.obj().parent().and_downcast::<super::TranscriberBin>() {
+                    this.imp().update_languages(&self.obj(), false);
+                }
+            }
+            "language-filters" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.language_filters = value
+                    .get::<Option<gst::Structure>>()
+                    .expect("type checked upstream");
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "Updated language-filters {:?}",
+                    settings.language_filters
                 );
 
                 drop(settings);
@@ -2711,6 +2779,10 @@ impl ObjectImpl for TranscriberSinkPad {
             "synthesis-languages" => {
                 let settings = self.settings.lock().unwrap();
                 settings.synthesis_languages.to_value()
+            }
+            "language-filters" => {
+                let settings = self.settings.lock().unwrap();
+                settings.language_filters.to_value()
             }
             "language-code" => {
                 let settings = self.settings.lock().unwrap();

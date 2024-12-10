@@ -8785,6 +8785,17 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "language-filters": {
+                        "blurb": "A map of language codes to bin descriptions, e.g. text-filters=\"languages, fr=regex\" will filter words out of the transcriber through the regex element",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": true
+                    },
                     "mode": {
                         "blurb": "Which closed caption mode to operate in",
                         "conditionally-available": false,
