@@ -20,6 +20,7 @@ use std::ops::Bound::Excluded;
 use std::sync::Mutex;
 
 use crate::fmp4mux::obu::read_seq_header_obu_bytes;
+use crate::fmp4mux::TransformMatrix;
 use std::sync::LazyLock;
 
 use super::boxes;
@@ -257,7 +258,7 @@ struct Stream {
     /// Language code from tags
     language_code: Option<[u8; 3]>,
     /// Orientation from tags
-    orientation: Option<gst_video::VideoOrientationMethod>,
+    orientation: &'static TransformMatrix,
 
     /// Edit list entries for this stream.
     elst_infos: Vec<super::ElstInfo>,
@@ -391,7 +392,7 @@ struct State {
     /// Start DTS of the whole stream
     start_dts: Option<gst::ClockTime>,
     /// Orientation from tags
-    orientation: Option<gst_video::VideoOrientationMethod>,
+    orientation: &'static TransformMatrix,
 
     /// Start PTS of the current fragment
     fragment_start_pts: Option<gst::ClockTime>,
@@ -2980,7 +2981,7 @@ impl FMP4Mux {
 
             // Check if language or orientation tags have already been
             // received
-            let mut orientation = None;
+            let mut orientation = Default::default();
             let mut language_code = None;
             pad.sticky_events_foreach(|ev| {
                 if let gst::EventView::Tag(ev) = ev.view() {
@@ -3000,9 +3001,9 @@ impl FMP4Mux {
                         language_code = Stream::parse_language_code(l.get());
                     } else if tag.get::<gst::tags::ImageOrientation>().is_some() {
                         if tag.scope() == gst::TagScope::Global {
-                            state.orientation = gst_video::VideoOrientationMethod::from_tag(tag);
+                            state.orientation = TransformMatrix::from_tag(self, ev);
                         } else {
-                            orientation = gst_video::VideoOrientationMethod::from_tag(tag);
+                            orientation = TransformMatrix::from_tag(self, ev);
                         }
                     }
                 }
@@ -3168,9 +3169,7 @@ impl FMP4Mux {
                     caps: s.caps.clone(),
                     extra_header_data: s.extra_header_data.clone(),
                     language_code: s.language_code,
-                    orientation: s
-                        .orientation
-                        .unwrap_or(gst_video::VideoOrientationMethod::Identity),
+                    orientation: s.orientation,
                     elst_infos: s.get_elst_infos().unwrap_or_else(|e| {
                         gst::error!(CAT, "Could not prepare edit lists: {e:?}");
 
@@ -3193,9 +3192,7 @@ impl FMP4Mux {
             streams,
             write_mehd: settings.write_mehd,
             duration: if at_eos { duration } else { None },
-            orientation: state
-                .orientation
-                .unwrap_or(gst_video::VideoOrientationMethod::Identity),
+            orientation: state.orientation,
             write_edts,
             start_utc_time: if variant == super::Variant::ONVIF {
                 state
@@ -3772,10 +3769,10 @@ impl AggregatorImpl for FMP4Mux {
                         state.need_new_header = true;
                         if tag.scope() == gst::TagScope::Stream {
                             let stream = state.mut_stream_from_pad(aggregator_pad).unwrap();
-                            stream.orientation = gst_video::VideoOrientationMethod::from_tag(tag);
+                            stream.orientation = TransformMatrix::from_tag(self, ev);
                             stream.tag_changed = true;
                         } else {
-                            state.orientation = gst_video::VideoOrientationMethod::from_tag(tag);
+                            state.orientation = TransformMatrix::from_tag(self, ev);
                             // Global orientation change implies tag
                             // change on all streams
                             for stream in &mut state.streams {

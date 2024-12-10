@@ -9,6 +9,7 @@
 use crate::fmp4mux::imp::CAT;
 use gst::glib;
 use gst::prelude::*;
+use gst::subclass::prelude::*;
 
 mod boxes;
 mod imp;
@@ -75,14 +76,56 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     Ok(())
 }
 
-type TransformMatrix = [[u8; 4]; 9];
+#[derive(Debug)]
+pub(crate) struct TransformMatrix([[u8; 4]; 9]);
+
+impl std::ops::Deref for TransformMatrix {
+    type Target = [[u8; 4]; 9];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Default for &TransformMatrix {
+    fn default() -> &'static TransformMatrix {
+        &IDENTITY_MATRIX
+    }
+}
+
+impl TransformMatrix {
+    fn from_tag(obj: &impl ObjectSubclass, tag: &gst::event::Tag) -> &'static TransformMatrix {
+        gst_video::VideoOrientationMethod::from_tag(tag.tag()).map_or(Default::default(), {
+            |orientation| match orientation {
+                gst_video::VideoOrientationMethod::Identity => &IDENTITY_MATRIX,
+                gst_video::VideoOrientationMethod::_90r => &ROTATE_90R_MATRIX,
+                gst_video::VideoOrientationMethod::_180 => &ROTATE_180_MATRIX,
+                gst_video::VideoOrientationMethod::_90l => &ROTATE_90L_MATRIX,
+                gst_video::VideoOrientationMethod::Horiz => &FLIP_HORZ_MATRIX,
+                gst_video::VideoOrientationMethod::Vert => &FLIP_VERT_MATRIX,
+                gst_video::VideoOrientationMethod::UrLl => &FLIP_ROTATE_90R_MATRIX,
+                gst_video::VideoOrientationMethod::UlLr => &FLIP_ROTATE_90L_MATRIX,
+                _ => {
+                    gst::info!(
+                        CAT,
+                        imp = obj,
+                        "Orientation {:?} not yet supported",
+                        orientation
+                    );
+                    &IDENTITY_MATRIX
+                }
+            }
+        })
+    }
+}
+
 macro_rules! tm {
     ( $($v:expr),* ) => {
-        [
+        TransformMatrix([
             $(
                 (($v << 16) as i32).to_be_bytes(),
             )*
-        ]
+        ])
     }
 }
 
@@ -129,25 +172,6 @@ const FLIP_ROTATE_90L_MATRIX: TransformMatrix = tm!(0, 1, 0,
                                                     1, 0, 0,
                                                     0, 0, (1 << 14));
 
-pub(crate) fn transform_matrix(
-    orientation: &gst_video::VideoOrientationMethod,
-) -> &'static TransformMatrix {
-    match orientation {
-        gst_video::VideoOrientationMethod::Identity => &IDENTITY_MATRIX,
-        gst_video::VideoOrientationMethod::_90r => &ROTATE_90R_MATRIX,
-        gst_video::VideoOrientationMethod::_180 => &ROTATE_180_MATRIX,
-        gst_video::VideoOrientationMethod::_90l => &ROTATE_90L_MATRIX,
-        gst_video::VideoOrientationMethod::Horiz => &FLIP_HORZ_MATRIX,
-        gst_video::VideoOrientationMethod::Vert => &FLIP_VERT_MATRIX,
-        gst_video::VideoOrientationMethod::UrLl => &FLIP_ROTATE_90R_MATRIX,
-        gst_video::VideoOrientationMethod::UlLr => &FLIP_ROTATE_90L_MATRIX,
-        _ => {
-            gst::info!(CAT, "Orientation {:?} not yet supported", orientation);
-            &IDENTITY_MATRIX
-        }
-    }
-}
-
 #[derive(Debug)]
 pub(crate) struct HeaderConfiguration {
     variant: Variant,
@@ -162,7 +186,7 @@ pub(crate) struct HeaderConfiguration {
 
     write_mehd: bool,
     duration: Option<gst::ClockTime>,
-    orientation: gst_video::VideoOrientationMethod,
+    orientation: &'static TransformMatrix,
 
     /// Start UTC time in ONVIF mode.
     /// Since Jan 1 1601 in 100ns units.
@@ -194,7 +218,7 @@ pub(crate) struct HeaderStream {
 
     // Tags meta for audio language and video orientation
     language_code: Option<[u8; 3]>,
-    orientation: gst_video::VideoOrientationMethod,
+    orientation: &'static TransformMatrix,
 
     /// Edit list clipping information
     elst_infos: Vec<ElstInfo>,

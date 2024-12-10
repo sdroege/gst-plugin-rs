@@ -12,7 +12,7 @@ use gst::prelude::*;
 use anyhow::{anyhow, bail, Context, Error};
 use std::convert::TryFrom;
 
-use super::{transform_matrix, Buffer, IDENTITY_MATRIX};
+use super::Buffer;
 
 fn write_box<T, F: FnOnce(&mut Vec<u8>) -> Result<T, Error>>(
     vec: &mut Vec<u8>,
@@ -522,8 +522,7 @@ fn write_mvhd(
     v.extend([0u8; 2 + 2 * 4]);
 
     // Matrix
-    let matrix = transform_matrix(&cfg.orientation);
-    v.extend(matrix.iter().flatten());
+    v.extend(cfg.orientation.iter().flatten());
 
     // Pre defined
     v.extend([0u8; 6 * 4]);
@@ -639,15 +638,8 @@ fn write_tkhd(
     // Reserved
     v.extend([0u8; 2]);
 
-    // Matrix
-    let matrix = match s.name().as_str() {
-        x if x.starts_with("video/") || x.starts_with("image/") => {
-            transform_matrix(&stream.orientation)
-        }
-        _ => &IDENTITY_MATRIX,
-    };
-
-    v.extend(matrix.iter().flatten());
+    // Per stream orientation matrix.
+    v.extend(stream.orientation.iter().flatten());
 
     // Width/height
     match s.name().as_str() {
