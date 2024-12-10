@@ -247,6 +247,11 @@ version = "0.22"
 name = "tokio-rustls"
 version = "0.24"
 
+# aws-config depends on old aws-smithy-json
+[[bans.skip]]
+name = "aws-smithy-json"
+version = "0.60"
+
 # aws SDK depends on older version of various crypto crates
 [[bans.skip]]
 name = "der"
