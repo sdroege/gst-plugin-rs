@@ -9700,10 +9700,162 @@
         "package": "gst-plugin-tracers",
         "source": "gst-plugin-tracers",
         "tracers": {
-            "buffer-lateness": {},
-            "pad-push-timings": {},
-            "pipeline-snapshot": {},
-            "queue-levels": {}
+            "buffer-lateness": {
+                "hierarchy": [
+                    "GstBufferLateness",
+                    "GstTracer",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "signals": {
+                    "write-log": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    }
+                }
+            },
+            "pad-push-timings": {
+                "hierarchy": [
+                    "GstPadPushTimings",
+                    "GstTracer",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ]
+            },
+            "pipeline-snapshot": {
+                "hierarchy": [
+                    "GstPipelineSnapshot",
+                    "GstTracer",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "properties": {
+                    "cleanup-mode": {
+                        "blurb": "Cleanup mode",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "none (2)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstPipelineSnapshotCleanupMode",
+                        "writable": true
+                    },
+                    "dot-dir": {
+                        "blurb": "Directory where to place dot files",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": true,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "dot-pipeline-ptr": {
+                        "blurb": "Add pipeline ptr value to dot files",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "dot-prefix": {
+                        "blurb": "Prefix for dot files",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "pipeline-snapshot-",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "dot-ts": {
+                        "blurb": "Add timestamp to dot files",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "folder-mode": {
+                        "blurb": "How to create folder each time a snapshot of all pipelines is made",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "none (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstPipelineSnapshotFolderMode",
+                        "writable": true
+                    },
+                    "xdg-cache": {
+                        "blurb": "Use $XDG_CACHE_DIR/gstreamer-dots",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": true,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                },
+                "signals": {
+                    "snapshot": {
+                        "action": true,
+                        "args": [],
+                        "return-type": "void",
+                        "when": "last"
+                    }
+                }
+            },
+            "queue-levels": {
+                "hierarchy": [
+                    "GstQueueLevels",
+                    "GstTracer",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "signals": {
+                    "write-log": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    }
+                }
+            }
         },
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
