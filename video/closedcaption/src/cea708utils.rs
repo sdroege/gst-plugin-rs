@@ -399,6 +399,10 @@ impl Cea708Renderer {
 
     pub fn clear_composition(&mut self) {
         self.composition.take();
+        if let Some(service) = self.service.as_mut() {
+            service.clear();
+        }
+        self.cea608.clear();
     }
 
     pub fn generate_composition(&mut self) -> Option<gst_video::VideoOverlayComposition> {
@@ -581,6 +585,14 @@ impl ServiceState {
 
     fn reset(&mut self) {
         *self = Self::new();
+    }
+
+    fn clear(&mut self) {
+        for window in self.windows.iter_mut() {
+            window.lines.clear();
+            window.pen_location = SetPenLocationArgs::default();
+            window.rectangle.take();
+        }
     }
 
     fn handle_code(&mut self, code: &Code) {
@@ -1297,13 +1309,17 @@ impl Window {
             }
         };
 
-        let buffer = match render_buffer() {
-            Ok(buffer) => buffer,
-            Err(e) => {
-                self.dump();
-                gst::error!(CAT, "Failed to render buffer: \"{e}\"");
-                return None;
+        let buffer = if width > 0 && height > 0 {
+            match render_buffer() {
+                Ok(buffer) => buffer,
+                Err(e) => {
+                    self.dump();
+                    gst::error!(CAT, "Failed to render buffer: \"{e}\"");
+                    return None;
+                }
             }
+        } else {
+            return None;
         };
         gst::trace!(
             CAT,
