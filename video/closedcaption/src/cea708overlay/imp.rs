@@ -241,6 +241,7 @@ impl Cea708Overlay {
                 }
 
                 state.cea708_renderer.push_service(service);
+                self.reset_timeout(state, pts);
             }
         }
 
@@ -296,6 +297,7 @@ impl Cea708Overlay {
     }
 
     fn reset_timeout(&self, state: &mut State, pts: gst::ClockTime) {
+        gst::trace!(CAT, "resetting timeout to {pts:?}");
         state.last_cc_pts = Some(pts);
     }
 

@@ -774,4 +774,13 @@ impl Cea608Renderer {
         self.rectangle = Some(rect.clone());
         Some(rect)
     }
+
+    pub fn clear(&mut self) {
+        self.state.reset();
+        let channel = self.channel();
+        self.frame.reset();
+        if let Some(channel) = channel {
+            self.set_channel(channel);
+        }
+    }
 }
