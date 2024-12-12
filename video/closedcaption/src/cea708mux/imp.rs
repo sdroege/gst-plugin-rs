@@ -324,6 +324,22 @@ impl AggregatorImpl for Cea708Mux {
                             }
                         }
                     }
+                    for (service_no, pending_codes) in pad_state.pending_services.iter_mut() {
+                        let new_service = services
+                            .entry(*service_no)
+                            .or_insert_with_key(|&n| Service::new(n));
+
+                        while let Some(code) = pending_codes.pop_front() {
+                            match new_service.push_code(&code) {
+                                Ok(_) => (),
+                                Err(cea708_types::WriterError::WouldOverflow(_)) => {
+                                    pending_codes.push_front(code);
+                                    break;
+                                }
+                                Err(cea708_types::WriterError::ReadOnly) => unreachable!(),
+                            }
+                        }
+                    }
                 }
                 _ => (),
             }
