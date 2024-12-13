@@ -328,7 +328,7 @@ impl Cea608Frame {
                 self.row = preamble.row() as usize;
             }
             Mode::RollUp2 | Mode::RollUp3 | Mode::RollUp4 => {
-                let base_row = preamble.row().max(mode.rollup_rows().unwrap_or(0));
+                let base_row = preamble.row().max(mode.rollup_rows().unwrap_or(0) - 1);
                 if self.base_row != base_row {
                     gst::debug!(
                         CAT,
