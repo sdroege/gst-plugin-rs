@@ -494,6 +494,11 @@ pub struct Cea608Renderer {
     video_height: u32,
     left_alignment: i32,
     black_background: bool,
+
+    safe_width: f32,
+    safe_height: f32,
+    max_layout_width: i32,
+    max_layout_height: i32,
 }
 
 impl Cea608Renderer {
@@ -506,7 +511,8 @@ impl Cea608Renderer {
         context.set_base_dir(pango::Direction::Ltr);
         let layout = pango::Layout::new(&context);
         layout.set_alignment(pango::Alignment::Left);
-        recalculate_pango_layout(&layout, video_width, video_height);
+        let (max_layout_width, max_layout_height) =
+            recalculate_pango_layout(&layout, video_width, video_height);
         Self {
             frame: Cea608Frame::new(),
             state: Cea608State::default(),
@@ -517,6 +523,10 @@ impl Cea608Renderer {
             video_height,
             left_alignment: 0,
             black_background: false,
+            safe_width: 0.8,
+            safe_height: 0.8,
+            max_layout_width,
+            max_layout_height,
         }
     }
 
@@ -546,13 +556,29 @@ impl Cea608Renderer {
         if width != self.video_width || height != self.video_height {
             self.video_width = width;
             self.video_height = height;
-            self.layout = pango::Layout::new(&self.context);
-            self.layout.set_alignment(pango::Alignment::Left);
-            let (max_layout_width, _max_layout_height) =
-                recalculate_pango_layout(&self.layout, width, height);
-            self.left_alignment = (width as i32 - max_layout_width) / 2;
-            self.rectangle.take();
+            self.recalculate_window_position();
         }
+    }
+
+    pub fn set_safe_title_area(&mut self, safe_width: f32, safe_height: f32) {
+        if safe_width != self.safe_width || safe_height != self.safe_height {
+            self.safe_width = safe_width;
+            self.safe_height = safe_height;
+            self.recalculate_window_position();
+        }
+    }
+
+    fn recalculate_window_position(&mut self) {
+        self.layout = pango::Layout::new(&self.context);
+        self.layout.set_alignment(pango::Alignment::Left);
+        let width = (self.video_width as f32 * self.safe_width) as u32;
+        let height = (self.video_height as f32 * self.safe_height) as u32;
+        let (max_layout_width, max_layout_height) =
+            recalculate_pango_layout(&self.layout, width, height);
+        self.left_alignment = (self.video_width as i32 - max_layout_width) / 2;
+        self.max_layout_width = max_layout_width;
+        self.max_layout_height = max_layout_height;
+        self.rectangle.take();
     }
 
     pub fn set_black_background(&mut self, bg: bool) {
@@ -670,7 +696,6 @@ impl Cea608Renderer {
         let (_ink_rect, logical_rect) = self.layout.extents();
         let height = logical_rect.height() / pango::SCALE;
         let width = logical_rect.width() / pango::SCALE;
-        gst::debug!(CAT, "overlaying size {width}x{height}, text {text}");
 
         // No text actually needs rendering
         if width == 0 || height == 0 {
@@ -756,16 +781,24 @@ impl Cea608Renderer {
             }
         };
 
-        let vertical_padding = self.video_height / 10;
-        let safe_height = self.video_height.mul_div_floor(80, 100).unwrap();
-        let first_row_position = (safe_height as i32)
+        let safe_height = (self.video_height as f32 * self.safe_height) as i32;
+        let vertical_padding =
+            (2 * self.video_height as i32 - safe_height - self.max_layout_height) / 2;
+        let first_row_position = self
+            .max_layout_height
             .mul_div_round(first_row as i32, MAX_ROW as i32 + 1)
             .unwrap();
 
+        gst::debug!(
+            CAT,
+            "overlay size {width}x{height} at {}x{}, text {text}",
+            self.left_alignment,
+            first_row_position + vertical_padding
+        );
         let rect = gst_video::VideoOverlayRectangle::new_raw(
             &buffer,
             self.left_alignment,
-            first_row_position + vertical_padding as i32,
+            first_row_position + vertical_padding,
             width as u32,
             height as u32,
             gst_video::VideoOverlayFormatFlags::PREMULTIPLIED_ALPHA,

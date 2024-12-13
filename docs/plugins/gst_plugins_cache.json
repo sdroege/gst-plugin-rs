@@ -7984,6 +7984,34 @@
                         "type": "gint",
                         "writable": true
                     },
+                    "safe-title-height": {
+                        "blurb": "Ratio of the video height to use as the safe area for caption display",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0.8",
+                        "max": "1",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gfloat",
+                        "writable": true
+                    },
+                    "safe-title-width": {
+                        "blurb": "Ratio of the video width to use as the safe area for caption display",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0.8",
+                        "max": "1",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gfloat",
+                        "writable": true
+                    },
                     "service": {
                         "blurb": "The service to render the caption for when available, (-1=automatic, 0=disabled)",
                         "conditionally-available": false,

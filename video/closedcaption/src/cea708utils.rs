@@ -309,6 +309,9 @@ pub struct Cea708Renderer {
     video_width: u32,
     video_height: u32,
     composition: Option<gst_video::VideoOverlayComposition>,
+
+    safe_width: f32,
+    safe_height: f32,
 }
 
 impl Cea708Renderer {
@@ -322,6 +325,8 @@ impl Cea708Renderer {
             video_width: 0,
             video_height: 0,
             composition: None,
+            safe_width: 0.8,
+            safe_height: 0.8,
         }
     }
 
@@ -332,6 +337,18 @@ impl Cea708Renderer {
             self.cea608.set_video_size(width, height);
             if let Some(service) = self.service.as_mut() {
                 service.set_video_size(width, height);
+            }
+            self.composition.take();
+        }
+    }
+
+    pub fn set_safe_title_area(&mut self, safe_width: f32, safe_height: f32) {
+        if safe_width != self.safe_width || safe_height != self.safe_height {
+            self.safe_width = safe_width;
+            self.safe_height = safe_height;
+            self.cea608.set_safe_title_area(safe_width, safe_height);
+            if let Some(service) = self.service.as_mut() {
+                service.set_safe_title_area(safe_width, safe_height);
             }
             self.composition.take();
         }
@@ -353,6 +370,7 @@ impl Cea708Renderer {
             let overlay_service = self.service.get_or_insert_with(|| {
                 let mut service = ServiceState::new();
                 service.set_video_size(self.video_width, self.video_height);
+                service.set_safe_title_area(self.safe_width, self.safe_height);
                 service
             });
             overlay_service.handle_code(code);
@@ -446,6 +464,8 @@ struct ServiceState {
     pango_context: pango::Context,
     video_width: u32,
     video_height: u32,
+    width_ratio: f32,
+    height_ratio: f32,
 }
 
 impl ServiceState {
@@ -462,6 +482,8 @@ impl ServiceState {
             pango_context: context,
             video_width: 0,
             video_height: 0,
+            width_ratio: 0.8,
+            height_ratio: 0.8,
         }
     }
 
@@ -486,23 +508,20 @@ impl ServiceState {
             let layout = pango::Layout::new(&self.pango_context);
             // XXX: May need a different alignment
             layout.set_alignment(pango::Alignment::Left);
-            let mut window = Window {
-                visible: args.visible,
-                attrs: args.window_attributes(),
-                pen_attrs: args.pen_attributes(),
-                pen_color: args.pen_color(),
-                define: *args,
-                pen_location: SetPenLocationArgs::default(),
-                lines: VecDeque::new(),
-                rectangle: None,
+            self.windows.push_back(Window::new(
+                args.visible,
+                *args,
+                args.window_attributes(),
+                args.pen_attributes(),
+                args.pen_color(),
                 layout,
-                video_dims: Dimensions::default(),
-                window_position: Dimensions::default(),
-                window_dims: Dimensions::default(),
-                max_layout_dims: Dimensions::default(),
-            };
-            window.set_video_size(self.video_width, self.video_height);
-            self.windows.push_back(window);
+                Dimensions {
+                    w: self.video_width,
+                    h: self.video_height,
+                },
+                self.width_ratio,
+                self.height_ratio,
+            ));
         };
         self.current_window = args.window_id as usize;
     }
@@ -667,6 +686,14 @@ impl ServiceState {
         self.video_width = video_width;
         self.video_height = video_height;
     }
+
+    fn set_safe_title_area(&mut self, width_ratio: f32, height_ratio: f32) {
+        for window in self.windows.iter_mut() {
+            window.set_safe_title_area(width_ratio, height_ratio);
+        }
+        self.width_ratio = width_ratio;
+        self.height_ratio = height_ratio;
+    }
 }
 
 fn color_value_as_u16(val: ColorValue) -> u16 {
@@ -753,6 +780,8 @@ struct Window {
     pen_location: SetPenLocationArgs,
     lines: VecDeque<WindowLine>,
 
+    safe_width: f32,
+    safe_height: f32,
     window_position: Dimensions,
     video_dims: Dimensions,
     window_dims: Dimensions,
@@ -762,6 +791,39 @@ struct Window {
 }
 
 impl Window {
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        visible: bool,
+        define: DefineWindowArgs,
+        attrs: SetWindowAttributesArgs,
+        pen_attrs: SetPenAttributesArgs,
+        pen_color: SetPenColorArgs,
+        layout: pango::Layout,
+        video_dims: Dimensions,
+        width_ratio: f32,
+        height_ratio: f32,
+    ) -> Self {
+        let mut ret = Self {
+            visible,
+            define,
+            attrs,
+            pen_attrs,
+            pen_color,
+            pen_location: SetPenLocationArgs::default(),
+            lines: VecDeque::new(),
+            rectangle: None,
+            layout,
+            video_dims: Dimensions::default(),
+            window_position: Dimensions::default(),
+            window_dims: Dimensions::default(),
+            max_layout_dims: Dimensions::default(),
+            safe_width: width_ratio,
+            safe_height: height_ratio,
+        };
+        ret.set_video_size(video_dims.w, video_dims.h);
+        ret
+    }
+
     fn dump(&self) {
         for line in self.lines.iter() {
             let mut string = line.no.to_string();
@@ -1050,8 +1112,12 @@ impl Window {
         // XXX: may need a better implementation for 'skinny' (horizontal or vertical) output
         // sizes.
 
+        let safe_area = Dimensions {
+            w: (self.video_dims.w as f32 * self.safe_width) as u32,
+            h: (self.video_dims.h as f32 * self.safe_height) as u32,
+        };
         let (max_layout_width, max_layout_height) =
-            recalculate_pango_layout(&self.layout, self.video_dims.w, self.video_dims.h);
+            recalculate_pango_layout(&self.layout, safe_area.w, safe_area.h);
         self.max_layout_dims = Dimensions {
             w: max_layout_width as u32,
             h: max_layout_height as u32,
@@ -1067,12 +1133,8 @@ impl Window {
         };
 
         let padding = Dimensions {
-            w: self.video_dims.w / 10,
-            h: self.video_dims.h / 10,
-        };
-        let safe_area = Dimensions {
-            w: self.video_dims.w - self.video_dims.w / 5,
-            h: self.video_dims.h - self.video_dims.h / 5,
+            w: (self.video_dims.w - safe_area.w) / 2,
+            h: (self.video_dims.h - safe_area.h) / 2,
         };
 
         self.window_position = if self.define.relative_positioning {
@@ -1127,6 +1189,16 @@ impl Window {
             return;
         }
         self.video_dims = new_dims;
+
+        self.recalculate_window_position();
+    }
+
+    fn set_safe_title_area(&mut self, width_ratio: f32, height_ratio: f32) {
+        if self.safe_width == width_ratio && self.safe_height == height_ratio {
+            return;
+        }
+        self.safe_width = width_ratio;
+        self.safe_height = height_ratio;
 
         self.recalculate_window_position();
     }

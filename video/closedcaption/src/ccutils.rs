@@ -157,8 +157,6 @@ pub(crate) fn recalculate_pango_layout(
     video_height: u32,
 ) -> (i32, i32) {
     let mut font_desc = pango::FontDescription::from_string("monospace");
-    let video_width = video_width * 80 / 100;
-    let video_height = video_height * 80 / 100;
 
     let mut font_size = 1;
     loop {

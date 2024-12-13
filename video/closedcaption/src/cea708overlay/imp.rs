@@ -28,6 +28,8 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 
 const DEFAULT_CEA608_CHANNEL: i32 = -1;
 const DEFAULT_SERVICE: i32 = 1;
+const DEFAULT_SAFE_WIDTH: f32 = 0.8;
+const DEFAULT_SAFE_HEIGHT: f32 = 0.8;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -35,6 +37,8 @@ struct Settings {
     cea608_channel: i32,
     service: i32,
     timeout: Option<gst::ClockTime>,
+    safe_width: f32,
+    safe_height: f32,
 }
 
 impl Default for Settings {
@@ -44,6 +48,8 @@ impl Default for Settings {
             cea608_channel: DEFAULT_CEA608_CHANNEL,
             service: DEFAULT_SERVICE,
             timeout: gst::ClockTime::NONE,
+            safe_width: DEFAULT_SAFE_WIDTH,
+            safe_height: DEFAULT_SAFE_HEIGHT,
         }
     }
 }
@@ -131,6 +137,9 @@ impl Cea708Overlay {
         );
 
         state.cea708_renderer.set_service_channel(state.selected);
+        state
+            .cea708_renderer
+            .set_safe_title_area(settings.safe_width, settings.safe_height);
         settings.changed = false;
     }
 
@@ -437,9 +446,12 @@ impl Cea708Overlay {
                 true
             }
             EventView::FlushStop(..) => {
+                let settings = self.settings.lock().unwrap().clone();
                 let mut state = self.state.lock().unwrap();
                 state.cea708_renderer = Cea708Renderer::new();
-                //state.cea608_renderer.set_black_background(settings.black_background);
+                state
+                    .cea708_renderer
+                    .set_safe_title_area(settings.safe_width, settings.safe_height);
                 drop(state);
 
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
@@ -518,6 +530,22 @@ impl ObjectImpl for Cea708Overlay {
                     .default_value(u64::MAX)
                     .mutable_playing()
                     .build(),
+                glib::ParamSpecFloat::builder("safe-title-height")
+                    .nick("Safe Title Height")
+                    .blurb("Ratio of the video height to use as the safe area for caption display")
+                    .minimum(0.0)
+                    .maximum(1.0)
+                    .default_value(0.8)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecFloat::builder("safe-title-width")
+                    .nick("Safe Title Width")
+                    .blurb("Ratio of the video width to use as the safe area for caption display")
+                    .minimum(0.0)
+                    .maximum(1.0)
+                    .default_value(0.8)
+                    .mutable_playing()
+                    .build(),
             ]
         });
 
@@ -554,28 +582,42 @@ impl ObjectImpl for Cea708Overlay {
                     _ => Some(timeout.nseconds()),
                 };
             }
+            "safe-title-width" => {
+                let mut settings = self.settings.lock().unwrap();
+
+                let new = value.get().expect("type checked upstream");
+                if new != settings.safe_width {
+                    settings.safe_width = new;
+                    settings.changed = true;
+                }
+            }
+            "safe-title-height" => {
+                let mut settings = self.settings.lock().unwrap();
+
+                let new = value.get().expect("type checked upstream");
+                if new != settings.safe_height {
+                    settings.safe_height = new;
+                    settings.changed = true;
+                }
+            }
             _ => unimplemented!(),
         }
     }
 
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        let settings = self.settings.lock().unwrap();
         match pspec.name() {
-            "cea608-channel" => {
-                let settings = self.settings.lock().unwrap();
-                settings.cea608_channel.to_value()
-            }
-            "service" => {
-                let settings = self.settings.lock().unwrap();
-                settings.service.to_value()
-            }
+            "cea608-channel" => settings.cea608_channel.to_value(),
+            "service" => settings.service.to_value(),
             "timeout" => {
-                let settings = self.settings.lock().unwrap();
                 if let Some(timeout) = settings.timeout {
                     timeout.nseconds().to_value()
                 } else {
                     u64::MAX.to_value()
                 }
             }
+            "safe-title-width" => settings.safe_width.to_value(),
+            "safe-title-height" => settings.safe_height.to_value(),
             _ => unimplemented!(),
         }
     }
