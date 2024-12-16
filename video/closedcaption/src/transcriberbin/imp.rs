@@ -116,6 +116,34 @@ pub struct TranscriberBin {
     settings: Mutex<Settings>,
 }
 
+fn query_latency(element: &gst::Element) -> Result<gst::ClockTime, Error> {
+    let fakesrc = gst::ElementFactory::make("fakesrc")
+        .property("is-live", true)
+        .build()?;
+
+    let Some(srcpad) = element.src_pads().first().cloned() else {
+        return Err(anyhow!(
+            "querying latency on element with no source pad unsupported"
+        ));
+    };
+
+    fakesrc.link(element)?;
+
+    let mut q = gst::query::Latency::new();
+
+    let handled = srcpad.query(&mut q);
+
+    fakesrc.unlink(element);
+
+    if !handled {
+        return Err(anyhow!("impossible to query latency"));
+    }
+
+    let (_live, min, _max) = q.result();
+
+    Ok(min)
+}
+
 impl TranscriberBin {
     fn configure_transcriber(&self, transcriber: &gst::Element) {
         let settings = self.settings.lock().unwrap();
@@ -248,6 +276,8 @@ impl TranscriberBin {
             gst::ParseFlags::NO_SINGLE_ELEMENT_BINS,
         )?;
 
+        let latency = query_latency(&synthesizer)?;
+
         bin.add_many([&queue, &textwrap, &synthesizer])?;
         gst::Element::link_many([&queue, &textwrap, &synthesizer])?;
 
@@ -263,23 +293,6 @@ impl TranscriberBin {
 
         let srcpad = gst::GhostPad::with_target(&synthesizer.static_pad("src").unwrap()).unwrap();
         bin.add_pad(&srcpad)?;
-
-        // FIXME: this won't work if an actual bin gets created, in which
-        // case we will need to figure out how to query the latency properly
-
-        if synthesizer.is::<gst::Bin>() {
-            gst::warning!(
-                CAT,
-                imp = self,
-                "Synthesis element is bin, cannot get latency"
-            );
-        }
-
-        let latency = if synthesizer.has_property_with_type("latency", u32::static_type()) {
-            gst::ClockTime::from_mseconds(synthesizer.property::<u32>("latency") as u64)
-        } else {
-            gst::ClockTime::ZERO
-        };
 
         Ok(SynthesisChannel {
             bin,
