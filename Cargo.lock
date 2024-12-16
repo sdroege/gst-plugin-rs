@@ -2788,6 +2788,7 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-pbutils",
  "gstreamer-video",
+ "num-integer",
  "tempfile",
  "url",
 ]

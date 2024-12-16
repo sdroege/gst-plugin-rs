@@ -13,9 +13,10 @@ anyhow = "1"
 gst = { workspace = true,  features = ["v1_18"] }
 gst-base = { workspace = true, features = ["v1_18"] }
 gst-audio = { workspace = true, features = ["v1_18"] }
-gst-video = { workspace = true, features = ["v1_18"] }
+gst-video = { workspace = true, features = ["v1_20"] }
 gst-pbutils = { workspace = true, features = ["v1_18"] }
 bitstream-io = "2.3"
+num-integer = { version = "0.1", default-features = false, features = [] }
 
 [lib]
 name = "gstmp4"

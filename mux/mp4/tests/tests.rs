@@ -172,3 +172,221 @@ fn test_roundtrip_av1_aac() {
         pipeline.into_completion();
     })
 }
+
+fn test_encode_uncompressed(video_format: &str, width: u32, height: u32) {
+    let pipeline_text = format!("videotestsrc num-buffers=250 ! video/x-raw,format={format},width={width},height={height} ! isomp4mux ! filesink location={format}_{width}x{height}.mp4", format = video_format);
+    let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
+        panic!("could not build encoding pipeline")
+    };
+    pipeline
+        .set_state(gst::State::Playing)
+        .expect("Unable to set the pipeline to the `Playing` state");
+    for msg in pipeline.bus().unwrap().iter_timed(gst::ClockTime::NONE) {
+        use gst::MessageView;
+
+        match msg.view() {
+            MessageView::Eos(..) => break,
+            MessageView::Error(err) => {
+                panic!(
+                    "Error from {:?}: {} ({:?})",
+                    err.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
+                );
+            }
+            _ => (),
+        }
+    }
+    pipeline
+        .set_state(gst::State::Null)
+        .expect("Unable to set the pipeline to the `Null` state");
+}
+
+#[test]
+fn encode_uncompressed_iyu2() {
+    init();
+    test_encode_uncompressed("IYU2", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_rgb() {
+    init();
+    test_encode_uncompressed("RGB", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_rgb_no_pad() {
+    init();
+    test_encode_uncompressed("RGB", 1280, 720);
+}
+
+#[test]
+fn encode_uncompressed_bgr() {
+    init();
+    test_encode_uncompressed("BGR", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_nv12() {
+    init();
+    test_encode_uncompressed("NV12", 1275, 714);
+}
+
+#[test]
+fn encode_uncompressed_nv21() {
+    init();
+    test_encode_uncompressed("NV21", 1275, 714);
+}
+
+#[test]
+fn encode_uncompressed_rgba() {
+    init();
+    test_encode_uncompressed("RGBA", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_argb() {
+    init();
+    test_encode_uncompressed("ARGB", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_abgr() {
+    init();
+    test_encode_uncompressed("ABGR", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_bgra() {
+    init();
+    test_encode_uncompressed("BGRA", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_rgbx() {
+    init();
+    test_encode_uncompressed("RGBx", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_bgrx() {
+    init();
+    test_encode_uncompressed("BGRx", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_y444() {
+    init();
+    test_encode_uncompressed("Y444", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_i420() {
+    init();
+    test_encode_uncompressed("I420", 1280, 720);
+}
+
+#[test]
+fn encode_uncompressed_yv12() {
+    init();
+    test_encode_uncompressed("YV12", 1280, 720);
+}
+
+#[test]
+fn encode_uncompressed_yuy2() {
+    init();
+    test_encode_uncompressed("YUY2", 320, 120);
+}
+
+#[test]
+fn encode_uncompressed_yvyu() {
+    init();
+    test_encode_uncompressed("YVYU", 320, 120);
+}
+
+#[test]
+fn encode_uncompressed_vyuy() {
+    init();
+    test_encode_uncompressed("VYUY", 320, 120);
+}
+
+#[test]
+fn encode_uncompressed_uyvy() {
+    init();
+    test_encode_uncompressed("UYVY", 320, 120);
+}
+
+/*
+TODO: report YA4p unknown pixel format to GPAC
+*/
+#[test]
+fn encode_uncompressed_ayuv() {
+    init();
+    test_encode_uncompressed("AYUV", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_y41b() {
+    init();
+    test_encode_uncompressed("Y41B", 1280, 713);
+}
+
+#[test]
+fn encode_uncompressed_y42b() {
+    init();
+    test_encode_uncompressed("Y42B", 1280, 713);
+}
+
+#[test]
+fn encode_uncompressed_v308() {
+    init();
+    test_encode_uncompressed("v308", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_gray8() {
+    init();
+    test_encode_uncompressed("GRAY8", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_gray16_be() {
+    init();
+    test_encode_uncompressed("GRAY16_BE", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_r210() {
+    init();
+    test_encode_uncompressed("r210", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_nv16() {
+    init();
+    test_encode_uncompressed("NV16", 1280, 713);
+}
+
+#[test]
+fn encode_uncompressed_nv61() {
+    init();
+    test_encode_uncompressed("NV61", 1280, 713);
+}
+
+#[test]
+fn encode_uncompressed_gbr() {
+    init();
+    test_encode_uncompressed("GBR", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_rgbp() {
+    init();
+    test_encode_uncompressed("RGBP", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_bgrp() {
+    init();
+    test_encode_uncompressed("BGRP", 1275, 713);
+}

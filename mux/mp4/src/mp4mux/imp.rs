@@ -13,6 +13,7 @@ use gst::subclass::prelude::*;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
+use num_integer::Integer;
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
@@ -1166,6 +1167,7 @@ impl MP4Mux {
                     delta_frames = super::DeltaFrames::PredictiveOnly;
                 }
                 "image/jpeg" => (),
+                "video/x-raw" => (),
                 "audio/mpeg" => {
                     if !s.has_field_with_type("codec_data", gst::Buffer::static_type()) {
                         gst::error!(CAT, obj = pad, "Received caps without codec_data");
@@ -1874,6 +1876,67 @@ impl ElementImpl for ISOMP4Mux {
                         .field("bit-depth-chroma", gst::List::new([8u32, 10u32, 12u32]))
                         .field("width", gst::IntRange::new(1, u16::MAX as i32))
                         .field("height", gst::IntRange::new(1, u16::MAX as i32))
+                        .build(),
+                    gst::Structure::builder("video/x-raw")
+                        // TODO: this could be extended to handle gst_video::VideoMeta for non-default stride and plane offsets
+                        .field(
+                            "format",
+                            // formats that do not use subsampling
+                            // Plus NV12 and NV21 because that works OK with the interleaved planes
+                            gst::List::new([
+                                "IYU2",
+                                "RGB",
+                                "BGR",
+                                "NV12",
+                                "NV21",
+                                "RGBA",
+                                "ARGB",
+                                "ABGR",
+                                "BGRA",
+                                "RGBx",
+                                "BGRx",
+                                "Y444",
+                                "AYUV",
+                                "GRAY8",
+                                "GRAY16_BE",
+                                "GBR",
+                                "RGBP",
+                                "BGRP",
+                                "v308",
+                                "r210",
+                            ]),
+                        )
+                        .field("width", gst::IntRange::new(1, i32::MAX))
+                        .field("height", gst::IntRange::new(1, i32::MAX))
+                        .build(),
+                    gst::Structure::builder("video/x-raw")
+                        // TODO: this could be extended to handle gst_video::VideoMeta for non-default stride and plane offsets
+                        .field(
+                            "format",
+                            // Formats that use horizontal subsampling, but not vertical subsampling (4:2:2 and 4:1:1)
+                            gst::List::new(["Y41B", "NV16", "NV61", "Y42B"]),
+                        )
+                        .field(
+                            "width",
+                            gst::IntRange::with_step(4, i32::MAX.prev_multiple_of(&4), 4),
+                        )
+                        .field("height", gst::IntRange::new(1, i32::MAX))
+                        .build(),
+                    gst::Structure::builder("video/x-raw")
+                        // TODO: this could be extended to handle gst_video::VideoMeta for non-default stride and plane offsets
+                        .field(
+                            "format",
+                            // Formats that use both horizontal and vertical subsampling (4:2:0)
+                            gst::List::new(["I420", "YV12", "YUY2", "YVYU", "UYVY", "VYUY"]),
+                        )
+                        .field(
+                            "width",
+                            gst::IntRange::with_step(4, i32::MAX.prev_multiple_of(&4), 4),
+                        )
+                        .field(
+                            "height",
+                            gst::IntRange::with_step(2, i32::MAX.prev_multiple_of(&2), 2),
+                        )
                         .build(),
                     gst::Structure::builder("audio/mpeg")
                         .field("mpegversion", 4i32)
