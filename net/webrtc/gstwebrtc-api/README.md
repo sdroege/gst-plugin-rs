@@ -101,12 +101,12 @@ that appears on the webpage.
 
 Then launch the following GStreamer pipeline:
 ```shell
-$ gst-launch-1.0 playbin uri=gstwebrtc://[signalling server]?peer-id=[client ID of the producer]
+$ gst-launch-1.0 playbin3 uri=gstwebrtc://[signalling server]?peer-id=[client ID of the producer]
 ```
 
 Using the local signalling server, it will look like this:
 ```shell
-$ gst-launch-1.0 playbin uri=gstwebrtc://127.0.0.1:8443?peer-id=e54e5d6b-f597-4e8f-bc96-2cc3765b6567
+$ gst-launch-1.0 playbin3 uri=gstwebrtc://127.0.0.1:8443?peer-id=e54e5d6b-f597-4e8f-bc96-2cc3765b6567
 ```
 
 The underlying *uridecodebin* element recognizes the *gstwebrtc://* scheme as a WebRTC stream compatible with the

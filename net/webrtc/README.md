@@ -136,11 +136,11 @@ Then open a new terminal and run:
 
 ``` shell
 export GST_PLUGIN_PATH=<path-to-gst-plugins-rs>/target/debug:$GST_PLUGIN_PATH
-gst-launch-1.0 playbin uri=gstwebrtc://127.0.0.1:8443?peer-id=[Client ID]
+gst-launch-1.0 playbin3 uri=gstwebrtc://127.0.0.1:8443?peer-id=[Client ID]
 ```
 
 Replacing the "peer-id" value with the previously copied "Client ID" value. You
-should see the playbin element opening a window and showing you the content
+should see the playbin3 element opening a window and showing you the content
 produced by the web page.
 
 ## Configuration

@@ -16,7 +16,7 @@
  * gst-launch-1.0 webrtcsrc signaller::producer-peer-id=<webrtcsink-peer-id> ! videoconvert ! autovideosink
  * ```
  *
- * or directly using `playbin`:
+ * or directly using `playbin3`:
  *
  * ``` bash
  * gst-launch-1.0 playbin3 uri="gstwebrtc://localhost:8443?peer-id=<webrtcsink-peer-id>"
