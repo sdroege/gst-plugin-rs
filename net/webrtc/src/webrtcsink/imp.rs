@@ -5450,6 +5450,31 @@ impl WebRTCSink {
         let settings = self.settings.lock().unwrap().clone();
 
         if settings.run_signalling_server {
+            // Configure our own signalling server as URI on the signaller
+            {
+                let signaller = self
+                    .obj()
+                    .upcast_ref::<super::BaseWebRTCSink>()
+                    .imp()
+                    .settings
+                    .lock()
+                    .unwrap()
+                    .signaller
+                    .clone();
+
+                // Map UNSPECIFIED addresses to localhost
+                let host = match settings.signalling_server_host.as_str() {
+                    "0.0.0.0" => "127.0.0.1".to_string(),
+                    "::" | "[::]" => "[::1]".to_string(),
+                    host => host.to_string(),
+                };
+
+                signaller.set_property(
+                    "uri",
+                    format!("ws://{}:{}", host, settings.signalling_server_port),
+                );
+            }
+
             if let Err(err) = LazyLock::force(&SIGNALLING_LOGGING) {
                 Err(anyhow!(
                     "failed signalling server logging initialization: {}",
