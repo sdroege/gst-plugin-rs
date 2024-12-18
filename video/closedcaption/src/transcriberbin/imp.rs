@@ -54,6 +54,7 @@ struct TranscriptionChannel {
     tttoceax08: gst::Element,
     language: String,
     ccmux_pad_name: String,
+    cccapsfilter: gst::Element,
 }
 
 struct SynthesisChannel {
@@ -366,11 +367,11 @@ impl TranscriberBin {
                 (builder.build()?, format!("sink_{}", service_no))
             }
         };
-        let capsfilter = gst::ElementFactory::make("capsfilter").build()?;
+        let cccapsfilter = gst::ElementFactory::make("capsfilter").build()?;
         let converter = gst::ElementFactory::make("ccconverter").build()?;
 
-        bin.add_many([&queue, &textwrap, &tttoceax08, &capsfilter, &converter])?;
-        gst::Element::link_many([&queue, &textwrap, &tttoceax08, &capsfilter, &converter])?;
+        bin.add_many([&queue, &textwrap, &tttoceax08, &cccapsfilter, &converter])?;
+        gst::Element::link_many([&queue, &textwrap, &tttoceax08, &cccapsfilter, &converter])?;
 
         queue.set_property("max-size-buffers", 0u32);
         queue.set_property("max-size-time", 0u64);
@@ -380,15 +381,15 @@ impl TranscriberBin {
         let caps = match mux_method {
             MuxMethod::Cea608 => gst::Caps::builder("closedcaption/x-cea-608")
                 .field("format", "raw")
-                .field("framerate", gst::Fraction::new(30000, 1001))
+                .field("framerate", gst::Fraction::new(30, 1))
                 .build(),
             MuxMethod::Cea708 => gst::Caps::builder("closedcaption/x-cea-708")
                 .field("format", "cc_data")
-                .field("framerate", gst::Fraction::new(30000, 1001))
+                .field("framerate", gst::Fraction::new(30, 1))
                 .build(),
         };
 
-        capsfilter.set_property("caps", caps);
+        cccapsfilter.set_property("caps", caps);
 
         let sinkpad = gst::GhostPad::with_target(&queue.static_pad("sink").unwrap()).unwrap();
         let srcpad = gst::GhostPad::with_target(&converter.static_pad("src").unwrap()).unwrap();
@@ -401,6 +402,7 @@ impl TranscriberBin {
             tttoceax08,
             language: String::from(lang),
             ccmux_pad_name,
+            cccapsfilter,
         })
     }
 
@@ -644,6 +646,26 @@ impl TranscriberBin {
         };
 
         state.ccmux_filter.set_property("caps", ccmux_caps);
+
+        let caps = match state.mux_method {
+            MuxMethod::Cea608 => gst::Caps::builder("closedcaption/x-cea-608")
+                .field("format", "raw")
+                .field("framerate", state.framerate.unwrap())
+                .build(),
+            MuxMethod::Cea708 => gst::Caps::builder("closedcaption/x-cea-708")
+                .field("format", "cc_data")
+                .field("framerate", state.framerate.unwrap())
+                .build(),
+        };
+
+        for pad in state.audio_sink_pads.values() {
+            let ps = pad.imp().state.lock().unwrap();
+            if let Ok(pad_state) = ps.as_ref() {
+                for channel in pad_state.transcription_channels.values() {
+                    channel.cccapsfilter.set_property("caps", &caps);
+                }
+            }
+        }
 
         let max_size_time = self.our_latency(state, &settings);
 
