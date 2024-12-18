@@ -13,6 +13,7 @@ use anyhow::{anyhow, bail, Context, Error};
 use std::convert::TryFrom;
 
 use super::Buffer;
+use super::IDENTITY_MATRIX;
 
 fn write_box<T, F: FnOnce(&mut Vec<u8>) -> Result<T, Error>>(
     vec: &mut Vec<u8>,
@@ -522,7 +523,7 @@ fn write_mvhd(
     v.extend([0u8; 2 + 2 * 4]);
 
     // Matrix
-    v.extend(cfg.orientation.iter().flatten());
+    v.extend(IDENTITY_MATRIX.iter().flatten());
 
     // Pre defined
     v.extend([0u8; 6 * 4]);

@@ -257,8 +257,9 @@ struct Stream {
 
     /// Language code from tags
     language_code: Option<[u8; 3]>,
-    /// Orientation from tags
-    orientation: &'static TransformMatrix,
+    /// Orientation from tags, stream orientation takes precedence over global orientation
+    global_orientation: &'static TransformMatrix,
+    stream_orientation: Option<&'static TransformMatrix>,
 
     /// Edit list entries for this stream.
     elst_infos: Vec<super::ElstInfo>,
@@ -350,6 +351,10 @@ impl Stream {
         self.running_time_utc_time_mapping = None;
     }
 
+    fn orientation(&self) -> &'static TransformMatrix {
+        self.stream_orientation.unwrap_or(self.global_orientation)
+    }
+
     fn parse_language_code(lang: &str) -> Option<[u8; 3]> {
         if lang.len() == 3 && lang.chars().all(|c| c.is_ascii_lowercase()) {
             let mut language_code: [u8; 3] = [0; 3];
@@ -391,8 +396,6 @@ struct State {
     end_pts: Option<gst::ClockTime>,
     /// Start DTS of the whole stream
     start_dts: Option<gst::ClockTime>,
-    /// Orientation from tags
-    orientation: &'static TransformMatrix,
 
     /// Start PTS of the current fragment
     fragment_start_pts: Option<gst::ClockTime>,
@@ -2981,7 +2984,8 @@ impl FMP4Mux {
 
             // Check if language or orientation tags have already been
             // received
-            let mut orientation = Default::default();
+            let mut stream_orientation = Default::default();
+            let mut global_orientation = Default::default();
             let mut language_code = None;
             pad.sticky_events_foreach(|ev| {
                 if let gst::EventView::Tag(ev) = ev.view() {
@@ -3001,9 +3005,9 @@ impl FMP4Mux {
                         language_code = Stream::parse_language_code(l.get());
                     } else if tag.get::<gst::tags::ImageOrientation>().is_some() {
                         if tag.scope() == gst::TagScope::Global {
-                            state.orientation = TransformMatrix::from_tag(self, ev);
+                            global_orientation = TransformMatrix::from_tag(self, ev);
                         } else {
-                            orientation = TransformMatrix::from_tag(self, ev);
+                            stream_orientation = Some(TransformMatrix::from_tag(self, ev));
                         }
                     }
                 }
@@ -3096,7 +3100,8 @@ impl FMP4Mux {
                 earliest_pts: None,
                 end_pts: None,
                 language_code,
-                orientation,
+                global_orientation,
+                stream_orientation,
                 elst_infos: Vec::new(),
             });
         }
@@ -3169,7 +3174,7 @@ impl FMP4Mux {
                     caps: s.caps.clone(),
                     extra_header_data: s.extra_header_data.clone(),
                     language_code: s.language_code,
-                    orientation: s.orientation,
+                    orientation: s.orientation(),
                     elst_infos: s.get_elst_infos().unwrap_or_else(|e| {
                         gst::error!(CAT, "Could not prepare edit lists: {e:?}");
 
@@ -3192,7 +3197,6 @@ impl FMP4Mux {
             streams,
             write_mehd: settings.write_mehd,
             duration: if at_eos { duration } else { None },
-            orientation: state.orientation,
             write_edts,
             start_utc_time: if variant == super::Variant::ONVIF {
                 state
@@ -3767,18 +3771,13 @@ impl AggregatorImpl for FMP4Mux {
 
                     if !state.streams.is_empty() && self.header_update_allowed("orientation") {
                         state.need_new_header = true;
+                        let stream = state.mut_stream_from_pad(aggregator_pad).unwrap();
                         if tag.scope() == gst::TagScope::Stream {
-                            let stream = state.mut_stream_from_pad(aggregator_pad).unwrap();
-                            stream.orientation = TransformMatrix::from_tag(self, ev);
-                            stream.tag_changed = true;
+                            stream.stream_orientation = Some(TransformMatrix::from_tag(self, ev));
                         } else {
-                            state.orientation = TransformMatrix::from_tag(self, ev);
-                            // Global orientation change implies tag
-                            // change on all streams
-                            for stream in &mut state.streams {
-                                stream.tag_changed = true;
-                            }
+                            stream.global_orientation = TransformMatrix::from_tag(self, ev);
                         }
+                        stream.tag_changed = true;
                     }
                 }
 
