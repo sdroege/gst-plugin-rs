@@ -1687,7 +1687,51 @@ impl Default for State {
 #[derive(Default)]
 pub struct WebRTCSrc {}
 
-impl ObjectImpl for WebRTCSrc {}
+impl ObjectImpl for WebRTCSrc {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
+            vec![glib::ParamSpecBoolean::builder("connect-to-first-producer")
+                .nick("Connect to first peer")
+                .blurb(
+                    "When enabled, automatically connect to the first peer that becomes available \
+                     if no 'peer-id' is specified.",
+                )
+                .default_value(false)
+                .mutable_ready()
+                .build()]
+        });
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        let obj = self.obj();
+        let base = obj.upcast_ref::<super::BaseWebRTCSrc>().imp();
+        match pspec.name() {
+            "connect-to-first-producer" => base
+                .signaller()
+                .downcast::<Signaller>()
+                .unwrap()
+                .imp()
+                .set_connect_to_first_producer(value.get().unwrap()),
+            _ => unimplemented!(),
+        }
+    }
+
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        let obj = self.obj();
+        let base = obj.upcast_ref::<super::BaseWebRTCSrc>().imp();
+        match pspec.name() {
+            "connect-to-first-producer" => base
+                .signaller()
+                .downcast::<Signaller>()
+                .unwrap()
+                .imp()
+                .connect_to_first_producer()
+                .into(),
+            _ => unimplemented!(),
+        }
+    }
+}
 
 impl GstObjectImpl for WebRTCSrc {}
 
