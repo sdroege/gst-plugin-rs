@@ -5,6 +5,7 @@ project('gst-plugins-rs',
         meson_version : '>= 1.1')
 
 # dependencies.py needs a toml parsing module
+api_version = '1.0'
 python = import('python').find_installation(modules: ['tomllib'], required: false)
 if not python.found()
   python = import('python').find_installation(modules: ['tomli'])
