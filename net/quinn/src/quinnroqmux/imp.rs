@@ -196,10 +196,10 @@ impl ElementImpl for QuinnRoqMux {
         _name: Option<&str>,
         _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
-        let mut state = self.state.lock().unwrap();
-
         match templ.name_template() {
             "stream_%u" => {
+                let mut state = self.state.lock().unwrap();
+
                 let sink_pad_name = format!("stream_{}", state.stream_uni_conns);
 
                 gst::debug!(CAT, imp = self, "Requesting pad {}", sink_pad_name);
@@ -215,6 +215,10 @@ impl ElementImpl for QuinnRoqMux {
 
                 state.stream_uni_conns += 1;
 
+                drop(state);
+
+                self.obj().child_added(&sinkpad, &sinkpad.name());
+
                 Some(sinkpad.upcast())
             }
             "datagram_%u" => {
@@ -222,6 +226,8 @@ impl ElementImpl for QuinnRoqMux {
                     gst::warning!(CAT, imp = self, "Datagram unsupported by peer");
                     return None;
                 }
+
+                let mut state = self.state.lock().unwrap();
 
                 let sink_pad_name = format!("datagram_{}", state.datagrams);
 
@@ -238,6 +244,10 @@ impl ElementImpl for QuinnRoqMux {
 
                 state.datagrams += 1;
 
+                drop(state);
+
+                self.obj().child_added(&sinkpad, &sinkpad.name());
+
                 Some(sinkpad.upcast())
             }
             _ => None,
@@ -249,7 +259,9 @@ impl ElementImpl for QuinnRoqMux {
             self.close_stream_for_pad(pad);
         }
 
-        self.parent_release_pad(pad)
+        self.parent_release_pad(pad);
+
+        self.obj().child_removed(pad, &pad.name());
     }
 }
 
@@ -265,6 +277,7 @@ impl ObjectSubclass for QuinnRoqMux {
     const NAME: &'static str = "GstQuinnRoqMux";
     type Type = super::QuinnRoqMux;
     type ParentType = gst_base::Aggregator;
+    type Interfaces = (gst::ChildProxy,);
 
     fn with_class(_klass: &Self::Class) -> Self {
         Self {

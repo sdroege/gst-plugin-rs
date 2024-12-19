@@ -18,7 +18,7 @@ use gst::prelude::*;
 pub mod imp;
 
 glib::wrapper! {
-    pub struct QuinnRoqDemux(ObjectSubclass<imp::QuinnRoqDemux>) @extends gst::Element, gst::Object, @implements gst::ChildProxy;
+    pub struct QuinnRoqDemux(ObjectSubclass<imp::QuinnRoqDemux>) @extends gst::Element, gst::Object;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {

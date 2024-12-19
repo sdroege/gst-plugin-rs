@@ -349,31 +349,6 @@ impl ObjectSubclass for QuinnRoqDemux {
     }
 }
 
-impl ChildProxyImpl for QuinnRoqDemux {
-    fn children_count(&self) -> u32 {
-        let object = self.obj();
-        object.num_pads() as u32
-    }
-
-    fn child_by_name(&self, name: &str) -> Option<glib::Object> {
-        let object = self.obj();
-        object
-            .pads()
-            .into_iter()
-            .find(|p| p.name() == name)
-            .map(|p| p.upcast())
-    }
-
-    fn child_by_index(&self, index: u32) -> Option<glib::Object> {
-        let object = self.obj();
-        object
-            .pads()
-            .into_iter()
-            .nth(index as usize)
-            .map(|p| p.upcast())
-    }
-}
-
 impl QuinnRoqDemux {
     fn add_srcpad_for_flowid(&self, flow_id: u64) -> Result<gst::Pad, gst::FlowError> {
         let caps = self

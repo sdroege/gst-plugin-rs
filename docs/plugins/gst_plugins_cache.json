@@ -5175,6 +5175,9 @@
                     "GInitiallyUnowned",
                     "GObject"
                 ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
                 "klass": "Source/Network/QUIC",
                 "pad-templates": {
                     "datagram": {
@@ -5981,6 +5984,9 @@
                     "GstObject",
                     "GInitiallyUnowned",
                     "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
                 ],
                 "klass": "Source/Network/QUIC",
                 "pad-templates": {

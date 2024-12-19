@@ -159,10 +159,10 @@ impl ElementImpl for QuinnQuicMux {
         name: Option<&str>,
         _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
-        let mut state = self.state.lock().unwrap();
-
         match templ.name_template() {
             "stream_%u" => {
+                let mut state = self.state.lock().unwrap();
+
                 let stream_pad_name = if let Some(pad_name) = name {
                     pad_name.to_string()
                 } else {
@@ -181,10 +181,16 @@ impl ElementImpl for QuinnQuicMux {
                     .add_pad(&stream_pad)
                     .expect("Failed to add unidirectional stream pad");
 
+                drop(state);
+
+                self.obj().child_added(&stream_pad, &stream_pad.name());
+
                 Some(stream_pad.upcast())
             }
             "datagram" => {
                 gst::debug!(CAT, imp = self, "Requesting datagram pad");
+
+                let mut state = self.state.lock().unwrap();
 
                 if state.datagram_requested {
                     gst::warning!(CAT, imp = self, "datagram pad has already been requested");
@@ -203,6 +209,10 @@ impl ElementImpl for QuinnQuicMux {
                     .add_pad(&datagram_pad)
                     .expect("Failed to add datagram pad");
 
+                drop(state);
+
+                self.obj().child_added(&datagram_pad, &datagram_pad.name());
+
                 Some(datagram_pad.upcast())
             }
             _ => None,
@@ -218,7 +228,11 @@ impl ElementImpl for QuinnQuicMux {
             self.close_stream_for_pad(pad, &mut state);
         }
 
-        self.parent_release_pad(pad)
+        drop(state);
+
+        self.parent_release_pad(pad);
+
+        self.obj().child_removed(pad, &pad.name());
     }
 
     fn change_state(
@@ -381,6 +395,7 @@ impl ObjectSubclass for QuinnQuicMux {
     const NAME: &'static str = "GstQuinnQuicMux";
     type Type = super::QuinnQuicMux;
     type ParentType = gst_base::Aggregator;
+    type Interfaces = (gst::ChildProxy,);
 
     fn with_class(_klass: &Self::Class) -> Self {
         Self {
