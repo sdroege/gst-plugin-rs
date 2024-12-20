@@ -43,17 +43,17 @@ fn test_parse() {
         (
             18_985_633_333.nseconds(),
             1_234_566_667.nseconds(),
-            "Yes, I'm supporting\r\nDonald Trump.",
+            "Yes, I’m supporting\r\nDonald Trump.",
         ),
         (
             20_220_200_000.nseconds(),
             2_168_833_333.nseconds(),
-            "I'm doing so as enthusiastically\r\nas I can,",
+            "I’m doing so as enthusiastically\r\nas I can,",
         ),
         (
             22_389_033_333.nseconds(),
             2_235_566_667.nseconds(),
-            "even the fact I think\r\nhe's a terrible human being.",
+            "even the fact I think\r\nhe’s a terrible human being.",
         ),
     ];
 
