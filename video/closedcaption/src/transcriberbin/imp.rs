@@ -751,7 +751,13 @@ impl TranscriberBin {
             let ps = pad.imp().state.lock().unwrap();
             let pad_state = ps.as_ref().unwrap();
             let pad_settings = pad.imp().settings.lock().unwrap();
-            self.setup_cc_mode(pad, pad_state, state.mux_method, pad_settings.mode);
+            self.setup_cc_mode(
+                pad,
+                pad_state,
+                state.mux_method,
+                pad_settings.mode,
+                settings.accumulate_time,
+            );
         }
     }
 
@@ -934,6 +940,7 @@ impl TranscriberBin {
         pad_state: &TranscriberSinkPadState,
         mux_method: MuxMethod,
         mode: Cea608Mode,
+        accumulate_time: gst::ClockTime,
     ) {
         gst::debug!(
             CAT,
@@ -960,8 +967,6 @@ impl TranscriberBin {
             if mode.is_rollup() {
                 channel.textwrap.set_property("accumulate-time", 0u64);
             } else {
-                let accumulate_time = self.settings.lock().unwrap().accumulate_time;
-
                 channel
                     .textwrap
                     .set_property("accumulate-time", accumulate_time);
@@ -1329,7 +1334,13 @@ impl TranscriberBin {
 
             self.expose_channel_outputs(state, pad_state, &pad_settings)?;
 
-            self.setup_cc_mode(&pad.obj(), pad_state, state.mux_method, pad_settings.mode);
+            self.setup_cc_mode(
+                &pad.obj(),
+                pad_state,
+                state.mux_method,
+                pad_settings.mode,
+                settings.accumulate_time,
+            );
 
             if !pad_settings.passthrough {
                 gst::debug!(CAT, imp = self, "Syncing state with parent");
@@ -2708,6 +2719,11 @@ impl ObjectImpl for TranscriberSinkPad {
                 }
             }
             "mode" => {
+                let Some(parent) = self.obj().parent().and_downcast::<super::TranscriberBin>()
+                else {
+                    return;
+                };
+                let accumulate_time = parent.imp().settings.lock().unwrap().accumulate_time;
                 let mut settings = self.settings.lock().unwrap();
 
                 let old_mode = settings.mode;
@@ -2726,6 +2742,7 @@ impl ObjectImpl for TranscriberSinkPad {
                                 pad_state,
                                 state.mux_method,
                                 new_mode,
+                                accumulate_time,
                             );
                         }
                     }
