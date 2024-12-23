@@ -164,7 +164,7 @@ impl Polly {
             .pts()
             .ok_or_else(|| anyhow!("Stream with timestamped buffers required"))?;
 
-        let duration = inbuf
+        let input_duration = inbuf
             .duration()
             .ok_or_else(|| anyhow!("Buffers of stream need to have a duration"))?;
 
@@ -198,7 +198,7 @@ impl Polly {
                 .text(if settings.ssml_set_max_duration {
                     format!(
                         "<speak><prosody amazon:max-duration=\"{}ms\">{data}</prosody></speak>",
-                        duration.mseconds()
+                        input_duration.mseconds()
                     )
                 } else {
                     data.to_owned()
@@ -234,7 +234,7 @@ impl Polly {
         let overflow = self.settings.lock().unwrap().overflow;
 
         if matches!(overflow, AwsOverflow::Clip) {
-            let max_expected_bytes = duration
+            let max_expected_bytes = input_duration
                 .nseconds()
                 .mul_div_floor(32_000, 1_000_000_000)
                 .unwrap()
@@ -280,6 +280,13 @@ impl Polly {
             let buf_mut = buf.get_mut().unwrap();
             buf_mut.set_pts(pts);
             buf_mut.set_duration(duration);
+
+            if let Ok(mut meta) =
+                gst::meta::CustomMeta::add(buf_mut, "GstScaletempoTargetDurationMeta")
+            {
+                meta.mut_structure()
+                    .set("duration", input_duration.nseconds());
+            }
 
             if discont {
                 gst::debug!(CAT, imp = self, "Marking buffer discont");
