@@ -2555,6 +2555,7 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-check",
  "gstreamer-video",
+ "itertools 0.13.0",
  "pango",
  "pangocairo",
  "pretty_assertions",

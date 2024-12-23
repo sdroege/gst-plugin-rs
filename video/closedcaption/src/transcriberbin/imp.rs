@@ -57,10 +57,11 @@ struct TranscriptionChannel {
     cccapsfilter: gst::Element,
 }
 
-struct SynthesisChannel {
+struct CustomOutputChannel {
     bin: gst::Bin,
     language: String,
     latency: gst::ClockTime,
+    suffix: String,
 }
 
 /* Locking order: State, Settings, PadState, PadSettings */
@@ -228,13 +229,17 @@ impl TranscriberBin {
         state: &State,
         pad_state: &TranscriberSinkPadState,
     ) -> Result<(), Error> {
-        for (language, bin) in Iterator::chain(
+        for (language, bin) in itertools::chain!(
             pad_state
                 .transcription_channels
                 .values()
                 .map(|c| (c.language.as_str(), c.bin.clone())),
             pad_state
                 .synthesis_channels
+                .values()
+                .map(|c| (c.language.as_str(), c.bin.clone())),
+            pad_state
+                .subtitle_channels
                 .values()
                 .map(|c| (c.language.as_str(), c.bin.clone())),
         ) {
@@ -254,8 +259,11 @@ impl TranscriberBin {
             pad_state.link_transcription_channel(channel, state, pad_settings.passthrough)?;
         }
 
-        for channel in pad_state.synthesis_channels.values() {
-            pad_state.expose_synthesis_pads(&self.obj(), state, channel)?;
+        for channel in itertools::chain!(
+            pad_state.synthesis_channels.values(),
+            pad_state.subtitle_channels.values()
+        ) {
+            pad_state.expose_custom_output_pads(&self.obj(), state, channel)?;
         }
 
         Ok(())
@@ -266,7 +274,7 @@ impl TranscriberBin {
         lang: &str,
         accumulate_time: gst::ClockTime,
         bin_description: &str,
-    ) -> Result<SynthesisChannel, Error> {
+    ) -> Result<CustomOutputChannel, Error> {
         let bin = gst::Bin::new();
         let queue = gst::ElementFactory::make("queue").build()?;
         let textwrap = gst::ElementFactory::make("textwrap").build()?;
@@ -295,10 +303,47 @@ impl TranscriberBin {
         let srcpad = gst::GhostPad::with_target(&synthesizer.static_pad("src").unwrap()).unwrap();
         bin.add_pad(&srcpad)?;
 
-        Ok(SynthesisChannel {
+        Ok(CustomOutputChannel {
             bin,
             language: String::from(lang),
             latency,
+            suffix: "synthesis".to_string(),
+        })
+    }
+
+    fn construct_subtitle_channel(
+        &self,
+        lang: &str,
+        bin_description: &str,
+    ) -> Result<CustomOutputChannel, Error> {
+        let bin = gst::Bin::new();
+        let queue = gst::ElementFactory::make("queue").build()?;
+        let processor = gst::parse::bin_from_description_full(
+            bin_description,
+            true,
+            None,
+            gst::ParseFlags::NO_SINGLE_ELEMENT_BINS,
+        )?;
+
+        let latency = query_latency(&processor)?;
+
+        bin.add_many([&queue, &processor])?;
+        gst::Element::link_many([&queue, &processor])?;
+
+        queue.set_property("max-size-buffers", 0u32);
+        queue.set_property("max-size-time", 0u64);
+
+        let sinkpad = gst::GhostPad::with_target(&queue.static_pad("sink").unwrap()).unwrap();
+        bin.add_pad(&sinkpad)?;
+
+        let srcpad = gst::GhostPad::with_target(&processor.static_pad("src").unwrap()).unwrap();
+        bin.add_pad(&srcpad)?;
+
+        Ok(CustomOutputChannel {
+            bin,
+            language: String::from(lang),
+            latency,
+            suffix: "subtitle".to_string(),
         })
     }
 
@@ -1023,10 +1068,14 @@ impl TranscriberBin {
         self.construct_synthesis_channels(accumulate_time, pad_settings, pad_state)
             .unwrap();
 
+        self.construct_subtitle_channels(pad_settings, pad_state)
+            .unwrap();
+
         for k in pad_state
             .transcription_channels
             .keys()
             .chain(pad_state.synthesis_channels.keys())
+            .chain(pad_state.subtitle_channels.keys())
         {
             use std::collections::hash_map::Entry::*;
             if let Vacant(e) = pad_state.language_tees.entry(k.clone()) {
@@ -1081,6 +1130,8 @@ impl TranscriberBin {
 
         self.tear_down_synthesis_channels(&self.obj(), state, pad_state)?;
 
+        self.tear_down_subtitle_channels(&self.obj(), state, pad_state)?;
+
         for (language, tee) in pad_state.language_tees.drain() {
             if let Some(filter) = pad_state.language_filters.remove(&language) {
                 let _ = pad_state.transcription_bin.remove(&filter);
@@ -1096,33 +1147,58 @@ impl TranscriberBin {
         Ok(())
     }
 
+    fn tear_down_custom_output_channel(
+        &self,
+        topbin: &super::TranscriberBin,
+        channel: CustomOutputChannel,
+        state: &State,
+        pad_state: &mut TranscriberSinkPadState,
+    ) -> Result<(), Error> {
+        let mut pad_name = format!("src_{}_{}", channel.suffix, channel.language);
+        let srcpad = pad_state.transcription_bin.static_pad(&pad_name).unwrap();
+
+        let _ = pad_state.transcription_bin.remove_pad(&srcpad);
+
+        pad_state.transcription_bin.remove(&channel.bin)?;
+
+        if let Some(serial) = pad_state.serial {
+            pad_name = format!("{}_{}", pad_name, serial);
+        }
+        let srcpad = state.transcription_bin.static_pad(&pad_name).unwrap();
+        let _ = state.transcription_bin.remove_pad(&srcpad);
+
+        let srcpad = state.internal_bin.static_pad(&pad_name).unwrap();
+        let _ = state.internal_bin.remove_pad(&srcpad);
+        let srcpad = topbin.static_pad(&pad_name).unwrap();
+        let _ = topbin.remove_pad(&srcpad);
+
+        Ok(())
+    }
+
     fn tear_down_synthesis_channels(
         &self,
         topbin: &super::TranscriberBin,
         state: &State,
         pad_state: &mut TranscriberSinkPadState,
     ) -> Result<(), Error> {
-        for channel in pad_state.synthesis_channels.values() {
-            let mut pad_name = format!("src_synthesis_{}", channel.language);
-            let srcpad = pad_state.transcription_bin.static_pad(&pad_name).unwrap();
-
-            let _ = pad_state.transcription_bin.remove_pad(&srcpad);
-
-            pad_state.transcription_bin.remove(&channel.bin)?;
-
-            if let Some(serial) = pad_state.serial {
-                pad_name = format!("{}_{}", pad_name, serial);
-            }
-            let srcpad = state.transcription_bin.static_pad(&pad_name).unwrap();
-            let _ = state.transcription_bin.remove_pad(&srcpad);
-
-            let srcpad = state.internal_bin.static_pad(&pad_name).unwrap();
-            let _ = state.internal_bin.remove_pad(&srcpad);
-            let srcpad = topbin.static_pad(&pad_name).unwrap();
-            let _ = topbin.remove_pad(&srcpad);
+        let channels: Vec<_> = pad_state.synthesis_channels.drain().collect();
+        for (_, channel) in channels {
+            self.tear_down_custom_output_channel(topbin, channel, state, pad_state)?;
         }
 
-        pad_state.synthesis_channels.clear();
+        Ok(())
+    }
+
+    fn tear_down_subtitle_channels(
+        &self,
+        topbin: &super::TranscriberBin,
+        state: &State,
+        pad_state: &mut TranscriberSinkPadState,
+    ) -> Result<(), Error> {
+        let channels: Vec<_> = pad_state.subtitle_channels.drain().collect();
+        for (_, channel) in channels {
+            self.tear_down_custom_output_channel(topbin, channel, state, pad_state)?;
+        }
 
         Ok(())
     }
@@ -1174,6 +1250,28 @@ impl TranscriberBin {
             }
 
             for channel in pad_state.synthesis_channels.values() {
+                pad_state.transcription_bin.add(&channel.bin)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn construct_subtitle_channels(
+        &self,
+        pad_settings: &TranscriberSinkPadSettings,
+        pad_state: &mut TranscriberSinkPadState,
+    ) -> Result<(), Error> {
+        if let Some(ref map) = pad_settings.subtitle_languages {
+            for (language, value) in map.iter() {
+                let bin_description = value.get::<String>()?;
+                pad_state.subtitle_channels.insert(
+                    language.to_string(),
+                    self.construct_subtitle_channel(language, &bin_description)?,
+                );
+            }
+
+            for channel in pad_state.subtitle_channels.values() {
                 pad_state.transcription_bin.add(&channel.bin)?;
             }
         }
@@ -1458,21 +1556,46 @@ impl TranscriberBin {
         ret
     }
 
+    fn subtitle_latency(&self, state: &State) -> gst::ClockTime {
+        let mut ret = gst::ClockTime::ZERO;
+
+        for pad in state.audio_sink_pads.values() {
+            let ps = pad.imp().state.lock().unwrap();
+
+            if let Ok(pad_state) = ps.as_ref() {
+                for channel in pad_state.subtitle_channels.values() {
+                    if channel.latency > ret {
+                        ret = channel.latency;
+                    }
+                }
+            }
+        }
+
+        ret
+    }
+
     fn our_latency(&self, state: &State, settings: &Settings) -> gst::ClockTime {
-        self.synthesis_latency(state)
-            + settings.latency
-            + settings.accumulate_time
-            + CEAX08MUX_LATENCY
-            + settings.translate_latency
-            + CCCOMBINER_LATENCY
-            + state
-                .framerate
-                .map(|f| {
-                    2 * gst::ClockTime::SECOND
-                        .mul_div_floor(f.denom() as u64, f.numer() as u64)
-                        .unwrap()
-                })
-                .unwrap_or(gst::ClockTime::from_seconds(0))
+        [
+            settings.latency + self.subtitle_latency(state),
+            settings.latency + settings.accumulate_time + self.synthesis_latency(state),
+            settings.latency
+                + settings.accumulate_time
+                + CEAX08MUX_LATENCY
+                + settings.translate_latency
+                + CCCOMBINER_LATENCY
+                + state
+                    .framerate
+                    .map(|f| {
+                        2 * gst::ClockTime::SECOND
+                            .mul_div_floor(f.denom() as u64, f.numer() as u64)
+                            .unwrap()
+                    })
+                    .unwrap_or(gst::ClockTime::from_seconds(0)),
+        ]
+        .iter()
+        .max()
+        .unwrap()
+        .to_owned()
     }
 
     #[allow(clippy::single_match)]
@@ -2018,6 +2141,38 @@ impl ElementImpl for TranscriberBin {
             )
             .unwrap();
 
+            let src_caps = gst::Caps::builder("text/x-raw").build();
+            let subtitle_src_pad_template = gst::PadTemplate::new(
+                "src_subtitle_%s",
+                gst::PadDirection::Src,
+                gst::PadPresence::Sometimes,
+                &src_caps,
+            )
+            .unwrap();
+            let secondary_subtitle_src_pad_template = gst::PadTemplate::new(
+                "src_subtitle_%s_%u",
+                gst::PadDirection::Src,
+                gst::PadPresence::Sometimes,
+                &src_caps,
+            )
+            .unwrap();
+
+            let src_caps = gst::Caps::builder("audio/x-raw").build();
+            let synthesis_src_pad_template = gst::PadTemplate::new(
+                "src_synthesis_%s",
+                gst::PadDirection::Src,
+                gst::PadPresence::Sometimes,
+                &src_caps,
+            )
+            .unwrap();
+            let secondary_synthesis_src_pad_template = gst::PadTemplate::new(
+                "src_synthesis_%s_%u",
+                gst::PadDirection::Src,
+                gst::PadPresence::Sometimes,
+                &src_caps,
+            )
+            .unwrap();
+
             vec![
                 video_src_pad_template,
                 video_sink_pad_template,
@@ -2029,6 +2184,10 @@ impl ElementImpl for TranscriberBin {
                 unsynced_translate_src_pad_template,
                 unsynced_secondary_src_pad_template,
                 unsynced_secondary_translate_src_pad_template,
+                subtitle_src_pad_template,
+                secondary_subtitle_src_pad_template,
+                synthesis_src_pad_template,
+                secondary_synthesis_src_pad_template,
             ]
         });
 
@@ -2307,6 +2466,7 @@ impl BinImpl for TranscriberBin {
 struct TranscriberSinkPadSettings {
     translation_languages: Option<gst::Structure>,
     synthesis_languages: Option<gst::Structure>,
+    subtitle_languages: Option<gst::Structure>,
     language_filters: Option<gst::Structure>,
     language_code: String,
     mode: Cea608Mode,
@@ -2318,6 +2478,7 @@ impl Default for TranscriberSinkPadSettings {
         Self {
             translation_languages: None,
             synthesis_languages: None,
+            subtitle_languages: None,
             language_filters: None,
             language_code: String::from(DEFAULT_INPUT_LANG_CODE),
             mode: DEFAULT_MODE,
@@ -2336,7 +2497,8 @@ struct TranscriberSinkPadState {
     transcriber: Option<gst::Element>,
     queue_passthrough: gst::Element,
     transcription_channels: HashMap<String, TranscriptionChannel>,
-    synthesis_channels: HashMap<String, SynthesisChannel>,
+    synthesis_channels: HashMap<String, CustomOutputChannel>,
+    subtitle_channels: HashMap<String, CustomOutputChannel>,
     srcpad_name: Option<String>,
     target_passthrough_state: TargetPassthroughState,
     serial: Option<u32>,
@@ -2369,6 +2531,7 @@ impl TranscriberSinkPadState {
             queue_passthrough: gst::ElementFactory::make("queue").build()?,
             transcription_channels: HashMap::new(),
             synthesis_channels: HashMap::new(),
+            subtitle_channels: HashMap::new(),
             srcpad_name: None,
             target_passthrough_state: TargetPassthroughState::None,
             serial: None,
@@ -2512,13 +2675,13 @@ impl TranscriberSinkPadState {
         Ok(())
     }
 
-    fn expose_synthesis_pads(
+    fn expose_custom_output_pads(
         &self,
         topbin: &super::TranscriberBin,
         state: &State,
-        channel: &SynthesisChannel,
+        channel: &CustomOutputChannel,
     ) -> Result<(), Error> {
-        let mut pad_name = format!("src_synthesis_{}", channel.language);
+        let mut pad_name = format!("src_{}_{}", channel.suffix, channel.language);
         let srcpad = gst::GhostPad::builder_with_target(&channel.bin.static_pad("src").unwrap())
             .unwrap()
             .name(&pad_name)
@@ -2599,6 +2762,11 @@ impl ObjectImpl for TranscriberSinkPad {
                 glib::ParamSpecBoxed::builder::<gst::Structure>("synthesis-languages")
                     .nick("Synthesis languages")
                     .blurb("A map of language codes to bin descriptions, e.g. synthesis-languages=\"languages, fr=awspolly\" will use the awspolly element to synthesize speech from French translations")
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecBoxed::builder::<gst::Structure>("subtitle-languages")
+                    .nick("Subtitle languages")
+                    .blurb("A map of language codes to bin descriptions, e.g. subtitle-languages=\"languages, fr=textwrap lines=2 accumulate-time=5000000000\" will use the textwrap element before outputting the subtitles")
                     .mutable_playing()
                     .build(),
                 gst::ParamSpecArray::builder("transcription-mix-matrix")
@@ -2692,6 +2860,24 @@ impl ObjectImpl for TranscriberSinkPad {
                     imp = self,
                     "Updated synthesis-languages {:?}",
                     settings.synthesis_languages
+                );
+
+                drop(settings);
+
+                if let Some(this) = self.obj().parent().and_downcast::<super::TranscriberBin>() {
+                    this.imp().update_languages(&self.obj(), false);
+                }
+            }
+            "subtitle-languages" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.subtitle_languages = value
+                    .get::<Option<gst::Structure>>()
+                    .expect("type checked upstream");
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "Updated subtitle-languages {:?}",
+                    settings.subtitle_languages
                 );
 
                 drop(settings);
@@ -2831,6 +3017,10 @@ impl ObjectImpl for TranscriberSinkPad {
             "synthesis-languages" => {
                 let settings = self.settings.lock().unwrap();
                 settings.synthesis_languages.to_value()
+            }
+            "subtitle-languages" => {
+                let settings = self.settings.lock().unwrap();
+                settings.subtitle_languages.to_value()
             }
             "language-filters" => {
                 let settings = self.settings.lock().unwrap();

@@ -8355,6 +8355,26 @@
                         "presence": "sometimes",
                         "type": "GstTranscriberSrcPad"
                     },
+                    "src_subtitle_%%s": {
+                        "caps": "text/x-raw:\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    },
+                    "src_subtitle_%%s_%%u": {
+                        "caps": "text/x-raw:\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    },
+                    "src_synthesis_%%s": {
+                        "caps": "audio/x-raw:\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    },
+                    "src_synthesis_%%s_%%u": {
+                        "caps": "audio/x-raw:\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    },
                     "src_video": {
                         "caps": "video/x-raw(ANY):\n",
                         "direction": "src",
@@ -8840,6 +8860,17 @@
                         "mutable": "playing",
                         "readable": true,
                         "type": "gboolean",
+                        "writable": true
+                    },
+                    "subtitle-languages": {
+                        "blurb": "A map of language codes to bin descriptions, e.g. subtitle-languages=\"languages, fr=textwrap lines=2 accumulate-time=5000000000\" will use the textwrap element before outputting the subtitles",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "GstStructure",
                         "writable": true
                     },
                     "synthesis-languages": {

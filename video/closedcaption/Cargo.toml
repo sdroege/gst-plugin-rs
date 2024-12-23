@@ -28,6 +28,7 @@ gst-video = { workspace = true, features = ["v1_16"]}
 winnow = "0.6"
 smallvec = "1"
 bitstream-io = "2.3"
+itertools = "0.13"
 
 [dev-dependencies]
 pretty_assertions = "1"
