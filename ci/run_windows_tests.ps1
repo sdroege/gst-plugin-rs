@@ -24,6 +24,12 @@ else
 Write-Host "Build Jobs: $ncpus"
 $cargo_opts = @("--color=always", "--jobs=$ncpus", "--all-targets")
 
+if ("$env:RUST_VERSION" -eq "1.71.1") {
+    $cargo_nextest_opts=@("--profile=ci", "--no-fail-fast")
+} else {
+    $cargo_nextest_opts=@("--profile=ci", "--no-fail-fast", "--no-tests=pass")
+}
+
 function Run-Tests {
     param (
         $Features
@@ -48,7 +54,7 @@ function Run-Tests {
 
     $env:G_DEBUG="fatal_warnings"
     $env:RUST_BACKTRACE="1"
-    cargo nextest run $cargo_opts --profile=ci --no-tests=pass --no-fail-fast --workspace $local_exclude $Features
+    cargo nextest run $cargo_opts $cargo_nextest_opts --workspace $local_exclude $Features
     if (!$?) {
         Write-Host "Tests failed"
         Exit 1
