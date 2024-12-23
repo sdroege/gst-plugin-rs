@@ -822,7 +822,7 @@ impl ElementImpl for RaptorqDec {
         }
 
         let sinkpad_fec = gst::Pad::builder_from_template(templ)
-            .maybe_name(name)
+            .name_if_some(name)
             .chain_function(|pad, parent, buffer| {
                 Self::catch_panic_pad_function(
                     parent,
