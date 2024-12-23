@@ -388,7 +388,7 @@ foreach glib_version : glib_versions
 endforeach
 
 if get_option('gtk4').allowed() and gtk_dep.found()
-  gtk4_versions = ['4.16','4.14','4.12','4.10']
+  gtk4_versions = ['4.20','4.18','4.16','4.14','4.12','4.10']
   foreach gtk4_version : gtk4_versions
     if gtk_dep.version().version_compare(f'>=@gtk4_version@')
       found_features += {'gtk': 'gtk_v' + gtk4_version.underscorify()}

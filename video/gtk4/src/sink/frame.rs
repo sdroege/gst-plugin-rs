@@ -241,6 +241,40 @@ fn video_format_to_memory_format(f: gst_video::VideoFormat) -> gdk::MemoryFormat
     }
 }
 
+#[cfg(feature = "gtk_v4_20")]
+fn colorimetry_to_color_state(colorimetry: gst_video::VideoColorimetry) -> Option<gdk::ColorState> {
+    // Ignore incomplete colorimetries and fall back to format dependent default color states in
+    // GTK. This should make it easier to detect buggy sources and avoid confusing and unexpected
+    // output.
+    if colorimetry.primaries() == gst_video::VideoColorPrimaries::Unknown
+        || colorimetry.transfer() == gst_video::VideoTransferFunction::Unknown
+        || colorimetry.matrix() == gst_video::VideoColorMatrix::Unknown
+        || colorimetry.range() == gst_video::VideoColorRange::Unknown
+    {
+        return None;
+    }
+
+    let color_params = gdk::CicpParams::new();
+
+    color_params.set_color_primaries(colorimetry.primaries().to_iso());
+    color_params.set_transfer_function(colorimetry.transfer().to_iso());
+    color_params.set_matrix_coefficients(colorimetry.matrix().to_iso());
+
+    match colorimetry.range() {
+        gst_video::VideoColorRange::Range0_255 => color_params.set_range(gdk::CicpRange::Full),
+        gst_video::VideoColorRange::Range16_235 => color_params.set_range(gdk::CicpRange::Narrow),
+        _ => panic!("Unhandled range"),
+    }
+
+    match color_params.build_color_state() {
+        Ok(color_state) => Some(color_state),
+        Err(error) => {
+            println!("Could not build color state: {}", error);
+            None
+        }
+    }
+}
+
 fn video_frame_to_memory_texture(
     frame: gst_video::VideoFrame<gst_video::video_frame::Readable>,
     cached_textures: &mut HashMap<TextureCacheId, gdk::Texture>,
@@ -261,14 +295,36 @@ fn video_frame_to_memory_texture(
     let height = frame.height();
     let rowstride = frame.plane_stride()[0] as usize;
 
-    let texture = gdk::MemoryTexture::new(
-        width as i32,
-        height as i32,
-        format,
-        &glib::Bytes::from_owned(FrameWrapper(frame)),
-        rowstride,
-    )
-    .upcast::<gdk::Texture>();
+    let texture = {
+        #[cfg(feature = "gtk_v4_20")]
+        {
+            let info = frame.info().clone();
+
+            let mut builder = gdk::MemoryTextureBuilder::new()
+                .set_width(width as i32)
+                .set_height(height as i32)
+                .set_format(format)
+                .set_bytes(Some(&glib::Bytes::from_owned(FrameWrapper(frame))))
+                .set_stride(rowstride);
+
+            if let Some(color_state) = colorimetry_to_color_state(info.colorimetry()) {
+                builder = builder.set_color_state(&color_state);
+            }
+
+            builder.build()
+        }
+        #[cfg(not(feature = "gtk_v4_20"))]
+        {
+            gdk::MemoryTexture::new(
+                width as i32,
+                height as i32,
+                format,
+                &glib::Bytes::from_owned(FrameWrapper(frame)),
+                rowstride,
+            )
+        }
+        .upcast::<gdk::Texture>()
+    };
 
     cached_textures.insert(TextureCacheId::Memory(ptr), texture.clone());
     used_textures.insert(TextureCacheId::Memory(ptr));
@@ -345,17 +401,40 @@ fn video_frame_to_gl_texture(
             };
             let sync_point = (*sync_meta.as_ptr()).data;
 
-            gdk::GLTextureBuilder::new()
-                .set_context(Some(gdk_context))
-                .set_id(texture_id as u32)
-                .set_width(width as i32)
-                .set_height(height as i32)
-                .set_format(format)
-                .set_sync(Some(sync_point))
-                .build_with_release_func(move || {
-                    // Unmap and drop the GStreamer GL texture once GTK is done with it and not earlier
-                    drop(frame);
-                })
+            let builder = {
+                #[cfg(feature = "gtk_v4_20")]
+                {
+                    let mut mut_builder = gdk::GLTextureBuilder::new()
+                        .set_context(Some(gdk_context))
+                        .set_id(texture_id as u32)
+                        .set_width(width as i32)
+                        .set_height(height as i32)
+                        .set_format(format)
+                        .set_sync(Some(sync_point));
+
+                    if let Some(color_state) =
+                        colorimetry_to_color_state(frame.info().colorimetry())
+                    {
+                        mut_builder = mut_builder.set_color_state(&color_state);
+                    }
+                    mut_builder
+                }
+                #[cfg(not(feature = "gtk_v4_20"))]
+                {
+                    gdk::GLTextureBuilder::new()
+                        .set_context(Some(gdk_context))
+                        .set_id(texture_id as u32)
+                        .set_width(width as i32)
+                        .set_height(height as i32)
+                        .set_format(format)
+                        .set_sync(Some(sync_point))
+                }
+            };
+
+            builder.build_with_release_func(move || {
+                // Unmap and drop the GStreamer GL texture once GTK is done with it and not earlier
+                drop(frame);
+            })
         }
         #[cfg(not(feature = "gtk_v4_12"))]
         {
@@ -409,6 +488,14 @@ fn video_frame_to_dmabuf_texture(
         .set_width(width)
         .set_height(height)
         .set_n_planes(n_planes);
+
+    #[cfg(feature = "gtk_v4_20")]
+    {
+        if let Some(color_state) = colorimetry_to_color_state(info.colorimetry()) {
+            builder = builder.set_color_state(Some(color_state).as_ref());
+        }
+    }
+
     for plane in 0..(n_planes as usize) {
         unsafe {
             builder = builder.set_fd(plane as u32, fds[plane]);
