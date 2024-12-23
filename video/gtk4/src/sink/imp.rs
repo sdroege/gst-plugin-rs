@@ -34,6 +34,7 @@ use gst_gl::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_base::subclass::prelude::*;
+#[allow(unused_imports)]
 use gst_video::{prelude::*, subclass::prelude::*};
 
 use once_cell::sync::Lazy;
