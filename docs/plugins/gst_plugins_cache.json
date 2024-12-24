@@ -4540,7 +4540,7 @@
                         "writable": true
                     },
                     "pdt-follows-pipeline-clock": {
-                        "blurb": "As there might be drift between the wallclock and pipeline clock, this controls whether the Program-Date-Time markers should follow the pipeline clock rate (true), or be skewed to match the wallclock rate (false).",
+                        "blurb": "As there might be drift between the wallclock and pipeline clock, this controls whether the Program-Date-Time markers should follow the pipeline clock rate (true), or be skewed to match the wallclock rate (false) (deprecated).",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -4588,6 +4588,18 @@
                         "readable": true,
                         "type": "gchararray",
                         "writable": true
+                    },
+                    "program-date-time-reference": {
+                        "blurb": "Sets the reference for program date time. Pipeline: Use pipeline clock. System: Use system clock (As there might be drift between the wallclock and pipeline clock), BufferReferenceTimestamp: Use buffer time from reference timestamp meta.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "pipeline (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstHlsProgramDateTimeReference",
+                        "writable": true
                     }
                 },
                 "signals": {
@@ -4622,6 +4634,26 @@
                         "when": "last"
                     }
                 }
+            },
+            "GstHlsProgramDateTimeReference": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Pipeline: Use the pipeline clock",
+                        "name": "pipeline",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "System: Use the system clock",
+                        "name": "system",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "BufferReferenceTimestamp: Use the buffer reference timestamp",
+                        "name": "buffer-reference-timestamp",
+                        "value": "2"
+                    }
+                ]
             },
             "GstHlsSink3PlaylistType": {
                 "kind": "enum",

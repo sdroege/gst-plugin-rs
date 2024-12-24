@@ -10,6 +10,7 @@ use crate::hlsbasesink::HlsBaseSinkImpl;
 use crate::hlssink3::HlsSink3PlaylistType;
 use crate::playlist::Playlist;
 use crate::HlsBaseSink;
+use chrono::{DateTime, Utc};
 use gio::prelude::*;
 use gst::glib;
 use gst::prelude::*;
@@ -461,6 +462,7 @@ impl HlsCmafSink {
         duration: gst::ClockTime,
         running_time: Option<gst::ClockTime>,
         location: String,
+        timestamp: Option<DateTime<Utc>>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let uri = base_imp!(self).get_segment_uri(&location, None);
         let mut state = self.state.lock().unwrap();
@@ -476,6 +478,7 @@ impl HlsCmafSink {
             &location,
             running_time,
             duration,
+            timestamp,
             MediaSegment {
                 uri,
                 duration: duration.mseconds() as f32 / 1_000f32,
@@ -558,6 +561,6 @@ impl HlsCmafSink {
             gst::FlowError::Error
         })?;
 
-        self.add_segment(duration, running_time, location)
+        self.add_segment(duration, running_time, location, None)
     }
 }

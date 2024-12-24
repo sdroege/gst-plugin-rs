@@ -11,6 +11,7 @@ use crate::hlsbasesink::HlsBaseSinkImpl;
 use crate::hlssink3::HlsSink3PlaylistType;
 use crate::playlist::Playlist;
 use crate::HlsBaseSink;
+use chrono::{DateTime, Utc};
 use gio::prelude::*;
 use gst::glib;
 use gst::prelude::*;
@@ -33,6 +34,40 @@ macro_rules! base_imp {
     ($i:expr) => {
         $i.obj().upcast_ref::<HlsBaseSink>().imp()
     };
+}
+
+/// Offset between NTP and UNIX epoch in seconds.
+/// NTP = UNIX + NTP_UNIX_OFFSET.
+const NTP_UNIX_OFFSET: u64 = 2_208_988_800;
+
+/// Reference timestamp meta caps for NTP timestamps.
+static NTP_CAPS: LazyLock<gst::Caps> =
+    LazyLock::new(|| gst::Caps::builder("timestamp/x-ntp").build());
+
+/// Reference timestamp meta caps for UNIX timestamps.
+static UNIX_CAPS: LazyLock<gst::Caps> =
+    LazyLock::new(|| gst::Caps::builder("timestamp/x-unix").build());
+
+/// Returns the UTC time of the buffer in the UNIX epoch.
+fn get_utc_time_from_buffer(buffer: &gst::BufferRef) -> Option<DateTime<Utc>> {
+    buffer
+        .iter_meta::<gst::ReferenceTimestampMeta>()
+        .find_map(|meta| {
+            if meta.reference().can_intersect(&UNIX_CAPS) {
+                Some(meta.timestamp())
+            } else if meta.reference().can_intersect(&NTP_CAPS) {
+                meta.timestamp().checked_sub(NTP_UNIX_OFFSET.seconds())
+            } else {
+                None
+            }
+        })
+        .and_then(|clock_time| {
+            let time_nsec = clock_time.nseconds();
+            let one_sec = gst::ClockTime::SECOND.nseconds();
+            let timestamp_secs = (time_nsec / one_sec).try_into().ok()?;
+            let timestamp_nanos = (time_nsec % one_sec).try_into().ok()?;
+            DateTime::<Utc>::from_timestamp(timestamp_secs, timestamp_nanos)
+        })
 }
 
 impl From<HlsSink3PlaylistType> for Option<MediaPlaylistType> {
@@ -125,6 +160,7 @@ struct HlsSink3State {
     fragment_opened_at: Option<gst::ClockTime>,
     fragment_running_time: Option<gst::ClockTime>,
     current_segment_location: Option<String>,
+    fragment_start_timestamp: Option<DateTime<Utc>>,
 }
 
 #[derive(Default)]
@@ -255,6 +291,9 @@ impl ObjectImpl for HlsSink3 {
 
                     let sample = args[2].get::<gst::Sample>().unwrap();
                     let buffer = sample.buffer();
+
+                    let buffer_timestamp = buffer.and_then(get_utc_time_from_buffer);
+
                     let running_time = if let Some(buffer) = buffer {
                         let segment = sample
                             .segment()
@@ -271,6 +310,13 @@ impl ObjectImpl for HlsSink3 {
                         );
                         None
                     };
+
+                    {
+                        let mut state = imp.state.lock().unwrap();
+                        if state.fragment_start_timestamp.is_none() {
+                            state.fragment_start_timestamp = buffer_timestamp;
+                        }
+                    }
 
                     match imp.on_format_location(fragment_id, running_time) {
                         Ok(segment_location) => Some(segment_location.to_value()),
@@ -578,6 +624,8 @@ impl HlsSink3 {
         };
 
         let running_time = state.fragment_running_time;
+        let fragment_start_timestamp = state.fragment_start_timestamp.take();
+
         drop(state);
 
         let obj = self.obj();
@@ -587,6 +635,7 @@ impl HlsSink3 {
             &location,
             running_time,
             duration,
+            fragment_start_timestamp,
             MediaSegment {
                 uri,
                 duration: duration_msec,

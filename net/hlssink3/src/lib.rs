@@ -28,6 +28,8 @@ pub fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     {
         use gst::prelude::*;
         HlsBaseSink::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        hlsbasesink::HlsProgramDateTimeReference::static_type()
+            .mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }
 
     hlssink3::register(plugin)?;

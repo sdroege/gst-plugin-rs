@@ -26,6 +26,8 @@ const DEFAULT_PLAYLIST_LENGTH: u32 = 5;
 const DEFAULT_PROGRAM_DATE_TIME_TAG: bool = false;
 const DEFAULT_CLOCK_TRACKING_FOR_PDT: bool = true;
 const DEFAULT_ENDLIST: bool = true;
+const DEFAULT_PROGRAM_DATE_TIME_REFERENCE: HlsProgramDateTimeReference =
+    HlsProgramDateTimeReference::Pipeline;
 
 const SIGNAL_GET_PLAYLIST_STREAM: &str = "get-playlist-stream";
 const SIGNAL_GET_FRAGMENT_STREAM: &str = "get-fragment-stream";
@@ -39,13 +41,29 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     )
 });
 
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
+#[repr(u32)]
+#[enum_type(name = "GstHlsProgramDateTimeReference")]
+#[non_exhaustive]
+pub enum HlsProgramDateTimeReference {
+    #[enum_value(name = "Pipeline: Use the pipeline clock", nick = "pipeline")]
+    Pipeline = 0,
+    #[enum_value(name = "System: Use the system clock", nick = "system")]
+    System = 1,
+    #[enum_value(
+        name = "BufferReferenceTimestamp: Use the buffer reference timestamp",
+        nick = "buffer-reference-timestamp"
+    )]
+    BufferReferenceTimestamp = 2,
+}
+
 struct Settings {
     playlist_location: String,
     playlist_root: Option<String>,
     playlist_length: u32,
     max_num_segment_files: usize,
     enable_program_date_time: bool,
-    pdt_follows_pipeline_clock: bool,
+    program_date_time_reference: HlsProgramDateTimeReference,
     enable_endlist: bool,
 }
 
@@ -57,7 +75,7 @@ impl Default for Settings {
             playlist_length: DEFAULT_PLAYLIST_LENGTH,
             max_num_segment_files: DEFAULT_MAX_NUM_SEGMENT_FILES as usize,
             enable_program_date_time: DEFAULT_PROGRAM_DATE_TIME_TAG,
-            pdt_follows_pipeline_clock: DEFAULT_CLOCK_TRACKING_FOR_PDT,
+            program_date_time_reference: DEFAULT_PROGRAM_DATE_TIME_REFERENCE,
             enable_endlist: DEFAULT_ENDLIST,
         }
     }
@@ -126,14 +144,18 @@ impl ObjectImpl for HlsBaseSink {
                     .blurb("Length of HLS playlist. To allow players to conform to section 6.3.3 of the HLS specification, this should be at least 3. If set to 0, the playlist will be infinite.")
                     .default_value(DEFAULT_PLAYLIST_LENGTH)
                     .build(),
-                    glib::ParamSpecBoolean::builder("enable-program-date-time")
+                glib::ParamSpecBoolean::builder("enable-program-date-time")
                     .nick("add EXT-X-PROGRAM-DATE-TIME tag")
                     .blurb("put EXT-X-PROGRAM-DATE-TIME tag in the playlist")
                     .default_value(DEFAULT_PROGRAM_DATE_TIME_TAG)
                     .build(),
+                glib::ParamSpecEnum::builder_with_default("program-date-time-reference", DEFAULT_PROGRAM_DATE_TIME_REFERENCE)
+                    .nick("Program Date Time Reference")
+                    .blurb("Sets the reference for program date time. Pipeline: Use pipeline clock. System: Use system clock (As there might be drift between the wallclock and pipeline clock), BufferReferenceTimestamp: Use buffer time from reference timestamp meta.")
+                    .build(),
                 glib::ParamSpecBoolean::builder("pdt-follows-pipeline-clock")
                     .nick("Whether Program-Date-Time should follow the pipeline clock")
-                    .blurb("As there might be drift between the wallclock and pipeline clock, this controls whether the Program-Date-Time markers should follow the pipeline clock rate (true), or be skewed to match the wallclock rate (false).")
+                    .blurb("As there might be drift between the wallclock and pipeline clock, this controls whether the Program-Date-Time markers should follow the pipeline clock rate (true), or be skewed to match the wallclock rate (false) (deprecated).")
                     .default_value(DEFAULT_CLOCK_TRACKING_FOR_PDT)
                     .build(),
                 glib::ParamSpecBoolean::builder("enable-endlist")
@@ -172,7 +194,16 @@ impl ObjectImpl for HlsBaseSink {
                 settings.enable_program_date_time = value.get().expect("type checked upstream");
             }
             "pdt-follows-pipeline-clock" => {
-                settings.pdt_follows_pipeline_clock = value.get().expect("type checked upstream");
+                gst::warning!(CAT, "The 'pdt-follows-pipeline-clock' property is deprecated. Use 'program-date-time-reference' instead.");
+                settings.program_date_time_reference =
+                    if value.get().expect("type checked upstream") {
+                        HlsProgramDateTimeReference::Pipeline
+                    } else {
+                        HlsProgramDateTimeReference::System
+                    };
+            }
+            "program-date-time-reference" => {
+                settings.program_date_time_reference = value.get().expect("type checked upstream");
             }
             "enable-endlist" => {
                 settings.enable_endlist = value.get().expect("type checked upstream");
@@ -192,7 +223,10 @@ impl ObjectImpl for HlsBaseSink {
             }
             "playlist-length" => settings.playlist_length.to_value(),
             "enable-program-date-time" => settings.enable_program_date_time.to_value(),
-            "pdt-follows-pipeline-clock" => settings.pdt_follows_pipeline_clock.to_value(),
+            "pdt-follows-pipeline-clock" => (settings.program_date_time_reference
+                == HlsProgramDateTimeReference::Pipeline)
+                .to_value(),
+            "program-date-time-reference" => settings.program_date_time_reference.to_value(),
             "enable-endlist" => settings.enable_endlist.to_value(),
             _ => unimplemented!(),
         }
@@ -367,6 +401,7 @@ impl HlsBaseSink {
         location: &str,
         running_time: Option<gst::ClockTime>,
         duration: gst::ClockTime,
+        timestamp: Option<DateTime<Utc>>,
         mut segment: MediaSegment,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
@@ -387,10 +422,12 @@ impl HlsBaseSink {
             let settings = self.settings.lock().unwrap();
 
             // Calculate the mapping from running time to UTC
-            // calculate pdt_base_utc for each segment for !pdt_follows_pipeline_clock
-            // when pdt_follows_pipeline_clock is set, we calculate the base time every time
+            // calculate pdt_base_utc for each segment if program_date_time_reference == System
+            // when following system clock, we calculate the base time every time
             // this avoids the drift between pdt tag and external clock (if gst clock has skew w.r.t external clock)
-            if context.pdt_base_utc.is_none() || !settings.pdt_follows_pipeline_clock {
+            if context.pdt_base_utc.is_none()
+                || settings.program_date_time_reference == HlsProgramDateTimeReference::System
+            {
                 let obj = self.obj();
                 let now_utc = Utc::now();
                 let now_gst = obj.clock().unwrap().time().unwrap();
@@ -405,22 +442,32 @@ impl HlsBaseSink {
             }
 
             if settings.enable_program_date_time {
-                // Add the diff of running time to UTC time
-                // date_time = first_segment_utc + (current_seg_running_time - first_seg_running_time)
-                let date_time =
-                    context
-                        .pdt_base_utc
-                        .unwrap()
-                        .checked_add_signed(Duration::nanoseconds(
-                            running_time
-                                .opt_checked_sub(context.pdt_base_running_time)
-                                .unwrap()
-                                .unwrap()
-                                .nseconds() as i64,
-                        ));
+                // if program_date_time_reference == BufferReferenceTimestamp and timestamp is provided, use the timestamp provided in the buffer
+                if settings.program_date_time_reference
+                    == HlsProgramDateTimeReference::BufferReferenceTimestamp
+                    && timestamp.is_some()
+                {
+                    if let Some(timestamp) = timestamp {
+                        segment.program_date_time = Some(timestamp.into());
+                    }
+                } else {
+                    // Add the diff of running time to UTC time
+                    // date_time = first_segment_utc + (current_seg_running_time - first_seg_running_time)
+                    let date_time =
+                        context
+                            .pdt_base_utc
+                            .unwrap()
+                            .checked_add_signed(Duration::nanoseconds(
+                                running_time
+                                    .opt_checked_sub(context.pdt_base_running_time)
+                                    .unwrap()
+                                    .unwrap()
+                                    .nseconds() as i64,
+                            ));
 
-                if let Some(date_time) = date_time {
-                    segment.program_date_time = Some(date_time.into());
+                    if let Some(date_time) = date_time {
+                        segment.program_date_time = Some(date_time.into());
+                    }
                 }
             }
         }
@@ -432,12 +479,18 @@ impl HlsBaseSink {
         }
 
         self.write_playlist(context).inspect(|_res| {
-            let s = gst::Structure::builder("hls-segment-added")
+            let mut s = gst::Structure::builder("hls-segment-added")
                 .field("location", location)
                 .field("running-time", running_time.unwrap())
-                .field("duration", duration)
-                .build();
-            self.post_message(gst::message::Element::builder(s).src(&*self.obj()).build());
+                .field("duration", duration);
+            if let Some(ts) = timestamp {
+                s = s.field("timestamp", ts.timestamp());
+            };
+            self.post_message(
+                gst::message::Element::builder(s.build())
+                    .src(&*self.obj())
+                    .build(),
+            );
         })
     }
 
