@@ -24,3 +24,6 @@ path = "src/lib.rs"
 
 [build-dependencies]
 gst-plugin-version-helper.workspace = true
+
+[package.metadata.gstreamer]
+release_date = "2024-12-24"
