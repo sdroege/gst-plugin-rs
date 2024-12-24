@@ -5,6 +5,28 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.13.4] - 2024-12-24
+### Fixed
+- cea608overlay: Fix rendering when roll-up base row is at the top.
+- cea708mux: Handle CEA608 data correctly and output padding by default.
+- cea708mux: Clear leftover pending codes correctly.
+- cea708overlay: Produce better CEA608 layouts.
+- cea708overlay: Fix background/foreground types and enable black background by default.
+- cea708overlay: Clear correctly on caption timeout.
+- mpegtslivesrc: Various fixes related to stream discontinuities.
+- tttocea708: Fix various conformance issues.
+- togglerecord: Fix various deadlocks and simplify mutexes.
+- webrtcsink: Fix various deadlocks.
+- webrtcsink: Set caps-change-mode=delayed on encoder capsfilter.
+- webrtcsink: Ignore more fields on caps changes.
+
+### Added
+- awss3putobjectsink: Add next-file support.
+- tracers: Add signal to force writing log file to queue-levels and buffer-lateness tracers.
+- webrtc: Handle some more Janus events.
+- webrtcsink: Add support for openh264enc and nvh265enc.
+- webrtcsrc: Add connect-to-first-producer property.
+
 ## [0.13.3] - 2024-11-02
 ### Fixed
 - gtk4paintablesink: Don't check for a GL context when filtering dmabuf caps.
@@ -580,7 +602,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.3...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.4...HEAD
+[0.13.4]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.3...0.13.4
 [0.13.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.2...0.13.3
 [0.13.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.1...0.13.2
 [0.13.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.0...0.13.1
