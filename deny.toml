@@ -101,10 +101,13 @@ version = "0.52"
 name = "windows-result"
 version = "0.1"
 
-# various rav1e / dssim-core depend on an old version of itertools
+# various rav1e / dssim-core depend on old versions of itertools
 [[bans.skip]]
 name = "itertools"
 version = "0.12"
+[[bans.skip]]
+name = "itertools"
+version = "0.13"
 
 # matchers depends on an old version of regex-automata
 [[bans.skip]]
