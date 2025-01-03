@@ -290,7 +290,9 @@ if get_option('gtk4').allowed()
       gtk4_features += 'dmabuf'
     endif
 
-    if gtk_dep.version().version_compare('>=4.14')
+    if gtk_dep.version().version_compare('>=4.16')
+      gtk4_features += 'gtk_v4_16'
+    elif gtk_dep.version().version_compare('>=4.14')
       gtk4_features += 'gtk_v4_14'
     elif gtk_dep.version().version_compare('>=4.12')
       gtk4_features += 'gtk_v4_12'
