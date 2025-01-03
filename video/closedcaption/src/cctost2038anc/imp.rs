@@ -6,6 +6,17 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+/**
+ * SECTION:element-cctost2038anc
+ *
+ * Takes closed captions (CEA-608 and/or CEA-708) as produced by other GStreamer closed caption
+ * processing elements and converts them into SMPTE ST-2038 ancillary data that can be fed to
+ * `st2038ancmux` and then to `mpegtsmux` for splicing/muxing into an MPEG-TS container. The
+ * `line-number` and `horizontal-offset` properties should be set to the desired line number
+ * and horizontal offset.
+ *
+ * Since: plugins-rs-0.14.0
+ */
 use std::sync::{LazyLock, Mutex};
 
 use gst::glib;

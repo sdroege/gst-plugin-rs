@@ -6,6 +6,17 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+/**
+ * SECTION:element-st2038anctocc
+ *
+ * Extracts closed captions (CEA-608 and/or CEA-708) from SMPTE ST-2038 ancillary streams
+ * outputs them on the respective sometimes source pad (`src_cea608` or `src_cea708`). The
+ * data is output as a closed caption stream with caps `closedcaption/x-cea-608,format=s334-1a`
+ * or `closedcaption/x-cea-708,format=cdp` for further processing by other GStreamer closed
+ * caption processing elements.
+ *
+ * Since: plugins-rs-0.14.0
+ */
 use std::{mem, sync::LazyLock};
 
 use gst::glib;

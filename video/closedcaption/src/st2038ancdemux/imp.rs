@@ -8,6 +8,19 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+/**
+ * SECTION:element-st3028ancdemux
+ *
+ * Splits SMPTE ST-2038 ancillary metadata (as received from `tsdemux`) into separate
+ * streams per DID/SDID and line/horizontal_offset.
+ *
+ * Will add a sometimes pad with details for each ancillary stream. Also has an
+ * always source pad that just outputs all ancillary streams for easy forwarding
+ * or remuxing, in case none of the ancillary streams need to be modified or
+ * dropped.
+ *
+ * Since: plugins-rs-0.14.0
+ */
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;

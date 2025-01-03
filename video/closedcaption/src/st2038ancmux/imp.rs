@@ -6,6 +6,26 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+/**
+ * SECTION:element-st3028ancmux
+ *
+ * Muxes SMPTE ST-2038 ancillary metadata streams into a single stream for muxing into MPEG-TS
+ * with `mpegtsmux`. Combines ancillary data on the same line if needed, as is required for
+ * MPEG-TS muxing.
+ *
+ * Can accept individual ancillary metadata streams as inputs and/or the combined
+ * stream from #st2038ancdemux. If the video framerate is known, it can be
+ * signalled to the ancillary data muxer via the output caps by adding a
+ * capsfilter behind it, with e.g. `meta/x-st-2038,framerate=30/1`. This
+ * allows the muxer to bundle all packets belonging to the same frame (with
+ * the same timestamp), but that is not required. In case there are multiple
+ * streams with the same DID/SDID that have an ST-2038 packet for the same
+ * frame, it will prioritise the one from more recently created request pads
+ * over those from earlier created request pads (which might contain a
+ * combined stream for example if that's fed first).
+ *
+ * Since: plugins-rs-0.14.0
+ */
 use std::{
     collections::BTreeMap,
     ops::ControlFlow,
