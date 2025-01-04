@@ -29,6 +29,9 @@ fn init() {
 //  ! audio/x-raw,rate=48000 ! lamemp3enc ! filesink
 const MP3_DATA: &[u8] = include_bytes!("audiotestsrc-1ch-48kHz.mp3").as_slice();
 
+// First few frames of sample file from bug 598335
+const MP3_FREEFORMAT_DATA: &[u8] = include_bytes!("freeformat-384kbps-2ch-44.1kHz.mp3").as_slice();
+
 pub(crate) fn parse_mpa_frames(data: &[u8]) -> Vec<&[u8]> {
     let mut frames = vec![];
 
@@ -686,5 +689,215 @@ fn test_mpa_pay_depay_multiframe_input_live() {
         expected_depay,
         None,
         Liveness::Live(20_000_000),
+    );
+}
+
+// test_mpa_pay_depay_freeformat
+//
+// Check basic payloading/depayloading of non-fragmented freeformat MP3 frames
+//
+// Challenge/problem is that we don't know the size of freeformat frames ahead of time, so
+// we need to wait for the next frame start to know that the previous frame is complete.
+//
+// Same as test_mpa_pay_depay_freeformat_fragmented() just payloader outputs one packet per frame
+#[test]
+fn test_mpa_pay_depay_freeformat() {
+    init();
+
+    // 3 frames of 1253, 1254, 1254 bytes
+    let frames = parse_mpa_frames(MP3_FREEFORMAT_DATA);
+
+    let input_caps = {
+        let hdr = peek_frame_header(FramedData(frames[0])).unwrap();
+
+        gst::Caps::builder("audio/mpeg")
+            .field("rate", hdr.sample_rate as i32)
+            .field("channels", hdr.channels as i32)
+            .field("mpegversion", hdr.version as i32)
+            .field("layer", hdr.layer as i32)
+            .field("parsed", true)
+            .build()
+    };
+
+    let mut input_buffers = vec![];
+    let mut expected_pay = vec![];
+
+    let frame_duration = gst::ClockTime::from_nseconds(26122448); // 1152/44100
+
+    for (i, frame) in frames.iter().enumerate() {
+        let discont_flag = if i == 0 {
+            gst::BufferFlags::DISCONT
+        } else {
+            gst::BufferFlags::empty()
+        };
+
+        let pts = gst::ClockTime::from_nseconds(1152 * i as u64 * 1000000000 / 44100);
+
+        input_buffers.push(make_buffer(frame, pts, frame_duration, discont_flag));
+
+        let marker_flag = if i == 0 {
+            gst::BufferFlags::MARKER
+        } else {
+            gst::BufferFlags::empty()
+        };
+
+        // Each ~1254 byte MP3 frame will be split into 2 RTP packets with mtu=1200.
+        // Each frame is 1152 samples, at 44.1kHz, but RTP clock-rate is 90kHz.
+        // MARKER = start of talk spurt, so first buffer should have it.
+        let rtp_time = (1152 * i as u32 * 90000).div_ceil(44100);
+        expected_pay.push(vec![
+            ExpectedPacket::builder()
+                .pts(pts)
+                .flags(discont_flag | marker_flag)
+                .pt(14)
+                .rtp_time(rtp_time)
+                .marker_bit(marker_flag.contains(gst::BufferFlags::MARKER))
+                .build(),
+        ]);
+    }
+
+    let pts_from_frame = |i| gst::ClockTime::from_nseconds(1152 * i as u64 * 1000000000 / 44100);
+
+    let expected_depay = vec![
+        vec![
+            ExpectedBuffer::builder()
+                .pts(pts_from_frame(0))
+                .duration(frame_duration)
+                .size(1253)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(pts_from_frame(1))
+                .duration(frame_duration)
+                .size(1254)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(pts_from_frame(2))
+                .duration(frame_duration)
+                .size(1254)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+    ];
+
+    run_test_pipeline(
+        Source::Buffers(input_caps, input_buffers),
+        "rtpmpapay2 mtu=1400",
+        "rtpmpadepay2",
+        expected_pay,
+        expected_depay,
+    );
+}
+
+// test_mpa_pay_depay_freeformat_fragmented
+//
+// Check basic payloading/depayloading of fragmented freeformat MP3 frames
+//
+// Challenge/problem is that we don't know the size of freeformat frames ahead of time, so in
+// case of a fragmented payload we need to wait for the next frame start to know that the previous
+// frame is complete.
+#[test]
+fn test_mpa_pay_depay_freeformat_fragmented() {
+    init();
+
+    // 3 frames of 1253, 1254, 1254 bytes
+    let frames = parse_mpa_frames(MP3_FREEFORMAT_DATA);
+
+    let input_caps = {
+        let hdr = peek_frame_header(FramedData(frames[0])).unwrap();
+
+        gst::Caps::builder("audio/mpeg")
+            .field("rate", hdr.sample_rate as i32)
+            .field("channels", hdr.channels as i32)
+            .field("mpegversion", hdr.version as i32)
+            .field("layer", hdr.layer as i32)
+            .field("parsed", true)
+            .build()
+    };
+
+    let mut input_buffers = vec![];
+    let mut expected_pay = vec![];
+
+    let frame_duration = gst::ClockTime::from_nseconds(26122448); // 1152/44100
+
+    for (i, frame) in frames.iter().enumerate() {
+        let discont_flag = if i == 0 {
+            gst::BufferFlags::DISCONT
+        } else {
+            gst::BufferFlags::empty()
+        };
+
+        let pts = gst::ClockTime::from_nseconds(1152 * i as u64 * 1000000000 / 44100);
+
+        input_buffers.push(make_buffer(frame, pts, frame_duration, discont_flag));
+
+        let marker_flag = if i == 0 {
+            gst::BufferFlags::MARKER
+        } else {
+            gst::BufferFlags::empty()
+        };
+
+        // Each ~1254 byte MP3 frame will be split into 2 RTP packets with mtu=1200.
+        // Each frame is 1152 samples, at 44.1kHz, but RTP clock-rate is 90kHz.
+        // MARKER = start of talk spurt, so first buffer should have it.
+        let rtp_time = (1152 * i as u32 * 90000).div_ceil(44100);
+        expected_pay.push(vec![
+            ExpectedPacket::builder()
+                .pts(pts)
+                .flags(discont_flag | marker_flag)
+                .pt(14)
+                .rtp_time(rtp_time)
+                .marker_bit(marker_flag.contains(gst::BufferFlags::MARKER))
+                .build(),
+            ExpectedPacket::builder()
+                .pts(pts)
+                .flags(gst::BufferFlags::empty())
+                .pt(14)
+                .rtp_time(rtp_time)
+                .marker_bit(false)
+                .build(),
+        ]);
+    }
+
+    let pts_from_frame = |i| gst::ClockTime::from_nseconds(1152 * i as u64 * 1000000000 / 44100);
+
+    let expected_depay = vec![
+        vec![
+            ExpectedBuffer::builder()
+                .pts(pts_from_frame(0))
+                .duration(frame_duration)
+                .size(1253)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(pts_from_frame(1))
+                .duration(frame_duration)
+                .size(1254)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(pts_from_frame(2))
+                .duration(frame_duration)
+                .size(1254)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+    ];
+
+    run_test_pipeline(
+        Source::Buffers(input_caps, input_buffers),
+        "rtpmpapay2 mtu=1200",
+        "rtpmpadepay2",
+        expected_pay,
+        expected_depay,
     );
 }
