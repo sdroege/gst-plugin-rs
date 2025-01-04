@@ -540,6 +540,29 @@ gst-launch-1.0 livekitwebrtcsrc \
   src. ! queue ! videoconvert ! autovideosink
 ```
 
+## Using the PixelStreaming Signaller
+
+Start a [PixelStreaming] signalling server using the following command:
+
+```shell
+docker run --rm -t -i --network=host pixelstreamingunofficial/pixel-streaming-signalling-server:5.4
+```
+
+It will listen on port `80` for web clients and `8888` for webrtc streamers.
+
+Start a streamer:
+
+```shell
+gst-launch-1.0 videotestsrc ! queue ! videoconvert ! uepswebrtcsink signaller::uri="ws://127.0.0.1:8888" signaller::streamer-id="test"
+```
+
+Open http://localhost/?StreamerId=test&HoveringMouse=true in a webrtc-compatible web browser, then click on "CLICK TO START".
+You should see the test video.
+
+Note: for a full remote gaming example with receiving controls (mouse & keyboard), check [Bevy Streaming].
+
 [LiveKit]: https://livekit.io/
 [janus]: https://github.com/meetecho/janus-gateway
 [simple whip server]: https://github.com/meetecho/simple-whip-server/
+[PixelStreaming]: https://github.com/EpicGamesExt/PixelStreamingInfrastructure
+[Bevy Streaming]: https://github.com/rlamarche/bevy_streaming

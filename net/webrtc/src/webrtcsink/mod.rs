@@ -75,6 +75,11 @@ glib::wrapper! {
     pub struct WhepWebRTCSink(ObjectSubclass<imp::whep::WhepWebRTCSink>) @extends BaseWebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
 }
 
+#[cfg(feature = "pixelstreaming")]
+glib::wrapper! {
+    pub struct UePsWebRTCSink(ObjectSubclass<imp::ue::UePsWebRTCSink>) @extends BaseWebRTCSink, gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum WebRTCSinkError {
     #[error("no session with id")]
@@ -262,6 +267,14 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
     #[cfg(feature = "janus")]
     JanusVRSignallerState::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+
+    #[cfg(feature = "pixelstreaming")]
+    gst::Element::register(
+        Some(plugin),
+        "uepswebrtcsink",
+        gst::Rank::NONE,
+        UePsWebRTCSink::static_type(),
+    )?;
 
     Ok(())
 }

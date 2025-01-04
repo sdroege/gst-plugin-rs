@@ -16908,6 +16908,39 @@
                 },
                 "rank": "none"
             },
+            "uepswebrtcsink": {
+                "author": "Romain Lamarche <lamarcheromain@gmail.com>",
+                "description": "WebRTC sink for signalling on an Unreal Engine Pixelstreaming compliant Signalling Server",
+                "hierarchy": [
+                    "UePsWebRTCSink",
+                    "GstBaseWebRTCSink",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy",
+                    "GstNavigation"
+                ],
+                "klass": "Sink/Network/WebRTC",
+                "pad-templates": {
+                    "audio_%%u": {
+                        "caps": "audio/x-raw:\naudio/x-opus:\n",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "GstWebRTCSinkPad"
+                    },
+                    "video_%%u": {
+                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n\nvideo/x-raw(memory:D3D11Memory):\n\nvideo/x-raw(memory:VAMemory):\nvideo/x-vp8:\nvideo/x-h264:\nvideo/x-vp9:\nvideo/x-h265:\nvideo/x-av1:\n",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "GstWebRTCSinkPad"
+                    }
+                },
+                "rank": "none"
+            },
             "webrtcsink": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "WebRTC sink with custom protocol signaller",

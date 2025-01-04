@@ -6870,3 +6870,52 @@ pub(super) mod whep {
         type ParentType = crate::webrtcsink::BaseWebRTCSink;
     }
 }
+
+#[cfg(feature = "pixelstreaming")]
+pub(super) mod ue {
+    use super::*;
+    use crate::ue_ps_signaller::UePsSignaller;
+    #[derive(Default)]
+    pub struct UePsWebRTCSink {}
+
+    impl ObjectImpl for UePsWebRTCSink {
+        fn constructed(&self) {
+            let element = self.obj();
+            let ws = element
+                .upcast_ref::<crate::webrtcsink::BaseWebRTCSink>()
+                .imp();
+
+            let _ = ws.set_signaller(UePsSignaller::default().upcast());
+        }
+    }
+
+    impl GstObjectImpl for UePsWebRTCSink {}
+
+    impl ElementImpl for UePsWebRTCSink {
+        fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+            static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(
+                || {
+                    gst::subclass::ElementMetadata::new(
+                        "UePsWebRTCSink",
+                        "Sink/Network/WebRTC",
+                        "WebRTC sink for signalling on an Unreal Engine Pixelstreaming compliant Signalling Server",
+                        "Romain Lamarche <lamarcheromain@gmail.com>",
+                    )
+                },
+            );
+
+            Some(&*ELEMENT_METADATA)
+        }
+    }
+
+    impl BinImpl for UePsWebRTCSink {}
+
+    impl BaseWebRTCSinkImpl for UePsWebRTCSink {}
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for UePsWebRTCSink {
+        const NAME: &'static str = "UePsWebRTCSink";
+        type Type = crate::webrtcsink::UePsWebRTCSink;
+        type ParentType = crate::webrtcsink::BaseWebRTCSink;
+    }
+}

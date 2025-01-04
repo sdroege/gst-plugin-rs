@@ -21,6 +21,8 @@ mod janusvr_signaller;
 #[cfg(feature = "livekit")]
 mod livekit_signaller;
 pub mod signaller;
+#[cfg(feature = "pixelstreaming")]
+mod ue_ps_signaller;
 pub mod utils;
 pub mod webrtcsink;
 pub mod webrtcsrc;

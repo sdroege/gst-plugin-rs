@@ -89,7 +89,7 @@ path = "src/lib.rs"
 gst-plugin-version-helper.workspace = true
 
 [features]
-default = ["janus", "whip", "web_server", "whep"]
+default = ["janus", "whip", "web_server", "whep", "pixelstreaming"]
 static = []
 capi = []
 doc = []
@@ -103,6 +103,7 @@ livekit = ["dep:livekit-protocol", "dep:livekit-api"]
 whip = ["dep:reqwest", "dep:warp", "dep:ctrlc"]
 web_server = ["dep:warp"]
 whep = ["dep:reqwest", "dep:warp"]
+pixelstreaming = []
 
 [package.metadata.capi]
 min_version = "0.9.21"
