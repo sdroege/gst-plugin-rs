@@ -8,6 +8,7 @@
 
 use std::{
     collections::{HashMap, VecDeque},
+    path::PathBuf,
     sync::{Arc, Mutex, MutexGuard},
 };
 
@@ -35,6 +36,8 @@ enum PlaylistError {
 struct Settings {
     uris: Vec<String>,
     iterations: u32,
+    cache: bool,
+    cache_dir: Option<String>,
 }
 
 impl Default for Settings {
@@ -42,6 +45,8 @@ impl Default for Settings {
         Self {
             uris: vec![],
             iterations: 1,
+            cache: false,
+            cache_dir: None,
         }
     }
 }
@@ -55,6 +60,8 @@ struct State {
     current_item: Option<Item>,
     /// key are src pads from uridecodebin
     pads: HashMap<gst::Pad, Pads>,
+    /// URIs cached on disk, only used if `cache` property is enabled.
+    cached_uris: HashMap<String, PathBuf>,
 
     // read-only properties
     current_iteration: u32,
@@ -77,6 +84,7 @@ impl State {
             pending_current_items: VecDeque::new(),
             current_item: None,
             pads: HashMap::new(),
+            cached_uris: HashMap::new(),
             current_iteration: 0,
             current_uri_index: 0,
         }
@@ -195,6 +203,30 @@ impl ObjectImpl for UriPlaylistBin {
                     .default_value(1)
                     .mutable_playing()
                     .build(),
+                /**
+                 * GstUriPlaylistBin:cache:
+                 *
+                 * Cache playlist items from the network to disk so they are downloaded only once when playing multiple iterations.
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
+                glib::ParamSpecBoolean::builder("cache")
+                    .nick("Cache")
+                    .blurb("Cache playlist items from the network to disk so they are downloaded only once when playing multiple iterations.")
+                    .mutable_ready()
+                    .build(),
+                /**
+                 * GstUriPlaylistBin:cache-dir:
+                 *
+                 * The directory where playlist items are downloaded to, if 'cache' is enabled. If not set (default), the XDG cache directory is used.
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
+                glib::ParamSpecString::builder("cache-dir")
+                    .nick("Cache directory")
+                    .blurb("The directory where playlist items are downloaded to, if 'cache' is enabled. If not set (default), the XDG cache directory is used.")
+                    .mutable_ready()
+                    .build(),
                 glib::ParamSpecUInt::builder("current-iteration")
                     .nick("Current iteration")
                     .blurb("The index of the current playlist iteration, or 0 if the iterations property is 0 (unlimited playlist)")
@@ -246,6 +278,30 @@ impl ObjectImpl for UriPlaylistBin {
                     }
                 }
             }
+            "cache" => {
+                let mut settings = self.settings.lock().unwrap();
+                let new_value = value.get().expect("type checked upstream");
+                gst::info!(
+                    CAT,
+                    imp = self,
+                    "Changing cache from {:?} to {:?}",
+                    settings.cache,
+                    new_value,
+                );
+                settings.cache = new_value;
+            }
+            "cache-dir" => {
+                let mut settings = self.settings.lock().unwrap();
+                let new_value = value.get().expect("type checked upstream");
+                gst::info!(
+                    CAT,
+                    imp = self,
+                    "Changing cache-dir from {:?} to {:?}",
+                    settings.cache_dir,
+                    new_value,
+                );
+                settings.cache_dir = new_value;
+            }
             _ => unimplemented!(),
         }
     }
@@ -275,6 +331,14 @@ impl ObjectImpl for UriPlaylistBin {
                     .map(|state| state.current_uri_index)
                     .unwrap_or(0)
                     .to_value()
+            }
+            "cache" => {
+                let settings = self.settings.lock().unwrap();
+                settings.cache.to_value()
+            }
+            "cache-dir" => {
+                let settings = self.settings.lock().unwrap();
+                settings.cache_dir.to_value()
             }
             _ => unimplemented!(),
         }
@@ -411,10 +475,16 @@ impl UriPlaylistBin {
             let mut state_guard = self.state.lock().unwrap();
             assert!(state_guard.is_none());
 
+            let settings = self.settings.lock().unwrap();
+            // No need to enable caching if we play only one iteration
+            let download = settings.cache && settings.iterations != 1;
             let uridecodebin = gst::ElementFactory::make("uridecodebin3")
                 .name("playlist-uridecodebin")
+                .property("download", download)
+                .property("download-dir", &settings.cache_dir)
                 .build()
                 .map_err(|e| PlaylistError::PluginMissing { error: e.into() })?;
+            drop(settings);
 
             let streamsynchronizer = gst::ElementFactory::make("streamsynchronizer")
                 .name("playlist-streamsynchronizer")
@@ -494,11 +564,80 @@ impl UriPlaylistBin {
             });
 
             let bin_weak = self.obj().downgrade();
-            uridecodebin.connect("about-to-finish", false, move |_args| {
+            uridecodebin.connect("about-to-finish", false, move |args| {
+                let uridecodebin = args[0].get::<gst::Bin>().unwrap();
                 let bin = bin_weak.upgrade()?;
                 let self_ = bin.imp();
 
                 gst::debug!(CAT, obj = bin, "current URI about to finish");
+
+                let cache = self_.settings.lock().unwrap().cache;
+
+                // `about-to-finish` is emitted when the file has been fully buffered so we are sure it has been fully written to disk.
+                if cache {
+                    // retrieve cached path of the current item
+                    let download_path = uridecodebin
+                        .iterate_recurse()
+                        .find(|e| {
+                            e.factory()
+                                .map(|factory| factory.name())
+                                .unwrap_or_default()
+                                == "downloadbuffer"
+                        })
+                        .map(|downloadbuffer| downloadbuffer.property::<String>("temp-location"))
+                        .map(PathBuf::from)
+                        .and_then(|path| path.canonicalize().ok());
+
+                    // urisourcebin uses downloadbuffer only with some specific URI scheme (http, etc).
+                    // So if it has not been used assume it's a local file and loop using the original (or already cached) URI.
+                    if let Some(path) = download_path {
+                        let mut state = self_.state.lock().unwrap();
+                        if let Some(state) = state.as_mut() {
+                            let uri = uridecodebin.property::<String>("uri");
+                            // downloadbuffer will remove the file as soon as it's done with it so we need to make a copy.
+                            let mut link_path = path.clone();
+                            link_path.set_file_name(format!(
+                                "item-{}-{}",
+                                state.current_uri_index,
+                                path.file_name()
+                                    .and_then(|name| name.to_str())
+                                    .unwrap_or_default()
+                            ));
+
+                            let mut cached = true;
+
+                            // Try first creating a hard link to prevent a full copy.
+                            if let Err(err) = std::fs::hard_link(&path, &link_path) {
+                                gst::warning!(
+                                    CAT,
+                                    imp = self_,
+                                    "Failed to hard link cached item, try copy: '{err}'"
+                                );
+
+                                if let Err(err) = std::fs::copy(&path, &link_path) {
+                                    // Hard links are only supported with NTFS on Windows so fallback to copy.
+                                    gst::warning!(
+                                        CAT,
+                                        imp = self_,
+                                        "Failed to copy cached item: '{err}'"
+                                    );
+
+                                    cached = false;
+                                }
+                            }
+
+                            if cached {
+                                gst::log!(
+                                    CAT,
+                                    imp = self_,
+                                    "URI {uri} cached to {}",
+                                    link_path.display()
+                                );
+                                state.cached_uris.insert(uri, link_path);
+                            }
+                        }
+                    }
+                }
 
                 let _ = self_.start_next_item();
 
@@ -549,17 +688,21 @@ impl UriPlaylistBin {
             }
         };
 
-        gst::debug!(
-            CAT,
-            imp = self,
-            "start next item #{}: {}",
-            item.index(),
-            item.uri()
-        );
+        let mut uri = item.uri();
+        if let Some(path) = state.cached_uris.get(&uri) {
+            uri = gst::glib::filename_to_uri(path, None).unwrap().to_string();
+            gst::debug!(
+                CAT,
+                imp = self,
+                "start next item from cache #{}: {uri}",
+                item.index(),
+            );
+        } else {
+            gst::debug!(CAT, imp = self, "start next item #{}: {uri}", item.index(),);
+        }
 
         // don't hold the mutex when updating `uri` to prevent deadlocks.
         let uridecodebin = state.uridecodebin.clone();
-        let uri = item.uri();
 
         state.pending_current_items.push_back(Some(item));
 
@@ -640,6 +783,13 @@ impl UriPlaylistBin {
         }
 
         let mut state_guard = self.state.lock().unwrap();
+
+        if let Some(state) = state_guard.as_ref() {
+            for cached in state.cached_uris.values() {
+                let _ = std::fs::remove_file(cached);
+            }
+        }
+
         *state_guard = None;
     }
 }

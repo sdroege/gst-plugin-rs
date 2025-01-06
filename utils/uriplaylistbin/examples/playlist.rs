@@ -20,14 +20,25 @@ use gst::prelude::*;
 struct Opt {
     #[clap(short, default_value = "1")]
     iterations: u32,
+    #[clap(long, help = "Enable items cache")]
+    cache: bool,
+    #[clap(long, help = "Cache directory")]
+    cache_dir: Option<String>,
     uris: Vec<String>,
 }
 
-fn create_pipeline(uris: Vec<String>, iterations: u32) -> anyhow::Result<gst::Pipeline> {
+fn create_pipeline(
+    uris: Vec<String>,
+    iterations: u32,
+    cache: bool,
+    cache_dir: Option<String>,
+) -> anyhow::Result<gst::Pipeline> {
     let pipeline = gst::Pipeline::default();
     let playlist = gst::ElementFactory::make("uriplaylistbin")
         .property("uris", &uris)
         .property("iterations", iterations)
+        .property("cache", cache)
+        .property("cache-dir", cache_dir)
         .build()?;
 
     pipeline.add(&playlist)?;
@@ -117,7 +128,7 @@ fn main() -> anyhow::Result<()> {
         .collect();
 
     {
-        let pipeline = create_pipeline(uris, opt.iterations)?;
+        let pipeline = create_pipeline(uris, opt.iterations, opt.cache, opt.cache_dir)?;
 
         pipeline
             .set_state(gst::State::Playing)

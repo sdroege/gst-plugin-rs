@@ -3211,6 +3211,7 @@ dependencies = [
  "gstreamer",
  "gstreamer-app",
  "more-asserts",
+ "tempfile",
  "thiserror 2.0.9",
  "url",
 ]
