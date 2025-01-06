@@ -1189,11 +1189,11 @@ impl TranscriberBin {
     ) -> Result<(), Error> {
         if let Some(ref map) = settings.translation_languages {
             for (key, value) in map.iter() {
-                let key = key.to_lowercase();
+                let lowercased_key = key.to_lowercase();
                 let (language_code, caption_streams) = match mux_method {
                     MuxMethod::Cea608 => {
-                        if ["cc1", "cc3"].contains(&key.as_str()) {
-                            (value.get::<String>()?, vec![key.to_string()])
+                        if ["cc1", "cc3"].contains(&lowercased_key.as_str()) {
+                            (value.get::<String>()?, vec![lowercased_key.to_string()])
                         } else if let Ok(caption_stream) = value.get::<String>() {
                             if !["cc1", "cc3"].contains(&caption_stream.as_str()) {
                                 anyhow::bail!(
@@ -1201,14 +1201,14 @@ impl TranscriberBin {
                                     caption_stream
                                 );
                             }
-                            (key, vec![caption_stream])
+                            (key.to_string(), vec![caption_stream])
                         } else {
                             anyhow::bail!("Unknown 608 channel/language {}", key);
                         }
                     }
                     MuxMethod::Cea708 => {
                         if let Ok(caption_stream) = value.get::<String>() {
-                            (key, vec![caption_stream])
+                            (key.to_string(), vec![caption_stream])
                         } else if let Ok(caption_streams) = value.get::<gst::List>() {
                             let mut streams = vec![];
                             for s in caption_streams.iter() {
@@ -1221,7 +1221,7 @@ impl TranscriberBin {
                                     anyhow::bail!("Unknown 708 service {}, valid values are cc1, cc3 or 708_*", key);
                                 }
                             }
-                            (key, streams)
+                            (key.to_string(), streams)
                         } else {
                             anyhow::bail!("Unknown 708 translation language field {}", key);
                         }
