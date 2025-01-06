@@ -13109,6 +13109,30 @@
                     }
                 },
                 "properties": {
+                    "cache": {
+                        "blurb": "Cache playlist items from the network to disk so they are downloaded only once when playing multiple iterations.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "cache-dir": {
+                        "blurb": "The directory where playlist items are downloaded to, if 'cache' is enabled. If not set (default), the XDG cache directory is used.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "current-iteration": {
                         "blurb": "The index of the current playlist iteration, or 0 if the iterations property is 0 (unlimited playlist)",
                         "conditionally-available": false,

@@ -2994,6 +2994,7 @@ dependencies = [
  "gstreamer-app",
  "more-asserts",
  "once_cell",
+ "tempfile",
  "thiserror 1.0.69",
  "url",
 ]
