@@ -16,6 +16,9 @@ ths = "ths"
 ines = "ines"
 Ines = "Ines"
 
+# net/hlsmultivariantsink
+cros = "cros"
+
 [files]
 extend-exclude = [
     "*.mcc",
