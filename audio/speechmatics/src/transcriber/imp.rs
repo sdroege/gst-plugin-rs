@@ -827,9 +827,7 @@ impl Transcriber {
         _mode: gst::PadMode,
         active: bool,
     ) -> Result<(), gst::LoggableError> {
-        if active {
-            pad.imp().start_task()?;
-        } else {
+        if !active {
             pad.imp().stop_task()?;
         }
 
@@ -966,6 +964,36 @@ impl Transcriber {
                 true
             }
             gst::EventView::Tag(_) => true,
+            gst::EventView::StreamStart(e) => {
+                let srcpads = self.state.lock().unwrap().srcpads.clone();
+                for srcpad in &srcpads {
+                    let sev = gst::event::StreamStart::builder("transcription")
+                        .seqnum(e.seqnum())
+                        .build();
+                    if !srcpad.push_event(sev) {
+                        gst::error!(CAT, obj = srcpad, "Failed to push stream start event");
+                        return false;
+                    }
+
+                    let unsynced_pad = srcpad.imp().state.lock().unwrap().unsynced_pad.clone();
+
+                    if let Some(pad) = unsynced_pad {
+                        let sev = gst::event::StreamStart::builder("unsynced-transcription")
+                            .seqnum(e.seqnum())
+                            .build();
+                        if !pad.push_event(sev) {
+                            gst::error!(CAT, obj = pad, "Failed to push stream start event");
+                            return false;
+                        }
+                    }
+
+                    if let Err(err) = srcpad.imp().start_task() {
+                        gst::error!(CAT, imp = self, "Failed to start srcpad task: {}", err);
+                        return false;
+                    }
+                }
+                true
+            }
             gst::EventView::Caps(_) => {
                 let srcpads = self.state.lock().unwrap().srcpads.clone();
 
@@ -1852,6 +1880,9 @@ impl ElementImpl for Transcriber {
         self.obj().add_pad(&pad).unwrap();
         self.obj().add_pad(&unsynced_srcpad).unwrap();
 
+        pad.set_active(true).unwrap();
+        unsynced_srcpad.set_active(true).unwrap();
+
         self.obj().child_added(&pad, &pad.name());
 
         Some(pad.upcast())
@@ -1989,7 +2020,31 @@ impl ObjectImpl for TranscriberSrcPad {
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             OUTPUT_LANG_CODE_PROPERTY => {
-                self.settings.lock().unwrap().language_code = value.get().unwrap()
+                let language_code: Option<String> = value.get().unwrap();
+
+                self.settings.lock().unwrap().language_code = language_code.clone();
+
+                if let Some(language_code) = language_code {
+                    // Make sure our tags do not get overwritten
+                    let sev = gst::event::StreamStart::builder("transcription").build();
+                    let _ = self.obj().store_sticky_event(&sev);
+
+                    let mut tl = gst::TagList::new();
+                    tl.make_mut().add::<gst::tags::LanguageCode>(
+                        &language_code.as_str(),
+                        gst::TagMergeMode::Append,
+                    );
+                    let ev = gst::event::Tag::builder(tl).build();
+                    let _ = self.obj().store_sticky_event(&ev);
+
+                    if let Some(pad) = self.state.lock().unwrap().unsynced_pad.as_ref() {
+                        // Make sure our tags do not get overwritten
+                        let sev =
+                            gst::event::StreamStart::builder("unsynced-transcription").build();
+                        let _ = pad.store_sticky_event(&sev);
+                        let _ = pad.store_sticky_event(&ev);
+                    }
+                }
             }
             _ => unimplemented!(),
         }

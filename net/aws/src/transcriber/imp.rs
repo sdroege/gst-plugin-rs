@@ -279,7 +279,16 @@ impl Transcriber {
                 gst::info!(CAT, "Received caps {c:?}");
                 true
             }
-            StreamStart(_) => true,
+            StreamStart(_) => {
+                let state = self.state.lock().unwrap();
+                match self.start_srcpad_tasks(&state) {
+                    Err(err) => {
+                        gst::error!(CAT, imp = self, "Failed to start srcpad tasks: {err}");
+                        false
+                    }
+                    Ok(_) => true,
+                }
+            }
             _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
@@ -707,6 +716,18 @@ impl ObjectSubclass for Transcriber {
     }
 }
 
+fn store_language_tag(pad: &gst::Pad, stream_id: &str, language_code: &str) {
+    // Make sure our tags do not get overwritten
+    let sev = gst::event::StreamStart::builder(stream_id).build();
+    let _ = pad.store_sticky_event(&sev);
+
+    let mut tl = gst::TagList::new();
+    tl.make_mut()
+        .add::<gst::tags::LanguageCode>(&language_code, gst::TagMergeMode::Append);
+    let ev = gst::event::Tag::builder(tl).build();
+    let _ = pad.store_sticky_event(&ev);
+}
+
 impl ObjectImpl for Transcriber {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
@@ -809,28 +830,64 @@ impl ObjectImpl for Transcriber {
     fn constructed(&self) {
         self.parent_constructed();
 
+        let language_code = self.settings.lock().unwrap().language_code.clone();
+
         let obj = self.obj();
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.static_srcpad).unwrap();
-        obj.add_pad(
-            self.static_srcpad
-                .imp()
-                .state
-                .lock()
-                .unwrap()
-                .unsynced_pad
-                .as_ref()
-                .unwrap(),
-        )
-        .unwrap();
+        self.static_srcpad.set_active(true).unwrap();
+
+        store_language_tag(
+            self.static_srcpad.upcast_ref(),
+            "transcription",
+            &language_code,
+        );
+
+        let pad_state = self.static_srcpad.imp().state.lock().unwrap();
+
+        let unsynced_pad = pad_state.unsynced_pad.as_ref().unwrap();
+
+        obj.add_pad(unsynced_pad).unwrap();
+        unsynced_pad.set_active(true).unwrap();
+
+        store_language_tag(
+            unsynced_pad.upcast_ref(),
+            "unsynced-transcription",
+            &language_code,
+        );
+
         obj.set_element_flags(gst::ElementFlags::PROVIDE_CLOCK | gst::ElementFlags::REQUIRE_CLOCK);
     }
 
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "language-code" => {
+                let language_code: String = value.get().expect("type checked upstream");
+
+                store_language_tag(
+                    self.static_srcpad.upcast_ref(),
+                    "transcription",
+                    &language_code,
+                );
+
+                if let Some(unsynced_pad) = self
+                    .static_srcpad
+                    .imp()
+                    .state
+                    .lock()
+                    .unwrap()
+                    .unsynced_pad
+                    .as_ref()
+                {
+                    store_language_tag(
+                        unsynced_pad.upcast_ref(),
+                        "unsynced-transcription",
+                        &language_code,
+                    );
+                }
+
                 let mut settings = self.settings.lock().unwrap();
-                settings.language_code = value.get().expect("type checked upstream");
+                settings.language_code = language_code;
             }
             DEPRECATED_LATENCY_PROPERTY => {
                 let mut settings = self.settings.lock().unwrap();
@@ -1119,6 +1176,9 @@ impl ElementImpl for Transcriber {
 
         self.obj().add_pad(&pad).unwrap();
         self.obj().add_pad(&static_unsynced_srcpad).unwrap();
+
+        pad.set_active(true).unwrap();
+        static_unsynced_srcpad.set_active(true).unwrap();
 
         let _ = self
             .obj()
@@ -1873,9 +1933,7 @@ impl TranslateSrcPad {
         _mode: gst::PadMode,
         active: bool,
     ) -> Result<(), gst::LoggableError> {
-        if active {
-            pad.imp().start_task()?;
-        } else {
+        if !active {
             pad.imp().stop_task();
         }
 
@@ -1971,7 +2029,17 @@ impl ObjectImpl for TranslateSrcPad {
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             OUTPUT_LANG_CODE_PROPERTY => {
-                self.settings.lock().unwrap().language_code = value.get().unwrap()
+                let language_code: Option<String> = value.get().unwrap();
+
+                self.settings.lock().unwrap().language_code = language_code.clone();
+
+                if let Some(language_code) = language_code {
+                    store_language_tag(self.obj().upcast_ref(), "transcription", &language_code);
+
+                    if let Some(pad) = self.state.lock().unwrap().unsynced_pad.as_ref() {
+                        store_language_tag(pad, "unsynced-transcription", &language_code);
+                    }
+                }
             }
             TRANSLATION_TOKENIZATION_PROPERTY => {
                 self.settings.lock().unwrap().tokenization_method = value.get().unwrap()
