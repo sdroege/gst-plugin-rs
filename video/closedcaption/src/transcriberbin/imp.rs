@@ -2645,6 +2645,23 @@ impl TranscriberSinkPadState {
             state.internal_bin.add_pad(&srcpad)?;
 
             let srcpad = gst::GhostPad::with_target(&srcpad).unwrap();
+
+            srcpad.set_active(true).unwrap();
+
+            unsynced_pad.sticky_events_foreach(|event| {
+                if event.type_() == gst::EventType::Tag
+                    || event.type_() == gst::EventType::StreamStart
+                {
+                    gst::debug!(
+                        CAT,
+                        obj = srcpad,
+                        "Storing {event:?} on unsynced source pad"
+                    );
+                    let _ = srcpad.store_sticky_event(event);
+                }
+                std::ops::ControlFlow::Continue(gst::EventForeachAction::Keep)
+            });
+
             topbin.add_pad(&srcpad)?;
         }
 
