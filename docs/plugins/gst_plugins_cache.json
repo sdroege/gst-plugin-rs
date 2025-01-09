@@ -11772,7 +11772,57 @@
                     "GstObject",
                     "GInitiallyUnowned",
                     "GObject"
-                ]
+                ],
+                "properties": {
+                    "fake-protocol": {
+                        "blurb": "Protocol to fake in pcap files",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "udp (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstPcapWriterFakeProtocol",
+                        "writable": true
+                    },
+                    "output-dir": {
+                        "blurb": "Directory where to save pcap files",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "tracer_pcaps",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "pad-path": {
+                        "blurb": "Pad path to target",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "target-factory": {
+                        "blurb": "Factory name to target",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                }
             },
             "pipeline-snapshot": {
                 "hierarchy": [

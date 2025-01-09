@@ -45,13 +45,12 @@
 use pcap_file::pcap;
 
 use etherparse::PacketBuilder;
+use gst::glib::Properties;
 use std::collections::{HashMap, HashSet};
 use std::fs::{create_dir_all, File};
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
-use atomic_refcell::AtomicRefCell;
 use gst::glib;
 
 use gst::prelude::*;
@@ -91,34 +90,6 @@ impl Default for Settings {
             pad_path: None,
             fake_protocol: FakeProtocol::Udp,
         }
-    }
-}
-
-impl Settings {
-    fn update_from_params(&mut self, obj: &super::PcapWriter, params: String) {
-        let s = match gst::Structure::from_str(&format!("pcap-writer-settings,{}", params)) {
-            Ok(s) => s,
-            Err(err) => {
-                gst::warning!(CAT, obj = obj, "failed to parse tracer parameters: {}", err);
-                return;
-            }
-        };
-
-        if let Ok(output_dir) = s.get::<&str>("output-dir") {
-            gst::log!(CAT, obj = obj, "pcap dumpdir= {}", output_dir);
-            self.output_dir = Path::new(output_dir).to_path_buf();
-        }
-
-        self.pad_path = s.get("pad-path").ok();
-        if let Ok(protocol) = s.get("fake-protocol") {
-            match glib::Value::deserialize(protocol, FakeProtocol::static_type()) {
-                Ok(protocol) => self.fake_protocol = protocol.get().unwrap(),
-                Err(err) => {
-                    gst::warning!(CAT, obj = obj, "failed to parse fake-protocol: {}", err);
-                }
-            }
-        }
-        self.target_factory = s.get("target-factory").ok();
     }
 }
 
@@ -182,9 +153,43 @@ impl Writer {
     }
 }
 
-#[derive(Default)]
+#[derive(Properties, Default)]
+#[properties(wrapper_type = super::PcapWriter)]
 pub struct PcapWriter {
-    settings: AtomicRefCell<Settings>,
+    #[property(
+        name="output-dir",
+        get,
+        set,
+        type = String,
+        member = output_dir,
+        blurb = "Directory where to save pcap files")
+    ]
+    #[property(
+        name="target-factory",
+        get,
+        set,
+        type = Option<String>,
+        member = target_factory,
+        blurb = "Factory name to target")
+    ]
+    #[property(
+        name="pad-path",
+        get,
+        set,
+        type = Option<String>,
+        member = pad_path,
+        blurb = "Pad path to target")
+    ]
+    #[property(
+        name="fake-protocol",
+        get,
+        set,
+        type = FakeProtocol,
+        member = fake_protocol,
+        blurb = "Protocol to fake in pcap files",
+        builder(FakeProtocol::Udp))
+    ]
+    settings: Mutex<Settings>,
 
     pads: Mutex<HashMap<usize, Arc<Mutex<Writer>>>>,
 
@@ -198,16 +203,12 @@ impl ObjectSubclass for PcapWriter {
     type ParentType = gst::Tracer;
 }
 
+#[glib::derived_properties]
 impl ObjectImpl for PcapWriter {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let obj = self.obj();
-        let mut settings = Settings::default();
-        if let Some(params) = obj.property::<Option<String>>("params") {
-            settings.update_from_params(&obj, params);
-        }
-
+        let settings = self.settings.lock().unwrap();
         if settings.target_factory.is_some() || settings.pad_path.is_some() {
             if let Err(err) = create_dir_all(&settings.output_dir) {
                 gst::error!(
@@ -221,12 +222,10 @@ impl ObjectImpl for PcapWriter {
         } else {
             gst::warning!(
                 CAT,
-                obj = obj,
+                imp = self,
                 "'pcap-writer' enabled without specifying 'target-factory' or 'pad-path' parameters. Not writing pcaps."
             );
         }
-
-        *self.settings.borrow_mut() = settings;
     }
 }
 
@@ -258,6 +257,8 @@ fn pad_is_wanted(pad: &gst::Pad, settings: &Settings) -> bool {
 }
 
 impl TracerImpl for PcapWriter {
+    const USE_STRUCTURE_PARAMS: bool = true;
+
     fn pad_push_list_pre(&self, _ts: u64, pad: &gst::Pad, blist: &gst::BufferList) {
         for buffer in blist.iter() {
             self.maybe_write_buffer(pad, buffer);
@@ -283,7 +284,7 @@ impl PcapWriter {
         let mut pads = self.pads.lock().unwrap();
         let writer = if let Some(writer) = pads.get(&(pad.as_ptr() as usize)) {
             writer.clone()
-        } else if pad_is_wanted(pad, &self.settings.borrow()) {
+        } else if pad_is_wanted(pad, &self.settings.lock().unwrap()) {
             let mut obj = pad.upcast_ref::<gst::Object>().clone();
             let mut fname = obj.name().to_string();
             while let Some(p) = obj.parent() {
@@ -292,14 +293,14 @@ impl PcapWriter {
             }
 
             fname.push_str(".pcap");
-            let outpath = self.settings.borrow().output_dir.join(fname);
+            let outpath = self.settings.lock().unwrap().output_dir.join(fname);
             gst::info!(CAT, obj = pad, "Writing pcap: {outpath:?}");
 
             let outfile = File::create(outpath).expect("Error creating file");
 
             let pcap_writer = Arc::new(Mutex::new(Writer::new(
                 outfile,
-                self.settings.borrow().fake_protocol,
+                self.settings.lock().unwrap().fake_protocol,
             )));
             pads.insert(pad.as_ptr() as usize, pcap_writer.clone());
 
