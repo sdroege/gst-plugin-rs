@@ -473,12 +473,12 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
         // keep the last one around as that should theoretically be the one with the highest
         // resolution and profile.
         if payload_descriptor.start_of_frame
-            && state.current_picture_payload_descriptor.as_ref().map_or(
-                false,
-                |current_picture_payload_descriptor| {
+            && state
+                .current_picture_payload_descriptor
+                .as_ref()
+                .is_some_and(|current_picture_payload_descriptor| {
                     !current_picture_payload_descriptor.inter_picture_predicted_frame
-                },
-            )
+                })
         {
             let mut r = BitReader::endian(&mut cursor, BigEndian);
             // We assume that the beginning of the frame header fits into the first packet

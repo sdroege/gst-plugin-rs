@@ -2576,7 +2576,7 @@ impl BaseWebRTCSink {
                         #[strong]
                         session_id,
                         move |_webrtcbin: gst::Element, _bin: gst::Bin, e: gst::Element| {
-                            if e.factory().map_or(false, |f| f.name() == "rtprtxsend") {
+                            if e.factory().is_some_and(|f| f.name() == "rtprtxsend") {
                                 if e.has_property("stuffing-kbps", Some(i32::static_type())) {
                                     element.imp().set_rtptrxsend(&session_id, e);
                                 } else {

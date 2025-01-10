@@ -341,13 +341,9 @@ impl HlsBaseSink {
 
         gst::trace!(CAT, imp = self, "Segment location formatted: {}", location);
 
-        let stream = match self
+        let stream = self
             .obj()
-            .emit_by_name::<Option<gio::OutputStream>>(SIGNAL_GET_FRAGMENT_STREAM, &[&location])
-        {
-            Some(stream) => stream,
-            None => return None,
-        };
+            .emit_by_name::<Option<gio::OutputStream>>(SIGNAL_GET_FRAGMENT_STREAM, &[&location])?;
 
         Some((stream, location))
     }

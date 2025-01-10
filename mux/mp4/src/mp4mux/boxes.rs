@@ -1476,7 +1476,7 @@ fn write_stts(
         )
         .context("too big sample duration")?;
 
-        if last_duration.map_or(true, |last_duration| last_duration != duration) {
+        if last_duration != Some(duration) {
             if let Some(last_duration) = last_duration {
                 v.extend(sample_count.to_be_bytes());
                 v.extend(last_duration.to_be_bytes());
@@ -1527,9 +1527,7 @@ fn write_ctts(
             .mul_div_round(timescale as i64, gst::ClockTime::SECOND.nseconds() as i64)
             .context("too big sample composition time offset")?;
 
-        if last_composition_time_offset.map_or(true, |last_composition_time_offset| {
-            last_composition_time_offset != composition_time_offset
-        }) {
+        if last_composition_time_offset != Some(composition_time_offset) {
             if let Some(last_composition_time_offset) = last_composition_time_offset {
                 v.extend(sample_count.to_be_bytes());
                 if version == FULL_BOX_VERSION_0 {
@@ -1727,9 +1725,7 @@ fn write_stsc(
     let mut first_chunk = 1u32;
     let mut samples_per_chunk: Option<u32> = None;
     for (idx, chunk) in stream.chunks.iter().enumerate() {
-        if samples_per_chunk.map_or(true, |samples_per_chunk| {
-            samples_per_chunk != chunk.samples.len() as u32
-        }) {
+        if samples_per_chunk != Some(chunk.samples.len() as u32) {
             if let Some(samples_per_chunk) = samples_per_chunk {
                 v.extend(first_chunk.to_be_bytes());
                 v.extend(samples_per_chunk.to_be_bytes());

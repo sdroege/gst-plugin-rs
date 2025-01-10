@@ -80,11 +80,7 @@ impl ColorDetect {
         let dominant_color_name =
             color_name::Color::similar([dominant_color.r, dominant_color.g, dominant_color.b])
                 .to_lowercase();
-        if state
-            .current_color
-            .as_ref()
-            .map_or(true, |current_color| current_color != &dominant_color_name)
-        {
+        if state.current_color.as_ref() != Some(&dominant_color_name) {
             let name = dominant_color_name.clone();
             state.current_color = Some(dominant_color_name);
             return Ok(Some((name, palette)));

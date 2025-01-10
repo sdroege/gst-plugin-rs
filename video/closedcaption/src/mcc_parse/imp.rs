@@ -681,7 +681,7 @@ impl MccParse {
                     "Duration scan done, last_tc: {:?}",
                     last_tc
                 );
-                break (Ok(last_tc));
+                break Ok(last_tc);
             }
         }
     }
