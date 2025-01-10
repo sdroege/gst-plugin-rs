@@ -1011,7 +1011,7 @@ impl RtpRecv {
                     if !split_bufferlist
                         && previous_jb
                             .as_ref()
-                            .map_or(false, |previous| !Arc::ptr_eq(previous, &jb))
+                            .is_some_and(|previous| !Arc::ptr_eq(previous, &jb))
                     {
                         split_bufferlist = true;
                     }

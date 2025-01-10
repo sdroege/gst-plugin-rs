@@ -234,10 +234,9 @@ impl GstObjectImpl for PcapWriter {}
 
 fn pad_is_wanted(pad: &gst::Pad, settings: &Settings) -> bool {
     if let Some(factory_name) = settings.target_factory.as_ref() {
-        return pad.parent().map_or(false, |p| {
-            p.downcast::<gst::Element>().map_or(false, |e| {
-                e.factory().map_or(false, |f| f.name() == *factory_name)
-            })
+        return pad.parent().is_some_and(|p| {
+            p.downcast::<gst::Element>()
+                .is_ok_and(|e| e.factory().is_some_and(|f| f.name() == *factory_name))
         });
     }
 

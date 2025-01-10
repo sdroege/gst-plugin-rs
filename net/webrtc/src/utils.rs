@@ -652,10 +652,7 @@ impl Codec {
                                 }
                             },
                             |encoding_names| {
-                                encoding_names.iter().any(|v| {
-                                    v.get::<&str>()
-                                        .map_or(false, |encoding_name| encoding_name == codec)
-                                })
+                                encoding_names.iter().any(|v| v.get::<&str>() == Ok(codec))
                             },
                         )
                 })

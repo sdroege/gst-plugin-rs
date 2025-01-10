@@ -166,34 +166,25 @@ impl RtpBaseDepay2Impl for RtpAmrDepay {
         // encoding-params="1", (channels), default
         // crc={"0", "1"}, default "0"
 
-        if s.get::<&str>("robust-sorting")
-            .ok()
-            .map_or(false, |s| s != "0")
-        {
+        if s.get::<&str>("robust-sorting").is_ok_and(|s| s != "0") {
             gst::error!(CAT, imp = self, "Only robust-sorting=0 supported");
             return false;
         }
 
-        if s.get::<&str>("interleaving")
-            .ok()
-            .map_or(false, |s| s != "0")
-        {
+        if s.get::<&str>("interleaving").is_ok_and(|s| s != "0") {
             gst::error!(CAT, imp = self, "Only interleaving=0 supported");
             return false;
         }
 
-        if s.get::<&str>("encoding-params")
-            .ok()
-            .map_or(false, |s| s != "1")
-        {
+        if s.get::<&str>("encoding-params").is_ok_and(|s| s != "1") {
             gst::error!(CAT, imp = self, "Only encoding-params=1 supported");
             return false;
         }
 
         let mut state = self.state.borrow_mut();
 
-        let has_crc = s.get::<&str>("crc").ok().map_or(false, |s| s != "0");
-        let bandwidth_efficient = s.get::<&str>("octet-align").ok().map_or(true, |s| s != "1");
+        let has_crc = s.get::<&str>("crc").is_ok_and(|s| s != "0");
+        let bandwidth_efficient = s.get::<&str>("octet-align") != Ok("1");
 
         if bandwidth_efficient && has_crc {
             gst::error!(

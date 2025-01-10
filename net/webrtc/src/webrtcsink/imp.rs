@@ -2898,7 +2898,7 @@ impl BaseWebRTCSink {
                         #[strong]
                         session_id,
                         move |_webrtcbin: gst::Element, _bin: gst::Bin, e: gst::Element| {
-                            if e.factory().map_or(false, |f| f.name() == "rtprtxsend") {
+                            if e.factory().is_some_and(|f| f.name() == "rtprtxsend") {
                                 if e.has_property_with_type("stuffing-kbps", i32::static_type()) {
                                     element.imp().set_rtptrxsend(&session_id, e);
                                 } else {
@@ -2927,7 +2927,7 @@ impl BaseWebRTCSink {
                 #[watch]
                 element,
                 move |_webrtcbin: gst::Element, _bin: gst::Bin, e: gst::Element| {
-                    if e.factory().map_or(false, |f| f.name() == "nicesink") {
+                    if e.factory().is_some_and(|f| f.name() == "nicesink") {
                         let sinkpad = e.static_pad("sink").unwrap();
 
                         let session_id = session_id.clone();

@@ -564,9 +564,7 @@ impl RtpAmrPay {
             let is_ready = drain
                 || agg_mode != super::AggregateMode::Aggregate
                 || queued_bytes + avg_bytes > max_payload_size
-                || (max_ptime.map_or(false, |max_ptime| {
-                    queued_duration + avg_duration > max_ptime
-                }));
+                || (max_ptime.is_some_and(|max_ptime| queued_duration + avg_duration > max_ptime));
 
             gst::log!(
                 CAT,

@@ -465,7 +465,7 @@ impl JsonGstParse {
                     "Duration scan done, last_pts: {:?}",
                     last_pts
                 );
-                break (Ok(last_pts));
+                break Ok(last_pts);
             }
         }
     }
