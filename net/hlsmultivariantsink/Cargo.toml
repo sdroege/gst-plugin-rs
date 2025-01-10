@@ -25,6 +25,8 @@ gst-video.workspace = true
 gst-check.workspace = true
 m3u8-rs = "5.0"
 anyhow = "1"
+gst-plugin-hlssink3 = { path = "../hlssink3" }
+gst-plugin-fmp4 = { path = "../../mux/fmp4" }
 
 [build-dependencies]
 gst-plugin-version-helper.workspace = true

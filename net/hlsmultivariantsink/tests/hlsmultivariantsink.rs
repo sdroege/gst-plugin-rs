@@ -61,6 +61,8 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
+        gstfmp4::plugin_register_static().expect("Need cmafmux for hlsmultivariantsink test");
+        gsthlssink3::plugin_register_static().expect("Need hlssink3 for hlsmultivariantsink test");
         gsthlsmultivariantsink::plugin_register_static().expect("hlsmultivariantsink test");
     });
 }
