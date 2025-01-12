@@ -719,6 +719,15 @@ impl RtpBaseDepay2 {
     pub(super) fn finish_pending_buffers(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.borrow_mut();
 
+        if state.segment.is_none() {
+            if !state.pending_buffers.is_empty() {
+                // The queued buffers must be based on the caps only. They can be forwarded at a later
+                // time, if there is one.
+                gst::debug!(CAT, imp = self, "Can't finish buffers yet without segment");
+            }
+            return Ok(gst::FlowSuccess::Ok);
+        }
+
         // As long as there are buffers that can be finished, take all with the same PTS (or no
         // PTS) and put them into a buffer list.
         while state.pending_buffers.iter().any(|b| b.metadata_set) {
@@ -1188,6 +1197,12 @@ impl RtpBaseDepay2 {
             );
             return Err(gst::FlowError::NotNegotiated);
         }
+
+        if state.segment.is_none() {
+            gst::error!(CAT, imp = self, "Received buffers without segment");
+            return Err(gst::FlowError::Error);
+        }
+
         // Always set if the caps are set.
         let clock_rate = state.clock_rate.unwrap();
 
@@ -1704,10 +1719,10 @@ impl RtpBaseDepay2 {
                 state.play_scale = play_scale;
                 state.clock_base = clock_base;
                 state.npt_start_times = None;
-                state.pending_segment = true;
+                state.pending_segment = state.segment.is_some();
             } else {
                 if state.npt_start.is_some() {
-                    state.pending_segment = true;
+                    state.pending_segment = state.segment.is_some();
                 }
                 state.npt_start = None;
                 state.npt_stop = None;
