@@ -790,6 +790,15 @@ impl RtpBasePay2 {
     pub(super) fn finish_pending_packets(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.borrow_mut();
 
+        if state.segment.is_none() {
+            if !state.pending_buffers.is_empty() {
+                // The queued buffers must be based on the caps only. They can be forwarded at a later
+                // time, if there is one.
+                gst::debug!(CAT, imp = self, "Can't finish buffers yet without segment");
+            }
+            return Ok(gst::FlowSuccess::Ok);
+        }
+
         // As long as there are packets that can be finished, take all with the same PTS and put
         // them into a buffer list.
         while state
@@ -1568,6 +1577,11 @@ impl RtpBasePay2 {
                 ]
             );
             return Err(gst::FlowError::NotNegotiated);
+        }
+
+        if state.segment.is_none() {
+            gst::error!(CAT, imp = self, "Received buffers without segment");
+            return Err(gst::FlowError::Error);
         }
 
         if buffer.flags().contains(gst::BufferFlags::HEADER)
