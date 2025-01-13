@@ -401,26 +401,37 @@ impl RtpBaseDepay2Impl for RtpVorbisDepay {
 
             FragType::Continuation | FragType::End => {
                 let Some(acc) = state.acc.as_mut() else {
-                    gst::debug!(CAT, imp = self,
-                        "{frag_type:?} packet but no partial frame (most likely indicates packet loss)");
+                    gst::debug!(
+                        CAT,
+                        imp = self,
+                        "{frag_type:?} packet but no partial frame (most likely indicates packet loss)"
+                    );
                     self.obj().drop_packet(packet);
                     state.acc = None;
                     return Ok(gst::FlowSuccess::Ok);
                 };
 
                 if acc.ext_timestamp != packet.ext_timestamp() {
-                    gst::warning!(CAT, imp = self,
+                    gst::warning!(
+                        CAT,
+                        imp = self,
                         "{frag_type:?} packet timestamp {} doesn't match existing partial fragment timestamp {}",
-                        packet.ext_timestamp(), acc.ext_timestamp);
+                        packet.ext_timestamp(),
+                        acc.ext_timestamp
+                    );
                     state.acc = None;
                     self.obj().drop_packet(packet);
                     return Ok(gst::FlowSuccess::Ok);
                 }
 
                 if acc.ident != ident || acc.vdt != vdt {
-                    gst::warning!(CAT, imp = self,
+                    gst::warning!(
+                        CAT,
+                        imp = self,
                         "Data type {vdt:?} or ident {ident:?} don't match existing partial fragment ({:?}, {:?})",
-                        acc.vdt, acc.ident);
+                        acc.vdt,
+                        acc.ident
+                    );
                     state.acc = None;
                     self.obj().drop_packet(packet);
                     return Ok(gst::FlowSuccess::Ok);
@@ -543,7 +554,9 @@ impl RtpVorbisDepay {
                                 gst::element_imp_warning!(
                                     self,
                                     gst::StreamError::Decode,
-                                    ["Could not switch codebooks, Vorbis config {ident:x?} not available yet"]
+                                    [
+                                        "Could not switch codebooks, Vorbis config {ident:x?} not available yet"
+                                    ]
                                 );
                                 state.last_warning_message = Some(std::time::Instant::now());
                             }
@@ -564,9 +577,12 @@ impl RtpVorbisDepay {
                     gst::log!(CAT, imp = self, "Packet length: {packet_len} bytes");
 
                     if data.len() < packet_len {
-                        gst::warning!(CAT, imp = self,
+                        gst::warning!(
+                            CAT,
+                            imp = self,
                             "Short packet, expected {packet_len} bytes but only have {} byte payload left",
-                            data.len());
+                            data.len()
+                        );
                         return Ok(gst::FlowSuccess::Ok);
                     }
 

@@ -24,6 +24,37 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     )
 });
 
+/// Errors that can be produced when parsing a `VorbisConfig` or creating `VorbisHeaders` from caps
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+pub(crate) enum VorbisConfigParseError {
+    #[error(
+        "Unsupported variable-size coded xiph length. Don't support or expect lengths of more than 4 bytes."
+    )]
+    UnsupportedXiphLength,
+
+    #[error("Unexpected number of headers ({}), expected exactly three headers", .0)]
+    UnexpectedNumberOfHeaders(usize),
+
+    #[error("Short {name} header size. Required: {required} bytes, available {available} bytes")]
+    WrongConfigHeaderSize {
+        name: &'static str,
+        required: usize,
+        available: usize,
+    },
+
+    #[error("Unexpectedly large packed header size ({}), max allowed {}", .0, .1)]
+    TooLarge(usize, usize),
+
+    #[error("Invalid {name} header: {reason}")]
+    InvalidHeader {
+        name: &'static str,
+        reason: &'static str,
+    },
+
+    #[error("Invalid caps: {reason}")]
+    InvalidCaps { reason: &'static str },
+}
+
 #[derive(Clone, Default, Debug)]
 pub(crate) struct VorbisInfo {
     channels: u8,
@@ -32,14 +63,50 @@ pub(crate) struct VorbisInfo {
 
 impl VorbisInfo {
     fn from_headers(id_header: &[u8], setup_header: &[u8]) -> anyhow::Result<Self> {
-        use anyhow::Context;
+        use VorbisConfigParseError::*;
+        use anyhow::bail;
 
-        // We assume our headers have been created through our own parser
-        // so we'll have checked the header ID and length already.
-        let channels = *id_header.get(11).context("short id header")?;
+        if !id_header.starts_with("\x01vorbis".as_bytes()) {
+            Err(InvalidHeader {
+                name: "id",
+                reason: "wrong header prefix",
+            })?;
+        }
 
-        // We already checked the rate is <= 192000 when parsing, so know that the last byte is 0
-        let rate = u32::from_le_bytes([id_header[12], id_header[13], id_header[14], 0x00]) as i32;
+        if id_header.len() < 22 {
+            Err(WrongConfigHeaderSize {
+                name: "id",
+                required: 22,
+                available: id_header.len(),
+            })?;
+        }
+
+        let channels = id_header[11];
+        let rate = u32::from_le_bytes([id_header[12], id_header[13], id_header[14], id_header[15]]);
+
+        if channels == 0 || rate == 0 || rate > 192000 {
+            Err(InvalidHeader {
+                name: "id",
+                reason: "invalid channels or sample rate value",
+            })?;
+        }
+
+        let rate = rate as i32;
+
+        if setup_header.len() < 7 {
+            Err(WrongConfigHeaderSize {
+                name: "setup",
+                required: 7,
+                available: setup_header.len(),
+            })?;
+        }
+
+        if !setup_header.starts_with("\x05vorbis".as_bytes()) {
+            Err(InvalidHeader {
+                name: "setup",
+                reason: "wrong header prefix",
+            })?;
+        }
 
         Ok(VorbisInfo { channels, rate })
     }
@@ -60,13 +127,34 @@ pub(crate) struct VorbisHeaders {
 }
 
 impl VorbisHeaders {
-    fn new(id_header: Vec<u8>, comment_header: Vec<u8>, setup_header: Vec<u8>) -> Self {
-        let info = VorbisInfo::from_headers(&id_header, &setup_header).expect("vorbis info");
+    fn new(
+        id_header: Vec<u8>,
+        comment_header: Vec<u8>,
+        setup_header: Vec<u8>,
+    ) -> anyhow::Result<Self> {
+        use VorbisConfigParseError::*;
 
-        VorbisHeaders {
+        let info = VorbisInfo::from_headers(&id_header, &setup_header)?;
+
+        if comment_header.len() < 7 {
+            Err(WrongConfigHeaderSize {
+                name: "comment",
+                required: 7,
+                available: comment_header.len(),
+            })?;
+        }
+
+        if !comment_header.starts_with("\x03vorbis".as_bytes()) {
+            Err(InvalidHeader {
+                name: "comment",
+                reason: "wrong header prefix",
+            })?;
+        }
+
+        Ok(VorbisHeaders {
             headers: [id_header, comment_header, setup_header],
             info,
-        }
+        })
     }
 
     fn into_vecs(self) -> [Vec<u8>; 3] {
@@ -243,35 +331,6 @@ impl VorbisConfig {
     }
 }
 
-/// Errors that can be produced when parsing a `VorbisConfig` or creating `VorbisHeaders` from caps
-#[derive(thiserror::Error, Debug, PartialEq, Eq)]
-pub(crate) enum VorbisConfigParseError {
-    #[error("Unsupported variable-size coded xiph length. Don't support or expect lengths of more than 4 bytes.")]
-    UnsupportedXiphLength,
-
-    #[error("Unexpected number of headers ({}), expected exactly three headers", .0)]
-    UnexpectedNumberOfHeaders(usize),
-
-    #[error("Short {name} header size. Required: {required} bytes, available {available} bytes")]
-    WrongConfigHeaderSize {
-        name: &'static str,
-        required: usize,
-        available: usize,
-    },
-
-    #[error("Unexpectedly large packed header size ({}), max allowed {}", .0, .1)]
-    TooLarge(usize, usize),
-
-    #[error("Invalid {name} header: {reason}")]
-    InvalidHeader {
-        name: &'static str,
-        reason: &'static str,
-    },
-
-    #[error("Invalid caps: {reason}")]
-    InvalidCaps { reason: &'static str },
-}
-
 fn read_xiph_length<R: ByteRead + ?Sized>(br: &mut R) -> anyhow::Result<usize> {
     use VorbisConfigParseError::*;
     use anyhow::Context;
@@ -355,24 +414,7 @@ impl FromByteStream for VorbisHeaders {
 
         // Read header lengths. Last header length (setup header) is implicit.
         let id_len = read_xiph_length(r).context("id header length")?;
-
-        if id_len < 22 {
-            Err(WrongConfigHeaderSize {
-                name: "id",
-                required: 22,
-                available: id_len,
-            })?;
-        }
-
         let comment_len = read_xiph_length(r).context("comment header length")?;
-
-        if comment_len < 7 {
-            Err(WrongConfigHeaderSize {
-                name: "comment",
-                required: 7,
-                available: comment_len,
-            })?;
-        }
 
         gst::trace!(CAT, "id len: {}", id_len);
         gst::trace!(CAT, "comment len: {}", comment_len);
@@ -380,32 +422,8 @@ impl FromByteStream for VorbisHeaders {
         // Read identification header
         let id_header = r.read_to_vec(id_len).context("id header")?;
 
-        if !id_header.starts_with("\x01vorbis".as_bytes()) {
-            Err(InvalidHeader {
-                name: "id",
-                reason: "wrong header prefix",
-            })?;
-        }
-
-        let channels = id_header[11];
-        let rate = u32::from_le_bytes([id_header[12], id_header[13], id_header[14], id_header[15]]);
-
-        if channels == 0 || rate == 0 || rate > 192000 {
-            Err(InvalidHeader {
-                name: "id",
-                reason: "invalid channels or sample rate value",
-            })?;
-        }
-
         // Read comment header
         let comment_header = r.read_to_vec(comment_len).context("comment header")?;
-
-        if !comment_header.starts_with("\x03vorbis".as_bytes()) {
-            Err(InvalidHeader {
-                name: "comment",
-                reason: "wrong header prefix",
-            })?;
-        }
 
         // Read setup header
         // This is dumb, but not sure there's a better way to read to the end currently
@@ -416,24 +434,7 @@ impl FromByteStream for VorbisHeaders {
 
         gst::trace!(CAT, "setup len: {}", setup_header.len());
 
-        if setup_header.len() < 7 {
-            Err(WrongConfigHeaderSize {
-                name: "setup",
-                required: 7,
-                available: setup_header.len(),
-            })?;
-        }
-
-        if !setup_header.starts_with("\x05vorbis".as_bytes()) {
-            Err(InvalidHeader {
-                name: "setup",
-                reason: "wrong header prefix",
-            })?;
-        }
-
-        let headers = VorbisHeaders::new(id_header, comment_header, setup_header);
-
-        Ok(headers)
+        VorbisHeaders::new(id_header, comment_header, setup_header)
     }
 }
 
