@@ -27,6 +27,9 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 /// Errors that can be produced when parsing a `VorbisConfig` or creating `VorbisHeaders` from caps
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub(crate) enum VorbisConfigParseError {
+    #[error("Unsupported Vorbis version {}.", .0)]
+    UnsupportedVersion(u32),
+
     #[error(
         "Unsupported variable-size coded xiph length. Don't support or expect lengths of more than 4 bytes."
     )]
@@ -59,6 +62,7 @@ pub(crate) enum VorbisConfigParseError {
 pub(crate) struct VorbisInfo {
     channels: u8,
     rate: i32,
+    blocksizes: [u16; 2],
 }
 
 impl VorbisInfo {
@@ -66,6 +70,7 @@ impl VorbisInfo {
         use VorbisConfigParseError::*;
         use anyhow::bail;
 
+        // Parse ID header
         if !id_header.starts_with("\x01vorbis".as_bytes()) {
             Err(InvalidHeader {
                 name: "id",
@@ -73,16 +78,23 @@ impl VorbisInfo {
             })?;
         }
 
-        if id_header.len() < 22 {
+        if id_header.len() < 30 {
             Err(WrongConfigHeaderSize {
                 name: "id",
-                required: 22,
+                required: 30,
                 available: id_header.len(),
             })?;
         }
 
-        let channels = id_header[11];
-        let rate = u32::from_le_bytes([id_header[12], id_header[13], id_header[14], id_header[15]]);
+        let mut br = BitReader::endian(Cursor::new(&id_header[7..]), LittleEndian);
+
+        let vorbis_version = br.read::<32, u32>()?;
+        if vorbis_version != 0 {
+            Err(UnsupportedVersion(vorbis_version))?;
+        }
+
+        let channels = br.read::<8, u8>()?;
+        let rate = br.read::<32, u32>()?;
 
         if channels == 0 || rate == 0 || rate > 192000 {
             Err(InvalidHeader {
@@ -91,8 +103,31 @@ impl VorbisInfo {
             })?;
         }
 
-        let rate = rate as i32;
+        let _bitrate_max = br.read::<32, u32>()?;
+        let _bitrate_nom = br.read::<32, u32>()?;
+        let _bitrate_min = br.read::<32, u32>()?;
 
+        let blocksize0 = 1u16 << br.read::<4, u8>()?;
+        let blocksize1 = 1u16 << br.read::<4, u8>()?;
+
+        // Allowed block sizes: 64, 128, 256, 512, 1024, 2048, 4096, 8192
+        #[allow(clippy::manual_range_contains)]
+        if blocksize0 < 64 || blocksize0 > 8192 || blocksize1 > 8192 || blocksize1 < blocksize0 {
+            Err(InvalidHeader {
+                name: "id",
+                reason: "invalid blocksize configuration",
+            })?;
+        }
+
+        let framing_bit = br.read_bit()?;
+        if !framing_bit {
+            Err(InvalidHeader {
+                name: "id",
+                reason: "invalid framing bit",
+            })?;
+        }
+
+        // Parse setup header, at least the interesting bits which are of course right at the end
         if setup_header.len() < 7 {
             Err(WrongConfigHeaderSize {
                 name: "setup",
@@ -108,7 +143,11 @@ impl VorbisInfo {
             })?;
         }
 
-        Ok(VorbisInfo { channels, rate })
+        Ok(VorbisInfo {
+            channels,
+            rate: rate as i32,
+            blocksizes: [blocksize0, blocksize1],
+        })
     }
 
     fn channels(&self) -> u8 {
@@ -135,6 +174,8 @@ impl VorbisHeaders {
         use VorbisConfigParseError::*;
 
         let info = VorbisInfo::from_headers(&id_header, &setup_header)?;
+
+        gst::info!(CAT, "vorbis info: {:?}", info);
 
         if comment_header.len() < 7 {
             Err(WrongConfigHeaderSize {
