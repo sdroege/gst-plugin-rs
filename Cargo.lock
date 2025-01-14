@@ -1420,9 +1420,9 @@ dependencies = [
 
 [[package]]
 name = "dash-mpd"
-version = "0.17.4"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c44833111fbf9e1d1a59b61deaffd27e41d94b358335c5f06284abaf8ccec97"
+checksum = "df8c53700cb27af681192b9f2fdb2fc700c0d4a1efaa33f57a94d237156e4c98"
 dependencies = [
  "base64 0.22.1",
  "base64-serde",
