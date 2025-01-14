@@ -44,10 +44,6 @@ use std::path;
 use std::str::FromStr;
 use std::sync::{LazyLock, Mutex};
 
-use cros_codecs::codec::h264::parser as H264Parser;
-use cros_codecs::codec::h265::parser as H265Parser;
-use std::io::Cursor;
-
 const DEFAULT_AUTO_SELECT: bool = false;
 const DEFAULT_FORCED: bool = false;
 const DEFAULT_I_FRAMES_ONLY_PLAYLIST: bool = false;
@@ -1312,7 +1308,11 @@ impl HlsMultivariantSink {
         drop(state);
     }
 
+    #[cfg(target_os = "linux")]
     fn parse_h264_sps(&self, buffer: &[u8], group_id: String) {
+        use cros_codecs::codec::h264::parser as H264Parser;
+        use std::io::Cursor;
+
         let mut caps_codec_str: Option<String> = None;
         let mut cursor = Cursor::new(buffer);
         let mut parser = H264Parser::Parser::default();
@@ -1362,7 +1362,11 @@ impl HlsMultivariantSink {
         }
     }
 
+    #[cfg(target_os = "linux")]
     fn parse_h265_sps(&self, buffer: &[u8], group_id: String) {
+        use cros_codecs::codec::h265::parser as H265Parser;
+        use std::io::Cursor;
+
         let mut caps_codec_str: Option<String> = None;
         let mut cursor = Cursor::new(buffer);
         let mut parser = H265Parser::Parser::default();
@@ -1455,6 +1459,7 @@ impl HlsMultivariantSink {
         }
     }
 
+    #[cfg(target_os = "linux")]
     fn parse_sps(
         &self,
         caps: &gst::Caps,
@@ -1499,34 +1504,41 @@ impl HlsMultivariantSink {
         hlspad: &super::HlsMultivariantSinkPad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let settings = self.settings.lock().unwrap();
-        let is_mpegts = settings.muxer_type == HlsMultivariantSinkMuxerType::MpegTs;
-        drop(settings);
-
         /*
          * MPEG-TS does byte-stream for H264/H265 which does not have
          * codec_data as the relevant information is carried in-band
          * with SPS. codec-utils helpers cannot give us codec string
          * without the codec_data. For MPEG-TS, parse SPS and figure
          * out the relevant information to generate codec string.
+         *
+         * parse_sps function relies on cros_codecs which supports
+         * only linux. On other platforms for MPEG-TS, users need to
+         * specify codec string manually.
          */
-        if is_mpegts && buffer.flags().contains(gst::BufferFlags::HEADER) {
-            let pad_settings = hlspad.imp().settings.lock().unwrap().to_owned();
-            let group_id = match pad_settings {
-                HlsMultivariantSinkPadSettings::PadAlternative(ref a) => a.group_id.clone(),
-                HlsMultivariantSinkPadSettings::PadVariant(ref v) => {
-                    if let Some(group_id) = &v.video {
-                        group_id.clone()
-                    } else if let Some(group_id) = &v.audio {
-                        group_id.clone()
-                    } else {
-                        v.uri.clone()
-                    }
-                }
-            };
+        #[cfg(target_os = "linux")]
+        {
+            let settings = self.settings.lock().unwrap();
+            let is_mpegts = settings.muxer_type == HlsMultivariantSinkMuxerType::MpegTs;
+            drop(settings);
 
-            if let Some(caps) = hlspad.current_caps() {
-                self.parse_sps(&caps, &buffer, group_id)?;
+            if is_mpegts && buffer.flags().contains(gst::BufferFlags::HEADER) {
+                let pad_settings = hlspad.imp().settings.lock().unwrap().to_owned();
+                let group_id = match pad_settings {
+                    HlsMultivariantSinkPadSettings::PadAlternative(ref a) => a.group_id.clone(),
+                    HlsMultivariantSinkPadSettings::PadVariant(ref v) => {
+                        if let Some(group_id) = &v.video {
+                            group_id.clone()
+                        } else if let Some(group_id) = &v.audio {
+                            group_id.clone()
+                        } else {
+                            v.uri.clone()
+                        }
+                    }
+                };
+
+                if let Some(caps) = hlspad.current_caps() {
+                    self.parse_sps(&caps, &buffer, group_id)?;
+                }
             }
         }
 

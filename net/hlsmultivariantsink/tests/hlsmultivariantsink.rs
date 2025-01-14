@@ -810,6 +810,7 @@ low/video.m3u8
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpegts(
 ) -> Result<(), ()> {
@@ -985,6 +986,7 @@ low/video.m3u8
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn hlsmultivariantsink_multiple_video_variant_with_mpegts_audio_video_muxed() -> Result<(), ()> {
     init();
