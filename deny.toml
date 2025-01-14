@@ -283,14 +283,11 @@ version = "1"
 name = "thiserror-impl"
 version = "1"
 
-# Various crates depend on older versions of core-foundation and
-# security-framework
+# clap depends on old strsim but we can't update clap because that
+# requires newer Rust
 [[bans.skip]]
-name = "core-foundation"
-version = "0.9"
-[[bans.skip]]
-name = "security-framework"
-version = "2"
+name = "strsim"
+version = "0.10"
 
 [sources]
 unknown-registry = "deny"
