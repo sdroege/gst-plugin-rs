@@ -374,7 +374,8 @@ outdated:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
   script:
     - cargo update --color=always
-    - cargo outdated --color=always --root-deps-only --exit-code 1 -v
+    # etherparse 0.17 requires Rust 1.81 or newer
+    - cargo outdated --color=always --root-deps-only --ignore etherparse --exit-code 1 -v
 
 coverage:
   allow_failure: true
