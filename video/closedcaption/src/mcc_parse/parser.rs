@@ -55,8 +55,7 @@ fn header<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
 /// Parser for an MCC comment, i.e. a line starting with `//`. We don't return the actual comment
 /// text as it's irrelevant for us.
 fn comment<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
-    use winnow::combinator::rest;
-    use winnow::token::literal;
+    use winnow::token::{literal, rest};
 
     (literal("//"), rest)
         .map(|_| MccLine::Comment)
