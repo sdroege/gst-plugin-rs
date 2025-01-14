@@ -150,7 +150,7 @@ use gst_video::subclass::prelude::*;
 
 use std::sync::Mutex;
 
-use gst::glib::once_cell::sync::Lazy;
+use std::sync::LazyLock;
 ```
 
 GStreamer is based on the GLib object system ([GObject](https://developer.gnome.org/gobject/stable/)). C (just like Rust) does not have built-in support for object orientated programming, inheritance, virtual methods and related concepts, and GObject makes these features available in C as a library. Without language support this is a quite verbose endeavour in C, and the `glib` crate tries to expose all this in a (as much as possible) Rust-style API while hiding all the details that do not really matter.
@@ -240,7 +240,7 @@ impl GstObjectImpl for Rgb2Gray {}
 
 impl ElementImpl for Rgb2Gray {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
                 "RGB-GRAY Converter",
                 "Filter/Effect/Converter/Video",
@@ -261,7 +261,7 @@ impl BaseTransformImpl for Rgb2Gray {
 }
 ```
 
-In the `metadata` function we set up `ElementMetadata` structure for our new element. In this case it contains a description, a classification of our element, a longer description and the author. The metadata can later be retrieved and made use of via the [`Registry`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/stable/latest/docs/gstreamer/struct.Registry.html) and [`PluginFeature`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/stable/latest/docs/gstreamer/struct.PluginFeature.html)/[`ElementFactory`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/stable/latest/docs/gstreamer/struct.ElementFactory.html) API. We employ the `once_cell::sync::Lazy` type from the `once_cell` crate here. This type allows to declare lazily initialized global variables, i.e. on the very first use the provided code will be executed and the result will be stored for all later uses.
+In the `metadata` function we set up `ElementMetadata` structure for our new element. In this case it contains a description, a classification of our element, a longer description and the author. The metadata can later be retrieved and made use of via the [`Registry`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/stable/latest/docs/gstreamer/struct.Registry.html) and [`PluginFeature`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/stable/latest/docs/gstreamer/struct.PluginFeature.html)/[`ElementFactory`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/stable/latest/docs/gstreamer/struct.ElementFactory.html) API. We employ the `std::sync::LazyLock` to declare lazily initialized global variables, i.e. on the very first use the provided code will be executed and the result will be stored for all later uses.
 
 We also implement the required `BaseTransformImpl` trait items, which define that we will never operate in-place (producing our output in the input buffer), and that we don’t want to work in passthrough mode if the input/output formats are the same.
 
@@ -324,10 +324,10 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 ## Debug Category
 
 To be able to later have a debug category available for our new element that
-can be used for logging, we again make use of the `once_cell::sync::Lazy` type.
+can be used for logging, we again make use of the `use std::sync::LazyLock` type.
 
 ```rust
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rsrgb2gray",
         gst::DebugColorFlags::empty(),
@@ -352,7 +352,7 @@ In our case we only have always pads, one sink pad called “sink”, on which w
         [...]
 
         fn pad_templates() -> &'static [gst::PadTemplate] {
-            static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
                 let caps = gst_video::VideoCapsBuilder::new()
                 .format_list([gst_video::VideoFormat::Bgrx, gst_video::VideoFormat::Gray8])
                 .build();
@@ -614,7 +614,7 @@ impl Rgb2Gray{...}
 impl ObjectImpl for Rgb2Gray {
     fn properties() -> &'static [glib::ParamSpec] {
         // Metadata for the properties
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoolean::builder("invert")
                     .nick("Invert")
