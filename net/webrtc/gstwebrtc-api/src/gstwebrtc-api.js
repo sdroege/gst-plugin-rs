@@ -12,16 +12,16 @@
 import defaultConfig from "./config.js";
 import ComChannel from "./com-channel.js";
 import SessionState from "./session-state.js";
+import ConsumerSession from "./consumer-session.js";
+import ProducerSession from "./producer-session.js";
 
-/**
- * @class GstWebRTCAPI
- * @classdesc The API entry point that manages a WebRTC.
- */
-export default class GstWebRTCAPI {
+class GstWebRTCAPI {
   /**
-   * @constructor GstWebRTCAPI
-   * @param {GstWebRTCConfig} [userConfig] - The user configuration.<br>Only the parameters different from the default
-   * ones need to be provided.
+   * @class GstWebRTCAPI
+   * @classdesc The API entry point that manages a WebRTC.
+   * @constructor
+   * @param {import('./config.js').GstWebRTCConfig} [userConfig] - The user configuration.<br>
+   * Only the parameters different from the default ones need to be provided.
    */
   constructor(userConfig) {
     this._channel = null;
@@ -43,12 +43,12 @@ export default class GstWebRTCAPI {
   }
 
   /**
-   * @interface GstWebRTCAPI.ConnectionListener
+   * @interface ConnectionListener
    */
   /**
    * Callback method called when this client connects to the WebRTC signaling server.
    * The callback implementation should not throw any exception.
-   * @method GstWebRTCAPI.ConnectionListener#connected
+   * @method ConnectionListener#connected
    * @abstract
    * @param {string} clientId - The unique identifier of this WebRTC client.<br>This identifier is provided by the
    * signaling server to uniquely identify each connected peer.
@@ -56,15 +56,14 @@ export default class GstWebRTCAPI {
   /**
    * Callback method called when this client disconnects from the WebRTC signaling server.
    * The callback implementation should not throw any exception.
-   * @method GstWebRTCAPI.ConnectionListener#disconnected
+   * @method ConnectionListener#disconnected
    * @abstract
    */
 
   /**
    * Registers a connection listener that will be called each time the WebRTC API connects to or disconnects from the
    * signaling server.
-   * @method GstWebRTCAPI#registerConnectionListener
-   * @param {GstWebRTCAPI.ConnectionListener} listener - The connection listener to register.
+   * @param {ConnectionListener} listener - The connection listener to register.
    * @returns {boolean} true in case of success (or if the listener was already registered), or false if the listener
    * doesn't implement all callback functions and cannot be registered.
    */
@@ -85,8 +84,7 @@ export default class GstWebRTCAPI {
   /**
    * Unregisters a connection listener.<br>
    * The removed listener will never be called again and can be garbage collected.
-   * @method GstWebRTCAPI#unregisterConnectionListener
-   * @param {GstWebRTCAPI.ConnectionListener} listener - The connection listener to unregister.
+   * @param {ConnectionListener} listener - The connection listener to unregister.
    * @returns {boolean} true if the listener is found and unregistered, or false if the listener was not previously
    * registered.
    */
@@ -102,7 +100,6 @@ export default class GstWebRTCAPI {
 
   /**
    * Unregisters all previously registered connection listeners.
-   * @method GstWebRTCAPI#unregisterAllConnectionListeners
    */
   unregisterAllConnectionListeners() {
     this._connectionListeners = [];
@@ -113,12 +110,11 @@ export default class GstWebRTCAPI {
    * <p>You can only create one producer session at a time.<br>
    * To request streaming from a new stream you will first need to close the previous producer session.</p>
    * <p>You can only request a producer session while you are connected to the signaling server. You can use the
-   * {@link GstWebRTCAPI.ConnectionListener} interface and {@link GstWebRTCAPI#registerConnectionListener} method to
+   * {@link ConnectionListener} interface and {@link GstWebRTCAPI#registerConnectionListener} method to
    * listen to the connection state.</p>
-   * @method GstWebRTCAPI#createProducerSession
-   * @param {external:MediaStream} stream - The audio/video stream to offer as a producer through WebRTC.
-   * @returns {GstWebRTCAPI.ProducerSession} The created producer session or null in case of error. To start streaming,
-   * you still need to call {@link GstWebRTCAPI.ProducerSession#start} after adding on the returned session all the event
+   * @param {MediaStream} stream - The audio/video stream to offer as a producer through WebRTC.
+   * @returns {ProducerSession} The created producer session or null in case of error. To start streaming,
+   * you still need to call {@link ProducerSession#start} after adding on the returned session all the event
    * listeners you may need.
    */
   createProducerSession(stream) {
@@ -130,7 +126,7 @@ export default class GstWebRTCAPI {
 
   /**
    * Information about a remote producer registered by the signaling server.
-   * @typedef {object} GstWebRTCAPI.Producer
+   * @typedef {object} Producer
    * @readonly
    * @property {string} id - The remote producer unique identifier set by the signaling server (always non-empty).
    * @property {object} meta - Free-form object containing extra information about the remote producer (always non-null,
@@ -140,38 +136,36 @@ export default class GstWebRTCAPI {
   /**
    * Gets the list of all remote WebRTC producers available on the signaling server.
    * <p>The remote producers list is only populated once you've connected to the signaling server. You can use the
-   * {@link GstWebRTCAPI.ConnectionListener} interface and {@link GstWebRTCAPI#registerConnectionListener} method to
+   * {@link ConnectionListener} interface and {@link GstWebRTCAPI#registerConnectionListener} method to
    * listen to the connection state.</p>
-   * @method GstWebRTCAPI#getAvailableProducers
-   * @returns {GstWebRTCAPI.Producer[]} The list of remote WebRTC producers available.
+   * @returns {Producer[]} The list of remote WebRTC producers available.
    */
   getAvailableProducers() {
     return Object.values(this._producers);
   }
 
   /**
-   * @interface GstWebRTCAPI.ProducersListener
+   * @interface ProducersListener
    */
   /**
    * Callback method called when a remote producer is added on the signaling server.
    * The callback implementation should not throw any exception.
-   * @method GstWebRTCAPI.ProducersListener#producerAdded
+   * @method ProducersListener#producerAdded
    * @abstract
-   * @param {GstWebRTCAPI.Producer} producer - The remote producer added on server-side.
+   * @param {Producer} producer - The remote producer added on server-side.
    */
   /**
    * Callback method called when a remote producer is removed from the signaling server.
    * The callback implementation should not throw any exception.
-   * @method GstWebRTCAPI.ProducersListener#producerRemoved
+   * @method ProducersListener#producerRemoved
    * @abstract
-   * @param {GstWebRTCAPI.Producer} producer - The remote producer removed on server-side.
+   * @param {Producer} producer - The remote producer removed on server-side.
    */
 
   /**
    * Registers a producers listener that will be called each time a producer is added or removed on the signaling
    * server.
-   * @method GstWebRTCAPI#registerProducersListener
-   * @param {GstWebRTCAPI.ProducersListener} listener - The producer listener to register.
+   * @param {ProducersListener} listener - The producer listener to register.
    * @returns {boolean} true in case of success (or if the listener was already registered), or false if the listener
    * doesn't implement all callback functions and cannot be registered.
    */
@@ -192,8 +186,7 @@ export default class GstWebRTCAPI {
   /**
    * Unregisters a producers listener.<br>
    * The removed listener will never be called again and can be garbage collected.
-   * @method GstWebRTCAPI#unregisterProducersListener
-   * @param {GstWebRTCAPI.ProducersListener} listener - The producers listener to unregister.
+   * @param {ProducersListener} listener - The producers listener to unregister.
    * @returns {boolean} true if the listener is found and unregistered, or false if the listener was not previously
    * registered.
    */
@@ -209,7 +202,6 @@ export default class GstWebRTCAPI {
 
   /**
    * Unregisters all previously registered producers listeners.
-   * @method GstWebRTCAPI#unregisterAllProducersListeners
    */
   unregisterAllProducersListeners() {
     this._producersListeners = [];
@@ -219,13 +211,12 @@ export default class GstWebRTCAPI {
    * Creates a consumer session by connecting the local client to a remote WebRTC producer.
    * <p>You can only create one consumer session per remote producer.</p>
    * <p>You can only request a new consumer session while you are connected to the signaling server. You can use the
-   * {@link GstWebRTCAPI.ConnectionListener} interface and {@link GstWebRTCAPI#registerConnectionListener} method to
+   * {@link ConnectionListener} interface and {@link GstWebRTCAPI#registerConnectionListener} method to
    * listen to the connection state.</p>
-   * @method GstWebRTCAPI#createConsumerSession
    * @param {string} producerId - The unique identifier of the remote producer to connect to.
-   * @returns {GstWebRTCAPI.ConsumerSession} The WebRTC session between the selected remote producer and this local
+   * @returns {ConsumerSession} The WebRTC session between the selected remote producer and this local
    * consumer, or null in case of error. To start connecting and receiving the remote streams, you still need to call
-   * {@link GstWebRTCAPI.ConsumerSession#connect} after adding on the returned session all the event listeners you may
+   * {@link ConsumerSession#connect} after adding on the returned session all the event listeners you may
    * need.
    */
   createConsumerSession(producerId) {
@@ -238,12 +229,11 @@ export default class GstWebRTCAPI {
   /**
    * Creates a consumer session by connecting the local client to a remote WebRTC producer and creating the offer.
    * <p>See {@link GstWebRTCAPI#createConsumerSession} for more information</p>
-   * @method GstWebRTCAPI#createConsumerSessionWithOfferOptions
    * @param {string} producerId - The unique identifier of the remote producer to connect to.
-   * @param {external:RTCOfferOptions} offerOptions - An object to use when creating the offer.
-   * @returns {GstWebRTCAPI.ConsumerSession} The WebRTC session between the selected remote producer and this local
+   * @param {RTCOfferOptions} offerOptions - An object to use when creating the offer.
+   * @returns {ConsumerSession} The WebRTC session between the selected remote producer and this local
    * consumer, or null in case of error. To start connecting and receiving the remote streams, you still need to call
-   * {@link GstWebRTCAPI.ConsumerSession#connect} after adding on the returned session all the event listeners you may
+   * {@link ConsumerSession#connect} after adding on the returned session all the event listeners you may
    * need.
    */
   createConsumerSessionWithOfferOptions(producerId, offerOptions) {
@@ -365,3 +355,5 @@ export default class GstWebRTCAPI {
 }
 
 GstWebRTCAPI.SessionState = SessionState;
+
+export default GstWebRTCAPI;

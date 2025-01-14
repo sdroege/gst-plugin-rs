@@ -15,30 +15,30 @@ import RemoteController from "./remote-controller.js";
 
 /**
  * Event name: "streamsChanged".<br>
- * Triggered when the underlying media streams of a {@link GstWebRTCAPI.ConsumerSession} change.
+ * Triggered when the underlying media streams of a {@link ConsumerSession} change.
  * @event GstWebRTCAPI#StreamsChangedEvent
- * @type {external:Event}
- * @see GstWebRTCAPI.ConsumerSession#streams
+ * @type {Event}
+ * @see ConsumerSession#streams
  */
 /**
  * Event name: "remoteControllerChanged".<br>
- * Triggered when the underlying remote controller of a {@link GstWebRTCAPI.ConsumerSession} changes.
+ * Triggered when the underlying remote controller of a {@link ConsumerSession} changes.
  * @event GstWebRTCAPI#RemoteControllerChangedEvent
- * @type {external:Event}
- * @see GstWebRTCAPI.ConsumerSession#remoteController
+ * @type {Event}
+ * @see ConsumerSession#remoteController
  */
 
 /**
- * @class GstWebRTCAPI.ConsumerSession
+ * @class ConsumerSession
  * @hideconstructor
  * @classdesc Consumer session managing a peer-to-peer WebRTC channel between a remote producer and this client
  * instance.
  * <p>Call {@link GstWebRTCAPI#createConsumerSession} to create a ConsumerSession instance.</p>
- * @extends {GstWebRTCAPI.WebRTCSession}
+ * @extends {WebRTCSession}
  * @fires {@link GstWebRTCAPI#event:StreamsChangedEvent}
  * @fires {@link GstWebRTCAPI#event:RemoteControllerChangedEvent}
  */
-export default class ConsumerSession extends WebRTCSession {
+class ConsumerSession extends WebRTCSession {
   constructor(peerId, comChannel, offerOptions) {
     super(peerId, comChannel);
     this._streams = [];
@@ -60,6 +60,7 @@ export default class ConsumerSession extends WebRTCSession {
 
   /**
    * Defines whether the SDP should be munged in order to enable stereo with chrome.
+   * @method
    * @param {boolean} enable - Enable or disable the hack, default is false
    */
   set mungeStereoHack(enable) {
@@ -69,36 +70,35 @@ export default class ConsumerSession extends WebRTCSession {
   }
 
   /**
-     * The array of remote media streams consumed locally through this WebRTC channel.
-     * @member {external:MediaStream[]} GstWebRTCAPI.ConsumerSession#streams
-     * @readonly
-     */
+   * The array of remote media streams consumed locally through this WebRTC channel.
+   * @type {MediaStream[]}
+   * @readonly
+   */
   get streams() {
     return this._streams;
   }
 
   /**
-     * The remote controller associated with this WebRTC consumer session. Value may be null if consumer session
-     * has no remote controller.
-     * @member {GstWebRTCAPI.RemoteController} GstWebRTCAPI.ConsumerSession#remoteController
-     * @readonly
-     */
+   * The remote controller associated with this WebRTC consumer session. Value may be null if consumer session
+   * has no remote controller.
+   * @type {RemoteController}
+   * @readonly
+   */
   get remoteController() {
     return this._remoteController;
   }
 
   /**
-     * Connects the consumer session to its remote producer.<br>
-     * This method must be called after creating the consumer session in order to start receiving the remote streams.
-     * It registers this consumer session to the signaling server and gets ready to receive audio/video streams.
-     * <p>Even on success, streaming can fail later if any error occurs during or after connection. In order to know
-     * the effective streaming state, you should be listening to the [error]{@link GstWebRTCAPI#event:ErrorEvent},
-     * [stateChanged]{@link GstWebRTCAPI#event:StateChangedEvent} and/or [closed]{@link GstWebRTCAPI#event:ClosedEvent}
-     * events.</p>
-     * @method GstWebRTCAPI.ConsumerSession#connect
-     * @returns {boolean} true in case of success (may fail later during or after connection) or false in case of
-     * immediate error (wrong session state or no connection to the signaling server).
-     */
+   * Connects the consumer session to its remote producer.<br>
+   * This method must be called after creating the consumer session in order to start receiving the remote streams.
+   * It registers this consumer session to the signaling server and gets ready to receive audio/video streams.
+   * <p>Even on success, streaming can fail later if any error occurs during or after connection. In order to know
+   * the effective streaming state, you should be listening to the [error]{@link GstWebRTCAPI#event:ErrorEvent},
+   * [stateChanged]{@link GstWebRTCAPI#event:StateChangedEvent} and/or [closed]{@link GstWebRTCAPI#event:ClosedEvent}
+   * events.</p>
+   * @returns {boolean} true in case of success (may fail later during or after connection) or false in case of
+   * immediate error (wrong session state or no connection to the signaling server).
+   */
   connect() {
     if (!this._comChannel || (this._state === SessionState.closed)) {
       return false;
@@ -357,3 +357,5 @@ export default class ConsumerSession extends WebRTCSession {
     }
   }
 }
+
+export default ConsumerSession;

@@ -32,6 +32,7 @@
     "docs/",
     "src/",
     "test/",
+    "types/",
     "index.html",
     "LICENSE-MPL-2.0",
     "webpack.config.cjs"
@@ -39,16 +40,19 @@
   "devDependencies": {
     "chai": "4.3.8",
     "eslint": "8.49.0",
+    "eslint-plugin-jsdoc": "50.6.1",
     "html-webpack-plugin": "5.5.3",
     "jsdoc": "4.0.2",
     "mocha": "10.2.0",
     "rimraf": "5.0.1",
     "terser-webpack-plugin": "5.3.9",
+    "typescript": "5.7.3",
     "webpack": "5.88.2",
     "webpack-cli": "5.1.4",
     "webpack-dev-server": "4.15.1"
   },
   "dependencies": {
+    "jsdoc-tsimport-plugin": "1.0.5",
     "patch-package": "8.0.0",
     "webrtc-adapter": "8.2.3"
   },
@@ -56,11 +60,13 @@
     "check": "eslint src",
     "format": "eslint --fix --fix-type layout src",
     "build": "rimraf dist && webpack",
-    "docs": "rimraf docs && jsdoc src/*.js -d docs/ -p package.json -R README.md",
+    "docs": "rimraf docs && jsdoc src/*.js -d docs/ -p package.json -R README.md -c jsdoc.conf.json",
     "make": "npm run check && npm run build && npm run docs",
     "test": "mocha --node-env=test --exit",
     "prepack": "npm run test && npm run make",
     "start": "webpack serve",
     "postinstall": "patch-package"
-  }
+  },
+  "types": "types/index.d.ts",
+  "main": "src/index.js"
 }

@@ -27,8 +27,13 @@
  * @property {number} reconnectionTimeout=2500 - Timeout in milliseconds to reconnect to the signaling server in
  * case of an unexpected disconnection.
  * @property {object} webrtcConfig={iceServers...} - The WebRTC peer connection configuration passed to
- * {@link external:RTCPeerConnection}. Default configuration only includes a list of free STUN servers
+ * {@link RTCPeerConnection}. Default configuration only includes a list of free STUN servers
  * (<i>stun[0-4].l.google.com:19302</i>).
+ */
+
+/**
+ * Default GstWebRTCAPI configuration.
+ * @type {GstWebRTCConfig}
  */
 const defaultConfig = Object.freeze({
   meta: null,
@@ -46,4 +51,4 @@ const defaultConfig = Object.freeze({
   }
 });
 
-export { defaultConfig as default };
+export default defaultConfig;

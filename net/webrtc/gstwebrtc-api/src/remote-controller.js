@@ -10,6 +10,7 @@
  */
 
 import getKeysymString from "./keysyms.js";
+import ConsumerSession from "./consumer-session.js";
 
 const eventsNames = Object.freeze([
   "wheel",
@@ -68,21 +69,21 @@ function getModifiers(event) {
  * Event name: "info".<br>
  * Triggered when a remote peer sends an information message over the control data channel.
  * @event GstWebRTCAPI#InfoEvent
- * @type {external:CustomEvent}
+ * @type {CustomEvent}
  * @property {object} detail - The info message
- * @see GstWebRTCAPI.RemoteController
+ * @see RemoteController
  */
 /**
  * Event name: "controlResponse".<br>
  * Triggered when a remote peer sends a response after a control request.
  * @event GstWebRTCAPI#ControlResponseEvent
- * @type {external:CustomEvent}
+ * @type {CustomEvent}
  * @property {object} detail - The response message
- * @see GstWebRTCAPI.RemoteController
+ * @see RemoteController
  */
 
 /**
- * @class GstWebRTCAPI.RemoteController
+ * @class RemoteController
  * @hideconstructor
  * @classdesc Manages a specific WebRTC data channel created by a remote GStreamer webrtcsink producer and offering
  * remote control of the producer through
@@ -90,18 +91,18 @@ function getModifiers(event) {
  * <p>The remote control data channel is created by the GStreamer webrtcsink element on the producer side. Then it is
  * announced through the consumer session thanks to the {@link gstWebRTCAPI#event:RemoteControllerChangedEvent}
  * event.</p>
- * <p>You can attach an {@link external:HTMLVideoElement} to the remote controller, then all mouse and keyboard events
+ * <p>You can attach an {@link HTMLVideoElement} to the remote controller, then all mouse and keyboard events
  * emitted by this element will be automatically relayed to the remote producer.</p>
- * @extends {external:EventTarget}
+ * @extends {EventTarget}
  * @fires {@link GstWebRTCAPI#event:ErrorEvent}
  * @fires {@link GstWebRTCAPI#event:ClosedEvent}
  * @fires {@link GstWebRTCAPI#event:InfoEvent}
  * @fires {@link GstWebRTCAPI#event:ControlResponseEvent}
- * @see GstWebRTCAPI.ConsumerSession#remoteController
- * @see GstWebRTCAPI.RemoteController#attachVideoElement
+ * @see ConsumerSession#remoteController
+ * @see RemoteController#attachVideoElement
  * @see https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/tree/main/net/webrtc/gstwebrtc-api#produce-a-gstreamer-interactive-webrtc-stream-with-remote-control
  */
-export default class RemoteController extends EventTarget {
+class RemoteController extends EventTarget {
   constructor(rtcDataChannel, consumerSession) {
     super();
 
@@ -150,44 +151,43 @@ export default class RemoteController extends EventTarget {
 
 
   /**
-     * The underlying WebRTC data channel connected to a remote GStreamer webrtcsink producer offering remote control.
-     * The value may be null if the remote controller has been closed.
-     * @member {external:RTCDataChannel} GstWebRTCAPI.RemoteController#rtcDataChannel
-     * @readonly
-     */
+   * The underlying WebRTC data channel connected to a remote GStreamer webrtcsink producer offering remote control.
+   * The value may be null if the remote controller has been closed.
+   * @type {RTCDataChannel}
+   * @readonly
+   */
   get rtcDataChannel() {
     return this._rtcDataChannel;
   }
 
   /**
-     * The consumer session associated with this remote controller.
-     * @member {GstWebRTCAPI.ConsumerSession} GstWebRTCAPI.RemoteController#consumerSession
-     * @readonly
-     */
+   * The consumer session associated with this remote controller.
+   * @type {ConsumerSession}
+   * @readonly
+   */
   get consumerSession() {
     return this._consumerSession;
   }
 
   /**
-     * The video element that is currently used to send all mouse and keyboard events to the remote producer. Value may
-     * be null if no video element is attached.
-     * @member {external:HTMLVideoElement} GstWebRTCAPI.RemoteController#videoElement
-     * @readonly
-     * @see GstWebRTCAPI.RemoteController#attachVideoElement
-     */
+   * The video element that is currently used to send all mouse and keyboard events to the remote producer. Value may
+   * be null if no video element is attached.
+   * @type {HTMLVideoElement}
+   * @readonly
+   * @see RemoteController#attachVideoElement
+   */
   get videoElement() {
     return this._videoElement;
   }
 
   /**
-     * Associates a video element with this remote controller.<br>
-     * When a video element is attached to this remote controller, all mouse and keyboard events emitted by this
-     * element will be sent to the remote GStreamer webrtcink producer.
-     * @method GstWebRTCAPI.RemoteController#attachVideoElement
-     * @param {external:HTMLVideoElement|null} element - the video element to use to relay mouse and keyboard events,
-     * or null to detach any previously attached element. If the provided element parameter is not null and not a
-     * valid instance of an {@link external:HTMLVideoElement}, then the method does nothing.
-     */
+   * Associates a video element with this remote controller.<br>
+   * When a video element is attached to this remote controller, all mouse and keyboard events emitted by this
+   * element will be sent to the remote GStreamer webrtcink producer.
+   * @param {HTMLVideoElement|null} element - the video element to use to relay mouse and keyboard events,
+   * or null to detach any previously attached element. If the provided element parameter is not null and not a
+   * valid instance of an {@link HTMLVideoElement}, then the method does nothing.
+   */
   attachVideoElement(element) {
     if ((element instanceof HTMLVideoElement) && (element !== this._videoElement)) {
       if (this._videoElement) {
@@ -218,13 +218,12 @@ export default class RemoteController extends EventTarget {
   }
 
   /**
-     * Send a request over the control data channel.<br>
-     *
-     * @method GstWebRTCAPI.RemoteController#sendControlRequest
-     * @fires {@link GstWebRTCAPI#event:ErrorEvent}
-     * @param {object|string} request - The request to send over the channel
-     * @returns {number} The identifier attributed to the request, or -1 if an exception occurred
-     */
+   * Send a request over the control data channel.<br>
+   *
+   * @fires {@link GstWebRTCAPI#event:ErrorEvent}
+   * @param {object|string} request - The request to send over the channel
+   * @returns {number} The identifier attributed to the request, or -1 if an exception occurred
+   */
   sendControlRequest(request) {
     try {
       if (!request || ((typeof (request) !== "object") && (typeof (request) !== "string"))) {
@@ -253,11 +252,10 @@ export default class RemoteController extends EventTarget {
   }
 
   /**
-     * Closes the remote controller channel.<br>
-     * It immediately shuts down the underlying WebRTC data channel connected to a remote GStreamer webrtcsink
-     * producer and detaches any video element that may be used to relay mouse and keyboard events.
-     * @method GstWebRTCAPI.RemoteController#close
-     */
+   * Closes the remote controller channel.<br>
+   * It immediately shuts down the underlying WebRTC data channel connected to a remote GStreamer webrtcsink
+   * producer and detaches any video element that may be used to relay mouse and keyboard events.
+   */
   close() {
     this.attachVideoElement(null);
 
@@ -417,3 +415,5 @@ export default class RemoteController extends EventTarget {
     }
   }
 }
+
+export default RemoteController;

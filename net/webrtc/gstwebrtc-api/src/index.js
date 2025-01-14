@@ -25,6 +25,10 @@ import GstWebRTCAPI from "./gstwebrtc-api.js";
  * @see https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel
  */
 /**
+ * @external RTCOfferOptions
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/createOffer#options
+ */
+/**
  * @external EventTarget
  * @see https://developer.mozilla.org/en-US/docs/Web/API/EventTarget
  */
@@ -52,3 +56,5 @@ import GstWebRTCAPI from "./gstwebrtc-api.js";
 if (!window.GstWebRTCAPI) {
   window.GstWebRTCAPI = GstWebRTCAPI;
 }
+
+export default GstWebRTCAPI;

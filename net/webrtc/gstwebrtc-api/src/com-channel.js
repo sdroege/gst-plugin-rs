@@ -53,7 +53,7 @@ function normalizeProducer(producer, excludedId) {
   return Object.freeze(normalizedProducer);
 }
 
-export default class ComChannel extends EventTarget {
+class ComChannel extends EventTarget {
   constructor(url, meta, webrtcConfig) {
     super();
 
@@ -336,3 +336,5 @@ export default class ComChannel extends EventTarget {
     }
   }
 }
+
+export default ComChannel;

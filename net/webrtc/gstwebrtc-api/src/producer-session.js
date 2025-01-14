@@ -13,10 +13,10 @@ import WebRTCSession from "./webrtc-session.js";
 import SessionState from "./session-state.js";
 
 /**
- * @class GstWebRTCAPI.ClientSession
+ * @class ClientSession
  * @hideconstructor
  * @classdesc Client session representing a link between a remote consumer and a local producer session.
- * @extends {GstWebRTCAPI.WebRTCSession}
+ * @extends {WebRTCSession}
  */
 class ClientSession extends WebRTCSession {
   constructor(peerId, sessionId, comChannel, stream) {
@@ -102,35 +102,35 @@ class ClientSession extends WebRTCSession {
 
 /**
  * Event name: "clientConsumerAdded".<br>
- * Triggered when a remote consumer peer connects to a local {@link GstWebRTCAPI.ProducerSession}.
+ * Triggered when a remote consumer peer connects to a local {@link ProducerSession}.
  * @event GstWebRTCAPI#ClientConsumerAddedEvent
- * @type {external:CustomEvent}
- * @property {GstWebRTCAPI.ClientSession} detail - The WebRTC session associated with the added consumer peer.
- * @see GstWebRTCAPI.ProducerSession
+ * @type {CustomEvent}
+ * @property {ClientSession} detail - The WebRTC session associated with the added consumer peer.
+ * @see ProducerSession
  */
 /**
  * Event name: "clientConsumerRemoved".<br>
- * Triggered when a remote consumer peer disconnects from a local {@link GstWebRTCAPI.ProducerSession}.
+ * Triggered when a remote consumer peer disconnects from a local {@link ProducerSession}.
  * @event GstWebRTCAPI#ClientConsumerRemovedEvent
- * @type {external:CustomEvent}
- * @property {GstWebRTCAPI.ClientSession} detail - The WebRTC session associated with the removed consumer peer.
- * @see GstWebRTCAPI.ProducerSession
+ * @type {CustomEvent}
+ * @property {ClientSession} detail - The WebRTC session associated with the removed consumer peer.
+ * @see ProducerSession
  */
 
 /**
- * @class GstWebRTCAPI.ProducerSession
+ * @class ProducerSession
  * @hideconstructor
- * @classdesc Producer session managing the streaming out of a local {@link external:MediaStream}.<br>
+ * @classdesc Producer session managing the streaming out of a local {@link MediaStream}.<br>
  * It manages all underlying WebRTC connections to each peer client consuming the stream.
  * <p>Call {@link GstWebRTCAPI#createProducerSession} to create a ProducerSession instance.</p>
- * @extends {external:EventTarget}
+ * @extends {EventTarget}
  * @fires {@link GstWebRTCAPI#event:ErrorEvent}
  * @fires {@link GstWebRTCAPI#event:StateChangedEvent}
  * @fires {@link GstWebRTCAPI#event:ClosedEvent}
  * @fires {@link GstWebRTCAPI#event:ClientConsumerAddedEvent}
  * @fires {@link GstWebRTCAPI#event:ClientConsumerRemovedEvent}
  */
-export default class ProducerSession extends EventTarget {
+class ProducerSession extends EventTarget {
   constructor(comChannel, stream) {
     super();
 
@@ -141,35 +141,34 @@ export default class ProducerSession extends EventTarget {
   }
 
   /**
-     * The local stream produced out by this session.
-     * @member {external:MediaStream} GstWebRTCAPI.ProducerSession#stream
-     * @readonly
-     */
+   * The local stream produced out by this session.
+   * @type {MediaStream}
+   * @readonly
+   */
   get stream() {
     return this._stream;
   }
 
   /**
-     * The current producer session state.
-     * @member {GstWebRTCAPI.SessionState} GstWebRTCAPI.ProducerSession#state
-     * @readonly
-     */
+   * The current producer session state.
+   * @type {SessionState}
+   * @readonly
+   */
   get state() {
     return this._state;
   }
 
   /**
-     * Starts the producer session.<br>
-     * This method must be called after creating the producer session in order to start streaming. It registers this
-     * producer session to the signaling server and gets ready to serve peer requests from consumers.
-     * <p>Even on success, streaming can fail later if any error occurs during or after connection. In order to know
-     * the effective streaming state, you should be listening to the [error]{@link GstWebRTCAPI#event:ErrorEvent},
-     * [stateChanged]{@link GstWebRTCAPI#event:StateChangedEvent} and/or [closed]{@link GstWebRTCAPI#event:ClosedEvent}
-     * events.</p>
-     * @method GstWebRTCAPI.ProducerSession#start
-     * @returns {boolean} true in case of success (may fail later during or after connection) or false in case of
-     * immediate error (wrong session state or no connection to the signaling server).
-     */
+   * Starts the producer session.<br>
+   * This method must be called after creating the producer session in order to start streaming. It registers this
+   * producer session to the signaling server and gets ready to serve peer requests from consumers.
+   * <p>Even on success, streaming can fail later if any error occurs during or after connection. In order to know
+   * the effective streaming state, you should be listening to the [error]{@link GstWebRTCAPI#event:ErrorEvent},
+   * [stateChanged]{@link GstWebRTCAPI#event:StateChangedEvent} and/or [closed]{@link GstWebRTCAPI#event:ClosedEvent}
+   * events.</p>
+   * @returns {boolean} true in case of success (may fail later during or after connection) or false in case of
+   * immediate error (wrong session state or no connection to the signaling server).
+   */
   start() {
     if (!this._comChannel || (this._state === SessionState.closed)) {
       return false;
@@ -200,11 +199,10 @@ export default class ProducerSession extends EventTarget {
   }
 
   /**
-     * Terminates the producer session.<br>
-     * It immediately disconnects all peer consumers attached to this producer session and unregisters the producer
-     * from the signaling server.
-     * @method GstWebRTCAPI.ProducerSession#close
-     */
+   * Terminates the producer session.<br>
+   * It immediately disconnects all peer consumers attached to this producer session and unregisters the producer
+   * from the signaling server.
+   */
   close() {
     if (this._state !== SessionState.closed) {
       for (const track of this._stream.getTracks()) {
@@ -277,3 +275,5 @@ export default class ProducerSession extends EventTarget {
     }
   }
 }
+
+export default ProducerSession;

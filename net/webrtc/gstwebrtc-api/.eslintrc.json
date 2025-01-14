@@ -56,6 +56,10 @@
     "no-multiple-empty-lines": "error",
     "no-trailing-spaces": "error",
     "quotes": "error",
-    "semi": "error"
-  }
+    "semi": "error",
+    "jsdoc/no-undefined-types": "warn"
+  },
+  "plugins": [
+      "jsdoc"
+  ]
 }
