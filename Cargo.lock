@@ -1051,6 +1051,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cdp-types"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e079febcb70057fe0f3cad4c67b570cc89d43477c3622e68f5c1f735bafd6747"
+dependencies = [
+ "cea708-types",
+ "log",
+ "thiserror 2.0.11",
+]
+
+[[package]]
 name = "cea608-types"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2562,6 +2573,7 @@ dependencies = [
  "bitstream-io",
  "byteorder",
  "cairo-rs",
+ "cdp-types",
  "cea608-types",
  "cea708-types",
  "chrono",

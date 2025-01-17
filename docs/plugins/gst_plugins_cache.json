@@ -8304,6 +8304,45 @@
                 },
                 "rank": "none"
             },
+            "cdpserviceinject": {
+                "author": "Matthew Waters <matthew@centricular.com>",
+                "description": "Adds or updates CDP Service Description Information",
+                "hierarchy": [
+                    "GstCdpServiceInject",
+                    "GstBaseTransform",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Filter/ClosedCaption",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "closedcaption/x-cea-708:\n         format: cdp\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "closedcaption/x-cea-708:\n         format: cdp\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "services": {
+                        "blurb": "List of service information to add or update in the CDP",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
             "cea608overlay": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Renders CEA 608 closed caption meta over raw video frames",

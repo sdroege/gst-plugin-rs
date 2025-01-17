@@ -20,6 +20,7 @@ use gst::prelude::*;
 mod ccdetect;
 mod cctost2038anc;
 mod ccutils;
+mod cdpserviceinject;
 mod cea608overlay;
 mod cea608tocea708;
 mod cea608tojson;
@@ -73,6 +74,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     st2038ancmux::register(plugin)?;
     st2038anctocc::register(plugin)?;
     cctost2038anc::register(plugin)?;
+    cdpserviceinject::register(plugin)?;
     Ok(())
 }
 
