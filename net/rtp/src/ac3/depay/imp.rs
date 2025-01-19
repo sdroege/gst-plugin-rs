@@ -346,8 +346,9 @@ impl RtpBaseDepay2Impl for RtpAc3Depay {
 
                     gst::trace!(CAT, imp = self, "Getting frame @ {offset}+{frame_len}");
 
+                    // The packet has a 2-byte payload header that we need to skip here too
                     let mut outbuf =
-                        packet.payload_subbuffer_from_offset_with_length(offset, frame_len);
+                        packet.payload_subbuffer_from_offset_with_length(2 + offset, frame_len);
 
                     let outbuf_ref = outbuf.get_mut().unwrap();
 
