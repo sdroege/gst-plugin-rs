@@ -10,7 +10,8 @@
 
 use crate::ac3::ac3_audio_utils::*;
 use crate::tests::{
-    run_test_pipeline, run_test_pipeline_full, ExpectedBuffer, ExpectedPacket, Liveness, Source,
+    run_test_pipeline_and_validate_data, run_test_pipeline_full_and_validate_data, ExpectedBuffer,
+    ExpectedPacket, Liveness, Source,
 };
 
 fn init() {
@@ -162,7 +163,7 @@ fn test_ac3_pay_depay() {
                 .build()],
         ];
 
-        run_test_pipeline_full(
+        run_test_pipeline_full_and_validate_data(
             Source::Buffers(input_caps, input_buffers),
             "rtpac3pay2",
             "rtpac3depay2",
@@ -170,6 +171,13 @@ fn test_ac3_pay_depay() {
             expected_depay,
             None,
             liveness,
+            |ac3_data, _, _| {
+                if peek_frame_header(ac3_data).is_err() {
+                    anyhow::bail!("Expected AC-3 frame header, got {ac3_data:02x?}")
+                } else {
+                    Ok(())
+                }
+            },
         );
     }
 
@@ -264,12 +272,19 @@ fn test_ac3_pay_depay_fragmented() {
             .flags(gst::BufferFlags::empty())
             .build()],
     ];
-    run_test_pipeline(
+    run_test_pipeline_and_validate_data(
         Source::Buffers(input_caps, input_buffers),
         "rtpac3pay2 mtu=250",
         "rtpac3depay2",
         expected_pay,
         expected_depay,
+        |ac3_data, _, _| {
+            if peek_frame_header(ac3_data).is_err() {
+                anyhow::bail!("Expected AC-3 frame header, got {ac3_data:02x?}")
+            } else {
+                Ok(())
+            }
+        },
     );
 }
 
@@ -357,12 +372,19 @@ fn test_ac3_pay_depay_fragmented_with_packet_loss() {
             "rtpac3pay2 mtu=250".to_string()
         };
 
-        run_test_pipeline(
+        run_test_pipeline_and_validate_data(
             Source::Buffers(input_caps, input_buffers),
             &payloader,
             "rtpac3depay2",
             expected_pay,
             expected_depay,
+            |ac3_data, _, _| {
+                if peek_frame_header(ac3_data).is_err() {
+                    anyhow::bail!("Expected AC-3 frame header, got {ac3_data:02x?}")
+                } else {
+                    Ok(())
+                }
+            },
         );
     }
 
