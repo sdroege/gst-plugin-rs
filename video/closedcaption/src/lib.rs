@@ -40,6 +40,7 @@ mod st2038ancdemux;
 mod st2038ancmux;
 mod st2038anctocc;
 mod transcriberbin;
+mod translationbin;
 mod tttocea608;
 mod tttocea708;
 mod tttojson;
@@ -63,6 +64,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     cea608tojson::register(plugin)?;
     jsontovtt::register(plugin)?;
     transcriberbin::register(plugin)?;
+    translationbin::register(plugin)?;
     cea608tocea708::register(plugin)?;
     cea708mux::register(plugin)?;
     tttocea708::register(plugin)?;

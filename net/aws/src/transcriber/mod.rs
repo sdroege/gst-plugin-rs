@@ -10,9 +10,9 @@ use gst::glib;
 use gst::prelude::*;
 
 mod imp;
-mod remote_types;
+pub mod remote_types;
 mod transcribe;
-mod translate;
+pub mod translate;
 
 use std::sync::LazyLock;
 

@@ -1379,6 +1379,282 @@
                     }
                 },
                 "rank": "none"
+            },
+            "awstranscriber2": {
+                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
+                "description": "Speech to Text filter, using AWS transcribe",
+                "hierarchy": [
+                    "GstAwsTranscriber2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Audio/Text/Filter",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/x-raw:\n           rate: 48000\n       channels: 1\n         layout: { (string)interleaved, (string)non-interleaved }\n         format: S16LE\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "access-key": {
+                        "blurb": "AWS Access Key",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "language-code": {
+                        "blurb": "The Language of the Stream, see <https://docs.aws.amazon.com/transcribe/latest/dg/how-streaming-transcription.html> for an up to date list of allowed languages",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "en-US",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "latency": {
+                        "blurb": "Amount of milliseconds to allow AWS transcribe",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "lateness": {
+                        "blurb": "Amount of milliseconds to introduce as lateness",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "results-stability": {
+                        "blurb": "Defines how fast results should stabilize",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "low (2)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstAwsTranscriberResultStability",
+                        "writable": true
+                    },
+                    "secret-access-key": {
+                        "blurb": "AWS Secret Access Key",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "session-id": {
+                        "blurb": "The ID of the transcription session, must be length 36",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "session-token": {
+                        "blurb": "AWS temporary Session Token from STS",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "vocabulary-filter-method": {
+                        "blurb": "Defines how filtered words will be edited, has no effect when vocabulary-filter-name isn't set",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "mask (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstAwsTranscriberVocabularyFilterMethod",
+                        "writable": true
+                    },
+                    "vocabulary-filter-name": {
+                        "blurb": "The name of a custom filter vocabulary, see <https://docs.aws.amazon.com/transcribe/latest/help-panel/vocab-filter.html> for more information",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "vocabulary-name": {
+                        "blurb": "The name of a custom vocabulary, see <https://docs.aws.amazon.com/transcribe/latest/dg/how-vocabulary.html> for more information",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
+            "awstranslate": {
+                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
+                "description": "Translates text",
+                "hierarchy": [
+                    "GstAwsTranslate",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Text/Filter",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "access-key": {
+                        "blurb": "AWS Access Key",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "input-language-code": {
+                        "blurb": "The Language of the input stream",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "en-US",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "latency": {
+                        "blurb": "Amount of milliseconds to allow AWS Polly",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "2000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "output-language-code": {
+                        "blurb": "The Language of the output stream",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "fr-FR",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "secret-access-key": {
+                        "blurb": "AWS Secret Access Key",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "session-token": {
+                        "blurb": "AWS temporary Session Token from STS",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "tokenization-method": {
+                        "blurb": "The tokenization method to apply",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "span-based (1)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstAwsTranscriberTranslationTokenizationMethod",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
             }
         },
         "filename": "gstaws",
@@ -8786,6 +9062,108 @@
                 },
                 "rank": "none"
             },
+            "translationbin": {
+                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
+                "description": "Transcribes audio and translates it",
+                "hierarchy": [
+                    "GstTranslationBin",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
+                "klass": "Audio / Text",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/x-raw:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "direction": "src",
+                        "presence": "always"
+                    },
+                    "translate_src_%%u": {
+                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "direction": "src",
+                        "presence": "request",
+                        "type": "GstTranslationBinTranslationSrcPad"
+                    }
+                },
+                "properties": {
+                    "language-code": {
+                        "blurb": "The language of the input stream",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "en-US",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "lateness": {
+                        "blurb": "Amount of milliseconds to offset transcription by",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "transcribe-latency": {
+                        "blurb": "Amount of milliseconds to allow for transcription",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "transcriber": {
+                        "blurb": "The transcriber element to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstElement",
+                        "writable": true
+                    },
+                    "translate-latency": {
+                        "blurb": "Amount of milliseconds to allow for translation",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "500",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
             "tttocea608": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Converts timed text to CEA-608 Closed Captions",
@@ -9220,6 +9598,32 @@
                     "GObject"
                 ],
                 "kind": "object"
+            },
+            "GstTranslationBinTranslationSrcPad": {
+                "hierarchy": [
+                    "GstTranslationBinTranslationSrcPad",
+                    "GstGhostPad",
+                    "GstProxyPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "language-code": {
+                        "blurb": "The language of the output stream",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "fr-FR",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                }
             },
             "GstTtToCea608Mode": {
                 "kind": "enum",

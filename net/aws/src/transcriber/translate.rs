@@ -223,7 +223,7 @@ impl TranslateLoop {
 ///
 /// If less parsed items are found, the last item will be assign the remaining
 /// duration from the `ts_duration_list`.
-fn span_tokenize_items(
+pub fn span_tokenize_items(
     translation: &str,
     ts_duration_list: impl IntoIterator<Item = (gst::ClockTime, gst::ClockTime)>,
 ) -> Vec<TranslatedItem> {

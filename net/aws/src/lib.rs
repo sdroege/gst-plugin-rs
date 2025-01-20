@@ -22,6 +22,8 @@ mod s3url;
 pub mod s3utils;
 mod transcribe_parse;
 mod transcriber;
+mod transcriber2;
+mod translate;
 
 pub use transcriber::AwsTranscriberResultStability;
 
@@ -30,6 +32,8 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     s3src::register(plugin)?;
     transcribe_parse::register(plugin)?;
     transcriber::register(plugin)?;
+    transcriber2::register(plugin)?;
+    translate::register(plugin)?;
     s3hlssink::register(plugin)?;
     polly::register(plugin)?;
 

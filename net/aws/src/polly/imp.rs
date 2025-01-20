@@ -118,8 +118,7 @@ impl Polly {
                     }
                     Ok(segment) => segment,
                 };
-                let mut state = self.state.lock().unwrap();
-                state.out_segment = segment;
+                self.state.lock().unwrap().out_segment = segment;
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             Caps(c) => {
