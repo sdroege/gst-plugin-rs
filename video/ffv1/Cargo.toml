@@ -10,7 +10,7 @@ rust-version.workspace = true
 
 [dependencies]
 byte-slice-cast = "1"
-ffv1 = { git = "https://github.com/rust-av/ffv1.git", rev = "2afb025a327173ce891954c052e804d0f880368a" }
+ffv1 = { git = "https://github.com/rust-av/ffv1.git", rev = "bd9eabfc14c9ad53c37b32279e276619f4390ab8" }
 gst = { workspace = true, features = ["v1_18"] }
 gst-video = { workspace = true, features = ["v1_18"] }
 
