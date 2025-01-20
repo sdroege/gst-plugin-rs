@@ -218,6 +218,27 @@ pub fn run_test_pipeline(
     );
 }
 
+// Validation of payloader output can be added if there's a concrete need for it
+pub fn run_test_pipeline_and_validate_data<T: Fn(&[u8], usize, usize) -> anyhow::Result<()>>(
+    src: Source,
+    pay: &str,
+    depay: &str,
+    expected_pay: Vec<Vec<ExpectedPacket>>,
+    expected_depay: Vec<Vec<ExpectedBuffer>>,
+    validate_depay_data_func: T,
+) {
+    run_test_pipeline_full_and_validate_data(
+        src,
+        pay,
+        depay,
+        expected_pay,
+        expected_depay,
+        None,
+        Liveness::NonLive,
+        validate_depay_data_func,
+    )
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Liveness {
     Live(i64),
@@ -232,6 +253,32 @@ pub fn run_test_pipeline_full(
     expected_depay: Vec<Vec<ExpectedBuffer>>,
     expected_depay_caps: Option<gst::Caps>,
     liveness: Liveness,
+) {
+    run_test_pipeline_full_and_validate_data(
+        src,
+        pay,
+        depay,
+        expected_pay,
+        expected_depay,
+        expected_depay_caps,
+        liveness,
+        |_, _, _| Ok(()),
+    )
+}
+
+// Validation of payloader output can be added if there's a concrete need for it
+#[allow(clippy::too_many_arguments)]
+pub fn run_test_pipeline_full_and_validate_data<
+    T: Fn(&[u8], usize, usize) -> anyhow::Result<()>,
+>(
+    src: Source,
+    pay: &str,
+    depay: &str,
+    expected_pay: Vec<Vec<ExpectedPacket>>,
+    expected_depay: Vec<Vec<ExpectedBuffer>>,
+    expected_depay_caps: Option<gst::Caps>,
+    liveness: Liveness,
+    validate_depay_data_func: T,
 ) {
     let pipeline = Pipeline(gst::Pipeline::new());
 
@@ -635,6 +682,14 @@ pub fn run_test_pipeline_full(
                 "Buffer {} of depayload buffer list {} has unexpected flags {:?} instead of {:?}",
                 j, i, buffer_flags, expected_buffer.flags,
             );
+
+            let map = buffer.map_readable().unwrap();
+            match validate_depay_data_func(&map, i, j) {
+                Ok(_) => {}
+                Err(err) => panic!(
+                    "Error validating data of buffer {j} of depayloaded buffer list {i}: {err}",
+                ),
+            }
         }
     }
 }
