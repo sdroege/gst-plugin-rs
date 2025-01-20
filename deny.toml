@@ -250,11 +250,6 @@ version = "0.22"
 name = "tokio-rustls"
 version = "0.24"
 
-# aws-config depends on old aws-smithy-json
-[[bans.skip]]
-name = "aws-smithy-json"
-version = "0.60"
-
 # aws SDK depends on older version of various crypto crates
 [[bans.skip]]
 name = "der"
@@ -283,11 +278,13 @@ version = "1"
 name = "thiserror-impl"
 version = "1"
 
-# clap depends on old strsim but we can't update clap because that
-# requires newer Rust
+# native-tls depends on old versions
 [[bans.skip]]
-name = "strsim"
-version = "0.10"
+name = "security-framework"
+version = "2"
+[[bans.skip]]
+name = "core-foundation"
+version = "0.9"
 
 [sources]
 unknown-registry = "deny"
