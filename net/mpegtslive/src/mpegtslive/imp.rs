@@ -523,21 +523,24 @@ impl State {
             let af = &af[..length];
             reader.skip(8 * length as u32).context("af")?;
 
-            // Parse adaption field and update PCR if it's the PID of our selected program
-            if self.pmt.as_ref().map(|pmt| pmt.pcr_pid) == Some(header.pid) {
-                let mut af_reader = BitReader::endian(af, BigEndian);
-                let adaptation_field = af_reader.parse::<AdaptionField>().context("af")?;
+            // Zero-byte adaption field is valid and can be just skipped over.
+            if !af.is_empty() {
+                // Parse adaption field and update PCR if it's the PID of our selected program
+                if self.pmt.as_ref().map(|pmt| pmt.pcr_pid) == Some(header.pid) {
+                    let mut af_reader = BitReader::endian(af, BigEndian);
+                    let adaptation_field = af_reader.parse::<AdaptionField>().context("af")?;
 
-                // PCR present
-                if let Some(pcr) = adaptation_field.pcr {
-                    if let Some(monotonic_time) = monotonic_time {
-                        self.store_observation(imp, pcr, monotonic_time);
-                    } else {
-                        gst::warning!(
-                            CAT,
-                            imp = imp,
-                            "Can't handle PCR without packet capture time"
-                        );
+                    // PCR present
+                    if let Some(pcr) = adaptation_field.pcr {
+                        if let Some(monotonic_time) = monotonic_time {
+                            self.store_observation(imp, pcr, monotonic_time);
+                        } else {
+                            gst::warning!(
+                                CAT,
+                                imp = imp,
+                                "Can't handle PCR without packet capture time"
+                            );
+                        }
                     }
                 }
             }
