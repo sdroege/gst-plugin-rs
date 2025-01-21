@@ -7,6 +7,11 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+/**
+ * plugin-hlsmultivariantsink:
+ *
+ * Since: plugins-rs-0.14.0
+ */
 use gst::glib;
 use gst::prelude::*;
 
