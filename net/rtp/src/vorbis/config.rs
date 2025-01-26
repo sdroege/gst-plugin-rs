@@ -8,10 +8,12 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use bitstream_io::{BigEndian, ByteRead, ByteReader, FromByteStream};
-use bitstream_io::{BitRead, BitReader, LittleEndian};
+use bitstream_io::{BigEndian, LittleEndian};
+use bitstream_io::{BitRead, BitReader, FromBitStream};
+use bitstream_io::{ByteRead, ByteReader, FromByteStream};
 
 use std::collections::VecDeque;
+use std::fmt::Debug;
 use std::io::{Cursor, SeekFrom};
 
 use std::sync::LazyLock;
@@ -58,11 +60,75 @@ pub(crate) enum VorbisConfigParseError {
     InvalidCaps { reason: &'static str },
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone)]
+pub(crate) struct VorbisBlockModes {
+    n_modes: usize,
+    blockflags: u64,
+}
+
+impl Debug for VorbisBlockModes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VorbisBlockModes")
+            .field("n_modes", &self.n_modes)
+            .field(
+                "blockflags",
+                &format_args!("{:0width$b}", self.blockflags, width = self.n_modes),
+            )
+            .finish()
+    }
+}
+
+impl FromBitStream for VorbisBlockModes {
+    type Error = anyhow::Error;
+
+    fn from_reader<R: BitRead + ?Sized>(r: &mut R) -> anyhow::Result<Self> {
+        let mode_count = 1 + r.read::<6, u8>()? as usize;
+
+        let mut mode_blockflags = 0;
+
+        for m in 0..mode_count {
+            let blockflag = r.read_bit()?;
+            if blockflag {
+                mode_blockflags |= 1u64 << m;
+            }
+            let windowtype = r.read::<16, u16>()?;
+            let transformtype = r.read::<16, u16>()?;
+            let _mapping = r.read::<8, u8>()?;
+            if windowtype != 0 || transformtype != 0 {
+                anyhow::bail!("invalid window type or transform type");
+            }
+        }
+
+        let framing_bit = r.read_bit()?;
+        if !framing_bit {
+            anyhow::bail!("invalid framing bit");
+        }
+
+        while let Ok(padding_bit) = r.read_bit() {
+            if padding_bit {
+                anyhow::bail!("invalid padding");
+            }
+        }
+
+        Ok(VorbisBlockModes {
+            n_modes: mode_count,
+            blockflags: mode_blockflags,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub(crate) struct VorbisInfo {
     channels: u8,
-    rate: i32,
+    rate: u32,
     blocksizes: [u16; 2],
+    blockmodes: VorbisBlockModes,
+}
+
+#[derive(Debug, PartialEq)]
+enum PacketSize {
+    Short,
+    Long,
 }
 
 impl VorbisInfo {
@@ -127,7 +193,7 @@ impl VorbisInfo {
             })?;
         }
 
-        // Parse setup header, at least the interesting bits which are of course right at the end
+        // Parse setup header, at least the interesting bits. Which are of course right at the end.
         if setup_header.len() < 7 {
             Err(WrongConfigHeaderSize {
                 name: "setup",
@@ -143,23 +209,154 @@ impl VorbisInfo {
             })?;
         }
 
+        // Figure out blockmode parameters which we need to calculate packet durations.
+        //
+        // Of course this information is at the very end of the setup header with all the codebooks
+        // and such. We'll try and guess it by searching for possible values from the end, so that
+        // we don't have to parse everything before it, which would be rather tedious.
+        //
+        let last_byte = *setup_header.last().unwrap();
+        if last_byte == 0 {
+            Err(InvalidHeader {
+                name: "setup",
+                reason: "missing framing bit in last byte",
+            })?;
+        }
+        let padding_bits = last_byte.leading_zeros() as usize;
+
+        let mut blockmodes = None;
+
+        for n in (1..=64).rev() {
+            let mut br = BitReader::endian(Cursor::new(&setup_header[7..]), LittleEndian);
+
+            let pos_from_end = 6 + n * (1 + 16 + 16 + 8) + 1 + padding_bits;
+
+            if pos_from_end >= setup_header.len() - 7 {
+                gst::trace!(CAT, "Trying to find block modes with n={n} -> not viable");
+                continue;
+            }
+
+            let start_pos = br.seek_bits(SeekFrom::End(pos_from_end as i64)).unwrap();
+
+            gst::trace!(
+                CAT,
+                "Trying to find block modes with n={n} @ {start_pos} bits.."
+            );
+
+            match br.parse::<VorbisBlockModes>() {
+                Ok(modes) if modes.n_modes == n => {
+                    blockmodes = Some(modes);
+                    break;
+                }
+                _ => continue,
+            }
+        }
+
+        let Some(blockmodes) = blockmodes else {
+            bail!(InvalidHeader {
+                name: "setup",
+                reason: "could not determine block modes",
+            });
+        };
+
+        gst::info!(
+            CAT,
+            "Found block modes: {blockmodes:?}, blockmode bits: {}",
+            (blockmodes.n_modes - 1).checked_ilog2().unwrap_or(0) + 1,
+        );
+
         Ok(VorbisInfo {
             channels,
-            rate: rate as i32,
+            rate,
             blocksizes: [blocksize0, blocksize1],
+            blockmodes,
         })
+    }
+
+    pub(crate) fn calc_packet_samples(&self, packet_data: &[u8]) -> anyhow::Result<u64> {
+        use anyhow::{Context, bail};
+
+        let mut br = BitReader::endian(Cursor::new(&packet_data), LittleEndian);
+
+        if br.read::<1, u8>().context("packet type bit")? != 0 {
+            bail!("Not an audio packet");
+        }
+
+        let blockmode_bits = (self.blockmodes.n_modes - 1).checked_ilog2().unwrap_or(0) + 1;
+
+        let blockmode = br.read_var::<u8>(blockmode_bits).context("blockmode")? as usize;
+
+        if blockmode >= self.blockmodes.n_modes {
+            gst::warning!(
+                CAT,
+                "unexpected blockmode {blockmode}, n_modes={}",
+                self.blockmodes.n_modes
+            );
+        }
+
+        use PacketSize::*;
+
+        let packet_size = match self.blockmodes.blockflags & (1 << blockmode) {
+            0 => Short,
+            _ => Long,
+        };
+
+        gst::trace!(CAT, "packet_size: {packet_size:?}");
+
+        let short_size = self.blocksize(Short) as u32;
+        let long_size = self.blocksize(Long) as u32;
+
+        /*  v
+         * lll:           l/2
+         * lls:           3l/4 - s/4
+         * lsl:           s/2
+         * lss:           s/2
+         * sll:           l/4 + s/4
+         * sls:           l/2
+         * ssl:           s/2
+         * sss:           s/2
+         */
+        let decode_blocksize = if packet_size == Short {
+            short_size / 2
+        } else {
+            let prev_size = match br.read_bit().context("previous_window_flag")? {
+                false => Short,
+                true => Long,
+            };
+
+            let next_size = match br.read_bit().context("next_window_flag")? {
+                false => Short,
+                true => Long,
+            };
+
+            match (prev_size, next_size) {
+                (Short, Short) => long_size / 2,
+                (Short, Long) => long_size / 4 + short_size / 4,
+                (Long, Short) => 3 * (long_size / 4) - short_size / 4,
+                (Long, Long) => long_size / 2,
+            }
+        };
+
+        Ok(decode_blocksize as u64)
     }
 
     fn channels(&self) -> u8 {
         self.channels
     }
 
-    fn rate(&self) -> i32 {
+    pub fn rate(&self) -> u32 {
         self.rate
+    }
+
+    fn blocksize(&self, size: PacketSize) -> u16 {
+        match size {
+            PacketSize::Short => self.blocksizes[0],
+            PacketSize::Long => self.blocksizes[1],
+        }
     }
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct VorbisHeaders {
     headers: [Vec<u8>; 3],
     info: VorbisInfo,
@@ -276,7 +473,7 @@ impl VorbisHeaders {
     }
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct VorbisConfig {
     ident: u32,
     headers: VorbisHeaders,
@@ -309,8 +506,12 @@ impl VorbisConfig {
         self.headers.info.channels()
     }
 
-    pub(crate) fn rate(&self) -> i32 {
+    pub(crate) fn rate(&self) -> u32 {
         self.headers.info.rate()
+    }
+
+    pub(crate) fn info(&self) -> VorbisInfo {
+        self.headers.info.clone()
     }
 
     pub(crate) fn into_headers(self) -> [Vec<u8>; 3] {

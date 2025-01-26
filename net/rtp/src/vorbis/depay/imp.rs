@@ -82,6 +82,7 @@ struct State {
 
     // Active config
     active_ident: Option<u32>,
+    active_info: Option<VorbisInfo>,
 
     // Throttle warning messages we send
     last_warning_message: Option<std::time::Instant>,
@@ -166,6 +167,7 @@ impl RtpBaseDepay2Impl for RtpVorbisDepay {
             acc: None,
             configs: ConfigPool::new(MAX_CONFIGS),
             active_ident: None,
+            active_info: None,
             last_warning_message: None,
         };
 
@@ -260,13 +262,14 @@ impl RtpBaseDepay2Impl for RtpVorbisDepay {
 
             let ident = config.ident();
 
-            if self.activate_config(config).is_err() {
+            let Ok(info) = self.activate_config(config) else {
                 return false;
-            }
+            };
 
-            gst::debug!(CAT, imp = self, "Activated new config {ident:x?}");
+            gst::debug!(CAT, imp = self, "Activated new config {ident:x?}, {info:?}");
 
             state.active_ident = Some(ident);
+            state.active_info = Some(info);
         }
 
         true
@@ -476,16 +479,17 @@ impl RtpBaseDepay2Impl for RtpVorbisDepay {
 }
 
 impl RtpVorbisDepay {
-    fn activate_config(&self, config: VorbisConfig) -> Result<(), gst::FlowError> {
+    fn activate_config(&self, config: VorbisConfig) -> Result<VorbisInfo, gst::FlowError> {
         let ident = config.ident();
 
         let channels = config.channels() as i32;
         let rate = config.rate();
+        let info = config.info();
 
         gst::debug!(
             CAT,
             imp = self,
-            "New config {ident:x?} has {channels}ch @ {rate}Hz"
+            "New config {ident:x?} has {channels}ch @ {rate}Hz, {info:?}"
         );
 
         let headers = config.into_headers().map(|hdr| {
@@ -517,7 +521,8 @@ impl RtpVorbisDepay {
                     gst::warning!(CAT, imp = self, "Failed to push header buffer: {err:?}");
                 })?;
         }
-        Ok(())
+
+        Ok(info)
     }
 
     // IMPROVE: Might be better to pass an input buffer as well so we can make sub-buffers, also for
@@ -566,12 +571,19 @@ impl RtpVorbisDepay {
                         return Ok(gst::FlowSuccess::Ok);
                     };
 
-                    self.activate_config(new_config)?;
+                    let info = self.activate_config(new_config)?;
 
-                    gst::debug!(CAT, imp = self, "Activated new config {ident:x?}");
+                    gst::debug!(CAT, imp = self, "Activated new config {ident:x?}, {info:?}");
 
                     state.active_ident = Some(ident);
+                    state.active_info = Some(info);
                 }
+
+                let active_info = state.active_info.as_ref().expect("active_info");
+
+                let sample_rate = active_info.rate() as u64;
+
+                let mut sample_offset = 0u64;
 
                 loop {
                     gst::log!(CAT, imp = self, "Packet length: {packet_len} bytes");
@@ -586,12 +598,65 @@ impl RtpVorbisDepay {
                         return Ok(gst::FlowSuccess::Ok);
                     }
 
-                    // TODO: would be good to add durations to outgoing packets, but it's non-trivial
-                    let outbuf = gst::Buffer::from_mut_slice(data[..packet_len].to_vec());
+                    // Note: it looks like the first output from the Vorbis encoder is always a
+                    // a packet with "no samples", so there will be two packets with the same
+                    // timestamp at the beginning, and the first packet has duration 0 at the
+                    // GStreamer level. If vorbis packets get aggregated into an RTP packet we
+                    // don't know if this is the first packet in a stream, so can't easily detect
+                    // this lead-in packet. Which means our timestamps/durations will be slightly
+                    // off for the first few interpolated timestamps. The decoder will correct
+                    // that though, and it will also be correct again from the second RTP packet
+                    // onwards. In zero-latency mode we have RTP timestamps for every vorbis packet.
+                    let samples = active_info.calc_packet_samples(data).map_err(|e| {
+                        gst::element_imp_error!(
+                            self,
+                            gst::StreamError::Decode,
+                            ["Failed to parse packet duration: {e}"]
+                        );
+                        gst::FlowError::Error
+                    })?;
+
+                    let pts_offset = sample_offset * *gst::ClockTime::SECOND / sample_rate;
+
+                    let next_pts =
+                        (sample_offset + samples) * *gst::ClockTime::SECOND / sample_rate;
+
+                    let duration = next_pts - pts_offset;
+
+                    gst::trace!(
+                        CAT,
+                        imp = self,
+                        "packet samples: {samples}, offset {sample_offset}"
+                    );
+
+                    let mut outbuf = gst::Buffer::from_mut_slice(data[..packet_len].to_vec());
+
+                    let outbuf_ref = outbuf.get_mut().unwrap();
+
+                    outbuf_ref.set_duration(gst::ClockTime::from_nseconds(duration));
+
+                    gst::trace!(CAT, imp = self, "Finishing buffer {outbuf:?}");
 
                     self.obj()
                         .queue_buffer(PacketToBufferRelation::Seqnums(seqnums.clone()), outbuf)?;
 
+                    // Leaving per-Vorbis packet timestamping disabled for the time being until
+                    // some open issues are figured out such as lead-in packet detection/handling
+                    // and an occasional discrepancy in packet duration vs what the encoder output.
+
+                    /*
+                                        use crate::basedepay::TimestampOffset;
+
+                                        self.obj().queue_buffer(
+                                            PacketToBufferRelation::SeqnumsWithOffset {
+                                                seqnums: seqnums.clone(),
+                                                timestamp_offset: TimestampOffset::Pts(
+                                                    gst::Signed::<gst::ClockTime>::from(pts_offset as i64),
+                                                ),
+                                            },
+                                            outbuf,
+                                        )?;
+                    */
                     data = &data[packet_len..];
 
                     // Read next packet's length, if any data is left
@@ -600,6 +665,8 @@ impl RtpVorbisDepay {
                     }
                     packet_len = u16::from_be_bytes([data[0], data[1]]) as usize;
                     data = &data[2..];
+
+                    sample_offset += samples;
                 }
                 Ok(gst::FlowSuccess::Ok)
             }
