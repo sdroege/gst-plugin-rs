@@ -218,6 +218,7 @@ impl Cea608Frame {
 
     pub fn set_channel(&mut self, channel: Channel) {
         if Some(channel) != self.selected_channel {
+            gst::log!(CAT, "reset (channel change)");
             self.reset();
             self.selected_channel = Some(channel);
         }
@@ -306,6 +307,7 @@ impl Cea608Frame {
                 .map_or(!new_mode.is_rollup(), |mode| mode.is_rollup())
         {
             self.base_row = MAX_ROW as u8;
+            gst::log!(CAT, "reset (mode change)");
             self.reset();
         }
 
@@ -810,6 +812,7 @@ impl Cea608Renderer {
     }
 
     pub fn clear(&mut self) {
+        gst::log!(CAT, "clearing");
         self.state.reset();
         let channel = self.channel();
         self.frame.reset();
