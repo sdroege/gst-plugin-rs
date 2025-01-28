@@ -216,6 +216,16 @@ impl Cea608Frame {
         self.selected_channel = None;
     }
 
+    fn row(&self) -> usize {
+        self.mode.map_or(self.row, |mode| {
+            if mode.is_rollup() {
+                self.base_row as usize
+            } else {
+                self.row
+            }
+        })
+    }
+
     pub fn set_channel(&mut self, channel: Channel) {
         if Some(channel) != self.selected_channel {
             gst::log!(CAT, "reset (channel change)");
@@ -272,13 +282,7 @@ impl Cea608Frame {
     }
 
     fn push_char(&mut self, c: char) -> bool {
-        let row = self.mode.map_or(self.row, |mode| {
-            if mode.is_rollup() {
-                self.base_row as usize
-            } else {
-                self.row
-            }
-        });
+        let row = self.row();
         self.ensure_cell(row, self.column);
         if self.column == 0 {
             let preamble = self.preamble;
@@ -353,8 +357,9 @@ impl Cea608Frame {
     }
 
     fn midrow(&mut self, midrow: MidRow) -> bool {
-        self.ensure_cell(self.row, self.column);
-        let Some(cell) = self.cell_mut(self.row, self.column) else {
+        let row = self.row();
+        self.ensure_cell(row, self.column);
+        let Some(cell) = self.cell_mut(row, self.column) else {
             return false;
         };
         *cell = Cea608Cell::MidRow(midrow);
@@ -388,8 +393,9 @@ impl Cea608Frame {
         if self.column == 0 {
             return false;
         }
-        self.ensure_cell(self.row, self.column - 1);
-        let Some(cell) = self.cell_mut(self.row, self.column - 1) else {
+        let row = self.row();
+        self.ensure_cell(row, self.column - 1);
+        let Some(cell) = self.cell_mut(row, self.column - 1) else {
             return false;
         };
         *cell = Cea608Cell::Empty;
@@ -399,7 +405,8 @@ impl Cea608Frame {
 
     fn delete_to_end_of_row(&mut self) -> bool {
         let column = self.column;
-        let Some(line) = self.line_mut(self.row) else {
+        let row = self.row();
+        let Some(line) = self.line_mut(row) else {
             return false;
         };
         while line.line.len() > column {
