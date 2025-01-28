@@ -191,7 +191,8 @@ impl Cea608Frame {
                 line: VecDeque::new(),
                 initial_preamble: None,
             });
-            lines.back_mut().unwrap()
+            lines.make_contiguous().sort_by_key(|line| line.no);
+            lines.iter_mut().find(|line| line.no == row).unwrap()
         };
         while line.line.len() <= column {
             line.line.push_back(Cea608Cell::Empty);
