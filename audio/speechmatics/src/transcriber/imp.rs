@@ -587,6 +587,22 @@ impl TranscriberSrcPad {
 
                             gst::info!(CAT, imp = self, "Parsed translation {:?}", translation);
 
+                            let s = gst::Structure::builder("speechmatics/raw")
+                                .field("translation", &text)
+                                .field("arrival-time", transcriber.current_running_time())
+                                .field("language-code", &language_code)
+                                .build();
+
+                            gst::trace!(
+                                CAT,
+                                obj = transcriber,
+                                "received translation event, posting message"
+                            );
+
+                            let _ = transcriber.post_message(
+                                gst::message::Element::builder(s).src(&transcriber).build(),
+                            );
+
                             let unsynced_pad = self.state.lock().unwrap().unsynced_pad.clone();
 
                             if let Some(unsynced_pad) = unsynced_pad {
@@ -668,6 +684,31 @@ impl TranscriberSrcPad {
                                 "Parsed {} transcript {:?}",
                                 if is_partial { "partial" } else { "final" },
                                 transcript
+                            );
+
+                            let s = gst::Structure::builder("speechmatics/raw")
+                                .field("transcript", &text)
+                                .field("arrival-time", transcriber.current_running_time())
+                                .field(
+                                    "language-code",
+                                    &transcriber
+                                        .imp()
+                                        .settings
+                                        .lock()
+                                        .as_ref()
+                                        .unwrap()
+                                        .language_code,
+                                )
+                                .build();
+
+                            gst::trace!(
+                                CAT,
+                                obj = transcriber,
+                                "received transcript event, posting message"
+                            );
+
+                            let _ = transcriber.post_message(
+                                gst::message::Element::builder(s).src(&transcriber).build(),
                             );
 
                             let unsynced_pad = self.state.lock().unwrap().unsynced_pad.clone();
