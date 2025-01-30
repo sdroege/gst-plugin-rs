@@ -311,35 +311,29 @@ impl TranscriberSrcPad {
             let send_eos =
                 state.send_eos && state.buffers.is_empty() && state.accumulator.is_none();
 
-            while let Some(buf) = state.buffers.front() {
-                if now.saturating_sub(buf.pts().unwrap() + start_time) + granularity > latency {
-                    /* Safe unwrap, we know we have an item */
-                    let mut buf = state.buffers.pop_front().unwrap();
-                    {
-                        let buf_mut = buf.make_mut();
-                        let mut pts = buf_mut.pts().unwrap() + start_time;
-                        let mut duration = buf_mut.duration().unwrap();
-                        if let Some(position) = state.out_segment.position() {
-                            if pts < position {
-                                gst::debug!(
-                                    CAT,
-                                    imp = self,
-                                    "Adjusting item timing({:?} < {:?})",
-                                    pts,
-                                    position,
-                                );
-                                duration = duration.saturating_sub(position - pts);
-                                pts = position;
-                            }
+            while let Some(mut buf) = state.buffers.pop_front() {
+                {
+                    let buf_mut = buf.make_mut();
+                    let mut pts = buf_mut.pts().unwrap() + start_time;
+                    let mut duration = buf_mut.duration().unwrap();
+                    if let Some(position) = state.out_segment.position() {
+                        if pts < position {
+                            gst::debug!(
+                                CAT,
+                                imp = self,
+                                "Adjusting item timing({:?} < {:?})",
+                                pts,
+                                position,
+                            );
+                            duration = duration.saturating_sub(position - pts);
+                            pts = position;
                         }
-
-                        buf_mut.set_pts(pts);
-                        buf_mut.set_duration(duration);
                     }
-                    items.push(buf);
-                } else {
-                    break;
+
+                    buf_mut.set_pts(pts);
+                    buf_mut.set_duration(duration);
                 }
+                items.push(buf);
             }
 
             (
