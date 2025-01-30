@@ -106,6 +106,7 @@ fn video_bin(
     fps: u32,
     bitrate: u32,
     iframe_only: bool,
+    h265: bool,
 ) -> Result<gst::Bin, ()> {
     const BUFFER_NB: i32 = 62;
 
@@ -116,8 +117,16 @@ fn video_bin(
     let videoscale = try_create_element!("videoscale")?;
     let videorate = try_create_element!("videorate")?;
     let capsfilter = try_create_element!("capsfilter")?;
-    let x264enc = try_create_element!("x264enc")?;
-    let h264parse = try_create_element!("h264parse")?;
+    let x26xenc = if h265 {
+        try_create_element!("x265enc")?
+    } else {
+        try_create_element!("x264enc")?
+    };
+    let h26xparse = if h265 {
+        try_create_element!("h265parse")?
+    } else {
+        try_create_element!("h264parse")?
+    };
     let queue = try_create_element!("queue")?;
 
     videosrc.set_property("is-live", true);
@@ -127,11 +136,13 @@ fn video_bin(
     let caps = gst::Caps::from_str(format!("video/x-raw,width={width},height={height},framerate={fps}/1,pixel-aspect-ratio=1/1,format=I420").as_str()).unwrap();
     capsfilter.set_property("caps", caps);
 
-    x264enc.set_property("bitrate", bitrate);
+    x26xenc.set_property("bitrate", bitrate);
     if iframe_only {
-        x264enc.set_property("key-int-max", 1);
+        x26xenc.set_property("key-int-max", 1);
+    } else if h265 {
+        x26xenc.set_property("key-int-max", (fps * 2) as i32);
     } else {
-        x264enc.set_property("key-int-max", fps * 2);
+        x26xenc.set_property("key-int-max", fps * 2);
     }
 
     bin.add(&videosrc).unwrap();
@@ -139,17 +150,17 @@ fn video_bin(
     bin.add(&videoscale).unwrap();
     bin.add(&videorate).unwrap();
     bin.add(&capsfilter).unwrap();
-    bin.add(&x264enc).unwrap();
-    bin.add(&h264parse).unwrap();
+    bin.add(&x26xenc).unwrap();
+    bin.add(&h26xparse).unwrap();
     bin.add(&queue).unwrap();
 
     videosrc.link(&videoconvert).unwrap();
     videoconvert.link(&videorate).unwrap();
     videorate.link(&videoscale).unwrap();
     videoscale.link(&capsfilter).unwrap();
-    capsfilter.link(&x264enc).unwrap();
-    x264enc.link(&h264parse).unwrap();
-    h264parse.link(&queue).unwrap();
+    capsfilter.link(&x26xenc).unwrap();
+    x26xenc.link(&h26xparse).unwrap();
+    h26xparse.link(&queue).unwrap();
 
     let queue_srcpad = queue.static_pad("src").unwrap();
 
@@ -384,7 +395,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant() -> Resu
     pipeline.add(&audio_bin2).unwrap();
     audio_bin2_pad.link(&audio2_pad).unwrap();
 
-    let video_bin1 = video_bin(1920, 1080, 30, 2500, false).unwrap();
+    let video_bin1 = video_bin(1920, 1080, 30, 2500, false, false).unwrap();
     let video_bin1_pad = video_bin1.static_pad("src").unwrap();
     let video1_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     let v = gst::Structure::builder("video1-variant")
@@ -396,7 +407,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant() -> Resu
     pipeline.add(&video_bin1).unwrap();
     video_bin1_pad.link(&video1_pad).unwrap();
 
-    let video_bin2 = video_bin(1280, 720, 30, 1500, false).unwrap();
+    let video_bin2 = video_bin(1280, 720, 30, 1500, false, false).unwrap();
     let video_bin2_pad = video_bin2.static_pad("src").unwrap();
     let video2_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     let v = gst::Structure::builder("video2-variant")
@@ -408,7 +419,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant() -> Resu
     pipeline.add(&video_bin2).unwrap();
     video_bin2_pad.link(&video2_pad).unwrap();
 
-    let video_bin3 = video_bin(640, 360, 24, 700, false).unwrap();
+    let video_bin3 = video_bin(640, 360, 24, 700, false, false).unwrap();
     let video_bin3_pad = video_bin3.static_pad("src").unwrap();
     let video3_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     let v = gst::Structure::builder("video2-variant")
@@ -570,7 +581,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_single_video_variant() -> Result
     pipeline.add(&audio_bin2).unwrap();
     audio_bin2_pad.link(&audio2_pad).unwrap();
 
-    let video_bin1 = video_bin(1920, 1080, 30, 2500, false).unwrap();
+    let video_bin1 = video_bin(1920, 1080, 30, 2500, false, false).unwrap();
     let video_bin1_pad = video_bin1.static_pad("src").unwrap();
     let video1_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     let v = gst::Structure::builder("video1-variant")
@@ -704,7 +715,7 @@ fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result
     pipeline.add(&audio_bin1).unwrap();
     audio_bin1_pad.link(&audio1_pad).unwrap();
 
-    let video_bin1 = video_bin(1920, 1080, 30, 2500, false).unwrap();
+    let video_bin1 = video_bin(1920, 1080, 30, 2500, false, false).unwrap();
     let video_bin1_pad = video_bin1.static_pad("src").unwrap();
     let video1_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     let v = gst::Structure::builder("video1-variant")
@@ -716,7 +727,7 @@ fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result
     pipeline.add(&video_bin1).unwrap();
     video_bin1_pad.link(&video1_pad).unwrap();
 
-    let video_bin2 = video_bin(1280, 720, 30, 1500, false).unwrap();
+    let video_bin2 = video_bin(1280, 720, 30, 1500, false, false).unwrap();
     let video_bin2_pad = video_bin2.static_pad("src").unwrap();
     let video2_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     let v = gst::Structure::builder("video2-variant")
@@ -728,7 +739,7 @@ fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result
     pipeline.add(&video_bin2).unwrap();
     video_bin2_pad.link(&video2_pad).unwrap();
 
-    let video_bin3 = video_bin(640, 360, 24, 700, false).unwrap();
+    let video_bin3 = video_bin(640, 360, 24, 700, false, false).unwrap();
     let video_bin3_pad = video_bin3.static_pad("src").unwrap();
     let video3_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     let v = gst::Structure::builder("video2-variant")
@@ -881,7 +892,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     pipeline.add(&audio_bin2).unwrap();
     audio_bin2_pad.link(&audio2_pad).unwrap();
 
-    let video_bin1 = video_bin(1920, 1080, 30, 2500, false).unwrap();
+    let video_bin1 = video_bin(1920, 1080, 30, 2500, false, false).unwrap();
     let video_bin1_pad = video_bin1.static_pad("src").unwrap();
     let video1_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     let v = gst::Structure::builder("video1-variant")
@@ -893,7 +904,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     pipeline.add(&video_bin1).unwrap();
     video_bin1_pad.link(&video1_pad).unwrap();
 
-    let video_bin2 = video_bin(1280, 720, 30, 1500, false).unwrap();
+    let video_bin2 = video_bin(1280, 720, 30, 1500, false, false).unwrap();
     let video_bin2_pad = video_bin2.static_pad("src").unwrap();
     let video2_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     let v = gst::Structure::builder("video2-variant")
@@ -905,7 +916,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     pipeline.add(&video_bin2).unwrap();
     video_bin2_pad.link(&video2_pad).unwrap();
 
-    let video_bin3 = video_bin(640, 360, 24, 700, false).unwrap();
+    let video_bin3 = video_bin(640, 360, 24, 700, false, false).unwrap();
     let video_bin3_pad = video_bin3.static_pad("src").unwrap();
     let video3_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     let v = gst::Structure::builder("video3-variant")
@@ -1023,7 +1034,7 @@ fn hlsmultivariantsink_multiple_video_variant_with_mpegts_audio_video_muxed() ->
         HlsMultivariantSinkMuxerType::MpegTs,
     );
 
-    let video_bin1 = video_bin(1920, 1080, 30, 2500, false).unwrap();
+    let video_bin1 = video_bin(1920, 1080, 30, 2500, false, false).unwrap();
     let video_bin1_pad = video_bin1.static_pad("src").unwrap();
     let video1_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     let v = gst::Structure::builder("video1-variant")
@@ -1035,7 +1046,7 @@ fn hlsmultivariantsink_multiple_video_variant_with_mpegts_audio_video_muxed() ->
     pipeline.add(&video_bin1).unwrap();
     video_bin1_pad.link(&video1_pad).unwrap();
 
-    let video_bin2 = video_bin(1280, 720, 30, 1500, false).unwrap();
+    let video_bin2 = video_bin(1280, 720, 30, 1500, false, false).unwrap();
     let video_bin2_pad = video_bin2.static_pad("src").unwrap();
     let video2_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     let v = gst::Structure::builder("video2-variant")
@@ -1145,6 +1156,189 @@ hi/video.m3u8
 mid/video.m3u8
 #EXT-X-STREAM-INF:BANDWIDTH=64000,CODECS="mp4a.40.2"
 low-audio/audio-only.m3u8
+"###,
+        contents.to_string()
+    );
+
+    Ok(())
+}
+
+#[test]
+fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpegts_h265(
+) -> Result<(), ()> {
+    init();
+
+    // Skip the test if `x265enc` is not available which is the case on CI
+    if gst::ElementFactory::make("x265enc").build().is_err() {
+        gst::info!(CAT, "Skipping test for MPEG-TS with H265");
+        return Ok(());
+    } else {
+        gst::info!(CAT, "Testing for MPEG-TS with H265");
+    }
+
+    let pipeline = gst::Pipeline::with_name("hlsmultivariantsink_pipeline");
+
+    let hlsmultivariantsink = gst::ElementFactory::make("hlsmultivariantsink")
+        .name("test_hlsmultivariantsink")
+        .property(
+            "multivariant-playlist-location",
+            "/tmp/hlssink/multivariant.m3u8",
+        )
+        .property("target-duration", 2u32)
+        .property("playlist-length", 2u32)
+        .property("max-files", 2u32)
+        .build()
+        .expect("Must be able to instantiate hlsmultivariantsink");
+
+    hlsmultivariantsink.set_property("muxer-type", HlsMultivariantSinkMuxerType::MpegTs);
+    let muxer_type: HlsMultivariantSinkMuxerType = hlsmultivariantsink.property("muxer-type");
+    assert_eq!(muxer_type, HlsMultivariantSinkMuxerType::MpegTs);
+
+    pipeline.add(&hlsmultivariantsink).unwrap();
+
+    let (hls_events_sender, hls_events_receiver) = mpsc::sync_channel(100);
+    let multivariant_playlist_content = Arc::new(Mutex::new(String::from("")));
+    let playlist_content = Arc::new(Mutex::new(String::from("")));
+
+    setup_signals(
+        &hlsmultivariantsink,
+        hls_events_sender.clone(),
+        multivariant_playlist_content.clone(),
+        playlist_content.clone(),
+        HlsMultivariantSinkMuxerType::MpegTs,
+    );
+
+    let audio_bin1 = audio_bin(256000).unwrap();
+    let audio_bin1_pad = audio_bin1.static_pad("src").unwrap();
+    let audio1_pad = hlsmultivariantsink.request_pad_simple("audio_%u").unwrap();
+    let r = gst::Structure::builder("audio1-rendition")
+        .field("media", "AUDIO")
+        .field("uri", "hi-audio/audio.m3u8")
+        .field("group_id", "aac")
+        .field("language", "en")
+        .field("name", "English")
+        .field("default", true)
+        .field("autoselect", false)
+        .build();
+    audio1_pad.set_property("alternate-rendition", r);
+    pipeline.add(&audio_bin1).unwrap();
+    audio_bin1_pad.link(&audio1_pad).unwrap();
+
+    let audio_bin2 = audio_bin(128000).unwrap();
+    let audio_bin2_pad = audio_bin2.static_pad("src").unwrap();
+    let audio2_pad = hlsmultivariantsink.request_pad_simple("audio_%u").unwrap();
+    let r = gst::Structure::builder("audio2-rendition")
+        .field("media", "AUDIO")
+        .field("uri", "mid-audio/audio.m3u8")
+        .field("group_id", "aac")
+        .field("language", "fr")
+        .field("name", "French")
+        .field("default", false)
+        .field("autoselect", false)
+        .build();
+    audio2_pad.set_property("alternate-rendition", r);
+    pipeline.add(&audio_bin2).unwrap();
+    audio_bin2_pad.link(&audio2_pad).unwrap();
+
+    let video_bin1 = video_bin(1920, 1080, 30, 2500, false, true).unwrap();
+    let video_bin1_pad = video_bin1.static_pad("src").unwrap();
+    let video1_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
+    let v = gst::Structure::builder("video1-variant")
+        .field("uri", "hi/video.m3u8")
+        .field("audio", "aac")
+        .field("bandwidth", 2500)
+        .build();
+    video1_pad.set_property("variant", v);
+    pipeline.add(&video_bin1).unwrap();
+    video_bin1_pad.link(&video1_pad).unwrap();
+
+    let video_bin2 = video_bin(1280, 720, 30, 1500, false, true).unwrap();
+    let video_bin2_pad = video_bin2.static_pad("src").unwrap();
+    let video2_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
+    let v = gst::Structure::builder("video2-variant")
+        .field("uri", "mid/video.m3u8")
+        .field("audio", "aac")
+        .field("bandwidth", 1500)
+        .build();
+    video2_pad.set_property("variant", v);
+    pipeline.add(&video_bin2).unwrap();
+    video_bin2_pad.link(&video2_pad).unwrap();
+
+    let video_bin3 = video_bin(640, 360, 24, 700, false, true).unwrap();
+    let video_bin3_pad = video_bin3.static_pad("src").unwrap();
+    let video3_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
+    let v = gst::Structure::builder("video3-variant")
+        .field("uri", "low/video.m3u8")
+        .field("audio", "aac")
+        .field("bandwidth", 700)
+        .build();
+    video3_pad.set_property("variant", v);
+    pipeline.add(&video_bin3).unwrap();
+    video_bin3_pad.link(&video3_pad).unwrap();
+
+    pipeline.set_state(gst::State::Playing).unwrap();
+
+    let mut eos = false;
+    let bus = pipeline.bus().unwrap();
+    while let Some(msg) = bus.timed_pop(gst::ClockTime::NONE) {
+        use gst::MessageView;
+        match msg.view() {
+            MessageView::Eos(..) => {
+                eos = true;
+                break;
+            }
+            MessageView::Error(e) => gst::error!(CAT, "hlsmultivariantsink error: {}", e),
+            _ => (),
+        }
+    }
+
+    pipeline.debug_to_dot_file_with_ts(
+        gst::DebugGraphDetails::all(),
+        "multiple_audio_rendition_multiple_video_variant_with_mpegts",
+    );
+
+    pipeline.set_state(gst::State::Null).unwrap();
+    assert!(eos);
+
+    let mut actual_events = Vec::new();
+    while let Ok(event) = hls_events_receiver.recv_timeout(Duration::from_millis(1)) {
+        actual_events.push(event);
+    }
+    let expected_events = {
+        use self::HlsSinkEvent::*;
+        vec![
+            GetMultivariantPlaylistStream("/tmp/hlssink/multivariant.m3u8".to_string()),
+            GetPlaylistStream("/tmp/hlssink/hi/video.m3u8".to_string()),
+            GetPlaylistStream("/tmp/hlssink/mid/video.m3u8".to_string()),
+            GetPlaylistStream("/tmp/hlssink/low/video.m3u8".to_string()),
+            GetPlaylistStream("/tmp/hlssink/hi-audio/audio.m3u8".to_string()),
+            GetPlaylistStream("/tmp/hlssink/mid-audio/audio.m3u8".to_string()),
+            GetFragmentStream("/tmp/hlssink/hi-audio/segment00000.ts".to_string()),
+            GetFragmentStream("/tmp/hlssink/mid-audio/segment00000.ts".to_string()),
+            GetFragmentStream("/tmp/hlssink/hi/segment00000.ts".to_string()),
+            GetFragmentStream("/tmp/hlssink/mid/segment00000.ts".to_string()),
+            GetFragmentStream("/tmp/hlssink/low/segment00000.ts".to_string()),
+            GetFragmentStream("/tmp/hlssink/hi/segment00001.ts".to_string()),
+            GetFragmentStream("/tmp/hlssink/mid/segment00001.ts".to_string()),
+            GetFragmentStream("/tmp/hlssink/low/segment00001.ts".to_string()),
+        ]
+    };
+    assert!(is_playlist_events_eq(&expected_events, &actual_events));
+
+    let contents = multivariant_playlist_content.lock().unwrap();
+
+    #[rustfmt::skip]
+    assert_eq!(
+        r###"#EXTM3U
+#EXT-X-VERSION:4
+#EXT-X-MEDIA:TYPE=AUDIO,URI="hi-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="en",NAME="English",DEFAULT=YES
+#EXT-X-MEDIA:TYPE=AUDIO,URI="mid-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="fr",NAME="French"
+#EXT-X-STREAM-INF:BANDWIDTH=2500,CODECS="hvc1.1.6.L120.90,hvc1.1.6.L63.90,hvc1.1.6.L93.90,mp4a.40.2",AUDIO="aac"
+hi/video.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=1500,CODECS="hvc1.1.6.L120.90,hvc1.1.6.L63.90,hvc1.1.6.L93.90,mp4a.40.2",AUDIO="aac"
+mid/video.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=700,CODECS="hvc1.1.6.L120.90,hvc1.1.6.L63.90,hvc1.1.6.L93.90,mp4a.40.2",AUDIO="aac"
+low/video.m3u8
 "###,
         contents.to_string()
     );
