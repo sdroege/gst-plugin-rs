@@ -15,6 +15,7 @@
 use gst::glib;
 use gst::prelude::*;
 
+mod cros_codecs;
 mod imp;
 
 #[derive(Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]

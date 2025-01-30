@@ -1343,23 +1343,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cros-codecs"
-version = "0.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4862478feb3de946be3e4b7f316b18957a45d88d1c3695c606bdf6e76a2d2bfb"
-dependencies = [
- "anyhow",
- "bitreader",
- "byteorder",
- "bytes",
- "crc32fast",
- "enumn",
- "log",
- "nix",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "crossbeam-deque"
 version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2730,8 +2713,11 @@ name = "gst-plugin-hlsmultivariantsink"
 version = "0.14.0-alpha.1"
 dependencies = [
  "anyhow",
+ "bitreader",
+ "byteorder",
+ "bytes",
  "chrono",
- "cros-codecs",
+ "enumn",
  "gio",
  "gst-plugin-fmp4",
  "gst-plugin-hlssink3",
@@ -2743,7 +2729,7 @@ dependencies = [
  "gstreamer-pbutils",
  "gstreamer-video",
  "m3u8-rs",
- "sprintf",
+ "thiserror 2.0.11",
 ]
 
 [[package]]

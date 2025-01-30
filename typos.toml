@@ -18,6 +18,7 @@ Ines = "Ines"
 
 # net/hlsmultivariantsink
 cros = "cros"
+ue = "ue"
 
 [files]
 extend-exclude = [

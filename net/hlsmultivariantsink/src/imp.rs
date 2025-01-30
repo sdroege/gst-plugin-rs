@@ -1308,12 +1308,10 @@ impl HlsMultivariantSink {
         drop(state);
     }
 
-    #[cfg(target_os = "linux")]
     fn parse_h264_sps(&self, buffer: &[u8], group_id: String) {
-        use cros_codecs::codec::h264::parser as H264Parser;
+        use crate::cros_codecs::h264::parser as H264Parser;
         use std::io::Cursor;
 
-        let mut caps_codec_str: Option<String> = None;
         let mut cursor = Cursor::new(buffer);
         let mut parser = H264Parser::Parser::default();
 
@@ -1340,34 +1338,19 @@ impl HlsMultivariantSink {
                     constraint_flags += 2u32.pow(7 - index as u32) * (*bit) as u32;
                 });
 
-                match sprintf::sprintf!("avc1.%02X%02X%02X", profile, constraint_flags, level) {
-                    Ok(codec_str) => {
-                        caps_codec_str = Some(codec_str);
-                    }
-                    Err(e) => {
-                        gst::element_error!(
-                            self.obj(),
-                            gst::ResourceError::Failed,
-                            ["Failed to format codec string with error: {:?}", e]
-                        );
-                    }
-                }
+                let codec_str = format!("avc1.{profile:02X}{constraint_flags:02X}{level:02X}");
+
+                self.build_codec_str_and_write_multivariant_playlist(codec_str, group_id);
 
                 break;
             }
         }
-
-        if let Some(codec_str) = caps_codec_str {
-            self.build_codec_str_and_write_multivariant_playlist(codec_str, group_id);
-        }
     }
 
-    #[cfg(target_os = "linux")]
     fn parse_h265_sps(&self, buffer: &[u8], group_id: String) {
-        use cros_codecs::codec::h265::parser as H265Parser;
+        use crate::cros_codecs::h265::parser as H265Parser;
         use std::io::Cursor;
 
-        let mut caps_codec_str: Option<String> = None;
         let mut cursor = Cursor::new(buffer);
         let mut parser = H265Parser::Parser::default();
 
@@ -1429,37 +1412,15 @@ impl HlsMultivariantSink {
                         constraint_indicator_flag += 2u32.pow(7 - index as u32) * (*bit) as u32;
                     });
 
-                match sprintf::sprintf!(
-                    "%s.%X.%hu.%c%d.%02X",
-                    codec_str,
-                    profile_idc,
-                    compat_flag_parameter,
-                    tier_flag,
-                    level_idc,
-                    constraint_indicator_flag
-                ) {
-                    Ok(codec_str) => {
-                        caps_codec_str = Some(codec_str);
-                    }
-                    Err(e) => {
-                        gst::element_error!(
-                            self.obj(),
-                            gst::ResourceError::Failed,
-                            ["Failed to format codec string with error: {:?}", e]
-                        );
-                    }
-                }
+                let codec_str = format!("{codec_str}.{profile_idc:X}.{compat_flag_parameter}.{tier_flag}{level_idc}.{constraint_indicator_flag:02X}");
+
+                self.build_codec_str_and_write_multivariant_playlist(codec_str, group_id);
 
                 break;
             }
         }
-
-        if let Some(codec_str) = caps_codec_str {
-            self.build_codec_str_and_write_multivariant_playlist(codec_str, group_id);
-        }
     }
 
-    #[cfg(target_os = "linux")]
     fn parse_sps(
         &self,
         caps: &gst::Caps,
@@ -1510,12 +1471,7 @@ impl HlsMultivariantSink {
          * with SPS. codec-utils helpers cannot give us codec string
          * without the codec_data. For MPEG-TS, parse SPS and figure
          * out the relevant information to generate codec string.
-         *
-         * parse_sps function relies on cros_codecs which supports
-         * only linux. On other platforms for MPEG-TS, users need to
-         * specify codec string manually.
          */
-        #[cfg(target_os = "linux")]
         {
             let settings = self.settings.lock().unwrap();
             let is_mpegts = settings.muxer_type == HlsMultivariantSinkMuxerType::MpegTs;
