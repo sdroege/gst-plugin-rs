@@ -17,7 +17,7 @@ chrono = "0.4"
 sprintf = "0.2"
 gst-pbutils = { workspace = true, features = ["v1_22"] }
 [target.'cfg(target_os = "linux")'.dependencies]
-cros-codecs = { version = "0.0.4", default-features = false }
+cros-codecs = { version = "0.0.5", default-features = false }
 
 [dev-dependencies]
 gst-audio.workspace = true

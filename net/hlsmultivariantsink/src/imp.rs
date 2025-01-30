@@ -1317,8 +1317,8 @@ impl HlsMultivariantSink {
         let mut cursor = Cursor::new(buffer);
         let mut parser = H264Parser::Parser::default();
 
-        while let Ok(nalu) = H264Parser::Nalu::<_>::next(&mut cursor) {
-            if let H264Parser::NaluType::Sps = nalu.header().nalu_type() {
+        while let Ok(nalu) = H264Parser::Nalu::next(&mut cursor) {
+            if let H264Parser::NaluType::Sps = nalu.header.type_ {
                 let sps = parser.parse_sps(&nalu).unwrap();
 
                 let profile = sps.profile_idc;
@@ -1371,26 +1371,26 @@ impl HlsMultivariantSink {
         let mut cursor = Cursor::new(buffer);
         let mut parser = H265Parser::Parser::default();
 
-        while let Ok(nalu) = H265Parser::Nalu::<_>::next(&mut cursor) {
-            if let H265Parser::NaluType::SpsNut = nalu.header().nalu_type() {
+        while let Ok(nalu) = H265Parser::Nalu::next(&mut cursor) {
+            if let H265Parser::NaluType::SpsNut = nalu.header.type_ {
                 let sps = parser.parse_sps(&nalu).unwrap();
-                let profile_tier_level = sps.profile_tier_level();
+                let profile_tier_level = &sps.profile_tier_level;
 
                 /* Adapted from hevc_get_mime_codec() in codec-utils.c */
                 let mut codec_str = "hvc1".to_owned();
-                let profile_space = profile_tier_level.general_profile_space();
+                let profile_space = profile_tier_level.general_profile_space;
                 if profile_space != 0 {
                     codec_str.push_str(&(65 + profile_space - 1).to_string());
                 }
 
-                let tier_flag = if profile_tier_level.general_tier_flag() {
+                let tier_flag = if profile_tier_level.general_tier_flag {
                     'H'
                 } else {
                     'L'
                 };
-                let profile_idc = profile_tier_level.general_profile_idc();
-                let level_idc = profile_tier_level.general_level_idc() as u16;
-                let compatibility_flag = profile_tier_level.general_profile_compatibility_flag();
+                let profile_idc = profile_tier_level.general_profile_idc;
+                let level_idc = profile_tier_level.general_level_idc as u16;
+                let compatibility_flag = profile_tier_level.general_profile_compatibility_flag;
 
                 let mut compat_flags = 0;
                 compatibility_flag
@@ -1411,14 +1411,14 @@ impl HlsMultivariantSink {
                 let compat_flag_parameter = compat_flags.rotate_left(16);
 
                 let constraint_flags = [
-                    profile_tier_level.general_progressive_source_flag(),
-                    profile_tier_level.general_interlaced_source_flag(),
-                    profile_tier_level.general_non_packed_constraint_flag(),
-                    profile_tier_level.general_frame_only_constraint_flag(),
-                    profile_tier_level.general_max_12bit_constraint_flag(),
-                    profile_tier_level.general_max_10bit_constraint_flag(),
-                    profile_tier_level.general_max_8bit_constraint_flag(),
-                    profile_tier_level.general_max_422chroma_constraint_flag(),
+                    profile_tier_level.general_progressive_source_flag,
+                    profile_tier_level.general_interlaced_source_flag,
+                    profile_tier_level.general_non_packed_constraint_flag,
+                    profile_tier_level.general_frame_only_constraint_flag,
+                    profile_tier_level.general_max_12bit_constraint_flag,
+                    profile_tier_level.general_max_10bit_constraint_flag,
+                    profile_tier_level.general_max_8bit_constraint_flag,
+                    profile_tier_level.general_max_422chroma_constraint_flag,
                 ];
 
                 let mut constraint_indicator_flag = 0;
