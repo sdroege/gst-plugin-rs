@@ -24,8 +24,8 @@ fn cdg_packets_ratio(typefind: &mut TypeFind, start: i64, len: i64) -> i64 {
     let mut count = 0;
     let total = len / CDG_PACKET_SIZE as i64;
 
-    for offset in (0..len).step_by(CDG_PACKET_SIZE as usize) {
-        match typefind.peek(start + offset, CDG_PACKET_SIZE as u32) {
+    for offset in (start..len).step_by(CDG_PACKET_SIZE as usize) {
+        match typefind.peek(offset, CDG_PACKET_SIZE as u32) {
             Some(data) => {
                 if data[0] & CDG_MASK == CDG_COMMAND {
                     count += 1;
@@ -50,6 +50,7 @@ fn compute_probability(typefind: &mut TypeFind) -> TypeFindProbability {
         .length()
         .unwrap_or(TYPEFIND_SEARCH_WINDOW as u64 * NB_WINDOWS);
     let step = len / NB_WINDOWS;
+    let search_window = cmp::min(len as i64, TYPEFIND_SEARCH_WINDOW);
 
     // Too short file
     if step == 0 {
@@ -57,7 +58,7 @@ fn compute_probability(typefind: &mut TypeFind) -> TypeFindProbability {
     }
 
     for offset in (0..len).step_by(step as usize) {
-        let proba = match cdg_packets_ratio(typefind, offset as i64, TYPEFIND_SEARCH_WINDOW) {
+        let proba = match cdg_packets_ratio(typefind, offset as i64, search_window) {
             0..=5 => TypeFindProbability::None,
             6..=10 => TypeFindProbability::Possible,
             _ => TypeFindProbability::Likely,
