@@ -208,6 +208,9 @@ pub(crate) struct Stream {
 
     /// Edit list clipping information
     elst_infos: Vec<ElstInfo>,
+
+    /// Whether this stream should be encoded as an ISO/IEC 23008-12 image sequence
+    image_sequence: bool,
 }
 
 #[derive(Debug)]

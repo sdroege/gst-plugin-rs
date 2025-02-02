@@ -7,9 +7,12 @@
 // SPDX-License-Identifier: MPL-2.0
 //
 
-use std::path::Path;
+use std::{
+    fs,
+    io::{Cursor, Read},
+    path::Path,
+};
 
-use gst::prelude::*;
 use gst_pbutils::prelude::*;
 
 fn init() {
@@ -60,6 +63,40 @@ impl Pipeline {
 
         self.set_state(gst::State::Null)
             .expect("Unable to set the pipeline to the `Null` state");
+    }
+}
+
+struct FileTypeBox {
+    major_brand: [u8; 4],
+    minor_version: u32,
+    compatible_brands: Vec<[u8; 4]>,
+}
+
+impl FileTypeBox {
+    fn read(mut reader: Cursor<&[u8]>) -> std::io::Result<FileTypeBox> {
+        let mut box_size_buf = [0u8; 4];
+        reader.read_exact(&mut box_size_buf)?;
+        let box_size = u32::from_be_bytes(box_size_buf);
+        let mut four_cc = [0u8; 4];
+        reader.read_exact(&mut four_cc)?;
+        assert_eq!(four_cc, *b"ftyp");
+        let mut major_brand = [0u8; 4];
+        reader.read_exact(&mut major_brand)?;
+        let mut minor_version_buf = [0u8; 4];
+        reader.read_exact(&mut minor_version_buf)?;
+        let minor_version = u32::from_be_bytes(minor_version_buf);
+        let num_brands = (box_size - 16) / 4;
+        let mut compatible_brands = Vec::with_capacity(num_brands.try_into().unwrap());
+        for _ in 0..num_brands {
+            let mut compatible_brand = [0u8; 4];
+            reader.read_exact(&mut compatible_brand)?;
+            compatible_brands.push(compatible_brand);
+        }
+        Ok(FileTypeBox {
+            major_brand,
+            minor_version,
+            compatible_brands,
+        })
     }
 }
 
@@ -212,7 +249,9 @@ fn test_roundtrip_uncompressed(video_format: &str, width: u32, height: u32) {
 }
 
 fn test_encode_uncompressed(video_format: &str, width: u32, height: u32) {
-    let pipeline_text = format!("videotestsrc num-buffers=250 ! video/x-raw,format={format},width={width},height={height} ! isomp4mux ! filesink location={format}_{width}x{height}.mp4", format = video_format);
+    let filename = format!("{video_format}_{width}x{height}.mp4");
+    let pipeline_text = format!("videotestsrc num-buffers=250 ! video/x-raw,format={video_format},width={width},height={height} ! isomp4mux ! filesink location={filename}");
+
     let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
         panic!("could not build encoding pipeline")
     };
@@ -238,6 +277,31 @@ fn test_encode_uncompressed(video_format: &str, width: u32, height: u32) {
     pipeline
         .set_state(gst::State::Null)
         .expect("Unable to set the pipeline to the `Null` state");
+
+    test_expected_uncompressed_output(filename);
+}
+
+fn test_expected_uncompressed_output(filename: String) {
+    let check_data: Vec<u8> = fs::read(filename).unwrap();
+    let cursor = Cursor::new(check_data.as_ref());
+    test_default_mpeg_file_type_box(cursor);
+}
+
+fn test_expected_file_type_box(
+    expected_major_brand: &[u8; 4],
+    expected_minor_version: u32,
+    expected_compatible_brands: Vec<[u8; 4]>,
+    cursor: Cursor<&[u8]>,
+) {
+    let ftyp = FileTypeBox::read(cursor).unwrap();
+
+    assert_eq!(ftyp.major_brand, *expected_major_brand);
+    assert_eq!(ftyp.minor_version, expected_minor_version);
+    let mut sorted_compatible_brands = ftyp.compatible_brands.clone();
+    sorted_compatible_brands.sort();
+    let mut sorted_expected_compatible_brands = expected_compatible_brands.clone();
+    sorted_expected_compatible_brands.sort();
+    assert_eq!(sorted_compatible_brands, sorted_expected_compatible_brands);
 }
 
 #[test]
@@ -456,4 +520,124 @@ fn encode_uncompressed_rgbp() {
 fn encode_uncompressed_bgrp() {
     init();
     test_encode_uncompressed("BGRP", 1275, 713);
+}
+
+fn test_encode_uncompressed_image_sequence(video_format: &str, width: u32, height: u32) {
+    let filename = format!("{video_format}_{width}x{height}.heifs");
+    let pipeline_text = format!("videotestsrc num-buffers=10 ! video/x-raw,format={video_format},width={width},height={height} ! isomp4mux name=mux ! filesink location={filename}");
+
+    let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
+        panic!("could not build encoding pipeline")
+    };
+    let pipeline = Pipeline(pipeline.downcast::<gst::Pipeline>().unwrap());
+    let mux = pipeline.by_name("mux").unwrap();
+    let sink_pad = &mux.sink_pads()[0];
+    sink_pad.set_property("image-sequence", true);
+    pipeline
+        .set_state(gst::State::Playing)
+        .expect("Unable to set the pipeline to the `Playing` state");
+    for msg in pipeline.bus().unwrap().iter_timed(gst::ClockTime::NONE) {
+        use gst::MessageView;
+
+        match msg.view() {
+            MessageView::Eos(..) => break,
+            MessageView::Error(err) => {
+                panic!(
+                    "Error from {:?}: {} ({:?})",
+                    err.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
+                );
+            }
+            _ => (),
+        }
+    }
+    pipeline
+        .set_state(gst::State::Null)
+        .expect("Unable to set the pipeline to the `Null` state");
+
+    test_expected_image_sequence_output(filename);
+}
+
+fn test_expected_image_sequence_output(filename: String) {
+    let check_data: Vec<u8> = fs::read(filename).unwrap();
+    let cursor = Cursor::new(check_data.as_ref());
+    test_expected_image_sequence_file_type_box_content(cursor);
+}
+
+fn test_expected_image_sequence_file_type_box_content(cursor: Cursor<&[u8]>) {
+    let expected_major_brand = b"msf1";
+    let expected_minor_version = 0;
+    let expected_compatible_brands: Vec<[u8; 4]> = vec![*b"iso8", *b"msf1", *b"unif"];
+    test_expected_file_type_box(
+        expected_major_brand,
+        expected_minor_version,
+        expected_compatible_brands,
+        cursor,
+    );
+}
+
+#[test]
+fn encode_uncompressed_image_sequence_rgb() {
+    init();
+    test_encode_uncompressed_image_sequence("RGB", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_image_sequence_nv12() {
+    init();
+    test_encode_uncompressed_image_sequence("NV12", 1275, 714);
+}
+
+#[test]
+fn test_encode_audio_trak() {
+    init();
+    let filename = "audio_only.mp4".to_string();
+    let pipeline_text = format!("audiotestsrc num-buffers=100 ! audioconvert ! opusenc ! isomp4mux ! filesink location={filename}");
+
+    let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
+        panic!("could not build encoding pipeline")
+    };
+    pipeline
+        .set_state(gst::State::Playing)
+        .expect("Unable to set the pipeline to the `Playing` state");
+    for msg in pipeline.bus().unwrap().iter_timed(gst::ClockTime::NONE) {
+        use gst::MessageView;
+
+        match msg.view() {
+            MessageView::Eos(..) => break,
+            MessageView::Error(err) => {
+                panic!(
+                    "Error from {:?}: {} ({:?})",
+                    err.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
+                );
+            }
+            _ => (),
+        }
+    }
+    pipeline
+        .set_state(gst::State::Null)
+        .expect("Unable to set the pipeline to the `Null` state");
+
+    test_audio_only_output(filename);
+}
+
+fn test_audio_only_output(filename: String) {
+    let check_data: Vec<u8> = fs::read(filename).unwrap();
+    let cursor = Cursor::new(check_data.as_ref());
+    test_default_mpeg_file_type_box(cursor);
+}
+
+fn test_default_mpeg_file_type_box(cursor: Cursor<&[u8]>) {
+    let expected_major_brand = b"iso4";
+    let expected_minor_version = 0;
+    let expected_compatible_brands: Vec<[u8; 4]> = vec![*b"isom", *b"mp41", *b"mp42"];
+    test_expected_file_type_box(
+        expected_major_brand,
+        expected_minor_version,
+        expected_compatible_brands,
+        cursor,
+    );
 }

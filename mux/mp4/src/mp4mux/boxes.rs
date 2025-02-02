@@ -69,29 +69,14 @@ fn write_full_box<T, F: FnOnce(&mut Vec<u8>) -> Result<T, Error>>(
 
 /// Creates `ftyp` box
 pub(super) fn create_ftyp(
-    variant: super::Variant,
-    content_caps: &[&gst::CapsRef],
+    major_brand: &[u8; 4],
+    minor_version: u32,
+    compatible_brands: Vec<&[u8; 4]>,
 ) -> Result<gst::Buffer, Error> {
     let mut v = vec![];
-    let mut minor_version = 0u32;
-
-    let (brand, mut compatible_brands) = match variant {
-        super::Variant::ISO | super::Variant::ONVIF => (b"iso4", vec![b"mp41", b"mp42", b"isom"]),
-    };
-
-    for caps in content_caps {
-        let s = caps.structure(0).unwrap();
-        if let (super::Variant::ISO, "video/x-av1") = (variant, s.name().as_str()) {
-            minor_version = 1;
-            compatible_brands = vec![b"iso4", b"av01"];
-            break;
-        }
-    }
-
     write_box(&mut v, b"ftyp", |v| {
         // major brand
-        v.extend(brand);
-        // minor version
+        v.extend(major_brand);
         v.extend(minor_version.to_be_bytes());
         // compatible brands
         v.extend(compatible_brands.into_iter().flatten());
@@ -494,7 +479,14 @@ fn write_hdlr(
     let s = stream.caps.structure(0).unwrap();
     let (handler_type, name) = match s.name().as_str() {
         "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
-        | "image/jpeg" | "video/x-raw" => (b"vide", b"VideoHandler\0".as_slice()),
+        | "image/jpeg" | "video/x-raw" => {
+            if stream.image_sequence {
+                // See ISO/IEC 23008-12:2022 Section 7.2.2
+                (b"pict", b"PictureHandler\0".as_slice())
+            } else {
+                (b"vide", b"VideoHandler\0".as_slice())
+            }
+        }
         "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
         | "audio/x-adpcm" => (b"soun", b"SoundHandler\0".as_slice()),
         "application/x-onvif-metadata" => (b"meta", b"MetadataHandler\0".as_slice()),
@@ -1050,6 +1042,49 @@ fn write_visual_sample_entry(
                 v.push(field_order);
                 Ok(())
             })?;
+        }
+
+        if stream.image_sequence {
+            match s.name().as_str() {
+                // intra formats
+                "video/x-vp9" | "video/x-vp8" | "image/jpeg" => {
+                    let all_ref_pics_intra = 1u32; // 0 = don't know, 1 = reference pictures are only intra
+                    let intra_pred_used = 1u32; // 0 = no, 1 = yes, or maybe
+                    let max_ref_per_pic = 0u32; // none number
+                    let packed_bits = (all_ref_pics_intra << 31)
+                        | (intra_pred_used << 30)
+                        | (max_ref_per_pic << 26);
+                    write_full_box(v, b"ccst", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
+                        v.extend(packed_bits.to_be_bytes());
+                        Ok(())
+                    })?;
+                }
+                // uncompressed
+                "video/x-raw" => {
+                    let all_ref_pics_intra = 1u32; // 0 = don't know, 1 = reference pictures are only intra
+                    let intra_pred_used = 0u32; // 0 = no, 1 = yes, or maybe
+                    let max_ref_per_pic = 0u32; // none
+                    let packed_bits = (all_ref_pics_intra << 31)
+                        | (intra_pred_used << 30)
+                        | (max_ref_per_pic << 26);
+                    write_full_box(v, b"ccst", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
+                        v.extend(packed_bits.to_be_bytes());
+                        Ok(())
+                    })?;
+                }
+                _ => {
+                    let all_ref_pics_intra = 0u32; // 0 = don't know, 1 = reference pictures are only intra
+                    let intra_pred_used = 1u32; // 0 = no, 1 = yes, or maybe
+                    let max_ref_per_pic = 15u32; // any number
+                    let packed_bits = (all_ref_pics_intra << 31)
+                        | (intra_pred_used << 30)
+                        | (max_ref_per_pic << 26);
+                    write_full_box(v, b"ccst", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
+                        v.extend(packed_bits.to_be_bytes());
+                        Ok(())
+                    })?;
+                }
+            }
         }
 
         // TODO: write btrt bitrate box based on tags
