@@ -14099,6 +14099,18 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "diarization": {
+                        "blurb": "Defines how to separate speakers in the audio",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "none (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstSpeechmaticsTranscriberDiarization",
+                        "writable": true
+                    },
                     "enable-late-punctuation-hack": {
                         "blurb": "Pass a reduced max-delay to speechmatics to make sure we always get punctuation in time for joining it with the preceding word.",
                         "conditionally-available": false,
@@ -14163,6 +14175,34 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "max-delay": {
+                        "blurb": "Max delay to pass to the speechmatics API (0 = use latency)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "max-speakers": {
+                        "blurb": "The maximum number of speakers that may be detected with diarization=speaker",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "50",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
                     "url": {
                         "blurb": "URL of the transcription server",
                         "conditionally-available": false,
@@ -14182,6 +14222,21 @@
         "filename": "gstspeechmatics",
         "license": "Proprietary",
         "other-types": {
+            "GstSpeechmaticsTranscriberDiarization": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "None: no diarization",
+                        "name": "none",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Speaker: identify speakers by their voices",
+                        "name": "speaker",
+                        "value": "1"
+                    }
+                ]
+            },
             "GstSpeechmaticsTranscriberSrcPad": {
                 "hierarchy": [
                     "GstSpeechmaticsTranscriberSrcPad",
