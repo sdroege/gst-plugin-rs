@@ -51,6 +51,7 @@ struct State {
     framerate: gst::Fraction,
     json_input: bool,
     force_clear: bool,
+    force_carriage_return: bool,
     max_frame_no: u64,
 }
 
@@ -61,6 +62,7 @@ impl Default for State {
             framerate: gst::Fraction::new(DEFAULT_FPS_N, DEFAULT_FPS_D),
             json_input: false,
             force_clear: false,
+            force_carriage_return: false,
             max_frame_no: 0,
         }
     }
@@ -192,6 +194,10 @@ impl TtToCea608 {
         let mut state = self.state.lock().unwrap();
         let settings = self.settings.lock().unwrap();
 
+        if state.force_clear {
+            state.force_carriage_return = false;
+        }
+
         let mut lines = Lines {
             lines: Vec::new(),
             mode: Some(settings.mode),
@@ -217,9 +223,17 @@ impl TtToCea608 {
                     _ => settings.origin_row as u32,
                 };
 
+                let carriage_return = if state.force_carriage_return {
+                    Some(true)
+                } else {
+                    None
+                };
+
+                state.force_carriage_return = false;
+
                 for phrase in &phrases {
                     lines.lines.push(Line {
-                        carriage_return: None,
+                        carriage_return,
                         column: None,
                         row: Some(row),
                         chunks: vec![Chunk {
@@ -358,6 +372,34 @@ impl TtToCea608 {
                 drop(state);
 
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
+            }
+            EventView::CustomDownstream(c) => {
+                let Some(s) = c.structure() else {
+                    return gst::Pad::event_default(pad, Some(&*self.obj()), event);
+                };
+
+                let insert_newline = match s.name().as_str() {
+                    "rstranscribe/final-transcript" => {
+                        gst::debug!(CAT, imp = self, "transcript is final, inserting new line");
+                        true
+                    }
+                    "rstranscribe/speaker-change" => {
+                        gst::debug!(CAT, imp = self, "speaker change, inserting new line");
+                        true
+                    }
+                    _ => false,
+                };
+
+                if insert_newline {
+                    let mut state = self.state.lock().unwrap();
+                    let settings = self.settings.lock().unwrap();
+
+                    if !state.json_input && settings.mode.is_rollup() {
+                        state.force_carriage_return = true;
+                    }
+                }
+
+                true
             }
             _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
@@ -590,6 +632,7 @@ impl ElementImpl for TtToCea608 {
                 let framerate = state.framerate;
                 *state = State::default();
                 state.force_clear = false;
+                state.force_carriage_return = false;
                 state.translator.set_mode(settings.mode);
                 state
                     .translator
