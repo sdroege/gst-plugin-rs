@@ -103,6 +103,7 @@ impl InterStreamProducer {
         if let Some(producer) = producers.remove(name) {
             match producer {
                 InterStreamProducer::Pending { .. } => None,
+                InterStreamProducer::Active { links, .. } if links.is_empty() => None,
                 InterStreamProducer::Active { links, producer } => {
                     producers.insert(
                         name.to_string(),
