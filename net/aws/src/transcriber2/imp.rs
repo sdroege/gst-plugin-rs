@@ -672,7 +672,7 @@ impl Transcriber {
                 builder.audio_stream(chunk_stream.into()).send().await
             })
             .map_err(|err| {
-                let err = format!("Transcribe ws init error: {err}: {}", err.meta());
+                let err = format!("Transcribe ws init error: {err}: {} ({err:?})", err.meta());
                 gst::error!(CAT, imp = self, "{err}");
                 gst::error_msg!(gst::LibraryError::Init, ["{err}"])
             })?;
@@ -685,7 +685,10 @@ impl Transcriber {
                     let event = match output.transcript_result_stream.recv().await {
                         Ok(event) => event,
                         Err(err) => {
-                            let err = format!("Transcribe ws stream error: {err}: {}", err.meta());
+                            let err = format!(
+                                "Transcribe ws stream error: {err}: {} {err:?}",
+                                err.meta()
+                            );
                             if let Some(this) = this_weak.upgrade() {
                                 gst::error!(CAT, imp = this, "{err}");
                                 this.post_error_message(gst::error_msg!(
