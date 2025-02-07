@@ -1311,6 +1311,7 @@ impl ToggleRecord {
             gst::element_imp_error!(self, gst::CoreError::Pad, ["Unknown pad {:?}", pad.name()]);
             gst::FlowError::Error
         })?;
+        drop(rec_state);
 
         let upstream_live;
 
@@ -1344,7 +1345,6 @@ impl ToggleRecord {
             }
         }
 
-        drop(rec_state);
         let handle_result = if stream != self.main_stream {
             self.handle_secondary_stream(pad, &stream, buffer, upstream_live)
         } else {
@@ -1715,6 +1715,7 @@ impl ToggleRecord {
 
         gst::log!(CAT, obj = pad, "Handling query {:?}", query);
 
+        drop(rec_state);
         let success = stream.srcpad.peer_query(query);
 
         if let gst::QueryView::Latency(latency) = query.view() {
@@ -1888,6 +1889,7 @@ impl ToggleRecord {
             }
             _ => {
                 gst::log!(CAT, obj = pad, "Forwarding query {:?}", query);
+                drop(rec_state);
                 stream.sinkpad.peer_query(query)
             }
         }
