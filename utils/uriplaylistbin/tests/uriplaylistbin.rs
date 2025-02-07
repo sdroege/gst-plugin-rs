@@ -6,7 +6,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    sync::{atomic::AtomicI32, Arc},
+};
 
 use gst::prelude::*;
 use gst::MessageView;
@@ -114,7 +117,7 @@ fn test(
     check_streams: bool,
     iterations_change: Option<IterationsChange>,
     cache: bool,
-) -> (Vec<gst::Message>, u32, u64) {
+) -> (Vec<gst::Message>, u32, u64, bool) {
     init();
 
     let total_len: gst::ClockTime = medias.iter().map(|t| t.len * (iterations as u64)).sum();
@@ -149,7 +152,10 @@ fn test(
         src_pad.link(&mq_sink).unwrap();
     });
 
+    let eos_count = Arc::new(AtomicI32::new(0));
+
     let pipeline_weak = pipeline.downgrade();
+    let eos_count_clone = eos_count.clone();
     mq.connect_pad_added(move |_mq, pad| {
         if pad.direction() != gst::PadDirection::Src {
             return;
@@ -167,6 +173,18 @@ fn test(
         sink.sync_state_with_parent().unwrap();
 
         pad.link(&sink.static_pad("sink").unwrap()).unwrap();
+
+        let eos_count_clone = eos_count_clone.clone();
+        pad.add_probe(
+            gst::PadProbeType::EVENT_DOWNSTREAM,
+            move |_pad, info| match info.data {
+                Some(gst::PadProbeData::Event(ref ev)) if ev.type_() == gst::EventType::Eos => {
+                    eos_count_clone.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    gst::PadProbeReturn::Remove
+                }
+                _ => gst::PadProbeReturn::Ok,
+            },
+        );
     });
 
     pipeline.set_state(gst::State::Playing).unwrap();
@@ -176,10 +194,21 @@ fn test(
     let mut n_stream_start = 0;
 
     loop {
-        let msg = bus.iter_timed(gst::ClockTime::NONE).next().unwrap();
+        let msg = bus.iter_timed(gst::ClockTime::from_mseconds(100)).next();
+
+        // Wait for each stream to EOS rather than rely on the EOS message.
+        // Prevent races as our test files are really short, see https://gitlab.freedesktop.org/gstreamer/gstreamer/-/issues/4204
+        if eos_count.load(std::sync::atomic::Ordering::Relaxed) == n_streams as i32 {
+            // all streams EOS
+            break;
+        }
+
+        let Some(msg) = msg else {
+            continue;
+        };
 
         match msg.view() {
-            MessageView::Error(_) | MessageView::Eos(..) => {
+            MessageView::Error(_) => {
                 events.push(msg.clone());
                 break;
             }
@@ -280,15 +309,11 @@ fn test(
 
     let current_iteration = playlist.property::<u32>("current-iteration");
     let current_uri_index = playlist.property::<u64>("current-uri-index");
+    let eos = eos_count.load(std::sync::atomic::Ordering::Relaxed) == n_streams as i32;
 
     pipeline.set_state(gst::State::Null).unwrap();
 
-    (events, current_iteration, current_uri_index)
-}
-
-#[track_caller]
-fn assert_eos(msg: gst::Message) {
-    assert!(matches!(msg.view(), MessageView::Eos(_)));
+    (events, current_iteration, current_uri_index, eos)
 }
 
 #[track_caller]
@@ -334,25 +359,25 @@ fn assert_stream_selected(msg: gst::Message, n_streams: usize) -> gst::Object {
 
 #[test]
 fn single_audio() {
-    let (events, current_iteration, current_uri_index) =
+    let (_events, current_iteration, current_uri_index, eos) =
         test(vec![TestMedia::ogg()], 1, 1, true, None, false);
-    assert_eos(events.into_iter().last().unwrap());
+    assert!(eos);
     assert_eq!(current_iteration, 0);
     assert_eq!(current_uri_index, 0);
 }
 
 #[test]
 fn single_video() {
-    let (events, current_iteration, current_uri_index) =
+    let (_events, current_iteration, current_uri_index, eos) =
         test(vec![TestMedia::mkv()], 2, 1, true, None, false);
-    assert_eos(events.into_iter().last().unwrap());
+    assert!(eos);
     assert_eq!(current_iteration, 0);
     assert_eq!(current_uri_index, 0);
 }
 
 #[test]
 fn multi_audio() {
-    let (events, current_iteration, current_uri_index) = test(
+    let (_events, current_iteration, current_uri_index, eos) = test(
         vec![TestMedia::ogg(), TestMedia::ogg(), TestMedia::ogg()],
         1,
         1,
@@ -360,14 +385,14 @@ fn multi_audio() {
         None,
         false,
     );
-    assert_eos(events.into_iter().last().unwrap());
+    assert!(eos);
     assert_eq!(current_iteration, 0);
     assert_eq!(current_uri_index, 2);
 }
 
 #[test]
 fn multi_audio_video() {
-    let (events, current_iteration, current_uri_index) = test(
+    let (_events, current_iteration, current_uri_index, eos) = test(
         vec![TestMedia::mkv(), TestMedia::mkv()],
         2,
         1,
@@ -375,14 +400,14 @@ fn multi_audio_video() {
         None,
         false,
     );
-    assert_eos(events.into_iter().last().unwrap());
+    assert!(eos);
     assert_eq!(current_iteration, 0);
     assert_eq!(current_uri_index, 1);
 }
 
 #[test]
 fn iterations() {
-    let (events, current_iteration, current_uri_index) = test(
+    let (_events, current_iteration, current_uri_index, eos) = test(
         vec![TestMedia::mkv(), TestMedia::mkv()],
         2,
         2,
@@ -390,7 +415,7 @@ fn iterations() {
         None,
         false,
     );
-    assert_eos(events.into_iter().last().unwrap());
+    assert!(eos);
     assert_eq!(current_iteration, 1);
     assert_eq!(current_uri_index, 1);
 }
@@ -399,7 +424,7 @@ fn iterations() {
 // FIXME: racy: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/514
 #[ignore]
 fn nb_streams_increasing() {
-    let (events, current_iteration, current_uri_index) = test(
+    let (_events, current_iteration, current_uri_index, eos) = test(
         vec![TestMedia::ogg(), TestMedia::mkv()],
         2,
         1,
@@ -407,14 +432,14 @@ fn nb_streams_increasing() {
         None,
         false,
     );
-    assert_eos(events.into_iter().last().unwrap());
+    assert!(eos);
     assert_eq!(current_iteration, 0);
     assert_eq!(current_uri_index, 1);
 }
 
 #[test]
 fn missing_file() {
-    let (events, current_iteration, current_uri_index) = test(
+    let (events, current_iteration, current_uri_index, eos) = test(
         vec![TestMedia::ogg(), TestMedia::missing_file()],
         1,
         1,
@@ -426,13 +451,14 @@ fn missing_file() {
         events.into_iter().last().unwrap(),
         TestMedia::missing_file(),
     );
+    assert!(!eos);
     assert_eq!(current_iteration, 0);
     assert_eq!(current_uri_index, 0);
 }
 
 #[test]
 fn missing_http() {
-    let (events, current_iteration, current_uri_index) = test(
+    let (events, current_iteration, current_uri_index, eos) = test(
         vec![TestMedia::ogg(), TestMedia::missing_http()],
         1,
         1,
@@ -444,6 +470,7 @@ fn missing_http() {
         events.into_iter().last().unwrap(),
         TestMedia::missing_http(),
     );
+    assert!(!eos);
     assert_eq!(current_iteration, 0);
     assert_eq!(current_uri_index, 0);
 }
@@ -451,7 +478,7 @@ fn missing_http() {
 #[test]
 /// increase playlist iterations while it's playing
 fn increase_iterations() {
-    let (events, current_iteration, current_uri_index) = test(
+    let (_events, current_iteration, current_uri_index, eos) = test(
         vec![TestMedia::mkv()],
         2,
         4,
@@ -462,7 +489,7 @@ fn increase_iterations() {
         }),
         false,
     );
-    assert_eos(events.into_iter().last().unwrap());
+    assert!(eos);
     assert_eq!(current_iteration, 7);
     assert_eq!(current_uri_index, 0);
 }
@@ -472,7 +499,7 @@ fn increase_iterations() {
 // FIXME: racy: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/514
 #[ignore]
 fn decrease_iterations() {
-    let (events, current_iteration, current_uri_index) = test(
+    let (_events, current_iteration, current_uri_index, eos) = test(
         vec![TestMedia::mkv()],
         2,
         4,
@@ -483,7 +510,7 @@ fn decrease_iterations() {
         }),
         false,
     );
-    assert_eos(events.into_iter().last().unwrap());
+    assert!(eos);
     assert_eq!(current_iteration, 2);
     assert_eq!(current_uri_index, 0);
 }
@@ -491,7 +518,7 @@ fn decrease_iterations() {
 #[test]
 /// change an infinite playlist to a finite one
 fn infinite_to_finite() {
-    let (events, current_iteration, current_uri_index) = test(
+    let (_events, current_iteration, current_uri_index, eos) = test(
         vec![TestMedia::mkv()],
         2,
         0,
@@ -502,7 +529,7 @@ fn infinite_to_finite() {
         }),
         false,
     );
-    assert_eos(events.into_iter().last().unwrap());
+    assert!(eos);
     assert_eq!(current_iteration, 3);
     assert_eq!(current_uri_index, 0);
 }
@@ -510,9 +537,9 @@ fn infinite_to_finite() {
 #[test]
 /// cache HTTP playlist items
 fn cache() {
-    let (events, current_iteration, current_uri_index) =
+    let (_events, current_iteration, current_uri_index, eos) =
         test(vec![TestMedia::mkv_http()], 2, 3, true, None, true);
-    assert_eos(events.into_iter().last().unwrap());
+    assert!(eos);
     assert_eq!(current_iteration, 2);
     assert_eq!(current_uri_index, 0);
 }
