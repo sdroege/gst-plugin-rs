@@ -17,8 +17,13 @@ fn init() {
 fn test_vorbis() {
     init();
 
-    let src = "audiotestsrc num-buffers=100 samplesperbuffer=1024 wave=silence ! audio/x-raw,rate=48000,channels=2 ! vorbisenc";
-    // 45ms = a bit more than two vorbis frames of 1024 samples
+    // gst-launch-1.0 audiotestsrc num-buffers=100 samplesperbuffer=1024 wave=silence \
+    //   ! audio/x-raw,rate=48000,channels=2 ! vorbisenc ! gdppay ! filesink
+    const GDP_DATA: &[u8] = include_bytes!("audiotestsrc-silence-2ch-48kHz-vorbis.gdp").as_slice();
+
+    let buffers_source = Source::buffers_from_gdp(GDP_DATA);
+
+    // 45ms = a bit more than two vorbis frames of 1024 samples @ 48kHz
     let pay = "rtpvorbispay2 max-ptime=45000000";
     let depay = "rtpvorbisdepay2";
 
@@ -115,7 +120,7 @@ fn test_vorbis() {
         }
     }
 
-    run_test_pipeline(Source::Bin(src), pay, depay, expected_pay, expected_depay);
+    run_test_pipeline(buffers_source, pay, depay, expected_pay, expected_depay);
 }
 
 #[test]
