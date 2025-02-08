@@ -53,6 +53,8 @@ mod vp8;
 mod vp9;
 
 #[cfg(test)]
+mod gdp;
+#[cfg(test)]
 mod tests;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {

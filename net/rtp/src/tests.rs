@@ -14,6 +14,8 @@ use std::{
 
 use gst::prelude::*;
 
+use crate::gdp;
+
 /// Expected packet produced by the payloader
 #[derive(Debug, Clone)]
 pub struct ExpectedPacket {
@@ -179,6 +181,31 @@ pub enum Source<'a> {
     #[allow(dead_code)]
     Buffers(gst::Caps, Vec<gst::Buffer>),
     Bin(&'a str),
+}
+
+impl<'a> Source<'a> {
+    // Todo: Could write a custom gdpsrc element that sends the events too
+    pub fn buffers_from_gdp(gdp_data: &'a [u8]) -> Self {
+        use std::io::Cursor;
+
+        let caps = gdp::ItemIter::new(Cursor::new(&gdp_data))
+            .filter_map(|item| match item {
+                gdp::Item::Caps(caps) => Some(caps),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        let caps = caps.first().unwrap();
+
+        let buffers: Vec<_> = gdp::ItemIter::new(Cursor::new(&gdp_data))
+            .filter_map(|item| match item {
+                gdp::Item::Buffer(buf) => Some(buf),
+                _ => None,
+            })
+            .collect();
+
+        Self::Buffers(caps.clone(), buffers)
+    }
 }
 
 /// Pipeline wrapper to automatically set state to `Null` on drop
