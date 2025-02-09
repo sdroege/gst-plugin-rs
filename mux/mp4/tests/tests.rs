@@ -173,6 +173,44 @@ fn test_roundtrip_av1_aac() {
     })
 }
 
+fn test_uncompressed_with(format: &str, width: u32, height: u32, cb: impl FnOnce(&Path)) {
+    let Ok(pipeline) = gst::parse::launch(&format!(
+        "videotestsrc num-buffers=99 ! video/x-raw,format={format},width={width},height={height} ! mux. \
+         isomp4mux name=mux ! filesink name=sink"
+    )) else {
+        println!("could not build encoding pipeline");
+        return;
+    };
+    let pipeline = Pipeline(pipeline.downcast::<gst::Pipeline>().unwrap());
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let mut location = dir.path().to_owned();
+    location.push("test.mp4");
+
+    let sink = pipeline.by_name("sink").unwrap();
+    sink.set_property("location", location.to_str().expect("Non-UTF8 filename"));
+    pipeline.into_completion();
+
+    cb(&location)
+}
+
+fn test_roundtrip_uncompressed(video_format: &str, width: u32, height: u32) {
+    test_uncompressed_with(video_format, width, height, |location| {
+        let Ok(pipeline) = gst::parse::launch(
+            "filesrc name=src ! qtdemux name=demux \
+             demux.video_0 ! queue ! fakesink",
+        ) else {
+            panic!("could not build decoding pipeline")
+        };
+        let pipeline = Pipeline(pipeline.downcast::<gst::Pipeline>().unwrap());
+        pipeline
+            .by_name("src")
+            .unwrap()
+            .set_property("location", location.display().to_string());
+        pipeline.into_completion();
+    })
+}
+
 fn test_encode_uncompressed(video_format: &str, width: u32, height: u32) {
     let pipeline_text = format!("videotestsrc num-buffers=250 ! video/x-raw,format={format},width={width},height={height} ! isomp4mux ! filesink location={format}_{width}x{height}.mp4", format = video_format);
     let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
@@ -215,15 +253,23 @@ fn encode_uncompressed_rgb() {
 }
 
 #[test]
-fn encode_uncompressed_rgb_no_pad() {
+fn encode_uncompressed_rgb_row_align_0() {
     init();
     test_encode_uncompressed("RGB", 1280, 720);
+    test_roundtrip_uncompressed("RGB", 1280, 720);
 }
 
 #[test]
 fn encode_uncompressed_bgr() {
     init();
     test_encode_uncompressed("BGR", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_bgr_row_align_0() {
+    init();
+    test_encode_uncompressed("BGR", 1280, 720);
+    test_roundtrip_uncompressed("BGR", 1280, 720);
 }
 
 #[test]
@@ -245,6 +291,13 @@ fn encode_uncompressed_rgba() {
 }
 
 #[test]
+fn encode_uncompressed_rgba_row_align_0() {
+    init();
+    test_encode_uncompressed("RGBA", 1280, 720);
+    test_roundtrip_uncompressed("RGBA", 1280, 720);
+}
+
+#[test]
 fn encode_uncompressed_argb() {
     init();
     test_encode_uncompressed("ARGB", 1275, 713);
@@ -254,6 +307,13 @@ fn encode_uncompressed_argb() {
 fn encode_uncompressed_abgr() {
     init();
     test_encode_uncompressed("ABGR", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_abgr_row_align_0() {
+    init();
+    test_encode_uncompressed("ABGR", 1280, 720);
+    test_roundtrip_uncompressed("ABGR", 1280, 720);
 }
 
 #[test]
@@ -347,6 +407,13 @@ fn encode_uncompressed_v308() {
 fn encode_uncompressed_gray8() {
     init();
     test_encode_uncompressed("GRAY8", 1275, 713);
+}
+
+#[test]
+fn encode_uncompressed_gray8_row_align_0() {
+    init();
+    test_encode_uncompressed("GRAY8", 1280, 720);
+    test_roundtrip_uncompressed("GRAY8", 1280, 720);
 }
 
 #[test]
