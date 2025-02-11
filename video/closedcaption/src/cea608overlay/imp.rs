@@ -185,15 +185,17 @@ impl Cea608Overlay {
         }
 
         for triple in data.chunks_exact(3) {
-            let cc_type = triple[0] & 0x01;
+            let field = if (triple[0] & 0x80) == 0x80 { 0 } else { 1 };
+
             if state.selected_field.is_none() {
-                state.selected_field = Some(cc_type);
-                gst::info!(CAT, imp = self, "Selected field {} automatically", cc_type);
+                state.selected_field = Some(field);
+                gst::info!(CAT, imp = self, "Selected field {field} automatically");
             }
 
-            if Some(cc_type) != state.selected_field {
+            if Some(field) != state.selected_field {
                 continue;
             };
+
             match state.renderer.push_pair([triple[1], triple[2]]) {
                 Err(e) => {
                     gst::warning!(
