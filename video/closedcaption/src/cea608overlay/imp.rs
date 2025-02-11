@@ -426,10 +426,17 @@ impl ObjectImpl for Cea608Overlay {
                 let mut state = self.state.lock().unwrap();
 
                 settings.field = value.get().expect("type checked upstream");
+
+                let old_field = state.selected_field;
                 state.selected_field = match settings.field {
                     -1 => None,
                     val => Some(val as u8),
                 };
+
+                if state.selected_field != old_field {
+                    state.renderer.clear();
+                    state.composition = None;
+                }
             }
             "black-background" => {
                 let mut settings = self.settings.lock().unwrap();
