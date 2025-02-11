@@ -295,7 +295,7 @@ impl Cea708Overlay {
         }
 
         for triple in data.chunks_exact(3) {
-            let field = if triple[0] & 0x01 == 0x0 {
+            let field = if (triple[0] & 0x80) == 0x80 {
                 cea608_types::tables::Field::ONE
             } else {
                 cea608_types::tables::Field::TWO
