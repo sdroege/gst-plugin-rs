@@ -71,7 +71,7 @@
 use futures::prelude::*;
 use std::collections::HashMap;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, RwLock};
 use tokio::runtime;
@@ -230,7 +230,7 @@ impl Settings {
     fn set_xdg_cache(&mut self, xdg_cache: bool) {
         self.xdg_cache = xdg_cache;
         if xdg_cache {
-            let mut path = dirs::cache_dir().expect("Failed to find cache directory");
+            let mut path = gst::glib::user_cache_dir();
             path.push("gstreamer-dots");
             self.dot_dir = path.to_str().map(|s| s.to_string());
         }
@@ -630,19 +630,32 @@ impl PipelineSnapshot {
                 settings.dot_prefix.as_ref().map_or("", |s| s.as_str()),
                 pipeline.name(),
             );
-            gst::debug!(CAT, imp = self, "Writing {}", dot_path);
-            match std::fs::File::create(&dot_path) {
-                Ok(mut f) => {
-                    let data = pipeline.debug_to_dot_data(gst::DebugGraphDetails::all());
-                    if let Err(e) = f.write_all(data.as_bytes()) {
-                        gst::warning!(CAT, imp = self, "Failed to write {}: {}", dot_path, e);
-                    }
-                }
-                Err(e) => {
-                    gst::warning!(CAT, imp = self, "Failed to create {}: {}", dot_path, e);
-                }
+
+            let data = pipeline.debug_to_dot_data(gst::DebugGraphDetails::all());
+
+            if let Err(e) = self.write_dot_file_atomically(Path::new(&dot_path), data.as_bytes()) {
+                gst::warning!(CAT, imp = self, "Failed to write {}: {}", dot_path, e);
             }
         }
+    }
+
+    fn write_dot_file_atomically(&self, path: &Path, data: &[u8]) -> std::io::Result<()> {
+        // Create a temporary file in the same directory
+        let tmp_path = path.with_extension("dot.tmp");
+
+        // Write data to temporary file
+        {
+            let mut tmp_file = std::fs::File::create(&tmp_path)?;
+            tmp_file.write_all(data)?;
+
+            // Ensure all data is written to disk
+            tmp_file.sync_all()?;
+        }
+
+        // Atomically rename temporary file to target path
+        std::fs::rename(tmp_path, path)?;
+
+        Ok(())
     }
 
     #[cfg(unix)]
