@@ -47,6 +47,12 @@ enum TargetPassthroughState {
     Disabled,
 }
 
+#[derive(Debug)]
+enum PassthroughState {
+    Enabled,
+    Disabled,
+}
+
 /* One per language, including original */
 struct TranscriptionChannel {
     bin: gst::Bin,
@@ -812,6 +818,11 @@ impl TranscriberBin {
         state: &mut State,
         pad_state: &mut TranscriberSinkPadState,
     ) {
+        if matches!(pad_state.passthrough_state, PassthroughState::Enabled) {
+            gst::log!(CAT, obj = pad, "passthrough was already enabled");
+            return;
+        }
+
         gst::debug!(CAT, imp = self, "disabling transcription bin");
 
         let bin_sink_pad = state.transcription_bin.static_pad(&pad.name()).unwrap();
@@ -840,6 +851,9 @@ impl TranscriberBin {
             .transcription_bin
             .set_state(gst::State::Null)
             .unwrap();
+
+        pad_state.target_passthrough_state = TargetPassthroughState::None;
+        pad_state.passthrough_state = PassthroughState::Enabled;
     }
 
     fn enable_transcription_bin(
@@ -848,6 +862,11 @@ impl TranscriberBin {
         state: &mut State,
         pad_state: &mut TranscriberSinkPadState,
     ) {
+        if matches!(pad_state.passthrough_state, PassthroughState::Disabled) {
+            gst::log!(CAT, imp = sinkpad, "passthrough was already disabled");
+            return;
+        }
+
         gst::debug!(CAT, imp = sinkpad, "enabling transcription bin");
 
         for channel in pad_state.transcription_channels.values() {
@@ -886,6 +905,7 @@ impl TranscriberBin {
             .unwrap();
         audio_tee_pad.link(&transcription_sink_pad).unwrap();
         pad_state.target_passthrough_state = TargetPassthroughState::None;
+        pad_state.passthrough_state = PassthroughState::Disabled;
     }
 
     fn block_and_update(
@@ -936,7 +956,6 @@ impl TranscriberBin {
                         match pad_state.target_passthrough_state {
                             TargetPassthroughState::Enabled => {
                                 imp.disable_transcription_bin(pad, state, pad_state);
-                                pad_state.target_passthrough_state = TargetPassthroughState::None;
                                 // Now that we are done, make sure that this is reflected in our settings
                                 let notify = {
                                     let mut pad_settings = pad_imp.settings.lock().unwrap();
@@ -2500,6 +2519,7 @@ struct TranscriberSinkPadState {
     synthesis_channels: HashMap<String, CustomOutputChannel>,
     subtitle_channels: HashMap<String, CustomOutputChannel>,
     srcpad_name: Option<String>,
+    passthrough_state: PassthroughState,
     target_passthrough_state: TargetPassthroughState,
     serial: Option<u32>,
     language_tees: HashMap<String, gst::Element>,
@@ -2533,6 +2553,7 @@ impl TranscriberSinkPadState {
             synthesis_channels: HashMap::new(),
             subtitle_channels: HashMap::new(),
             srcpad_name: None,
+            passthrough_state: PassthroughState::Disabled,
             target_passthrough_state: TargetPassthroughState::None,
             serial: None,
             language_tees: HashMap::new(),
