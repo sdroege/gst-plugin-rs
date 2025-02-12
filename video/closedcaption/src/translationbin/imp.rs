@@ -64,6 +64,74 @@ pub struct TranslationBin {
 }
 
 impl TranslationBin {
+    fn prepare_translation_srcpad(
+        &self,
+        elem: &super::TranslationBin,
+        srcpad: &super::TranslationSrcPad,
+        input_language_code: &str,
+        translate_latency_ms: u32,
+        tee: &gst::Element,
+    ) -> Result<(), Error> {
+        let output_language_code = srcpad.imp().settings.lock().unwrap().language_code.clone();
+
+        let queue = gst::ElementFactory::make("queue").build()?;
+        let translator = gst::ElementFactory::make("awstranslate")
+            .property("input-language-code", input_language_code)
+            .property("output-language-code", output_language_code)
+            .build()?;
+
+        if translator.has_property_with_type("latency", u32::static_type()) {
+            translator.set_property("latency", translate_latency_ms);
+        }
+
+        elem.add_many([&queue, &translator])?;
+        queue.sync_state_with_parent()?;
+        translator.sync_state_with_parent()?;
+
+        tee.link(&queue)?;
+        queue.link(&translator)?;
+
+        srcpad.set_target(Some(
+            &translator
+                .static_pad("src")
+                .ok_or(anyhow!("No pad named src on translator"))?,
+        ))?;
+
+        let mut pad_state = srcpad.imp().state.lock().unwrap();
+
+        pad_state.queue = Some(queue);
+        pad_state.translator = Some(translator);
+
+        Ok(())
+    }
+
+    fn unprepare_translation_srcpad(
+        &self,
+        elem: &super::TranslationBin,
+        tee: &gst::Element,
+        srcpad: &super::TranslationSrcPad,
+    ) -> Result<(), Error> {
+        let (queue, translator) = {
+            let mut pad_state = srcpad.imp().state.lock().unwrap();
+
+            (
+                pad_state.queue.take().unwrap(),
+                pad_state.translator.take().unwrap(),
+            )
+        };
+
+        tee.unlink(&queue);
+
+        elem.remove_many([&queue, &translator])?;
+
+        srcpad.set_target(None::<&gst::Pad>)?;
+
+        let _ = queue.set_state(gst::State::Null);
+        let _ = translator.set_state(gst::State::Null);
+
+        Ok(())
+    }
+
     fn prepare(&self) -> Result<(), Error> {
         let (transcriber, srcpads) = {
             let state = self.state.lock().unwrap();
@@ -124,35 +192,13 @@ impl TranslationBin {
             .set_target(Some(&queue.static_pad("src").unwrap()))?;
 
         for srcpad in srcpads {
-            let output_language_code = srcpad.imp().settings.lock().unwrap().language_code.clone();
-
-            let queue = gst::ElementFactory::make("queue").build()?;
-            let translator = gst::ElementFactory::make("awstranslate")
-                .property("input-language-code", &language_code)
-                .property("output-language-code", output_language_code)
-                .build()?;
-
-            if translator.has_property_with_type("latency", u32::static_type()) {
-                translator.set_property("latency", translate_latency_ms);
-            }
-
-            obj.add_many([&queue, &translator])?;
-            queue.sync_state_with_parent()?;
-            translator.sync_state_with_parent()?;
-
-            tee.link(&queue)?;
-            queue.link(&translator)?;
-
-            srcpad.set_target(Some(
-                &translator
-                    .static_pad("src")
-                    .ok_or(anyhow!("No pad named src on translator"))?,
-            ))?;
-
-            let mut pad_state = srcpad.imp().state.lock().unwrap();
-
-            pad_state.queue = Some(queue);
-            pad_state.translator = Some(translator);
+            self.prepare_translation_srcpad(
+                &obj,
+                &srcpad,
+                &language_code,
+                translate_latency_ms,
+                &tee,
+            )?;
         }
 
         let mut state = self.state.lock().unwrap();
@@ -176,32 +222,18 @@ impl TranslationBin {
         };
         let obj = self.obj();
 
+        let srcpads = self.state.lock().unwrap().srcpads.clone();
+
+        for srcpad in srcpads {
+            self.unprepare_translation_srcpad(&obj, &tee, &srcpad)?;
+        }
+
         transcriber.unlink(&tee);
 
         obj.remove_many([&transcriber, &tee, &queue])?;
 
         self.audio_sinkpad.set_target(None::<&gst::Pad>)?;
         self.transcript_srcpad.set_target(None::<&gst::Pad>)?;
-
-        let srcpads = self.state.lock().unwrap().srcpads.clone();
-
-        for srcpad in srcpads {
-            let (queue, translator) = {
-                let mut pad_state = srcpad.imp().state.lock().unwrap();
-
-                (
-                    pad_state.queue.take().unwrap(),
-                    pad_state.translator.take().unwrap(),
-                )
-            };
-
-            obj.remove_many([&queue, &translator])?;
-
-            srcpad.set_target(None::<&gst::Pad>)?;
-
-            let _ = queue.set_state(gst::State::Null);
-            let _ = translator.set_state(gst::State::Null);
-        }
 
         let _ = transcriber.set_state(gst::State::Null);
         let _ = tee.set_state(gst::State::Null);
@@ -370,11 +402,40 @@ impl ElementImpl for TranslationBin {
 
         self.state.lock().unwrap().srcpads.insert(pad.clone());
 
+        if let Some(tee) = self.state.lock().unwrap().tee.clone() {
+            let Settings {
+                translate_latency,
+                language_code,
+                ..
+            } = self.settings.lock().unwrap().clone();
+
+            let translate_latency_ms = translate_latency.mseconds() as u32;
+
+            if let Err(err) = self.prepare_translation_srcpad(
+                &self.obj(),
+                &pad,
+                &language_code,
+                translate_latency_ms,
+                &tee,
+            ) {
+                gst::error!(CAT, "Failed to prepare translation source pad: {err:?}");
+                return None;
+            }
+        }
+
         Some(pad.upcast())
     }
 
     fn release_pad(&self, pad: &gst::Pad) {
-        let _ = self.state.lock().unwrap().srcpads.remove(pad);
+        let srcpad = self.state.lock().unwrap().srcpads.take(pad);
+
+        if let Some(srcpad) = srcpad {
+            if let Some(tee) = self.state.lock().unwrap().tee.clone() {
+                if let Err(err) = self.unprepare_translation_srcpad(&self.obj(), &tee, &srcpad) {
+                    gst::warning!(CAT, "Failed to unprepare translation source pad: {err:?}");
+                }
+            }
+        }
 
         let _ = self.obj().remove_pad(pad);
     }
@@ -511,7 +572,6 @@ impl ObjectImpl for TranslationSrcPad {
                 .nick("Language Code")
                 .blurb("The language of the output stream")
                 .default_value(Some(DEFAULT_OUTPUT_LANG_CODE))
-                .mutable_ready()
                 .build()]
         });
 
@@ -523,7 +583,11 @@ impl ObjectImpl for TranslationSrcPad {
             "language-code" => {
                 let language_code: String = value.get().expect("type checked upstream");
                 let mut settings = self.settings.lock().unwrap();
-                settings.language_code = language_code;
+                settings.language_code = language_code.clone();
+
+                if let Some(translator) = self.state.lock().unwrap().translator.as_ref() {
+                    translator.set_property("output-language-code", language_code);
+                }
             }
             _ => unimplemented!(),
         }

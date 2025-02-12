@@ -9669,7 +9669,7 @@
                         "construct-only": false,
                         "controllable": false,
                         "default": "fr-FR",
-                        "mutable": "ready",
+                        "mutable": "null",
                         "readable": true,
                         "type": "gchararray",
                         "writable": true
