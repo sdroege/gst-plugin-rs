@@ -117,6 +117,7 @@ struct State {
     discont: bool,
     seqnum: gst::Seqnum,
     chained_one: bool,
+    current_speaker: Option<String>,
 }
 
 impl Default for State {
@@ -131,6 +132,7 @@ impl Default for State {
             discont: false,
             seqnum: gst::Seqnum::next(),
             chained_one: false,
+            current_speaker: None,
         }
     }
 }
@@ -282,6 +284,8 @@ impl Translate {
                     }
                     "rstranscribe/speaker-change" => {
                         gst::debug!(CAT, imp = self, "speaker change, draining");
+                        self.state.lock().unwrap().current_speaker =
+                            s.get::<String>("speaker").ok();
                         true
                     }
                     _ => false,
@@ -446,7 +450,7 @@ impl Translate {
             )
         };
 
-        let (client, segment) = {
+        let (client, segment, speaker) = {
             let mut state = self.state.lock().unwrap();
 
             state
@@ -458,6 +462,7 @@ impl Translate {
             (
                 state.client.as_ref().unwrap().clone(),
                 state.segment.as_ref().unwrap().clone(),
+                state.current_speaker.clone(),
             )
         };
 
@@ -519,17 +524,6 @@ impl Translate {
 
         gst::log!(CAT, imp = self, "translation received: {translated_text}");
 
-        let s = gst::Structure::builder("awstranslate/raw")
-            .field("translation", &translated_text)
-            .field("arrival-time", self.obj().current_running_time())
-            .field("start-time", to_translate.start_pts())
-            .field("language-code", &output_lang)
-            .build();
-
-        let _ = self
-            .obj()
-            .post_message(gst::message::Element::builder(s).src(&*self.obj()).build());
-
         let upstream_latency = self.upstream_latency();
 
         let mut translated_items = match tokenization_method {
@@ -561,6 +555,8 @@ impl Translate {
 
         gst::log!(CAT, imp = self, "translated items: {translated_items:?}");
 
+        let mut translated_items_builder = gst::Structure::builder("awstranslate/items");
+
         for mut item in translated_items.drain(..) {
             if let Some((upstream_live, upstream_min, _)) = upstream_latency {
                 if upstream_live {
@@ -581,6 +577,8 @@ impl Translate {
                 }
             }
 
+            translated_items_builder = translated_items_builder.field(&item.content, item.pts);
+
             let mut buf = gst::Buffer::from_mut_slice(item.content.into_bytes());
             {
                 let buf_mut = buf.get_mut().unwrap();
@@ -595,6 +593,22 @@ impl Translate {
 
             output.push(TranslateOutput::Item(buf));
         }
+
+        let mut message_builder = gst::Structure::builder("awstranslate/raw")
+            .field("translation", translated_items_builder.build())
+            .field("arrival-time", self.obj().current_running_time())
+            .field("start-time", to_translate.start_pts())
+            .field("language-code", &output_lang);
+
+        if let Some(speaker) = speaker {
+            message_builder = message_builder.field("speaker", speaker);
+        }
+
+        let _ = self.obj().post_message(
+            gst::message::Element::builder(message_builder.build())
+                .src(&*self.obj())
+                .build(),
+        );
 
         Ok(output)
     }
