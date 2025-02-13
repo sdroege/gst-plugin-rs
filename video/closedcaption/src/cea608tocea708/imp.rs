@@ -530,7 +530,7 @@ impl Cea608ToCea708 {
                     return Ok(gst::FlowSuccess::Ok);
                 }
                 for triple in data.chunks_exact(3) {
-                    let field = (triple[0] & 0x80) >> 7;
+                    let field = if (triple[0] & 0x80) > 0 { 0 } else { 1 };
                     state.handle_cc_data(self, field, [triple[1], triple[2]]);
                 }
                 data.to_vec()
@@ -561,9 +561,9 @@ impl Cea608ToCea708 {
                 for pair in data.chunks_exact(2) {
                     state.handle_cc_data(self, field, [pair[0], pair[1]]);
                     if field == 0 {
-                        s334_1a_data.push(0x00);
-                    } else {
                         s334_1a_data.push(0x80);
+                    } else {
+                        s334_1a_data.push(0x00);
                     }
                     s334_1a_data.push(pair[0]);
                     s334_1a_data.push(pair[1]);
