@@ -167,6 +167,7 @@ plugins = {
   'webrtc': {
     'library': 'libgstrswebrtc',
     'examples': ['webrtcsink-stats-server'],
+    'option-features': ['aws', 'livekit']
   },
 
   'textahead': {'library': 'libgsttextahead'},
@@ -461,6 +462,14 @@ foreach plugin_name, details: plugins
   if not plugin_deps_found
     continue
   endif
+
+  option_features = []
+  foreach feature : details.get('option-features', [])
+    if get_option(f'@plugin_name@-@feature@').allowed()
+      message(f'Enabling @feature@ for @plugin_name@')
+      features += [feature]
+    endif
+  endforeach
 
   # Check if we have the required GStreamer version
   if details.has_key('gst-version') and not \

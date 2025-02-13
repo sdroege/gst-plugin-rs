@@ -38,6 +38,8 @@ option('relationmeta', type: 'feature', value: 'auto', description: 'Build relat
 option('rtsp', type: 'feature', value: 'auto', description: 'Build rtsp plugin')
 option('rtp', type: 'feature', value: 'auto', description: 'Build rtp plugin')
 option('webrtc', type: 'feature', value: 'auto', yield: true, description: 'Build webrtc plugin')
+option('webrtc-livekit', type: 'feature', value: 'disabled',  description: 'Build webrtc aws')
+option('webrtc-aws', type: 'feature', value: 'disabled', description: 'Build webrtc livekit')
 option('webrtchttp', type: 'feature', value: 'auto', description: 'Build webrtchttp plugin')
 option('quinn', type: 'feature', value: 'auto', description: 'Build quinn plugin')
 
