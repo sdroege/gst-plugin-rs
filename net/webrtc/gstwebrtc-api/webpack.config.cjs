@@ -9,20 +9,10 @@ const TerserWebpackPlugin = require("terser-webpack-plugin");
 const isDevServer = process.argv.includes("serve");
 /* eslint-enable */
 
-const config = {
+const commonConfig = {
   target: ["web", "es2017"],
   mode: isDevServer ? "development" : "production",
   devtool: isDevServer ? "eval" : "source-map",
-
-  entry: { "gstwebrtc-api": "./src/index.js" },
-  output: { filename: isDevServer ? "[name]-[contenthash].min.js" : `[name]-${packageVersion}.min.js` },
-
-  devServer: {
-    open: true,
-    static: false,
-    server: "http",
-    port: 9090
-  },
 
   optimization: {
     minimizer: [
@@ -39,15 +29,56 @@ const config = {
         }
       })
     ]
-  },
-
-  plugins: [new webpack.ProgressPlugin()]
+  }
 };
 
-config.plugins.push(new HtmlWebpackPlugin({
-  template: "./index.html",
-  inject: "head",
-  minify: false
-}));
+// Normal .js file for direct use in <script> tags
+const browserConfig = {
+  ...commonConfig,
+  entry: { "gstwebrtc-api": "./src/index.js" },
+  output: {
+    filename: isDevServer ? "[name]-[contenthash].min.js" : `[name]-${packageVersion}.min.js`
+  },
 
-module.exports = config; // eslint-disable-line no-undef
+  devServer: {
+    open: true,
+    static: false,
+    server: "http",
+    port: 9090
+  },
+
+  plugins: [
+    new webpack.ProgressPlugin(),
+    new HtmlWebpackPlugin({
+      template: "./index.html",
+      inject: "head",
+      minify: false,
+      scriptLoading: "blocking"
+    })
+  ]
+};
+
+// ESM module for use in any modern JS project
+const esmConfig = {
+  ...commonConfig,
+  entry: { "gstwebrtc-api": "./src/index.js" },
+  output: {
+    filename: `[name]-${packageVersion}.esm.js`,
+    chunkFormat: "module",
+    iife: false,
+    library: {
+      type: "module"
+    },
+    module: true
+  },
+
+  experiments: {
+    outputModule: true
+  },
+
+  plugins: [
+    new webpack.ProgressPlugin()
+  ]
+};
+
+module.exports = isDevServer ? browserConfig : [browserConfig, esmConfig]; // eslint-disable-line no-undef

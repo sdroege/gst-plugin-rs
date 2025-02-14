@@ -26,7 +26,9 @@
     "directory": "net/webrtc/gstwebrtc-api"
   },
   "type": "module",
-  "browser": "dist/gstwebrtc-api-${npm_package_version}.min.js",
+  "main": "./dist/gstwebrtc-api-2.0.0.min.js",
+  "module": "./dist/gstwebrtc-api-2.0.0.esm.js",
+  "types": "./types/index.d.ts",
   "files": [
     "dist/",
     "docs/",
@@ -66,7 +68,5 @@
     "prepack": "npm run test && npm run make",
     "start": "webpack serve",
     "postinstall": "patch-package"
-  },
-  "types": "types/index.d.ts",
-  "main": "src/index.js"
+  }
 }

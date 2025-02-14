@@ -37,11 +37,14 @@ Then build the bundle by calling:
 $ npm run make
 ```
 
-It will build and compress the code into the *dist/* folder, there you will find 2 files:
-- *gstwebrtc-api-[version].min.js* which is the only file you need to include into your web application to use the API.
-  It already embeds all dependencies.
+It will build and compress the code into the *dist/* folder, there you will find the following files:
+- *gstwebrtc-api-[version].min.js* which is the only file you need to include in your web application to use the API,
+  if you are manually adding the .js file to your webpage. It already embeds all dependencies.
 - *gstwebrtc-api-[version].min.js.map* which is useful for debugging the API code, you need to put it in the same
   folder as the API script on your web server if you want to allow debugging, else you can just ignore it.
+- *gstwebrtc-api-[version].esm.js, which is the ES module variant of this library. You probably don't need to use
+  this directly - it will be automatically used by your build system if you install this package via npm. See below.
+- *gstwebrtc-api-[version].esm.js.map* which is the source map for the ES module variant mentioned above.
 
 The API documentation is created into the *docs/* folder. It is automatically created when building the whole API.
 
