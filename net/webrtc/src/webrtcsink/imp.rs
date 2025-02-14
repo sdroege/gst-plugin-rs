@@ -495,12 +495,12 @@ struct PipelineWrapper(gst::Pipeline);
 // This is simply used to hold references to the inner items.
 #[allow(dead_code)]
 #[derive(Debug)]
-struct NavigationEventHandler((glib::SignalHandlerId, WebRTCDataChannel));
+struct NavigationEventHandler((Option<glib::SignalHandlerId>, WebRTCDataChannel));
 
 // Structure to generate arbitrary upstream events from a WebRTCDataChannel
 #[allow(dead_code)]
 #[derive(Debug)]
-struct ControlRequestHandler((glib::SignalHandlerId, WebRTCDataChannel));
+struct ControlRequestHandler((Option<glib::SignalHandlerId>, WebRTCDataChannel));
 
 /// Our instance structure
 #[derive(Default)]
@@ -1598,7 +1598,7 @@ impl NavigationEventHandler {
         let session_id = session_id.to_string();
 
         Self((
-            channel.connect_closure(
+            Some(channel.connect_closure(
                 "on-message-string",
                 false,
                 glib::closure!(
@@ -1610,9 +1610,16 @@ impl NavigationEventHandler {
                         create_navigation_event(element, msg, &session_id);
                     }
                 ),
-            ),
+            )),
             channel,
         ))
+    }
+}
+
+impl Drop for NavigationEventHandler {
+    fn drop(&mut self) {
+        self.0 .1.disconnect(self.0 .0.take().unwrap());
+        self.0 .1.close();
     }
 }
 
@@ -1631,7 +1638,7 @@ impl ControlRequestHandler {
         let session_id = session_id.to_string();
 
         Self((
-            channel.connect_closure(
+            Some(channel.connect_closure(
                 "on-message-string",
                 false,
                 glib::closure!(
@@ -1659,9 +1666,16 @@ impl ControlRequestHandler {
                         }
                     }
                 ),
-            ),
+            )),
             channel,
         ))
+    }
+}
+
+impl Drop for ControlRequestHandler {
+    fn drop(&mut self) {
+        self.0 .1.disconnect(self.0 .0.take().unwrap());
+        self.0 .1.close();
     }
 }
 
