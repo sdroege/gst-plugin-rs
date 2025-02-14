@@ -325,6 +325,9 @@ struct SessionInner {
     codecs: Option<BTreeMap<i32, Codec>>,
 
     stats_collection_handle: Option<tokio::task::JoinHandle<()>>,
+
+    navigation_handler: Option<NavigationEventHandler>,
+    control_events_handler: Option<ControlRequestHandler>,
 }
 
 #[derive(Clone)]
@@ -364,8 +367,6 @@ struct State {
     video_serial: u32,
     streams: HashMap<String, InputStream>,
     discoveries: HashMap<String, Vec<DiscoveryInfo>>,
-    navigation_handler: Option<NavigationEventHandler>,
-    control_events_handler: Option<ControlRequestHandler>,
     signaller_signals: Option<SignallerSignals>,
     finalizing_sessions: Arc<(Mutex<HashSet<String>>, Condvar)>,
     #[cfg(feature = "web_server")]
@@ -567,8 +568,6 @@ impl Default for State {
             video_serial: 0,
             streams: HashMap::new(),
             discoveries: HashMap::new(),
-            navigation_handler: None,
-            control_events_handler: None,
             signaller_signals: Default::default(),
             finalizing_sessions: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
             #[cfg(feature = "web_server")]
@@ -1292,6 +1291,8 @@ impl SessionInner {
             stats_sigid: None,
             codecs: None,
             stats_collection_handle: None,
+            navigation_handler: None,
+            control_events_handler: None,
         }
     }
 
@@ -2764,7 +2765,12 @@ impl BaseWebRTCSink {
             return;
         };
 
-        if let Some(ref handler) = state.control_events_handler {
+        let Some(session) = state.sessions.get(session_id) else {
+            return;
+        };
+        let session = session.0.lock().unwrap();
+
+        if let Some(ref handler) = session.control_events_handler {
             for meta in utils::serialize_meta(buffer, &settings.forward_metas) {
                 match serde_json::to_string(&utils::InfoMessage {
                     mid: mid.to_owned(),
@@ -3372,20 +3378,26 @@ impl BaseWebRTCSink {
 
                 if enable_data_channel_navigation {
                     let mut state = this.state.lock().unwrap();
-                    state.navigation_handler = Some(NavigationEventHandler::new(
-                        &element,
-                        &webrtcbin,
-                        &session_id,
-                    ));
+                    if let Some(session) = state.sessions.get_mut(&session_id) {
+                        let mut session = session.0.lock().unwrap();
+                        session.navigation_handler = Some(NavigationEventHandler::new(
+                            &element,
+                            &webrtcbin,
+                            &session_id,
+                        ));
+                    }
                 }
 
                 if enable_control_data_channel {
                     let mut state = this.state.lock().unwrap();
-                    state.control_events_handler = Some(ControlRequestHandler::new(
-                        &element,
-                        &webrtcbin,
-                        &session_id,
-                    ));
+                    if let Some(session) = state.sessions.get_mut(&session_id) {
+                        let mut session = session.0.lock().unwrap();
+                        session.control_events_handler = Some(ControlRequestHandler::new(
+                            &element,
+                            &webrtcbin,
+                            &session_id,
+                        ));
+                    }
                 }
 
                 // This is intentionally emitted with the pipeline in the Ready state,
