@@ -5746,6 +5746,8 @@ pub(super) mod aws {
 
     impl ObjectImpl for AwsKvsWebRTCSink {
         fn constructed(&self) {
+            self.parent_constructed();
+
             let element = self.obj();
             let ws = element
                 .upcast_ref::<crate::webrtcsink::BaseWebRTCSink>()
@@ -5795,6 +5797,8 @@ pub(super) mod whip {
 
     impl ObjectImpl for WhipWebRTCSink {
         fn constructed(&self) {
+            self.parent_constructed();
+
             let element = self.obj();
             let ws = element
                 .upcast_ref::<crate::webrtcsink::BaseWebRTCSink>()
@@ -5844,6 +5848,8 @@ pub(super) mod livekit {
 
     impl ObjectImpl for LiveKitWebRTCSink {
         fn constructed(&self) {
+            self.parent_constructed();
+
             let element = self.obj();
             let ws = element
                 .upcast_ref::<crate::webrtcsink::BaseWebRTCSink>()
@@ -5936,6 +5942,8 @@ pub(super) mod janus {
     #[glib::derived_properties]
     impl ObjectImpl for JanusVRWebRTCSink {
         fn constructed(&self) {
+            self.parent_constructed();
+
             let settings = self.settings.lock().unwrap();
             let element = self.obj();
             let ws = element
