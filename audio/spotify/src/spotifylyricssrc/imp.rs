@@ -117,6 +117,8 @@ impl ObjectImpl for SpotifyLyricsSrc {
     }
 
     fn constructed(&self) {
+        self.parent_constructed();
+
         self.obj().set_format(gst::Format::Time);
     }
 }
