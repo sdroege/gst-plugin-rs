@@ -9,7 +9,7 @@
 use either::Either;
 
 use crate::parser_utils::{digits, digits_range, end_of_line, timecode, TimeCode};
-use winnow::{error::StrContext, PResult, Parser};
+use winnow::{error::StrContext, ModalParser, ModalResult, Parser};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MccLine<'a> {
@@ -37,7 +37,7 @@ pub struct MccParser {
 }
 
 /// Parser for the MCC header
-fn header<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
+fn header<'a>(s: &mut &'a [u8]) -> ModalResult<MccLine<'a>> {
     use winnow::combinator::{alt, opt};
     use winnow::token::literal;
 
@@ -54,9 +54,8 @@ fn header<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
 
 /// Parser for an MCC comment, i.e. a line starting with `//`. We don't return the actual comment
 /// text as it's irrelevant for us.
-fn comment<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
-    use winnow::combinator::rest;
-    use winnow::token::literal;
+fn comment<'a>(s: &mut &'a [u8]) -> ModalResult<MccLine<'a>> {
+    use winnow::token::{literal, rest};
 
     (literal("//"), rest)
         .map(|_| MccLine::Comment)
@@ -65,7 +64,7 @@ fn comment<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
 }
 
 /// Parser for the MCC UUID line.
-fn uuid<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
+fn uuid<'a>(s: &mut &'a [u8]) -> ModalResult<MccLine<'a>> {
     use winnow::token::{literal, take_while};
 
     (
@@ -79,7 +78,7 @@ fn uuid<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
 }
 
 /// Parser for the MCC Time Code Rate line.
-fn time_code_rate<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
+fn time_code_rate<'a>(s: &mut &'a [u8]) -> ModalResult<MccLine<'a>> {
     use winnow::combinator::opt;
     use winnow::token::literal;
 
@@ -95,7 +94,7 @@ fn time_code_rate<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
 }
 
 /// Parser for generic MCC metadata lines in the form `key=value`.
-fn metadata<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
+fn metadata<'a>(s: &mut &'a [u8]) -> ModalResult<MccLine<'a>> {
     use winnow::token::{one_of, take_while};
 
     (
@@ -110,7 +109,7 @@ fn metadata<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
 }
 
 /// Parser that accepts only an empty line
-fn empty_line<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
+fn empty_line<'a>(s: &mut &'a [u8]) -> ModalResult<MccLine<'a>> {
     end_of_line
         .map(|_| MccLine::Empty)
         .context(StrContext::Label("invalid empty line"))
@@ -122,7 +121,7 @@ fn empty_line<'a>(s: &mut &'a [u8]) -> PResult<MccLine<'a>> {
 ///
 /// It returns an `Either` of the single hex encoded byte or the short-cut byte sequence as a
 /// static byte slice.
-fn mcc_payload_item(s: &mut &[u8]) -> PResult<Either<u8, &'static [u8]>> {
+fn mcc_payload_item(s: &mut &[u8]) -> ModalResult<Either<u8, &'static [u8]>> {
     use winnow::combinator::alt;
     use winnow::stream::AsChar;
     use winnow::token::{literal, take_while};
@@ -210,7 +209,7 @@ fn mcc_payload_item(s: &mut &[u8]) -> PResult<Either<u8, &'static [u8]>> {
 }
 
 /// Parser for the whole MCC payload with conversion to the underlying byte values.
-fn mcc_payload(s: &mut &[u8]) -> PResult<Vec<u8>> {
+fn mcc_payload(s: &mut &[u8]) -> ModalResult<Vec<u8>> {
     use winnow::combinator::repeat;
 
     repeat(1.., mcc_payload_item)
@@ -228,13 +227,13 @@ fn mcc_payload(s: &mut &[u8]) -> PResult<Vec<u8>> {
 /// Parser for a MCC caption line in the form `timecode\tpayload`.
 fn caption<'a>(
     parse_payload: bool,
-) -> impl Parser<&'a [u8], MccLine<'a>, winnow::error::ContextError> {
+) -> impl ModalParser<&'a [u8], MccLine<'a>, winnow::error::ContextError> {
     use winnow::combinator::opt;
     use winnow::token::{one_of, take_while};
 
     fn parse<'a>(
         parse_payload: bool,
-    ) -> impl Parser<&'a [u8], Option<Vec<u8>>, winnow::error::ContextError> {
+    ) -> impl ModalParser<&'a [u8], Option<Vec<u8>>, winnow::error::ContextError> {
         move |s: &mut &'a [u8]| {
             if parse_payload {
                 mcc_payload.map(Some).parse_next(s)

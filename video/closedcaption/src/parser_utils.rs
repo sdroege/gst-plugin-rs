@@ -6,7 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use winnow::{error::StrContext, PResult, Parser};
+use winnow::{error::StrContext, ModalParser, ModalResult, Parser};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TimeCode {
@@ -18,7 +18,7 @@ pub struct TimeCode {
 }
 
 /// Parser for parsing a run of ASCII, decimal digits and converting them into a `u32`
-pub fn digits(s: &mut &[u8]) -> PResult<u32> {
+pub fn digits(s: &mut &[u8]) -> ModalResult<u32> {
     use winnow::stream::AsChar;
     use winnow::token::take_while;
 
@@ -32,7 +32,7 @@ pub fn digits(s: &mut &[u8]) -> PResult<u32> {
 /// in the allowed range.
 pub fn digits_range<'a, R: std::ops::RangeBounds<u32>>(
     range: R,
-) -> impl Parser<&'a [u8], u32, winnow::error::ContextError> {
+) -> impl ModalParser<&'a [u8], u32, winnow::error::ContextError> {
     move |s: &mut &'a [u8]| {
         digits
             .verify(|v| range.contains(v))
@@ -42,7 +42,7 @@ pub fn digits_range<'a, R: std::ops::RangeBounds<u32>>(
 }
 
 /// Parser for a timecode in the form `hh:mm:ss:fs`
-pub fn timecode(s: &mut &[u8]) -> PResult<TimeCode> {
+pub fn timecode(s: &mut &[u8]) -> ModalResult<TimeCode> {
     use winnow::token::one_of;
 
     (
@@ -66,7 +66,7 @@ pub fn timecode(s: &mut &[u8]) -> PResult<TimeCode> {
 }
 
 /// Parser that checks for EOF and optionally `\n` or `\r\n` before EOF
-pub fn end_of_line(s: &mut &[u8]) -> PResult<()> {
+pub fn end_of_line(s: &mut &[u8]) -> ModalResult<()> {
     use winnow::combinator::alt;
     use winnow::combinator::{eof, opt};
     use winnow::token::literal;
