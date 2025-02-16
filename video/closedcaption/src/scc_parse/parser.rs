@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::parser_utils::{end_of_line, timecode, TimeCode};
-use winnow::{error::StrContext, PResult, Parser};
+use winnow::{error::StrContext, ModalResult, Parser};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SccLine {
@@ -30,7 +30,7 @@ pub struct SccParser {
 }
 
 /// Parser for the SCC header
-fn header(s: &mut &[u8]) -> PResult<SccLine> {
+fn header(s: &mut &[u8]) -> ModalResult<SccLine> {
     use winnow::combinator::opt;
     use winnow::token::literal;
 
@@ -45,7 +45,7 @@ fn header(s: &mut &[u8]) -> PResult<SccLine> {
 }
 
 /// Parser that accepts only an empty line
-fn empty_line(s: &mut &[u8]) -> PResult<SccLine> {
+fn empty_line(s: &mut &[u8]) -> ModalResult<SccLine> {
     end_of_line
         .map(|_| SccLine::Empty)
         .context(StrContext::Label("invalid empty line"))
@@ -54,7 +54,7 @@ fn empty_line(s: &mut &[u8]) -> PResult<SccLine> {
 
 /// A single SCC payload item. This is ASCII hex encoded bytes.
 /// It returns an tuple of `(u8, u8)` of the hex encoded bytes.
-fn scc_payload_item(s: &mut &[u8]) -> PResult<(u8, u8)> {
+fn scc_payload_item(s: &mut &[u8]) -> ModalResult<(u8, u8)> {
     use winnow::stream::AsChar;
     use winnow::token::take_while;
 
@@ -77,7 +77,7 @@ fn scc_payload_item(s: &mut &[u8]) -> PResult<(u8, u8)> {
 }
 
 /// Parser for the whole SCC payload with conversion to the underlying byte values.
-fn scc_payload(s: &mut &[u8]) -> PResult<Vec<u8>> {
+fn scc_payload(s: &mut &[u8]) -> ModalResult<Vec<u8>> {
     use winnow::combinator::{alt, repeat};
     use winnow::token::literal;
 
@@ -98,7 +98,7 @@ fn scc_payload(s: &mut &[u8]) -> PResult<Vec<u8>> {
 }
 
 /// Parser for a SCC caption line in the form `timecode\tpayload`.
-fn caption(s: &mut &[u8]) -> PResult<SccLine> {
+fn caption(s: &mut &[u8]) -> ModalResult<SccLine> {
     use winnow::ascii::multispace0;
     use winnow::token::literal;
 
