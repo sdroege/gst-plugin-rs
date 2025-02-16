@@ -1463,8 +1463,8 @@ impl Session {
                 RequestEarlyRtcpResult::NotScheduled
             }
         } else {
-            let mut rng = rand::thread_rng();
-            self.next_early_rtcp_time = Some(now + t_dither_max.mul_f64(rng.gen()) + offset);
+            let mut rng = rand::rng();
+            self.next_early_rtcp_time = Some(now + t_dither_max.mul_f64(rng.random()) + offset);
             debug!("early RTCP scheduled at {:?}", self.next_early_rtcp_time);
             RequestEarlyRtcpResult::TimerReconsideration
         }
@@ -1588,21 +1588,21 @@ impl Session {
 }
 
 fn generate_cname() -> String {
-    let mut rng = rand::thread_rng();
-    let user = rng.gen::<u32>();
-    let host = rng.gen::<u32>();
+    let mut rng = rand::rng();
+    let user = rng.random::<u32>();
+    let host = rng.random::<u32>();
     format!("user{user}@{host:#}")
 }
 
 fn generate_ssrc() -> u32 {
-    let mut rng = rand::thread_rng();
-    rng.gen::<u32>()
+    let mut rng = rand::rng();
+    rng.random::<u32>()
 }
 
 fn rtcp_dither(dur: Duration) -> Duration {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     // need a factor in [0.5, 1.5]
-    let factor = rng.gen::<f64>();
+    let factor = rng.random::<f64>();
     dur.mul_f64(factor + 0.5)
 }
 
