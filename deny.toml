@@ -23,6 +23,7 @@ allow = [
   "Apache-2.0",
   "Apache-2.0 WITH LLVM-exception",
   "MPL-2.0",
+  "NCSA",
 ]
 confidence-threshold = 0.8
 
@@ -285,6 +286,30 @@ version = "2"
 [[bans.skip]]
 name = "core-foundation"
 version = "0.9"
+
+# Various crates depend on old zerocopy
+[[bans.skip]]
+name = "zerocopy"
+version = "0.7"
+
+# Various crates depend on old wasi
+[[bans.skip]]
+name = "wasi"
+version = "0.11"
+
+# Various crates depend on old rand
+[[bans.skip]]
+name = "rand_core"
+version = "0.6"
+[[bans.skip]]
+name = "rand_chacha"
+version = "0.3"
+[[bans.skip]]
+name = "rand"
+version = "0.8"
+[[bans.skip]]
+name = "getrandom"
+version = "0.2"
 
 [sources]
 unknown-registry = "deny"
