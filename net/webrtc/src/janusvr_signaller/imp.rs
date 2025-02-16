@@ -34,8 +34,8 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 fn transaction_id() -> String {
-    thread_rng()
-        .sample_iter(&rand::distributions::Alphanumeric)
+    rand::rng()
+        .sample_iter(&rand::distr::Alphanumeric)
         .map(char::from)
         .take(30)
         .collect()

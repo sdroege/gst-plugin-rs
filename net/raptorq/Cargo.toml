@@ -17,7 +17,7 @@ raptorq = "2"
 
 [dev-dependencies]
 gst-check = { workspace = true, features = ["v1_18"] }
-rand = "0.8"
+rand = "0.9"
 
 [lib]
 name = "gstraptorq"

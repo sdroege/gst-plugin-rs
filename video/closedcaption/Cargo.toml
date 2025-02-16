@@ -31,7 +31,7 @@ smallvec = "1"
 
 [dev-dependencies]
 pretty_assertions = "1"
-rand = { version = "0.8", features = ["small_rng"] }
+rand = { version = "0.9", features = ["small_rng"] }
 gst-check.workspace = true
 
 [lib]

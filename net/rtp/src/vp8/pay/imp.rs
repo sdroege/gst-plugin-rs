@@ -224,8 +224,8 @@ impl crate::basepay::RtpBasePay2Impl for RtpVp8Pay {
         let picture_id_offset = settings.picture_id_offset.unwrap_or_else(|| {
             use rand::Rng as _;
 
-            let mut rng = rand::thread_rng();
-            rng.gen::<u16>()
+            let mut rng = rand::rng();
+            rng.random::<u16>()
         });
 
         let picture_id = PictureId::new(settings.picture_id_mode, picture_id_offset);

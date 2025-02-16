@@ -146,13 +146,13 @@ impl RaptorqTest {
         h_dec.set_src_caps_str("application/x-rtp");
         h_dec_fec.set_src_caps(caps);
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         let input_buffers = (0..self.input_buffers)
             .map(|i| {
                 // payload size without RTP Header and ADUI Header
-                let size = rng.gen_range(1..self.mtu - 12 - 3);
-                let data = (0..size).map(|_| rng.gen()).collect::<Vec<u8>>();
+                let size = rng.random_range(1..self.mtu - 12 - 3);
+                let data = (0..size).map(|_| rng.random()).collect::<Vec<u8>>();
 
                 let mut buf = gst::Buffer::new_rtp_with_sizes(size as u32, 0, 0).unwrap();
                 {

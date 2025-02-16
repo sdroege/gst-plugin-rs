@@ -1090,7 +1090,7 @@ impl RtpBasePay2 {
         let ssrc_collision = self.ssrc_collision.lock().unwrap().take();
         if state.stream.is_none() {
             use rand::prelude::*;
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             let settings = self.settings.lock().unwrap();
 
             let pt = if settings.pt_set {
@@ -1101,11 +1101,13 @@ impl RtpBasePay2 {
             let ssrc = ssrc_collision
                 .or(settings.ssrc)
                 .or(caps_ssrc)
-                .unwrap_or_else(|| rng.gen::<u32>());
+                .unwrap_or_else(|| rng.random::<u32>());
             let timestamp_offset = settings
                 .timestamp_offset
-                .unwrap_or_else(|| rng.gen::<u32>());
-            let seqnum_offset = settings.seqnum_offset.unwrap_or_else(|| rng.gen::<u16>());
+                .unwrap_or_else(|| rng.random::<u32>());
+            let seqnum_offset = settings
+                .seqnum_offset
+                .unwrap_or_else(|| rng.random::<u16>());
             let stream = Stream {
                 pt,
                 ssrc,
@@ -1336,10 +1338,10 @@ impl RtpBasePay2 {
             suggested_ssrc
         } else {
             use rand::prelude::*;
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
 
             loop {
-                let new_ssrc = rng.gen::<u32>();
+                let new_ssrc = rng.random::<u32>();
                 if new_ssrc != stats.ssrc {
                     break new_ssrc;
                 }

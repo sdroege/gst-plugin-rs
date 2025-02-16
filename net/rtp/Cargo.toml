@@ -25,7 +25,7 @@ gio.workspace = true
 hex = "0.4.3"
 log = "0.4"
 once_cell.workspace = true
-rand = { version = "0.8", default-features = false, features = ["std", "std_rng" ] }
+rand = { version = "0.9", default-features = false, features = ["std", "std_rng" ] }
 rtp-types = { version = "0.1" }
 rtcp-types = { version = "0.1" }
 slab = "0.4.9"
