@@ -2763,6 +2763,7 @@ dependencies = [
  "gstreamer-pbutils",
  "gstreamer-video",
  "m3u8-rs",
+ "serial_test",
  "thiserror 2.0.11",
 ]
 

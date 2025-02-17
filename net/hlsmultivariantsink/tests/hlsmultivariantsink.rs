@@ -14,6 +14,7 @@
 use gio::prelude::*;
 use gst::prelude::*;
 use gsthlsmultivariantsink::{HlsMultivariantSinkMuxerType, HlsMultivariantSinkPlaylistType};
+use serial_test::serial;
 use std::io::Write;
 use std::str::FromStr;
 use std::sync::mpsc::SyncSender;
@@ -323,6 +324,7 @@ fn setup_signals(
 }
 
 #[test]
+#[serial]
 fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant() -> Result<(), ()> {
     init();
 
@@ -456,7 +458,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant() -> Resu
     assert!(eos);
 
     let mut actual_events = Vec::new();
-    while let Ok(event) = hls_events_receiver.recv_timeout(Duration::from_millis(1)) {
+    while let Ok(event) = hls_events_receiver.recv_timeout(Duration::from_secs(30)) {
         actual_events.push(event);
     }
     let expected_events = {
@@ -509,6 +511,7 @@ low/video.m3u8
 }
 
 #[test]
+#[serial]
 fn hlsmultivariantsink_multiple_audio_rendition_single_video_variant() -> Result<(), ()> {
     init();
 
@@ -618,7 +621,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_single_video_variant() -> Result
     assert!(eos);
 
     let mut actual_events = Vec::new();
-    while let Ok(event) = hls_events_receiver.recv_timeout(Duration::from_millis(1)) {
+    while let Ok(event) = hls_events_receiver.recv_timeout(Duration::from_secs(30)) {
         actual_events.push(event);
     }
     let expected_events = {
@@ -659,6 +662,7 @@ hi/video.m3u8
 }
 
 #[test]
+#[serial]
 fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result<(), ()> {
     init();
 
@@ -776,7 +780,7 @@ fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result
     assert!(eos);
 
     let mut actual_events = Vec::new();
-    while let Ok(event) = hls_events_receiver.recv_timeout(Duration::from_millis(1)) {
+    while let Ok(event) = hls_events_receiver.recv_timeout(Duration::from_secs(30)) {
         actual_events.push(event);
     }
     let expected_events = {
@@ -824,6 +828,7 @@ low/video.m3u8
 }
 
 #[test]
+#[serial]
 fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpegts(
 ) -> Result<(), ()> {
     init();
@@ -953,7 +958,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     assert!(eos);
 
     let mut actual_events = Vec::new();
-    while let Ok(event) = hls_events_receiver.recv_timeout(Duration::from_millis(1)) {
+    while let Ok(event) = hls_events_receiver.recv_timeout(Duration::from_secs(30)) {
         actual_events.push(event);
     }
     let expected_events = {
@@ -999,6 +1004,7 @@ low/video.m3u8
 }
 
 #[test]
+#[serial]
 fn hlsmultivariantsink_multiple_video_variant_with_mpegts_audio_video_muxed() -> Result<(), ()> {
     init();
 
@@ -1125,7 +1131,7 @@ fn hlsmultivariantsink_multiple_video_variant_with_mpegts_audio_video_muxed() ->
     assert!(eos);
 
     let mut actual_events = Vec::new();
-    while let Ok(event) = hls_events_receiver.recv_timeout(Duration::from_millis(1)) {
+    while let Ok(event) = hls_events_receiver.recv_timeout(Duration::from_secs(30)) {
         actual_events.push(event);
     }
     let expected_events = {
@@ -1164,6 +1170,7 @@ low-audio/audio-only.m3u8
 }
 
 #[test]
+#[serial]
 fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpegts_h265(
 ) -> Result<(), ()> {
     init();
@@ -1301,7 +1308,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     assert!(eos);
 
     let mut actual_events = Vec::new();
-    while let Ok(event) = hls_events_receiver.recv_timeout(Duration::from_millis(1)) {
+    while let Ok(event) = hls_events_receiver.recv_timeout(Duration::from_secs(30)) {
         actual_events.push(event);
     }
     let expected_events = {
