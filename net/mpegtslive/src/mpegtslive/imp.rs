@@ -365,6 +365,14 @@ impl State {
                 self.discont_pending = true;
             }
         } else {
+            let (cinternal, cexternal, cnum, cdenom) = imp.external_clock.calibration();
+            let base_external = gst::Clock::adjust_with_calibration(
+                observation_internal,
+                cinternal,
+                cexternal,
+                cnum,
+                cdenom,
+            );
             gst::debug!(
                 CAT,
                 imp = imp,
@@ -375,7 +383,13 @@ impl State {
             );
             new_pcr = MpegTsPcr::new(pcr);
             self.base_pcr = Some(new_pcr);
-            self.base_external = Some(observation_internal);
+            self.base_external = Some(base_external);
+            imp.external_clock
+                .set_calibration(observation_internal, base_external, 1, 1);
+            // Hack to flush out observations, we set the window-size to the
+            // same value
+            imp.external_clock
+                .set_window_size(imp.external_clock.window_size());
             self.discont_pending = true;
         }
         self.last_seen_pcr = Some(new_pcr);
