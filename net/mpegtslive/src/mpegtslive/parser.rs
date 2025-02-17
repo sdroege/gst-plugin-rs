@@ -40,9 +40,18 @@ impl SectionParser {
     /// Push PSI `payload`.
     ///
     /// After this call `parse()` until `None` is returned.
-    pub fn push(&mut self, header: &PacketHeader, payload: &[u8]) {
+    pub fn push(
+        &mut self,
+        header: &PacketHeader,
+        adaptation_field: Option<&AdaptionField>,
+
+        payload: &[u8],
+    ) {
         if header.pusi {
             self.clear();
+        } else if adaptation_field.is_some_and(|af| af.discontinuity_flag) {
+            // discontinuity_flag only defines that there is an expected discountinuity in the
+            // continuity counter but the actual data is continuous
         } else if self.cc.map_or(true, |cc| (cc + 1) & 0xf != header.cc) {
             self.clear();
             self.waiting_for_pusi = true;
@@ -414,9 +423,18 @@ impl PESParser {
     /// Push PES `payload`.
     ///
     /// After this call `parse()` until `None` is returned.
-    pub fn push(&mut self, header: &PacketHeader, payload: &[u8]) {
+    pub fn push(
+        &mut self,
+        header: &PacketHeader,
+        adaptation_field: Option<&AdaptionField>,
+
+        payload: &[u8],
+    ) {
         if header.pusi {
             self.clear();
+        } else if adaptation_field.is_some_and(|af| af.discontinuity_flag) {
+            // discontinuity_flag only defines that there is an expected discountinuity in the
+            // continuity counter but the actual data is continuous
         } else if self.cc.map_or(true, |cc| (cc + 1) & 0xf != header.cc) {
             self.clear();
             self.waiting_for_pusi = true;
@@ -634,6 +652,7 @@ impl FromBitStream for PacketHeader {
 
 #[derive(Debug, Clone)]
 pub struct AdaptionField {
+    pub discontinuity_flag: bool,
     pub pcr: Option<u64>,
     // Add other fields as needed
 }
@@ -645,7 +664,8 @@ impl FromBitStream for AdaptionField {
     where
         Self: Sized,
     {
-        r.skip(3).context("flags")?;
+        let discontinuity_flag = r.read_bit().context("discontinuity_flag")?;
+        r.skip(2).context("flags")?;
         let pcr_present = r.read_bit().context("pcr_present")?;
         r.skip(4).context("flags")?;
 
@@ -661,6 +681,9 @@ impl FromBitStream for AdaptionField {
 
         // Skip all other parts of the adaptation field for now
 
-        Ok(AdaptionField { pcr })
+        Ok(AdaptionField {
+            discontinuity_flag,
+            pcr,
+        })
     }
 }
