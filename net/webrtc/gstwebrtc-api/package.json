@@ -49,12 +49,12 @@
     "typescript": "5.7.3",
     "webpack": "5.88.2",
     "webpack-cli": "5.1.4",
-    "webpack-dev-server": "4.15.1"
+    "webpack-dev-server": "4.15.1",
+    "jsdoc-tsimport-plugin": "1.0.5"
   },
   "dependencies": {
-    "jsdoc-tsimport-plugin": "1.0.5",
-    "patch-package": "8.0.0",
-    "webrtc-adapter": "8.2.3"
+    "webrtc-adapter": "8.2.3",
+    "patch-package": "8.0.0"
   },
   "scripts": {
     "check": "eslint src",
