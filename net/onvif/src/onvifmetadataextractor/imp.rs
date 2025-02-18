@@ -206,6 +206,9 @@ impl OnvifMetadataExtractor {
 
         let remove = self.settings.lock().unwrap().remove_metadata;
 
+        let pts = buffer.pts();
+        let dts = buffer.dts();
+
         if let Ok(metas) =
             gst::meta::CustomMeta::from_mut_buffer(buffer.make_mut(), "OnvifXMLFrameMeta")
         {
@@ -213,7 +216,14 @@ impl OnvifMetadataExtractor {
 
             if let Ok(frames) = s.get::<gst::BufferList>("frames") {
                 frames.foreach(|meta_buf, _idx| {
-                    let res = self.meta_src_pad.push(meta_buf.clone());
+                    let mut buffer = meta_buf.clone();
+                    {
+                        let buffer = buffer.make_mut();
+                        buffer.set_dts(dts);
+                        buffer.set_pts(pts);
+                    }
+
+                    let res = self.meta_src_pad.push(buffer);
                     let _ = self
                         .flow_combiner
                         .lock()
