@@ -359,7 +359,12 @@ impl AggregatorImpl for OnvifMetadataCombiner {
             {
                 let buflist_mut = buflist.get_mut().unwrap();
 
-                for frame in state.meta_frames.drain(..) {
+                for mut frame in state.meta_frames.drain(..) {
+                    {
+                        let frame = frame.make_mut();
+                        frame.set_dts(None);
+                        frame.set_pts(None);
+                    }
                     buflist_mut.add(frame);
                 }
             }
