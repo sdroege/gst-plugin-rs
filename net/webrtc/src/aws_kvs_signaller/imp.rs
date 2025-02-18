@@ -85,7 +85,7 @@ pub struct Signaller {
 }
 
 impl Signaller {
-    fn handle_message(&self, msg: String) {
+    fn handle_message(&self, msg: async_tungstenite::tungstenite::Utf8Bytes) {
         if let Ok(msg) = serde_json::from_str::<p::IncomingMessage>(&msg) {
             match BASE64.decode(&msg.message_payload.into_bytes()) {
                 Ok(payload) => {
@@ -446,14 +446,14 @@ impl Signaller {
                             );
                         }
                         res = ws_sink
-                            .send(WsMessage::Text(serde_json::to_string(&msg).unwrap()))
+                            .send(WsMessage::text(serde_json::to_string(&msg).unwrap()))
                             .await;
                     }
                     Ok(None) => {
                         break;
                     }
                     Err(_) => {
-                        res = ws_sink.send(WsMessage::Ping(vec![])).await;
+                        res = ws_sink.send(WsMessage::Ping(Default::default())).await;
                     }
                 }
 

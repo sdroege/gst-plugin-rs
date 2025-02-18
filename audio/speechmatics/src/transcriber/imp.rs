@@ -655,7 +655,7 @@ impl TranscriberSrcPad {
                             gst::info!(CAT, imp = self, "Parsed translation {:?}", translation);
 
                             let s = gst::Structure::builder("speechmatics/raw")
-                                .field("translation", &text)
+                                .field("translation", &*text)
                                 .field("arrival-time", transcriber.current_running_time())
                                 .field("language-code", &language_code)
                                 .build();
@@ -675,7 +675,7 @@ impl TranscriberSrcPad {
                             if let Some(unsynced_pad) = unsynced_pad {
                                 if unsynced_pad.last_flow_result().is_ok() {
                                     let now = transcriber.current_running_time().unwrap();
-                                    let mut buf = gst::Buffer::from_mut_slice(text.into_bytes());
+                                    let mut buf = gst::Buffer::from_slice(text);
                                     {
                                         let buf_mut = buf.get_mut().unwrap();
 
@@ -754,7 +754,7 @@ impl TranscriberSrcPad {
                             );
 
                             let s = gst::Structure::builder("speechmatics/raw")
-                                .field("transcript", &text)
+                                .field("transcript", &*text)
                                 .field("arrival-time", transcriber.current_running_time())
                                 .field(
                                     "language-code",
@@ -783,7 +783,7 @@ impl TranscriberSrcPad {
                             if let Some(unsynced_pad) = unsynced_pad {
                                 if unsynced_pad.last_flow_result().is_ok() {
                                     let now = transcriber.current_running_time().unwrap();
-                                    let mut buf = gst::Buffer::from_mut_slice(text.into_bytes());
+                                    let mut buf = gst::Buffer::from_slice(text);
                                     {
                                         let buf_mut = buf.get_mut().unwrap();
 
@@ -1171,7 +1171,7 @@ impl Transcriber {
                 let data = buffer.map_readable().unwrap();
                 for chunk in data.chunks(8192) {
                     ws_sink
-                        .send(Message::Binary(chunk.to_vec()))
+                        .send(Message::binary(chunk.to_vec()))
                         .await
                         .map_err(|err| {
                             gst::error!(CAT, imp = self, "Failed sending packet: {}", err);
@@ -1186,7 +1186,7 @@ impl Transcriber {
                 };
                 let message = serde_json::to_string(&end_message).unwrap();
 
-                ws_sink.send(Message::Text(message)).await.map_err(|err| {
+                ws_sink.send(Message::text(message)).await.map_err(|err| {
                     gst::error!(CAT, imp = self, "Failed sending packet: {}", err);
                     gst::FlowError::Error
                 })?;
@@ -1378,7 +1378,7 @@ impl Transcriber {
         gst::debug!(CAT, imp = self, "Sending start message: {}", message);
 
         RUNTIME
-            .block_on(ws_sink.send(Message::Text(message)))
+            .block_on(ws_sink.send(Message::text(message)))
             .map_err(|err| {
                 gst::error!(CAT, imp = self, "Failed to send StartRecognition: {err}");
                 gst::error_msg!(

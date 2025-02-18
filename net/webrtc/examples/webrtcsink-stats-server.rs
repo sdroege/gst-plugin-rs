@@ -158,7 +158,7 @@ async fn run(args: Args) -> Result<(), Error> {
                 let stats = ws.property::<gst::Structure>("stats");
                 let stats = serialize_value(&stats.to_value()).unwrap();
                 debug!("Stats: {}", serde_json::to_string_pretty(&stats).unwrap());
-                let msg = WsMessage::Text(serde_json::to_string(&stats).unwrap());
+                let msg = WsMessage::text(serde_json::to_string(&stats).unwrap());
 
                 let listeners = state_clone.lock().unwrap().listeners.clone();
 
