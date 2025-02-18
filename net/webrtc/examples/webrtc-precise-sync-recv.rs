@@ -541,7 +541,7 @@ async fn connect_as_listener(
 
     let mut signaller_tx = Box::pin(ws_tx.sink_err_into::<anyhow::Error>().with(
         |msg: ToSignaller| {
-            future::ok(Message::Text(
+            future::ok(Message::text(
                 serde_json::to_string(&msg).expect("msg is serializable"),
             ))
         },

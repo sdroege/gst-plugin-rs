@@ -369,7 +369,7 @@ impl Signaller {
                             Some(msg) => {
                                 gst::log!(CAT, "Sending websocket message {:?}", msg);
                                 res = ws_sink
-                                    .send(WsMessage::Text(serde_json::to_string(&msg).unwrap()))
+                                    .send(WsMessage::text(serde_json::to_string(&msg).unwrap()))
                                     .await;
                             },
                             None => break,
@@ -391,7 +391,7 @@ impl Signaller {
                                     apisecret,
                                 });
                                 res = ws_sink
-                                    .send(WsMessage::Text(serde_json::to_string(&msg).unwrap()))
+                                    .send(WsMessage::text(serde_json::to_string(&msg).unwrap()))
                                     .await;
                         }
                     }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use anyhow::Error;
-use async_tungstenite::tungstenite::Message as WsMessage;
+use async_tungstenite::tungstenite::{Message as WsMessage, Utf8Bytes};
 use futures::channel::mpsc;
 use futures::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,7 @@ struct Peer {
 }
 
 struct State {
-    tx: Option<mpsc::Sender<(String, Option<String>)>>,
+    tx: Option<mpsc::Sender<(String, Option<Utf8Bytes>)>>,
     peers: HashMap<String, Peer>,
 }
 
@@ -48,7 +48,7 @@ impl Server {
     >(
         factory: Factory,
     ) -> Self {
-        let (tx, rx) = mpsc::channel::<(String, Option<String>)>(1000);
+        let (tx, rx) = mpsc::channel::<(String, Option<Utf8Bytes>)>(1000);
         let mut handler = factory(Box::pin(rx.filter_map(|(peer_id, msg)| async move {
             if let Some(msg) = msg {
                 match serde_json::from_str::<I>(&msg) {
@@ -147,14 +147,14 @@ impl Server {
                 {
                     Ok(Some(msg)) => {
                         trace!(this_id = %this_id_clone, "sending {}", msg);
-                        res = ws_sink.send(WsMessage::Text(msg)).await;
+                        res = ws_sink.send(WsMessage::text(msg)).await;
                     }
                     Ok(None) => {
                         break;
                     }
                     Err(_) => {
                         trace!(this_id = %this_id_clone, "timeout, sending ping");
-                        res = ws_sink.send(WsMessage::Ping(vec![])).await;
+                        res = ws_sink.send(WsMessage::Ping(Default::default())).await;
                     }
                 }
 
@@ -183,7 +183,8 @@ impl Server {
                             serde_json::json!({
                                 "type": "newPeer",
                             })
-                            .to_string(),
+                            .to_string()
+                            .into(),
                         ),
                     ))
                     .await
