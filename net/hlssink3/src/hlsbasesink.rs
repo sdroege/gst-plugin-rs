@@ -510,19 +510,30 @@ impl HlsBaseSink {
     where
         P: AsRef<path::Path>,
     {
-        let file = fs::File::create(location).map_err(move |err| {
-            let error_msg = gst::error_msg!(
-                gst::ResourceError::OpenWrite,
-                [
-                    "Could not open file {} for writing: {}",
-                    location.as_ref().to_str().unwrap(),
-                    err.to_string(),
-                ]
-            );
-            self.post_error_message(error_msg);
-            err.to_string()
-        })?;
-        Ok(gio::WriteOutputStream::new(file).upcast())
+        let file = gio::File::for_path(location);
+        // Open the file for writing, creating it if it doesn't exist
+        // Use replace() to write the content in atomic mode
+        // (writes to a temporary file and then atomically rename over the destination when the stream is closed)
+        let output_stream = file
+            .replace(
+                None,
+                false,
+                gio::FileCreateFlags::empty(),
+                None::<&gio::Cancellable>,
+            )
+            .map_err(move |err| {
+                let error_msg = gst::error_msg!(
+                    gst::ResourceError::OpenWrite,
+                    [
+                        "Could not open file {} for writing: {}",
+                        location.as_ref().to_str().unwrap(),
+                        err.to_string(),
+                    ]
+                );
+                self.post_error_message(error_msg);
+                err.to_string()
+            })?;
+        Ok(output_stream.upcast())
     }
 
     fn delete_fragment<P>(&self, location: &P)
