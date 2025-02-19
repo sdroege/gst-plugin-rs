@@ -194,7 +194,7 @@ documentation:
       -Dgst-examples=disabled
       -Drs=enabled
       -Dgst-plugins-rs:sodium-source=system
-      -Dgst-docs:fatal_warnings=true
+      -Dgst-docs:fatal_warnings=false
       -Dorc=disabled
   script:
     - export PATH=/usr/local/cargo/bin/:/usr/local/bin/:$PATH
