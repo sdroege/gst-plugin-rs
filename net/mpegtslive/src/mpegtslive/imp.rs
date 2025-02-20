@@ -420,10 +420,13 @@ impl State {
                             "Parsed PAT: {table_header:?} {table_syntax_section:?} {pat:?}"
                         );
 
-                        if pat.is_empty() {
+                        // Program number 0 is reserved for the NIT
+                        let num_non_nit_pats =
+                            pat.iter().filter(|pat| pat.program_num != 0).count();
+                        if num_non_nit_pats == 0 {
                             gst::warning!(CAT, imp = imp, "No programs in PAT");
                             continue;
-                        } else if pat.len() > 1 {
+                        } else if num_non_nit_pats > 1 {
                             gst::warning!(
                                     CAT,
                                     imp = imp,
@@ -431,7 +434,8 @@ impl State {
                                 );
                         }
 
-                        let selected_pat = &pat[0];
+                        // Get first non-NIT program here and select that
+                        let selected_pat = pat.iter().find(|pat| pat.program_num != 0).unwrap();
                         if header.pid == 0x00_00 && Some(selected_pat) != self.pat.as_ref() {
                             gst::trace!(
                                 CAT,
