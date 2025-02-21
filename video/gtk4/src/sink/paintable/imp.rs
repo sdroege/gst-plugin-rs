@@ -119,9 +119,9 @@ impl ObjectImpl for Paintable {
             "background-color" => {
                 let color = self.background_color.get();
 
-                let v = (f32::clamp(color.red() * 255.0, 0.0, 255.0) as u32) << 24
-                    | (f32::clamp(color.green() * 255.0, 0.0, 255.0) as u32) << 16
-                    | (f32::clamp(color.blue() * 255.0, 0.0, 255.0) as u32) << 8
+                let v = ((f32::clamp(color.red() * 255.0, 0.0, 255.0) as u32) << 24)
+                    | ((f32::clamp(color.green() * 255.0, 0.0, 255.0) as u32) << 16)
+                    | ((f32::clamp(color.blue() * 255.0, 0.0, 255.0) as u32) << 8)
                     | (f32::clamp(color.alpha() * 255.0, 0.0, 255.0) as u32);
 
                 v.to_value()
