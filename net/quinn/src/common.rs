@@ -171,11 +171,11 @@ pub fn set_varint<B: BufMut>(data: &mut B, val: u64) {
     if val < 2u64.pow(6) {
         data.put_u8(val as u8);
     } else if val < 2u64.pow(14) {
-        data.put_u16(0b01 << 14 | val as u16);
+        data.put_u16((0b01 << 14) | val as u16);
     } else if val < 2u64.pow(30) {
-        data.put_u32(0b10 << 30 | val as u32);
+        data.put_u32((0b10 << 30) | val as u32);
     } else if val < 2u64.pow(62) {
-        data.put_u64(0b11 << 62 | val);
+        data.put_u64((0b11 << 62) | val);
     } else {
         unreachable!("malformed varint");
     }

@@ -1613,7 +1613,7 @@ fn write_audio_sample_entry(
             (bitrate / 8000) as u16
         }
         "audio/x-flac" => with_flac_metadata(&stream.caps, |streaminfo, _| {
-            1 + (u16::from_be_bytes([streaminfo[16], streaminfo[17]]) >> 4 & 0b11111)
+            1 + ((u16::from_be_bytes([streaminfo[16], streaminfo[17]]) >> 4) & 0b11111)
         })
         .context("FLAC metadata error")?,
         _ => 16u16,

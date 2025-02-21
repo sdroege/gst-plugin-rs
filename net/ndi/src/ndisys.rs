@@ -307,7 +307,7 @@ pub struct NDIlib_audio_frame_v3_t {
 }
 
 #[cfg(feature = "advanced-sdk")]
-#[repr(packed)]
+#[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
 pub struct NDIlib_compressed_packet_t {
     pub version: u32,

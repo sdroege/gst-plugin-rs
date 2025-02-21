@@ -206,7 +206,7 @@ pub struct TocEntry {
 
 impl TocEntry {
     pub fn frame_header(&self) -> u8 {
-        self.frame_type << 3 | (self.frame_quality_indicator as u8) << 2
+        (self.frame_type << 3) | ((self.frame_quality_indicator as u8) << 2)
     }
 }
 
