@@ -7,4 +7,4 @@ declare class RemoteController extends EventTarget {
     sendControlRequest(request: object | string): number;
     close(): void;
 }
-import ConsumerSession from "./consumer-session.js";
+import type ConsumerSession from "./consumer-session.js";

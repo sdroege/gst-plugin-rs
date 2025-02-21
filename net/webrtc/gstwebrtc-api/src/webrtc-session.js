@@ -10,8 +10,9 @@
  */
 
 import SessionState from "./session-state.js";
-import ProducerSession from "./producer-session.js";
-import ClientSession from "./producer-session.js";
+
+/** @import ProducerSession from "./producer-session.js"; */
+/** @import ClientSession from "./producer-session.js"; */
 
 /**
  * Event name: "error".<br>

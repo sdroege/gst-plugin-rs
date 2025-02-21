@@ -10,7 +10,8 @@
  */
 
 import getKeysymString from "./keysyms.js";
-import ConsumerSession from "./consumer-session.js";
+
+/** @import ConsumerSession from "./consumer-session.js"; */
 
 const eventsNames = Object.freeze([
   "wheel",

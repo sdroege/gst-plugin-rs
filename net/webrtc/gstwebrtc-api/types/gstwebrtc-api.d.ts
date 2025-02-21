@@ -10,13 +10,13 @@ declare class GstWebRTCAPI {
     unregisterProducersListener(listener: ProducersListener): boolean;
     unregisterAllProducersListeners(): void;
     createConsumerSession(producerId: string): ConsumerSession;
-    createConsumerSessionWithOfferOptions(producerId: string, offerOptions: any): ConsumerSession;
+    createConsumerSessionWithOfferOptions(producerId: string, offerOptions: RTCOfferOptions): ConsumerSession;
 }
 declare namespace GstWebRTCAPI {
     export { SessionState };
 }
-import ProducerSession from "./producer-session.js";
-import ConsumerSession from "./consumer-session.js";
+import type ProducerSession from "./producer-session.js";
+import type ConsumerSession from "./consumer-session.js";
 import SessionState from "./session-state.js";
 
 /* Added manually */

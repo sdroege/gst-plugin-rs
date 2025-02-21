@@ -12,15 +12,18 @@
 import defaultConfig from "./config.js";
 import ComChannel from "./com-channel.js";
 import SessionState from "./session-state.js";
-import ConsumerSession from "./consumer-session.js";
-import ProducerSession from "./producer-session.js";
+
+/** @import ConsumerSession from "./consumer-session.js"; */
+/** @import ProducerSession from "./producer-session.js"; */
+/** @import GstWebRTCConfig from "./config.js"; */
+/** @import RTCOfferOptions from "typescript/lib/lib.dom.js"; */
 
 class GstWebRTCAPI {
   /**
    * @class GstWebRTCAPI
    * @classdesc The API entry point that manages a WebRTC.
    * @constructor
-   * @param {import('./config.js').GstWebRTCConfig} [userConfig] - The user configuration.<br>
+   * @param {GstWebRTCConfig} [userConfig] - The user configuration.<br>
    * Only the parameters different from the default ones need to be provided.
    */
   constructor(userConfig) {
