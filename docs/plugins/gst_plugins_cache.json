@@ -4197,6 +4197,42 @@
                         "type": "GstStructure",
                         "writable": true
                     },
+                    "init-segment-location": {
+                        "blurb": "Location of the init segment file to write for CMAF",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "playlist-location": {
+                        "blurb": "Location of the media playlist to write",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "segment-location": {
+                        "blurb": "Location of the media segment file to write",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "variant": {
                         "blurb": "Variant Stream",
                         "conditionally-available": false,

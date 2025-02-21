@@ -55,9 +55,9 @@ const DEFAULT_PLAYLIST_TYPE: HlsMultivariantSinkPlaylistType =
     HlsMultivariantSinkPlaylistType::Unspecified;
 const DEFAULT_SEND_KEYFRAME_REQUESTS: bool = true;
 const DEFAULT_TARGET_DURATION: u32 = 15;
-const DEFAULT_TS_LOCATION: &str = "segment%05d.ts";
 const DEFAULT_INIT_LOCATION: &str = "init%05d.mp4";
 const DEFAULT_CMAF_LOCATION: &str = "segment%05d.m4s";
+const DEFAULT_TS_LOCATION: &str = "segment%05d.ts";
 const DEFAULT_MULTIVARIANT_PLAYLIST_LOCATION: &str = "multivariant.m3u8";
 
 const SIGNAL_DELETE_FRAGMENT: &str = "delete-fragment";
@@ -476,13 +476,68 @@ fn hlssink_pad(
     }
 }
 
-fn hlssink_setup_paths(
+fn hlssink_setup_paths_absolute(
+    pad: &HlsMultivariantSinkPad,
+    hlssink: &gst::Element,
+    muxer_type: HlsMultivariantSinkMuxerType,
+) -> Result<(), gst::ErrorMessage> {
+    let pad_settings = pad.settings.lock().unwrap();
+
+    let playlist_location = pad_settings
+        .playlist_location
+        .clone()
+        .ok_or(gst::error_msg!(
+            gst::ResourceError::Failed,
+            ["Media playlist location not provided for absolute path"]
+        ))?;
+    let segment_location = pad_settings
+        .segment_location
+        .clone()
+        .ok_or(gst::error_msg!(
+            gst::ResourceError::Failed,
+            ["Media segment location not provided for absolute path"]
+        ))?;
+
+    gst::info!(
+        CAT,
+        imp = pad,
+        "Segment playlist: {playlist_location}, segment: {segment_location}"
+    );
+
+    hlssink.set_property("playlist-location", playlist_location);
+    hlssink.set_property("location", segment_location);
+
+    if muxer_type == HlsMultivariantSinkMuxerType::Cmaf {
+        let init_location = pad_settings
+            .init_segment_location
+            .clone()
+            .ok_or(gst::error_msg!(
+                gst::ResourceError::Failed,
+                ["Init segment location not provided for absolute path"]
+            ))?;
+        gst::info!(CAT, imp = pad, "Init location: {init_location}");
+        hlssink.set_property("init-location", init_location);
+    }
+
+    Ok(())
+}
+
+fn hlssink_setup_paths_relative(
     pad: &HlsMultivariantSinkPad,
     hlssink: &gst::Element,
     muxer_type: HlsMultivariantSinkMuxerType,
     multivariant_playlist_location: String,
     uri: String,
-) {
+) -> Result<(), gst::ErrorMessage> {
+    /*
+     * This function is for the convenience path where segment and media
+     * playlist paths are always considered to be relative to the
+     * multivariant playlist along with the `uri`.
+     *
+     * If multivariant playlist has the path `/tmp/hlssink/multivariant.m3u8`,
+     * in this case, a playlist path for a rendition or variant with an `uri`
+     * like `hi-audio/audio.m3u8` will map to `/tmp/hlssink/hi-audio/audio.m3u8`.
+     */
     let multivariant_playlist_parts: Vec<&str> =
         multivariant_playlist_location.split('/').collect();
     let segment_location = if multivariant_playlist_parts.len() == 1 {
@@ -495,18 +550,16 @@ fn hlssink_setup_paths(
     };
 
     let parts: Vec<&str> = segment_location.split('/').collect();
-    if parts.is_empty() {
+    if parts.len() == 1 {
         gst::error!(
             CAT,
             imp = pad,
             "URI must be relative to multivariant playlist"
         );
-        gst::element_error!(
-            pad.parent(),
+        return Err(gst::error_msg!(
             gst::ResourceError::Failed,
             ["URI must be relative to multivariant playlist"]
-        );
-        return;
+        ));
     }
 
     let segment_playlist_root = &parts[..parts.len() - 1].join("/");
@@ -531,6 +584,58 @@ fn hlssink_setup_paths(
             );
         }
     }
+
+    Ok(())
+}
+
+fn hlssink_setup_paths(
+    pad: &HlsMultivariantSinkPad,
+    hlssink: &gst::Element,
+    muxer_type: HlsMultivariantSinkMuxerType,
+    multivariant_playlist_location: String,
+    uri: String,
+) -> Result<(), gst::ErrorMessage> {
+    let pad_settings = pad.settings.lock().unwrap();
+    /*
+     * If any of these pad properties are set, we assume that the user
+     * wants to manually specify the absolute paths where the segment
+     * and media playlists are to be written instead of using a relative
+     * path to the multivariant playlist. Cannot have a mix of relative
+     * and absolute path for any of these properties.
+     *
+     * An element error will be triggered if only one of these are set.
+     */
+    if pad_settings.playlist_location.is_some()
+        || pad_settings.init_segment_location.is_some()
+        || pad_settings.segment_location.is_some()
+    {
+        gst::info!(
+            CAT,
+            imp = pad,
+            "Using provided absolute paths for media playlist and segments playlist:{:?} init_segment:{:?} segment: {:?}",
+            pad_settings.playlist_location,
+            pad_settings.init_segment_location,
+            pad_settings.segment_location
+        );
+
+        drop(pad_settings);
+        hlssink_setup_paths_absolute(pad, hlssink, muxer_type)
+    } else {
+        gst::info!(
+            CAT,
+            imp = pad,
+            "Using relative paths for media playlist and segments"
+        );
+
+        drop(pad_settings);
+        hlssink_setup_paths_relative(
+            pad,
+            hlssink,
+            muxer_type,
+            multivariant_playlist_location,
+            uri,
+        )
+    }
 }
 
 /*
@@ -553,33 +658,42 @@ fn is_alternate_rendition(s: &gst::Structure) -> bool {
  * a variant stream.
  */
 #[derive(Clone)]
-enum HlsMultivariantSinkPadSettings {
+enum HlsMultivariantSinkPadType {
     PadAlternative(AlternateRendition),
     PadVariant(Variant),
 }
 
-impl Default for HlsMultivariantSinkPadSettings {
+impl Default for HlsMultivariantSinkPadType {
     fn default() -> Self {
-        HlsMultivariantSinkPadSettings::PadVariant(Variant::default())
+        HlsMultivariantSinkPadType::PadVariant(Variant::default())
     }
 }
 
-impl From<gst::Structure> for HlsMultivariantSinkPadSettings {
+impl From<gst::Structure> for HlsMultivariantSinkPadType {
     fn from(s: gst::Structure) -> Self {
         match is_alternate_rendition(&s) {
-            true => HlsMultivariantSinkPadSettings::PadAlternative(AlternateRendition::from(s)),
-            false => HlsMultivariantSinkPadSettings::PadVariant(Variant::from(s)),
+            true => HlsMultivariantSinkPadType::PadAlternative(AlternateRendition::from(s)),
+            false => HlsMultivariantSinkPadType::PadVariant(Variant::from(s)),
         }
     }
 }
 
-impl From<HlsMultivariantSinkPadSettings> for gst::Structure {
-    fn from(obj: HlsMultivariantSinkPadSettings) -> Self {
+impl From<HlsMultivariantSinkPadType> for gst::Structure {
+    fn from(obj: HlsMultivariantSinkPadType) -> Self {
         match obj {
-            HlsMultivariantSinkPadSettings::PadAlternative(a) => Into::<gst::Structure>::into(a),
-            HlsMultivariantSinkPadSettings::PadVariant(v) => Into::<gst::Structure>::into(v),
+            HlsMultivariantSinkPadType::PadAlternative(a) => Into::<gst::Structure>::into(a),
+            HlsMultivariantSinkPadType::PadVariant(v) => Into::<gst::Structure>::into(v),
         }
     }
+}
+
+#[derive(Clone, Default)]
+struct HlsMultivariantSinkPadSettings {
+    sink: Option<gst::Element>,
+    pad_type: HlsMultivariantSinkPadType,
+    playlist_location: Option<String>,
+    init_segment_location: Option<String>,
+    segment_location: Option<String>,
 }
 
 #[derive(Default)]
@@ -607,6 +721,18 @@ impl ObjectImpl for HlsMultivariantSinkPad {
                     .nick("Variant")
                     .blurb("Variant Stream")
                     .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("playlist-location")
+                    .nick("Playlist location")
+                    .blurb("Location of the media playlist to write")
+                    .build(),
+                glib::ParamSpecString::builder("init-segment-location")
+                    .nick("Init segment location")
+                    .blurb("Location of the init segment file to write for CMAF")
+                    .build(),
+                glib::ParamSpecString::builder("segment-location")
+                    .nick("Segment location")
+                    .blurb("Location of the media segment file to write")
                     .build(),
             ]
         });
@@ -647,13 +773,20 @@ impl ObjectImpl for HlsMultivariantSinkPad {
 
                 elem.setup_hlssink(&hlssink, &elem_settings);
 
-                hlssink_setup_paths(
+                if let Err(e) = hlssink_setup_paths(
                     self,
                     &hlssink,
                     muxer_type,
                     elem_settings.multivariant_playlist_location.clone(),
                     rendition.uri.clone(),
-                );
+                ) {
+                    gst::element_error!(
+                        parent,
+                        gst::ResourceError::Settings,
+                        ["Failed to setup HLS paths {e:?}"]
+                    );
+                    return;
+                }
 
                 parent
                     .add(&hlssink)
@@ -674,7 +807,8 @@ impl ObjectImpl for HlsMultivariantSinkPad {
                 drop(state);
 
                 let mut settings = self.settings.lock().unwrap();
-                *settings = HlsMultivariantSinkPadSettings::PadAlternative(rendition);
+                settings.pad_type = HlsMultivariantSinkPadType::PadAlternative(rendition);
+                settings.sink = Some(hlssink);
             }
             "variant" => {
                 let s = value
@@ -710,13 +844,20 @@ impl ObjectImpl for HlsMultivariantSinkPad {
                 if !muxed {
                     elem.setup_hlssink(&hlssink, &elem_settings);
 
-                    hlssink_setup_paths(
+                    if let Err(e) = hlssink_setup_paths(
                         self,
                         &hlssink,
                         muxer_type,
                         elem_settings.multivariant_playlist_location.clone(),
                         variant.uri.clone(),
-                    );
+                    ) {
+                        gst::element_error!(
+                            parent,
+                            gst::ResourceError::Settings,
+                            ["Failed to setup HLS paths {e:?}"]
+                        );
+                        return;
+                    }
 
                     parent
                         .add(&hlssink)
@@ -746,7 +887,41 @@ impl ObjectImpl for HlsMultivariantSinkPad {
                 drop(state);
 
                 let mut settings = self.settings.lock().unwrap();
-                *settings = HlsMultivariantSinkPadSettings::PadVariant(variant);
+                settings.pad_type = HlsMultivariantSinkPadType::PadVariant(variant);
+                settings.sink = Some(hlssink);
+            }
+            "playlist-location" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.playlist_location = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream");
+
+                if let Some(ref sink) = settings.sink {
+                    sink.set_property("playlist-location", settings.playlist_location.clone());
+                }
+            }
+            "init-segment-location" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.init_segment_location = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream");
+
+                if let Some(ref sink) = settings.sink {
+                    /* See hlssink_name() */
+                    if sink.name().contains("hlscmafsink-") {
+                        sink.set_property("init-location", settings.init_segment_location.clone());
+                    }
+                }
+            }
+            "segment-location" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.segment_location = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream");
+
+                if let Some(ref sink) = settings.sink {
+                    sink.set_property("location", settings.segment_location.clone());
+                }
             }
             _ => unimplemented!(),
         }
@@ -757,8 +932,11 @@ impl ObjectImpl for HlsMultivariantSinkPad {
 
         match pspec.name() {
             "alternate-rendition" | "variant" => {
-                Into::<gst::Structure>::into(settings.clone()).to_value()
+                Into::<gst::Structure>::into(settings.pad_type.clone()).to_value()
             }
+            "playlist-location" => settings.playlist_location.to_value(),
+            "init-segment-location" => settings.init_segment_location.to_value(),
+            "segment-location" => settings.segment_location.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -1479,9 +1657,9 @@ impl HlsMultivariantSink {
 
             if is_mpegts && buffer.flags().contains(gst::BufferFlags::HEADER) {
                 let pad_settings = hlspad.imp().settings.lock().unwrap().to_owned();
-                let group_id = match pad_settings {
-                    HlsMultivariantSinkPadSettings::PadAlternative(ref a) => a.group_id.clone(),
-                    HlsMultivariantSinkPadSettings::PadVariant(ref v) => {
+                let group_id = match pad_settings.pad_type {
+                    HlsMultivariantSinkPadType::PadAlternative(ref a) => a.group_id.clone(),
+                    HlsMultivariantSinkPadType::PadVariant(ref v) => {
                         if let Some(group_id) = &v.video {
                             group_id.clone()
                         } else if let Some(group_id) = &v.audio {
@@ -1534,9 +1712,9 @@ impl HlsMultivariantSink {
              * stream, track the caps as per group id.
              */
             let pad_settings = hlspad.imp().settings.lock().unwrap().to_owned();
-            let group_id = match pad_settings {
-                HlsMultivariantSinkPadSettings::PadAlternative(ref a) => a.group_id.clone(),
-                HlsMultivariantSinkPadSettings::PadVariant(ref v) => {
+            let group_id = match pad_settings.pad_type {
+                HlsMultivariantSinkPadType::PadAlternative(ref a) => a.group_id.clone(),
+                HlsMultivariantSinkPadType::PadVariant(ref v) => {
                     if let Some(group_id) = &v.video {
                         group_id.clone()
                     } else if let Some(group_id) = &v.audio {

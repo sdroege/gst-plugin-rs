@@ -22,6 +22,10 @@ use std::sync::{mpsc, Arc, LazyLock, Mutex};
 use std::time::Duration;
 use std::{collections::HashSet, hash::Hash};
 
+const DEFAULT_TS_LOCATION: &str = "segment%05d.ts";
+const DEFAULT_INIT_LOCATION: &str = "init%05d.mp4";
+const DEFAULT_CMAF_LOCATION: &str = "segment%05d.m4s";
+
 fn is_playlist_events_eq<T>(a: &[T], b: &[T]) -> bool
 where
     T: Eq + Hash + std::fmt::Debug,
@@ -379,6 +383,262 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant() -> Resu
         .field("autoselect", false)
         .build();
     audio1_pad.set_property("alternate-rendition", r);
+    audio1_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/hi-audio/audio.m3u8".to_string(),
+    );
+    audio1_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/hi-audio/{DEFAULT_CMAF_LOCATION}"),
+    );
+    audio1_pad.set_property(
+        "init-segment-location",
+        format!("/tmp/hlssink/hi-audio/{DEFAULT_INIT_LOCATION}"),
+    );
+    pipeline.add(&audio_bin1).unwrap();
+    audio_bin1_pad.link(&audio1_pad).unwrap();
+
+    let audio_bin2 = audio_bin(128000).unwrap();
+    let audio_bin2_pad = audio_bin2.static_pad("src").unwrap();
+    let audio2_pad = hlsmultivariantsink.request_pad_simple("audio_%u").unwrap();
+    let r = gst::Structure::builder("audio2-rendition")
+        .field("media", "AUDIO")
+        .field("uri", "mid-audio/audio.m3u8")
+        .field("group_id", "aac")
+        .field("language", "fr")
+        .field("name", "French")
+        .field("default", false)
+        .field("autoselect", false)
+        .build();
+    audio2_pad.set_property("alternate-rendition", r);
+    audio2_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/mid-audio/audio.m3u8".to_string(),
+    );
+    audio2_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/mid-audio/{DEFAULT_CMAF_LOCATION}"),
+    );
+    audio2_pad.set_property(
+        "init-segment-location",
+        format!("/tmp/hlssink/mid-audio/{DEFAULT_INIT_LOCATION}"),
+    );
+    pipeline.add(&audio_bin2).unwrap();
+    audio_bin2_pad.link(&audio2_pad).unwrap();
+
+    let video_bin1 = video_bin(1920, 1080, 30, 2500, false, false).unwrap();
+    let video_bin1_pad = video_bin1.static_pad("src").unwrap();
+    let video1_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
+    let v = gst::Structure::builder("video1-variant")
+        .field("uri", "hi/video.m3u8")
+        .field("audio", "aac")
+        .field("bandwidth", 2500)
+        .build();
+    video1_pad.set_property("variant", v);
+    video1_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/hi/video.m3u8".to_string(),
+    );
+    video1_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/hi/{DEFAULT_CMAF_LOCATION}"),
+    );
+    video1_pad.set_property(
+        "init-segment-location",
+        format!("/tmp/hlssink/hi/{DEFAULT_INIT_LOCATION}"),
+    );
+    pipeline.add(&video_bin1).unwrap();
+    video_bin1_pad.link(&video1_pad).unwrap();
+
+    let video_bin2 = video_bin(1280, 720, 30, 1500, false, false).unwrap();
+    let video_bin2_pad = video_bin2.static_pad("src").unwrap();
+    let video2_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
+    let v = gst::Structure::builder("video2-variant")
+        .field("uri", "mid/video.m3u8")
+        .field("audio", "aac")
+        .field("bandwidth", 1500)
+        .build();
+    video2_pad.set_property("variant", v);
+    video2_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/mid/video.m3u8".to_string(),
+    );
+    video2_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/mid/{DEFAULT_CMAF_LOCATION}"),
+    );
+    video2_pad.set_property(
+        "init-segment-location",
+        format!("/tmp/hlssink/mid/{DEFAULT_INIT_LOCATION}"),
+    );
+    pipeline.add(&video_bin2).unwrap();
+    video_bin2_pad.link(&video2_pad).unwrap();
+
+    let video_bin3 = video_bin(640, 360, 24, 700, false, false).unwrap();
+    let video_bin3_pad = video_bin3.static_pad("src").unwrap();
+    let video3_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
+    let v = gst::Structure::builder("video2-variant")
+        .field("uri", "low/video.m3u8")
+        .field("audio", "aac")
+        .field("bandwidth", 700)
+        .build();
+    video3_pad.set_property("variant", v);
+    video3_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/low/video.m3u8".to_string(),
+    );
+    video3_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/low/{DEFAULT_CMAF_LOCATION}"),
+    );
+    video3_pad.set_property(
+        "init-segment-location",
+        format!("/tmp/hlssink/low/{DEFAULT_INIT_LOCATION}"),
+    );
+    pipeline.add(&video_bin3).unwrap();
+    video_bin3_pad.link(&video3_pad).unwrap();
+
+    pipeline.set_state(gst::State::Playing).unwrap();
+
+    let mut eos = false;
+    let bus = pipeline.bus().unwrap();
+    while let Some(msg) = bus.timed_pop(gst::ClockTime::NONE) {
+        use gst::MessageView;
+        match msg.view() {
+            MessageView::Eos(..) => {
+                eos = true;
+                break;
+            }
+            MessageView::Error(e) => gst::error!(CAT, "hlsmultivariantsink error: {}", e),
+            _ => (),
+        }
+    }
+
+    pipeline.debug_to_dot_file_with_ts(
+        gst::DebugGraphDetails::all(),
+        "multiple_audio_rendition_multiple_video_variant",
+    );
+
+    pipeline.set_state(gst::State::Null).unwrap();
+    assert!(eos);
+
+    let mut actual_events = Vec::new();
+    while let Ok(event) = hls_events_receiver.recv_timeout(Duration::from_secs(30)) {
+        actual_events.push(event);
+    }
+    let expected_events = {
+        use self::HlsSinkEvent::*;
+        vec![
+            GetMultivariantPlaylistStream("/tmp/hlssink/multivariant.m3u8".to_string()),
+            GetInitStream("/tmp/hlssink/hi/init00000.mp4".to_string()),
+            GetInitStream("/tmp/hlssink/mid/init00000.mp4".to_string()),
+            GetInitStream("/tmp/hlssink/low/init00000.mp4".to_string()),
+            GetInitStream("/tmp/hlssink/hi-audio/init00000.mp4".to_string()),
+            GetInitStream("/tmp/hlssink/mid-audio/init00000.mp4".to_string()),
+            GetPlaylistStream("/tmp/hlssink/hi/video.m3u8".to_string()),
+            GetPlaylistStream("/tmp/hlssink/mid/video.m3u8".to_string()),
+            GetPlaylistStream("/tmp/hlssink/low/video.m3u8".to_string()),
+            GetPlaylistStream("/tmp/hlssink/hi-audio/audio.m3u8".to_string()),
+            GetPlaylistStream("/tmp/hlssink/mid-audio/audio.m3u8".to_string()),
+            GetFragmentStream("/tmp/hlssink/hi/segment00000.m4s".to_string()),
+            GetFragmentStream("/tmp/hlssink/hi/segment00001.m4s".to_string()),
+            GetFragmentStream("/tmp/hlssink/mid/segment00000.m4s".to_string()),
+            GetFragmentStream("/tmp/hlssink/mid/segment00001.m4s".to_string()),
+            GetFragmentStream("/tmp/hlssink/low/segment00000.m4s".to_string()),
+            GetFragmentStream("/tmp/hlssink/low/segment00001.m4s".to_string()),
+            GetFragmentStream("/tmp/hlssink/hi-audio/segment00000.m4s".to_string()),
+            GetFragmentStream("/tmp/hlssink/hi-audio/segment00001.m4s".to_string()),
+            GetFragmentStream("/tmp/hlssink/mid-audio/segment00000.m4s".to_string()),
+            GetFragmentStream("/tmp/hlssink/mid-audio/segment00001.m4s".to_string()),
+        ]
+    };
+    assert!(is_playlist_events_eq(&expected_events, &actual_events));
+
+    let contents = multivariant_playlist_content.lock().unwrap();
+
+    #[rustfmt::skip]
+        assert_eq!(
+            r###"#EXTM3U
+#EXT-X-VERSION:4
+#EXT-X-MEDIA:TYPE=AUDIO,URI="hi-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="en",NAME="English",DEFAULT=YES
+#EXT-X-MEDIA:TYPE=AUDIO,URI="mid-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="fr",NAME="French"
+#EXT-X-STREAM-INF:BANDWIDTH=2500,CODECS="avc1.64001E,avc1.64001F,avc1.640028,mp4a.40.2",AUDIO="aac"
+hi/video.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=1500,CODECS="avc1.64001E,avc1.64001F,avc1.640028,mp4a.40.2",AUDIO="aac"
+mid/video.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=700,CODECS="avc1.64001E,avc1.64001F,avc1.640028,mp4a.40.2",AUDIO="aac"
+low/video.m3u8
+"###,
+            contents.to_string()
+        );
+
+    Ok(())
+}
+
+#[ignore]
+#[test]
+#[serial]
+fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_relative_path(
+) -> Result<(), ()> {
+    /*
+     * For this test, we do not set the playlist and segment location on the pad. The sink
+     * will figure out and use relative path to the multivariant playlist.
+     *
+     * In this case, a playlist path like `hi-audio/audio.m3u8` will map to
+     * `/tmp/hlssink/hi-audio/audio.m3u8`.
+     */
+    init();
+
+    let pipeline = gst::Pipeline::with_name("hlsmultivariantsink_pipeline");
+
+    let hlsmultivariantsink = gst::ElementFactory::make("hlsmultivariantsink")
+        .name("test_hlsmultivariantsink")
+        .property(
+            "multivariant-playlist-location",
+            "/tmp/hlssink/multivariant.m3u8",
+        )
+        .property("target-duration", 2u32)
+        .property("playlist-length", 2u32)
+        .property("max-files", 2u32)
+        .build()
+        .expect("Must be able to instantiate hlsmultivariantsink");
+
+    hlsmultivariantsink.set_property("playlist-type", HlsMultivariantSinkPlaylistType::Event);
+    let pl_type: HlsMultivariantSinkPlaylistType = hlsmultivariantsink.property("playlist-type");
+    assert_eq!(pl_type, HlsMultivariantSinkPlaylistType::Event);
+
+    hlsmultivariantsink.set_property_from_str("playlist-type", "unspecified");
+
+    let muxer_type: HlsMultivariantSinkMuxerType = hlsmultivariantsink.property("muxer-type");
+    assert_eq!(muxer_type, HlsMultivariantSinkMuxerType::Cmaf);
+
+    pipeline.add(&hlsmultivariantsink).unwrap();
+
+    let (hls_events_sender, hls_events_receiver) = mpsc::sync_channel(100);
+    let multivariant_playlist_content = Arc::new(Mutex::new(String::from("")));
+    let playlist_content = Arc::new(Mutex::new(String::from("")));
+
+    setup_signals(
+        &hlsmultivariantsink,
+        hls_events_sender.clone(),
+        multivariant_playlist_content.clone(),
+        playlist_content.clone(),
+        HlsMultivariantSinkMuxerType::Cmaf,
+    );
+
+    let audio_bin1 = audio_bin(256000).unwrap();
+    let audio_bin1_pad = audio_bin1.static_pad("src").unwrap();
+    let audio1_pad = hlsmultivariantsink.request_pad_simple("audio_%u").unwrap();
+    let r = gst::Structure::builder("audio1-rendition")
+        .field("media", "AUDIO")
+        .field("uri", "hi-audio/audio.m3u8")
+        .field("group_id", "aac")
+        .field("language", "en")
+        .field("name", "English")
+        .field("default", true)
+        .field("autoselect", false)
+        .build();
+    audio1_pad.set_property("alternate-rendition", r);
     pipeline.add(&audio_bin1).unwrap();
     audio_bin1_pad.link(&audio1_pad).unwrap();
 
@@ -557,6 +817,18 @@ fn hlsmultivariantsink_multiple_audio_rendition_single_video_variant() -> Result
     let audio_bin1 = audio_bin(256000).unwrap();
     let audio_bin1_pad = audio_bin1.static_pad("src").unwrap();
     let audio1_pad = hlsmultivariantsink.request_pad_simple("audio_%u").unwrap();
+    audio1_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/hi-audio/audio.m3u8".to_string(),
+    );
+    audio1_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/hi-audio/{DEFAULT_CMAF_LOCATION}"),
+    );
+    audio1_pad.set_property(
+        "init-segment-location",
+        format!("/tmp/hlssink/hi-audio/{DEFAULT_INIT_LOCATION}"),
+    );
     let r = gst::Structure::builder("audio1-rendition")
         .field("media", "AUDIO")
         .field("uri", "hi-audio/audio.m3u8")
@@ -573,6 +845,18 @@ fn hlsmultivariantsink_multiple_audio_rendition_single_video_variant() -> Result
     let audio_bin2 = audio_bin(128000).unwrap();
     let audio_bin2_pad = audio_bin2.static_pad("src").unwrap();
     let audio2_pad = hlsmultivariantsink.request_pad_simple("audio_%u").unwrap();
+    audio2_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/mid-audio/audio.m3u8".to_string(),
+    );
+    audio2_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/mid-audio/{DEFAULT_CMAF_LOCATION}"),
+    );
+    audio2_pad.set_property(
+        "init-segment-location",
+        format!("/tmp/hlssink/mid-audio/{DEFAULT_INIT_LOCATION}"),
+    );
     let r = gst::Structure::builder("audio2-rendition")
         .field("media", "AUDIO")
         .field("uri", "mid-audio/audio.m3u8")
@@ -589,6 +873,18 @@ fn hlsmultivariantsink_multiple_audio_rendition_single_video_variant() -> Result
     let video_bin1 = video_bin(1920, 1080, 30, 2500, false, false).unwrap();
     let video_bin1_pad = video_bin1.static_pad("src").unwrap();
     let video1_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
+    video1_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/hi/video.m3u8".to_string(),
+    );
+    video1_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/hi/{DEFAULT_CMAF_LOCATION}"),
+    );
+    video1_pad.set_property(
+        "init-segment-location",
+        format!("/tmp/hlssink/hi/{DEFAULT_INIT_LOCATION}"),
+    );
     let v = gst::Structure::builder("video1-variant")
         .field("uri", "hi/video.m3u8")
         .field("audio", "aac")
@@ -709,6 +1005,18 @@ fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result
     let audio_bin1 = audio_bin(256000).unwrap();
     let audio_bin1_pad = audio_bin1.static_pad("src").unwrap();
     let audio1_pad = hlsmultivariantsink.request_pad_simple("audio_%u").unwrap();
+    audio1_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/hi-audio/audio.m3u8".to_string(),
+    );
+    audio1_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/hi-audio/{DEFAULT_CMAF_LOCATION}"),
+    );
+    audio1_pad.set_property(
+        "init-segment-location",
+        format!("/tmp/hlssink/hi-audio/{DEFAULT_INIT_LOCATION}"),
+    );
     let r = gst::Structure::builder("audio1-rendition")
         .field("media", "AUDIO")
         .field("uri", "hi-audio/audio.m3u8")
@@ -725,6 +1033,18 @@ fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result
     let video_bin1 = video_bin(1920, 1080, 30, 2500, false, false).unwrap();
     let video_bin1_pad = video_bin1.static_pad("src").unwrap();
     let video1_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
+    video1_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/hi/video.m3u8".to_string(),
+    );
+    video1_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/hi/{DEFAULT_CMAF_LOCATION}"),
+    );
+    video1_pad.set_property(
+        "init-segment-location",
+        format!("/tmp/hlssink/hi/{DEFAULT_INIT_LOCATION}"),
+    );
     let v = gst::Structure::builder("video1-variant")
         .field("uri", "hi/video.m3u8")
         .field("audio", "aac")
@@ -737,6 +1057,18 @@ fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result
     let video_bin2 = video_bin(1280, 720, 30, 1500, false, false).unwrap();
     let video_bin2_pad = video_bin2.static_pad("src").unwrap();
     let video2_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
+    video2_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/mid/video.m3u8".to_string(),
+    );
+    video2_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/mid/{DEFAULT_CMAF_LOCATION}"),
+    );
+    video2_pad.set_property(
+        "init-segment-location",
+        format!("/tmp/hlssink/mid/{DEFAULT_INIT_LOCATION}"),
+    );
     let v = gst::Structure::builder("video2-variant")
         .field("uri", "mid/video.m3u8")
         .field("audio", "aac")
@@ -749,6 +1081,18 @@ fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result
     let video_bin3 = video_bin(640, 360, 24, 700, false, false).unwrap();
     let video_bin3_pad = video_bin3.static_pad("src").unwrap();
     let video3_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
+    video3_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/low/video.m3u8".to_string(),
+    );
+    video3_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/low/{DEFAULT_CMAF_LOCATION}"),
+    );
+    video3_pad.set_property(
+        "init-segment-location",
+        format!("/tmp/hlssink/low/{DEFAULT_INIT_LOCATION}"),
+    );
     let v = gst::Structure::builder("video2-variant")
         .field("uri", "low/video.m3u8")
         .field("audio", "aac")
@@ -872,6 +1216,14 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     let audio_bin1 = audio_bin(256000).unwrap();
     let audio_bin1_pad = audio_bin1.static_pad("src").unwrap();
     let audio1_pad = hlsmultivariantsink.request_pad_simple("audio_%u").unwrap();
+    audio1_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/hi-audio/audio.m3u8".to_string(),
+    );
+    audio1_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/hi-audio/{DEFAULT_TS_LOCATION}"),
+    );
     let r = gst::Structure::builder("audio1-rendition")
         .field("media", "AUDIO")
         .field("uri", "hi-audio/audio.m3u8")
@@ -888,6 +1240,14 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     let audio_bin2 = audio_bin(128000).unwrap();
     let audio_bin2_pad = audio_bin2.static_pad("src").unwrap();
     let audio2_pad = hlsmultivariantsink.request_pad_simple("audio_%u").unwrap();
+    audio2_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/mid-audio/audio.m3u8".to_string(),
+    );
+    audio2_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/mid-audio/{DEFAULT_TS_LOCATION}"),
+    );
     let r = gst::Structure::builder("audio2-rendition")
         .field("media", "AUDIO")
         .field("uri", "mid-audio/audio.m3u8")
@@ -904,6 +1264,14 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     let video_bin1 = video_bin(1920, 1080, 30, 2500, false, false).unwrap();
     let video_bin1_pad = video_bin1.static_pad("src").unwrap();
     let video1_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
+    video1_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/hi/video.m3u8".to_string(),
+    );
+    video1_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/hi/{DEFAULT_TS_LOCATION}"),
+    );
     let v = gst::Structure::builder("video1-variant")
         .field("uri", "hi/video.m3u8")
         .field("audio", "aac")
@@ -916,6 +1284,14 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     let video_bin2 = video_bin(1280, 720, 30, 1500, false, false).unwrap();
     let video_bin2_pad = video_bin2.static_pad("src").unwrap();
     let video2_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
+    video2_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/mid/video.m3u8".to_string(),
+    );
+    video2_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/mid/{DEFAULT_TS_LOCATION}"),
+    );
     let v = gst::Structure::builder("video2-variant")
         .field("uri", "mid/video.m3u8")
         .field("audio", "aac")
@@ -928,6 +1304,14 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     let video_bin3 = video_bin(640, 360, 24, 700, false, false).unwrap();
     let video_bin3_pad = video_bin3.static_pad("src").unwrap();
     let video3_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
+    video3_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/low/video.m3u8".to_string(),
+    );
+    video3_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/low/{DEFAULT_TS_LOCATION}"),
+    );
     let v = gst::Structure::builder("video3-variant")
         .field("uri", "low/video.m3u8")
         .field("audio", "aac")
@@ -1048,6 +1432,14 @@ fn hlsmultivariantsink_multiple_video_variant_with_mpegts_audio_video_muxed() ->
     let video_bin1 = video_bin(1920, 1080, 30, 2500, false, false).unwrap();
     let video_bin1_pad = video_bin1.static_pad("src").unwrap();
     let video1_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
+    video1_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/hi/video.m3u8".to_string(),
+    );
+    video1_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/hi/{DEFAULT_TS_LOCATION}"),
+    );
     let v = gst::Structure::builder("video1-variant")
         .field("uri", "hi/video.m3u8")
         .field("bandwidth", 2500)
@@ -1060,6 +1452,14 @@ fn hlsmultivariantsink_multiple_video_variant_with_mpegts_audio_video_muxed() ->
     let video_bin2 = video_bin(1280, 720, 30, 1500, false, false).unwrap();
     let video_bin2_pad = video_bin2.static_pad("src").unwrap();
     let video2_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
+    video2_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/mid/video.m3u8".to_string(),
+    );
+    video2_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/mid/{DEFAULT_TS_LOCATION}"),
+    );
     let v = gst::Structure::builder("video2-variant")
         .field("uri", "mid/video.m3u8")
         .field("bandwidth", 1500)
@@ -1077,6 +1477,14 @@ fn hlsmultivariantsink_multiple_video_variant_with_mpegts_audio_video_muxed() ->
     let audio_bin1 = audio_bin(256000).unwrap();
     let audio_bin1_pad = audio_bin1.static_pad("src").unwrap();
     let audio1_pad = hlsmultivariantsink.request_pad_simple("audio_%u").unwrap();
+    audio1_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/hi/video.m3u8".to_string(),
+    );
+    audio1_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/hi/{DEFAULT_TS_LOCATION}"),
+    );
     let v = gst::Structure::builder("audio1-variant")
         .field("uri", "hi/video.m3u8")
         .field("bandwidth", 256000)
@@ -1089,6 +1497,14 @@ fn hlsmultivariantsink_multiple_video_variant_with_mpegts_audio_video_muxed() ->
     let audio_bin2 = audio_bin(128000).unwrap();
     let audio_bin2_pad = audio_bin2.static_pad("src").unwrap();
     let audio2_pad = hlsmultivariantsink.request_pad_simple("audio_%u").unwrap();
+    audio2_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/mid/video.m3u8".to_string(),
+    );
+    audio2_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/mid/{DEFAULT_TS_LOCATION}"),
+    );
     let v = gst::Structure::builder("audio2-variant")
         .field("uri", "mid/video.m3u8")
         .field("bandwidth", 128000)
@@ -1102,6 +1518,14 @@ fn hlsmultivariantsink_multiple_video_variant_with_mpegts_audio_video_muxed() ->
     let audio_bin3 = audio_bin(64000).unwrap();
     let audio_bin3_pad = audio_bin3.static_pad("src").unwrap();
     let audio3_pad = hlsmultivariantsink.request_pad_simple("audio_%u").unwrap();
+    audio3_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/low-audio/audio-only.m3u8".to_string(),
+    );
+    audio3_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/low-audio/{DEFAULT_TS_LOCATION}"),
+    );
     let v = gst::Structure::builder("audio3-variant")
         .field("uri", "low-audio/audio-only.m3u8")
         .field("bandwidth", 64000)
@@ -1224,6 +1648,14 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     let audio_bin1 = audio_bin(256000).unwrap();
     let audio_bin1_pad = audio_bin1.static_pad("src").unwrap();
     let audio1_pad = hlsmultivariantsink.request_pad_simple("audio_%u").unwrap();
+    audio1_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/hi-audio/audio.m3u8".to_string(),
+    );
+    audio1_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/hi-audio/{DEFAULT_TS_LOCATION}"),
+    );
     let r = gst::Structure::builder("audio1-rendition")
         .field("media", "AUDIO")
         .field("uri", "hi-audio/audio.m3u8")
@@ -1240,6 +1672,14 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     let audio_bin2 = audio_bin(128000).unwrap();
     let audio_bin2_pad = audio_bin2.static_pad("src").unwrap();
     let audio2_pad = hlsmultivariantsink.request_pad_simple("audio_%u").unwrap();
+    audio2_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/mid-audio/audio.m3u8".to_string(),
+    );
+    audio2_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/mid-audio/{DEFAULT_TS_LOCATION}"),
+    );
     let r = gst::Structure::builder("audio2-rendition")
         .field("media", "AUDIO")
         .field("uri", "mid-audio/audio.m3u8")
@@ -1256,6 +1696,14 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     let video_bin1 = video_bin(1920, 1080, 30, 2500, false, true).unwrap();
     let video_bin1_pad = video_bin1.static_pad("src").unwrap();
     let video1_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
+    video1_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/hi/video.m3u8".to_string(),
+    );
+    video1_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/hi/{DEFAULT_TS_LOCATION}"),
+    );
     let v = gst::Structure::builder("video1-variant")
         .field("uri", "hi/video.m3u8")
         .field("audio", "aac")
@@ -1268,6 +1716,14 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     let video_bin2 = video_bin(1280, 720, 30, 1500, false, true).unwrap();
     let video_bin2_pad = video_bin2.static_pad("src").unwrap();
     let video2_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
+    video2_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/mid/video.m3u8".to_string(),
+    );
+    video2_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/mid/{DEFAULT_TS_LOCATION}"),
+    );
     let v = gst::Structure::builder("video2-variant")
         .field("uri", "mid/video.m3u8")
         .field("audio", "aac")
@@ -1280,6 +1736,14 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     let video_bin3 = video_bin(640, 360, 24, 700, false, true).unwrap();
     let video_bin3_pad = video_bin3.static_pad("src").unwrap();
     let video3_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
+    video3_pad.set_property(
+        "playlist-location",
+        "/tmp/hlssink/low/video.m3u8".to_string(),
+    );
+    video3_pad.set_property(
+        "segment-location",
+        format!("/tmp/hlssink/low/{DEFAULT_TS_LOCATION}"),
+    );
     let v = gst::Structure::builder("video3-variant")
         .field("uri", "low/video.m3u8")
         .field("audio", "aac")
