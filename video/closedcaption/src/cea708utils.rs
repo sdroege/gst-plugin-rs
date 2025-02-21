@@ -128,6 +128,10 @@ impl Cea708ServiceWriter {
         }
     }
 
+    pub fn service_no(&self) -> u8 {
+        self.service_no
+    }
+
     pub fn take_service(&mut self, available_bytes: usize) -> Option<Service> {
         if self.codes.is_empty() {
             return None;

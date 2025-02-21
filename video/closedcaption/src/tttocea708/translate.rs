@@ -52,7 +52,6 @@ pub struct TextToCea708 {
     // settings
     mode: Cea708Mode,
     roll_up_count: u8,
-    service_no: u8,
     cea608_channel: Option<cea608_types::Id>,
     origin_column: u32,
     roll_up_timeout: Option<gst::ClockTime>,
@@ -80,7 +79,6 @@ impl Default for TextToCea708 {
             cea608: TextToCea608::default(),
             mode: Cea708Mode::RollUp,
             roll_up_count: 2,
-            service_no: 1,
             cea608_channel: Some(cea608_types::Id::CC1),
             origin_column: 0,
             framerate: gst::Fraction::new(DEFAULT_FPS_N, DEFAULT_FPS_D),
@@ -182,7 +180,9 @@ impl TextToCea708 {
     }
 
     pub fn set_service_no(&mut self, service_no: u8) {
-        self.service_no = service_no;
+        if service_no != self.service_writer.service_no() {
+            self.service_writer = Cea708ServiceWriter::new(service_no);
+        }
     }
 
     pub fn last_frame_no(&self) -> u64 {
@@ -335,8 +335,6 @@ impl TextToCea708 {
         if self.cea608_channel.is_some() {
             self.cea608.generate(frame_no, end_frame_no, lines.clone());
         }
-
-        self.service_writer = Cea708ServiceWriter::new(self.service_no);
 
         if self.mode == Cea708Mode::PopOn || self.mode == Cea708Mode::PaintOn {
             self.pen_location.column = 0;
