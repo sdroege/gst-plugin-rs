@@ -264,13 +264,15 @@ impl TextToCea708 {
         self.check_erase_display();
 
         let seq_no = self.sequence_no;
-        self.sequence_no = (self.sequence_no + 1) & 0x3;
 
         let mut packet = DTVCCPacket::new(seq_no);
         gst::trace!(CAT, "New packet {}", packet.sequence_no());
         while let Some(service) = self.service_writer.take_service(packet.free_space()) {
             gst::trace!(CAT, "adding service {service:?} to packet");
             packet.push_service(service).unwrap();
+            if seq_no == self.sequence_no {
+                self.sequence_no = (self.sequence_no + 1) & 0x3;
+            }
         }
         gst::trace!(CAT, "push packet to writer");
         self.cc_data_writer.push_packet(packet);
