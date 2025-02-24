@@ -343,7 +343,6 @@ impl AggregatorImpl for Cea708Mux {
         }
 
         let mut packet = DTVCCPacket::new(state.dtvcc_seq_no & 0x3);
-        state.dtvcc_seq_no = state.dtvcc_seq_no.wrapping_add(1);
 
         for (_service_no, service) in services.into_iter().filter(|(_, s)| !s.codes().is_empty()) {
             // FIXME: handle needing to split services
@@ -354,6 +353,9 @@ impl AggregatorImpl for Cea708Mux {
                 service.number()
             );
             packet.push_service(service).unwrap();
+            if packet.sequence_no() == state.dtvcc_seq_no & 0x3 {
+                state.dtvcc_seq_no = state.dtvcc_seq_no.wrapping_add(1);
+            }
         }
 
         let mut data = vec![];
