@@ -1534,7 +1534,18 @@ impl Transcriber {
             });
         }
 
+        let srcpads = state.srcpads.clone();
+
         *state = State::default();
+
+        for srcpad in &srcpads {
+            let mut sstate = srcpad.imp().state.lock().unwrap();
+            let unsynced_pad = sstate.unsynced_pad.take();
+            *sstate = TranscriberSrcPadState::default();
+            sstate.unsynced_pad = unsynced_pad;
+        }
+
+        state.srcpads = srcpads;
 
         gst::info!(
             CAT,
@@ -1550,6 +1561,10 @@ impl Transcriber {
         let now = self.obj().current_running_time()?;
 
         let mut state = self.state.lock().unwrap();
+
+        if !state.connected {
+            return None;
+        }
 
         if state.start_time.is_none() {
             state.start_time = Some(now);
