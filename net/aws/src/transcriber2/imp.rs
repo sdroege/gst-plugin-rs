@@ -329,7 +329,9 @@ impl Transcriber {
         if let Some(upstream_latency) = upstream_latency {
             let (upstream_live, upstream_min, _) = upstream_latency;
 
-            if upstream_live {
+            // Don't push a gap before we've even received a first buffer,
+            // as we haven't set in_segment.position to a start time yet
+            if upstream_live && state.last_input_rtime.is_some() {
                 if let Some(now) = now {
                     let seqnum = state.seqnum;
                     let in_segment = state.in_segment.as_mut().unwrap();
@@ -602,6 +604,10 @@ impl Transcriber {
             rtime.opt_add_assign(buffer.duration());
 
             gst::trace!(CAT, imp = self, "storing last input running time {rtime}");
+
+            if state.last_input_rtime.is_none() {
+                state.in_segment.as_mut().unwrap().set_position(Some(pts));
+            }
 
             state.last_input_rtime = Some(rtime);
         }
