@@ -848,8 +848,17 @@ impl TranscriberBin {
             .link_pads(Some("src"), &state.cccombiner, Some("caption"))
             .unwrap();
 
+        // We don't need to sync below playing as the state is now unlocked
+        // and the bin will transition when necessary.
+        //
+        // Trying to sync in PAUSED was causing issues with base time distribution,
+        // with cea608mux selecting an incorrect start time.
+        let do_sync = self.obj().current_state() == gst::State::Playing;
+
         state.transcription_bin.set_locked_state(false);
-        state.transcription_bin.sync_state_with_parent().unwrap();
+        if do_sync {
+            state.transcription_bin.sync_state_with_parent().unwrap();
+        }
 
         for pad in state.audio_sink_pads.values() {
             let ps = pad.imp().state.lock().unwrap();
@@ -858,10 +867,14 @@ impl TranscriberBin {
 
             if !pad_settings.passthrough {
                 pad_state.transcription_bin.set_locked_state(false);
-                pad_state
-                    .transcription_bin
-                    .sync_state_with_parent()
-                    .unwrap();
+
+                if do_sync {
+                    pad_state
+                        .transcription_bin
+                        .sync_state_with_parent()
+                        .unwrap();
+                }
+
                 let transcription_sink_pad =
                     state.transcription_bin.static_pad(&pad.name()).unwrap();
                 // Might be linked already if "translation-languages" is set
