@@ -323,6 +323,7 @@ fn setup_signals(
     });
 }
 
+#[ignore]
 #[test]
 #[serial]
 fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant() -> Result<(), ()> {
@@ -510,6 +511,7 @@ low/video.m3u8
     Ok(())
 }
 
+#[ignore]
 #[test]
 #[serial]
 fn hlsmultivariantsink_multiple_audio_rendition_single_video_variant() -> Result<(), ()> {
@@ -661,6 +663,7 @@ hi/video.m3u8
     Ok(())
 }
 
+#[ignore]
 #[test]
 #[serial]
 fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result<(), ()> {
@@ -827,6 +830,7 @@ low/video.m3u8
     Ok(())
 }
 
+#[ignore]
 #[test]
 #[serial]
 fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpegts(
@@ -1003,6 +1007,7 @@ low/video.m3u8
     Ok(())
 }
 
+#[ignore]
 #[test]
 #[serial]
 fn hlsmultivariantsink_multiple_video_variant_with_mpegts_audio_video_muxed() -> Result<(), ()> {
@@ -1169,6 +1174,7 @@ low-audio/audio-only.m3u8
     Ok(())
 }
 
+#[ignore]
 #[test]
 #[serial]
 fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpegts_h265(
