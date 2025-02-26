@@ -16,12 +16,17 @@ use gst_base::subclass::prelude::*;
 use num_integer::Integer;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::str::FromStr;
 use std::sync::Mutex;
 
 use crate::mp4mux::obu::read_seq_header_obu_bytes;
+use crate::mp4mux::TaicClockType;
 use std::sync::LazyLock;
 
 use super::boxes;
+use super::PrecisionClockTimeUncertaintyNanosecondsTag;
+use super::PrecisionClockTypeTag;
+use super::TaiClockInfo;
 use super::TransformMatrix;
 
 /// Offset between NTP and UNIX epoch in seconds.
@@ -75,6 +80,44 @@ pub(crate) static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     )
 });
 
+impl FromStr for TaicClockType {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "unknown" => Ok(TaicClockType::Unknown),
+            "cannot-sync-to-tai" => Ok(TaicClockType::CannotSync),
+            "can-sync-to-tai" => Ok(TaicClockType::CanSync),
+            _ => bail!("unknown TAI Clock type: {}", s),
+        }
+    }
+}
+
+impl<'a> Tag<'a> for PrecisionClockTypeTag {
+    type TagType = &'a str;
+    const TAG_NAME: &'static glib::GStr = glib::gstr!("precision-clock-type");
+}
+
+impl CustomTag<'_> for PrecisionClockTypeTag {
+    const FLAG: gst::TagFlag = gst::TagFlag::Meta;
+    const NICK: &'static glib::GStr = glib::gstr!("precision-clock-type");
+    const DESCRIPTION: &'static glib::GStr =
+        glib::gstr!("ISO/IEC 23001-17 TAI Clock type information");
+}
+
+impl Tag<'_> for PrecisionClockTimeUncertaintyNanosecondsTag {
+    type TagType = i32;
+    const TAG_NAME: &'static glib::GStr =
+        glib::gstr!("precision-clock-time-uncertainty-nanoseconds");
+}
+
+impl CustomTag<'_> for PrecisionClockTimeUncertaintyNanosecondsTag {
+    const FLAG: gst::TagFlag = gst::TagFlag::Meta;
+    const NICK: &'static glib::GStr = glib::gstr!("precision-clock-time-uncertainty-nanoseconds");
+    const DESCRIPTION: &'static glib::GStr =
+        glib::gstr!("ISO/IEC 23001-17 TAI Clock time uncertainty (in nanoseconds) information");
+}
+
 const DEFAULT_INTERLEAVE_BYTES: Option<u64> = None;
 const DEFAULT_INTERLEAVE_TIME: Option<gst::ClockTime> = Some(gst::ClockTime::from_mseconds(500));
 
@@ -93,6 +136,22 @@ impl Default for Settings {
             interleave_time: DEFAULT_INTERLEAVE_TIME,
             movie_timescale: 0,
             extra_brands: Vec::new(),
+        }
+    }
+}
+
+// Standard values for taic box (ISO/IEC 23001-17 Amd 1)
+const TAIC_TIME_UNCERTAINTY_UNKNOWN: u64 = 0xFFFF_FFFF_FFFF_FFFF;
+const TAIC_CLOCK_RESOLUTION_MICROSECONDS: u32 = 1000;
+const TAIC_CLOCK_DRIFT_RATE_UNKNOWN: i32 = 0x7FFF_FFFF;
+
+impl Default for TaiClockInfo {
+    fn default() -> Self {
+        TaiClockInfo {
+            time_uncertainty: TAIC_TIME_UNCERTAINTY_UNKNOWN,
+            clock_resolution: TAIC_CLOCK_RESOLUTION_MICROSECONDS,
+            clock_drift_rate: TAIC_CLOCK_DRIFT_RATE_UNKNOWN,
+            clock_type: super::TaicClockType::Unknown,
         }
     }
 }
@@ -160,6 +219,9 @@ struct Stream {
 
     avg_bitrate: Option<u32>,
     max_bitrate: Option<u32>,
+
+    /// TAI precision clock information
+    tai_clock_info: Option<TaiClockInfo>,
 }
 
 impl Stream {
@@ -1159,6 +1221,10 @@ impl MP4Mux {
             let mut language_code = None;
             let mut avg_bitrate = None;
             let mut max_bitrate = None;
+            let mut tai_clock_info = None;
+            let mut clock_type = TaicClockType::Unknown;
+            let mut found_taic_part = false;
+            let mut time_uncertainty = TAIC_TIME_UNCERTAINTY_UNKNOWN;
             pad.sticky_events_foreach(|ev| {
                 if let gst::EventView::Tag(ev) = ev.view() {
                     let tag = ev.tag();
@@ -1235,6 +1301,62 @@ impl MP4Mux {
                         }
                         avg_bitrate = Some(bitrate);
                     }
+                    if let Some(tag_value) = ev.tag().get::<PrecisionClockTypeTag>() {
+                        let clock_type_str = tag_value.get();
+                        gst::debug!(
+                            CAT,
+                            imp = self,
+                            "Received TAI clock type from tags: {:?}",
+                            clock_type_str
+                        );
+                        clock_type = match clock_type_str.parse() {
+                            Ok(t) => {
+                                found_taic_part = true;
+                                t
+                            }
+                            Err(err) => {
+                                gst::warning!(CAT, imp = self, "error parsing TAIClockType tag value: {}", err);
+                                TaicClockType::Unknown
+                            }
+                        };
+                        if tag.scope() == gst::TagScope::Global {
+                            gst::info!(
+                                CAT,
+                                obj = pad,
+                                "TAI clock tags scoped 'global' are treated as if they were stream tags.",
+                            );
+                        }
+                    }
+                    if let Some(tag_value) = ev
+                        .tag()
+                        .get::<PrecisionClockTimeUncertaintyNanosecondsTag>()
+                    {
+                        let time_uncertainty_from_tag = tag_value.get();
+                        if time_uncertainty_from_tag < 1 {
+                            gst::warning!(
+                                CAT,
+                                imp = self,
+                                "Ignoring non-positive TAI clock uncertainty from tags: {:?}",
+                                time_uncertainty_from_tag
+                            );
+                        } else {
+                            time_uncertainty = time_uncertainty_from_tag as u64;
+                            gst::debug!(
+                                CAT,
+                                imp = self,
+                                "Received TAI clock uncertainty from tags: {:?}",
+                                time_uncertainty
+                            );
+                            if tag.scope() == gst::TagScope::Global {
+                                gst::info!(
+                                    CAT,
+                                    obj = pad,
+                                    "TAI clock tags scoped 'global' are treated as if they were stream tags.",
+                                );
+                            }
+                            found_taic_part = true;
+                        }
+                    }
                 }
                 std::ops::ControlFlow::Continue(gst::EventForeachAction::Keep)
             });
@@ -1246,6 +1368,16 @@ impl MP4Mux {
                     continue;
                 }
             };
+
+            // TODO: also set this when we have GIMI implemented
+            if found_taic_part {
+                // TODO: set remaining parts if there are tags implemented
+                tai_clock_info = Some(TaiClockInfo {
+                    clock_type,
+                    time_uncertainty,
+                    ..Default::default()
+                });
+            }
 
             gst::info!(CAT, obj = pad, "Configuring caps {caps:?}");
 
@@ -1336,6 +1468,7 @@ impl MP4Mux {
                 stream_orientation,
                 max_bitrate,
                 avg_bitrate,
+                tai_clock_info,
             });
         }
 
@@ -1957,6 +2090,7 @@ impl AggregatorImpl for MP4Mux {
                     max_bitrate: stream.max_bitrate,
                     avg_bitrate: stream.avg_bitrate,
                     chunks: stream.chunks,
+                    tai_clock_info: stream.tai_clock_info,
                 });
             }
 

@@ -9,6 +9,7 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::tags;
 
 mod boxes;
 mod imp;
@@ -51,6 +52,8 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         ONVIFMP4Mux::static_type(),
     )?;
 
+    tags::register::<PrecisionClockTypeTag>();
+    tags::register::<PrecisionClockTimeUncertaintyNanosecondsTag>();
     Ok(())
 }
 
@@ -203,6 +206,41 @@ pub(crate) struct ElstInfo {
     duration: Option<gst::ClockTime>,
 }
 
+pub enum PrecisionClockTimeUncertaintyNanosecondsTag {}
+
+pub enum PrecisionClockTypeTag {}
+
+/// Synchronisation capability of clock
+///
+/// This is used in the TAIClockInfoBox, see ISO/IEC 23001-17:2024 Amd 1.
+#[repr(u8)]
+#[allow(dead_code)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum TaicClockType {
+    /// Clock type is unknown
+    Unknown = 0u8,
+    /// Clock does not synchronise to an atomic clock time source
+    CannotSync = 1u8,
+    // Clock can synchronise to an atomic clock time source
+    CanSync = 2u8,
+    // Reserved - DO NOT USE
+    Reserved = 3u8,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct TaiClockInfo {
+    // Set with the PrecisionClockTimeUncertaintyNanoseconds tag
+    // Defaults to unknown
+    time_uncertainty: u64,
+    // Cannot currently be set, defaults to microsecond
+    clock_resolution: u32,
+    // Cannot currently be set, defaults to unknown
+    clock_drift_rate: i32,
+    // Set with the PrecisionClockType tag
+    // Defaults to unknown
+    clock_type: TaicClockType,
+}
+
 #[derive(Debug)]
 pub(crate) struct Stream {
     /// Caps of this stream
@@ -243,6 +281,9 @@ pub(crate) struct Stream {
 
     /// Whether this stream should be encoded as an ISO/IEC 23008-12 image sequence
     image_sequence: bool,
+
+    /// TAI Clock information (ISO/IEC 23001-17 Amd 1)
+    tai_clock_info: Option<TaiClockInfo>,
 }
 
 #[derive(Debug)]

@@ -1100,6 +1100,16 @@ fn write_visual_sample_entry(
             })?;
         }
 
+        if let Some(taic) = &stream.tai_clock_info {
+            write_full_box(v, b"taic", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
+                v.extend(taic.time_uncertainty.to_be_bytes());
+                v.extend(taic.clock_resolution.to_be_bytes());
+                v.extend(taic.clock_drift_rate.to_be_bytes());
+                v.extend(((taic.clock_type as u8) << 6).to_be_bytes());
+                Ok(())
+            })?;
+        }
+
         Ok(())
     })?;
 
