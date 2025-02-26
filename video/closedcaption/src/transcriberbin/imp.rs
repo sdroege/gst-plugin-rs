@@ -2620,7 +2620,25 @@ impl ObjectImpl for TranscriberBin {
 
                 let s = self.state.lock().unwrap();
                 if let Some(state) = s.as_ref() {
-                    if settings.caption_source == CaptionSource::Inband {
+                    if state.cccombiner.has_property("input-meta-processing") {
+                        match settings.caption_source {
+                            CaptionSource::Inband => {
+                                state
+                                    .cccombiner
+                                    .set_property_from_str("input-meta-processing", "force");
+                            }
+                            CaptionSource::Both => {
+                                state
+                                    .cccombiner
+                                    .set_property_from_str("input-meta-processing", "append");
+                            }
+                            CaptionSource::Transcription => {
+                                state
+                                    .cccombiner
+                                    .set_property_from_str("input-meta-processing", "drop");
+                            }
+                        }
+                    } else if settings.caption_source == CaptionSource::Inband {
                         gst::debug!(
                             CAT,
                             imp = self,
