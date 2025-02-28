@@ -1439,6 +1439,19 @@ impl SessionInner {
         filtered_s.extend(s.iter().filter_map(|(key, value)| {
             if key.starts_with("a-") {
                 None
+            } else if key.starts_with("extmap-")
+                && value
+                    .get::<&str>()
+                    .is_ok_and(|v| v == "urn:ietf:params:rtp-hdrext:ssrc-audio-level")
+            {
+                // Workaround for the audio-level header extension: our extmap for this will usually be an array
+                // with "vad=on", but browsers strip that (because it's the default) and just give us a string
+                // with the uri. To make the capsfilter work, lets re-add the vad=on variant to the caps.
+                let vad_on_array =
+                    gst::Array::new(["", "urn:ietf:params:rtp-hdrext:ssrc-audio-level", "vad=on"])
+                        .to_send_value();
+                let list = gst::List::new([vad_on_array, value.to_owned()]).to_send_value();
+                Some((key, list))
             } else {
                 Some((key, value.to_owned()))
             }
