@@ -184,7 +184,7 @@ fn update_manifest(state: &mut StreamState) {
 
     let playlist = MediaPlaylist {
         version: Some(7),
-        target_duration: 2.5,
+        target_duration: 3,
         media_sequence: state.media_sequence,
         segments: state
             .segments
@@ -421,7 +421,7 @@ impl VideoStream {
             )
             .build()?;
         let mux = gst::ElementFactory::make("cmafmux")
-            .property("fragment-duration", 2500.mseconds())
+            .property("fragment-duration", 3000.mseconds())
             .property("write-mehd", true)
             .build()?;
         let appsink = gst_app::AppSink::builder().buffer_list(true).build();
@@ -469,7 +469,7 @@ impl AudioStream {
         let mux = gst::ElementFactory::make("cmafmux")
             .property_from_str("header-update-mode", "update")
             .property("write-mehd", true)
-            .property("fragment-duration", 2500.mseconds())
+            .property("fragment-duration", 3000.mseconds())
             .build()?;
         let appsink = gst_app::AppSink::builder().buffer_list(true).build();
 

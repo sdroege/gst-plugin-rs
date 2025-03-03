@@ -223,7 +223,7 @@ fn setup_appsink(appsink: &gst_app::AppSink, name: &str, path: &Path, is_video: 
 
                 let playlist = MediaPlaylist {
                     version: Some(7),
-                    target_duration: 2.5,
+                    target_duration: 3,
                     media_sequence: 0,
                     segments: state
                         .segments
@@ -314,7 +314,7 @@ impl VideoStream {
             )
             .build()?;
         let mux = gst::ElementFactory::make("cmafmux")
-            .property("fragment-duration", 2500.mseconds())
+            .property("fragment-duration", 3000.mseconds())
             .property_from_str("header-update-mode", "update")
             .property("write-mehd", true)
             .build()?;
@@ -372,7 +372,7 @@ impl AudioStream {
             .build()?;
         let enc = gst::ElementFactory::make("avenc_aac").build()?;
         let mux = gst::ElementFactory::make("cmafmux")
-            .property("fragment-duration", 2500.mseconds())
+            .property("fragment-duration", 3000.mseconds())
             .property_from_str("header-update-mode", "update")
             .property("write-mehd", true)
             .build()?;
