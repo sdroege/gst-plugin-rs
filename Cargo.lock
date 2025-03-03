@@ -8576,9 +8576,9 @@ dependencies = [
 
 [[package]]
 name = "web-transport-quinn"
-version = "0.3.4"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3020b51cda10472a365e42d9a701916d4f04d74cc743de08246ef6a421c2d137"
+checksum = "5edbbbd8de66e931f5c8a5c9b6e660db7623f1e9042f5f03964ffa1f03c0b9b1"
 dependencies = [
  "bytes",
  "futures",
@@ -8586,7 +8586,10 @@ dependencies = [
  "log",
  "quinn",
  "quinn-proto",
- "thiserror 1.0.69",
+ "ring",
+ "rustls 0.23.26",
+ "rustls-native-certs 0.8.1",
+ "thiserror 2.0.12",
  "tokio",
  "url",
  "web-transport-proto",

@@ -623,23 +623,14 @@ impl QuinnWebTransportServerSink {
             ))
         })?;
 
-        let incoming_conn = endpoint.accept().await.unwrap();
+        let mut incoming_conn = web_transport_quinn::Server::new(endpoint);
 
-        let connection = incoming_conn.await.map_err(|err| {
+        let request = incoming_conn.accept().await.ok_or_else(|| {
             WaitError::FutureError(gst::error_msg!(
                 gst::ResourceError::Failed,
-                ["Connection error: {}", err]
+                ["Connection error"]
             ))
         })?;
-
-        let request = web_transport_quinn::accept(connection)
-            .await
-            .map_err(|err| {
-                WaitError::FutureError(gst::error_msg!(
-                    gst::ResourceError::Failed,
-                    ["Connection error: {}", err]
-                ))
-            })?;
 
         gst::info!(
             CAT,
