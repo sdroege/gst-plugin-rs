@@ -379,7 +379,8 @@ outdated:
   script:
     - cargo update --color=always
     # etherparse 0.17 requires Rust 1.81 or newer
-    - cargo outdated --color=always --root-deps-only --ignore etherparse --exit-code 1 -v
+    # libwebp-sys 0.2 requires Rust 1.85 or newer
+    - cargo outdated --color=always --root-deps-only --ignore etherparse --ignore libwebp-sys2 --exit-code 1 -v
 
 coverage:
   allow_failure: true
