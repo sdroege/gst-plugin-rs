@@ -499,7 +499,7 @@ impl HlsSink3 {
 
         let playlist = MediaPlaylist {
             version: if i_frames_only { Some(4) } else { Some(3) },
-            target_duration: target_duration as f32,
+            target_duration: target_duration as u64,
             playlist_type,
             i_frames_only,
             ..Default::default()

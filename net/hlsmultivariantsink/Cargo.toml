@@ -12,7 +12,7 @@ rust-version.workspace = true
 gst.workspace = true
 gst-app.workspace = true
 gio.workspace = true
-m3u8-rs = "5.0"
+m3u8-rs = "6.0"
 chrono = "0.4"
 gst-pbutils = { workspace = true, features = ["v1_22"] }
 anyhow = "1"
@@ -26,7 +26,7 @@ thiserror = "2"
 gst-audio.workspace = true
 gst-video.workspace = true
 gst-check.workspace = true
-m3u8-rs = "5.0"
+m3u8-rs = "6.0"
 anyhow = "1"
 gst-plugin-hlssink3 = { path = "../hlssink3" }
 gst-plugin-fmp4 = { path = "../../mux/fmp4" }
