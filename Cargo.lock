@@ -5572,11 +5572,11 @@ dependencies = [
 
 [[package]]
 name = "parse_link_header"
-version = "0.3.3"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3687fe9debbbf2a019f381a8bc6b42049b22647449b39af54b3013985c0cf6de"
+checksum = "fbc23fdb8bbf668d582b0c17120bf6b7f91d85ccad3a5b39706f019a4efda005"
 dependencies = [
- "http 0.2.12",
+ "http 1.2.0",
  "lazy_static",
  "regex",
  "url",

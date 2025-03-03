@@ -52,7 +52,7 @@ data-encoding = {version = "2.3.3", optional = true }
 url-escape = { version = "0.1.1", optional = true }
 
 reqwest = { version = "0.11", features = ["default-tls"], optional = true }
-parse_link_header = {version = "0.3", features = ["url"]}
+parse_link_header = {version = "0.4", features = ["url"]}
 async-recursion = { version = "1.0.0", optional = true }
 
 livekit-protocol = { version = "0.3, < 0.3.4", optional = true }

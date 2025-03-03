@@ -15,7 +15,7 @@ gst.workspace = true
 gst-webrtc = { workspace = true, features = ["v1_18"] }
 gst-sdp.workspace = true
 reqwest = { version = "0.12", features = ["default-tls"] }
-parse_link_header = {version = "0.3", features = ["url"]}
+parse_link_header = {version = "0.4", features = ["url"]}
 tokio = { version = "1.20.1", default-features = false, features = ["time", "rt-multi-thread"] }
 futures = "0.3.23"
 bytes = "1"
