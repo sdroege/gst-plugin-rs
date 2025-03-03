@@ -13,7 +13,7 @@ gst.workspace = true
 gst-base.workspace = true
 gst-rtp.workspace = true
 once_cell.workspace = true
-raptorq = "1.7"
+raptorq = "2"
 
 [dev-dependencies]
 gst-check = { workspace = true, features = ["v1_18"] }

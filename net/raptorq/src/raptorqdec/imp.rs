@@ -242,7 +242,7 @@ impl RaptorqDec {
             let blocksz = info.symbols_per_block * symbolsz;
 
             let config = ObjectTransmissionInformation::new(0, symbolsz as u16, 1, 1, 8);
-            let mut decoder = SourceBlockDecoder::new2(0, &config, blocksz);
+            let mut decoder = SourceBlockDecoder::new(0, &config, blocksz);
             let mut result = None;
 
             for (esi, symbol) in
