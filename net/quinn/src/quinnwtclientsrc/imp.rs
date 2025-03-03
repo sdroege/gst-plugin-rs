@@ -13,7 +13,7 @@
 use crate::quinnquicmeta::QuinnQuicMeta;
 use crate::quinnquicquery::*;
 use crate::utils::{
-    client_endpoint, get_stats, make_socket_addr, server_endpoint, wait, Canceller,
+    client, client_endpoint, get_stats, make_socket_addr, server_endpoint, wait, Canceller,
     QuinnQuicEndpointConfig, WaitError, CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG, RUNTIME,
 };
 use crate::{common::*, utils};
@@ -535,21 +535,19 @@ impl QuinnWebTransportClientSrc {
             ))),
         }?;
 
-        let client = client_endpoint(&endpoint_config).map_err(|err| {
+        let client = client(&endpoint_config).map_err(|err| {
             WaitError::FutureError(gst::error_msg!(
                 gst::ResourceError::Failed,
                 ["Failed to configure endpoint: {}", err]
             ))
         })?;
 
-        let session = web_transport_quinn::connect(&client, &url)
-            .await
-            .map_err(|err| {
-                WaitError::FutureError(gst::error_msg!(
-                    gst::ResourceError::Failed,
-                    ["Failed to connect to server: {}", err]
-                ))
-            })?;
+        let session = client.connect(&url).await.map_err(|err| {
+            WaitError::FutureError(gst::error_msg!(
+                gst::ResourceError::Failed,
+                ["Failed to connect to server: {}", err]
+            ))
+        })?;
 
         gst::info!(
             CAT,
