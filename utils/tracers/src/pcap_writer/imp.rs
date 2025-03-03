@@ -42,7 +42,7 @@
 *
 * Since: plugins-rs-0.13.0
 */
-use pcap_file::pcap;
+use pcap_file::pcap::{self, RawPcapPacket};
 
 use etherparse::PacketBuilder;
 use gst::glib::Properties;
@@ -113,17 +113,23 @@ impl Writer {
             anyhow::bail!("Maximum size of packet is {MAX_PACKET_LEN}");
         }
 
+        let pts = buffer.pts().unwrap_or(gst::ClockTime::from_seconds(0));
+
+        // Store capture time in microsecond precision because that's what wireshark uses
+        // by default and the precision is not signalled in the packet headers.
+        let ts_sec = pts.seconds() as u32;
+        let ts_frac = (pts.useconds() % 1_000_000) as u32;
+
         let map = buffer.map_readable()?;
         if matches!(self.protocol, FakeProtocol::None) {
-            self.writer.write(
-                0,
-                buffer
-                    .pts()
-                    .unwrap_or(gst::ClockTime::from_seconds(0))
-                    .nseconds() as u32,
-                map.as_slice(),
-                map.len() as u32,
-            )?;
+            let packet = RawPcapPacket {
+                ts_sec,
+                ts_frac,
+                incl_len: map.len() as u32,
+                orig_len: map.len() as u32,
+                data: std::borrow::Cow::Borrowed(map.as_slice()),
+            };
+            self.writer.write_raw_packet(&packet)?;
 
             return Ok(());
         }
@@ -139,15 +145,14 @@ impl Writer {
         self.buf.clear();
         builder.write(&mut self.buf, map.as_slice()).unwrap();
 
-        self.writer.write(
-            0,
-            buffer
-                .pts()
-                .unwrap_or(gst::ClockTime::from_seconds(0))
-                .nseconds() as u32,
-            &self.buf,
-            size as u32,
-        )?;
+        let packet = RawPcapPacket {
+            ts_sec,
+            ts_frac,
+            incl_len: size as u32,
+            orig_len: size as u32,
+            data: std::borrow::Cow::Borrowed(&self.buf),
+        };
+        self.writer.write_raw_packet(&packet)?;
 
         Ok(())
     }
