@@ -12,7 +12,7 @@ rust-version.workspace = true
 gst.workspace = true
 gst-base.workspace = true
 gst-rtp.workspace = true
-raptorq = "1.7"
+raptorq = "2"
 
 [dev-dependencies]
 gst-check = { workspace = true, features = ["v1_18"] }

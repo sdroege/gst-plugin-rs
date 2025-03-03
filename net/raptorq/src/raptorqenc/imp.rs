@@ -163,7 +163,7 @@ impl RaptorqEnc {
         );
 
         let encoder =
-            SourceBlockEncoder::with_encoding_plan2(0, &state.info, &source_block, &state.plan);
+            SourceBlockEncoder::with_encoding_plan(0, &state.info, &source_block, &state.plan);
 
         let sbl = state.symbols_per_block;
 
