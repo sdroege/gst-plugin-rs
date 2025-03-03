@@ -34,7 +34,7 @@ gst-gl = { workspace = true, features = ["v1_16"] }
 gtk = { workspace = true, features = ["v4_6"] }
 gst-gl = { workspace = true, features = ["v1_20"] }
 gdk-win32 = { workspace = true, features = ["v4_4"]}
-windows-sys = { version = "0.52", features = ["Win32_Graphics_OpenGL", "Win32_Foundation", "Win32_Graphics_Gdi"] }
+windows-sys = { version = "0.59", features = ["Win32_Graphics_OpenGL", "Win32_Foundation", "Win32_Graphics_Gdi"] }
 
 [lib]
 name = "gstgtk4"

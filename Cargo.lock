@@ -2524,7 +2524,7 @@ dependencies = [
  "gstreamer-video",
  "gtk4",
  "once_cell",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
