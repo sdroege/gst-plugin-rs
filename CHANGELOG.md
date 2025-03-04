@@ -5,6 +5,36 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.13.5] - 2025-03-04
+### Fixed
+- cdg: Fix typefind errors on specific file sizes.
+- cea608overlay: Ensure lines are rendered in order.
+- cea608overlay: Clear output on each switch.
+- cea608overlay / cea708overlay: Fix field lookup for S334-1A captions.
+- cea608tocea708: Fix S334-1A field flag usage.
+- closedcaption: Fix rollup mode not always using the correct base row.
+- closedcaption: Only increase dtvcc packet sequence if there are services.
+- fmp4mux: Fix state cleanup on flush.
+- fmp4mux: Handle language/orientation tags as per-stream tags.
+- hlssink3: Write playlist atomically.
+- inter: Don't leak hashmap objects.
+- mpegtslivesrc: Handle zero-byte adaptation fields correctly.
+- mpegtslivesrc: Consider initial calibration of the clock.
+- mpegtslivesrc: Ignore NIT programs from the PAT.
+- onvifmetadatacombiner: Unset PTS/DTS of metadata.
+- rtpbasepay / rtpbasedepay: Only forward buffers after a segment event.
+- rtpac3depay2: Fix handling of non-fragmented payloads.
+- togglerecord: Drop locks before sending queries to avoid deadlocks.
+- tttocea708: Don't reset service writer for every incoming caption.
+- whipserversrc: Handle concurrent POSTs.
+
+### Added
+- mpegtslivesrc: Take adaptation field discontinuity flag into account.
+- uriplaylistbin: Add caching support
+
+### Changed
+- Updated various dependencies.
+
 ## [0.13.4] - 2024-12-24
 ### Fixed
 - cea608overlay: Fix rendering when roll-up base row is at the top.
@@ -602,7 +632,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.4...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.5...HEAD
+[0.13.5]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.4...0.13.5
 [0.13.4]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.3...0.13.4
 [0.13.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.2...0.13.3
 [0.13.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.1...0.13.2
