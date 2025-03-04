@@ -28,7 +28,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use thiserror::Error;
 use tokio::runtime;
-use web_transport_quinn::Client;
 
 pub const CONNECTION_CLOSE_CODE: u32 = 0;
 pub const CONNECTION_CLOSE_MSG: &str = "Stopped";
@@ -432,15 +431,6 @@ pub fn client_endpoint(ep_config: &QuinnQuicEndpointConfig) -> Result<Endpoint, 
     endpoint.set_default_client_config(client_cfg);
 
     Ok(endpoint)
-}
-
-pub fn client(ep_config: &QuinnQuicEndpointConfig) -> Result<Client, Box<dyn Error>> {
-    let client_cfg = configure_client(ep_config)?;
-    let mut endpoint = Endpoint::client(ep_config.client_addr.expect("client_addr not set"))?;
-
-    endpoint.set_default_client_config(client_cfg.clone());
-
-    Ok(web_transport_quinn::Client::new(endpoint, client_cfg))
 }
 
 pub fn get_stats(stats: Option<ConnectionStats>) -> gst::Structure {
