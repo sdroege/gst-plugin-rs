@@ -29,3 +29,6 @@ gst_plugin_webrtc_protocol = { path="../protocol", package = "gst-plugin-webrtc-
 [[bin]]
 name = "gst-webrtc-signalling-server"
 path = "src/bin/server.rs"
+
+[package.metadata.gstreamer]
+release_date = "2025-03-04"
