@@ -2682,7 +2682,7 @@ dependencies = [
  "once_cell",
  "quick-xml",
  "smallvec",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -2746,7 +2746,7 @@ dependencies = [
  "rustls-pemfile 2.2.0",
  "rustls-pki-types",
  "serial_test",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
  "tokio",
 ]
 
@@ -2836,7 +2836,7 @@ dependencies = [
  "rtp-types",
  "slab",
  "smallvec",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
  "time",
  "tokio",
 ]
@@ -2859,7 +2859,7 @@ dependencies = [
  "rtsp-types",
  "sdp-types",
  "socket2",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
  "url",
@@ -3008,7 +3008,7 @@ dependencies = [
  "more-asserts",
  "once_cell",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
  "url",
 ]
 
@@ -3098,7 +3098,7 @@ dependencies = [
  "reqwest 0.11.27",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-native-tls",
  "tokio-stream",
@@ -3124,7 +3124,7 @@ dependencies = [
  "serde",
  "serde_json",
  "test-log",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-native-tls",
  "tracing",

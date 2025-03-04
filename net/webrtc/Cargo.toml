@@ -23,7 +23,7 @@ uuid = { version = "1", features = ["v4"] }
 
 anyhow = "1"
 chrono = "0.4"
-thiserror = "1"
+thiserror = "2"
 futures = "0.3"
 tokio = { version = "1", features = ["fs", "macros", "rt-multi-thread", "time"] }
 tokio-native-tls = "0.3.0"

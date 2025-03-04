@@ -30,7 +30,7 @@ rtp-types = { version = "0.1" }
 rtcp-types = { version = "0.1" }
 slab = "0.4.9"
 smallvec = { version = "1.11", features = ["union", "write", "const_generics", "const_new"] }
-thiserror = "1"
+thiserror = "2"
 time = { version = "0.3", default-features = false, features = ["std"] }
 # TODO: experiment with other async executors (mio, async-std, etc)
 tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "time", "sync"] }

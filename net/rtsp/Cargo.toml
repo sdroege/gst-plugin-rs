@@ -22,7 +22,7 @@ lru = "0.13"
 rtsp-types = "0.1"
 sdp-types = "0.1"
 socket2 = "0.5"
-thiserror = "1"
+thiserror = "2"
 tokio = { version = "1.0", default-features = false, features = ["io-util", "macros", "net", "time", "rt-multi-thread", "sync"] }
 tokio-stream = "0.1"
 url = "2"

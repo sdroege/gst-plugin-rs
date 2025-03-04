@@ -23,7 +23,7 @@ rustls-pemfile = "2"
 rustls-pki-types = "1"
 rcgen = "0.13"
 bytes = "1.5.0"
-thiserror = "1"
+thiserror = "2"
 
 [dev-dependencies]
 gst-check = { workspace = true, features = ["v1_20"] }
