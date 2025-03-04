@@ -20,12 +20,12 @@ allow = [
   "BSD-2-Clause",
   "BSD-3-Clause",
   "ISC",
-  "OpenSSL",
   "Zlib",
   "Unicode-3.0",
   "Apache-2.0",
   "Apache-2.0 WITH LLVM-exception",
   "MPL-2.0",
+  "NCSA",
 ]
 confidence-threshold = 0.8
 
@@ -61,9 +61,6 @@ version = "0.9"
 name = "digest"
 version = "0.9"
 [[bans.skip]]
-name = "sha-1"
-version = "0.9"
-[[bans.skip]]
 name = "hmac"
 version = "0.11"
 [[bans.skip]]
@@ -77,9 +74,6 @@ version = "0.6"
 [[bans.skip]]
 name = "hermit-abi"
 version = "0.3"
-[[bans.skip]]
-name = "quick-xml"
-version = "0.36"
 
 # Various crates depend on an older version of base64
 [[bans.skip]]
@@ -98,11 +92,6 @@ version = "1.0"
 [[bans.skip]]
 name = "regex-syntax"
 version = "0.6"
-
-# various livekit dependencies depend on an older versions of various crates
-[[bans.skip]]
-name = "idna"
-version = "0.3"
 
 # Various crates depend on an older version of indexmap / hashbrown
 
@@ -174,11 +163,6 @@ version = "0.20"
 name = "tungstenite"
 version = "0.20"
 
-# librespot depends on older tokio-tungstenite
-[[bans.skip]]
-name = "tungstenite"
-version = "0.24"
-
 # Various crates depend on an older version of http
 [[bans.skip]]
 name = "http"
@@ -226,9 +210,6 @@ version = "0.5"
 name = "rustls"
 version = "0.21"
 [[bans.skip]]
-name = "rustls-native-certs"
-version = "0.6"
-[[bans.skip]]
 name = "rustls-webpki"
 version = "0.101"
 
@@ -255,39 +236,47 @@ version = "0.52"
 name = "cfg-expr"
 version = "0.15"
 
-# aws-smithy-runtime depends on old tokio-rustls
-[[bans.skip]]
-name = "tokio-rustls"
-version = "0.24"
-
-# aws-config depends on old aws-smithy-json
-[[bans.skip]]
-name = "aws-smithy-json"
-version = "0.60"
-
-[[bans.skip]]
-name = "spki"
-version = "0.6"
-
 # Various crates depend on thiserror 1
-
 [[bans.skip]]
 name = "thiserror"
 version = "1"
-
 [[bans.skip]]
 name = "thiserror-impl"
 version = "1"
 
-# Various crates depend on older versions of core-foundation and
-# security-framework
+# ffv1 depends on old crc
+[[bans.skip]]
+name = "crc"
+version = "1"
 
+# various crates depend on old getrandom
 [[bans.skip]]
-name = "core-foundation"
-version = "0.9"
+name = "getrandom"
+version = "0.2"
+
+# aws-sdk-s3 depends on old lru
 [[bans.skip]]
-name = "security-framework"
-version = "2"
+name = "lru"
+version = "0.12"
+
+# various crates depend on old wasi
+[[bans.skip]]
+name = "wasi"
+version = "0.11"
+
+# various crates depend on old zerocopy / rand
+[[bans.skip]]
+name = "zerocopy"
+version = "0.7"
+[[bans.skip]]
+name = "rand_core"
+version = "0.6"
+[[bans.skip]]
+name = "rand_chacha"
+version = "0.3"
+[[bans.skip]]
+name = "rand"
+version = "0.8"
 
 [sources]
 unknown-registry = "deny"
