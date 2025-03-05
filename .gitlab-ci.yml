@@ -436,21 +436,11 @@ cerbero trigger:
     # Never run post merge
     - if: '$CI_PROJECT_NAMESPACE == "gstreamer"'
       when: never
-    # Don't run if the only changes are files that cargo-c does not read
-    - if:
-      changes:
-      - "CHANGELOG.md"
-      - "README.md"
-      - "deny.toml"
-      - "rustfmt.toml"
-      - "typos.toml"
-      - "*.py"
-      - "*.sh"
-      - "Makefile"
-      - "meson.build"
-      - "meson_options.txt"
-      - "**/meson.build"
-      - "ci/*.sh"
-      - "ci/*.py"
-      when: never
-    - when: always
+    - changes:
+        paths:
+          - ".gitlab-ci.yml"
+          - "Cargo.toml"
+          - "Cargo.lock"
+          - "**/Cargo.toml"
+          - "**/*.rs"
+          - "**/*.c"
