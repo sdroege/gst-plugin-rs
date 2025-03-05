@@ -222,6 +222,10 @@ plugins = {
     ],
   },
   'speechmatics': {'library': 'libgstspeechmatics'},
+  'vvdec': {
+    'library': 'libgstvvdec',
+    'extra-deps': {'libvvdec': ['>= 3.0']}
+  }
 }
 
 # Won't build on platforms where it bundles the sources because of:

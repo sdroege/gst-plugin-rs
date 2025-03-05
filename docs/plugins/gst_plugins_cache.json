@@ -16751,6 +16751,74 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "vvdec": {
+        "description": "GStreamer VVdeC VVC/H.266 decoder plugin",
+        "elements": {
+            "vvdec": {
+                "author": "Carlos Bentzen <cadubentzen@igalia.com>",
+                "description": "Decode VVC/H.266 video streams with VVdeC",
+                "hierarchy": [
+                    "GstVVdeC",
+                    "GstVideoDecoder",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Decoder/Video",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-h266:\n  stream-format: byte-stream\n      alignment: au\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-raw:\n         format: { GRAY8, I420, Y42B, Y444, GRAY10_LE16, I420_10LE, I422_10LE, Y444_10LE }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "n-parser-threads": {
+                        "blurb": "Number of parser threads to use while decoding (set to -1 to let libvvdec choose the number of parser threads, set to 0 to parse on the element streaming thread)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-1",
+                        "max": "2147483647",
+                        "min": "-1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": true
+                    },
+                    "n-threads": {
+                        "blurb": "Number of threads to use while decoding (set to -1 to use the number of logical cores, set to 0 to decode in a single thread)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-1",
+                        "max": "2147483647",
+                        "min": "-1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": true
+                    }
+                },
+                "rank": "secondary"
+            }
+        },
+        "filename": "gstvvdec",
+        "license": "MPL-2.0",
+        "other-types": {},
+        "package": "gst-plugin-vvdec",
+        "source": "gst-plugin-vvdec",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "webrtchttp": {
         "description": "GStreamer WebRTC Plugin for WebRTC HTTP protocols (WHIP/WHEP)",
         "elements": {

@@ -62,6 +62,7 @@ members = [
     "video/png",
     "video/rav1e",
     "video/videofx",
+    "video/vvdec",
     "video/webp",
 ]
 

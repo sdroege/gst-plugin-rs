@@ -67,6 +67,7 @@ option('hsv', type: 'feature', value: 'auto', description: 'Build hsv plugin')
 option('png', type: 'feature', value: 'auto', description: 'Build png plugin')
 option('rav1e', type: 'feature', value: 'auto', description: 'Build rav1e plugin')
 option('videofx', type: 'feature', value: 'auto', description: 'Build videofx plugin')
+option('vvdec', type: 'feature', value: 'auto', description: 'Build vvdec plugin')
 option('webp', type: 'feature', value: 'auto', description: 'Build webp plugin')
 
 # Common options

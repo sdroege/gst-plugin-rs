@@ -341,7 +341,7 @@ version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0f9dd2e03ee80ca2822dd6ea431163d2ef259f2066a4d6ccaca6d9dcb386aa43"
 dependencies = [
- "bindgen",
+ "bindgen 0.69.5",
  "cc",
  "cmake",
  "dunce",
@@ -902,6 +902,26 @@ dependencies = [
  "shlex",
  "syn 2.0.99",
  "which",
+]
+
+[[package]]
+name = "bindgen"
+version = "0.70.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f49d8fed880d473ea71efb9bf597651e77201bdd4893efe54c9e5d65ae04ce6f"
+dependencies = [
+ "bitflags 2.9.0",
+ "cexpr",
+ "clang-sys",
+ "itertools 0.12.1",
+ "log",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash 1.1.0",
+ "shlex",
+ "syn 2.0.99",
 ]
 
 [[package]]
@@ -3292,6 +3312,18 @@ dependencies = [
  "image",
  "image_hasher",
  "rgb",
+]
+
+[[package]]
+name = "gst-plugin-vvdec"
+version = "0.14.0-alpha.1"
+dependencies = [
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "gstreamer-audio",
+ "gstreamer-check",
+ "gstreamer-video",
+ "vvdec",
 ]
 
 [[package]]
@@ -8154,6 +8186,27 @@ name = "vsimd"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
+
+[[package]]
+name = "vvdec"
+version = "0.6.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c4dd0b089dddc930150dbce1f3222020d3c8f6d3c6d81ffea3492d913a1a195"
+dependencies = [
+ "thiserror 2.0.12",
+ "vvdec-sys",
+]
+
+[[package]]
+name = "vvdec-sys"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15f825818f7e4770c5807f26b6230d2ec369f8e8a35f00c0d081de519e7917db"
+dependencies = [
+ "bindgen 0.70.1",
+ "cmake",
+ "system-deps 7.0.3",
+]
 
 [[package]]
 name = "waker-fn"
