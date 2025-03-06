@@ -16,6 +16,7 @@ allow = [
   "MIT",
   "BSD-2-Clause",
   "BSD-3-Clause",
+  "BSD-3-Clause-Clear",
   "ISC",
   "OpenSSL",
   "Zlib",
@@ -106,6 +107,11 @@ version = "0.1"
 [[bans.skip]]
 name = "itertools"
 version = "0.12"
+
+# vvdec-sys uses bindgen 0.70 while aws-lc-sys uses bindgen 0.69
+[[bans.skip]]
+name = "bindgen"
+version = "0.69"
 
 # matchers depends on an old version of regex-automata
 [[bans.skip]]
@@ -250,6 +256,11 @@ version = "0.22"
 name = "tokio-rustls"
 version = "0.24"
 
+# aws-config depends on old aws-smithy-json
+[[bans.skip]]
+name = "aws-smithy-json"
+version = "0.60.7"
+
 # aws SDK depends on older version of various crypto crates
 [[bans.skip]]
 name = "der"
@@ -272,9 +283,6 @@ version = "0.6"
 [[bans.skip]]
 name = "lru"
 version = "0.12"
-[[bans.skip]]
-name = "untrusted"
-version = "0.7"
 
 # Various crates depend on thiserror 1
 [[bans.skip]]
