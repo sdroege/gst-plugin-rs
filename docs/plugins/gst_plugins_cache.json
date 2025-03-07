@@ -9673,6 +9673,17 @@
                         "readable": true,
                         "type": "gchararray",
                         "writable": true
+                    },
+                    "translator": {
+                        "blurb": "The translator element in use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstElement",
+                        "writable": false
                     }
                 }
             },

@@ -102,6 +102,10 @@ impl TranslationBin {
         pad_state.queue = Some(queue);
         pad_state.translator = Some(translator);
 
+        drop(pad_state);
+
+        srcpad.notify("translator");
+
         Ok(())
     }
 
@@ -568,11 +572,18 @@ impl ObjectSubclass for TranslationSrcPad {
 impl ObjectImpl for TranslationSrcPad {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecString::builder("language-code")
-                .nick("Language Code")
-                .blurb("The language of the output stream")
-                .default_value(Some(DEFAULT_OUTPUT_LANG_CODE))
-                .build()]
+            vec![
+                glib::ParamSpecString::builder("language-code")
+                    .nick("Language Code")
+                    .blurb("The language of the output stream")
+                    .default_value(Some(DEFAULT_OUTPUT_LANG_CODE))
+                    .build(),
+                glib::ParamSpecObject::builder::<gst::Element>("translator")
+                    .nick("Translator")
+                    .blurb("The translator element in use")
+                    .read_only()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()
@@ -599,6 +610,7 @@ impl ObjectImpl for TranslationSrcPad {
                 let settings = self.settings.lock().unwrap();
                 settings.language_code.to_value()
             }
+            "translator" => self.state.lock().unwrap().translator.to_value(),
             _ => unimplemented!(),
         }
     }
