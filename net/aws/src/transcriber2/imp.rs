@@ -248,7 +248,23 @@ impl Transcriber {
                             }
                         }
 
-                        let mut pts = aws_start_time + state.discont_accumulator + lateness;
+                        let rtime = aws_start_time + state.discont_accumulator + lateness;
+
+                        let Some(mut pts) = state
+                            .in_segment
+                            .as_ref()
+                            .unwrap()
+                            .position_from_running_time(rtime)
+                        else {
+                            gst::warning!(
+                                CAT,
+                                imp = self,
+                                "received item with running time outside of segment ({})",
+                                rtime
+                            );
+                            continue;
+                        };
+
                         let duration = aws_end_time.saturating_sub(aws_start_time);
 
                         if let Some(position) = state.in_segment.as_ref().unwrap().position() {
