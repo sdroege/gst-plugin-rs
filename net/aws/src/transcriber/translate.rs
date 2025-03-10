@@ -293,7 +293,7 @@ pub fn span_tokenize_items(
             translated_items.push(TranslatedItem {
                 pts,
                 duration,
-                content,
+                content: content.trim().to_string(),
             });
 
             content = String::new();
@@ -394,7 +394,7 @@ mod tests {
         let second = items.next().unwrap();
         assert_eq!(second.pts, 1.seconds());
         assert_eq!(second.duration, 2.seconds());
-        assert_eq!(second.content, "second ");
+        assert_eq!(second.content, "second");
 
         let third = items.next().unwrap();
         assert_eq!(third.pts, 3.seconds());
@@ -426,7 +426,7 @@ mod tests {
         let init = items.next().unwrap();
         assert_eq!(init.pts, 0.seconds());
         assert_eq!(init.duration, 1.seconds());
-        assert_eq!(init.content, "Initial ");
+        assert_eq!(init.content, "Initial");
 
         let first = items.next().unwrap();
         assert_eq!(first.pts, 1.seconds());
@@ -436,7 +436,7 @@ mod tests {
         let second = items.next().unwrap();
         assert_eq!(second.pts, 2.seconds());
         assert_eq!(second.duration, 1.seconds());
-        assert_eq!(second.content, "second ");
+        assert_eq!(second.content, "second");
 
         let third = items.next().unwrap();
         assert_eq!(third.pts, 3.seconds());
