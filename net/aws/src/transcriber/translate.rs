@@ -300,10 +300,15 @@ pub fn span_tokenize_items(
         } else if let Some(last_item) = translated_items.last_mut() {
             // exhausted available pts and duration
             // add content to last item
-            if !last_item.content.ends_with(' ') {
+            let starts_with_punctuation = content.starts_with(|c: char| c.is_ascii_punctuation());
+
+            if !starts_with_punctuation {
                 last_item.content.push(' ');
             }
-            last_item.content.extend(content.drain(..));
+
+            last_item.content.push_str(content.trim());
+
+            content = String::new();
         }
     }
 
@@ -320,15 +325,16 @@ pub fn span_tokenize_items(
             translated_items.push(TranslatedItem {
                 pts,
                 duration,
-                content,
+                content: content.trim().to_string(),
             });
         } else if let Some(last_item) = translated_items.last_mut() {
             // No more pts and duration in the index
             // Add remaining content to the last item pushed
-            if !last_item.content.ends_with(' ') {
+            let starts_with_punctuation = content.starts_with(|c: char| c.is_ascii_punctuation());
+            if !starts_with_punctuation {
                 last_item.content.push(' ');
             }
-            last_item.content.push_str(&content);
+            last_item.content.push_str(content.trim());
         }
     } else if let Some((last_pts, last_duration)) = ts_duration_iter.last() {
         if let Some(last_item) = translated_items.last_mut() {
@@ -575,5 +581,37 @@ mod tests {
         assert_eq!(first.content, "caractères accentués");
 
         assert!(items.next().is_none());
+    }
+
+    #[test]
+    fn exhausted_spans_join_punctuation() {
+        let input = "<span>et</span> <span><span>les</span> <span>Clippers</span> <span>sont</span> <span><span>au</span></span> <span>tableau</span><span>,</span> <span>et</span> <span>c'est <span>Norman</span> qui</span> <span>attaque</span> en <span>lisant</span> <span>Max <span>Christie</span>.</span></span>";
+
+        let ts_duration_list = vec![
+            (0.seconds(), 1.seconds()),
+            (1.seconds(), 1.seconds()),
+            (2.seconds(), 1.seconds()),
+            (3.seconds(), 1.seconds()),
+            (4.seconds(), 1.seconds()),
+            (5.seconds(), 1.seconds()),
+            (6.seconds(), 1.seconds()),
+            (7.seconds(), 1.seconds()),
+            (8.seconds(), 1.seconds()),
+            (9.seconds(), 1.seconds()),
+            (10.seconds(), 1.seconds()),
+            (11.seconds(), 1.seconds()),
+            (12.seconds(), 1.seconds()),
+            (13.seconds(), 1.seconds()),
+            (14.seconds(), 1.seconds()),
+            (15.seconds(), 1.seconds()),
+        ];
+
+        let items = span_tokenize_items(input, ts_duration_list).into_iter();
+
+        let final_ = items.last().unwrap();
+
+        // when all spans are consumed and punctuation remains as the content,
+        // don't join it with a space with the last item content (Christie .)
+        assert!(final_.content == "Christie.");
     }
 }
