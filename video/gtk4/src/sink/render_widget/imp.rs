@@ -98,14 +98,31 @@ impl WidgetImpl for RenderWidget {
     fn snapshot(&self, snapshot: &gtk::Snapshot) {
         let window_width = self.obj().width() as u32;
         let window_height = self.obj().height() as u32;
-        let new_size = (window_width, window_height);
+        let scale = {
+            #[cfg(feature = "gtk_v4_12")]
+            {
+                if let Some(surface) = self.obj().native().and_then(|native| native.surface()) {
+                    surface.scale()
+                } else {
+                    self.obj().scale_factor() as f64
+                }
+            }
+            #[cfg(not(feature = "gtk_v4_12"))]
+            {
+                self.obj().scale_factor() as f64
+            }
+        };
+        let new_size = (
+            f64::ceil(window_width as f64 * scale) as u32,
+            f64::ceil(window_height as f64 * scale) as u32,
+        );
         let updated = self.window_size.replace(new_size) != new_size;
 
         if updated {
             let element = self.element.borrow();
             let element = element.as_ref().unwrap();
-            element.set_property("window-width", window_width);
-            element.set_property("window-height", window_height);
+            element.set_property("window-width", new_size.0);
+            element.set_property("window-height", new_size.1);
         }
 
         self.parent_snapshot(snapshot)
