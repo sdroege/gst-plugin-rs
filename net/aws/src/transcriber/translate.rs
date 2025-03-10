@@ -15,6 +15,7 @@ use aws_sdk_translate::error::ProvideErrorMetadata;
 use futures::channel::mpsc;
 use futures::prelude::*;
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use super::imp::TranslateSrcPad;
@@ -343,7 +344,24 @@ pub fn span_tokenize_items(
         }
     }
 
-    translated_items
+    let mut consolidated_items: VecDeque<TranslatedItem> = VecDeque::new();
+    let mut consolidate = false;
+
+    for item in translated_items.drain(..) {
+        if consolidate {
+            let last_item = consolidated_items.back_mut().unwrap();
+            last_item.duration = item.pts + item.duration - last_item.pts;
+            last_item.content += &item.content;
+            consolidate = false;
+            continue;
+        }
+        if item.content.ends_with("'") || item.content.ends_with("’") {
+            consolidate = true;
+        }
+        consolidated_items.push_back(item);
+    }
+
+    consolidated_items.into()
 }
 
 #[cfg(test)]
