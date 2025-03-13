@@ -747,6 +747,8 @@ impl MpegTsLiveSource {
             buffer.set_dts(new_pts);
         };
 
+        drop(state);
+
         gst::ProxyPad::chain_default(pad, Some(&*self.obj()), buffer)
     }
 
@@ -800,6 +802,8 @@ impl MpegTsLiveSource {
             };
             ControlFlow::Continue(Some(buffer))
         });
+
+        drop(state);
 
         gst::ProxyPad::chain_list_default(pad, Some(&*self.obj()), bufferlist)
     }
