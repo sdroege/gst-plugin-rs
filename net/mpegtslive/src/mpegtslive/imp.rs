@@ -235,10 +235,12 @@ struct Stream {
 }
 
 #[derive(Default)]
-struct State {
-    // Controlled source element
+struct Settings {
     source: Option<gst::Element>,
+}
 
+#[derive(Default)]
+struct State {
     // Last observed PCR (for handling wraparound)
     last_seen_pcr: Option<MpegTsPcr>,
 
@@ -696,6 +698,7 @@ pub struct MpegTsLiveSource {
     external_clock: gst::SystemClock,
 
     state: Mutex<State>,
+    settings: Mutex<Settings>,
 }
 
 impl MpegTsLiveSource {
@@ -849,6 +852,7 @@ impl ObjectSubclass for MpegTsLiveSource {
             internal_clock,
             external_clock,
             state: Mutex::new(State::default()),
+            settings: Mutex::new(Settings::default()),
         }
     }
 }
@@ -880,8 +884,8 @@ impl ObjectImpl for MpegTsLiveSource {
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "source" => {
-                let mut state = self.state.lock().unwrap();
-                if let Some(existing_source) = state.source.take() {
+                let mut settings = self.settings.lock().unwrap();
+                if let Some(existing_source) = settings.source.take() {
                     let _ = self.obj().remove(&existing_source);
                     let _ = self.srcpad.set_target(None::<&gst::Pad>);
                 }
@@ -906,9 +910,9 @@ impl ObjectImpl for MpegTsLiveSource {
                         gst::warning!(CAT, imp = self, "Failed to set ghost pad target");
                         return;
                     }
-                    state.source = Some(source);
+                    settings.source = Some(source);
                 } else {
-                    state.source = None;
+                    settings.source = None;
                 }
             }
             "window-size" => {
@@ -920,7 +924,7 @@ impl ObjectImpl for MpegTsLiveSource {
 
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
-            "source" => self.state.lock().unwrap().source.to_value(),
+            "source" => self.settings.lock().unwrap().source.to_value(),
             "window-size" => self.external_clock.window_size().to_value(),
             _ => unimplemented!(),
         }
@@ -953,7 +957,7 @@ impl ElementImpl for MpegTsLiveSource {
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         if transition == gst::StateChange::ReadyToPaused
             && self
-                .state
+                .settings
                 .lock()
                 .expect("Couldn't get state")
                 .source
