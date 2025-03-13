@@ -8,6 +8,8 @@ ignore = [
     # sodiumoxide is deprecated
     # https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/530
     "RUSTSEC-2021-0137",
+    # paste is no longer maintained but there's no alternative
+    "RUSTSEC-2024-0436"
 ]
 
 [licenses]
@@ -103,10 +105,15 @@ version = "0.52"
 name = "windows-result"
 version = "0.1"
 
-# various rav1e / dssim-core depend on old versions of itertools
+# rav1e / dssim-core depend on old versions of itertools
 [[bans.skip]]
 name = "itertools"
 version = "0.12"
+
+# bindgen depends on old itertools
+[[bans.skip]]
+name = "itertools"
+version = "0.13"
 
 # vvdec-sys uses bindgen 0.70 while aws-lc-sys uses bindgen 0.69
 [[bans.skip]]
@@ -123,29 +130,59 @@ version = "0.1"
 name = "windows_x86_64_msvc"
 version = "0.48"
 [[bans.skip]]
+name = "windows_x86_64_msvc"
+version = "0.52"
+[[bans.skip]]
 name = "windows_x86_64_gnullvm"
 version = "0.48"
+[[bans.skip]]
+name = "windows_x86_64_gnullvm"
+version = "0.52"
 [[bans.skip]]
 name = "windows_x86_64_gnu"
 version = "0.48"
 [[bans.skip]]
+name = "windows_x86_64_gnu"
+version = "0.52"
+[[bans.skip]]
 name = "windows_i686_msvc"
 version = "0.48"
+[[bans.skip]]
+name = "windows_i686_msvc"
+version = "0.52"
 [[bans.skip]]
 name = "windows_i686_gnu"
 version = "0.48"
 [[bans.skip]]
+name = "windows_i686_gnu"
+version = "0.52"
+[[bans.skip]]
+name = "windows_i686_gnullvm"
+version = "0.52"
+[[bans.skip]]
 name = "windows_aarch64_msvc"
 version = "0.48"
+[[bans.skip]]
+name = "windows_aarch64_msvc"
+version = "0.52"
 [[bans.skip]]
 name = "windows_aarch64_gnullvm"
 version = "0.48"
 [[bans.skip]]
+name = "windows_aarch64_gnullvm"
+version = "0.52"
+[[bans.skip]]
 name = "windows-targets"
 version = "0.48"
 [[bans.skip]]
+name = "windows-targets"
+version = "0.52"
+[[bans.skip]]
 name = "windows-sys"
 version = "0.48"
+[[bans.skip]]
+name = "windows-sys"
+version = "0.52"
 
 # Various crates depend on an older version of crypto-bigint
 [[bans.skip]]
@@ -256,10 +293,10 @@ version = "0.22"
 name = "tokio-rustls"
 version = "0.24"
 
-# aws-config depends on old aws-smithy-json
+# Some AWS crates depend on old aws-smithy-http
 [[bans.skip]]
-name = "aws-smithy-json"
-version = "0.60.7"
+name = "aws-smithy-http"
+version = "0.60"
 
 # aws SDK depends on older version of various crypto crates
 [[bans.skip]]
@@ -323,6 +360,14 @@ version = "0.8"
 [[bans.skip]]
 name = "getrandom"
 version = "0.2"
+
+# Various crates depend on old rustix / linux-raw-sys
+[[bans.skip]]
+name = "rustix"
+version = "0.38"
+[[bans.skip]]
+name = "linux-raw-sys"
+version = "0.4"
 
 [sources]
 unknown-registry = "deny"
