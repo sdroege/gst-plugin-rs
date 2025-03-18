@@ -44,7 +44,6 @@ impl Default for Settings {
 
 struct State {
     color_format: ColorFormat,
-    out_info: gst_video::VideoInfo,
     current_color: Option<String>,
 }
 
@@ -57,7 +56,7 @@ pub struct ColorDetect {
 impl ColorDetect {
     fn detect_color(
         &self,
-        buf: &mut gst::BufferRef,
+        frame: &gst_video::VideoFrameRef<&gst::BufferRef>,
     ) -> Result<Option<(String, Vec<Color>)>, gst::FlowError> {
         let mut state_guard = self.state.borrow_mut();
         let state = state_guard.as_mut().ok_or_else(|| {
@@ -66,8 +65,6 @@ impl ColorDetect {
         })?;
 
         let settings = *self.settings.lock().unwrap();
-        let frame =
-            gst_video::VideoFrameRef::from_buffer_ref_readable(buf, &state.out_info).unwrap();
         let palette = get_palette(
             frame.plane_data(0).unwrap(),
             state.color_format,
@@ -119,7 +116,7 @@ impl ColorDetect {
 impl ObjectSubclass for ColorDetect {
     const NAME: &'static str = "GstColorDetect";
     type Type = super::ColorDetect;
-    type ParentType = gst_base::BaseTransform;
+    type ParentType = gst_video::VideoFilter;
 }
 
 impl ObjectImpl for ColorDetect {
@@ -249,26 +246,24 @@ impl ElementImpl for ColorDetect {
 impl BaseTransformImpl for ColorDetect {
     const MODE: gst_base::subclass::BaseTransformMode =
         gst_base::subclass::BaseTransformMode::AlwaysInPlace;
-    const PASSTHROUGH_ON_SAME_CAPS: bool = false;
-    const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
+    const PASSTHROUGH_ON_SAME_CAPS: bool = true;
+    const TRANSFORM_IP_ON_PASSTHROUGH: bool = true;
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         *self.state.borrow_mut() = None;
         gst::info!(CAT, imp = self, "Stopped");
         Ok(())
     }
+}
 
-    fn set_caps(&self, incaps: &gst::Caps, outcaps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        let in_info = match gst_video::VideoInfo::from_caps(incaps) {
-            Err(_) => return Err(gst::loggable_error!(CAT, "Failed to parse input caps")),
-            Ok(info) => info,
-        };
-
-        let out_info = match gst_video::VideoInfo::from_caps(outcaps) {
-            Err(_) => return Err(gst::loggable_error!(CAT, "Failed to parse output caps")),
-            Ok(info) => info,
-        };
-
+impl VideoFilterImpl for ColorDetect {
+    fn set_info(
+        &self,
+        incaps: &gst::Caps,
+        in_info: &gst_video::VideoInfo,
+        outcaps: &gst::Caps,
+        _out_info: &gst_video::VideoInfo,
+    ) -> Result<(), gst::LoggableError> {
         gst::debug!(
             CAT,
             imp = self,
@@ -292,15 +287,17 @@ impl BaseTransformImpl for ColorDetect {
         };
         *self.state.borrow_mut() = Some(State {
             color_format,
-            out_info,
             current_color: previous_color,
         });
 
         Ok(())
     }
 
-    fn transform_ip(&self, buf: &mut gst::BufferRef) -> Result<gst::FlowSuccess, gst::FlowError> {
-        if let Some((dominant_color_name, palette)) = self.detect_color(buf)? {
+    fn transform_frame_ip_passthrough(
+        &self,
+        frame: &gst_video::VideoFrameRef<&gst::BufferRef>,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        if let Some((dominant_color_name, palette)) = self.detect_color(frame)? {
             self.color_changed(&dominant_color_name, palette);
         }
 
