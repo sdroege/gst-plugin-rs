@@ -9928,6 +9928,7 @@
                 "description": "Detects the dominant color of a video",
                 "hierarchy": [
                     "GstColorDetect",
+                    "GstVideoFilter",
                     "GstBaseTransform",
                     "GstElement",
                     "GstObject",
