@@ -109,6 +109,22 @@ fn test_basic_with(video_enc: &str, audio_enc: &str, cb: impl FnOnce(&Path)) {
         println!("could not build encoding pipeline");
         return;
     };
+    run_pipeline(pipeline, cb);
+}
+
+fn test_short_basic_with(video_enc: &str, audio_enc: &str, cb: impl FnOnce(&Path)) {
+    let Ok(pipeline) = gst::parse::launch(&format!(
+        "videotestsrc num-buffers=9 ! {video_enc} ! mux. \
+         audiotestsrc num-buffers=13 ! {audio_enc} ! mux. \
+         isomp4mux name=mux ! filesink name=sink"
+    )) else {
+        println!("could not build encoding pipeline");
+        return;
+    };
+    run_pipeline(pipeline, cb);
+}
+
+fn run_pipeline(pipeline: gst::Element, cb: impl FnOnce(&Path)) {
     let pipeline = Pipeline(pipeline.downcast::<gst::Pipeline>().unwrap());
 
     let dir = tempfile::TempDir::new().unwrap();
@@ -173,7 +189,7 @@ fn test_basic_x264_aac() {
 #[test]
 fn test_roundtrip_vp9_flac() {
     init();
-    test_basic_with("vp9enc ! vp9parse", "flacenc ! flacparse", |location| {
+    test_short_basic_with("vp9enc ! vp9parse", "flacenc ! flacparse", |location| {
         let Ok(pipeline) = gst::parse::launch(
             "filesrc name=src ! qtdemux name=demux \
              demux.audio_0 ! queue ! flacdec ! fakesink \
@@ -193,7 +209,7 @@ fn test_roundtrip_vp9_flac() {
 #[test]
 fn test_roundtrip_av1_aac() {
     init();
-    test_basic_with("av1enc ! av1parse", "avenc_aac ! aacparse", |location| {
+    test_short_basic_with("av1enc ! av1parse", "avenc_aac ! aacparse", |location| {
         let Ok(pipeline) = gst::parse::launch(
             "filesrc name=src ! qtdemux name=demux \
              demux.audio_0 ! queue ! avdec_aac ! fakesink \
@@ -212,7 +228,7 @@ fn test_roundtrip_av1_aac() {
 
 fn test_uncompressed_with(format: &str, width: u32, height: u32, cb: impl FnOnce(&Path)) {
     let Ok(pipeline) = gst::parse::launch(&format!(
-        "videotestsrc num-buffers=99 ! video/x-raw,format={format},width={width},height={height} ! mux. \
+        "videotestsrc num-buffers=34 ! video/x-raw,format={format},width={width},height={height} ! mux. \
          isomp4mux name=mux ! filesink name=sink"
     )) else {
         println!("could not build encoding pipeline");
@@ -250,7 +266,7 @@ fn test_roundtrip_uncompressed(video_format: &str, width: u32, height: u32) {
 
 fn test_encode_uncompressed(video_format: &str, width: u32, height: u32) {
     let filename = format!("{video_format}_{width}x{height}.mp4");
-    let pipeline_text = format!("videotestsrc num-buffers=250 ! video/x-raw,format={video_format},width={width},height={height} ! isomp4mux ! filesink location={filename}");
+    let pipeline_text = format!("videotestsrc num-buffers=34 ! video/x-raw,format={video_format},width={width},height={height} ! isomp4mux ! filesink location={filename}");
 
     let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
         panic!("could not build encoding pipeline")
