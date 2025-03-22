@@ -293,32 +293,56 @@ impl Dav1dDec {
         );
 
         let input_state = state.input_state.clone();
-        let input_info = input_state.info();
         let input_caps = input_state.caps().ok_or(gst::FlowError::NotNegotiated)?;
         let input_structure = input_caps
             .structure(0)
             .ok_or(gst::FlowError::NotNegotiated)?;
-        let input_colorimetry = input_info.colorimetry();
 
         drop(state_guard);
 
         let instance = self.obj();
         let mut output_state =
             instance.set_output_state(format, pic.width(), pic.height(), Some(&input_state))?;
-        let mut info_builder = gst_video::VideoInfo::builder(format, pic.width(), pic.height());
+        let info = output_state.info();
+        let mut info_builder = gst_video::VideoInfo::builder_from_info(&info);
         let mut update_output_state = false;
 
-        let colorimetry = self.colorimetry_from_dav1d_picture(pic);
-        if !input_structure.has_field("colorimetry")
-            || input_colorimetry.range() == gst_video::VideoColorRange::Unknown
-            || input_colorimetry.matrix() == gst_video::VideoColorMatrix::Unknown
-            || input_colorimetry.transfer() == gst_video::VideoTransferFunction::Unknown
-            || input_colorimetry.primaries() == gst_video::VideoColorPrimaries::Unknown
-        {
-            if let Some(colorimetry) = colorimetry.as_ref() {
-                info_builder = info_builder.colorimetry(colorimetry);
-                update_output_state = true;
+        let input_colorimetry = info.colorimetry();
+        let dec_colorimetry = self.colorimetry_from_dav1d_picture(pic);
+        if let Some(ref dec_colorimetry) = dec_colorimetry {
+            let mut range = input_colorimetry.range();
+            let mut matrix = input_colorimetry.matrix();
+            let mut transfer = input_colorimetry.transfer();
+            let mut primaries = input_colorimetry.primaries();
+
+            if !input_structure.has_field("colorimetry")
+                || range == gst_video::VideoColorRange::Unknown
+            {
+                range = dec_colorimetry.range();
             }
+
+            if !input_structure.has_field("colorimetry")
+                || matrix == gst_video::VideoColorMatrix::Unknown
+            {
+                matrix = dec_colorimetry.matrix();
+            }
+
+            if !input_structure.has_field("colorimetry")
+                || transfer == gst_video::VideoTransferFunction::Unknown
+            {
+                transfer = dec_colorimetry.transfer();
+            }
+
+            if !input_structure.has_field("colorimetry")
+                || primaries == gst_video::VideoColorPrimaries::Unknown
+            {
+                primaries = dec_colorimetry.primaries();
+            }
+
+            info_builder = info_builder.colorimetry(&gst_video::VideoColorimetry::new(
+                range, matrix, transfer, primaries,
+            ));
+            update_output_state = true;
         }
 
         if !input_structure.has_field("chroma-site") {
