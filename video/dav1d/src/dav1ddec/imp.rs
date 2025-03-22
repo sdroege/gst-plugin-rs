@@ -467,20 +467,15 @@ impl Dav1dDec {
 
     fn decoded_picture_as_buffer(
         &self,
-        state_guard: &mut MutexGuard<Option<State>>,
+        mut state_guard: MutexGuard<Option<State>>,
         pic: &dav1d::Picture,
         output_state: gst_video::VideoCodecState<gst_video::video_codec_state::Readable>,
-    ) -> Result<gst::Buffer, gst::FlowError> {
-        let mut offsets = vec![];
-        let mut strides = vec![];
-        let mut acc_offset: usize = 0;
-
+        codec_frame: &mut gst_video::VideoCodecFrame,
+    ) -> Result<(), gst::FlowError> {
         let state = state_guard.as_mut().ok_or(gst::FlowError::Flushing)?;
         let video_meta_supported = state.video_meta_supported;
 
         let info = output_state.info();
-        let mut out_buffer = gst::Buffer::new();
-        let mut_buffer = out_buffer.get_mut().unwrap();
 
         let components = if info.is_yuv() {
             const YUV_COMPONENTS: [dav1d::PlanarImageComponent; 3] = [
@@ -497,66 +492,110 @@ impl Dav1dDec {
         } else {
             unreachable!();
         };
-        for &component in components {
-            let dest_stride: u32 = info.stride()[component as usize].try_into().unwrap();
+
+        let mut offsets = [0; 4];
+        let mut strides = [0; 4];
+        let mut acc_offset = 0usize;
+
+        for (idx, &component) in components.iter().enumerate() {
             let plane = pic.plane(component);
-            let (src_stride, height) = pic.plane_data_geometry(component);
-            let mem = if video_meta_supported || src_stride == dest_stride {
-                gst::Memory::from_slice(plane)
-            } else {
-                gst::trace!(
-                    gst::CAT_PERFORMANCE,
-                    imp = self,
-                    "Copying decoded video frame component {:?}",
-                    component
-                );
+            let src_stride = pic.stride(component);
 
-                let src_slice = plane.as_ref();
-                let mem = gst::Memory::with_size((dest_stride * height) as usize);
-                let mut writable_mem = mem
-                    .into_mapped_memory_writable()
-                    .map_err(|_| gst::FlowError::Error)?;
-                let len = std::cmp::min(src_stride, dest_stride) as usize;
+            let mem_size = plane.len();
 
-                for (out_line, in_line) in writable_mem
-                    .as_mut_slice()
-                    .chunks_exact_mut(dest_stride.try_into().unwrap())
-                    .zip(src_slice.chunks_exact(src_stride.try_into().unwrap()))
-                {
-                    out_line.copy_from_slice(&in_line[..len]);
-                }
-                writable_mem.into_memory()
-            };
-            let mem_size = mem.size();
-            mut_buffer.append_memory(mem);
-
-            strides.push(src_stride as i32);
-            offsets.push(acc_offset);
+            strides[idx] = src_stride as i32;
+            offsets[idx] = acc_offset;
             acc_offset += mem_size;
         }
 
-        if video_meta_supported {
-            gst_video::VideoMeta::add_full(
-                out_buffer.get_mut().unwrap(),
-                gst_video::VideoFrameFlags::empty(),
-                info.format(),
-                info.width(),
-                info.height(),
-                &offsets,
-                &strides[..],
-            )
-            .unwrap();
-        }
+        let strides = &strides[..components.len()];
+        let offsets = &offsets[..components.len()];
+
+        let strides_matching = info.offset() == offsets && info.stride() == strides;
+
+        // We can forward decoded memory as-is if downstream supports the video meta
+        // or the strides/offsets are matching with the default ones.
+        let forward_memory = video_meta_supported || strides_matching;
+
+        drop(state_guard);
+
+        let mut out_buffer = forward_memory.then(gst::Buffer::new);
+        let mut_buffer = if forward_memory {
+            out_buffer.as_mut().unwrap().get_mut().unwrap()
+        } else {
+            self.obj().allocate_output_frame(codec_frame, None)?;
+            codec_frame
+                .output_buffer_mut()
+                .expect("output_buffer is set")
+        };
 
         let duration = pic.duration() as u64;
         if duration > 0 {
-            out_buffer
-                .get_mut()
-                .unwrap()
-                .set_duration(duration.nseconds());
+            mut_buffer.set_duration(duration.nseconds());
         }
 
-        Ok(out_buffer)
+        if forward_memory {
+            assert!(mut_buffer.size() == 0);
+
+            for &component in components {
+                let plane = pic.plane(component);
+                let mem = gst::Memory::from_slice(plane);
+                mut_buffer.append_memory(mem);
+            }
+
+            if video_meta_supported {
+                gst_video::VideoMeta::add_full(
+                    mut_buffer,
+                    gst_video::VideoFrameFlags::empty(),
+                    info.format(),
+                    info.width(),
+                    info.height(),
+                    offsets,
+                    strides,
+                )
+                .unwrap();
+            }
+
+            assert!(codec_frame.output_buffer().is_none());
+            codec_frame.set_output_buffer(out_buffer.expect("out_buffer is set"));
+        } else {
+            gst::trace!(
+                gst::CAT_PERFORMANCE,
+                imp = self,
+                "Copying decoded video frame to output",
+            );
+
+            assert!(mut_buffer.size() > 0);
+
+            let mut vframe = gst_video::VideoFrameRef::from_buffer_ref_writable(mut_buffer, &info)
+                .expect("can map writable frame");
+
+            for (idx, &component) in components.iter().enumerate() {
+                let plane = pic.plane(component);
+                let (src_stride, src_height) = pic.plane_data_geometry(component);
+                let src_slice = plane.as_ref();
+                let dest_stride = vframe.plane_stride()[idx] as u32;
+                let dest_height = vframe.plane_height(idx as u32);
+                let dest_plane_data = vframe
+                    .plane_data_mut(idx as u32)
+                    .expect("can get plane data");
+
+                let chunk_len = std::cmp::min(src_stride, dest_stride) as usize;
+
+                if src_stride == dest_stride && src_height == dest_height {
+                    dest_plane_data.copy_from_slice(src_slice);
+                } else {
+                    for (out_line, in_line) in dest_plane_data
+                        .chunks_exact_mut(dest_stride as usize)
+                        .zip(src_slice.chunks_exact(src_stride as usize))
+                    {
+                        out_line.copy_from_slice(&in_line[..chunk_len]);
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn handle_picture<'s>(
@@ -576,10 +615,7 @@ impl Dav1dDec {
 
         let frame = instance.frame(offset);
         if let Some(mut frame) = frame {
-            let output_buffer =
-                self.decoded_picture_as_buffer(&mut state_guard, pic, output_state)?;
-            frame.set_output_buffer(output_buffer);
-            drop(state_guard);
+            self.decoded_picture_as_buffer(state_guard, pic, output_state, &mut frame)?;
             instance.finish_frame(frame)?;
             Ok(self.state.lock().unwrap())
         } else {
