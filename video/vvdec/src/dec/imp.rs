@@ -348,10 +348,59 @@ impl VVdeC {
     ) -> Result<(), gst::FlowError> {
         let state = state_guard.as_mut().expect("state is set");
         let video_meta_supported = state.video_meta_supported;
+
+        let info = state
+            .output_info
+            .as_ref()
+            .expect("output_info is set")
+            .clone();
+        let color_format = frame.color_format();
+        if color_format == vvdec::ColorFormat::Invalid {
+            gst::error!(CAT, imp = self, "Invalid color format");
+            return Err(gst::FlowError::Error);
+        }
+
+        let components = if color_format == vvdec::ColorFormat::Yuv400Planar {
+            const GRAY_COMPONENTS: [vvdec::PlaneComponent; 1] = [vvdec::PlaneComponent::Y];
+            &GRAY_COMPONENTS[..]
+        } else {
+            const YUV_COMPONENTS: [vvdec::PlaneComponent; 3] = [
+                vvdec::PlaneComponent::Y,
+                vvdec::PlaneComponent::U,
+                vvdec::PlaneComponent::V,
+            ];
+            &YUV_COMPONENTS[..]
+        };
+
+        let mut offsets = [0; 4];
+        let mut strides = [0; 4];
+        let mut acc_offset = 0usize;
+
+        for (idx, component) in components.iter().enumerate() {
+            let plane = frame
+                .plane(*component)
+                .expect("frame contains the requested plane");
+            let src_stride = plane.stride();
+            let mem_size = plane.len();
+
+            strides[idx] = src_stride as i32;
+            offsets[idx] = acc_offset;
+            acc_offset += mem_size;
+        }
+
+        let strides = &strides[..components.len()];
+        let offsets = &offsets[..components.len()];
+
+        let strides_matching = info.offset() == offsets && info.stride() == strides;
+
+        // We can forward decoded memory as-is if downstream supports the video meta
+        // or the strides/offsets are matching with the default ones.
+        let forward_memory = video_meta_supported || strides_matching;
+
         drop(state_guard);
 
-        let mut out_buffer = video_meta_supported.then(gst::Buffer::new);
-        let mut_buffer = if video_meta_supported {
+        let mut out_buffer = forward_memory.then(gst::Buffer::new);
+        let mut_buffer = if forward_memory {
             out_buffer.as_mut().unwrap().get_mut().unwrap()
         } else {
             self.obj().allocate_output_frame(codec_frame, None)?;
@@ -359,16 +408,6 @@ impl VVdeC {
                 .output_buffer_mut()
                 .expect("output_buffer is set")
         };
-
-        state_guard = self.state.lock().unwrap();
-        let state = state_guard.as_mut().expect("state is set");
-        let info = state.output_info.as_ref().expect("output_info is set");
-
-        let color_format = frame.color_format();
-        if color_format == vvdec::ColorFormat::Invalid {
-            gst::error!(CAT, imp = self, "Invalid color format");
-            return Err(gst::FlowError::Error);
-        }
 
         let frame_format = frame.frame_format();
         let video_flags = match frame_format {
@@ -397,37 +436,15 @@ impl VVdeC {
             mut_buffer.set_video_flags(video_flags);
         }
 
-        let components = if color_format == vvdec::ColorFormat::Yuv400Planar {
-            const GRAY_COMPONENTS: [vvdec::PlaneComponent; 1] = [vvdec::PlaneComponent::Y];
-            &GRAY_COMPONENTS[..]
-        } else {
-            const YUV_COMPONENTS: [vvdec::PlaneComponent; 3] = [
-                vvdec::PlaneComponent::Y,
-                vvdec::PlaneComponent::U,
-                vvdec::PlaneComponent::V,
-            ];
-            &YUV_COMPONENTS[..]
-        };
-
-        if video_meta_supported {
-            let mut offsets = vec![];
-            let mut strides = vec![];
-            let mut acc_offset: usize = 0;
-
+        if forward_memory {
             assert!(mut_buffer.size() == 0);
 
             for component in components {
                 let plane = frame
                     .plane(*component)
                     .expect("frame contains the requested plane");
-                let src_stride = plane.stride();
                 let mem = gst::Memory::from_slice(plane);
-                let mem_size = mem.size();
                 mut_buffer.append_memory(mem);
-
-                strides.push(src_stride as i32);
-                offsets.push(acc_offset);
-                acc_offset += mem_size;
             }
 
             let frame_flags = match frame_format {
@@ -445,26 +462,35 @@ impl VVdeC {
                 vvdec::FrameFormat::BottomTop => gst_video::VideoFrameFlags::INTERLACED,
                 _ => unreachable!("frame_format is checked above"),
             };
-            gst_video::VideoMeta::add_full(
-                mut_buffer,
-                frame_flags,
-                info.format(),
-                info.width(),
-                info.height(),
-                &offsets,
-                &strides[..],
-            )
-            .unwrap();
+
+            if video_meta_supported {
+                gst_video::VideoMeta::add_full(
+                    mut_buffer,
+                    frame_flags,
+                    info.format(),
+                    info.width(),
+                    info.height(),
+                    offsets,
+                    strides,
+                )
+                .unwrap();
+            }
 
             assert!(codec_frame.output_buffer().is_none());
             codec_frame.set_output_buffer(out_buffer.expect("out_buffer is set"));
         } else {
+            gst::trace!(
+                gst::CAT_PERFORMANCE,
+                imp = self,
+                "Copying decoded video frame to output",
+            );
+
             assert!(mut_buffer.size() > 0);
-            let mut vframe = gst_video::VideoFrameRef::from_buffer_ref_writable(mut_buffer, info)
+            let mut vframe = gst_video::VideoFrameRef::from_buffer_ref_writable(mut_buffer, &info)
                 .expect("can map writable frame");
             for component in components {
-                let dest_stride: u32 = vframe.plane_stride()[*component as usize] as u32;
-                let dest_height: u32 = vframe.plane_height(*component as u32);
+                let dest_stride = vframe.plane_stride()[*component as usize] as u32;
+                let dest_height = vframe.plane_height(*component as u32);
                 let dest_plane_data = vframe
                     .plane_data_mut(*component as u32)
                     .expect("can get plane data");
@@ -480,8 +506,8 @@ impl VVdeC {
                     dest_plane_data.copy_from_slice(src_slice);
                 } else {
                     for (out_line, in_line) in dest_plane_data
-                        .chunks_exact_mut(dest_stride.try_into().unwrap())
-                        .zip(src_slice.chunks_exact(src_stride.try_into().unwrap()))
+                        .chunks_exact_mut(dest_stride as usize)
+                        .zip(src_slice.chunks_exact(src_stride as usize))
                     {
                         out_line.copy_from_slice(&in_line[..chunk_len]);
                     }
