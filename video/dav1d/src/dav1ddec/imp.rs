@@ -929,6 +929,21 @@ impl VideoDecoderImpl for Dav1dDec {
         input_state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
         let mut state_guard = self.state.lock().unwrap();
+        // Drain decoder on caps changes if necessary
+        if state_guard.is_some() {
+            state_guard = self
+                .forward_pending_pictures(state_guard, true)
+                .map_err(|err| {
+                    gst::loggable_error!(CAT, "Failed to forward pending pictures: {}", err)
+                })?;
+        }
+        *state_guard = None;
+        drop(state_guard);
+
+        self.parent_set_format(input_state)?;
+
+        state_guard = self.state.lock().unwrap();
+
         let settings = self.settings.lock().unwrap();
         let mut decoder_settings = dav1d::Settings::new();
         let max_frame_delay: u32;
