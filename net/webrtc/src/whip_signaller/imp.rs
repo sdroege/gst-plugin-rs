@@ -13,23 +13,13 @@ use gst::subclass::prelude::*;
 use gst_sdp::SDPMessage;
 use gst_webrtc::{WebRTCICEGatheringState, WebRTCSessionDescription};
 use once_cell::sync::Lazy;
-use reqwest::header::HeaderMap;
-use reqwest::header::HeaderValue;
-use reqwest::StatusCode;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
 use std::net::SocketAddr;
 use tokio::sync::mpsc;
 use url::Url;
-use warp::{
-    http,
-    hyper::{
-        header::{CONTENT_TYPE, LINK},
-        Body,
-    },
-    Filter, Reply,
-};
+use warp::{http, hyper::Body, Filter, Reply};
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -189,17 +179,17 @@ impl WhipClient {
         let body = sdp.as_text().unwrap();
 
         gst::debug!(CAT, imp = self, "Using endpoint {}", endpoint.as_str());
-        let mut headermap = HeaderMap::new();
+        let mut headermap = reqwest::header::HeaderMap::new();
         headermap.insert(
             reqwest::header::CONTENT_TYPE,
-            HeaderValue::from_static(CONTENT_SDP),
+            reqwest::header::HeaderValue::from_static(CONTENT_SDP),
         );
 
         if let Some(token) = auth_token.as_ref() {
             let bearer_token = "Bearer ".to_owned() + token;
             headermap.insert(
                 reqwest::header::AUTHORIZATION,
-                HeaderValue::from_str(bearer_token.as_str())
+                reqwest::header::HeaderValue::from_str(bearer_token.as_str())
                     .expect("Failed to set auth token to header"),
             );
         }
@@ -243,7 +233,7 @@ impl WhipClient {
         gst::debug!(CAT, "response status: {}", resp.status());
 
         match resp.status() {
-            StatusCode::OK | StatusCode::CREATED => {
+            reqwest::StatusCode::OK | reqwest::StatusCode::CREATED => {
                 if use_link_headers {
                     if let Err(e) = set_ice_servers(webrtcbin, resp.headers()) {
                         self.raise_error(e.to_string());
@@ -398,12 +388,12 @@ impl WhipClient {
 
         drop(state);
 
-        let mut headermap = HeaderMap::new();
+        let mut headermap = reqwest::header::HeaderMap::new();
         if let Some(token) = &settings.auth_token {
             let bearer_token = "Bearer ".to_owned() + token.as_str();
             headermap.insert(
                 reqwest::header::AUTHORIZATION,
-                HeaderValue::from_str(bearer_token.as_str())
+                reqwest::header::HeaderValue::from_str(bearer_token.as_str())
                     .expect("Failed to set auth token to header"),
             );
         }
@@ -746,12 +736,15 @@ impl WhipServer {
         let settings = self.settings.lock().unwrap();
         drop(settings);
 
-        let mut links = HeaderMap::new();
+        let mut links = http::HeaderMap::new();
         let settings = self.settings.lock().unwrap();
         match &settings.stun_server {
             Some(stun) => match build_link_header(stun.as_str()) {
                 Ok(stun_link) => {
-                    links.append(LINK, HeaderValue::from_str(stun_link.as_str()).unwrap());
+                    links.append(
+                        http::header::LINK,
+                        warp::http::HeaderValue::from_str(stun_link.as_str()).unwrap(),
+                    );
                 }
                 Err(e) => {
                     gst::error!(CAT, imp = self, "Failed to parse {stun:?} : {e:?}");
@@ -766,7 +759,10 @@ impl WhipServer {
                     gst::debug!(CAT, imp = self, "turn server: {}", turn.as_str());
                     match build_link_header(turn.as_str()) {
                         Ok(turn_link) => {
-                            links.append(LINK, HeaderValue::from_str(turn_link.as_str()).unwrap());
+                            links.append(
+                                http::header::LINK,
+                                warp::http::HeaderValue::from_str(turn_link.as_str()).unwrap(),
+                            );
                         }
                         Err(e) => {
                             gst::error!(CAT, imp = self, "Failed to parse {turn_server:?} : {e:?}");
@@ -860,13 +856,16 @@ impl WhipServer {
         };
 
         let settings = self.settings.lock().unwrap();
-        let mut links = HeaderMap::new();
+        let mut links = http::HeaderMap::new();
 
         #[allow(clippy::single_match)]
         match &settings.stun_server {
             Some(stun) => match build_link_header(stun.as_str()) {
                 Ok(stun_link) => {
-                    links.append(LINK, HeaderValue::from_str(stun_link.as_str()).unwrap());
+                    links.append(
+                        http::header::LINK,
+                        http::HeaderValue::from_str(stun_link.as_str()).unwrap(),
+                    );
                 }
                 Err(e) => {
                     gst::error!(CAT, imp = self, "Failed to parse {stun:?} : {e:?}");
@@ -881,7 +880,10 @@ impl WhipServer {
                     gst::debug!(CAT, imp = self, "turn server: {}", turn.as_str());
                     match build_link_header(turn.as_str()) {
                         Ok(turn_link) => {
-                            links.append(LINK, HeaderValue::from_str(turn_link.as_str()).unwrap());
+                            links.append(
+                                http::header::LINK,
+                                http::HeaderValue::from_str(turn_link.as_str()).unwrap(),
+                            );
                         }
                         Err(e) => {
                             gst::error!(
@@ -936,8 +938,8 @@ impl WhipServer {
         // Got SDP answer, send answer in the response
         let resource_url = "/".to_owned() + ROOT + "/" + RESOURCE_PATH + "/" + &session_id;
         let mut res = http::Response::builder()
-            .status(StatusCode::CREATED)
-            .header(CONTENT_TYPE, CONTENT_SDP)
+            .status(http::StatusCode::CREATED)
+            .header(http::header::CONTENT_TYPE, CONTENT_SDP)
             .header("location", resource_url)
             .body(Body::from(ans_text.unwrap()))
             .unwrap();
@@ -975,7 +977,10 @@ impl WhipServer {
         let post_filter = warp::post()
             .and(warp::path(ENDPOINT_PATH))
             .and(warp::path::end())
-            .and(warp::header::exact(CONTENT_TYPE.as_str(), CONTENT_SDP))
+            .and(warp::header::exact(
+                http::header::CONTENT_TYPE.as_str(),
+                CONTENT_SDP,
+            ))
             .and(warp::body::bytes())
             .and_then(glib::clone!(
                 #[weak(rename_to = self_)]
@@ -1001,7 +1006,7 @@ impl WhipServer {
             .and(warp::path::param::<String>())
             .and(warp::path::end())
             .and(warp::header::exact(
-                CONTENT_TYPE.as_str(),
+                http::header::CONTENT_TYPE.as_str(),
                 CONTENT_TRICKLE_ICE,
             ))
             .and_then(glib::clone!(
