@@ -537,8 +537,15 @@ fn infinite_to_finite() {
 #[test]
 /// cache HTTP playlist items
 fn cache() {
+    let media = TestMedia::mkv_http();
+
+    if let Err(err) = reqwest::blocking::get(&media.uri) {
+        println!("skipping test as {} is not available: {}", media.uri, err);
+        return;
+    }
+
     let (_events, current_iteration, current_uri_index, eos) =
-        test(vec![TestMedia::mkv_http()], 2, 3, true, None, true);
+        test(vec![media], 2, 3, true, None, true);
     assert!(eos);
     assert_eq!(current_iteration, 2);
     assert_eq!(current_uri_index, 0);

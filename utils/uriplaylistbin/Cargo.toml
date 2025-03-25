@@ -19,6 +19,7 @@ gst-app.workspace = true
 url = "2.2"
 more-asserts = "0.3"
 tempfile = "3"
+reqwest = { version = "0.12", features = ["blocking"] }
 
 [lib]
 name = "gsturiplaylistbin"
