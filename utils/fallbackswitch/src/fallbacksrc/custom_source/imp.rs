@@ -193,10 +193,9 @@ impl ElementImpl for CustomSource {
                 if self.state.lock().unwrap().is_passthrough() {
                     gst::debug!(CAT, imp = self, "Forwarding select streams event to source");
                     let streams = e.streams();
-                    let event = gst::event::SelectStreams::builder(
-                        &streams.iter().map(|s| s.as_ref()).collect::<Vec<_>>(),
-                    )
-                    .build();
+                    let event =
+                        gst::event::SelectStreams::builder(streams.iter().map(|s| s.as_str()))
+                            .build();
                     return self.source.get().unwrap().send_event(event);
                 }
 

@@ -1103,7 +1103,7 @@ impl BaseSrcImpl for ReqwestHttpSrc {
                     -1,
                     0,
                 );
-                q.add_scheduling_modes(&[gst::PadMode::Push]);
+                q.add_scheduling_modes([gst::PadMode::Push]);
                 true
             }
             _ => BaseSrcImplExt::parent_query(self, query),

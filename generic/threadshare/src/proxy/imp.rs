@@ -728,7 +728,7 @@ impl PadSrcHandler for ProxySrcPadHandler {
             }
             QueryViewMut::Scheduling(q) => {
                 q.set(gst::SchedulingFlags::SEQUENTIAL, 1, -1, 0);
-                q.add_scheduling_modes(&[gst::PadMode::Push]);
+                q.add_scheduling_modes([gst::PadMode::Push]);
                 true
             }
             QueryViewMut::Caps(q) => {

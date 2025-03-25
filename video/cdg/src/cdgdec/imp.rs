@@ -206,8 +206,7 @@ impl VideoDecoderImpl for CdgDec {
             .find_allocation_meta::<gst_video::VideoMeta>()
             .is_some()
         {
-            let pools = query.allocation_pools();
-            if let Some((Some(ref pool), _, _, _)) = pools.first() {
+            if let Some((Some(ref pool), _, _, _)) = query.allocation_pools().next() {
                 let mut config = pool.config();
                 config.add_option(gst_video::BUFFER_POOL_OPTION_VIDEO_META);
                 pool.set_config(config)

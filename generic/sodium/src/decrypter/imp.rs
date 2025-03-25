@@ -292,7 +292,7 @@ impl Decrypter {
 
                 let (flags, min, max, align) = peer_query.result();
                 q.set(flags, min, max, align);
-                q.add_scheduling_modes(&[gst::PadMode::Pull]);
+                q.add_scheduling_modes([gst::PadMode::Pull]);
                 gst::log!(CAT, obj = pad, "Returning {:?}", q.query_mut());
                 true
             }

@@ -3646,7 +3646,7 @@ impl FallbackSrc {
                 "Sending select-streams event to main source with streams {:?}",
                 main_ids
             );
-            let main_event = gst::event::SelectStreams::builder(&main_ids).build();
+            let main_event = gst::event::SelectStreams::builder(main_ids).build();
             events.push((state.source.source.clone(), main_event));
         }
 
@@ -3663,7 +3663,7 @@ impl FallbackSrc {
                     "Sending select-streams event to fallback source with streams {:?}",
                     fallback_ids
                 );
-                let fallback_event = gst::event::SelectStreams::builder(&fallback_ids).build();
+                let fallback_event = gst::event::SelectStreams::builder(fallback_ids).build();
                 events.push((source.source.clone(), fallback_event));
             }
         };
@@ -3719,10 +3719,7 @@ impl FallbackSrc {
             CAT,
             imp = self,
             "Got streams selected {:?} (fallback: {})",
-            streams
-                .iter()
-                .map(|s| s.stream_id().unwrap())
-                .collect::<Vec<_>>(),
+            streams.map(|s| s.stream_id().unwrap()).collect::<Vec<_>>(),
             fallback_source,
         );
 

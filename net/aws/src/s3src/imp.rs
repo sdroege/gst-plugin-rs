@@ -530,7 +530,7 @@ impl BaseSrcImpl for S3Src {
                 -1,
                 0,
             );
-            q.add_scheduling_modes(&[gst::PadMode::Push, gst::PadMode::Pull]);
+            q.add_scheduling_modes([gst::PadMode::Push, gst::PadMode::Pull]);
             return true;
         }
 

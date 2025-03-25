@@ -1798,12 +1798,9 @@ impl ToggleRecord {
                 let (flags, min, max, align) = new_query.result();
                 q.set(flags, min, max, align);
                 q.add_scheduling_modes(
-                    &new_query
+                    new_query
                         .scheduling_modes()
-                        .iter()
-                        .cloned()
-                        .filter(|m| m != &gst::PadMode::Pull)
-                        .collect::<Vec<_>>(),
+                        .filter(|m| m != &gst::PadMode::Pull),
                 );
                 gst::log!(CAT, obj = pad, "Returning {:?}", q.query_mut());
                 true

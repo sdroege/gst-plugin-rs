@@ -531,7 +531,7 @@ impl BaseSrcImpl for NdiSrc {
         match query.view_mut() {
             QueryViewMut::Scheduling(ref mut q) => {
                 q.set(gst::SchedulingFlags::SEQUENTIAL, 1, -1, 0);
-                q.add_scheduling_modes(&[gst::PadMode::Push]);
+                q.add_scheduling_modes([gst::PadMode::Push]);
                 true
             }
             QueryViewMut::Latency(ref mut q) => {
