@@ -72,6 +72,6 @@ for (i, (pad, values)) in enumerate(pads.items()):
         statistics.mean(push_durations)))
 
 fig.tight_layout()
-plt.legend(loc='best')
+plt.legend(loc='best', prop={'size': 6})
 
 plt.show()
