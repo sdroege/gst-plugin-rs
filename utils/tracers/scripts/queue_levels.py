@@ -153,5 +153,5 @@ for (i, (queue, values)) in enumerate(queues.items()):
 
 fig.tight_layout()
 
-plt.legend(handles=patches, loc='best')
+plt.legend(handles=patches, loc='best', prop={'size': 6})
 plt.show()
