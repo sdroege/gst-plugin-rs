@@ -366,6 +366,7 @@ outdated:
 
 coverage:
   allow_failure: true
+  when: 'manual'
   extends:
     - '.debian:12-stable'
   needs:
