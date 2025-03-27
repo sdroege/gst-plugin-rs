@@ -234,7 +234,7 @@ impl Transcriber {
                                     .to_running_time(pts)
                                     .unwrap();
 
-                                state.discont_accumulator += base_rtime - discont_rtime;
+                                state.discont_accumulator += base_rtime.saturating_sub(discont_rtime);
 
                                 gst::info!(
                                     CAT,
