@@ -27,7 +27,7 @@ use std::sync::LazyLock;
 
 use super::CAT;
 use crate::s3utils::RUNTIME;
-use crate::transcriber::remote_types::TranscriptDef;
+use crate::transcriber::remote_types::{ItemDef, TranscriptDef};
 use crate::transcriber::{AwsTranscriberResultStability, AwsTranscriberVocabularyFilterMethod};
 
 #[allow(deprecated)]
@@ -207,9 +207,7 @@ impl Transcriber {
                         break;
                     }
 
-                    gst::log!(CAT, imp = self, "{item:?} is stabilized");
-
-                    if let Some(content) = item.content {
+                    if let Some(content) = item.content.clone() {
                         let aws_start_time: gst::ClockTime =
                             ((item.start_time * 1_000_000_000.0) as u64).nseconds();
                         let aws_end_time: gst::ClockTime =
@@ -234,7 +232,8 @@ impl Transcriber {
                                     .to_running_time(pts)
                                     .unwrap();
 
-                                state.discont_accumulator += base_rtime.saturating_sub(discont_rtime);
+                                state.discont_accumulator +=
+                                    base_rtime.saturating_sub(discont_rtime);
 
                                 gst::info!(
                                     CAT,
@@ -317,6 +316,23 @@ impl Transcriber {
                             let buf_mut = buf.get_mut().unwrap();
                             buf_mut.set_pts(pts);
                             buf_mut.set_duration(duration);
+                            if let Ok(mut m) =
+                                gst::meta::CustomMeta::add(buf_mut, "AWSTranscribeItemMeta")
+                            {
+                                let i = ItemDef {
+                                    start_time: item.start_time,
+                                    end_time: item.end_time,
+                                    r#type: item.r#type,
+                                    content: item.content.clone(),
+                                    vocabulary_filter_match: item.vocabulary_filter_match,
+                                    speaker: item.speaker,
+                                    confidence: item.confidence,
+                                    stable: item.stable,
+                                };
+
+                                m.mut_structure()
+                                    .set("item", serde_json::to_string(&i).expect("serializable"));
+                            }
                         }
 
                         output.push(TranscriptOutput::Item(buf));

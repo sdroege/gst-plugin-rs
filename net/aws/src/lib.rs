@@ -37,6 +37,10 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     s3hlssink::register(plugin)?;
     polly::register(plugin)?;
 
+    if !gst::meta::CustomMeta::is_registered("AWSTranscribeItemMeta") {
+        gst::meta::CustomMeta::register("AWSTranscribeItemMeta", &[]);
+    }
+
     Ok(())
 }
 

@@ -56,16 +56,16 @@ impl SerializeAs<sdk_types::ItemType> for ItemTypeDef {
 
 #[serde_as]
 #[derive(serde_derive::Serialize)]
-struct ItemDef {
-    start_time: f64,
-    end_time: f64,
+pub struct ItemDef {
+    pub start_time: f64,
+    pub end_time: f64,
     #[serde_as(as = "Option<ItemTypeDef>")]
-    r#type: Option<sdk_types::ItemType>,
-    content: Option<String>,
-    vocabulary_filter_match: bool,
-    speaker: Option<String>,
-    confidence: Option<f64>,
-    stable: Option<bool>,
+    pub r#type: Option<sdk_types::ItemType>,
+    pub content: Option<String>,
+    pub vocabulary_filter_match: bool,
+    pub speaker: Option<String>,
+    pub confidence: Option<f64>,
+    pub stable: Option<bool>,
 }
 
 impl SerializeAs<sdk_types::Item> for ItemDef {

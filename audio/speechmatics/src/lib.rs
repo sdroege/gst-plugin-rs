@@ -20,6 +20,10 @@ mod transcriber;
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     transcriber::register(plugin)?;
 
+    if !gst::meta::CustomMeta::is_registered("SpeechmaticsItemMeta") {
+        gst::meta::CustomMeta::register("SpeechmaticsItemMeta", &[]);
+    }
+
     Ok(())
 }
 

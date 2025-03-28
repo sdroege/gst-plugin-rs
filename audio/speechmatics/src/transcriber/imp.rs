@@ -39,13 +39,13 @@ struct TranscriptMetadata {
     transcript: String,
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
 #[allow(dead_code)]
 struct TranscriptDisplay {
     direction: String,
 }
 
-#[derive(serde::Deserialize, Debug, PartialEq)]
+#[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq)]
 #[allow(dead_code)]
 #[serde(rename_all = "lowercase")]
 enum Tag {
@@ -53,7 +53,7 @@ enum Tag {
     Disfluency,
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
 #[allow(dead_code)]
 struct TranscriptAlternative {
     content: String,
@@ -66,7 +66,7 @@ struct TranscriptAlternative {
     tags: Vec<Tag>,
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
 #[allow(dead_code)]
 struct TranscriptResult {
     #[serde(rename = "type")]
@@ -243,6 +243,7 @@ struct ItemAccumulator {
     start_time: gst::ClockTime,
     end_time: gst::ClockTime,
     speaker: Option<String>,
+    items: Vec<String>,
 }
 
 impl From<ItemAccumulator> for gst::Buffer {
@@ -253,6 +254,10 @@ impl From<ItemAccumulator> for gst::Buffer {
             let buf = buf.get_mut().unwrap();
             buf.set_pts(acc.start_time);
             buf.set_duration(acc.end_time - acc.start_time);
+
+            if let Ok(mut m) = gst::meta::CustomMeta::add(buf, "SpeechmaticsItemMeta") {
+                m.mut_structure().set("items", acc.items);
+            }
         }
 
         buf
@@ -542,6 +547,9 @@ impl TranscriberSrcPad {
                     if item.type_ == "punctuation" {
                         accumulator_inner.text.push_str(&alternative.content);
                         accumulator_inner.end_time = end_time;
+                        accumulator_inner
+                            .items
+                            .push(serde_json::to_string(&item).unwrap());
                     } else {
                         gst::debug!(
                             CAT,
@@ -566,6 +574,7 @@ impl TranscriberSrcPad {
                             start_time,
                             end_time,
                             speaker: alternative.speaker.clone(),
+                            items: vec![serde_json::to_string(&item).unwrap()],
                         });
                     }
                 } else if join_punctuation {
@@ -574,6 +583,7 @@ impl TranscriberSrcPad {
                         start_time,
                         end_time,
                         speaker: alternative.speaker.clone(),
+                        items: vec![serde_json::to_string(&item).unwrap()],
                     });
                 } else {
                     let text = alternative.content.clone();
@@ -598,6 +608,10 @@ impl TranscriberSrcPad {
                         let buf = buf.get_mut().unwrap();
                         buf.set_pts(start_time);
                         buf.set_duration(end_time - start_time);
+                        if let Ok(mut m) = gst::meta::CustomMeta::add(buf, "SpeechmaticsItemMeta") {
+                            m.mut_structure()
+                                .set("items", vec![serde_json::to_string(&item).unwrap()]);
+                        }
                     }
 
                     state.push_buffer(buf);

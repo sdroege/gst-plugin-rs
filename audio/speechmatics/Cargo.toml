@@ -10,7 +10,7 @@ rust-version.workspace = true
 
 [dependencies]
 futures = "0.3"
-gst.workspace = true
+gst = { workspace = true, features = ["v1_20"] }
 gst-base.workspace = true
 gst-audio = { workspace = true, features = ["v1_16"] }
 tokio = { version = "1", features = [ "full" ] }
