@@ -3140,7 +3140,14 @@ impl BinImpl for TranscriberBin {
                     let Ok(pad_state) = ps.as_mut() else {
                         continue;
                     };
-                    if msg.src() == pad_state.transcriber.as_ref().map(|t| t.upcast_ref()) {
+
+                    if msg.src() == pad_state.transcriber.as_ref().map(|t| t.upcast_ref())
+                        || msg
+                            .src()
+                            .zip(pad_state.transcriber.clone())
+                            .map(|(src, transcriber)| src.has_ancestor(&transcriber))
+                            .unwrap_or(false)
+                    {
                         gst::error!(
                             CAT,
                             imp = self,
