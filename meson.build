@@ -309,16 +309,6 @@ if get_option('gtk4').allowed()
       gtk4_features += 'dmabuf'
     endif
 
-    if gtk_dep.version().version_compare('>=4.16')
-      gtk4_features += 'gtk_v4_16'
-    elif gtk_dep.version().version_compare('>=4.14')
-      gtk4_features += 'gtk_v4_14'
-    elif gtk_dep.version().version_compare('>=4.12')
-      gtk4_features += 'gtk_v4_12'
-    elif gtk_dep.version().version_compare('>=4.10')
-      gtk4_features += 'gtk_v4_10'
-    endif
-
     plugins += {
       'gtk4': {
         'library': 'libgstgtk4',
@@ -380,28 +370,40 @@ features = []
 examples = []
 # Add the plugin library files as output
 output = []
+# List of features from meson dependencies
+found_features = {}
+# List of dependencies for each plugin from Cargo.toml
+feature_deps = {}
+# List of dependencies that are actually enabled
+required_feature_deps = []
 
-if get_option('gtk4').allowed()
-  if glib_dep.version().version_compare('>=2.74')
-    features += ['glib/v2_74', 'gio/v2_74']
-  elif glib_dep.version().version_compare('>=2.72')
-    features += ['glib/v2_72', 'gio/v2_72']
-  elif glib_dep.version().version_compare('>=2.70')
-    features += ['glib/v2_70', 'gio/v2_70']
-  elif glib_dep.version().version_compare('>=2.68')
-    features += ['glib/v2_68', 'gio/v2_68']
-  elif glib_dep.version().version_compare('>=2.66')
-    features += ['glib/v2_66', 'gio/v2_66']
-  elif glib_dep.version().version_compare('>=2.64')
-    features += ['glib/v2_64', 'gio/v2_64']
-  elif glib_dep.version().version_compare('>=2.62')
-    features += ['glib/v2_62', 'gio/v2_62']
-  elif glib_dep.version().version_compare('>=2.60')
-    features += ['glib/v2_60', 'gio/v2_60']
-  elif glib_dep.version().version_compare('>=2.58')
-    features += ['glib/v2_58', 'gio/v2_58']
+glib_versions = ['2.74','2.72','2.70','2.68','2.66','2.64','2.62','2.60','2.58']
+foreach glib_version : glib_versions
+  if glib_dep.version().version_compare(f'>=@glib_version@')
+    found_features += {'glib': 'glib/v' + glib_version.underscorify()}
+    found_features += {'gio': 'gio/v' + glib_version.underscorify()}
+    break
   endif
+endforeach
+
+if get_option('gtk4').allowed() and gtk_dep.found()
+  gtk4_versions = ['4.16','4.14','4.12','4.10']
+  foreach gtk4_version : gtk4_versions
+    if gtk_dep.version().version_compare(f'>=@gtk4_version@')
+      found_features += {'gtk': 'gtk_v' + gtk4_version.underscorify()}
+      break
+    endif
+  endforeach
 endif
+
+p = run_command('dependencies.py', meson.current_source_dir(), '--feature-deps', capture: true, check: true)
+foreach line : p.stdout().split('\n')
+  if ':' in line
+    tmp = line.split(':')
+    library_name = 'lib' + tmp[0].strip()
+    feature_deps += {library_name: tmp[1].strip().split(',')}
+  endif
+endforeach
 
 if get_option('rav1e').allowed()
   nasm = find_program('nasm', required: false)
@@ -449,6 +451,16 @@ foreach plugin_name, details: plugins
   endforeach
   if not plugin_deps_found
     continue
+  endif
+
+  # Build list of required features
+  library_name = details.get('library', [])
+  if feature_deps.has_key(library_name)
+    foreach d : feature_deps.get(library_name)
+      if d not in required_feature_deps
+        required_feature_deps += d
+      endif
+    endforeach
   endif
 
   # Validate gst-plugin features
@@ -516,7 +528,7 @@ foreach plugin_name, details: plugins
   packages += f'gst-plugin-@plugin_name@'
   features += plugin_features
   extra_features = run_command('dependencies.py', meson.current_source_dir(), plugin_name,
-    '--feature', '--gst-version', gst_dep.version(), capture: true, check: true).stdout().strip()
+    '--features', '--gst-version', gst_dep.version(), capture: true, check: true).stdout().strip()
   if extra_features != ''
     features += extra_features.split(',')
   endif
@@ -531,6 +543,13 @@ foreach plugin_name, details: plugins
   endif
   if default_library in ['static', 'both']
     output += [lib + '.' + ext_static]
+  endif
+endforeach
+
+# Add required features
+foreach feat : required_feature_deps
+  if found_features.has_key(feat)
+    features += found_features[feat]
   endif
 endforeach
 

@@ -21,6 +21,7 @@ PARSER.add_argument('src_dir', type=Path)
 PARSER.add_argument('plugins', nargs='*')
 PARSER.add_argument('--features', action="store_true", help="Get list of features to activate")
 PARSER.add_argument('--gst-version', help="GStreamer version used")
+PARSER.add_argument('--feature-deps', action="store_true", help="Get list of feature dependencies per plugin")
 
 
 # Map plugin name to directory name, for those that does not match.
@@ -49,6 +50,30 @@ class CargoAnalyzer:
         self.plugins = None
         self.features = False
         self.gst_version = "1.18"
+        self.feature_deps = False
+
+        self.crates = None
+
+    def load_crates(self):
+        with (self.src_dir / 'Cargo.toml').open('rb') as f:
+            self.crates = tomllib.load(f)['workspace']['members']
+
+    def get_feature_deps(self):
+        res = dict()
+        for crate in self.crates:
+            crate_path = opts.src_dir / crate / 'Cargo.toml'
+            with crate_path.open('rb') as f:
+                data = tomllib.load(f)
+            if 'lib' not in data or 'dependencies' not in data:
+                continue
+            name = data['lib']['name']
+            deps = set()
+            for dep_name, dep_info in data['dependencies'].items():
+                if not dep_name.startswith('gst') and 'workspace' in dep_info and dep_info['workspace']:
+                    deps.add(dep_name)
+            if (len(deps)):
+                res[name] = deps
+        return res
 
     def extract_version(self, feature_name):
         if feature_name.startswith('v'):
@@ -88,8 +113,6 @@ class CargoAnalyzer:
         return wanted_features
 
     def run(self):
-        with (opts.src_dir / 'Cargo.toml').open('rb') as f:
-            crates = tomllib.load(f)['workspace']['members']
         res = set()
         for name in opts.plugins:
             if name.startswith('gst'):
@@ -97,7 +120,7 @@ class CargoAnalyzer:
 
             name = RENAMES.get(name, name)
             crate_path = None
-            for crate in crates:
+            for crate in self.crates:
                 if Path(crate).name == name:
                     crate_path = opts.src_dir / crate / 'Cargo.toml'
             assert crate_path
@@ -117,4 +140,13 @@ if __name__ == "__main__":
     analyzer = CargoAnalyzer()
     opts = PARSER.parse_args(namespace=analyzer)
 
-    print(','.join(analyzer.run()))
+    if opts.feature_deps and (opts.features or opts.plugins):
+        sys.exit('error: --feature-deps must not be used with --features or plugins')
+
+    analyzer.load_crates()
+
+    if opts.feature_deps:
+        for name, deps in analyzer.get_feature_deps().items():
+            print('{}: {}'.format(name, ','.join(deps)))
+    else:
+        print(','.join(analyzer.run()))
