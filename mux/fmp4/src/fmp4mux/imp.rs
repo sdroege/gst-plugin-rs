@@ -12,7 +12,7 @@ use gst::subclass::prelude::*;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use std::mem;
@@ -268,29 +268,28 @@ struct Stream {
 impl Stream {
     fn get_elst_infos(&self) -> Result<Vec<super::ElstInfo>, anyhow::Error> {
         let mut elst_infos = self.elst_infos.clone();
-        let timescale = self.timescale();
         let earliest_pts = self.earliest_pts.unwrap_or(gst::ClockTime::ZERO);
         let end_pts = self
             .end_pts
             .unwrap_or(gst::ClockTime::from_nseconds(u64::MAX - 1));
 
-        let mut iter = elst_infos.iter_mut().peekable();
+        let mut iter = elst_infos
+            .iter_mut()
+            .filter(|e| e.start.is_some())
+            .peekable();
         while let Some(&mut ref mut elst_info) = iter.next() {
-            if elst_info.duration.unwrap_or(0) == 0 {
+            if elst_info
+                .duration
+                .map_or(true, |duration| duration.is_zero())
+            {
                 elst_info.duration = if let Some(next) = iter.peek_mut() {
-                    let duration = next.start - elst_info.start;
-                    if duration < 0 {
-                        anyhow::bail!("Invalid edit list entry, negative duration");
-                    }
-                    Some(duration as u64)
-                } else {
                     Some(
-                        (end_pts.checked_sub(earliest_pts))
-                            .expect("stream end < stream start?")
-                            .nseconds()
-                            .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
-                            .context("too big track duration")?,
+                        (next.start.unwrap() - elst_info.start.unwrap())
+                            .positive()
+                            .unwrap_or(gst::ClockTime::ZERO),
                     )
+                } else {
+                    Some(end_pts - earliest_pts)
                 }
             }
         }
@@ -447,59 +446,56 @@ impl FMP4Mux {
         buffer: &PreQueuedBuffer,
         stream: &mut Stream,
     ) -> Result<(), anyhow::Error> {
-        if let Some(cmeta) = buffer.buffer.meta::<gst_audio::AudioClippingMeta>() {
-            let timescale = stream
-                .caps
-                .structure(0)
-                .unwrap()
-                .get::<i32>("rate")
-                .unwrap_or_else(|_| stream.timescale() as i32);
+        let cmeta = if let Some(cmeta) = buffer.buffer.meta::<gst_audio::AudioClippingMeta>() {
+            cmeta
+        } else {
+            return Ok(());
+        };
 
-            let gstclocktime_to_samples = move |v: gst::ClockTime| {
-                v.nseconds()
-                    .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
-                    .context("Invalid start in the AudioClipMeta")
-            };
+        let timescale = stream
+            .caps
+            .structure(0)
+            .unwrap()
+            .get::<i32>("rate")
+            .unwrap_or_else(|_| stream.timescale() as i32);
 
-            let generic_to_samples = move |t| -> Result<Option<u64>, anyhow::Error> {
-                if let gst::GenericFormattedValue::Default(Some(v)) = t {
-                    let v = v.into();
-                    Ok(Some(v).filter(|x| x != &0u64))
-                } else if let gst::GenericFormattedValue::Time(Some(v)) = t {
-                    Ok(Some(gstclocktime_to_samples(v)?))
-                } else {
-                    Ok(None)
-                }
-            };
+        let samples_to_gstclocktime = move |v: u64| {
+            let nseconds = v
+                .mul_div_round(gst::ClockTime::SECOND.nseconds(), timescale as u64)
+                .context("Invalid start in the AudioClipMeta")?;
+            Ok::<_, anyhow::Error>(gst::ClockTime::from_nseconds(nseconds))
+        };
 
-            let start = generic_to_samples(cmeta.start())?;
-            let end = generic_to_samples(cmeta.end())?;
-            if end.is_none() && start.is_none() {
-                return Err(anyhow::anyhow!(
-                    "No start or end time in `default` format in the AudioClipingMeta"
-                ));
+        let generic_to_gstclocktime = move |t| -> Result<Option<gst::ClockTime>, anyhow::Error> {
+            if let gst::GenericFormattedValue::Default(Some(v)) = t {
+                let v = u64::from(v);
+                let v = samples_to_gstclocktime(v)?;
+                Ok(Some(v).filter(|x| !x.is_zero()))
+            } else if let gst::GenericFormattedValue::Time(Some(v)) = t {
+                Ok(Some(v).filter(|x| !x.is_zero()))
+            } else {
+                Ok(None)
             }
+        };
 
-            let start = if let Some(start) = generic_to_samples(cmeta.start())? {
-                start + gstclocktime_to_samples(buffer.pts)?
-            } else {
-                0
-            };
-            let duration = if let Some(e) = end {
-                Some(
-                    gstclocktime_to_samples(buffer.end_pts)?
-                        .checked_sub(e)
-                        .context("Invalid end in the AudioClipMeta")?,
-                )
-            } else {
-                None
-            };
+        let start = generic_to_gstclocktime(cmeta.start())?;
+        let end = generic_to_gstclocktime(cmeta.end())?;
 
-            stream.elst_infos.push(super::ElstInfo {
-                start: start as i64,
-                duration,
-            });
+        if end.is_none() && start.is_none() {
+            bail!("No start or end time in `default` format in the AudioClipingMeta");
         }
+
+        let start = if let Some(start) = generic_to_gstclocktime(cmeta.start())? {
+            start + buffer.pts
+        } else {
+            gst::ClockTime::ZERO
+        };
+        let duration = end.map(|end| buffer.end_pts - end);
+
+        stream.elst_infos.push(super::ElstInfo {
+            start: Some(start.into()),
+            duration,
+        });
 
         Ok(())
     }

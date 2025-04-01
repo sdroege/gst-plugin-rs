@@ -543,31 +543,69 @@ struct TrackReference {
     track_ids: Vec<u32>,
 }
 
-fn write_edts(v: &mut Vec<u8>, stream: &super::HeaderStream) -> Result<(), Error> {
-    write_full_box(v, b"elst", FULL_BOX_VERSION_1, 0, |v| write_elst(v, stream))?;
+fn write_edts(
+    v: &mut Vec<u8>,
+    cfg: &super::HeaderConfiguration,
+    stream: &super::HeaderStream,
+) -> Result<(), Error> {
+    write_full_box(v, b"elst", FULL_BOX_VERSION_1, 0, |v| {
+        write_elst(v, cfg, stream)
+    })?;
 
     Ok(())
 }
 
-fn write_elst(v: &mut Vec<u8>, stream: &super::HeaderStream) -> Result<(), Error> {
+fn write_elst(
+    v: &mut Vec<u8>,
+    cfg: &super::HeaderConfiguration,
+    stream: &super::HeaderStream,
+) -> Result<(), Error> {
+    let movie_timescale = header_configuration_to_timescale(cfg);
+    let track_timescale = header_stream_to_timescale(stream);
+
     // Entry count
-    v.extend((stream.elst_infos.len() as u32).to_be_bytes());
+    let mut num_entries = 0u32;
+    let entry_count_position = v.len();
+    // Entry count, rewritten in the end
+    v.extend(0u32.to_be_bytes());
 
     for elst_info in &stream.elst_infos {
-        v.extend(
-            elst_info
-                .duration
-                .expect("Should have been set by `get_elst_infos`")
-                .to_be_bytes(),
-        );
+        // Edit duration (in movie timescale)
+        let edit_duration = elst_info
+            .duration
+            .expect("Should have been set by `get_elst_infos`")
+            .nseconds()
+            .mul_div_round(movie_timescale as u64, gst::ClockTime::SECOND.nseconds())
+            .unwrap();
 
-        // Media time
-        v.extend(elst_info.start.to_be_bytes());
+        if edit_duration == 0 {
+            continue;
+        }
+        v.extend(edit_duration.to_be_bytes());
+
+        // Media time (in media timescale)
+        let media_time = elst_info
+            .start
+            .map(|start| {
+                i64::try_from(start)
+                    .unwrap()
+                    .mul_div_round(
+                        track_timescale as i64,
+                        gst::ClockTime::SECOND.nseconds() as i64,
+                    )
+                    .unwrap()
+            })
+            .unwrap_or(-1i64);
+        v.extend(media_time.to_be_bytes());
 
         // Media rate
         v.extend(1u16.to_be_bytes());
         v.extend(0u16.to_be_bytes());
+        num_entries += 1;
     }
+
+    // Rewrite entry count
+    v[entry_count_position..][..4].copy_from_slice(&num_entries.to_be_bytes());
 
     Ok(())
 }
@@ -591,7 +629,7 @@ fn write_trak(
     // TODO: write edts optionally for negative DTS instead of offsetting the DTS
     write_box(v, b"mdia", |v| write_mdia(v, cfg, stream, creation_time))?;
     if !stream.elst_infos.is_empty() && cfg.write_edts {
-        if let Err(e) = write_edts(v, stream) {
+        if let Err(e) = write_edts(v, cfg, stream) {
             gst::warning!(CAT, "Failed to write edts: {e}");
         }
     }
