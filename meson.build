@@ -268,7 +268,7 @@ if get_option('gtk4').allowed()
   gl_winsys = gstgl_dep.get_variable('gl_winsys').split()
   gl_platforms = gstgl_dep.get_variable('gl_platforms').split()
   if 'wayland' in gl_winsys
-    gtk4_features += 'wayland'
+    gtk4_features += 'waylandegl'
   endif
   if 'x11' in gl_winsys
     if 'egl' in gl_platforms
@@ -287,7 +287,7 @@ if get_option('gtk4').allowed()
   gtk_dep = dependency('gtk4', version: '>=4.6', required: get_option('gtk4'))
   if gtk_dep.found()
     if host_system == 'linux' and gtk_dep.version().version_compare('>=4.14') and \
-        gst_allocators_dep.found() and 'wayland' in gtk4_features
+        gst_allocators_dep.found() and 'waylandegl' in gtk4_features
       gtk4_features += 'dmabuf'
     endif
 
