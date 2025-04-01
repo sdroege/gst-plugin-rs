@@ -309,7 +309,7 @@ fn write_trak(
     if !references.is_empty() {
         write_box(v, b"tref", |v| write_tref(v, header, references))?;
     }
-    write_box(v, b"edts", |v| write_edts(v, stream))?;
+    write_box(v, b"edts", |v| write_edts(v, header, stream))?;
 
     Ok(())
 }
@@ -2288,31 +2288,68 @@ fn write_tref(
     Ok(())
 }
 
-fn write_edts(v: &mut Vec<u8>, stream: &super::Stream) -> Result<(), Error> {
-    write_full_box(v, b"elst", FULL_BOX_VERSION_1, 0, |v| write_elst(v, stream))?;
+fn write_edts(
+    v: &mut Vec<u8>,
+    header: &super::Header,
+    stream: &super::Stream,
+) -> Result<(), Error> {
+    write_full_box(v, b"elst", FULL_BOX_VERSION_1, 0, |v| {
+        write_elst(v, header, stream)
+    })?;
 
     Ok(())
 }
 
-fn write_elst(v: &mut Vec<u8>, stream: &super::Stream) -> Result<(), Error> {
+fn write_elst(
+    v: &mut Vec<u8>,
+    header: &super::Header,
+    stream: &super::Stream,
+) -> Result<(), Error> {
+    let movie_timescale = header_to_timescale(header);
+
     // Entry count
-    v.extend((stream.elst_infos.len() as u32).to_be_bytes());
+    let mut num_entries = 0u32;
+    let entry_count_position = v.len();
+    // Entry count, rewritten in the end
+    v.extend(0u32.to_be_bytes());
 
     for elst_info in &stream.elst_infos {
-        v.extend(
-            elst_info
-                .duration
-                .expect("Should have been set by `get_elst_infos`")
-                .to_be_bytes(),
-        );
+        // Edit duration (in movie timescale)
+        let edit_duration = elst_info
+            .duration
+            .expect("Should have been set by `get_elst_infos`")
+            .nseconds()
+            .mul_div_round(movie_timescale as u64, gst::ClockTime::SECOND.nseconds())
+            .unwrap();
 
-        // Media time
-        v.extend(elst_info.start.to_be_bytes());
+        if edit_duration == 0 {
+            continue;
+        }
+        v.extend(edit_duration.to_be_bytes());
+
+        // Media time (in media timescale)
+        let media_time = elst_info
+            .start
+            .map(|start| {
+                i64::try_from(start)
+                    .unwrap()
+                    .mul_div_round(
+                        stream.timescale as i64,
+                        gst::ClockTime::SECOND.nseconds() as i64,
+                    )
+                    .unwrap()
+            })
+            .unwrap_or(-1i64);
+        v.extend(media_time.to_be_bytes());
 
         // Media rate
         v.extend(1u16.to_be_bytes());
         v.extend(0u16.to_be_bytes());
+        num_entries += 1;
     }
+
+    // Rewrite entry count
+    v[entry_count_position..][..4].copy_from_slice(&num_entries.to_be_bytes());
 
     Ok(())
 }

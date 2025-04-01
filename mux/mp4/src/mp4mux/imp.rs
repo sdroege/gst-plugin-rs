@@ -6,7 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use anyhow::{anyhow, Context};
+use anyhow::{bail, Context};
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -158,7 +158,6 @@ impl Stream {
         min_earliest_pts: gst::ClockTime,
     ) -> Result<Vec<super::ElstInfo>, anyhow::Error> {
         let mut elst_infos = self.elst_infos.clone();
-        let timescale = self.timescale();
         let earliest_pts = self
             .earliest_pts
             .expect("Streams without earliest_pts should have been skipped");
@@ -169,57 +168,47 @@ impl Stream {
         // If no elst info were set, use the whole track
         if self.elst_infos.is_empty() {
             let start = if let Some(start_dts) = self.start_dts {
-                ((gst::Signed::Positive(earliest_pts) - start_dts)
-                    .nseconds()
-                    .positive()
-                    .unwrap_or(0)
-                    .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
-                    .context("too big track duration")?) as i64
+                gst::Signed::Positive(earliest_pts) - start_dts
             } else {
-                0i64
+                gst::Signed::Positive(gst::ClockTime::ZERO)
             };
 
             elst_infos.push(super::ElstInfo {
-                start,
-                duration: Some(
-                    (end_pts - earliest_pts)
-                        .nseconds()
-                        .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
-                        .context("too big track duration")?,
-                ),
+                start: Some(start),
+                duration: Some(end_pts - earliest_pts),
             });
         }
 
         // Add a gap at the beginning if needed
-        if min_earliest_pts != earliest_pts {
-            let gap_duration = (earliest_pts - min_earliest_pts)
-                .nseconds()
-                .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
-                .context("too big gap")?;
+        if earliest_pts > min_earliest_pts {
+            let gap_duration = earliest_pts - min_earliest_pts;
 
-            if gap_duration > 0 {
-                elst_infos.insert(
-                    0,
-                    super::ElstInfo {
-                        start: -1,
-                        duration: Some(gap_duration),
-                    },
-                );
-            }
+            elst_infos.insert(
+                0,
+                super::ElstInfo {
+                    start: None,
+                    duration: Some(gap_duration),
+                },
+            );
         }
 
-        let mut iter = elst_infos.iter_mut().peekable();
+        let mut iter = elst_infos
+            .iter_mut()
+            .filter(|e| e.start.is_some())
+            .peekable();
         while let Some(&mut ref mut elst_info) = iter.next() {
-            if elst_info.duration.unwrap_or(0u64) == 0u64 {
+            if elst_info
+                .duration
+                .map_or(true, |duration| duration.is_zero())
+            {
                 elst_info.duration = if let Some(next) = iter.peek_mut() {
-                    Some((next.start - elst_info.start) as u64)
-                } else {
                     Some(
-                        (end_pts - earliest_pts)
-                            .nseconds()
-                            .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
-                            .context("too big track duration")?,
+                        (next.start.unwrap() - elst_info.start.unwrap())
+                            .positive()
+                            .unwrap_or(gst::ClockTime::ZERO),
                     )
+                } else {
+                    Some(end_pts - earliest_pts)
                 }
             }
         }
@@ -355,53 +344,51 @@ impl MP4Mux {
             .get::<i32>("rate")
             .unwrap_or_else(|_| stream.timescale() as i32);
 
-        let gstclocktime_to_samples = move |v: gst::ClockTime| {
-            v.nseconds()
-                .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
-                .context("Invalid start in the AudioClipMeta")
+        let samples_to_gstclocktime = move |v: u64| {
+            let nseconds = v
+                .mul_div_round(gst::ClockTime::SECOND.nseconds(), timescale as u64)
+                .context("Invalid start in the AudioClipMeta")?;
+            Ok::<_, anyhow::Error>(gst::ClockTime::from_nseconds(nseconds))
         };
 
-        let generic_to_samples = move |t| -> Result<Option<u64>, anyhow::Error> {
+        let generic_to_gstclocktime = move |t| -> Result<Option<gst::ClockTime>, anyhow::Error> {
             if let gst::GenericFormattedValue::Default(Some(v)) = t {
                 let v = u64::from(v);
-                Ok(Some(v).filter(|x| x != &0u64))
+                let v = samples_to_gstclocktime(v)?;
+                Ok(Some(v).filter(|x| !x.is_zero()))
             } else if let gst::GenericFormattedValue::Time(Some(v)) = t {
-                Ok(Some(gstclocktime_to_samples(v)?))
+                Ok(Some(v).filter(|x| !x.is_zero()))
             } else {
                 Ok(None)
             }
         };
 
-        let start = generic_to_samples(cmeta.start())?;
-        let end = generic_to_samples(cmeta.end())?;
+        let start = generic_to_gstclocktime(cmeta.start())?;
+        let end = generic_to_gstclocktime(cmeta.end())?;
 
         if end.is_none() && start.is_none() {
-            return Err(anyhow!(
-                "No start or end time in `default` format in the AudioClipingMeta"
-            ));
+            bail!("No start or end time in `default` format in the AudioClipingMeta");
         }
 
-        let start = if let Some(start) = generic_to_samples(cmeta.start())? {
-            start + gstclocktime_to_samples(buffer.pts)?
+        let start = if let Some(start) = generic_to_gstclocktime(cmeta.start())? {
+            start + buffer.pts
         } else {
-            0
+            gst::ClockTime::ZERO
         };
-        let duration = if let Some(e) = end {
+        let duration = if let Some(end) = end {
             Some(
-                gstclocktime_to_samples(buffer.pts)?
-                    + gstclocktime_to_samples(
-                        buffer
-                            .duration
-                            .context("No duration on buffer, we can't add edit list")?,
-                    )?
-                    - e,
+                buffer.pts
+                    + buffer
+                        .duration
+                        .context("No duration on buffer, we can't add edit list")?
+                    - end,
             )
         } else {
             None
         };
 
         stream.elst_infos.push(super::ElstInfo {
-            start: start as i64,
+            start: Some(start.into()),
             duration,
         });
 

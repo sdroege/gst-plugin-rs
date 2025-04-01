@@ -174,8 +174,8 @@ pub(crate) struct Chunk {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ElstInfo {
-    start: i64,
-    duration: Option<u64>,
+    start: Option<gst::Signed<gst::ClockTime>>,
+    duration: Option<gst::ClockTime>,
 }
 
 #[derive(Debug)]
