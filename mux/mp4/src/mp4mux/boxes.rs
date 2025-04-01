@@ -609,7 +609,7 @@ fn write_stbl(
             if composition_time_offset < 0 {
                 need_ctts = Some(1);
                 break;
-            } else {
+            } else if composition_time_offset != 0 {
                 need_ctts = Some(0);
             }
         }
