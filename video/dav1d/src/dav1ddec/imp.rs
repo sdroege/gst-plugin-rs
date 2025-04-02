@@ -265,7 +265,7 @@ impl Dav1dDec {
     ) -> Result<MutexGuard<'s, Option<State>>, gst::FlowError> {
         let state = state_guard.as_ref().unwrap();
 
-        let format = self.gst_video_format_from_dav1d_picture(pic);
+        let mut format = self.gst_video_format_from_dav1d_picture(pic);
         if format == gst_video::VideoFormat::Unknown {
             return Err(gst::FlowError::NotNegotiated);
         }
@@ -283,6 +283,62 @@ impl Dav1dDec {
             return Ok(state_guard);
         }
 
+        let input_state = state.input_state.clone();
+        let input_caps = input_state.caps().ok_or(gst::FlowError::NotNegotiated)?;
+        let input_structure = input_caps
+            .structure(0)
+            .ok_or(gst::FlowError::NotNegotiated)?;
+
+        // Special handling of RGB
+        if input_state.info().colorimetry().matrix() == gst_video::VideoColorMatrix::Rgb
+            || (input_state.info().colorimetry().matrix() == gst_video::VideoColorMatrix::Unknown
+                && pic.matrix_coefficients() == dav1d::pixel::MatrixCoefficients::Identity)
+        {
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Input is actually RGB, switching format {format:?} to RGB"
+            );
+
+            if pic.pixel_layout() != dav1d::PixelLayout::I444 {
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Unsupported non-4:4:4 YUV format {format:?} for RGB"
+                );
+                return Err(gst::FlowError::NotNegotiated);
+            }
+
+            let rgb_format = format.to_str().replace("Y444", "GBR");
+            format = match rgb_format.parse::<gst_video::VideoFormat>() {
+                Ok(format) => format,
+                Err(_) => {
+                    gst::error!(CAT, imp = self, "Unsupported YUV format {format:?} for RGB");
+                    return Err(gst::FlowError::NotNegotiated);
+                }
+            };
+
+            if input_state.info().colorimetry().transfer()
+                != gst_video::VideoTransferFunction::Unknown
+                && input_state.info().colorimetry().transfer()
+                    != gst_video::VideoTransferFunction::Srgb
+                || (input_state.info().colorimetry().transfer()
+                    == gst_video::VideoTransferFunction::Unknown
+                    && pic.transfer_characteristic() != dav1d::pixel::TransferCharacteristic::SRGB)
+            {
+                gst::warning!(CAT, imp = self, "Unexpected non-sRGB transfer function");
+            }
+
+            if input_state.info().colorimetry().range() != gst_video::VideoColorRange::Unknown
+                && input_state.info().colorimetry().range()
+                    != gst_video::VideoColorRange::Range0_255
+                || (input_state.info().colorimetry().range() == gst_video::VideoColorRange::Unknown
+                    && pic.color_range() != dav1d::pixel::YUVRange::Full)
+            {
+                gst::warning!(CAT, imp = self, "Unexpected non-full-range RGB");
+            }
+        }
+
         gst::info!(
             CAT,
             imp = self,
@@ -291,12 +347,6 @@ impl Dav1dDec {
             pic.width(),
             pic.height()
         );
-
-        let input_state = state.input_state.clone();
-        let input_caps = input_state.caps().ok_or(gst::FlowError::NotNegotiated)?;
-        let input_structure = input_caps
-            .structure(0)
-            .ok_or(gst::FlowError::NotNegotiated)?;
 
         drop(state_guard);
 
@@ -477,7 +527,7 @@ impl Dav1dDec {
 
         let info = output_state.info();
 
-        let components = if info.is_yuv() {
+        let components = if info.is_yuv() || info.is_rgb() {
             const YUV_COMPONENTS: [dav1d::PlanarImageComponent; 3] = [
                 dav1d::PlanarImageComponent::Y,
                 dav1d::PlanarImageComponent::U,
