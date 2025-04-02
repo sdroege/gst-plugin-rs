@@ -182,7 +182,7 @@ impl Dav1dDec {
                     imp = self,
                     "Unsupported dav1d colorimetry matrix coefficients"
                 );
-                return None;
+                gst_video::VideoColorMatrix::Unknown
             }
         };
 
@@ -217,7 +217,7 @@ impl Dav1dDec {
                     imp = self,
                     "Unsupported dav1d colorimetry transfer function"
                 );
-                return None;
+                gst_video::VideoTransferFunction::Unknown
             }
         };
 
@@ -235,12 +235,20 @@ impl Dav1dDec {
             pixel::ColorPrimaries::Tech3213 => gst_video::VideoColorPrimaries::Ebu3213,
             _ => {
                 gst::warning!(CAT, imp = self, "Unsupported dav1d color primaries");
-                return None;
+                gst_video::VideoColorPrimaries::Unknown
             }
         };
-        Some(gst_video::VideoColorimetry::new(
-            range, matrix, transfer, primaries,
-        ))
+
+        if matrix == gst_video::VideoColorMatrix::Unknown
+            && transfer == gst_video::VideoTransferFunction::Unknown
+            && primaries == gst_video::VideoColorPrimaries::Unknown
+        {
+            None
+        } else {
+            Some(gst_video::VideoColorimetry::new(
+                range, matrix, transfer, primaries,
+            ))
+        }
     }
 
     fn chroma_site_from_dav1d_picture(
