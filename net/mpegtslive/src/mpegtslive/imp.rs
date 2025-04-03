@@ -151,8 +151,8 @@ impl MpegTsPcr {
         let pcr = gst::ClockTime::from(self);
 
         let absdiff = pts.absdiff(pcr);
-        // Fast paths, no wraparounds and close to the PCR as it should (< 1s is required by T-STD)
-        let threshold = gst::ClockTime::from_mseconds(1500);
+        // Fast paths, no wraparounds and close (enough) to the PCR as it should (< 1s is required by T-STD)
+        let threshold = gst::ClockTime::from_mseconds(5000);
         if absdiff <= threshold {
             return Some(pts);
         }
