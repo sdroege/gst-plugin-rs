@@ -8,6 +8,7 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Mutex;
+use std::time::Duration;
 
 use cea708_types::{CCDataParser, Service};
 use cea708_types::{CCDataWriter, DTVCCPacket, Framerate};
@@ -87,6 +88,7 @@ struct State {
     dtvcc_seq_no: u8,
     writer: CCDataWriter,
     n_frames: u64,
+    pending_services: HashMap<u8, VecDeque<cea708_types::tables::Code>>,
 }
 
 impl Default for State {
@@ -100,6 +102,7 @@ impl Default for State {
             dtvcc_seq_no: 0,
             writer,
             n_frames: 0,
+            pending_services: HashMap::default(),
         }
     }
 }
@@ -243,7 +246,13 @@ impl AggregatorImpl for Cea708Mux {
         if need_data && !timeout {
             return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
         }
-        if all_eos {
+        if all_eos
+            && state
+                .pending_services
+                .iter()
+                .all(|(_service_no, pending_codes)| pending_codes.is_empty())
+            && state.writer.buffered_packet_duration() == Duration::ZERO
+        {
             return Err(gst::FlowError::Eos);
         }
 
@@ -252,6 +261,10 @@ impl AggregatorImpl for Cea708Mux {
 
         // phase 2: write stored data into output packet
         let mut services = HashMap::new();
+        let mut packet = DTVCCPacket::new(state.dtvcc_seq_no & 0x3);
+        // an empty packet does not account for the packet header in free space calculations so do
+        // that manually here.
+        let mut free_space = packet.free_space() - 1;
 
         for pad in sinkpads.iter().map(|pad| {
             pad.downcast_ref::<super::Cea708MuxSinkPad>()
@@ -273,12 +286,22 @@ impl AggregatorImpl for Cea708Mux {
                             let new_service = services
                                 .entry(service_no)
                                 .or_insert_with_key(|&n| Service::new(n));
+                            let prev_service_len = new_service.len();
 
+                            // try putting any previously overflowed service codes into a new
+                            // output service.
                             let mut overflowed = false;
                             if let Some(pending_codes) =
-                                pad_state.pending_services.get_mut(&service.number())
+                                state.pending_services.get_mut(&service.number())
                             {
                                 while let Some(code) = pending_codes.pop_front() {
+                                    if code.byte_len() + new_service.len() - prev_service_len
+                                        > free_space
+                                    {
+                                        overflowed = true;
+                                        pending_codes.push_front(code);
+                                        break;
+                                    }
                                     match new_service.push_code(&code) {
                                         Ok(_) => (),
                                         Err(cea708_types::WriterError::WouldOverflow(_)) => {
@@ -302,17 +325,28 @@ impl AggregatorImpl for Cea708Mux {
                                     service.number()
                                 );
                                 if overflowed {
-                                    pad_state
+                                    state
                                         .pending_services
                                         .entry(service.number())
                                         .or_default()
                                         .push_back(code.clone());
                                 } else {
+                                    if code.byte_len() + new_service.len() - prev_service_len
+                                        > free_space
+                                    {
+                                        overflowed = true;
+                                        state
+                                            .pending_services
+                                            .entry(service.number())
+                                            .or_default()
+                                            .push_back(code.clone());
+                                        continue;
+                                    }
                                     match new_service.push_code(code) {
                                         Ok(_) => (),
                                         Err(cea708_types::WriterError::WouldOverflow(_)) => {
                                             overflowed = true;
-                                            pad_state
+                                            state
                                                 .pending_services
                                                 .entry(service.number())
                                                 .or_default()
@@ -325,14 +359,26 @@ impl AggregatorImpl for Cea708Mux {
                                     }
                                 }
                             }
+                            gst::trace!(
+                                CAT,
+                                obj = pad,
+                                "free_space: {free_space}, service len: {}",
+                                new_service.len()
+                            );
+                            free_space -= new_service.len() - prev_service_len;
                         }
                     }
-                    for (service_no, pending_codes) in pad_state.pending_services.iter_mut() {
+                    for (service_no, pending_codes) in state.pending_services.iter_mut() {
                         let new_service = services
                             .entry(*service_no)
                             .or_insert_with_key(|&n| Service::new(n));
+                        let prev_service_len = new_service.len();
 
                         while let Some(code) = pending_codes.pop_front() {
+                            if code.byte_len() + new_service.len() - prev_service_len > free_space {
+                                pending_codes.push_front(code);
+                                break;
+                            }
                             match new_service.push_code(&code) {
                                 Ok(_) => (),
                                 Err(cea708_types::WriterError::WouldOverflow(_)) => {
@@ -351,15 +397,14 @@ impl AggregatorImpl for Cea708Mux {
             }
         }
 
-        let mut packet = DTVCCPacket::new(state.dtvcc_seq_no & 0x3);
-
         for (_service_no, service) in services.into_iter().filter(|(_, s)| !s.codes().is_empty()) {
             // FIXME: handle needing to split services
             gst::trace!(
                 CAT,
                 imp = self,
-                "Adding service {} to packet",
-                service.number()
+                "Adding service {} to packet with sequence {}",
+                service.number(),
+                packet.sequence_no(),
             );
             packet.push_service(service).unwrap();
             if packet.sequence_no() == state.dtvcc_seq_no & 0x3 {
@@ -626,7 +671,6 @@ impl ObjectSubclass for Cea708Mux {
 struct PadState {
     format: CeaFormat,
     ccp_parser: CCDataParser,
-    pending_services: HashMap<u8, VecDeque<cea708_types::tables::Code>>,
     pending_buffer: Option<gst::Buffer>,
 }
 
@@ -637,7 +681,6 @@ impl Default for PadState {
         Self {
             format: CeaFormat::default(),
             ccp_parser,
-            pending_services: HashMap::default(),
             pending_buffer: None,
         }
     }
