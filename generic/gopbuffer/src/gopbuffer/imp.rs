@@ -118,7 +118,7 @@ impl Gop {
             _ => None,
         });
         let first_pts = iter.next();
-        let last_pts = iter.last();
+        let last_pts = iter.next_back();
         gst::debug!(
             CAT,
             "pushing gop with start pts {} end pts {}",
