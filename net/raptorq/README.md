@@ -6,9 +6,9 @@ packets.  The receiver only needs:
 
 - `K` of any repair or RTP packets to recover all the data with 99% probability
 - `K + 1` of any repair or RTP packets to recover all the data with 99.99%
-    probability,
+  probability,
 - `K + 2` of any repair or RTP packets to recover all the data with 99.9999%
-    probability etc.
+  probability etc.
 
 Relevant documents:
 - [RFC6363 - Forward Error Correction (FEC) Framework](https://datatracker.ietf.org/doc/html/rfc6363)

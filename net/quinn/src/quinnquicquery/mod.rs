@@ -56,11 +56,7 @@ pub fn request_stream(srcpad: &gst::Pad, priority: i32) -> Option<u64> {
 
     if srcpad.peer_query(&mut query) {
         if let Some(s) = query.structure() {
-            if let Ok(stream_id) = s.get::<u64>(QUIC_STREAM_ID) {
-                Some(stream_id)
-            } else {
-                None
-            }
+            s.get::<u64>(QUIC_STREAM_ID).ok()
         } else {
             None
         }

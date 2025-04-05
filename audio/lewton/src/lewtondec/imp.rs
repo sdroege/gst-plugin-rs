@@ -185,7 +185,7 @@ impl AudioDecoderImpl for LewtonDec {
         let state = state_guard.as_mut().ok_or(gst::FlowError::NotNegotiated)?;
 
         // Ignore empty packets unless we have no headers yet
-        if inmap.len() == 0 {
+        if inmap.is_empty() {
             self.obj().finish_frame(None, 1)?;
 
             if state.headerset.is_some() {

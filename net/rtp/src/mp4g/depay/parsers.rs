@@ -82,7 +82,7 @@ impl PayloadParser {
             headers_len = r.read::<u16>().context("AU-headers-length")?;
 
             // Up to 7 bits of padding
-            let headers_len_bytes = (headers_len as usize + 7) / 8;
+            let headers_len_bytes = (headers_len as usize).div_ceil(8);
 
             data_offset = 2 + headers_len_bytes;
             if data_offset > payload.len() {
@@ -119,7 +119,7 @@ impl PayloadParser {
             let aux_len = r.read::<u16>().context("auxiliary-data-size")?;
 
             // Up to 7 bits of padding
-            let aux_len_bytes = (aux_len as usize + 7) / 8;
+            let aux_len_bytes = (aux_len as usize).div_ceil(8);
 
             data_offset += 2 + aux_len_bytes;
             if data_offset > payload.len() {

@@ -448,7 +448,7 @@ fn missing_file() {
         false,
     );
     assert_error(
-        events.into_iter().last().unwrap(),
+        events.into_iter().next_back().unwrap(),
         TestMedia::missing_file(),
     );
     assert!(!eos);
@@ -467,7 +467,7 @@ fn missing_http() {
         false,
     );
     assert_error(
-        events.into_iter().last().unwrap(),
+        events.into_iter().next_back().unwrap(),
         TestMedia::missing_http(),
     );
     assert!(!eos);

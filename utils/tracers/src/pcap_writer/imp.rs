@@ -21,10 +21,8 @@
 *
 * ## Parameters:
 *
-* - `output-dir` (string, default: "tracer_pcaps"): The directory where to save
-*    `.pcap` files
-* - `fake-protocol` (['udp', 'none'], default: "udp"): the fake headers to add
-*    to packets
+* - `output-dir` (string, default: "tracer_pcaps"): The directory where to save `.pcap` files
+* - `fake-protocol` (['udp', 'none'], default: "udp"): the fake headers to add to packets
 *
 * ## Example:
 *

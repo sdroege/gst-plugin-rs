@@ -624,9 +624,9 @@ mod tests {
             (15.seconds(), 1.seconds()),
         ];
 
-        let items = span_tokenize_items(input, ts_duration_list).into_iter();
+        let mut items = span_tokenize_items(input, ts_duration_list).into_iter();
 
-        let final_ = items.last().unwrap();
+        let final_ = items.next_back().unwrap();
 
         // when all spans are consumed and punctuation remains as the content,
         // don't join it with a space with the last item content (Christie .)

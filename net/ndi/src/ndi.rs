@@ -777,7 +777,9 @@ impl VideoFrame {
 
                 if (frame.plane_data(2).unwrap().as_ptr() as usize)
                     .checked_sub(frame.plane_data(1).unwrap().as_ptr() as usize)
-                    != Some((frame.height() as usize + 1) / 2 * frame.plane_stride()[1] as usize)
+                    != Some(
+                        (frame.height() as usize).div_ceil(2) * frame.plane_stride()[1] as usize,
+                    )
                 {
                     return Err(TryFromVideoFrameError);
                 }
@@ -814,7 +816,9 @@ impl VideoFrame {
 
                 if (frame.plane_data(2).unwrap().as_ptr() as usize)
                     .checked_sub(frame.plane_data(1).unwrap().as_ptr() as usize)
-                    != Some((frame.height() as usize + 1) / 2 * frame.plane_stride()[1] as usize)
+                    != Some(
+                        (frame.height() as usize).div_ceil(2) * frame.plane_stride()[1] as usize,
+                    )
                 {
                     return Err(TryFromVideoFrameError);
                 }

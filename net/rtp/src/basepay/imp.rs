@@ -628,7 +628,7 @@ impl RtpBasePay2 {
             };
 
         // Round up to a multiple of 4 bytes
-        extension_size = ((extension_size + 3) / 4) * 4;
+        extension_size = extension_size.next_multiple_of(4);
 
         // If there are extensions, write an empty extension area of the required size. If this is
         // not filled then it would be considered as padding inside the extension because of the

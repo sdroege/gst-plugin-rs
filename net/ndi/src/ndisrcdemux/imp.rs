@@ -1063,7 +1063,7 @@ impl NdiSrcDemux {
                     }
                     gst_video::VideoFormat::Yv12 | gst_video::VideoFormat::I420 => {
                         let src_stride = video_frame.line_stride_or_data_size_in_bytes() as usize;
-                        let src_stride1 = (src_stride + 1) / 2;
+                        let src_stride1 = src_stride.div_ceil(2);
 
                         if src_stride == info.stride()[0] as usize
                             && src_stride1 == info.stride()[1] as usize
@@ -1088,10 +1088,11 @@ impl NdiSrcDemux {
                                 gst_video::VideoFrame::from_buffer_writable(buffer, info).unwrap();
 
                             let line_bytes = vframe.width() as usize;
-                            let line_bytes1 = (line_bytes + 1) / 2;
+                            let line_bytes1 = line_bytes.div_ceil(2);
 
                             let plane_size = video_frame.yres() as usize * src_stride;
-                            let plane_size1 = ((video_frame.yres() as usize + 1) / 2) * src_stride1;
+                            let plane_size1 =
+                                (video_frame.yres() as usize).div_ceil(2) * src_stride1;
 
                             if src.len() < plane_size + 2 * plane_size1 || src_stride < line_bytes {
                                 gst::error!(

@@ -476,7 +476,7 @@ impl RtpBasePay2Impl for RtpMpeg4GenericPay {
         state.max_header_bit_len = mode.max_header_bit_len();
         state.min_mtu = rtp_types::RtpPacket::MIN_RTP_PACKET_LEN
             + HEADERS_LEN_SIZE
-            + (state.max_header_bit_len + 7) / 8
+            + state.max_header_bit_len.div_ceil(8)
             + 1;
         state.mode = mode;
         state.clock_rate = clock_rate;
@@ -697,7 +697,7 @@ impl RtpMpeg4GenericPay {
             headers_buf.clear();
             ctx.prev_index = None;
 
-            if front.buffer.len() + (state.max_header_bit_len + 7) / 8 > max_payload_size {
+            if front.buffer.len() + state.max_header_bit_len.div_ceil(8) > max_payload_size {
                 // AU needs to be fragmented
                 let au = state.pending_aus.pop_front().unwrap();
                 let mut data = au.buffer.as_slice();
@@ -741,8 +741,10 @@ impl RtpMpeg4GenericPay {
                     let header_bit_len = c.written() as u16;
 
                     let left = au.buffer.len() - next_frag_offset;
-                    let bytes_in_this_packet =
-                        std::cmp::min(left, max_payload_size - (header_bit_len as usize + 7) / 8);
+                    let bytes_in_this_packet = std::cmp::min(
+                        left,
+                        max_payload_size - (header_bit_len as usize).div_ceil(8),
+                    );
 
                     next_frag_offset += bytes_in_this_packet;
                     is_final = next_frag_offset >= au.buffer.len();
@@ -882,7 +884,9 @@ impl RtpMpeg4GenericPay {
                 c.build_with(&header, &ctx).unwrap();
                 let header_bit_len = c.written() as u16;
 
-                if acc_size + ((headers_len + header_bit_len) as usize + 7) / 8 + front.buffer.len()
+                if acc_size
+                    + ((headers_len + header_bit_len) as usize).div_ceil(8)
+                    + front.buffer.len()
                     > max_payload_size
                     || (ctx.prev_index.is_some()
                         && max_ptime
