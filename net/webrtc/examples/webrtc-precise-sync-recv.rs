@@ -132,8 +132,8 @@ fn spawn_consumer(
         // * https://gitlab.freedesktop.org/gstreamer/gst-plugins-good/-/issues/914
         // * https://gitlab.freedesktop.org/gstreamer/gstreamer/-/issues/1574
         .property_if("do-retransmission", false, args.expect_clock_signalling)
-        .property_if_not_empty::<gst::Array>("audio-codecs", &args.audio_codecs)
-        .property_if_not_empty::<gst::Array>("video-codecs", &args.video_codecs)
+        .property_if_not_empty::<gst::Array, _>("audio-codecs", &args.audio_codecs)
+        .property_if_not_empty::<gst::Array, _>("video-codecs", &args.video_codecs)
         .build()
         .context("Creating webrtcsrc")?;
 

@@ -372,7 +372,7 @@ impl VideoDecoderImpl for Ffv1Dec {
             .set_output_state(format, info.width(), info.height(), Some(state))
             .map_err(|err| gst::loggable_error!(CAT, "Failed to set output params: {}", err))?;
 
-        let output_info = Some(output_state.info());
+        let output_info = Some(output_state.info().clone());
 
         let mut decoder_state = self.state.lock().unwrap();
         *decoder_state = DecoderState::Started {

@@ -269,7 +269,7 @@ impl VideoEncoderImpl for GifEnc {
         gst::debug!(CAT, imp = self, "Setting format {:?}", video_info);
 
         {
-            let mut state = State::new(video_info);
+            let mut state = State::new(video_info.clone());
             let settings = self.settings.lock().unwrap();
             state.reset(*settings);
             *self.state.borrow_mut() = Some(state);

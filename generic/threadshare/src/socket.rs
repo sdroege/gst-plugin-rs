@@ -33,13 +33,10 @@ use std::net::UdpSocket;
 use crate::runtime::Async;
 
 #[cfg(unix)]
-use std::os::{
-    fd::BorrowedFd,
-    unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd},
-};
+use std::os::fd::OwnedFd;
 
 #[cfg(windows)]
-use std::os::windows::io::{AsRawSocket, FromRawSocket, IntoRawSocket, RawSocket};
+use std::os::windows::io::OwnedSocket;
 
 static SOCKET_CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -207,14 +204,14 @@ impl<T: SocketRead> Drop for Socket<T> {
 }
 
 // Send/Sync struct for passing around a gio::Socket
-// and getting the raw fd from it
+// and getting the fd from it
 //
 // gio::Socket is not Send/Sync as it's generally unsafe
 // to access it from multiple threads. Getting the underlying raw
 // fd is safe though, as is receiving/sending from two different threads
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GioSocketWrapper {
-    socket: *mut gio::ffi::GSocket,
+    socket: gio::Socket,
 }
 
 unsafe impl Send for GioSocketWrapper {}
@@ -222,19 +219,13 @@ unsafe impl Sync for GioSocketWrapper {}
 
 impl GioSocketWrapper {
     pub fn new(socket: &gio::Socket) -> Self {
-        use glib::translate::*;
-
         Self {
-            socket: socket.to_glib_full(),
+            socket: socket.clone(),
         }
     }
 
-    pub fn as_socket(&self) -> gio::Socket {
-        unsafe {
-            use glib::translate::*;
-
-            from_glib_none(self.socket)
-        }
+    pub fn as_socket(&self) -> &gio::Socket {
+        &self.socket
     }
 
     #[cfg(any(
@@ -252,6 +243,8 @@ impl GioSocketWrapper {
         target_env = "newlib"
     ))]
     pub fn set_tos(&self, qos_dscp: i32) -> rustix::io::Result<()> {
+        use std::os::fd::AsFd;
+
         use gio::prelude::*;
         use rustix::net::sockopt;
 
@@ -259,16 +252,10 @@ impl GioSocketWrapper {
 
         let socket = self.as_socket();
 
-        sockopt::set_ip_tos(
-            unsafe { BorrowedFd::borrow_raw(socket.as_raw_fd()) },
-            tos as u8,
-        )?;
+        sockopt::set_ip_tos(socket.as_fd(), tos as u8)?;
 
         if socket.family() == gio::SocketFamily::Ipv6 {
-            sockopt::set_ipv6_tclass(
-                unsafe { BorrowedFd::borrow_raw(socket.as_raw_fd()) },
-                tos as u32,
-            )?;
+            sockopt::set_ipv6_tclass(socket.as_fd(), tos as u32)?;
         }
 
         Ok(())
@@ -293,96 +280,36 @@ impl GioSocketWrapper {
     }
 
     #[cfg(not(windows))]
-    pub fn get<T: FromRawFd>(&self) -> T {
-        unsafe {
-            let borrowed =
-                rustix::fd::BorrowedFd::borrow_raw(gio::ffi::g_socket_get_fd(self.socket));
+    pub fn get<T: From<OwnedFd>>(&self) -> T {
+        use std::os::fd::AsFd;
 
-            let dupped = rustix::io::dup(borrowed).unwrap();
-            let res = FromRawFd::from_raw_fd(dupped.as_raw_fd());
-
-            // We transferred ownership to T so don't drop dupped
-            std::mem::forget(dupped);
-
-            res
-        }
+        let fd = self.socket.as_fd();
+        let fd = fd.try_clone_to_owned().unwrap();
+        T::from(fd)
     }
 
     #[cfg(windows)]
-    pub fn get<T: FromRawSocket>(&self) -> T {
+    pub fn get<T: From<OwnedSocket>>(&self) -> T {
         unsafe {
-            FromRawSocket::from_raw_socket(
-                dup_socket(gio::ffi::g_socket_get_fd(self.socket) as _) as _
-            )
+            use std::os::windows::io::{AsRawSocket, BorrowedSocket};
+
+            let socket = self.socket.as_raw_socket();
+            let socket = BorrowedSocket::borrow_raw(socket);
+            let socket = socket.try_clone_to_owned().unwrap();
+            T::from(socket)
         }
     }
-}
-
-impl Clone for GioSocketWrapper {
-    fn clone(&self) -> Self {
-        Self {
-            socket: unsafe { glib::gobject_ffi::g_object_ref(self.socket as *mut _) as *mut _ },
-        }
-    }
-}
-
-impl Drop for GioSocketWrapper {
-    fn drop(&mut self) {
-        unsafe {
-            glib::gobject_ffi::g_object_unref(self.socket as *mut _);
-        }
-    }
-}
-
-#[cfg(windows)]
-unsafe fn dup_socket(socket: usize) -> usize {
-    use std::mem;
-    use winapi::shared::ws2def;
-    use winapi::um::processthreadsapi;
-    use winapi::um::winsock2;
-
-    let mut proto_info = mem::MaybeUninit::uninit();
-    let ret = winsock2::WSADuplicateSocketA(
-        socket,
-        processthreadsapi::GetCurrentProcessId(),
-        proto_info.as_mut_ptr(),
-    );
-    assert_eq!(ret, 0);
-    let mut proto_info = proto_info.assume_init();
-
-    let socket = winsock2::WSASocketA(
-        ws2def::AF_INET,
-        ws2def::SOCK_DGRAM,
-        ws2def::IPPROTO_UDP as i32,
-        &mut proto_info,
-        0,
-        0,
-    );
-
-    assert_ne!(socket, winsock2::INVALID_SOCKET);
-
-    socket
 }
 
 pub fn wrap_socket(socket: &Async<UdpSocket>) -> Result<GioSocketWrapper, gst::ErrorMessage> {
     #[cfg(unix)]
-    unsafe {
-        let dupped = rustix::io::dup(socket).unwrap();
+    {
+        use std::os::fd::AsFd;
 
-        // This is unsafe because it allows us to share the fd between the socket and the
-        // GIO socket below, but safety of this is the job of the application
-        struct FdConverter(RawFd);
-        impl IntoRawFd for FdConverter {
-            fn into_raw_fd(self) -> RawFd {
-                self.0
-            }
-        }
-
-        let fd = FdConverter(dupped.as_raw_fd());
+        let fd = socket.as_fd();
+        let fd = fd.try_clone_to_owned().unwrap();
 
         let gio_socket = gio::Socket::from_fd(fd);
-        // We transferred ownership to gio_socket so don't drop dupped
-        std::mem::forget(dupped);
         let gio_socket = gio_socket.map_err(|err| {
             gst::error_msg!(
                 gst::ResourceError::OpenWrite,
@@ -394,20 +321,13 @@ pub fn wrap_socket(socket: &Async<UdpSocket>) -> Result<GioSocketWrapper, gst::E
     }
     #[cfg(windows)]
     unsafe {
-        let fd = socket.as_raw_socket();
+        use std::os::windows::io::{AsRawSocket, BorrowedSocket};
 
-        // This is unsafe because it allows us to share the fd between the socket and the
-        // GIO socket below, but safety of this is the job of the application
-        struct SocketConverter(RawSocket);
-        impl IntoRawSocket for SocketConverter {
-            fn into_raw_socket(self) -> RawSocket {
-                self.0
-            }
-        }
+        let socket = socket.as_raw_socket();
+        let socket = BorrowedSocket::borrow_raw(socket);
+        let socket = socket.try_clone_to_owned().unwrap();
 
-        let fd = SocketConverter(fd);
-
-        let gio_socket = gio::Socket::from_socket(fd).map_err(|err| {
+        let gio_socket = gio::Socket::from_socket(socket).map_err(|err| {
             gst::error_msg!(
                 gst::ResourceError::OpenWrite,
                 ["Failed to create wrapped GIO socket: {}", err]

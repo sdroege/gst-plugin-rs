@@ -121,7 +121,7 @@ impl VideoDecoderImpl for CdgDec {
                 instance.negotiate(output_state)?;
 
                 let out_state = instance.output_state().unwrap();
-                *out_info = Some(out_state.info());
+                *out_info = Some(out_state.info().clone());
             }
         }
 

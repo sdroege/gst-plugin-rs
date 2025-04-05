@@ -177,7 +177,7 @@ impl VideoEncoderImpl for PngEncoder {
         &self,
         state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
-        let video_info = state.info();
+        let video_info = state.info().clone();
         gst::debug!(CAT, imp = self, "Setting format {:?}", video_info);
 
         *self.state.lock() = Some(State { video_info });

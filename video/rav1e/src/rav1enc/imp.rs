@@ -574,7 +574,7 @@ impl VideoEncoderImpl for Rav1Enc {
         self.finish()
             .map_err(|_| gst::loggable_error!(CAT, "Failed to drain"))?;
 
-        let video_info = state.info();
+        let video_info = state.info().clone();
         gst::debug!(CAT, imp = self, "Setting format {:?}", video_info);
 
         let settings = self.settings.lock().unwrap();

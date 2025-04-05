@@ -1939,7 +1939,7 @@ pub(super) mod livekit {
             .field("can-subscribe", participant_permission.can_subscribe)
             .field("can-publish", participant_permission.can_publish)
             .field("can-publish-data", participant_permission.can_publish_data)
-            .field_from_iter::<gst::Array>(
+            .field_from_iter::<gst::Array, _>(
                 "can-publish-sources",
                 participant_permission
                     .can_publish_sources
@@ -2006,7 +2006,7 @@ pub(super) mod livekit {
                     .map(|s| s.as_str_name())
                     .unwrap_or("unknown"),
             )
-            .field_from_iter::<gst::Array>(
+            .field_from_iter::<gst::Array, _>(
                 "tracks",
                 participant_info.tracks.iter().map(track_info_to_structure),
             )

@@ -254,7 +254,7 @@ impl VVdeC {
 
         let mut state_guard = self.state.lock().unwrap();
         let state = state_guard.as_mut().ok_or(gst::FlowError::Flushing)?;
-        state.output_info = Some(out_state.info());
+        state.output_info = Some(out_state.info().clone());
 
         gst::trace!(CAT, imp = self, "Negotiated format");
 

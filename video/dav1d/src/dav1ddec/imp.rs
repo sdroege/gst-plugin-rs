@@ -362,7 +362,7 @@ impl Dav1dDec {
         let mut output_state =
             instance.set_output_state(format, pic.width(), pic.height(), Some(&input_state))?;
         let info = output_state.info();
-        let mut info_builder = gst_video::VideoInfo::builder_from_info(&info);
+        let mut info_builder = gst_video::VideoInfo::builder_from_info(info);
         let mut update_output_state = false;
 
         let input_colorimetry = info.colorimetry();
@@ -422,7 +422,7 @@ impl Dav1dDec {
 
         state_guard = self.state.lock().unwrap();
         let state = state_guard.as_mut().ok_or(gst::FlowError::Flushing)?;
-        state.output_info = Some(out_state.info());
+        state.output_info = Some(out_state.info().clone());
 
         Ok(state_guard)
     }
@@ -625,7 +625,7 @@ impl Dav1dDec {
 
             assert!(mut_buffer.size() > 0);
 
-            let mut vframe = gst_video::VideoFrameRef::from_buffer_ref_writable(mut_buffer, &info)
+            let mut vframe = gst_video::VideoFrameRef::from_buffer_ref_writable(mut_buffer, info)
                 .expect("can map writable frame");
 
             for (idx, &component) in components.iter().enumerate() {
