@@ -3596,7 +3596,12 @@ impl ObjectImpl for FMP4Mux {
             obj.add_pad(&sinkpad).unwrap();
         }
 
-        obj.set_latency(Settings::default().fragment_duration, None);
+        let settings = self.settings.lock().unwrap();
+        let latency = settings
+            .chunk_duration
+            .unwrap_or(settings.fragment_duration);
+        drop(settings);
+        self.obj().set_latency(latency, None);
     }
 }
 
