@@ -2608,48 +2608,53 @@ impl FMP4Mux {
             return;
         }
 
+        // Must be set or there's nothing to do here yet
+        let Some(pts) = pts else {
+            return;
+        };
+
         let current_position = stream.current_position;
 
         // In case of ONVIF this needs to be converted back from UTC time to
         // the stream's running time
-        let (fku_time, current_position) =
-            if self.obj().class().as_ref().variant == super::Variant::ONVIF {
-                let Some(fku_time) =
-                    utc_time_to_running_time(pts, stream.running_time_utc_time_mapping.unwrap())
-                else {
-                    return;
-                };
-                (
-                    Some(fku_time),
-                    utc_time_to_running_time(
-                        Some(current_position),
-                        stream.running_time_utc_time_mapping.unwrap(),
-                    ),
-                )
-            } else {
-                (pts, Some(current_position))
-            };
-
-        let fku_time = if current_position
-            .is_some_and(|current_position| fku_time.is_some_and(|t| current_position > t))
+        let (fku_time, current_position) = if self.obj().class().as_ref().variant
+            == super::Variant::ONVIF
         {
-            gst::warning!(
-                CAT,
-                obj = stream.sinkpad,
-                "Sending force-keyunit event late for running time {:?} at {}",
+            let Some(fku_time) =
+                utc_time_to_running_time(Some(pts), stream.running_time_utc_time_mapping.unwrap())
+            else {
+                return;
+            };
+            (
                 fku_time,
-                current_position.display(),
-            );
-            None
+                utc_time_to_running_time(
+                    Some(current_position),
+                    stream.running_time_utc_time_mapping.unwrap(),
+                ),
+            )
         } else {
-            gst::debug!(
-                CAT,
-                obj = stream.sinkpad,
-                "Sending force-keyunit event for running time {:?}",
-                fku_time,
-            );
-            fku_time
+            (pts, Some(current_position))
         };
+
+        let fku_time =
+            if current_position.is_some_and(|current_position| current_position > fku_time) {
+                gst::warning!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "Sending immediate force-keyunit event late for running time {:?} at {}",
+                    fku_time,
+                    current_position.display(),
+                );
+                None
+            } else {
+                gst::debug!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "Sending force-keyunit event for running time {:?}",
+                    fku_time,
+                );
+                Some(fku_time)
+            };
 
         let fku = gst_video::UpstreamForceKeyUnitEvent::builder()
             .running_time(fku_time)
