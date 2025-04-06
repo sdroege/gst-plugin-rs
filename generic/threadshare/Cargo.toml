@@ -23,7 +23,7 @@ once_cell.workspace = true
 pin-project-lite = "0.2.0"
 polling = "3.1.0"
 rand = "0.9"
-rustix = { version = "0.38.2", default-features = false, features = ["std", "fs", "net"] }
+rustix = { version = "1.0", default-features = false, features = ["std", "fs", "net"] }
 slab = "0.4.7"
 socket2 = {features = ["all"], version = "0.5"}
 waker-fn = "1.1"
