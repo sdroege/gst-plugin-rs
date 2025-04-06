@@ -26,6 +26,7 @@ use std::sync::LazyLock;
 use super::boxes;
 use super::Buffer;
 use super::DeltaFrames;
+use super::SplitNowEvent;
 use super::WriteEdtsMode;
 
 /// Offset for the segment in non-single-stream variants.
@@ -112,6 +113,7 @@ const DEFAULT_INTERLEAVE_BYTES: Option<u64> = None;
 const DEFAULT_INTERLEAVE_TIME: Option<gst::ClockTime> = Some(gst::ClockTime::from_mseconds(250));
 const DEFAULT_WRITE_EDTS_MODE: WriteEdtsMode = WriteEdtsMode::Auto;
 const DEFAULT_SEND_FORCE_KEYUNIT: bool = true;
+const DEFAULT_MANUAL_SPLIT: bool = false;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -126,6 +128,7 @@ struct Settings {
     offset_to_zero: bool,
     write_edts_mode: WriteEdtsMode,
     send_force_keyunit: bool,
+    manual_split: bool,
 }
 
 impl Default for Settings {
@@ -142,6 +145,7 @@ impl Default for Settings {
             offset_to_zero: false,
             write_edts_mode: DEFAULT_WRITE_EDTS_MODE,
             send_force_keyunit: DEFAULT_SEND_FORCE_KEYUNIT,
+            manual_split: DEFAULT_MANUAL_SPLIT,
         }
     }
 }
@@ -174,12 +178,23 @@ struct PreQueuedBuffer {
     end_dts: Option<gst::Signed<gst::ClockTime>>,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum SplitNowType {
+    Chunk,
+    Fragment,
+}
+
 #[derive(Debug)]
 struct GopBuffer {
     buffer: gst::Buffer,
     pts: gst::ClockTime,
     pts_position: gst::ClockTime,
     dts: Option<gst::ClockTime>,
+    /// If a split-now event was received and this buffer should become the first
+    /// buffer of the next fragment or chunk.
+    ///
+    /// There can be multiple if this stream had no buffers for a fragment or chunk.
+    split_now: Vec<SplitNowType>,
 }
 
 #[derive(Debug)]
@@ -266,6 +281,12 @@ struct Stream {
 
     /// Edit list entries for this stream.
     elst_infos: Vec<super::ElstInfo>,
+
+    /// Pending split-now event for this stream, if any.
+    ///
+    /// This will be processed on the next aggregate call once
+    /// the conditions are met.
+    pending_split_now: Vec<SplitNowEvent>,
 }
 
 impl Stream {
@@ -351,6 +372,7 @@ impl Stream {
         self.fragment_filled = false;
         self.pre_queue.clear();
         self.running_time_utc_time_mapping = None;
+        self.pending_split_now.clear();
     }
 
     fn orientation(&self) -> &'static TransformMatrix {
@@ -1177,6 +1199,30 @@ impl FMP4Mux {
                     })?;
             }
 
+            // If there's a pending split-now event then we can take it here in any case because
+            // we got a new keyframe.
+            let split_now = stream
+                .pending_split_now
+                .drain(..)
+                .map(|s| {
+                    if s.chunk {
+                        gst::info!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "split-now event for a chunk received and received a keyframe",
+                        );
+                        SplitNowType::Chunk
+                    } else {
+                        gst::debug!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "split-now event for a fragment received",
+                        );
+                        SplitNowType::Fragment
+                    }
+                })
+                .collect();
+
             let gop = Gop {
                 start_pts: pts,
                 start_dts: dts,
@@ -1191,6 +1237,7 @@ impl FMP4Mux {
                     pts,
                     pts_position,
                     dts,
+                    split_now,
                 }],
             };
             stream.queued_gops.push_front(gop);
@@ -1233,6 +1280,28 @@ impl FMP4Mux {
         } else if let Some(gop) = stream.queued_gops.front_mut() {
             assert!(!delta_frames.intra_only());
 
+            let split_now = stream
+                .pending_split_now
+                .drain(..)
+                .map(|s| {
+                    if s.chunk {
+                        gst::debug!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "split-now event for a chunk received",
+                        );
+                        SplitNowType::Chunk
+                    } else {
+                        gst::warning!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "split-now event for a fragment received but didn't receive a keyframe",
+                        );
+                        SplitNowType::Fragment
+                    }
+                })
+                .collect();
+
             gop.end_pts = std::cmp::max(gop.end_pts, end_pts);
             gop.end_dts = gop.end_dts.opt_max(end_dts);
             gop.buffers.push(GopBuffer {
@@ -1240,6 +1309,7 @@ impl FMP4Mux {
                 pts,
                 pts_position,
                 dts,
+                split_now,
             });
 
             if delta_frames.requires_dts() {
@@ -1369,14 +1439,130 @@ impl FMP4Mux {
         fragment_end_pts: Option<gst::ClockTime>,
         chunk_start_pts: Option<gst::ClockTime>,
     ) {
-        // Either all are none or none are
-        let (chunk_start_pts, fragment_start_pts, fragment_end_pts) =
-            match (chunk_start_pts, fragment_start_pts, fragment_end_pts) {
-                (Some(chunk_start_pts), Some(fragment_start_pts), Some(fragment_end_pts)) => {
-                    (chunk_start_pts, fragment_start_pts, fragment_end_pts)
+        // Either both are none or neither is
+        let Some((chunk_start_pts, fragment_start_pts)) =
+            Option::zip(chunk_start_pts, fragment_start_pts)
+        else {
+            return;
+        };
+
+        // Simple fast-path in manual-split mode first
+        if settings.manual_split {
+            // GOPs are stored in reverse order, buffers in normal order
+            for (gop_idx, gop) in stream.queued_gops.iter().enumerate().rev() {
+                for (buffer_idx, buffer) in gop.buffers.iter().enumerate() {
+                    if let Some(split_now) = buffer.split_now.first() {
+                        match split_now {
+                            SplitNowType::Chunk => {
+                                gst::trace!(
+                                    CAT,
+                                    obj = stream.sinkpad,
+                                    "split-now for chunk start {} at buffer {}",
+                                    chunk_start_pts,
+                                    buffer.pts,
+                                );
+
+                                // Need to know the earliest PTS of this GOP to be able to split off a
+                                // chunk
+                                if gop.final_earliest_pts || stream.sinkpad.is_eos() {
+                                    // Chunk should be split off at exactly this point
+                                    gst::debug!(
+                                        CAT,
+                                        obj = stream.sinkpad,
+                                        "Stream queued enough data for this chunk"
+                                    );
+                                    stream.chunk_filled = true;
+                                } else {
+                                    gst::debug!(
+                                        CAT,
+                                        obj = stream.sinkpad,
+                                        "Waiting for GOP earliest PTS"
+                                    );
+                                }
+                            }
+                            SplitNowType::Fragment => {
+                                gst::trace!(
+                                    CAT,
+                                    obj = stream.sinkpad,
+                                    "split-now for fragment start {} at buffer {}",
+                                    fragment_start_pts,
+                                    buffer.pts,
+                                );
+
+                                if buffer_idx != 0 {
+                                    gst::warning!(
+                                        CAT,
+                                        obj = stream.sinkpad,
+                                        "split-now for fragment not on the first buffer of a GOP",
+                                    );
+                                }
+
+                                // Previous GOP is the one with the next higher index
+                                let previous_gop = stream.queued_gops.get(gop_idx + 1);
+
+                                // Need to have a final end PTS for the previous GOP or the stream must
+                                // be EOS, otherwise we might not have the correct end PTS for this
+                                // GOP.
+                                //
+                                // Or the fragment does not start actually at a keyframe in which case
+                                // we just don't care.
+                                if previous_gop.is_some_and(|gop| gop.final_end_pts)
+                                    || stream.sinkpad.is_eos()
+                                    || buffer_idx != 0
+                                {
+                                    gst::debug!(
+                                        CAT,
+                                        obj = stream.sinkpad,
+                                        "Stream queued enough data for this fragment"
+                                    );
+                                    // Fragment should be split off at exactly this point
+                                    stream.fragment_filled = true;
+                                } else {
+                                    gst::debug!(
+                                        CAT,
+                                        obj = stream.sinkpad,
+                                        "Waiting for GOP final end PTS"
+                                    );
+                                }
+                            }
+                        }
+
+                        // Otherwise need to wait for more data
+                        return;
+                    }
                 }
-                _ => return,
-            };
+            }
+
+            // If currently nothing is queued, check the pending split-now events if any.
+            // The stream might still be filled.
+            if stream.queued_gops.is_empty() {
+                if let Some(split_now) = stream.pending_split_now.first() {
+                    match split_now {
+                        SplitNowEvent { chunk: true } => {
+                            // Chunk should be split off at exactly this point
+                            gst::debug!(
+                                CAT,
+                                obj = stream.sinkpad,
+                                "Stream queued enough data for this chunk at EOS"
+                            );
+                            stream.chunk_filled = true;
+                        }
+                        SplitNowEvent { chunk: false } => {
+                            // Fragment should be split off at exactly this point
+                            gst::debug!(
+                                CAT,
+                                obj = stream.sinkpad,
+                                "Stream queued enough data for this fragment at EOS"
+                            );
+
+                            stream.fragment_filled = true;
+                        }
+                    }
+
+                    return;
+                }
+            }
+        }
 
         // Early return, if caps have changed assume this stream is
         // ready for pushing a fragment
@@ -1390,6 +1576,16 @@ impl FMP4Mux {
             stream.chunk_filled = true;
             return;
         }
+
+        // All conditions below are not relevant for manual-split mode
+        if settings.manual_split {
+            return;
+        }
+
+        // Always set in non-manual-split mode unless we just started and have to wait
+        let Some(fragment_end_pts) = fragment_end_pts else {
+            return;
+        };
 
         // Check if this stream is filled enough now.
         if let Some(chunk_duration) = settings.chunk_duration {
@@ -1628,6 +1824,12 @@ impl FMP4Mux {
     fn calculate_fragment_end_pts(&self, settings: &Settings, state: &mut State) {
         use std::ops::Bound;
 
+        // In manual-split mode, fragment end PTS is never set
+        if settings.manual_split {
+            state.fragment_end_pts = None;
+            return;
+        }
+
         let Some(fragment_start_pts) = state.fragment_start_pts else {
             return;
         };
@@ -1776,7 +1978,7 @@ impl FMP4Mux {
         need_new_header: bool,
         timeout: bool,
         all_eos: bool,
-        fragment_end_pts: gst::ClockTime,
+        fragment_end_pts: Option<gst::ClockTime>,
         chunk_start_pts: gst::ClockTime,
         chunk_end_pts: Option<gst::ClockTime>,
         check_fragment_start: bool,
@@ -1786,8 +1988,12 @@ impl FMP4Mux {
             timeout
                 || need_new_header
                 || stream.sinkpad.is_eos()
-                || stream.queued_gops.get(1).map(|gop| gop.final_earliest_pts) == Some(true)
+                || stream
+                    .queued_gops
+                    .get(1)
+                    .is_some_and(|gop| gop.final_earliest_pts)
                 || settings.chunk_duration.is_some()
+                || settings.manual_split
         );
 
         let mut gops = Vec::with_capacity(stream.queued_gops.len());
@@ -1795,8 +2001,135 @@ impl FMP4Mux {
             return Ok(gops);
         }
 
-        // For the first stream drain as much as necessary and decide the end of this
+        // In manual-split mode, drain everything until the split-now event as requested.
+        if settings.manual_split {
+            if timeout && !stream.fragment_filled && !stream.chunk_filled && !all_eos {
+                gst::warning!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "Timeout in manual-split mode ignored",
+                );
+                return Ok(gops);
+            }
+
+            assert!(stream.fragment_filled || stream.chunk_filled || all_eos);
+
+            if all_eos {
+                gst::trace!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "Draining from {} until manual split or EOS",
+                    chunk_start_pts,
+                );
+            } else {
+                gst::trace!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "Draining from {} until manual split",
+                    chunk_start_pts,
+                );
+            }
+
+            while let Some(gop) = stream.queued_gops.back() {
+                gst::trace!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "Current GOP start {} end {} (final {})",
+                    gop.start_pts,
+                    gop.end_pts,
+                    gop.final_end_pts || stream.sinkpad.is_eos() || stream.caps_or_tag_change()
+                );
+
+                let split_index = gop
+                    .buffers
+                    .iter()
+                    .enumerate()
+                    .find(|(_, buffer)| !buffer.split_now.is_empty())
+                    .map(|(split_idx, _)| split_idx);
+
+                // If no split-now in this GOP then the whole GOP has to be included,
+                // otherwise we split the GOP before the index.
+
+                if let Some(split_index) = split_index {
+                    let gop = stream.queued_gops.back_mut().unwrap();
+
+                    // On the first buffer of the GOP, so we just stop at this point.
+                    if split_index == 0 {
+                        gst::trace!(CAT, obj = stream.sinkpad, "Keeping whole GOP");
+
+                        // Remove the first split-now event
+                        gop.buffers[split_index].split_now.remove(0);
+                    } else {
+                        let start_pts = gop.start_pts;
+                        let start_dts = gop.start_dts;
+                        let earliest_pts = gop.earliest_pts;
+                        let earliest_pts_position = gop.earliest_pts_position;
+
+                        let mut buffers = mem::take(&mut gop.buffers);
+                        // Contains all buffers from `split_index` to the end
+                        gop.buffers = buffers.split_off(split_index);
+
+                        gop.start_pts = gop.buffers[0].pts;
+                        gop.start_dts = gop.buffers[0].dts;
+                        gop.earliest_pts_position = gop.buffers[0].pts_position;
+                        gop.earliest_pts = gop.buffers[0].pts;
+
+                        // Remove the first split-now event
+                        gop.buffers[0].split_now.remove(0);
+
+                        gst::trace!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Splitting GOP and keeping PTS {}",
+                            gop.buffers[0].pts,
+                        );
+
+                        let queue_gop = Gop {
+                            start_pts,
+                            start_dts,
+                            earliest_pts,
+                            final_earliest_pts: true,
+                            end_pts: gop.start_pts,
+                            final_end_pts: true,
+                            end_dts: gop.start_dts,
+                            earliest_pts_position,
+                            buffers,
+                        };
+
+                        gops.push(queue_gop);
+                    }
+
+                    break;
+                } else {
+                    if !gop.final_end_pts && !stream.sinkpad.is_eos() {
+                        gst::warning!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Including GOP without final end PTS",
+                        );
+                    }
+
+                    gst::trace!(CAT, obj = stream.sinkpad, "Pushing complete GOP");
+                    gops.push(stream.queued_gops.pop_back().unwrap());
+                }
+            }
+
+            // If nothing is queued anymore then drop the first of the pending split-now
+            // events.
+            if stream.queued_gops.is_empty() {
+                if !stream.pending_split_now.is_empty() {
+                    stream.pending_split_now.remove(0);
+                } else {
+                    assert!(all_eos);
+                }
+            }
+
+            return Ok(gops);
+        }
+
+        // Otherwise, for the first stream drain as much as necessary and decide the end of this
         // fragment or chunk, for all other streams drain up to that position.
+        let fragment_end_pts = fragment_end_pts.unwrap();
 
         if let Some(chunk_duration) = settings.chunk_duration {
             // Chunk mode
@@ -2270,21 +2603,29 @@ impl FMP4Mux {
         let mut chunk_end_pts = None;
 
         let fragment_start_pts = state.fragment_start_pts.unwrap();
-        let fragment_end_pts = state.fragment_end_pts.unwrap();
+        let fragment_end_pts = state.fragment_end_pts;
         let chunk_start_pts = state.chunk_start_pts.unwrap();
         let fragment_start = fragment_start_pts == chunk_start_pts;
 
-        // In fragment mode, each chunk is a full fragment. Otherwise, in chunk mode,
-        // this fragment is filled if it is filled for the first non-EOS stream
-        // that has a GOP inside this chunk
-        let fragment_filled = settings.chunk_duration.is_none()
-            || state
-                .streams
-                .iter()
-                .find(|s| {
-                    !s.sinkpad.is_eos()
-                        && s.queued_gops.back().is_some_and(|gop| {
-                            gop.start_pts <= fragment_end_pts
+        let fragment_filled = if settings.manual_split {
+            // In manual-split mode we simply have to look at the first filled stream to
+            // decide whether we output a full fragment or just a chunk now.
+
+            state.streams.iter().any(|s| s.fragment_filled)
+        } else {
+            let fragment_end_pts = fragment_end_pts.unwrap();
+
+            // In fragment mode, each chunk is a full fragment. Otherwise, in chunk mode,
+            // this fragment is filled if it is filled for the first non-EOS stream
+            // that has a GOP inside this chunk
+            settings.chunk_duration.is_none()
+                || state
+                    .streams
+                    .iter()
+                    .find(|s| {
+                        !s.sinkpad.is_eos()
+                            && s.queued_gops.back().is_some_and(|gop| {
+                                gop.start_pts <= fragment_end_pts
                                 // In chunk mode we might've drained a partial GOP as a chunk after
                                 // the fragment end if the keyframe came too late. The GOP now
                                 // starts with a non-keyframe after the fragment end but is part of
@@ -2293,12 +2634,15 @@ impl FMP4Mux {
                                 || gop.buffers.first().is_some_and(|b| {
                                     b.buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
                                 })
-                        })
-                })
-                .map(|s| s.fragment_filled)
-                == Some(true);
+                            })
+                    })
+                    .is_some_and(|s| s.fragment_filled)
+        };
 
-        // The first stream decides how much can be dequeued, if anything at all.
+        // In manual-split mode, for each stream exactly as much as requested is dequeued.
+        // The end PTS of the fragment / chunk is decided based on the maximum of all streams.
+        //
+        // Otherwise the first stream decides how much can be dequeued, if anything at all.
         //
         // In chunk mode:
         //   If more than the fragment duration has passed until the latest GOPs earliest PTS then
@@ -2324,7 +2668,7 @@ impl FMP4Mux {
             "Starting to drain at {} (fragment start {}, fragment end {}, chunk start {}, chunk end {})",
             chunk_start_pts,
             fragment_start_pts,
-            fragment_end_pts,
+            fragment_end_pts.display(),
             chunk_start_pts.display(),
             settings.chunk_duration.map(|duration| chunk_start_pts + duration).display(),
         );
@@ -2349,8 +2693,17 @@ impl FMP4Mux {
             stream.fragment_filled = false;
             stream.chunk_filled = false;
 
-            // If we don't have a next chunk start PTS then this is the first stream as above.
-            if chunk_end_pts.is_none() {
+            if settings.manual_split || all_eos {
+                if let Some(last_gop) = gops.last() {
+                    if chunk_end_pts.map_or(true, |chunk_end_pts| chunk_end_pts < last_gop.end_pts)
+                    {
+                        chunk_end_pts = Some(last_gop.end_pts);
+                    }
+                }
+            } else if chunk_end_pts.is_none() {
+                let fragment_end_pts = fragment_end_pts.unwrap();
+
+                // If we don't have a next chunk start PTS then this is the first stream as above.
                 if let Some(last_gop) = gops.last() {
                     // Dequeued something so let's take the end PTS of the last GOP
                     chunk_end_pts = Some(last_gop.end_pts);
@@ -2392,13 +2745,6 @@ impl FMP4Mux {
                         // In this case we advance the timeout by 1s and hope that things are
                         // better then.
                         return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
-                    }
-                }
-            } else if all_eos {
-                if let Some(last_gop) = gops.last() {
-                    if chunk_end_pts.map_or(true, |chunk_end_pts| chunk_end_pts < last_gop.end_pts)
-                    {
-                        chunk_end_pts = Some(last_gop.end_pts);
                     }
                 }
             }
@@ -2604,7 +2950,7 @@ impl FMP4Mux {
         pts: Option<gst::ClockTime>,
         upstream_events: &mut Vec<(super::FMP4MuxPad, gst::Event)>,
     ) {
-        if !settings.send_force_keyunit {
+        if settings.manual_split || !settings.send_force_keyunit {
             return;
         }
 
@@ -2677,15 +3023,15 @@ impl FMP4Mux {
     ) -> Result<(Option<gst::Caps>, Option<gst::BufferList>), gst::FlowError> {
         if at_eos {
             gst::info!(CAT, imp = self, "Draining at EOS");
-        } else if timeout {
+        } else if timeout && !settings.manual_split {
             gst::info!(CAT, imp = self, "Draining at timeout");
         } else if state.need_new_header {
             gst::info!(CAT, imp = self, "Draining on caps change");
         } else {
-            for stream in &state.streams {
-                if !stream.chunk_filled && !stream.fragment_filled && !stream.sinkpad.is_eos() {
-                    return Ok((None, None));
-                }
+            if state.streams.iter().any(|stream| {
+                !stream.chunk_filled && !stream.fragment_filled && !stream.sinkpad.is_eos()
+            }) {
+                return Ok((None, None));
             }
             gst::info!(
                 CAT,
@@ -2890,7 +3236,7 @@ impl FMP4Mux {
                 chunk_end_pts,
             );
         } else {
-            gst::info!(CAT, imp = self, "Starting new chunk at {}", chunk_end_pts,);
+            gst::info!(CAT, imp = self, "Starting new chunk at {}", chunk_end_pts);
         }
         state.chunk_start_pts = Some(chunk_end_pts);
 
@@ -2947,7 +3293,9 @@ impl FMP4Mux {
                     if err == gst_base::AGGREGATOR_FLOW_NEED_DATA {
                         assert!(!all_eos);
                         gst::debug!(CAT, imp = self, "Need more data");
-                        state.timeout_delay += 1.seconds();
+                        if timeout {
+                            state.timeout_delay += 1.seconds();
+                        }
                     }
 
                     return Err(err);
@@ -3144,6 +3492,7 @@ impl FMP4Mux {
                 global_orientation,
                 stream_orientation,
                 elst_infos: Vec::new(),
+                pending_split_now: Vec::new(),
             });
         }
 
@@ -3395,11 +3744,23 @@ impl ObjectImpl for FMP4Mux {
                     .class_handler(|args| {
                         let element = args[0].get::<super::FMP4Mux>().expect("signal arg");
                         let imp = element.imp();
+
+                        let settings = imp.settings.lock().unwrap().clone();
+
                         let mut state = imp.state.lock().unwrap();
                         let time = args[1]
                             .get::<Option<gst::ClockTime>>()
                             .expect("time arg")
                             .unwrap_or(gst::ClockTime::ZERO);
+
+                        if settings.manual_split {
+                            gst::warning!(
+                                CAT,
+                                obj = element,
+                                "split-at-running-time has no effect in manual-split mode",
+                            );
+                            return None;
+                        }
 
                         if let Some(fragment_start_pts) = state.fragment_start_pts {
                             if time < fragment_start_pts {
@@ -3490,6 +3851,36 @@ impl ObjectImpl for FMP4Mux {
                     .default_value(DEFAULT_SEND_FORCE_KEYUNIT)
                     .mutable_ready()
                     .build(),
+               /**
+                 * GstFMP4Mux:manual-split:
+                 *
+                 * In `manual-split=true` mode the `chunk-duration` / `fragment-duration`
+                 * properties are only used for latency reporting. Similarly, the
+                 * `split-at-running-time` action signal has no effect at all and no automatic
+                 * `force-keyunit` events are sent.
+                 *
+                 * Instead, providing suitable input for splitting is the job of the application.
+                 * The application is supposed to send a (serialized) `custom-downstream` event
+                 * with a structure named `FMP4MuxSplitNow` to signal when fragments or chunks
+                 * should be split off. A split will happen between the buffer received right
+                 * before the event and the buffer received right after the event.
+                 *
+                 * The event has an optional boolean `chunk` field (defaults to `false`) to signal
+                 * that a chunk should be created instead of a full fragment.
+                 *
+                 * Whenever a fragment should be created then this event should be sent right
+                 * before the next keyframe. Sending the event at any other time will cause a
+                 * warning but a full fragment will still be created, just that the next fragment
+                 * will not start on a keyframe as requested by the application.
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
+                glib::ParamSpecBoolean::builder("manual-split")
+                    .nick("Manual Split")
+                    .blurb("Don't split automatically based on the fragment-duration and chunk-duration properties")
+                    .default_value(DEFAULT_MANUAL_SPLIT)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -3567,6 +3958,10 @@ impl ObjectImpl for FMP4Mux {
                 let mut settings = self.settings.lock().unwrap();
                 settings.send_force_keyunit = value.get().expect("type checked upstream");
             }
+            "manual-split" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.manual_split = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -3619,6 +4014,10 @@ impl ObjectImpl for FMP4Mux {
             "send-force-keyunit" => {
                 let settings = self.settings.lock().unwrap();
                 settings.send_force_keyunit.to_value()
+            }
+            "manual-split" => {
+                let settings = self.settings.lock().unwrap();
+                settings.manual_split.to_value()
             }
             _ => unimplemented!(),
         }
@@ -3858,6 +4257,46 @@ impl AggregatorImpl for FMP4Mux {
                 }
 
                 self.parent_sink_event(aggregator_pad, event)
+            }
+            gst::EventView::CustomDownstream(ev) => {
+                if let Some(split_now) = SplitNowEvent::try_parse(ev) {
+                    gst::trace!(
+                        CAT,
+                        obj = aggregator_pad,
+                        "Received split-now event {split_now:?}",
+                    );
+
+                    let settings = self.settings.lock().unwrap().clone();
+
+                    if settings.manual_split {
+                        let mut state = self.state.lock().unwrap();
+                        if let Some(stream) = state.mut_stream_from_pad(aggregator_pad) {
+                            match split_now {
+                                Err(err) => {
+                                    gst::warning!(
+                                        CAT,
+                                        obj = aggregator_pad,
+                                        "Invalid split-now event received: {err}",
+                                    );
+                                }
+                                Ok(split_now) => {
+                                    stream.pending_split_now.push(split_now);
+                                }
+                            }
+                        } else {
+                            gst::warning!(CAT, obj = aggregator_pad, "No stream created for pad");
+                        }
+                    } else {
+                        gst::warning!(
+                            CAT,
+                            obj = aggregator_pad,
+                            "split-now events only have an effect in manual-split mode",
+                        );
+                    }
+                    true
+                } else {
+                    self.parent_sink_event(aggregator_pad, event)
+                }
             }
             _ => self.parent_sink_event(aggregator_pad, event),
         }

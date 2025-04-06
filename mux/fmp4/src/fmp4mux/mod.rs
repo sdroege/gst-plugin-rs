@@ -335,3 +335,44 @@ pub(crate) enum WriteEdtsMode {
     Always,
     Never,
 }
+
+#[derive(Debug)]
+pub(crate) struct SplitNowEvent {
+    pub chunk: bool,
+}
+
+impl From<&SplitNowEvent> for gst::Event {
+    fn from(value: &SplitNowEvent) -> Self {
+        gst::event::CustomDownstream::builder(
+            gst::Structure::builder("FMP4MuxSplitNow")
+                .field("chunk", value.chunk)
+                .build(),
+        )
+        .build()
+    }
+}
+
+impl From<SplitNowEvent> for gst::Event {
+    fn from(value: SplitNowEvent) -> Self {
+        gst::Event::from(&value)
+    }
+}
+
+impl SplitNowEvent {
+    fn try_parse(event: &gst::event::CustomDownstream) -> Option<Result<Self, glib::BoolError>> {
+        let s = event.structure()?;
+        if s.name() != "FMP4MuxSplitNow" {
+            return None;
+        }
+
+        let chunk = match s
+            .get_optional::<bool>("chunk")
+            .map_err(|e| glib::bool_error!("Invalid SplitNow event with wrong chunk field: {e}"))
+        {
+            Ok(chunk) => chunk.unwrap_or(false),
+            Err(err) => return Some(Err(err)),
+        };
+
+        Some(Ok(SplitNowEvent { chunk }))
+    }
+}
