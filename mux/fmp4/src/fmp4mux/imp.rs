@@ -111,6 +111,7 @@ const DEFAULT_WRITE_MEHD: bool = false;
 const DEFAULT_INTERLEAVE_BYTES: Option<u64> = None;
 const DEFAULT_INTERLEAVE_TIME: Option<gst::ClockTime> = Some(gst::ClockTime::from_mseconds(250));
 const DEFAULT_WRITE_EDTS_MODE: WriteEdtsMode = WriteEdtsMode::Auto;
+const DEFAULT_SEND_FORCE_KEYUNIT: bool = true;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -124,6 +125,7 @@ struct Settings {
     movie_timescale: u32,
     offset_to_zero: bool,
     write_edts_mode: WriteEdtsMode,
+    send_force_keyunit: bool,
 }
 
 impl Default for Settings {
@@ -139,6 +141,7 @@ impl Default for Settings {
             movie_timescale: 0,
             offset_to_zero: false,
             write_edts_mode: DEFAULT_WRITE_EDTS_MODE,
+            send_force_keyunit: DEFAULT_SEND_FORCE_KEYUNIT,
         }
     }
 }
@@ -1713,7 +1716,12 @@ impl FMP4Mux {
         // Check if any of the streams are already filled enough for the first chunk/fragment.
         for stream in &mut state.streams {
             // Now send force-keyunit events for the second fragment start.
-            self.request_force_keyunit_event(stream, state.fragment_end_pts, upstream_events);
+            self.request_force_keyunit_event(
+                settings,
+                stream,
+                state.fragment_end_pts,
+                upstream_events,
+            );
             self.check_stream_filled(
                 settings,
                 stream,
@@ -2565,10 +2573,15 @@ impl FMP4Mux {
     /// Request a force-keyunit event for the given PTS.
     fn request_force_keyunit_event(
         &self,
+        settings: &Settings,
         stream: &Stream,
         pts: Option<gst::ClockTime>,
         upstream_events: &mut Vec<(super::FMP4MuxPad, gst::Event)>,
     ) {
+        if !settings.send_force_keyunit {
+            return;
+        }
+
         let current_position = stream.current_position;
 
         // In case of ONVIF this needs to be converted back from UTC time to
@@ -2858,7 +2871,12 @@ impl FMP4Mux {
         // keyframe and can request the following one.
         if fragment_filled {
             for stream in &state.streams {
-                self.request_force_keyunit_event(stream, state.fragment_end_pts, upstream_events);
+                self.request_force_keyunit_event(
+                    settings,
+                    stream,
+                    state.fragment_end_pts,
+                    upstream_events,
+                );
             }
         }
 
@@ -3422,6 +3440,12 @@ impl ObjectImpl for FMP4Mux {
                     .blurb("Mode for writing EDTS, when in auto mode, edts written only for non-live streams.")
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("send-force-keyunit")
+                    .nick("Send force-keyunit Events")
+                    .blurb("Send force-keyunit events to request keyframes for the start of each fragment")
+                    .default_value(DEFAULT_SEND_FORCE_KEYUNIT)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -3495,6 +3519,10 @@ impl ObjectImpl for FMP4Mux {
                 let mut settings = self.settings.lock().unwrap();
                 settings.write_edts_mode = value.get().expect("type checked upstream");
             }
+            "send-force-keyunit" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.send_force_keyunit = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -3544,7 +3572,10 @@ impl ObjectImpl for FMP4Mux {
                 let settings = self.settings.lock().unwrap();
                 settings.write_edts_mode.to_value()
             }
-
+            "send-force-keyunit" => {
+                let settings = self.settings.lock().unwrap();
+                settings.send_force_keyunit.to_value()
+            }
             _ => unimplemented!(),
         }
     }
@@ -3927,6 +3958,7 @@ impl AggregatorImpl for FMP4Mux {
                         "Incomplete GOP pushed or caps change - send force-key-unit event"
                     );
                     self.request_force_keyunit_event(
+                        &settings,
                         stream,
                         state.fragment_start_pts,
                         &mut upstream_events,

@@ -3472,6 +3472,18 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "send-force-keyunit": {
+                        "blurb": "Send force-keyunit events to request keyframes for the start of each fragment",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "write-edts-mode": {
                         "blurb": "Mode for writing EDTS, when in auto mode, edts written only for non-live streams.",
                         "conditionally-available": false,
