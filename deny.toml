@@ -99,9 +99,6 @@ version = "0.25"
 
 # chrono via iana-time-zone depends on old windows-core
 [[bans.skip]]
-name = "windows-core"
-version = "0.52"
-[[bans.skip]]
 name = "windows-result"
 version = "0.1"
 
@@ -128,28 +125,43 @@ version = "0.1"
 # Various crates depend on old versions of the windows crates
 [[bans.skip]]
 name = "windows_x86_64_msvc"
+version = "0.42"
+[[bans.skip]]
+name = "windows_x86_64_msvc"
 version = "0.48"
 [[bans.skip]]
 name = "windows_x86_64_msvc"
 version = "0.52"
 [[bans.skip]]
 name = "windows_x86_64_gnullvm"
+version = "0.42"
+[[bans.skip]]
+name = "windows_x86_64_gnullvm"
 version = "0.48"
 [[bans.skip]]
 name = "windows_x86_64_gnullvm"
 version = "0.52"
 [[bans.skip]]
 name = "windows_x86_64_gnu"
+version = "0.42"
+[[bans.skip]]
+name = "windows_x86_64_gnu"
 version = "0.48"
 [[bans.skip]]
 name = "windows_x86_64_gnu"
 version = "0.52"
 [[bans.skip]]
 name = "windows_i686_msvc"
+version = "0.42"
+[[bans.skip]]
+name = "windows_i686_msvc"
 version = "0.48"
 [[bans.skip]]
 name = "windows_i686_msvc"
 version = "0.52"
+[[bans.skip]]
+name = "windows_i686_gnu"
+version = "0.42"
 [[bans.skip]]
 name = "windows_i686_gnu"
 version = "0.48"
@@ -164,7 +176,13 @@ name = "windows_aarch64_msvc"
 version = "0.48"
 [[bans.skip]]
 name = "windows_aarch64_msvc"
+version = "0.42"
+[[bans.skip]]
+name = "windows_aarch64_msvc"
 version = "0.52"
+[[bans.skip]]
+name = "windows_aarch64_gnullvm"
+version = "0.42"
 [[bans.skip]]
 name = "windows_aarch64_gnullvm"
 version = "0.48"
@@ -173,16 +191,34 @@ name = "windows_aarch64_gnullvm"
 version = "0.52"
 [[bans.skip]]
 name = "windows-targets"
+version = "0.42"
+[[bans.skip]]
+name = "windows-targets"
 version = "0.48"
 [[bans.skip]]
 name = "windows-targets"
 version = "0.52"
 [[bans.skip]]
 name = "windows-sys"
+version = "0.45"
+[[bans.skip]]
+name = "windows-sys"
 version = "0.48"
 [[bans.skip]]
 name = "windows-sys"
 version = "0.52"
+[[bans.skip]]
+name = "windows-strings"
+version = "0.3"
+[[bans.skip]]
+name = "windows-interface"
+version = "0.57"
+[[bans.skip]]
+name = "windows-implement"
+version = "0.57"
+[[bans.skip]]
+name = "windows-core"
+version = "0.57"
 
 # Various crates depend on an older version of crypto-bigint
 [[bans.skip]]
@@ -254,6 +290,9 @@ version = "0.6"
 [[bans.skip]]
 name = "rustls-webpki"
 version = "0.101"
+[[bans.skip]]
+name = "rustls-webpki"
+version = "0.102"
 
 # warp depends on an older version of tokio-tungstenite
 [[bans.skip]]
