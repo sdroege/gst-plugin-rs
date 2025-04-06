@@ -3214,7 +3214,7 @@ dependencies = [
  "pkg-config",
  "polling",
  "rand 0.9.0",
- "rustix 0.38.44",
+ "rustix 1.0.5",
  "slab",
  "socket2",
  "waker-fn",
