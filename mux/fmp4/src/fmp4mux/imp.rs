@@ -1508,8 +1508,7 @@ impl FMP4Mux {
                     }
                 }
 
-                // We can only finish a chunk if a full GOP with final end PTS is queued and it
-                // ends at or after the fragment end PTS.
+                // We can only finish a chunk if a full GOP with final earliest PTS is queued.
                 let (gop_idx, gop) = match stream
                     .queued_gops
                     .iter()
@@ -1521,7 +1520,7 @@ impl FMP4Mux {
                         gst::trace!(
                             CAT,
                             obj = stream.sinkpad,
-                            "Chunked mode and want to finish fragment but no GOP with final end PTS known yet",
+                            "Chunked mode and want to finish chunk but no GOP with final earliest PTS known yet",
                         );
                         return;
                     }
@@ -1551,6 +1550,8 @@ impl FMP4Mux {
                 }
             }
         } else {
+            // In fragment-only mode
+
             // Check if the end of the latest finalized GOP is after the fragment end
             gst::trace!(
                 CAT,
