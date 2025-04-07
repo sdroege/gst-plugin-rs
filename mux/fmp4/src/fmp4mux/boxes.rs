@@ -2066,9 +2066,25 @@ fn write_traf(
     write_full_box(v, b"tfhd", FULL_BOX_VERSION_0, tf_flags, |v| {
         write_tfhd(v, cfg, idx, default_size, default_duration, default_flags)
     })?;
-    write_full_box(v, b"tfdt", FULL_BOX_VERSION_1, FULL_BOX_FLAGS_NONE, |v| {
-        write_tfdt(v, cfg, idx, stream, timescale)
-    })?;
+
+    let large_tfdt = stream
+        .start_time
+        .unwrap()
+        .mul_div_floor(timescale as u64, gst::ClockTime::SECOND.nseconds())
+        .context("base time overflow")?
+        .nseconds()
+        > u32::MAX as u64;
+    write_full_box(
+        v,
+        b"tfdt",
+        if large_tfdt {
+            FULL_BOX_VERSION_1
+        } else {
+            FULL_BOX_VERSION_0
+        },
+        FULL_BOX_FLAGS_NONE,
+        |v| write_tfdt(v, cfg, idx, stream, timescale),
+    )?;
 
     let mut current_data_offset = 0;
 
@@ -2160,9 +2176,14 @@ fn write_tfdt(
         .start_time
         .unwrap()
         .mul_div_floor(timescale as u64, gst::ClockTime::SECOND.nseconds())
-        .context("base time overflow")?;
+        .context("base time overflow")?
+        .nseconds();
 
-    v.extend(base_time.to_be_bytes());
+    if base_time > u32::MAX as u64 {
+        v.extend(base_time.to_be_bytes());
+    } else {
+        v.extend((base_time as u32).to_be_bytes());
+    }
 
     Ok(())
 }
