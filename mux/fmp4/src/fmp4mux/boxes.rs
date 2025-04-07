@@ -11,6 +11,7 @@ use gst::prelude::*;
 
 use anyhow::{anyhow, bail, Context, Error};
 use std::convert::TryFrom;
+use std::str::FromStr;
 
 use super::Buffer;
 use super::IDENTITY_MATRIX;
@@ -2071,7 +2072,10 @@ fn write_traf(
 
     let mut current_data_offset = 0;
 
-    for run in GroupBy::new(cfg.buffers, |a: &Buffer, b: &Buffer| a.idx == b.idx) {
+    for run in cfg
+        .buffers
+        .chunk_by(|a: &Buffer, b: &Buffer| a.idx == b.idx)
+    {
         if run[0].idx != idx {
             // FIXME: What to do with >4GB offsets?
             current_data_offset = (current_data_offset as u64
@@ -2288,100 +2292,4 @@ pub(crate) fn create_mfra(
     v[offset..][..4].copy_from_slice(&len.to_be_bytes());
 
     Ok(gst::Buffer::from_mut_slice(v))
-}
-
-// Copy from std while this is still nightly-only
-use std::{fmt, str::FromStr};
-
-/// An iterator over slice in (non-overlapping) chunks separated by a predicate.
-///
-/// This struct is created by the [`group_by`] method on [slices].
-///
-/// [`group_by`]: slice::group_by
-/// [slices]: slice
-struct GroupBy<'a, T: 'a, P> {
-    slice: &'a [T],
-    predicate: P,
-}
-
-impl<'a, T: 'a, P> GroupBy<'a, T, P> {
-    fn new(slice: &'a [T], predicate: P) -> Self {
-        GroupBy { slice, predicate }
-    }
-}
-
-impl<'a, T: 'a, P> Iterator for GroupBy<'a, T, P>
-where
-    P: FnMut(&T, &T) -> bool,
-{
-    type Item = &'a [T];
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.slice.is_empty() {
-            None
-        } else {
-            let mut len = 1;
-            let mut iter = self.slice.windows(2);
-            while let Some([l, r]) = iter.next() {
-                if (self.predicate)(l, r) {
-                    len += 1
-                } else {
-                    break;
-                }
-            }
-            let (head, tail) = self.slice.split_at(len);
-            self.slice = tail;
-            Some(head)
-        }
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        if self.slice.is_empty() {
-            (0, Some(0))
-        } else {
-            (1, Some(self.slice.len()))
-        }
-    }
-
-    #[inline]
-    fn last(mut self) -> Option<Self::Item> {
-        self.next_back()
-    }
-}
-
-impl<'a, T: 'a, P> DoubleEndedIterator for GroupBy<'a, T, P>
-where
-    P: FnMut(&T, &T) -> bool,
-{
-    #[inline]
-    fn next_back(&mut self) -> Option<Self::Item> {
-        if self.slice.is_empty() {
-            None
-        } else {
-            let mut len = 1;
-            let mut iter = self.slice.windows(2);
-            while let Some([l, r]) = iter.next_back() {
-                if (self.predicate)(l, r) {
-                    len += 1
-                } else {
-                    break;
-                }
-            }
-            let (head, tail) = self.slice.split_at(self.slice.len() - len);
-            self.slice = head;
-            Some(tail)
-        }
-    }
-}
-
-impl<'a, T: 'a, P> std::iter::FusedIterator for GroupBy<'a, T, P> where P: FnMut(&T, &T) -> bool {}
-
-impl<'a, T: 'a + fmt::Debug, P> fmt::Debug for GroupBy<'a, T, P> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("GroupBy")
-            .field("slice", &self.slice)
-            .finish()
-    }
 }
