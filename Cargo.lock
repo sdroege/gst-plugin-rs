@@ -1021,6 +1021,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cdp-types"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "332ca05a88e143d80a245f9aa6c65b6e6383ee3e332017005647c27c6a62f902"
+dependencies = [
+ "cea708-types",
+ "log",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "cea608-types"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1032,9 +1043,9 @@ dependencies = [
 
 [[package]]
 name = "cea708-types"
-version = "0.3.5"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "711a98fc25dbb1c2a76505ac7ede42a5ed81aa36360939ad7709e92eff7f8fe3"
+checksum = "2b4d0a0b75ef1572334ddfd197090a9f550b6a8852663cbb69e7af8e8c5641ef"
 dependencies = [
  "log",
  "muldiv",
@@ -2364,6 +2375,7 @@ dependencies = [
  "atomic_refcell",
  "byteorder",
  "cairo-rs",
+ "cdp-types",
  "cea608-types",
  "cea708-types",
  "chrono",

@@ -20,7 +20,8 @@ pangocairo.workspace = true
 byteorder = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
-cea708-types = "0.3.5"
+cdp-types = "0.3"
+cea708-types = "0.4.0"
 cea608-types = "0.1.1"
 once_cell.workspace = true
 gst = { workspace = true, features = ["v1_16"]}
