@@ -312,7 +312,10 @@ impl AggregatorImpl for Cea708Mux {
                                             pending_codes.push_front(code);
                                             break;
                                         }
-                                        Err(cea708_types::WriterError::ReadOnly) => unreachable!(),
+                                        Err(
+                                            cea708_types::WriterError::ReadOnly
+                                            | cea708_types::WriterError::EmptyService,
+                                        ) => unreachable!(),
                                     }
                                 }
                             }
@@ -352,7 +355,10 @@ impl AggregatorImpl for Cea708Mux {
                                                 .or_default()
                                                 .push_back(code.clone());
                                         }
-                                        Err(cea708_types::WriterError::ReadOnly) => unreachable!(),
+                                        Err(
+                                            cea708_types::WriterError::ReadOnly
+                                            | cea708_types::WriterError::EmptyService,
+                                        ) => unreachable!(),
                                     }
                                 }
                             }
@@ -382,7 +388,10 @@ impl AggregatorImpl for Cea708Mux {
                                     pending_codes.push_front(code);
                                     break;
                                 }
-                                Err(cea708_types::WriterError::ReadOnly) => unreachable!(),
+                                Err(
+                                    cea708_types::WriterError::ReadOnly
+                                    | cea708_types::WriterError::EmptyService,
+                                ) => unreachable!(),
                             }
                         }
                     }
