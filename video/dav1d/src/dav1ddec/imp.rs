@@ -58,6 +58,7 @@ struct State {
     input_state: gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     output_info: Option<gst_video::VideoInfo>,
     video_meta_supported: bool,
+    n_cpus: usize,
 }
 
 // We make our own settings object so we don't have to deal with a Sync impl for dav1d::Settings
@@ -94,6 +95,17 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 });
 
 impl Dav1dDec {
+    // FIXME: drop this once we have API from dav1d to query this value
+    // https://code.videolan.org/videolan/dav1d/-/merge_requests/1407
+    fn estimate_frame_delay(&self, max_frame_delay: u32, n_threads: u32) -> u32 {
+        if max_frame_delay > 0 {
+            std::cmp::min(max_frame_delay, n_threads)
+        } else {
+            let n_tc = n_threads as f64;
+            std::cmp::min(8, n_tc.sqrt().ceil() as u32)
+        }
+    }
+
     fn gst_video_format_from_dav1d_picture(&self, pic: &dav1d::Picture) -> gst_video::VideoFormat {
         let bpc = pic.bits_per_component();
         let format_desc = match (pic.pixel_layout(), bpc) {
@@ -920,10 +932,14 @@ impl VideoDecoderImpl for Dav1dDec {
                             if self.obj().sink_pad().peer_query(&mut upstream_latency) {
                                 let (live, mut min, mut max) = upstream_latency.result();
                                 // For autodetection: 1 if live, else whatever dav1d gives us
-                                let frame_latency = if max_frame_delay < 0 && live {
+                                let frame_latency: u64 = if max_frame_delay < 0 && live {
                                     1
                                 } else {
-                                    state.decoder.get_frame_delay() as u64
+                                    self.estimate_frame_delay(
+                                        max_frame_delay as u32,
+                                        state.n_cpus as u32,
+                                    )
+                                    .into()
                                 };
 
                                 let fps_n = match info.fps().numer() {
@@ -1027,6 +1043,7 @@ impl VideoDecoderImpl for Dav1dDec {
             input_state: input_state.clone(),
             output_info: None,
             video_meta_supported: false,
+            n_cpus,
         });
 
         self.parent_set_format(input_state)
