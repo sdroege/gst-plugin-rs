@@ -3018,6 +3018,197 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "dashsink2": {
+        "description": "GStreamer MPEG-DASH Plugin",
+        "elements": {
+            "dashsink2": {
+                "author": "Roberto Viola <rviola@vicomtech.org>",
+                "description": "MPEG-DASH Sink",
+                "hierarchy": [
+                    "DashSink2",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
+                "klass": "Sink/Muxer",
+                "pad-templates": {
+                    "audio_%%u": {
+                        "caps": "audio/mpeg:\n    mpegversion: 4\n  stream-format: raw\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\naudio/x-opus:\nchannel-mapping-family: [ 0, 255 ]\n       channels: [ 1, 8 ]\n           rate: [ 1, 2147483647 ]\n",
+                        "direction": "sink",
+                        "presence": "request"
+                    },
+                    "video_%%u": {
+                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-av1:\n  stream-format: obu-stream\n      alignment: tu\n        profile: { (string)main, (string)high, (string)professional }\n   croma-format: { (string)4:0:0, (string)4:2:0, (string)4:2:2, (string)4:4:4 }\n bit-depth-luma: { (uint)8, (uint)10, (uint)12 }\nbit-depth-chroma: { (uint)8, (uint)10, (uint)12 }\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\n",
+                        "direction": "sink",
+                        "presence": "request"
+                    }
+                },
+                "properties": {
+                    "dynamic": {
+                        "blurb": "Whether to generate dynamic manifest (MPD)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "latency": {
+                        "blurb": "Latency in milliseconds",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "5000",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "min-buffer-time": {
+                        "blurb": "Minimum buffer time in milliseconds for MPD",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "10000",
+                        "max": "-1",
+                        "min": "1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "minimum-update-period": {
+                        "blurb": "Optional update period in milliseconds for dynamic MPD",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "mpd-filename": {
+                        "blurb": "Filename of the manifest (MPD) file",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "manifest.mpd",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "mpd-root-path": {
+                        "blurb": "Root path to write the manifest (MPD) file",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "sync": {
+                        "blurb": "Whether to sync appsink to the pipeline clock",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "target-duration": {
+                        "blurb": "Target duration in milliseconds for each segment",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "10000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "utc-timing-url": {
+                        "blurb": "URL to be used in UTCTiming with http-xsdate scheme",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "none",
+                "signals": {
+                    "get-init-stream": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "GOutputStream",
+                        "when": "last"
+                    },
+                    "get-manifest-stream": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "GOutputStream",
+                        "when": "last"
+                    },
+                    "get-segment-stream": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "GOutputStream",
+                        "when": "last"
+                    }
+                }
+            }
+        },
+        "filename": "gstdashsink2",
+        "license": "MIT/Apache-2.0",
+        "other-types": {},
+        "package": "gst-plugin-dashsink2",
+        "source": "gst-plugin-dashsink2",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "dav1d": {
         "description": "GStreamer dav1d AV1 decoder Plugin",
         "elements": {

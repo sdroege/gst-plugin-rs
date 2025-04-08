@@ -97,6 +97,8 @@ You will find the following plugins in this repository:
     - `deepgram`: Wrapper elements to talk to the [Deepgram API](https://developers.deepgram.com/home)
       - `deepgramtranscriber`: an element wrapping the Deepgram Speech-to-Text service
 
+    - `dashsink2`: An element for generating MPEG-DASH streams.
+
     - `hlsmultivariantsink`: Create multi-variant HLS playlists with alternate renditions and variant streams.
 
     - `hlssink3`: An element for generating MPEG-TS HLS streams.

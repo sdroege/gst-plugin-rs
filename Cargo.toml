@@ -33,6 +33,7 @@ members = [
 
     "net/aws",
     "net/deepgram",
+    "net/dashsink2",
     "net/hlsmultivariantsink",
     "net/hlssink3",
     "net/icecast",
@@ -102,6 +103,7 @@ default-members = [
     "mux/isobmff",
 
     "net/aws",
+    "net/dashsink2",
     "net/mpegtslive",
     "net/hlssink3",
     "net/icecast",

@@ -36,6 +36,7 @@ option('isobmff', type: 'feature', value: 'auto', description: 'Build ISO BMFF p
 # net
 option('aws', type: 'feature', value: 'auto', description: 'Build aws plugin')
 option('deepgram', type: 'feature', value: 'auto', description: 'Build deepgram plugin')
+option('dashsink2', type: 'feature', value: 'auto', description: 'Build dash plugin')
 option('hlsmultivariantsink', type: 'feature', value: 'auto', description: 'Build hlsmultivariantsink plugin')
 option('hlssink3', type: 'feature', value: 'auto', description: 'Build hlssink3 plugin')
 option('icecast', type: 'feature', value: 'auto', description: 'Build icecast plugin')

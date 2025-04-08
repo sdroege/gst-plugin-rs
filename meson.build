@@ -110,6 +110,7 @@ plugins = {
   },
   'deepgram': {'library': 'libgstdeepgram'},
   'mpegtslive': {'library': 'libgstmpegtslive'},
+  'dashsink2': {'library': 'libgstdashsink2'},
   'hlsmultivariantsink': {'library': 'libgsthlsmultivariantsink'},
   'hlssink3': {'library': 'libgsthlssink3'},
   'icecast': {'library': 'libgsticecast'},

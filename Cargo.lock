@@ -4323,6 +4323,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "gst-plugin-dashsink2"
+version = "0.16.0-alpha"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "dash-mpd",
+ "gio",
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "gstreamer-app",
+ "gstreamer-audio",
+ "gstreamer-check",
+ "gstreamer-pbutils",
+ "gstreamer-video",
+ "quick-xml 0.39.2",
+ "serde",
+ "sprintf",
+]
+
+[[package]]
 name = "gst-plugin-dav1d"
 version = "0.16.0-alpha"
 dependencies = [
