@@ -68,6 +68,7 @@ pub struct TextToCea708 {
     send_roll_up_preamble: bool,
     erase_display_frame_no: Option<u64>,
     last_frame_no: u64,
+    base_row: u8,
 }
 
 impl Default for TextToCea708 {
@@ -101,6 +102,7 @@ impl Default for TextToCea708 {
             send_roll_up_preamble: false,
             erase_display_frame_no: None,
             last_frame_no: 0,
+            base_row: 14,
         }
     }
 }
@@ -220,7 +222,8 @@ impl TextToCea708 {
 
         if do_preamble {
             if self.mode == Cea708Mode::RollUp {
-                self.service_writer.rollup_preamble(self.roll_up_count, 15);
+                self.service_writer
+                    .rollup_preamble(self.roll_up_count, self.base_row);
             }
 
             self.send_roll_up_preamble = false;
@@ -412,9 +415,6 @@ impl TextToCea708 {
             }
 
             if let Some(line_column) = line.column {
-                if self.mode != Cea708Mode::PopOn && self.mode != Cea708Mode::PaintOn {
-                    self.send_roll_up_preamble = true;
-                }
                 self.pen_location.column = line_column as u8;
                 need_pen_location = true;
             } else if self.mode == Cea708Mode::PopOn || self.mode == Cea708Mode::PaintOn {
@@ -429,6 +429,10 @@ impl TextToCea708 {
 
             if need_pen_location {
                 self.service_writer.set_pen_location(self.pen_location);
+                if !matches!(self.mode, Cea708Mode::PopOn | Cea708Mode::PaintOn) {
+                    self.base_row = self.pen_location.row;
+                    self.send_roll_up_preamble = true;
+                }
             }
 
             for (i, chunk) in line.chunks.iter().enumerate() {
