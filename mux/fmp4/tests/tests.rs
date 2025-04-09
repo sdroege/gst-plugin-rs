@@ -2501,6 +2501,10 @@ fn test_caps_change_at_gop_boundary() {
 
     let mut h = gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"));
 
+    h.element()
+        .unwrap()
+        .set_property_from_str("header-update-mode", "caps");
+
     let caps = gst::Caps::builder("video/x-h264")
         .field("width", 1920i32)
         .field("height", 1080i32)
@@ -2540,6 +2544,10 @@ fn test_language_change_at_gop_boundary() {
     init();
 
     let mut h = gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"));
+
+    h.element()
+        .unwrap()
+        .set_property_from_str("header-update-mode", "caps");
 
     let caps = gst::Caps::builder("video/x-h264")
         .field("width", 1920i32)
@@ -2602,6 +2610,10 @@ fn test_caps_change_at_gop_boundary_multi_stream() {
 
     let mut h1 = gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"));
     let mut h2 = gst_check::Harness::with_element(&h1.element().unwrap(), Some("sink_1"), None);
+
+    h1.element()
+        .unwrap()
+        .set_property_from_str("header-update-mode", "caps");
 
     let caps1 = gst::Caps::builder("video/x-h264")
         .field("width", 1920i32)
@@ -2770,6 +2782,10 @@ fn test_caps_change_at_gop_boundary_chunked_multi_stream() {
     let mut h1 = gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"));
     let mut h2 = gst_check::Harness::with_element(&h1.element().unwrap(), Some("sink_1"), None);
 
+    h1.element()
+        .unwrap()
+        .set_property_from_str("header-update-mode", "caps");
+
     let caps1 = gst::Caps::builder("video/x-h264")
         .field("width", 1920i32)
         .field("height", 1080i32)
@@ -2918,6 +2934,10 @@ fn test_caps_change_at_gop_boundary_compatible() {
 
     let mut h = gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"));
 
+    h.element()
+        .unwrap()
+        .set_property_from_str("header-update-mode", "caps");
+
     let caps = gst::Caps::builder("video/x-h264")
         .field("width", 1280i32)
         .field("height", 720i32)
@@ -2958,6 +2978,10 @@ fn test_caps_change_at_gop_boundary_not_allowed() {
     init();
 
     let mut h = gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"));
+
+    h.element()
+        .unwrap()
+        .set_property_from_str("header-update-mode", "caps");
 
     let caps = gst::Caps::builder("video/x-h264")
         .field("width", 1920i32)
@@ -3004,6 +3028,10 @@ fn test_caps_change_within_gop() {
 
     let mut h = gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"));
 
+    h.element()
+        .unwrap()
+        .set_property_from_str("header-update-mode", "caps");
+
     let caps = gst::Caps::builder("video/x-h264")
         .field("width", 1920i32)
         .field("height", 1080i32)
@@ -3044,6 +3072,10 @@ fn test_caps_change_within_gop_start_without_key() {
 
     let mut h = gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"));
 
+    h.element()
+        .unwrap()
+        .set_property_from_str("header-update-mode", "caps");
+
     let caps = gst::Caps::builder("video/x-h264")
         .field("width", 1920i32)
         .field("height", 1080i32)
@@ -3082,6 +3114,10 @@ fn test_caps_change_within_gop_chunked() {
     init();
 
     let mut h = gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"));
+
+    h.element()
+        .unwrap()
+        .set_property_from_str("header-update-mode", "caps");
 
     let caps = gst::Caps::builder("video/x-h264")
         .field("width", 1920i32)
@@ -3130,6 +3166,10 @@ fn test_caps_change_within_gop_no_key() {
 
     let mut h = gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"));
 
+    h.element()
+        .unwrap()
+        .set_property_from_str("header-update-mode", "caps");
+
     let caps = gst::Caps::builder("video/x-h264")
         .field("width", 1920i32)
         .field("height", 1080i32)
@@ -3170,6 +3210,10 @@ fn test_caps_change_before_first_frame() {
     init();
 
     let mut h = gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"));
+
+    h.element()
+        .unwrap()
+        .set_property_from_str("header-update-mode", "caps");
 
     let caps = gst::Caps::builder("video/x-h264")
         .field("width", 1920i32)

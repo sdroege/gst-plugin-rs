@@ -921,14 +921,14 @@ impl FMP4Mux {
     }
 
     // Caps/tag changes are allowed only in case that the
-    // header-update-mode is None.
+    // header-update-mode is Caps.
     //
     // CAUTION: This function logs an error if operation is not
     // allowed so it should be evaluated only in case the caps/tags
     // would change otherwise (e. g. right-most operand in boolean
     // expressions).
     fn header_update_allowed(&self, reason: &str) -> bool {
-        if self.settings.lock().unwrap().header_update_mode == super::HeaderUpdateMode::None {
+        if self.settings.lock().unwrap().header_update_mode == super::HeaderUpdateMode::Caps {
             gst::debug!(
                 CAT,
                 imp = self,
@@ -3643,17 +3643,30 @@ impl FMP4Mux {
         let class = aggregator.class();
         let variant = class.as_ref().variant;
 
-        if settings.header_update_mode == super::HeaderUpdateMode::None && at_eos {
+        if [super::HeaderUpdateMode::None, super::HeaderUpdateMode::Caps]
+            .contains(&settings.header_update_mode)
+            && at_eos
+        {
             return Ok(None);
         }
 
         assert!(!at_eos || state.streams.iter().all(|s| s.queued_gops.is_empty()));
 
-        let duration = state
-            .end_pts
-            .opt_checked_sub(state.earliest_pts)
-            .ok()
-            .flatten();
+        let duration = if at_eos
+            && [
+                super::HeaderUpdateMode::Update,
+                super::HeaderUpdateMode::Rewrite,
+            ]
+            .contains(&settings.header_update_mode)
+        {
+            state
+                .end_pts
+                .opt_checked_sub(state.earliest_pts)
+                .ok()
+                .flatten()
+        } else {
+            None
+        };
 
         let streams = state
             .streams
@@ -3750,7 +3763,7 @@ impl FMP4Mux {
         match updated_header {
             Ok(Some((buffer_list, caps))) => {
                 match settings.header_update_mode {
-                    super::HeaderUpdateMode::None => unreachable!(),
+                    super::HeaderUpdateMode::None | super::HeaderUpdateMode::Caps => unreachable!(),
                     super::HeaderUpdateMode::Rewrite => {
                         let mut q = gst::query::Seeking::new(gst::Format::Bytes);
                         if self.obj().src_pad().peer_query(&mut q) && q.result().0 {

@@ -3598,6 +3598,11 @@
                         "desc": "Update",
                         "name": "update",
                         "value": "2"
+                    },
+                    {
+                        "desc": "Caps",
+                        "name": "caps",
+                        "value": "3"
                     }
                 ]
             },

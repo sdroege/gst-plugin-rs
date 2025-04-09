@@ -326,14 +326,51 @@ pub(crate) struct FragmentOffset {
     offset: u64,
 }
 
+/**
+ * GstFMP4MuxHeaderUpdateMode:
+ *
+ * How and when updating of the header (`moov`, initialization segment) is allowed.
+ */
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, glib::Enum)]
 #[repr(i32)]
 #[enum_type(name = "GstFMP4MuxHeaderUpdateMode")]
 pub(crate) enum HeaderUpdateMode {
+    /**
+     * GstFMP4MuxHeaderUpdateMode:none:
+     *
+     * Don't allow and do any header updates at all.
+     *
+     * Caps changes are not allowed in this mode.
+     */
     None,
+    /**
+     * GstFMP4MuxHeaderUpdateMode:rewrite:
+     *
+     * Try rewriting the initial header with the overall duration at the very end.
+     *
+     * Caps changes are not allowed in this mode.
+     */
     Rewrite,
+    /**
+     * GstFMP4MuxHeaderUpdateMode:update:
+     *
+     * Send an updated version of the initial header with the overall duration at
+     * the very end.
+     *
+     * Caps changes are not allowed in this mode.
+     */
     Update,
+    /**
+     * GstFMP4MuxHeaderUpdateMode:caps:
+     *
+     * Send an updated header whenever caps or tag changes are pending that affect the initial
+     * header. The updated header does not have the duration set and will always be followed by a
+     * new fragment.
+     *
+     * Since: plugins-rs-0.14.0
+     */
+    Caps,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, glib::Enum, Default)]
