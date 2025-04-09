@@ -461,6 +461,9 @@ impl State {
         self.fragment_end_pts = None;
         self.chunk_start_pts = None;
     }
+    fn stream_from_pad(&self, pad: &gst_base::AggregatorPad) -> Option<&Stream> {
+        self.streams.iter().find(|s| *pad == s.sinkpad)
+    }
     fn mut_stream_from_pad(&mut self, pad: &gst_base::AggregatorPad) -> Option<&mut Stream> {
         self.streams.iter_mut().find(|s| *pad == s.sinkpad)
     }
@@ -4351,31 +4354,45 @@ impl AggregatorImpl for FMP4Mux {
                 self.parent_sink_event(aggregator_pad, event)
             }
             EventView::Caps(caps) => {
-                // Only care of caps if streams have been setup
+                let caps = caps.caps_owned();
+
+                gst::trace!(CAT, imp = self, "Received caps {}", caps);
+
+                // Only care of caps if streams have been setup and the
+                // caps actually change in an incompatible way
                 let mut state = self.state.lock().unwrap();
-                if !state.streams.is_empty() {
-                    state.need_new_header =
-                        state
-                            .mut_stream_from_pad(aggregator_pad)
-                            .is_some_and(|stream| {
-                                if !self.caps_compatible(stream, caps.caps())
-                                    && self.header_update_allowed("caps")
-                                {
-                                    gst::trace!(
-                                        CAT,
-                                        obj = aggregator_pad,
-                                        "Update caps and send new headers {:?}",
-                                        caps
-                                    );
-                                    stream.next_caps = Some(caps.caps_owned());
-                                    true
-                                } else {
-                                    false
-                                }
-                            });
+                let stream = state.stream_from_pad(aggregator_pad);
+
+                if state.streams.is_empty()
+                    || stream.is_none_or(|s| s.caps == caps || self.caps_compatible(s, &caps))
+                {
+                    // No streams created yet or caps are compatible, don't have to do anything
+                    drop(state);
+                    self.parent_sink_event(aggregator_pad, event)
+                } else if self.header_update_allowed("caps") {
+                    // Stream created and caps are not compatible, but header updates are allowed
+                    state.need_new_header = true;
+                    gst::trace!(
+                        CAT,
+                        obj = aggregator_pad,
+                        "Update caps and send new headers {:?}",
+                        caps
+                    );
+                    let stream = state.mut_stream_from_pad(aggregator_pad).unwrap();
+                    stream.next_caps = Some(caps);
+                    drop(state);
+                    self.parent_sink_event(aggregator_pad, event)
+                } else {
+                    // Stream created and caps are not compatible, but header updates are not allowed
+                    gst::warning!(
+                        CAT,
+                        obj = aggregator_pad,
+                        "Updated caps not accepted {:?}",
+                        caps
+                    );
+
+                    false
                 }
-                drop(state);
-                self.parent_sink_event(aggregator_pad, event)
             }
             EventView::Tag(ev) => {
                 let tag = ev.tag();
@@ -4392,7 +4409,11 @@ impl AggregatorImpl for FMP4Mux {
                     if let Some(language_code) = Stream::parse_language_code(lang) {
                         let mut state = self.state.lock().unwrap();
 
-                        if !state.streams.is_empty() && self.header_update_allowed("language code")
+                        if !state.streams.is_empty()
+                            && state
+                                .stream_from_pad(aggregator_pad)
+                                .is_some_and(|s| s.language_code != Some(language_code))
+                            && self.header_update_allowed("language code")
                         {
                             if tag.scope() == gst::TagScope::Global {
                                 gst::info!(
@@ -4404,8 +4425,8 @@ impl AggregatorImpl for FMP4Mux {
 
                             state.need_new_header = true;
                             let stream = state.mut_stream_from_pad(aggregator_pad).unwrap();
-                            stream.language_code = Some(language_code);
                             stream.tag_changed = true;
+                            stream.language_code = Some(language_code);
                         }
                     }
                 } else if let Some(tag_value) = tag.get::<gst::tags::ImageOrientation>() {
@@ -4418,14 +4439,24 @@ impl AggregatorImpl for FMP4Mux {
                     );
 
                     let mut state = self.state.lock().unwrap();
+                    let orientation = TransformMatrix::from_tag(self, ev);
 
-                    if !state.streams.is_empty() && self.header_update_allowed("orientation") {
+                    if !state.streams.is_empty()
+                        && state.stream_from_pad(aggregator_pad).is_some_and(|s| {
+                            if tag.scope() == gst::TagScope::Stream {
+                                s.stream_orientation != Some(orientation)
+                            } else {
+                                s.global_orientation != orientation
+                            }
+                        })
+                        && self.header_update_allowed("orientation")
+                    {
                         state.need_new_header = true;
                         let stream = state.mut_stream_from_pad(aggregator_pad).unwrap();
                         if tag.scope() == gst::TagScope::Stream {
-                            stream.stream_orientation = Some(TransformMatrix::from_tag(self, ev));
+                            stream.stream_orientation = Some(orientation);
                         } else {
-                            stream.global_orientation = TransformMatrix::from_tag(self, ev);
+                            stream.global_orientation = orientation;
                         }
                         stream.tag_changed = true;
                     }

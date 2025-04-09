@@ -76,7 +76,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     Ok(())
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct TransformMatrix([[u8; 4]; 9]);
 
 impl std::ops::Deref for TransformMatrix {

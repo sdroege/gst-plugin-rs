@@ -2571,7 +2571,7 @@ fn test_language_change_at_gop_boundary() {
             if i == 10 {
                 let mut tl = gst::TagList::new();
                 tl.make_mut()
-                    .add::<gst::tags::LanguageCode>(&"abc", gst::TagMergeMode::Append);
+                    .add::<gst::tags::LanguageCode>(&"eng", gst::TagMergeMode::Append);
                 let ev = gst::event::Tag::builder(tl).build();
                 h.push_event(ev);
             }
