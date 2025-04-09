@@ -3841,6 +3841,15 @@ impl ObjectImpl for FMP4Mux {
                     .blurb("Mode for writing EDTS, when in auto mode, edts written only for non-live streams.")
                     .mutable_ready()
                     .build(),
+               /**
+                 * GstFMP4Mux:send-force-keyunit:
+                 *
+                 * Send force-keyunit events to request keyframes for the start of each fragment.
+                 * If this is disabled then the application needs to ensure that keyframes are
+                 * provided at appropriate times.
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
                 glib::ParamSpecBoolean::builder("send-force-keyunit")
                     .nick("Send force-keyunit Events")
                     .blurb("Send force-keyunit events to request keyframes for the start of each fragment")
