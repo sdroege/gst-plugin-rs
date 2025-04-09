@@ -1700,7 +1700,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33d852cb9b869c2a9b3df2f71a3074817f01e1844f839a144f5fcef059a4eb5d"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2149,7 +2149,7 @@ dependencies = [
  "gobject-sys",
  "libc",
  "system-deps 7.0.3",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2485,6 +2485,7 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-check",
  "gstreamer-pbutils",
+ "gstreamer-tag",
  "gstreamer-video",
  "m3u8-rs",
  "once_cell",
@@ -3162,7 +3163,7 @@ dependencies = [
 [[package]]
 name = "gstreamer"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "cfg-if",
  "futures-channel",
@@ -3188,7 +3189,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-allocators"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3200,7 +3201,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-allocators-sys"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3212,7 +3213,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-app"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -3226,7 +3227,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-app-sys"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib-sys",
  "gstreamer-base-sys",
@@ -3238,7 +3239,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-audio"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "cfg-if",
  "glib",
@@ -3254,7 +3255,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-audio-sys"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3267,7 +3268,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-base"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "atomic_refcell",
  "cfg-if",
@@ -3280,7 +3281,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-base-sys"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3292,7 +3293,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-check"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3302,7 +3303,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-check-sys"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3314,7 +3315,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3328,7 +3329,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-egl"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3340,7 +3341,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-egl-sys"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib-sys",
  "gstreamer-gl-sys",
@@ -3351,7 +3352,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-sys"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3365,7 +3366,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-wayland"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3377,7 +3378,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-wayland-sys"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib-sys",
  "gstreamer-gl-sys",
@@ -3388,7 +3389,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-x11"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3400,7 +3401,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-x11-sys"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib-sys",
  "gstreamer-gl-sys",
@@ -3411,7 +3412,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-net"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "gio",
  "glib",
@@ -3422,7 +3423,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-net-sys"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "gio-sys",
  "glib-sys",
@@ -3434,7 +3435,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-pbutils"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3448,7 +3449,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-pbutils-sys"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3462,7 +3463,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-rtp"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3473,7 +3474,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-rtp-sys"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib-sys",
  "gstreamer-base-sys",
@@ -3485,7 +3486,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-sdp"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3495,7 +3496,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-sdp-sys"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib-sys",
  "gstreamer-sys",
@@ -3506,7 +3507,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-sys"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3515,9 +3516,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "gstreamer-tag"
+version = "0.23.5"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
+dependencies = [
+ "glib",
+ "gstreamer",
+ "gstreamer-tag-sys",
+ "libc",
+]
+
+[[package]]
+name = "gstreamer-tag-sys"
+version = "0.23.5"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
+dependencies = [
+ "glib-sys",
+ "gobject-sys",
+ "gstreamer-sys",
+ "libc",
+ "system-deps 7.0.3",
+]
+
+[[package]]
 name = "gstreamer-utils"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "gstreamer",
  "gstreamer-app",
@@ -3529,7 +3553,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-video"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "cfg-if",
  "futures-channel",
@@ -3546,7 +3570,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-video-sys"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3559,7 +3583,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-webrtc"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3571,7 +3595,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-webrtc-sys"
 version = "0.23.5"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#efeb5cfff825aba0bae07bf7aeeee87d6da7b137"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=0.23#a51339de797476fc584bb1f31ac68224b68ece66"
 dependencies = [
  "glib-sys",
  "gstreamer-sdp-sys",
@@ -5573,7 +5597,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6019,7 +6043,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6704,7 +6728,7 @@ dependencies = [
  "getrandom 0.3.1",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
