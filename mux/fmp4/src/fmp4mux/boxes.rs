@@ -1800,7 +1800,18 @@ pub(super) fn create_fmp4_fragment_header(
         })?;
     }
 
-    let styp_len = v.len();
+    // Write prft for the first stream if we can
+    if let Some(stream) = cfg.streams.first() {
+        if let Some((start_time, start_ntp_time)) =
+            Option::zip(stream.start_time, stream.start_ntp_time)
+        {
+            write_full_box(&mut v, b"prft", FULL_BOX_VERSION_1, 8, |v| {
+                write_prft(v, &cfg, 0, stream, start_time, start_ntp_time)
+            })?;
+        }
+    }
+
+    let moof_pos = v.len();
 
     let data_offset_offsets = write_box(&mut v, b"moof", |v| write_moof(v, &cfg))?;
 
@@ -1818,7 +1829,7 @@ pub(super) fn create_fmp4_fragment_header(
         v.extend((size + 16).to_be_bytes());
     }
 
-    let data_offset = v.len() - styp_len;
+    let data_offset = v.len() - moof_pos;
     for data_offset_offset in data_offset_offsets {
         let val = u32::from_be_bytes(v[data_offset_offset..][..4].try_into()?)
             .checked_add(u32::try_from(data_offset)?)
@@ -1826,7 +1837,33 @@ pub(super) fn create_fmp4_fragment_header(
         v[data_offset_offset..][..4].copy_from_slice(&val.to_be_bytes());
     }
 
-    Ok((gst::Buffer::from_mut_slice(v), styp_len as u64))
+    Ok((gst::Buffer::from_mut_slice(v), moof_pos as u64))
+}
+
+fn write_prft(
+    v: &mut Vec<u8>,
+    _cfg: &super::FragmentHeaderConfiguration,
+    idx: usize,
+    stream: &super::FragmentHeaderStream,
+    start_time: gst::ClockTime,
+    start_ntp_time: gst::ClockTime,
+) -> Result<(), Error> {
+    // Reference track ID
+    v.extend((idx as u32 + 1).to_be_bytes());
+    // NTP timestamp
+    let start_ntp_time = start_ntp_time
+        .nseconds()
+        .mul_div_floor(1u64 << 32, gst::ClockTime::SECOND.nseconds())
+        .unwrap();
+    v.extend(start_ntp_time.to_be_bytes());
+    // Media time
+    let timescale = fragment_header_stream_to_timescale(stream);
+    let media_time = start_time
+        .mul_div_floor(timescale as u64, gst::ClockTime::SECOND.nseconds())
+        .unwrap();
+    v.extend(media_time.to_be_bytes());
+
+    Ok(())
 }
 
 fn write_moof(

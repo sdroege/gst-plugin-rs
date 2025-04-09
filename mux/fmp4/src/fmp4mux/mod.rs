@@ -252,6 +252,13 @@ pub(crate) struct FragmentHeaderStream {
     ///
     /// `None` if this stream has no buffers in this fragment.
     start_time: Option<gst::ClockTime>,
+
+    /// Start NTP time of this fragment
+    ///
+    /// This is in nanoseconds since epoch and is used for writing the prft box if present.
+    ///
+    /// Only the first track is ever used.
+    start_ntp_time: Option<gst::ClockTime>,
 }
 
 #[derive(Debug, Copy, Clone)]

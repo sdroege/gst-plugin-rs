@@ -2437,6 +2437,10 @@ impl FMP4Mux {
             Option<gst::ClockTime>,
             // End DTS
             Option<gst::ClockTime>,
+            // Start time (either matches start_dts if required or earliest-pts)
+            gst::ClockTime,
+            // Start NTP time (either matches start_dts if required or earliest_pts)
+            Option<gst::ClockTime>,
         )>,
         gst::FlowError,
     > {
@@ -2456,6 +2460,7 @@ impl FMP4Mux {
         let mut earliest_pts_position = None;
         let mut start_dts = None;
         let mut start_dts_position = None;
+        let mut start_ntp_time = None;
 
         let mut gop_buffers = gop_buffers.into_iter();
         while let Some(buffer) = gop_buffers.next() {
@@ -2472,6 +2477,11 @@ impl FMP4Mux {
 
             if earliest_pts.is_none_or(|earliest_pts| buffer.pts < earliest_pts) {
                 earliest_pts = Some(buffer.pts);
+                if !stream.delta_frames.requires_dts() {
+                    let utc_time = get_utc_time_from_buffer(&buffer.buffer)
+                        .and_then(|t| t.checked_add(NTP_UNIX_OFFSET.seconds()));
+                    start_ntp_time = utc_time;
+                }
             }
             if earliest_pts_position.is_none_or(|earliest_pts_position| {
                 buffer.buffer.pts().unwrap() < earliest_pts_position
@@ -2480,6 +2490,11 @@ impl FMP4Mux {
             }
             if stream.delta_frames.requires_dts() && start_dts.is_none() {
                 start_dts = Some(buffer.dts.unwrap());
+                if stream.delta_frames.requires_dts() {
+                    let utc_time = get_utc_time_from_buffer(&buffer.buffer)
+                        .and_then(|t| t.checked_add(NTP_UNIX_OFFSET.seconds()));
+                    start_ntp_time = utc_time;
+                }
             }
             if stream.delta_frames.requires_dts() && start_dts_position.is_none() {
                 start_dts_position = Some(buffer.buffer.dts().unwrap());
@@ -2557,6 +2572,12 @@ impl FMP4Mux {
         let start_dts = start_dts;
         let start_dts_position = start_dts_position;
 
+        let start_time = if !stream.delta_frames.requires_dts() {
+            earliest_pts
+        } else {
+            start_dts.unwrap()
+        };
+
         Ok(Some((
             buffers,
             earliest_pts,
@@ -2565,6 +2586,8 @@ impl FMP4Mux {
             start_dts,
             start_dts_position,
             end_dts,
+            start_time,
+            start_ntp_time,
         )))
     }
 
@@ -2760,6 +2783,7 @@ impl FMP4Mux {
                     super::FragmentHeaderStream {
                         caps: stream.caps.clone(),
                         start_time: None,
+                        start_ntp_time: None,
                         delta_frames: stream.delta_frames,
                         trak_timescale,
                     },
@@ -2802,6 +2826,8 @@ impl FMP4Mux {
                 start_dts,
                 start_dts_position,
                 _end_dts,
+                start_time,
+                start_ntp_time,
             ) = match buffers {
                 Some(res) => res,
                 None => {
@@ -2811,6 +2837,7 @@ impl FMP4Mux {
                         super::FragmentHeaderStream {
                             caps: stream.caps.clone(),
                             start_time: None,
+                            start_ntp_time: None,
                             delta_frames: stream.delta_frames,
                             trak_timescale,
                         },
@@ -2830,12 +2857,6 @@ impl FMP4Mux {
                 start_dts.display(),
                 stream.dts_offset.display(),
             );
-
-            let start_time = if !stream.delta_frames.requires_dts() {
-                earliest_pts
-            } else {
-                start_dts.unwrap()
-            };
 
             if min_earliest_pts.opt_gt(earliest_pts).unwrap_or(true) {
                 min_earliest_pts = Some(earliest_pts);
@@ -2859,6 +2880,7 @@ impl FMP4Mux {
                 super::FragmentHeaderStream {
                     caps: stream.caps.clone(),
                     start_time: Some(start_time),
+                    start_ntp_time,
                     delta_frames: stream.delta_frames,
                     trak_timescale,
                 },
