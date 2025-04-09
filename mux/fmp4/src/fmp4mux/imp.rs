@@ -116,6 +116,7 @@ const DEFAULT_SEND_FORCE_KEYUNIT: bool = true;
 const DEFAULT_MANUAL_SPLIT: bool = false;
 const DEFAULT_OFFSET_TO_ZERO: bool = false;
 const DEFAULT_DECODE_TIME_OFFSET: gst::ClockTimeDiff = 0;
+const DEFAULT_START_FRAGMENT_SEQUENCE_NUMBER: u32 = 1;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -132,6 +133,7 @@ struct Settings {
     send_force_keyunit: bool,
     manual_split: bool,
     decode_time_offset: gst::ClockTimeDiff,
+    start_fragment_sequence_number: u32,
 }
 
 impl Default for Settings {
@@ -150,6 +152,7 @@ impl Default for Settings {
             send_force_keyunit: DEFAULT_SEND_FORCE_KEYUNIT,
             manual_split: DEFAULT_MANUAL_SPLIT,
             decode_time_offset: DEFAULT_DECODE_TIME_OFFSET,
+            start_fragment_sequence_number: DEFAULT_START_FRAGMENT_SEQUENCE_NUMBER,
         }
     }
 }
@@ -3157,15 +3160,11 @@ impl FMP4Mux {
         // TODO: Write prft boxes before moof
         // TODO: Write sidx boxes before moof and rewrite once offsets are known
 
-        // First sequence number must be 1
-        if state.sequence_number == 0 {
-            state.sequence_number = 1;
-        }
         let sequence_number = state.sequence_number;
         // If this is the last chunk of a fragment then increment the sequence number for the
         // start of the next fragment.
         if fragment_filled {
-            state.sequence_number += 1;
+            state.sequence_number = state.sequence_number.wrapping_add(1);
         }
         let (mut fmp4_fragment_header, moof_offset) =
             boxes::create_fmp4_fragment_header(super::FragmentHeaderConfiguration {
@@ -3930,6 +3929,22 @@ impl ObjectImpl for FMP4Mux {
                     .default_value(DEFAULT_DECODE_TIME_OFFSET)
                     .mutable_ready()
                     .build(),
+               /**
+                 * GstFMP4Mux:start-fragment-sequence-number:
+                 *
+                 * Initial sequence number to use in the mfhd box.
+                 *
+                 * This is incremented with every fragment by one and stays the same between
+                 * chunks.
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
+                glib::ParamSpecUInt::builder("start-fragment-sequence-number")
+                    .nick("Start Fragment Sequence Number")
+                    .blurb("Initial sequence number to use in the mfhd")
+                    .default_value(DEFAULT_START_FRAGMENT_SEQUENCE_NUMBER)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -4015,6 +4030,11 @@ impl ObjectImpl for FMP4Mux {
                 let mut settings = self.settings.lock().unwrap();
                 settings.decode_time_offset = value.get().expect("type checked upstream");
             }
+            "start-fragment-sequence-number" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.start_fragment_sequence_number =
+                    value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -4075,6 +4095,10 @@ impl ObjectImpl for FMP4Mux {
             "decode-time-offset" => {
                 let settings = self.settings.lock().unwrap();
                 settings.decode_time_offset.to_value()
+            }
+            "start-fragment-sequence-number" => {
+                let settings = self.settings.lock().unwrap();
+                settings.start_fragment_sequence_number.to_value()
             }
             _ => unimplemented!(),
         }
@@ -4423,7 +4447,14 @@ impl AggregatorImpl for FMP4Mux {
             aggregator.update_segment(&segment);
         }
 
-        *self.state.lock().unwrap() = State::default();
+        let mut state = self.state.lock().unwrap();
+        let settings = self.settings.lock().unwrap();
+        *state = State {
+            sequence_number: settings.start_fragment_sequence_number,
+            ..Default::default()
+        };
+        drop(settings);
+        drop(state);
 
         Ok(())
     }
