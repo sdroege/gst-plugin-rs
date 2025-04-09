@@ -218,6 +218,8 @@ pub(crate) struct HeaderStream {
     // Tags meta for audio language and video orientation
     language_code: Option<[u8; 3]>,
     orientation: &'static TransformMatrix,
+    avg_bitrate: Option<u32>,
+    max_bitrate: Option<u32>,
 
     /// Edit list clipping information
     elst_infos: Vec<ElstInfo>,

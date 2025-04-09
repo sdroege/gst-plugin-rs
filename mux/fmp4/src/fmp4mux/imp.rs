@@ -285,6 +285,9 @@ struct Stream {
     /// Orientation from tags, stream orientation takes precedence over global orientation
     global_orientation: &'static TransformMatrix,
     stream_orientation: Option<&'static TransformMatrix>,
+    /// Bitrate tags
+    avg_bitrate: Option<u32>,
+    max_bitrate: Option<u32>,
 
     /// Edit list entries for this stream.
     elst_infos: Vec<super::ElstInfo>,
@@ -3421,10 +3424,20 @@ impl FMP4Mux {
             let mut stream_orientation = Default::default();
             let mut global_orientation = Default::default();
             let mut language_code = None;
+            let mut avg_bitrate = None;
+            let mut max_bitrate = None;
             pad.sticky_events_foreach(|ev| {
                 if let gst::EventView::Tag(ev) = ev.view() {
                     let tag = ev.tag();
-                    if let Some(l) = tag.get::<gst::tags::LanguageCode>() {
+                    if let Some(lang) = tag.get::<gst::tags::LanguageCode>() {
+                        let lang = lang.get();
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "Received language code from tags: {:?}",
+                            lang
+                        );
+
                         // There is no header field for global
                         // language code, maybe because it does not
                         // really make sense, global language tags are
@@ -3436,13 +3449,55 @@ impl FMP4Mux {
                                 "Language tags scoped 'global' are considered stream tags",
                             );
                         }
-                        language_code = Stream::parse_language_code(l.get());
-                    } else if tag.get::<gst::tags::ImageOrientation>().is_some() {
+                        language_code = Stream::parse_language_code(lang);
+                    } else if let Some(orientation) = tag.get::<gst::tags::ImageOrientation>() {
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "Received image orientation from tags: {:?}",
+                            orientation.get(),
+                        );
+
                         if tag.scope() == gst::TagScope::Global {
                             global_orientation = TransformMatrix::from_tag(self, ev);
                         } else {
                             stream_orientation = Some(TransformMatrix::from_tag(self, ev));
                         }
+                    } else if let Some(bitrate) = tag
+                        .get::<gst::tags::MaximumBitrate>()
+                        .filter(|br| br.get() > 0 && br.get() < u32::MAX)
+                    {
+                        let bitrate = bitrate.get();
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "Received maximum bitrate from tags: {:?}",
+                            bitrate
+                        );
+
+                        if tag.scope() == gst::TagScope::Global {
+                            gst::info!(
+                                CAT,
+                                obj = pad,
+                                "Bitrate tags scoped 'global' are considered stream tags",
+                            );
+                        }
+                        max_bitrate = Some(bitrate);
+                    } else if let Some(bitrate) = tag
+                        .get::<gst::tags::Bitrate>()
+                        .filter(|br| br.get() > 0 && br.get() < u32::MAX)
+                    {
+                        let bitrate = bitrate.get();
+                        gst::trace!(CAT, imp = self, "Received bitrate from tags: {:?}", bitrate);
+
+                        if tag.scope() == gst::TagScope::Global {
+                            gst::info!(
+                                CAT,
+                                obj = pad,
+                                "Bitrate tags scoped 'global' are considered stream tags",
+                            );
+                        }
+                        avg_bitrate = Some(bitrate);
                     }
                 }
                 std::ops::ControlFlow::Continue(gst::EventForeachAction::Keep)
@@ -3536,6 +3591,8 @@ impl FMP4Mux {
                 language_code,
                 global_orientation,
                 stream_orientation,
+                avg_bitrate,
+                max_bitrate,
                 elst_infos: Vec::new(),
                 pending_split_now: Vec::new(),
             });
@@ -3610,6 +3667,8 @@ impl FMP4Mux {
                     extra_header_data: s.extra_header_data.clone(),
                     language_code: s.language_code,
                     orientation: s.orientation(),
+                    max_bitrate: s.max_bitrate,
+                    avg_bitrate: s.avg_bitrate,
                     elst_infos: s.get_elst_infos().unwrap_or_else(|e| {
                         gst::error!(CAT, "Could not prepare edit lists: {e:?}");
 

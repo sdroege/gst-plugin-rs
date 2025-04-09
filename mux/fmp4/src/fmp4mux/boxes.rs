@@ -1300,7 +1300,23 @@ fn write_visual_sample_entry(
             })?;
         }
 
-        // TODO: write btrt bitrate box based on tags
+        if stream.avg_bitrate.is_some() || stream.max_bitrate.is_some() {
+            write_box(v, b"btrt", |v| {
+                // Buffer size DB
+                // TODO
+                v.extend(0u32.to_be_bytes());
+
+                // Maximum bitrate
+                let max_bitrate = stream.max_bitrate.or(stream.avg_bitrate).unwrap();
+                v.extend(max_bitrate.to_be_bytes());
+
+                // Average bitrate
+                let avg_bitrate = stream.avg_bitrate.or(stream.max_bitrate).unwrap();
+                v.extend(avg_bitrate.to_be_bytes());
+
+                Ok(())
+            })?;
+        }
 
         Ok(())
     })?;
@@ -1348,7 +1364,7 @@ fn av1_tier(tier: Option<&str>) -> u8 {
 
 fn write_audio_sample_entry(
     v: &mut Vec<u8>,
-    _cfg: &super::HeaderConfiguration,
+    cfg: &super::HeaderConfiguration,
     stream: &super::HeaderStream,
 ) -> Result<(), Error> {
     let s = stream.caps.structure(0).unwrap();
@@ -1415,7 +1431,7 @@ fn write_audio_sample_entry(
                 if map.len() < 2 {
                     bail!("too small codec_data");
                 }
-                write_esds_aac(v, &map)?;
+                write_esds_aac(v, cfg, stream, &map)?;
             }
             "audio/x-opus" => {
                 write_dops(v, &stream.caps)?;
@@ -1445,7 +1461,23 @@ fn write_audio_sample_entry(
             )?;
         }
 
-        // TODO: write btrt bitrate box based on tags
+        if stream.avg_bitrate.is_some() || stream.max_bitrate.is_some() {
+            write_box(v, b"btrt", |v| {
+                // Buffer size DB
+                // TODO
+                v.extend(0u32.to_be_bytes());
+
+                // Maximum bitrate
+                let max_bitrate = stream.max_bitrate.or(stream.avg_bitrate).unwrap();
+                v.extend(max_bitrate.to_be_bytes());
+
+                // Average bitrate
+                let avg_bitrate = stream.avg_bitrate.or(stream.max_bitrate).unwrap();
+                v.extend(avg_bitrate.to_be_bytes());
+
+                Ok(())
+            })?;
+        }
 
         // TODO: chnl box for channel ordering? probably not needed for AAC
 
@@ -1455,7 +1487,12 @@ fn write_audio_sample_entry(
     Ok(())
 }
 
-fn write_esds_aac(v: &mut Vec<u8>, codec_data: &[u8]) -> Result<(), Error> {
+fn write_esds_aac(
+    v: &mut Vec<u8>,
+    _cfg: &super::HeaderConfiguration,
+    stream: &super::HeaderStream,
+    codec_data: &[u8],
+) -> Result<(), Error> {
     let calculate_len = |mut len| {
         if len > 260144641 {
             bail!("too big descriptor length");
@@ -1533,10 +1570,10 @@ fn write_esds_aac(v: &mut Vec<u8>, codec_data: &[u8]) -> Result<(), Error> {
             v.extend([0u8; 3]);
 
             // Max bitrate
-            v.extend(0u32.to_be_bytes());
+            v.extend(stream.max_bitrate.unwrap_or(0u32).to_be_bytes());
 
             // Avg bitrate
-            v.extend(0u32.to_be_bytes());
+            v.extend(stream.avg_bitrate.unwrap_or(0u32).to_be_bytes());
 
             // Decoder specific info
             v.push(0x05);
