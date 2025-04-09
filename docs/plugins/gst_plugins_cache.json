@@ -3404,6 +3404,20 @@
                         "type": "guint64",
                         "writable": true
                     },
+                    "decode-time-offset": {
+                        "blurb": "Offset to apply to the tfdt",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "9223372036854775807",
+                        "min": "-9223372036854775808",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gint64",
+                        "writable": true
+                    },
                     "fragment-duration": {
                         "blurb": "Duration for each FMP4 fragment in nanoseconds",
                         "conditionally-available": false,

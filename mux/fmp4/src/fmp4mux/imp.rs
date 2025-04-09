@@ -114,6 +114,8 @@ const DEFAULT_INTERLEAVE_TIME: Option<gst::ClockTime> = Some(gst::ClockTime::fro
 const DEFAULT_WRITE_EDTS_MODE: WriteEdtsMode = WriteEdtsMode::Auto;
 const DEFAULT_SEND_FORCE_KEYUNIT: bool = true;
 const DEFAULT_MANUAL_SPLIT: bool = false;
+const DEFAULT_OFFSET_TO_ZERO: bool = false;
+const DEFAULT_DECODE_TIME_OFFSET: gst::ClockTimeDiff = 0;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -129,6 +131,7 @@ struct Settings {
     write_edts_mode: WriteEdtsMode,
     send_force_keyunit: bool,
     manual_split: bool,
+    decode_time_offset: gst::ClockTimeDiff,
 }
 
 impl Default for Settings {
@@ -142,10 +145,11 @@ impl Default for Settings {
             interleave_bytes: DEFAULT_INTERLEAVE_BYTES,
             interleave_time: DEFAULT_INTERLEAVE_TIME,
             movie_timescale: 0,
-            offset_to_zero: false,
+            offset_to_zero: DEFAULT_OFFSET_TO_ZERO,
             write_edts_mode: DEFAULT_WRITE_EDTS_MODE,
             send_force_keyunit: DEFAULT_SEND_FORCE_KEYUNIT,
             manual_split: DEFAULT_MANUAL_SPLIT,
+            decode_time_offset: DEFAULT_DECODE_TIME_OFFSET,
         }
     }
 }
@@ -3083,6 +3087,30 @@ impl FMP4Mux {
             }
         }
 
+        if settings.decode_time_offset != 0 {
+            for stream in &mut streams {
+                if let Some(start_time) = stream.start_time {
+                    if settings.decode_time_offset >= 0 {
+                        stream.start_time = Some(
+                            start_time
+                                .checked_add(gst::ClockTime::from_nseconds(
+                                    settings.decode_time_offset as u64,
+                                ))
+                                .unwrap(),
+                        );
+                    } else {
+                        stream.start_time = Some(
+                            start_time
+                                .checked_sub(gst::ClockTime::from_nseconds(
+                                    (-settings.decode_time_offset) as u64,
+                                ))
+                                .unwrap(),
+                        );
+                    }
+                }
+            }
+        }
+
         if interleaved_buffers.is_empty() {
             assert!(at_eos);
             return Ok((caps, None));
@@ -3886,6 +3914,22 @@ impl ObjectImpl for FMP4Mux {
                     .default_value(DEFAULT_MANUAL_SPLIT)
                     .mutable_ready()
                     .build(),
+               /**
+                 * GstFMP4Mux:decode-time-offset:
+                 *
+                 * Offset to apply to the decode time in the tfdt box. By default the offset is the
+                 * running time of the first DTS or earliest PTS of the stream.
+                 *
+                 * This can be used to shift the decoding timeline.
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
+                glib::ParamSpecInt64::builder("decode-time-offset")
+                    .nick("Decode Time Offset")
+                    .blurb("Offset to apply to the tfdt")
+                    .default_value(DEFAULT_DECODE_TIME_OFFSET)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -3967,6 +4011,10 @@ impl ObjectImpl for FMP4Mux {
                 let mut settings = self.settings.lock().unwrap();
                 settings.manual_split = value.get().expect("type checked upstream");
             }
+            "decode-time-offset" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.decode_time_offset = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -4023,6 +4071,10 @@ impl ObjectImpl for FMP4Mux {
             "manual-split" => {
                 let settings = self.settings.lock().unwrap();
                 settings.manual_split.to_value()
+            }
+            "decode-time-offset" => {
+                let settings = self.settings.lock().unwrap();
+                settings.decode_time_offset.to_value()
             }
             _ => unimplemented!(),
         }
