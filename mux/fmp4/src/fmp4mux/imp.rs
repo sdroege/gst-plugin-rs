@@ -387,6 +387,7 @@ impl Stream {
     }
 
     fn parse_language_code(lang: &str) -> Option<[u8; 3]> {
+        let lang = gst_tag::language_codes::language_code_iso_639_2t(lang)?;
         if lang.len() == 3 && lang.chars().all(|c| c.is_ascii_lowercase()) {
             let mut language_code: [u8; 3] = [0; 3];
             for (out, c) in Iterator::zip(language_code.iter_mut(), lang.chars()) {
