@@ -352,6 +352,7 @@ struct SessionInner {
     // if a pad is added and released before the current negotiation is done,
     // a discovery might finish after pending_removed_streams has been purged
     removed_streams: HashSet<String>,
+    meta_serializer: utils::MetaSerializer,
 }
 
 #[derive(Clone)]
@@ -1477,6 +1478,7 @@ impl SessionInner {
             pending_streams: HashSet::new(),
             pending_removed_streams: HashSet::new(),
             removed_streams: HashSet::new(),
+            meta_serializer: utils::MetaSerializer::default(),
         }
     }
 
@@ -1610,6 +1612,26 @@ impl SessionInner {
                 Ok(())
             }
             Err(err) => Err(anyhow!("Could not link producer: {:?}", err)),
+        }
+    }
+
+    fn send_meta(&mut self, mid: &str, buffer: &gst::BufferRef, forward_metas: &HashSet<String>) {
+        if let Some(ref handler) = self.control_events_handler {
+            for meta in self.meta_serializer.process(buffer, forward_metas) {
+                match serde_json::to_string(&utils::InfoMessage {
+                    mid: mid.to_owned(),
+                    info: utils::Info::Meta(meta),
+                }) {
+                    Ok(msg) => {
+                        if let Err(err) = handler.0.1.send_string_full(Some(msg.as_str())) {
+                            gst::error!(CAT, "Failed sending meta to peer: {err}",);
+                        }
+                    }
+                    Err(err) => {
+                        gst::warning!(CAT, "Failed to serialize info message: {err:?}",);
+                    }
+                }
+            }
         }
     }
 }
@@ -3025,28 +3047,14 @@ impl BaseWebRTCSink {
         let Some(session) = state.sessions.get(session_id) else {
             return;
         };
-        let session = session.0.lock().unwrap();
+        let mut session = session.0.lock().unwrap();
 
         if let Some(ref handler) = session.control_events_handler {
             if handler.0.1.ready_state() != gst_webrtc::WebRTCDataChannelState::Open {
                 return;
             }
 
-            for meta in utils::serialize_meta(buffer, &settings.forward_metas) {
-                match serde_json::to_string(&utils::InfoMessage {
-                    mid: mid.to_owned(),
-                    info: utils::Info::Meta(meta),
-                }) {
-                    Ok(msg) => {
-                        if let Err(err) = handler.0.1.send_string_full(Some(msg.as_str())) {
-                            gst::error!(CAT, imp = self, "Failed sending meta to peer: {err}",);
-                        }
-                    }
-                    Err(err) => {
-                        gst::warning!(CAT, imp = self, "Failed to serialize info message: {err:?}",);
-                    }
-                }
-            }
+            session.send_meta(mid, buffer, &settings.forward_metas);
         }
     }
 

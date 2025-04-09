@@ -1439,35 +1439,57 @@ pub struct InfoMessage {
     pub info: Info,
 }
 
-pub fn serialize_meta(buffer: &gst::BufferRef, forward_metas: &HashSet<String>) -> Vec<Meta> {
-    let mut ret = vec![];
+#[derive(Default)]
+pub struct MetaSerializer {
+    last_timecode_time: Option<gst::ClockTime>,
+}
 
-    buffer.foreach_meta(|meta| {
-        if forward_metas.contains("timecode")
-            && let Some(tc_meta) = meta.downcast_ref::<gst_video::VideoTimeCodeMeta>()
-        {
-            let tc = tc_meta.tc();
-            ret.push(Meta::TimeCode {
-                hours: tc.hours(),
-                minutes: tc.minutes(),
-                seconds: tc.seconds(),
-                frames: tc.frames(),
-                field_count: tc.field_count(),
-                fps: tc.fps(),
-                flags: VideoTimeCodeFlags(tc.flags()),
-                latest_daily_jam: tc
-                    .latest_daily_jam()
-                    .and_then(|dt| {
-                        let gst_dt: gst::DateTime = dt.into();
-                        gst_dt.to_iso8601_string().ok()
-                    })
-                    .map(|s| s.to_string()),
-            });
-        }
-        std::ops::ControlFlow::Continue(())
-    });
+impl MetaSerializer {
+    pub fn process(
+        &mut self,
+        buffer: &gst::BufferRef,
+        forward_metas: &HashSet<String>,
+    ) -> Vec<Meta> {
+        let mut ret = vec![];
 
-    ret
+        buffer.foreach_meta(|meta| {
+            if forward_metas.contains("timecode")
+                && let Some(tc_meta) = meta.downcast_ref::<gst_video::VideoTimeCodeMeta>()
+            {
+                let tc = tc_meta.tc();
+
+                let tc_ts = tc.time_since_daily_jam();
+
+                if let Some(last_tc_ts) = self.last_timecode_time
+                    && last_tc_ts == tc_ts
+                {
+                    return std::ops::ControlFlow::Continue(());
+                }
+
+                self.last_timecode_time = Some(tc_ts);
+
+                ret.push(Meta::TimeCode {
+                    hours: tc.hours(),
+                    minutes: tc.minutes(),
+                    seconds: tc.seconds(),
+                    frames: tc.frames(),
+                    field_count: tc.field_count(),
+                    fps: tc.fps(),
+                    flags: VideoTimeCodeFlags(tc.flags()),
+                    latest_daily_jam: tc
+                        .latest_daily_jam()
+                        .and_then(|dt| {
+                            let gst_dt: gst::DateTime = dt.into();
+                            gst_dt.to_iso8601_string().ok()
+                        })
+                        .map(|s| s.to_string()),
+                });
+            }
+            std::ops::ControlFlow::Continue(())
+        });
+
+        ret
+    }
 }
 
 #[cfg(test)]
@@ -1555,8 +1577,10 @@ mod tests {
             &time_code.try_into().unwrap(),
         );
 
+        let mut serializer = MetaSerializer::default();
+
         assert_eq!(
-            serialize_meta(&buffer, &[String::from("timecode")].into()),
+            serializer.process(&buffer, &[String::from("timecode")].into()),
             vec![Meta::TimeCode {
                 hours: 10,
                 minutes: 53,
@@ -1567,6 +1591,12 @@ mod tests {
                 flags: VideoTimeCodeFlags(gst_video::VideoTimeCodeFlags::empty()),
                 latest_daily_jam: None,
             }]
+        );
+
+        // Duplicate timecode metas are dropped
+        assert_eq!(
+            serializer.process(&buffer, &[String::from("timecode")].into()),
+            vec![]
         );
 
         Ok(())
