@@ -14,7 +14,9 @@ use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 
+use std::cell::UnsafeCell;
 use std::cmp;
+use std::mem;
 use std::ptr;
 use std::sync::LazyLock;
 
@@ -533,10 +535,10 @@ impl Dav1dDec {
 
         let output_state = state.output_state.as_ref().unwrap().clone();
         let info = output_state.info();
-        let in_vframe = pic.allocator_data().unwrap();
+        let allocator_data = pic.allocator_data().unwrap();
 
-        let strides_matching =
-            info.offset() == in_vframe.plane_offset() && info.stride() == in_vframe.plane_stride();
+        let strides_matching = info.offset() == allocator_data.frame().plane_offset()
+            && info.stride() == allocator_data.frame().plane_stride();
 
         // We can forward the decoded buffer as-is if downstream supports the video meta or the
         // strides/offsets are matching with the default ones.
@@ -550,17 +552,10 @@ impl Dav1dDec {
         }
 
         if forward_buffer {
-            // SAFETY: The frame is still write-mapped in dav1d but won't be modified
-            // anymore. We don't have a way to atomically re-map it read-only.
+            // SAFETY: Only this thread has access to this frame's allocator data so it
+            // can be safely frozen at this point.
             unsafe {
-                use glib::translate::*;
-
-                let in_vframe_ptr = in_vframe.as_ptr();
-                let buffer_ptr = (*in_vframe_ptr).buffer;
-
-                let codec_frame_ptr = codec_frame.to_glib_none().0;
-                gst::ffi::gst_mini_object_ref(buffer_ptr as *mut _);
-                (*codec_frame_ptr).output_buffer = buffer_ptr;
+                allocator_data.freeze(self, codec_frame);
             };
         } else {
             self.obj().allocate_output_frame(codec_frame, None)?;
@@ -581,11 +576,7 @@ impl Dav1dDec {
                 gst_video::VideoFrameRef::from_buffer_ref_writable(mut_buffer, output_state.info())
                     .expect("can map writable frame");
 
-            if in_vframe
-                .as_video_frame_ref()
-                .copy(&mut out_vframe)
-                .is_err()
-            {
+            if allocator_data.frame().copy(&mut out_vframe).is_err() {
                 gst::error!(CAT, imp = self, "Failed to copy video frame to output");
                 return Err(gst::FlowError::Error);
             }
@@ -607,19 +598,21 @@ impl Dav1dDec {
             .output_state()
             .expect("Output state not set. Shouldn't happen!");
 
-        let video_frame = pic.allocator_data().unwrap();
-
-        let info = output_state.info();
-        if info.format() != video_frame.format()
-            || info.width() != video_frame.width()
-            || info.height() != video_frame.height()
         {
-            gst::error!(
-                CAT,
-                imp = self,
-                "Received picture format does not match output state",
-            );
-            return Err(gst::FlowError::NotNegotiated);
+            let allocator_data = pic.allocator_data().unwrap();
+
+            let info = output_state.info();
+            if info.format() != allocator_data.frame().format()
+                || info.width() != allocator_data.frame().width()
+                || info.height() != allocator_data.frame().height()
+            {
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Received picture format does not match output state",
+                );
+                return Err(gst::FlowError::NotNegotiated);
+            }
         }
 
         let offset = pic.offset() as i32;
@@ -721,8 +714,85 @@ impl Dav1dDec {
     }
 }
 
+pub struct AllocatorData(UnsafeCell<AllocatorDataInner>);
+struct AllocatorDataInner {
+    vframe: mem::ManuallyDrop<gst_video::VideoFrame<gst_video::video_frame::Writable>>,
+    cframe: Option<ptr::NonNull<gst_video::ffi::GstVideoCodecFrame>>,
+}
+
+impl AllocatorData {
+    /// SAFETY: There must be no other thread freezing the same allocator data and codec frame
+    /// at the same time.
+    unsafe fn freeze(&self, imp: &Dav1dDec, codec_frame: &mut gst_video::VideoCodecFrame) {
+        use glib::translate::*;
+
+        let inner = self.0.get();
+
+        if let Some(cframe) = (*inner).cframe {
+            let buffer_ptr = (*(*inner).vframe.as_ptr()).buffer;
+            gst::debug!(
+                CAT,
+                imp = imp,
+                "Allocated frame ({:?}) is used for multiple output frames ({} and {})",
+                (*inner).vframe.buffer(),
+                codec_frame.system_frame_number(),
+                cframe.as_ref().system_frame_number,
+            );
+            // Take an additional reference for storing in the second video codec frame
+            gst::ffi::gst_mini_object_ref(buffer_ptr as *mut _);
+        } else {
+            // Steal the reference from the video frame and make sure to keep the video
+            // codec frame alive as long as the video frame is mapped.
+            (*(*inner).vframe.as_mut_ptr()).map[0].flags |=
+                gst_video::ffi::GST_VIDEO_FRAME_MAP_FLAG_NO_REF;
+            (*inner).cframe = Some(ptr::NonNull::new_unchecked(
+                gst_video::ffi::gst_video_codec_frame_ref(codec_frame.to_glib_none().0),
+            ));
+        }
+
+        codec_frame.set_output_buffer(from_glib_full((*(*inner).vframe.as_ptr()).buffer));
+    }
+
+    fn frame(&self) -> gst_video::VideoFrameRef<&gst::BufferRef> {
+        unsafe {
+            let inner = self.0.get();
+
+            (*inner).vframe.as_video_frame_ref()
+        }
+    }
+}
+
+unsafe impl Send for AllocatorData {}
+unsafe impl Sync for AllocatorData {}
+
+impl Drop for AllocatorDataInner {
+    fn drop(&mut self) {
+        // The underlying buffer is either kept alive by the video frame
+        // if no video codec frame was assigned yet, or otherwise by
+        // the video codec frame.
+        let no_ref_flag = unsafe {
+            let vframe_ptr = self.vframe.as_ptr();
+            ((*vframe_ptr).map[0].flags & gst_video::ffi::GST_VIDEO_FRAME_MAP_FLAG_NO_REF) != 0
+        };
+
+        assert!(self.cframe.is_none() ^ no_ref_flag);
+
+        // Drop the video frame before unreffing the codec frame to ensure that
+        // the buffer is still valid
+        unsafe {
+            mem::ManuallyDrop::drop(&mut self.vframe);
+        }
+
+        if let Some(cframe) = self.cframe {
+            unsafe {
+                gst_video::ffi::gst_video_codec_frame_unref(cframe.as_ptr());
+            }
+        }
+    }
+}
+
 unsafe impl dav1d::PictureAllocator for super::Dav1dDec {
-    type AllocatorData = gst_video::VideoFrame<gst_video::video_frame::Writable>;
+    type AllocatorData = AllocatorData;
 
     unsafe fn alloc_picture(
         &self,
@@ -908,7 +978,10 @@ unsafe impl dav1d::PictureAllocator for super::Dav1dDec {
         Ok(dav1d::PictureAllocation {
             data,
             stride,
-            allocator_data: frame,
+            allocator_data: AllocatorData(UnsafeCell::new(AllocatorDataInner {
+                vframe: mem::ManuallyDrop::new(frame),
+                cframe: None,
+            })),
         })
     }
 
@@ -917,7 +990,7 @@ unsafe impl dav1d::PictureAllocator for super::Dav1dDec {
             CAT,
             obj = self,
             "Releasing video frame with buffer {:?}",
-            allocation.allocator_data.buffer()
+            allocation.allocator_data.frame().buffer()
         );
     }
 }
