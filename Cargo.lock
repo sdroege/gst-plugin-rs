@@ -284,9 +284,9 @@ dependencies = [
 
 [[package]]
 name = "aws-config"
-version = "1.6.1"
+version = "1.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c39646d1a6b51240a1a23bb57ea4eebede7e16fbc237fdc876980233dcecb4f"
+checksum = "90aff65e86db5fe300752551c1b015ef72b708ac54bded8ef43d0d53cb7cb0b1"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -294,7 +294,7 @@ dependencies = [
  "aws-sdk-ssooidc",
  "aws-sdk-sts",
  "aws-smithy-async",
- "aws-smithy-http 0.62.0",
+ "aws-smithy-http 0.61.1",
  "aws-smithy-json",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
@@ -303,7 +303,7 @@ dependencies = [
  "bytes",
  "fastrand",
  "hex",
- "http 1.3.1",
+ "http 0.2.12",
  "ring",
  "time",
  "tokio",
@@ -326,25 +326,27 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-rs"
-version = "1.13.0"
+version = "1.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19b756939cb2f8dc900aa6dcd505e6e2428e9cae7ff7b028c49e3946efa70878"
+checksum = "5e4e8200b9a4a5801a769d50eeabc05670fec7e959a8cb7a63a93e4e519942ae"
 dependencies = [
  "aws-lc-sys",
+ "paste",
  "zeroize",
 ]
 
 [[package]]
 name = "aws-lc-sys"
-version = "0.28.0"
+version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9f7720b74ed28ca77f90769a71fd8c637a0137f6fae4ae947e1050229cff57f"
+checksum = "0f9dd2e03ee80ca2822dd6ea431163d2ef259f2066a4d6ccaca6d9dcb386aa43"
 dependencies = [
  "bindgen 0.69.5",
  "cc",
  "cmake",
  "dunce",
  "fs_extra",
+ "paste",
 ]
 
 [[package]]
@@ -375,21 +377,20 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-kinesisvideo"
-version = "1.65.0"
+version = "1.62.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c6e2c6a81288f7a57f81cda1b9f24b227d68c64b8483df9dd43297584a9d062"
+checksum = "ee4a417ba5708249f751871346b33e90fa77ce4f23e22feb71f2d7b108d3eab8"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
  "aws-smithy-async",
- "aws-smithy-http 0.62.0",
+ "aws-smithy-http 0.61.1",
  "aws-smithy-json",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "aws-types",
  "bytes",
- "fastrand",
  "http 0.2.12",
  "once_cell",
  "regex-lite",
@@ -398,21 +399,20 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-kinesisvideosignaling"
-version = "1.64.0"
+version = "1.61.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6c31447ff479229a14bda1a78720168841ed12d6be9a44e4e28161a2cee6e91"
+checksum = "21e26c7eb8320764c744668f328331895b6560bd8895bc1fc9b0150ecc7db98d"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
  "aws-smithy-async",
- "aws-smithy-http 0.62.0",
+ "aws-smithy-http 0.61.1",
  "aws-smithy-json",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "aws-types",
  "bytes",
- "fastrand",
  "http 0.2.12",
  "once_cell",
  "regex-lite",
@@ -421,24 +421,22 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-polly"
-version = "1.68.0"
+version = "1.64.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98fb614b8392241157402d0619660b7714b4b0a0ddb499676c016d2feee36d9e"
+checksum = "65ba925135b467d391852089f5e44516e411429cc625a2e7d1172cf935c16e95"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
  "aws-sigv4",
  "aws-smithy-async",
- "aws-smithy-http 0.62.0",
+ "aws-smithy-http 0.61.1",
  "aws-smithy-json",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "aws-types",
  "bytes",
- "fastrand",
  "http 0.2.12",
- "http 1.3.1",
  "once_cell",
  "regex-lite",
  "tracing",
@@ -446,9 +444,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-s3"
-version = "1.82.0"
+version = "1.78.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6eab2900764411ab01c8e91a76fd11a63b4e12bc3da97d9e14a0ce1343d86d3"
+checksum = "3038614b6cf7dd68d9a7b5b39563d04337eb3678d1d4173e356e927b0356158a"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -456,7 +454,7 @@ dependencies = [
  "aws-smithy-async",
  "aws-smithy-checksums",
  "aws-smithy-eventstream",
- "aws-smithy-http 0.62.0",
+ "aws-smithy-http 0.61.1",
  "aws-smithy-json",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
@@ -468,7 +466,6 @@ dependencies = [
  "hex",
  "hmac",
  "http 0.2.12",
- "http 1.3.1",
  "http-body 0.4.6",
  "lru 0.12.5",
  "once_cell",
@@ -551,23 +548,22 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-transcribestreaming"
-version = "1.66.0"
+version = "1.63.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38fdd5abbe5e96e5d05fadbbdb2bc09780758df05369cf20cd4e1a0a65124186"
+checksum = "6c422a13b02fc024859f342e3c2dca7c956bd686257f023e261e13d8a43734e0"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
  "aws-sigv4",
  "aws-smithy-async",
  "aws-smithy-eventstream",
- "aws-smithy-http 0.62.0",
+ "aws-smithy-http 0.61.1",
  "aws-smithy-json",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "aws-types",
  "bytes",
- "fastrand",
  "http 0.2.12",
  "hyper 0.14.32",
  "once_cell",
@@ -577,14 +573,14 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-translate"
-version = "1.64.0"
+version = "1.61.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f731a63b6314719f64b19ea1626f057bc18e03214106ff3f04e30b2b149cd0c7"
+checksum = "48a847f4c6ffb31af5ac79b6a1bd73f19ae61ea8762b5d82dcbdc336b21d005d"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
  "aws-smithy-async",
- "aws-smithy-http 0.62.0",
+ "aws-smithy-http 0.61.1",
  "aws-smithy-json",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
@@ -693,11 +689,31 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http"
+version = "0.61.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6f276f21c7921fe902826618d1423ae5bf74cf8c1b8472aee8434f3dfd31824"
+dependencies = [
+ "aws-smithy-eventstream",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "bytes",
+ "bytes-utils",
+ "futures-core",
+ "http 0.2.12",
+ "http-body 0.4.6",
+ "once_cell",
+ "percent-encoding",
+ "pin-project-lite",
+ "pin-utils",
+ "tracing",
+]
+
+[[package]]
+name = "aws-smithy-http"
 version = "0.62.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c5949124d11e538ca21142d1fba61ab0a2a2c1bc3ed323cdb3e4b878bfb83166"
 dependencies = [
- "aws-smithy-eventstream",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "bytes",
@@ -724,20 +740,12 @@ dependencies = [
  "aws-smithy-types",
  "h2 0.4.9",
  "http 0.2.12",
- "http 1.3.1",
  "http-body 0.4.6",
  "hyper 0.14.32",
- "hyper 1.6.0",
  "hyper-rustls 0.24.2",
- "hyper-rustls 0.27.5",
- "hyper-util",
  "pin-project-lite",
  "rustls 0.21.12",
- "rustls 0.23.26",
- "rustls-native-certs 0.8.1",
- "rustls-pki-types",
  "tokio",
- "tower",
  "tracing",
 ]
 
@@ -2245,7 +2253,7 @@ dependencies = [
 [[package]]
 name = "gdk4"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#5f46b437042f5342f4d65a0a46ced4a37dbaaf10"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#99fa8edf67b7cdbd4ffda57ca00be8a2def45aa5"
 dependencies = [
  "cairo-rs",
  "gdk-pixbuf",
@@ -2259,7 +2267,7 @@ dependencies = [
 [[package]]
 name = "gdk4-sys"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#5f46b437042f5342f4d65a0a46ced4a37dbaaf10"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#99fa8edf67b7cdbd4ffda57ca00be8a2def45aa5"
 dependencies = [
  "cairo-sys-rs",
  "gdk-pixbuf-sys",
@@ -2275,7 +2283,7 @@ dependencies = [
 [[package]]
 name = "gdk4-wayland"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#5f46b437042f5342f4d65a0a46ced4a37dbaaf10"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#99fa8edf67b7cdbd4ffda57ca00be8a2def45aa5"
 dependencies = [
  "gdk4",
  "gdk4-wayland-sys",
@@ -2287,7 +2295,7 @@ dependencies = [
 [[package]]
 name = "gdk4-wayland-sys"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#5f46b437042f5342f4d65a0a46ced4a37dbaaf10"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#99fa8edf67b7cdbd4ffda57ca00be8a2def45aa5"
 dependencies = [
  "glib-sys",
  "libc",
@@ -2297,7 +2305,7 @@ dependencies = [
 [[package]]
 name = "gdk4-win32"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#5f46b437042f5342f4d65a0a46ced4a37dbaaf10"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#99fa8edf67b7cdbd4ffda57ca00be8a2def45aa5"
 dependencies = [
  "gdk4",
  "gdk4-win32-sys",
@@ -2310,7 +2318,7 @@ dependencies = [
 [[package]]
 name = "gdk4-win32-sys"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#5f46b437042f5342f4d65a0a46ced4a37dbaaf10"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#99fa8edf67b7cdbd4ffda57ca00be8a2def45aa5"
 dependencies = [
  "gdk4-sys",
  "glib-sys",
@@ -2321,7 +2329,7 @@ dependencies = [
 [[package]]
 name = "gdk4-x11"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#5f46b437042f5342f4d65a0a46ced4a37dbaaf10"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#99fa8edf67b7cdbd4ffda57ca00be8a2def45aa5"
 dependencies = [
  "gdk4",
  "gdk4-x11-sys",
@@ -2333,7 +2341,7 @@ dependencies = [
 [[package]]
 name = "gdk4-x11-sys"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#5f46b437042f5342f4d65a0a46ced4a37dbaaf10"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#99fa8edf67b7cdbd4ffda57ca00be8a2def45aa5"
 dependencies = [
  "gdk4-sys",
  "glib-sys",
@@ -2543,7 +2551,7 @@ dependencies = [
 [[package]]
 name = "gsk4"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#5f46b437042f5342f4d65a0a46ced4a37dbaaf10"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#99fa8edf67b7cdbd4ffda57ca00be8a2def45aa5"
 dependencies = [
  "cairo-rs",
  "gdk4",
@@ -2557,7 +2565,7 @@ dependencies = [
 [[package]]
 name = "gsk4-sys"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#5f46b437042f5342f4d65a0a46ced4a37dbaaf10"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#99fa8edf67b7cdbd4ffda57ca00be8a2def45aa5"
 dependencies = [
  "cairo-sys-rs",
  "gdk4-sys",
@@ -2616,7 +2624,7 @@ dependencies = [
  "gstreamer-check",
  "gstreamer-video",
  "percent-encoding",
- "rand 0.9.0",
+ "rand 0.9.1",
  "serde",
  "serde_derive",
  "serde_json",
@@ -2678,7 +2686,7 @@ dependencies = [
  "pango",
  "pangocairo",
  "pretty_assertions",
- "rand 0.9.0",
+ "rand 0.9.1",
  "serde",
  "serde_json",
  "smallvec",
@@ -2726,7 +2734,7 @@ dependencies = [
  "gstreamer-video",
  "gtk4",
  "parking_lot",
- "rand 0.9.0",
+ "rand 0.9.1",
 ]
 
 [[package]]
@@ -3074,7 +3082,7 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-check",
  "gstreamer-rtp",
- "rand 0.9.0",
+ "rand 0.9.1",
  "raptorq",
 ]
 
@@ -3156,7 +3164,7 @@ dependencies = [
  "gstreamer-video",
  "hex",
  "log",
- "rand 0.9.0",
+ "rand 0.9.1",
  "rtcp-types",
  "rtp-types",
  "slab",
@@ -3201,7 +3209,7 @@ dependencies = [
  "gstreamer-check",
  "hex",
  "pretty_assertions",
- "rand 0.9.0",
+ "rand 0.9.1",
  "serde",
  "serde_json",
  "smallvec",
@@ -3295,7 +3303,7 @@ dependencies = [
  "pin-project-lite",
  "pkg-config",
  "polling",
- "rand 0.9.0",
+ "rand 0.9.1",
  "rustix 1.0.5",
  "slab",
  "socket2",
@@ -3463,7 +3471,7 @@ dependencies = [
  "livekit-api",
  "livekit-protocol",
  "parse_link_header",
- "rand 0.9.0",
+ "rand 0.9.1",
  "regex",
  "reqwest 0.12.15",
  "serde",
@@ -3992,7 +4000,7 @@ dependencies = [
 [[package]]
 name = "gtk4"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#5f46b437042f5342f4d65a0a46ced4a37dbaaf10"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#99fa8edf67b7cdbd4ffda57ca00be8a2def45aa5"
 dependencies = [
  "cairo-rs",
  "field-offset",
@@ -4012,7 +4020,7 @@ dependencies = [
 [[package]]
 name = "gtk4-macros"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#5f46b437042f5342f4d65a0a46ced4a37dbaaf10"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#99fa8edf67b7cdbd4ffda57ca00be8a2def45aa5"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -4023,7 +4031,7 @@ dependencies = [
 [[package]]
 name = "gtk4-sys"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#5f46b437042f5342f4d65a0a46ced4a37dbaaf10"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#99fa8edf67b7cdbd4ffda57ca00be8a2def45aa5"
 dependencies = [
  "cairo-sys-rs",
  "gdk-pixbuf-sys",
@@ -6073,9 +6081,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.94"
+version = "1.0.95"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a31971752e70b8b2686d7e46ec17fb38dad4051d94024c88df49b667caea9c84"
+checksum = "02b3e5e68a3a1a02aad3ec490a98007cbc13c37cbe84a3cd7b8e406d76e7f778"
 dependencies = [
  "unicode-ident",
 ]
@@ -6267,7 +6275,7 @@ checksum = "b820744eb4dc9b57a3398183639c511b5a26d2ed702cedd3febaa1393caa22cc"
 dependencies = [
  "bytes",
  "getrandom 0.3.2",
- "rand 0.9.0",
+ "rand 0.9.1",
  "ring",
  "rustc-hash 2.1.1",
  "rustls 0.23.26",
@@ -6322,13 +6330,12 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3779b94aeb87e8bd4e834cee3650289ee9e0d5677f976ecdb6d219e5f4f6cd94"
+checksum = "9fbfd9d094a40bf3ae768db9361049ace4c0e04a4fd6b359518bd7b73a73dd97"
 dependencies = [
  "rand_chacha 0.9.0",
  "rand_core 0.9.3",
- "zerocopy 0.8.24",
 ]
 
 [[package]]
@@ -8183,7 +8190,7 @@ dependencies = [
  "httparse",
  "log",
  "native-tls",
- "rand 0.9.0",
+ "rand 0.9.1",
  "sha1",
  "thiserror 2.0.12",
  "url",
@@ -8284,7 +8291,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "458f7a779bf54acc9f347480ac654f68407d3aab21269a6e3c9f922acd9e2da9"
 dependencies = [
  "getrandom 0.3.2",
- "rand 0.9.0",
+ "rand 0.9.1",
 ]
 
 [[package]]
