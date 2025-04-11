@@ -1,4 +1,4 @@
-use super::super::CAT;
+use super::CAT;
 use clap::Parser;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, clap::ValueEnum)]
@@ -13,7 +13,7 @@ pub enum Sink {
 
 impl Sink {
     pub fn element_name(self) -> &'static str {
-        use super::super::sink;
+        use super::sink;
         use Sink::*;
         match self {
             AsyncMutex => sink::ASYNC_MUTEX_ELEMENT_NAME,

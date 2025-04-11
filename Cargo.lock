@@ -3218,7 +3218,6 @@ dependencies = [
  "slab",
  "socket2",
  "waker-fn",
- "winapi",
  "windows-sys 0.59.0",
 ]
 
