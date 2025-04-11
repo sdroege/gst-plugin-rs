@@ -149,6 +149,9 @@ struct State {
     /// Running timestamp of our srcpad
     out_timestamp: Option<Timestamps>,
 
+    /// See `PROP_SILENT`
+    silent: bool,
+
     /// See `PROP_IN`
     num_in: u64,
 
@@ -171,6 +174,7 @@ const PROP_IN: &str = "in";
 const PROP_DROP: &str = "drop";
 const PROP_OUT: &str = "out";
 const PROP_DUPLICATE: &str = "duplicate";
+const PROP_SILENT: &str = "silent";
 
 const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::ZERO;
 const MINIMUM_DURATION: gst::ClockTime = gst::ClockTime::from_mseconds(8);
@@ -178,6 +182,7 @@ const DEFAULT_DURATION: gst::ClockTime = gst::ClockTime::from_mseconds(100);
 const MAXIMUM_DURATION: gst::ClockTime = gst::ClockTime::from_seconds(10);
 const MINIMUM_LATE_THRESHOLD: gst::ClockTime = gst::ClockTime::ZERO;
 const DEFAULT_LATE_THRESHOLD: Option<gst::ClockTime> = Some(gst::ClockTime::from_seconds(2));
+const DEFAULT_SILENT: bool = true;
 
 impl Default for State {
     fn default() -> Self {
@@ -205,6 +210,7 @@ impl Default for State {
             out_buffer_duplicate: false,
             in_timestamp: None,
             out_timestamp: None,
+            silent: DEFAULT_SILENT,
             num_in: 0,
             num_drop: 0,
             num_out: 0,
@@ -296,7 +302,7 @@ impl ObjectSubclass for LiveSync {
 
 impl ObjectImpl for LiveSync {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: LazyLock<[glib::ParamSpec; 8]> = LazyLock::new(|| {
+        static PROPERTIES: LazyLock<[glib::ParamSpec; 9]> = LazyLock::new(|| {
             [
                 glib::ParamSpecUInt64::builder(PROP_LATENCY)
                     .nick("Latency")
@@ -348,6 +354,11 @@ impl ObjectImpl for LiveSync {
                     .blurb("Number of outgoing frames duplicated")
                     .read_only()
                     .build(),
+                glib::ParamSpecBoolean::builder(PROP_SILENT)
+                    .nick("Silent")
+                    .blurb("Don't emit notify for dropped and duplicated frames")
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -383,6 +394,10 @@ impl ObjectImpl for LiveSync {
                 state.sync = value.get().unwrap();
             }
 
+            PROP_SILENT => {
+                state.silent = value.get().unwrap();
+            }
+
             _ => unimplemented!(),
         }
     }
@@ -398,6 +413,7 @@ impl ObjectImpl for LiveSync {
             PROP_DROP => state.num_drop.to_value(),
             PROP_OUT => state.num_out.to_value(),
             PROP_DUPLICATE => state.num_duplicate.to_value(),
+            PROP_SILENT => state.silent.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -470,6 +486,14 @@ impl ElementImpl for LiveSync {
                 state.num_drop = 0;
                 state.num_out = 0;
                 state.num_duplicate = 0;
+                let notify = !state.silent;
+                drop(state);
+                if notify {
+                    self.obj().notify(PROP_IN);
+                    self.obj().notify(PROP_DROP);
+                    self.obj().notify(PROP_OUT);
+                    self.obj().notify(PROP_DUPLICATE);
+                }
             }
 
             _ => {}
@@ -982,6 +1006,13 @@ impl LiveSync {
         if lateness == BufferLateness::LateUnderThreshold {
             gst::debug!(CAT, imp = self, "Discarding late {:?}", buf_mut);
             state.num_drop += 1;
+            let notify_drop = !state.silent;
+            drop(state);
+
+            if notify_drop {
+                self.obj().notify(PROP_DROP);
+            }
+
             return Ok(gst::FlowSuccess::Ok);
         }
 
@@ -1180,9 +1211,14 @@ impl LiveSync {
         let mut caps = None;
         let mut segment = None;
 
+        let mut notify_in = false;
+        let mut notify_dup = false;
+        let mut notify_drop = false;
+
         match in_buffer {
             Some((mut buffer, timestamp, BufferLateness::OnTime)) => {
                 state.num_in += 1;
+                notify_in = !state.silent;
 
                 if state.out_buffer.is_none() || state.out_buffer_duplicate {
                     // We are just starting or done bridging a gap
@@ -1202,20 +1238,25 @@ impl LiveSync {
             {
                 gst::debug!(CAT, imp = self, "Accepting late {:?}", buffer);
                 state.num_in += 1;
+                notify_in = !state.silent;
 
                 self.patch_output_buffer(&mut state, Some(buffer))?;
+                notify_dup = !state.silent;
             }
 
             Some((buffer, _timestamp, BufferLateness::LateOverThreshold)) => {
                 // Cannot accept late-over-threshold buffers while we have pending events
                 gst::debug!(CAT, imp = self, "Discarding late {:?}", buffer);
                 state.num_drop += 1;
+                notify_drop = !state.silent;
 
                 self.patch_output_buffer(&mut state, None)?;
+                notify_dup = !state.silent;
             }
 
             None => {
                 self.patch_output_buffer(&mut state, None)?;
+                notify_dup = !state.silent;
             }
 
             Some((_, _, BufferLateness::LateUnderThreshold)) => {
@@ -1276,8 +1317,25 @@ impl LiveSync {
         }
 
         state.num_out += 1;
+        let notify_out = !state.silent;
 
         drop(state);
+
+        if notify_in {
+            self.obj().notify(PROP_IN);
+        }
+
+        if notify_dup {
+            self.obj().notify(PROP_DUPLICATE);
+        }
+
+        if notify_drop {
+            self.obj().notify(PROP_DROP);
+        }
+
+        if notify_out {
+            self.obj().notify(PROP_OUT);
+        }
 
         gst::trace!(CAT, imp = self, "Pushing {buffer:?}");
         self.srcpad.push(buffer)

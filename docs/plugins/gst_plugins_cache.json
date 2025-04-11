@@ -5146,6 +5146,18 @@
                         "type": "guint64",
                         "writable": false
                     },
+                    "silent": {
+                        "blurb": "Don't emit notify for dropped and duplicated frames",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "single-segment": {
                         "blurb": "Timestamp buffers and eat segments so as to appear as one segment",
                         "conditionally-available": false,
