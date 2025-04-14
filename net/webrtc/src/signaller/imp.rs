@@ -155,9 +155,12 @@ impl Signaller {
         };
 
         if let super::WebRTCSignallerRole::Consumer = role {
-            if !connect_to_first_producer {
-                self.producer_peer_id()
-                    .ok_or_else(|| anyhow!("No target producer peer id set"))?;
+            if !connect_to_first_producer && self.producer_peer_id().is_none() {
+                gst::info!(
+                    CAT,
+                    imp = self,
+                    "No producer peer id set, listening for producer session requests"
+                );
             }
         }
 
@@ -273,7 +276,7 @@ impl Signaller {
             super::WebRTCSignallerRole::Consumer => p::PeerStatus {
                 meta: meta.clone(),
                 peer_id: Some(peer_id.to_string()),
-                roles: vec![],
+                roles: vec![p::PeerRole::Consumer],
             },
             super::WebRTCSignallerRole::Producer => p::PeerStatus {
                 meta: meta.clone(),
@@ -373,10 +376,10 @@ impl Signaller {
                     match msg {
                         p::OutgoingMessage::Welcome { peer_id } => {
                             self.set_status(meta, &peer_id);
-                            if self.producer_peer_id().is_none() {
-                                self.send(p::IncomingMessage::List);
-                            } else {
+                            if self.producer_peer_id().is_some() {
                                 self.start_session();
+                            } else if self.connect_to_first_producer() {
+                                self.send(p::IncomingMessage::List);
                             }
                         }
                         p::OutgoingMessage::PeerStatusChanged(p::PeerStatus {
@@ -510,10 +513,11 @@ impl Signaller {
                                 );
                             }
                         },
-                        p::OutgoingMessage::List { producers } => {
+                        p::OutgoingMessage::List { producers, .. } => {
                             let mut settings = self.settings.lock().unwrap();
                             let role = settings.role;
                             if matches!(role, super::WebRTCSignallerRole::Consumer)
+                                && settings.connect_to_first_producer
                                 && settings.producer_peer_id.is_none()
                             {
                                 if let Some(producer) = producers.first() {

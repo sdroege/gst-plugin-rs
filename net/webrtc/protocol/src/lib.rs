@@ -35,9 +35,12 @@ pub enum OutgoingMessage {
     EndSession(EndSessionMessage),
     /// Messages directly forwarded from one peer to another
     Peer(PeerMessage),
-    /// Provides the current list of consumer peers
+    /// Provides the current list of producers and passive consumers (awaiting session initiation)
     #[serde(rename_all = "camelCase")]
-    List { producers: Vec<Peer> },
+    List {
+        producers: Vec<Peer>,
+        consumers: Vec<Peer>,
+    },
     /// Notifies that an error occurred with the peer's current session
     #[serde(rename_all = "camelCase")]
     Error { details: String },
@@ -51,6 +54,8 @@ pub enum PeerRole {
     Producer,
     /// Register as a listener
     Listener,
+    /// Register as a passive consumer (awaiting a session initiated by a producer peer)
+    Consumer,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default, Clone)]
@@ -71,11 +76,15 @@ impl PeerStatus {
     pub fn listening(&self) -> bool {
         self.roles.iter().any(|t| matches!(t, PeerRole::Listener))
     }
+
+    pub fn consuming(&self) -> bool {
+        self.roles.iter().any(|t| matches!(t, PeerRole::Consumer))
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-/// Ask the server to start a session with a producer peer
+/// Ask the server to start a session (either as a producer or a consumer)
 pub struct StartSessionMessage {
     /// Identifies the peer
     pub peer_id: String,
@@ -143,7 +152,7 @@ pub enum IncomingMessage {
     NewPeer,
     /// Set current peer status
     SetPeerStatus(PeerStatus),
-    /// Start a session with a producer peer
+    /// Start a session with another peer
     StartSession(StartSessionMessage),
     /// End an existing session
     EndSession(EndSessionMessage),

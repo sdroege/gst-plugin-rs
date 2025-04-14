@@ -83,10 +83,10 @@ impl Handler {
             }
             p::IncomingMessage::SetPeerStatus(status) => self.set_peer_status(peer_id, &status),
             p::IncomingMessage::StartSession(message) => {
-                self.start_session(&message.peer_id, peer_id, message.offer.as_deref())
+                self.start_session(peer_id, &message.peer_id, message.offer.as_deref())
             }
             p::IncomingMessage::Peer(peermsg) => self.handle_peer_message(peer_id, peermsg),
-            p::IncomingMessage::List => self.list_producers(peer_id),
+            p::IncomingMessage::List => self.list_producers_and_consumers(peer_id),
             p::IncomingMessage::EndSession(msg) => self.end_session(peer_id, &msg.session_id),
         }
     }
@@ -203,22 +203,26 @@ impl Handler {
         Ok(())
     }
 
-    /// List producer peers
+    /// List producer and consumer peers
     #[instrument(level = "debug", skip(self))]
-    fn list_producers(&mut self, peer_id: &str) -> Result<(), Error> {
+    fn list_producers_and_consumers(&mut self, peer_id: &str) -> Result<(), Error> {
+        let filter_peers = |f: fn(&PeerStatus) -> bool| {
+            self.peers
+                .iter()
+                .filter_map(|(peer_id, peer)| {
+                    f(peer).then_some(p::Peer {
+                        id: peer_id.clone(),
+                        meta: peer.meta.clone(),
+                    })
+                })
+                .collect()
+        };
+
         self.items.push_back((
             peer_id.to_string(),
             p::OutgoingMessage::List {
-                producers: self
-                    .peers
-                    .iter()
-                    .filter_map(|(peer_id, peer)| {
-                        peer.producing().then_some(p::Peer {
-                            id: peer_id.clone(),
-                            meta: peer.meta.clone(),
-                        })
-                    })
-                    .collect(),
+                producers: filter_peers(PeerStatus::producing),
+                consumers: filter_peers(PeerStatus::consuming),
             },
         ));
 
@@ -239,8 +243,17 @@ impl Handler {
             return Ok(());
         }
 
+        if status.producing() && status.consuming() {
+            bail!(
+                "Cannot register peer {} as both producer and passive consumer",
+                peer_id
+            );
+        }
+
         if old_status.producing() && !status.producing() {
             self.stop_producer(peer_id);
+        } else if old_status.consuming() && !status.consuming() {
+            self.stop_consumer(peer_id);
         }
 
         let mut status = status.clone();
@@ -261,7 +274,7 @@ impl Handler {
             ));
         }
 
-        info!(peer_id = %peer_id, "registered as a producer");
+        info!(peer_id = %peer_id, "registered as {:?}", status.roles);
 
         Ok(())
     }
@@ -270,27 +283,32 @@ impl Handler {
     #[instrument(level = "debug", skip(self))]
     fn start_session(
         &mut self,
-        producer_id: &str,
-        consumer_id: &str,
+        from_id: &str,
+        to_id: &str,
         offer: Option<&str>,
     ) -> Result<(), Error> {
-        self.peers.get(producer_id).map_or_else(
-            || Err(anyhow!("No producer with ID: '{producer_id}'")),
-            |peer| {
-                if !peer.producing() {
-                    Err(anyhow!(
-                        "Peer with id {} is not registered as a producer",
-                        producer_id
-                    ))
-                } else {
-                    Ok(peer)
-                }
-            },
-        )?;
+        let from = self
+            .peers
+            .get(from_id)
+            .ok_or_else(|| anyhow!("Peer with ID '{}' not found", from_id))?;
+        let to = self
+            .peers
+            .get(to_id)
+            .ok_or_else(|| anyhow!("Peer with ID '{}' not found", to_id))?;
 
-        self.peers
-            .get(consumer_id)
-            .map_or_else(|| Err(anyhow!("No consumer with ID: '{consumer_id}'")), Ok)?;
+        let (producer_id, consumer_id) = if to.producing() {
+            (to_id, from_id)
+        } else if to.consuming() {
+            (from_id, to_id)
+        } else {
+            bail!(
+                "Missing a producer or a consumer: id {} roles {:?}, id {} roles {:?}",
+                from_id,
+                from.roles,
+                to_id,
+                to.roles
+            );
+        };
 
         let session_id = uuid::Uuid::new_v4().to_string();
         self.sessions.insert(
@@ -444,7 +462,8 @@ mod tests {
                     meta: Some(json!(
                         {"display-name": "foobar".to_string()
                     })),
-                }]
+                }],
+                consumers: vec!()
             }
         );
     }
@@ -1031,7 +1050,7 @@ mod tests {
         assert_eq!(
             sent_message,
             p::OutgoingMessage::Error {
-                details: "No producer with ID: 'producer'".into()
+                details: "Peer with ID 'producer' not found".into()
             }
         );
     }
@@ -1238,7 +1257,7 @@ mod tests {
         assert_eq!(
             sent_message,
             p::OutgoingMessage::Error {
-                details: "No consumer with ID: 'consumer'".into()
+                details: "Peer with ID 'consumer' not found".into()
             }
         );
     }
@@ -1371,5 +1390,63 @@ mod tests {
             .sessions
             .get(&session0_id)
             .expect("Session should remain");
+    }
+
+    #[tokio::test]
+    async fn test_start_session_passive_consumer() {
+        let (mut tx, rx) = mpsc::unbounded();
+        let mut handler = Handler::new(Box::pin(rx));
+
+        new_peer(&mut tx, &mut handler, "consumer").await;
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Consumer],
+            meta: None,
+            peer_id: None,
+        });
+        tx.send(("consumer".to_string(), Some(message)))
+            .await
+            .unwrap();
+
+        new_peer(&mut tx, &mut handler, "producer").await;
+        let message = p::IncomingMessage::SetPeerStatus(p::PeerStatus {
+            roles: vec![p::PeerRole::Producer],
+            meta: None,
+            peer_id: None,
+        });
+        tx.send(("producer".to_string(), Some(message)))
+            .await
+            .unwrap();
+
+        let message = p::IncomingMessage::StartSession(p::StartSessionMessage {
+            peer_id: "consumer".to_string(),
+            offer: None,
+        });
+        tx.send(("producer".to_string(), Some(message)))
+            .await
+            .unwrap();
+
+        let (peer_id, sent_message) = handler.next().await.unwrap();
+        assert_eq!(peer_id, "consumer");
+        let session_id = match sent_message {
+            p::OutgoingMessage::SessionStarted {
+                ref peer_id,
+                ref session_id,
+            } => {
+                assert_eq!(peer_id, "producer");
+                session_id.to_string()
+            }
+            _ => panic!("SessionStarted message missing"),
+        };
+
+        let (peer_id, sent_message) = handler.next().await.unwrap();
+        assert_eq!(peer_id, "producer");
+        assert_eq!(
+            sent_message,
+            p::OutgoingMessage::StartSession {
+                peer_id: "consumer".to_string(),
+                session_id,
+                offer: None,
+            }
+        );
     }
 }

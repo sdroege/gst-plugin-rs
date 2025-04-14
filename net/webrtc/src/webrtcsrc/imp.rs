@@ -1117,7 +1117,7 @@ impl BaseWebRTCSrc {
                     glib::closure!(
                         #[watch]
                         instance,
-                        move |_signaler: glib::Object, session_id: &str| {
+                        move |_signaller: glib::Object, session_id: &str| {
                             let this = instance.imp();
                             let mut state = this.state.lock().unwrap();
                             let Some(session) = state.sessions.remove(session_id) else {
