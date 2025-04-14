@@ -1147,6 +1147,53 @@ impl MP4Mux {
             .into_iter()
             .map(|pad| pad.downcast::<super::MP4MuxPad>().unwrap())
         {
+            // Check if language or orientation tags have already been
+            // received
+            let mut stream_orientation = Default::default();
+            let mut global_orientation = Default::default();
+            let mut language_code = None;
+            pad.sticky_events_foreach(|ev| {
+                if let gst::EventView::Tag(ev) = ev.view() {
+                    let tag = ev.tag();
+                    if let Some(lang) = tag.get::<gst::tags::LanguageCode>() {
+                        let lang = lang.get();
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "Received language code from tags: {:?}",
+                            lang
+                        );
+
+                        // There is no header field for global
+                        // language code, maybe because it does not
+                        // really make sense, global language tags are
+                        // considered to be stream local
+                        if tag.scope() == gst::TagScope::Global {
+                            gst::info!(
+                                CAT,
+                                obj = pad,
+                                "Language tags scoped 'global' are considered stream tags",
+                            );
+                        }
+                        language_code = Stream::parse_language_code(lang);
+                    } else if let Some(orientation) = tag.get::<gst::tags::ImageOrientation>() {
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "Received image orientation from tags: {:?}",
+                            orientation.get(),
+                        );
+
+                        if tag.scope() == gst::TagScope::Global {
+                            global_orientation = TransformMatrix::from_tag(self, ev);
+                        } else {
+                            stream_orientation = Some(TransformMatrix::from_tag(self, ev));
+                        }
+                    }
+                }
+                std::ops::ControlFlow::Continue(gst::EventForeachAction::Keep)
+            });
+
             let caps = match pad.current_caps() {
                 Some(caps) => caps,
                 None => {
@@ -1239,9 +1286,9 @@ impl MP4Mux {
                 end_pts: None,
                 running_time_utc_time_mapping: None,
                 extra_header_data: None,
-                language_code: None,
-                global_orientation: &super::IDENTITY_MATRIX,
-                stream_orientation: None,
+                language_code,
+                global_orientation,
+                stream_orientation,
             });
         }
 
