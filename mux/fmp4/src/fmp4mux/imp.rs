@@ -3437,7 +3437,7 @@ impl FMP4Mux {
                         let lang = lang.get();
                         gst::trace!(
                             CAT,
-                            imp = self,
+                            obj = pad,
                             "Received language code from tags: {:?}",
                             lang
                         );
@@ -3457,7 +3457,7 @@ impl FMP4Mux {
                     } else if let Some(orientation) = tag.get::<gst::tags::ImageOrientation>() {
                         gst::trace!(
                             CAT,
-                            imp = self,
+                            obj = pad,
                             "Received image orientation from tags: {:?}",
                             orientation.get(),
                         );
@@ -3474,7 +3474,7 @@ impl FMP4Mux {
                         let bitrate = bitrate.get();
                         gst::trace!(
                             CAT,
-                            imp = self,
+                            obj = pad,
                             "Received maximum bitrate from tags: {:?}",
                             bitrate
                         );
@@ -3492,7 +3492,7 @@ impl FMP4Mux {
                         .filter(|br| br.get() > 0 && br.get() < u32::MAX)
                     {
                         let bitrate = bitrate.get();
-                        gst::trace!(CAT, imp = self, "Received bitrate from tags: {:?}", bitrate);
+                        gst::trace!(CAT, obj = pad, "Received bitrate from tags: {:?}", bitrate);
 
                         if tag.scope() == gst::TagScope::Global {
                             gst::info!(
@@ -4357,7 +4357,7 @@ impl AggregatorImpl for FMP4Mux {
             EventView::Caps(caps) => {
                 let caps = caps.caps_owned();
 
-                gst::trace!(CAT, imp = self, "Received caps {}", caps);
+                gst::trace!(CAT, obj = aggregator_pad, "Received caps {}", caps);
 
                 // Only care of caps if streams have been setup and the
                 // caps actually change in an incompatible way
@@ -4401,7 +4401,7 @@ impl AggregatorImpl for FMP4Mux {
                     let lang = tag_value.get();
                     gst::trace!(
                         CAT,
-                        imp = self,
+                        obj = aggregator_pad,
                         "Received language code from tags: {:?}",
                         lang
                     );
@@ -4419,7 +4419,7 @@ impl AggregatorImpl for FMP4Mux {
                             if tag.scope() == gst::TagScope::Global {
                                 gst::info!(
                                     CAT,
-                                    imp = self,
+                                    obj = aggregator_pad,
                                     "Language tags scoped 'global' are considered stream tags",
                                 );
                             }
@@ -4434,7 +4434,7 @@ impl AggregatorImpl for FMP4Mux {
                     let orientation = tag_value.get();
                     gst::trace!(
                         CAT,
-                        imp = self,
+                        obj = aggregator_pad,
                         "Received image orientation from tags: {:?}",
                         orientation
                     );
