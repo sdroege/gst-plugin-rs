@@ -476,7 +476,7 @@ fn language_code(lang: impl std::borrow::Borrow<[u8; 3]>) -> u16 {
 
 fn write_mdhd(
     v: &mut Vec<u8>,
-    header: &super::Header,
+    _header: &super::Header,
     stream: &super::Stream,
     creation_time: u64,
 ) -> Result<(), Error> {
@@ -499,7 +499,7 @@ fn write_mdhd(
     v.extend(duration.to_be_bytes());
 
     // Language as ISO-639-2/T
-    if let Some(lang) = header.language_code {
+    if let Some(lang) = stream.language_code {
         v.extend(language_code(lang).to_be_bytes());
     } else {
         v.extend(language_code(b"und").to_be_bytes());

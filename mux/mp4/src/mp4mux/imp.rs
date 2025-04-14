@@ -139,6 +139,9 @@ struct Stream {
 
     extra_header_data: Option<Vec<u8>>,
 
+    /// Language code from tags
+    language_code: Option<[u8; 3]>,
+
     /// Orientation from tags
     orientation: Option<ImageOrientation>,
 }
@@ -159,9 +162,6 @@ struct State {
 
     /// Size of the `mdat` as written so far.
     mdat_size: u64,
-
-    /// Language code from tags
-    language_code: Option<[u8; 3]>,
 }
 
 #[derive(Default)]
@@ -1021,6 +1021,7 @@ impl MP4Mux {
                 end_pts: None,
                 running_time_utc_time_mapping: None,
                 extra_header_data: None,
+                language_code: None,
                 orientation: None,
             });
         }
@@ -1235,7 +1236,9 @@ impl AggregatorImpl for MP4Mux {
                 self.parent_sink_event_pre_queue(aggregator_pad, event)
             }
             EventView::Tag(ev) => {
-                if let Some(tag_value) = ev.tag().get::<gst::tags::LanguageCode>() {
+                let tag = ev.tag();
+
+                if let Some(tag_value) = tag.get::<gst::tags::LanguageCode>() {
                     let lang = tag_value.get();
                     gst::trace!(
                         CAT,
@@ -1252,7 +1255,21 @@ impl AggregatorImpl for MP4Mux {
                         for (out, c) in Iterator::zip(language_code.iter_mut(), lang.chars()) {
                             *out = c as u8;
                         }
-                        state.language_code = Some(language_code);
+
+                        if tag.scope() == gst::TagScope::Global {
+                            gst::info!(
+                                CAT,
+                                imp = self,
+                                "Language tags scoped 'global' are considered stream tags",
+                            );
+                        }
+
+                        for stream in &mut state.streams {
+                            if &stream.sinkpad == aggregator_pad {
+                                stream.language_code = Some(language_code);
+                                break;
+                            }
+                        }
                     }
                 }
                 if let Some(tag_value) = ev.tag().get::<gst::tags::ImageOrientation>() {
@@ -1487,6 +1504,7 @@ impl AggregatorImpl for MP4Mux {
                     end_pts,
                     chunks: stream.chunks,
                     extra_header_data: stream.extra_header_data.clone(),
+                    language_code: stream.language_code,
                     orientation: stream.orientation,
                 });
             }
@@ -1495,7 +1513,6 @@ impl AggregatorImpl for MP4Mux {
                 variant: self.obj().class().as_ref().variant,
                 movie_timescale: settings.movie_timescale,
                 streams,
-                language_code: state.language_code,
             })
             .map_err(|err| {
                 gst::error!(CAT, imp = self, "Failed to create moov box: {err}");
