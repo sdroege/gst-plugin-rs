@@ -302,10 +302,7 @@ impl Stream {
             .filter(|e| e.start.is_some())
             .peekable();
         while let Some(&mut ref mut elst_info) = iter.next() {
-            if elst_info
-                .duration
-                .map_or(true, |duration| duration.is_zero())
-            {
+            if elst_info.duration.is_none_or(|duration| duration.is_zero()) {
                 elst_info.duration = if let Some(next) = iter.peek_mut() {
                     Some(
                         (next.start.unwrap() - elst_info.start.unwrap())
@@ -630,7 +627,7 @@ impl FMP4Mux {
 
         if stream
             .earliest_pts
-            .map_or(true, |earliest_pts| earliest_pts > pts)
+            .is_none_or(|earliest_pts| earliest_pts > pts)
         {
             stream.end_pts = Some(pts);
         }
@@ -1025,7 +1022,7 @@ impl FMP4Mux {
 
             if earliest_stream
                 .as_ref()
-                .map_or(true, |(_stream, earliest_running_time)| {
+                .is_none_or(|(_stream, earliest_running_time)| {
                     *earliest_running_time > running_time
                 })
             {
@@ -2466,10 +2463,10 @@ impl FMP4Mux {
                 continue;
             }
 
-            if earliest_pts.map_or(true, |earliest_pts| buffer.pts < earliest_pts) {
+            if earliest_pts.is_none_or(|earliest_pts| buffer.pts < earliest_pts) {
                 earliest_pts = Some(buffer.pts);
             }
-            if earliest_pts_position.map_or(true, |earliest_pts_position| {
+            if earliest_pts_position.is_none_or(|earliest_pts_position| {
                 buffer.buffer.pts().unwrap() < earliest_pts_position
             }) {
                 earliest_pts_position = Some(buffer.buffer.pts().unwrap());
@@ -2695,8 +2692,7 @@ impl FMP4Mux {
 
             if settings.manual_split || all_eos {
                 if let Some(last_gop) = gops.last() {
-                    if chunk_end_pts.map_or(true, |chunk_end_pts| chunk_end_pts < last_gop.end_pts)
-                    {
+                    if chunk_end_pts.is_none_or(|chunk_end_pts| chunk_end_pts < last_gop.end_pts) {
                         chunk_end_pts = Some(last_gop.end_pts);
                     }
                 }

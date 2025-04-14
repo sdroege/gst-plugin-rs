@@ -2319,7 +2319,7 @@ impl FallbackSrc {
                             o.main_branch
                                 .as_ref()
                                 // no main branch = ignore
-                                .map_or(true, |b| {
+                                .is_none_or(|b| {
                                     &b.queue_srcpad == pad
                             // now check if the pad is EOS
                             && b.queue_srcpad.pad_flags().contains(gst::PadFlags::EOS)
@@ -2659,7 +2659,7 @@ impl FallbackSrc {
             }
 
             let running_time = running_time.unwrap();
-            if min_running_time.map_or(true, |min_running_time| running_time < min_running_time) {
+            if min_running_time.is_none_or(|min_running_time| running_time < min_running_time) {
                 min_running_time = Some(running_time);
             }
         }

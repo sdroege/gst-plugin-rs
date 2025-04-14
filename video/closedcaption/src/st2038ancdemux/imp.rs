@@ -179,7 +179,7 @@ impl St2038AncDemux {
             if let Some(running_time) = running_time {
                 if stream
                     .last_used
-                    .map_or(true, |last_used| last_used < running_time)
+                    .is_none_or(|last_used| last_used < running_time)
                 {
                     stream.last_used = Some(running_time);
                 }

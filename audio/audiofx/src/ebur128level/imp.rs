@@ -586,9 +586,9 @@ impl AudioFilterImpl for EbuR128Level {
                 .map_err(|err| gst::loggable_error!(CAT, "Failed to set channel map: {}", err))?;
         } else {
             // Weight all channels equally if we have no channel map
-            let channel_map = std::iter::repeat(ebur128::Channel::Center)
-                .take(info.channels() as usize)
-                .collect::<Vec<_>>();
+            let channel_map =
+                std::iter::repeat_n(ebur128::Channel::Center, info.channels() as usize)
+                    .collect::<Vec<_>>();
             ebur128
                 .set_channel_map(&channel_map)
                 .map_err(|err| gst::loggable_error!(CAT, "Failed to set channel map: {}", err))?;

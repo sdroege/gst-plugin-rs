@@ -1409,7 +1409,7 @@ impl TranslationPadTask {
         if self
             .translate_loop_handle
             .as_ref()
-            .map_or(true, task::JoinHandle::is_finished)
+            .is_none_or(task::JoinHandle::is_finished)
         {
             const ERR: &str = "Translate loop is not running";
             gst::error!(CAT, imp = self.pad, "{ERR}");

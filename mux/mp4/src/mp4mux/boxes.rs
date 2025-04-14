@@ -2087,12 +2087,12 @@ fn write_cslg(
         })
         .fold((None, None), |(min, max), ctts| {
             (
-                if min.map_or(true, |min| ctts < min) {
+                if min.is_none_or(|min| ctts < min) {
                     Some(ctts)
                 } else {
                     min
                 },
-                if max.map_or(true, |max| ctts > max) {
+                if max.is_none_or(|max| ctts > max) {
                     Some(ctts)
                 } else {
                     max

@@ -198,7 +198,7 @@ impl OnvifMetadataParse {
         if state
             .in_segment
             .position()
-            .map_or(true, |position| position < pts)
+            .is_none_or(|position| position < pts)
         {
             gst::trace!(CAT, imp = self, "Input position updated to {}", pts);
             state.in_segment.set_position(pts);
@@ -571,7 +571,7 @@ impl OnvifMetadataParse {
             if state
                 .clock_wait
                 .as_ref()
-                .map_or(true, |clock_wait| clock_wait.time() != earliest_clock_time)
+                .is_none_or(|clock_wait| clock_wait.time() != earliest_clock_time)
             {
                 if let Some(clock_wait) = state.clock_wait.take() {
                     clock_wait.unschedule();
@@ -682,7 +682,7 @@ impl OnvifMetadataParse {
 
                         if out_segment
                             .position()
-                            .map_or(true, |position| position < current_position)
+                            .is_none_or(|position| position < current_position)
                         {
                             gst::trace!(
                                 CAT,
@@ -768,7 +768,7 @@ impl OnvifMetadataParse {
 
             if out_segment
                 .position()
-                .map_or(true, |position| position < frame_pts)
+                .is_none_or(|position| position < frame_pts)
             {
                 gst::trace!(CAT, imp = self, "Output position updated to {}", frame_pts);
                 out_segment.set_position(frame_pts);
@@ -959,7 +959,7 @@ impl OnvifMetadataParse {
                         if state
                             .in_segment
                             .position()
-                            .map_or(true, |position| position < current_position)
+                            .is_none_or(|position| position < current_position)
                         {
                             gst::trace!(
                                 CAT,

@@ -298,7 +298,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
             && payload_descriptor
                 .layer_index
                 .as_ref()
-                .map_or(true, |layer_index| layer_index.spatial_layer_id == 0);
+                .is_none_or(|layer_index| layer_index.spatial_layer_id == 0);
 
         // Additionally, this is a key picture if it is not an inter predicted picture.
         let is_key_picture =
@@ -509,8 +509,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
         if let Some(current_keyframe_frame_header) = state.current_keyframe_frame_header.take() {
             // TODO: Could also add more information to the caps
             if current_keyframe_frame_header.keyframe_info.is_some()
-                && state.last_keyframe_frame_header.as_ref().map_or(
-                    true,
+                && state.last_keyframe_frame_header.as_ref().is_none_or(
                     |last_keyframe_frame_header| {
                         last_keyframe_frame_header.profile != current_keyframe_frame_header.profile
                             || last_keyframe_frame_header

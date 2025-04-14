@@ -111,7 +111,7 @@ impl futures::stream::Stream for RtcpSendStream {
                 return Poll::Ready(Some(reply));
             }
             if let Some(wait) = session_inner.session.poll_rtcp_send_timeout(now) {
-                if lowest_wait.map_or(true, |lowest_wait| wait < lowest_wait) {
+                if lowest_wait.is_none_or(|lowest_wait| wait < lowest_wait) {
                     lowest_wait = Some(wait);
                 }
             }

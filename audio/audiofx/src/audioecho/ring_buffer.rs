@@ -6,8 +6,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::iter;
-
 pub struct RingBuffer {
     buffer: Box<[f64]>,
     pos: usize,
@@ -16,7 +14,7 @@ pub struct RingBuffer {
 impl RingBuffer {
     pub fn new(size: usize) -> Self {
         let mut buffer = Vec::with_capacity(size);
-        buffer.extend(iter::repeat(0.0).take(size));
+        buffer.extend(std::iter::repeat_n(0.0, size));
 
         Self {
             buffer: buffer.into_boxed_slice(),

@@ -52,7 +52,7 @@ impl SectionParser {
         } else if adaptation_field.is_some_and(|af| af.discontinuity_flag) {
             // discontinuity_flag only defines that there is an expected discountinuity in the
             // continuity counter but the actual data is continuous
-        } else if self.cc.map_or(true, |cc| (cc + 1) & 0xf != header.cc) {
+        } else if self.cc.is_none_or(|cc| (cc + 1) & 0xf != header.cc) {
             self.clear();
             self.waiting_for_pusi = true;
             // Not start of a payload and we didn't see the start, just return
@@ -435,7 +435,7 @@ impl PESParser {
         } else if adaptation_field.is_some_and(|af| af.discontinuity_flag) {
             // discontinuity_flag only defines that there is an expected discountinuity in the
             // continuity counter but the actual data is continuous
-        } else if self.cc.map_or(true, |cc| (cc + 1) & 0xf != header.cc) {
+        } else if self.cc.is_none_or(|cc| (cc + 1) & 0xf != header.cc) {
             self.clear();
             self.waiting_for_pusi = true;
             // Not start of a payload and we didn't see the start, just return

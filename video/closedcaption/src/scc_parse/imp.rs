@@ -179,7 +179,7 @@ impl State {
 
         if self
             .last_position
-            .map_or(true, |last_position| nsecs >= last_position)
+            .is_none_or(|last_position| nsecs >= last_position)
         {
             self.last_position = Some(nsecs);
         } else {

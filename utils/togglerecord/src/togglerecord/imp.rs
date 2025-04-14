@@ -1626,9 +1626,7 @@ impl ToggleRecord {
                 let mut state = stream.state.lock();
                 state.eos = true;
 
-                let main_is_eos = main_state
-                    .as_ref()
-                    .map_or(true, |main_state| main_state.eos);
+                let main_is_eos = main_state.as_ref().is_none_or(|main_state| main_state.eos);
                 drop(main_state);
 
                 if main_is_eos {

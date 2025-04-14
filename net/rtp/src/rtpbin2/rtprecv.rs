@@ -149,7 +149,7 @@ impl futures::stream::Stream for JitterBufferStream {
                     return Poll::Ready(Some(item));
                 }
                 jitterbuffer::PollResult::Timeout(timeout) => {
-                    if lowest_wait.map_or(true, |lowest_wait| timeout < lowest_wait) {
+                    if lowest_wait.is_none_or(|lowest_wait| timeout < lowest_wait) {
                         lowest_wait = Some(timeout);
                     }
                     break;

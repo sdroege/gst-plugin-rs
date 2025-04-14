@@ -171,9 +171,9 @@ impl CCDetect {
             );
 
             if cc_packet.cc608 != settings.cc608 {
-                let changed = state.last_cc608_change.map_or(true, |last_cc608_change| {
-                    ts > last_cc608_change + settings.window
-                });
+                let changed = state
+                    .last_cc608_change
+                    .is_none_or(|last_cc608_change| ts > last_cc608_change + settings.window);
 
                 if changed {
                     settings.cc608 = cc_packet.cc608;
@@ -185,9 +185,9 @@ impl CCDetect {
             }
 
             if cc_packet.cc708 != settings.cc708 {
-                let changed = state.last_cc708_change.map_or(true, |last_cc708_change| {
-                    ts > last_cc708_change + settings.window
-                });
+                let changed = state
+                    .last_cc708_change
+                    .is_none_or(|last_cc708_change| ts > last_cc708_change + settings.window);
                 if changed {
                     settings.cc708 = cc_packet.cc708;
                     state.last_cc708_change = Some(ts);

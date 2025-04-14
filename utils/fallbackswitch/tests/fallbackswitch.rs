@@ -570,7 +570,7 @@ fn setup_pipeline(
                 // FIXME probably can expect clock.time()
                 clock
                     .time()
-                    .map_or(true, |clock_time| clock_time < clock_id.time())
+                    .is_none_or(|clock_time| clock_time < clock_id.time())
             }) {
                 use std::{thread, time};
 

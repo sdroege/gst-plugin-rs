@@ -155,7 +155,7 @@ impl AggregatorImpl for St2038AncMux {
                     "Buffer starting at {buffer_start_ts} >= {end_running_time}"
                 );
 
-                if min_next_buffer_running_time.map_or(true, |next_buffer_min_running_time| {
+                if min_next_buffer_running_time.is_none_or(|next_buffer_min_running_time| {
                     next_buffer_min_running_time > buffer_start_ts
                 }) {
                     min_next_buffer_running_time = Some(buffer_start_ts);

@@ -271,9 +271,7 @@ fn test(
 
         // check stream-collection and streams-selected message ordering
         let mut events = events.clone().into_iter();
-        let playlist = std::iter::repeat(medias.iter())
-            .take(iterations as usize)
-            .flatten();
+        let playlist = std::iter::repeat_n(medias.iter(), iterations as usize).flatten();
         let mut last_media = None;
 
         for media in playlist {
@@ -281,7 +279,7 @@ fn test(
 
             if last_media
                 .as_ref()
-                .map_or(true, |last_media| *last_media != media)
+                .is_none_or(|last_media| *last_media != media)
             {
                 last_media = Some(media);
                 media_changed = true;

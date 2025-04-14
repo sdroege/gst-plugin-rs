@@ -197,10 +197,7 @@ impl Stream {
             .filter(|e| e.start.is_some())
             .peekable();
         while let Some(&mut ref mut elst_info) = iter.next() {
-            if elst_info
-                .duration
-                .map_or(true, |duration| duration.is_zero())
-            {
+            if elst_info.duration.is_none_or(|duration| duration.is_zero()) {
                 elst_info.duration = if let Some(next) = iter.peek_mut() {
                     Some(
                         (next.start.unwrap() - elst_info.start.unwrap())
@@ -689,7 +686,7 @@ impl MP4Mux {
                                 );
 
                                 let pts = pts + dur;
-                                if stream.end_pts.map_or(true, |end_pts| end_pts < pts) {
+                                if stream.end_pts.is_none_or(|end_pts| end_pts < pts) {
                                     gst::trace!(CAT, obj = stream.sinkpad, "Stream end PTS {pts}");
                                     stream.end_pts = Some(pts);
                                 }
@@ -746,7 +743,7 @@ impl MP4Mux {
                     );
 
                     let pts = pts + dur;
-                    if stream.end_pts.map_or(true, |end_pts| end_pts < pts) {
+                    if stream.end_pts.is_none_or(|end_pts| end_pts < pts) {
                         gst::trace!(CAT, obj = stream.sinkpad, "Stream end PTS {pts}");
                         stream.end_pts = Some(pts);
                     }
@@ -833,7 +830,7 @@ impl MP4Mux {
 
                     if stream
                         .earliest_pts
-                        .map_or(true, |earliest_pts| earliest_pts > pts)
+                        .is_none_or(|earliest_pts| earliest_pts > pts)
                     {
                         gst::debug!(CAT, obj = stream.sinkpad, "Stream earliest PTS {pts}");
                         stream.earliest_pts = Some(pts);
@@ -893,9 +890,9 @@ impl MP4Mux {
                     ));
 
                     if single_stream
-                        || (settings.interleave_bytes.map_or(true, |interleave_bytes| {
+                        || (settings.interleave_bytes.is_none_or(|interleave_bytes| {
                             interleave_bytes >= stream.queued_chunk_bytes
-                        }) && settings.interleave_time.map_or(true, |interleave_time| {
+                        }) && settings.interleave_time.is_none_or(|interleave_time| {
                             interleave_time >= stream.queued_chunk_time
                         }))
                     {
@@ -963,7 +960,7 @@ impl MP4Mux {
 
                     if earliest_stream
                         .as_ref()
-                        .map_or(true, |(_idx, _stream, earliest_timestamp)| {
+                        .is_none_or(|(_idx, _stream, earliest_timestamp)| {
                             *earliest_timestamp > timestamp
                         })
                     {

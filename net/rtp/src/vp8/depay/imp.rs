@@ -337,7 +337,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp8Depay {
                 if state
                     .last_keyframe_frame_header
                     .as_ref()
-                    .map_or(true, |last_frame_header| {
+                    .is_none_or(|last_frame_header| {
                         last_frame_header.profile != frame_header.profile
                             || last_frame_header.resolution != frame_header.resolution
                     })

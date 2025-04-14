@@ -235,7 +235,7 @@ impl State {
                     if self
                         .settings
                         .timeout
-                        .map_or(true, |timeout| running_time < line_running_time + timeout)
+                        .is_none_or(|timeout| running_time < line_running_time + timeout)
                     {
                         let mut cloned = drained_line.clone();
                         cloned.pts = end_pts;
