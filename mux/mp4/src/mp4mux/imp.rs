@@ -155,6 +155,9 @@ struct Stream {
     /// Orientation from tags, stream orientation takes precedence over global orientation
     global_orientation: &'static TransformMatrix,
     stream_orientation: Option<&'static TransformMatrix>,
+
+    avg_bitrate: Option<u32>,
+    max_bitrate: Option<u32>,
 }
 
 impl Stream {
@@ -1152,6 +1155,8 @@ impl MP4Mux {
             let mut stream_orientation = Default::default();
             let mut global_orientation = Default::default();
             let mut language_code = None;
+            let mut avg_bitrate = None;
+            let mut max_bitrate = None;
             pad.sticky_events_foreach(|ev| {
                 if let gst::EventView::Tag(ev) = ev.view() {
                     let tag = ev.tag();
@@ -1159,7 +1164,7 @@ impl MP4Mux {
                         let lang = lang.get();
                         gst::trace!(
                             CAT,
-                            imp = self,
+                            obj = pad,
                             "Received language code from tags: {:?}",
                             lang
                         );
@@ -1179,7 +1184,7 @@ impl MP4Mux {
                     } else if let Some(orientation) = tag.get::<gst::tags::ImageOrientation>() {
                         gst::trace!(
                             CAT,
-                            imp = self,
+                            obj = pad,
                             "Received image orientation from tags: {:?}",
                             orientation.get(),
                         );
@@ -1189,6 +1194,41 @@ impl MP4Mux {
                         } else {
                             stream_orientation = Some(TransformMatrix::from_tag(self, ev));
                         }
+                    } else if let Some(bitrate) = tag
+                        .get::<gst::tags::MaximumBitrate>()
+                        .filter(|br| br.get() > 0 && br.get() < u32::MAX)
+                    {
+                        let bitrate = bitrate.get();
+                        gst::trace!(
+                            CAT,
+                            obj = pad,
+                            "Received maximum bitrate from tags: {:?}",
+                            bitrate
+                        );
+
+                        if tag.scope() == gst::TagScope::Global {
+                            gst::info!(
+                                CAT,
+                                obj = pad,
+                                "Bitrate tags scoped 'global' are considered stream tags",
+                            );
+                        }
+                        max_bitrate = Some(bitrate);
+                    } else if let Some(bitrate) = tag
+                        .get::<gst::tags::Bitrate>()
+                        .filter(|br| br.get() > 0 && br.get() < u32::MAX)
+                    {
+                        let bitrate = bitrate.get();
+                        gst::trace!(CAT, obj = pad, "Received bitrate from tags: {:?}", bitrate);
+
+                        if tag.scope() == gst::TagScope::Global {
+                            gst::info!(
+                                CAT,
+                                obj = pad,
+                                "Bitrate tags scoped 'global' are considered stream tags",
+                            );
+                        }
+                        avg_bitrate = Some(bitrate);
                     }
                 }
                 std::ops::ControlFlow::Continue(gst::EventForeachAction::Keep)
@@ -1289,6 +1329,8 @@ impl MP4Mux {
                 language_code,
                 global_orientation,
                 stream_orientation,
+                max_bitrate,
+                avg_bitrate,
             });
         }
 
@@ -1518,7 +1560,7 @@ impl AggregatorImpl for MP4Mux {
                     let lang = tag_value.get();
                     gst::trace!(
                         CAT,
-                        imp = self,
+                        obj = aggregator_pad,
                         "Received language code from tags: {:?}",
                         lang
                     );
@@ -1530,7 +1572,7 @@ impl AggregatorImpl for MP4Mux {
                         if tag.scope() == gst::TagScope::Global {
                             gst::info!(
                                 CAT,
-                                imp = self,
+                                obj = aggregator_pad,
                                 "Language tags scoped 'global' are considered stream tags",
                             );
                         }
@@ -1560,6 +1602,60 @@ impl AggregatorImpl for MP4Mux {
                             } else {
                                 stream.global_orientation = orientation;
                             }
+                            break;
+                        }
+                    }
+                } else if let Some(bitrate) = tag
+                    .get::<gst::tags::MaximumBitrate>()
+                    .filter(|br| br.get() > 0 && br.get() < u32::MAX)
+                {
+                    let bitrate = bitrate.get();
+                    gst::trace!(
+                        CAT,
+                        obj = aggregator_pad,
+                        "Received maximum bitrate from tags: {:?}",
+                        bitrate
+                    );
+
+                    if tag.scope() == gst::TagScope::Global {
+                        gst::info!(
+                            CAT,
+                            obj = aggregator_pad,
+                            "Bitrate tags scoped 'global' are considered stream tags",
+                        );
+                    }
+
+                    let mut state = self.state.lock().unwrap();
+                    for stream in &mut state.streams {
+                        if &stream.sinkpad == aggregator_pad {
+                            stream.max_bitrate = Some(bitrate);
+                            break;
+                        }
+                    }
+                } else if let Some(bitrate) = tag
+                    .get::<gst::tags::Bitrate>()
+                    .filter(|br| br.get() > 0 && br.get() < u32::MAX)
+                {
+                    let bitrate = bitrate.get();
+                    gst::trace!(
+                        CAT,
+                        obj = aggregator_pad,
+                        "Received bitrate from tags: {:?}",
+                        bitrate
+                    );
+
+                    if tag.scope() == gst::TagScope::Global {
+                        gst::info!(
+                            CAT,
+                            obj = aggregator_pad,
+                            "Bitrate tags scoped 'global' are considered stream tags",
+                        );
+                    }
+
+                    let mut state = self.state.lock().unwrap();
+                    for stream in &mut state.streams {
+                        if &stream.sinkpad == aggregator_pad {
+                            stream.avg_bitrate = Some(bitrate);
                             break;
                         }
                     }
@@ -1805,6 +1901,8 @@ impl AggregatorImpl for MP4Mux {
                     extra_header_data: stream.extra_header_data.clone(),
                     language_code: stream.language_code,
                     orientation: stream.orientation(),
+                    max_bitrate: stream.max_bitrate,
+                    avg_bitrate: stream.avg_bitrate,
                     chunks: stream.chunks,
                 });
             }

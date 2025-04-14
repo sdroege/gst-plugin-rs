@@ -231,6 +231,10 @@ pub(crate) struct Stream {
     // Language code from tags
     language_code: Option<[u8; 3]>,
 
+    /// Bitrate tags
+    avg_bitrate: Option<u32>,
+    max_bitrate: Option<u32>,
+
     /// Orientation from tags
     orientation: &'static TransformMatrix,
 
