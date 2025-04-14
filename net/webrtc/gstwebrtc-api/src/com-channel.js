@@ -23,34 +23,34 @@ const SignallingServerMessageType = Object.freeze({
   error: "error"
 });
 
-function normalizeProducer(producer, excludedId) {
-  if (!producer || (typeof (producer) !== "object")) {
+function normalizePeer(peer, excludedId) {
+  if (!peer || (typeof (peer) !== "object")) {
     return null;
   }
 
-  const normalizedProducer = {
+  const normalizedPeer = {
     id: "",
     meta: {}
   };
 
-  if (producer.id && (typeof (producer.id) === "string")) {
-    normalizedProducer.id = producer.id;
-  } else if (producer.peerId && (typeof (producer.peerId) === "string")) {
-    normalizedProducer.id = producer.peerId;
+  if (peer.id && (typeof (peer.id) === "string")) {
+    normalizedPeer.id = peer.id;
+  } else if (peer.peerId && (typeof (peer.peerId) === "string")) {
+    normalizedPeer.id = peer.peerId;
   } else {
     return null;
   }
 
-  if (normalizedProducer.id === excludedId) {
+  if (normalizedPeer.id === excludedId) {
     return null;
   }
 
-  if (producer.meta && (typeof (producer.meta) === "object")) {
-    normalizedProducer.meta = producer.meta;
+  if (peer.meta && (typeof (peer.meta) === "object")) {
+    normalizedPeer.meta = peer.meta;
   }
 
-  Object.freeze(normalizedProducer.meta);
-  return Object.freeze(normalizedProducer);
+  Object.freeze(normalizedPeer.meta);
+  return Object.freeze(normalizedPeer);
 }
 
 class ComChannel extends EventTarget {
@@ -64,6 +64,7 @@ class ComChannel extends EventTarget {
     this._channelId = "";
     this._producerSession = null;
     this._consumerSessions = {};
+    this._peers = {};
 
     this._ws.onerror = (event) => {
       this.dispatchEvent(new ErrorEvent("error", {
@@ -112,7 +113,7 @@ class ComChannel extends EventTarget {
             }
             break;
 
-          case SignallingServerMessageType.peerStatusChanged:
+          case SignallingServerMessageType.peerStatusChanged: {
             if (msg.peerId === this._channelId) {
               if (!this._ready && msg.roles.includes("listener")) {
                 this._ready = true;
@@ -123,26 +124,44 @@ class ComChannel extends EventTarget {
               if (this._producerSession && msg.roles.includes("producer")) {
                 this._producerSession.onProducerRegistered();
               }
-            } else {
-              const normalizedProducer = normalizeProducer(msg, this._channelId);
-              if (normalizedProducer) {
-                if (msg.roles.includes("producer")) {
-                  this.dispatchEvent(new CustomEvent("producerAdded", { detail: normalizedProducer }));
-                } else {
-                  this.dispatchEvent(new CustomEvent("producerRemoved", { detail: normalizedProducer }));
-                }
-              }
-            }
-            break;
 
-          case SignallingServerMessageType.list:
-            for (const producer of msg.producers) {
-              const normalizedProducer = normalizeProducer(producer, this._channelId);
-              if (normalizedProducer) {
-                this.dispatchEvent(new CustomEvent("producerAdded", { detail: normalizedProducer }));
+              break;
+            }
+
+            const peer = normalizePeer(msg, this._channelId);
+            if (!peer) {
+              break;
+            }
+
+            const oldRoles = this._peers[msg.peerId] || [];
+            this._peers[msg.peerId] = msg.roles;
+            for (const role of ["producer", "consumer"]) {
+              if (!oldRoles.includes(role) && msg.roles.includes(role)) {
+                this.dispatchEvent(new CustomEvent("peerAdded", { detail: { peer, role } }));
+              } else if (oldRoles.includes(role) && !msg.roles.includes(role)) {
+                this.dispatchEvent(new CustomEvent("peerRemoved", { detail: { peerId: msg.peerId, role } }));
               }
             }
             break;
+          }
+
+          case SignallingServerMessageType.list: {
+            const addPeers = (items, role) => {
+              items.forEach(item => {
+                const peer = normalizePeer(item, this._channelId);
+                if (peer) {
+                  this._peers[peer.id] = [role];
+                  this.dispatchEvent(new CustomEvent("peerAdded", { detail: { peer, role } }));
+                }
+              });
+            };
+
+            this._peers = {};
+            addPeers(msg.producers, "producer");
+            addPeers(msg.consumers, "consumer");
+
+            break;
+          }
 
           case SignallingServerMessageType.sessionStarted:
             {
@@ -228,7 +247,7 @@ class ComChannel extends EventTarget {
     return this._producerSession;
   }
 
-  createProducerSession(stream) {
+  createProducerSession(stream, consumerId) {
     if (!this._ready || !(stream instanceof MediaStream)) {
       return null;
     }
@@ -241,7 +260,7 @@ class ComChannel extends EventTarget {
       }
     }
 
-    const session = new ProducerSession(this, stream);
+    const session = new ProducerSession(this, stream, consumerId);
     this._producerSession = session;
 
     session.addEventListener("closed", () => {

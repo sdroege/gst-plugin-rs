@@ -131,13 +131,14 @@ class ClientSession extends WebRTCSession {
  * @fires {@link GstWebRTCAPI#event:ClientConsumerRemovedEvent}
  */
 class ProducerSession extends EventTarget {
-  constructor(comChannel, stream) {
+  constructor(comChannel, stream, consumerId) {
     super();
 
     this._comChannel = comChannel;
     this._stream = stream;
     this._state = SessionState.idle;
     this._clientSessions = {};
+    this._consumerId = consumerId;
   }
 
   /**
@@ -236,6 +237,21 @@ class ProducerSession extends EventTarget {
     if (this._state === SessionState.connecting) {
       this._state = SessionState.streaming;
       this.dispatchEvent(new Event("stateChanged"));
+    }
+
+    if (this._consumerId) {
+      const msg = {
+        type: "startSession",
+        peerId: this._consumerId
+      };
+      if (!this._comChannel.send(msg)) {
+        this.dispatchEvent(new ErrorEvent("error", {
+          message: "cannot send session request to specified consumer",
+          error: new Error("cannot send startSession message to signaling server")
+        }));
+
+        this.close();
+      }
     }
   }
 

@@ -5,10 +5,12 @@ declare class GstWebRTCAPI {
     unregisterConnectionListener(listener: ConnectionListener): boolean;
     unregisterAllConnectionListeners(): void;
     createProducerSession(stream: MediaStream): ProducerSession;
-    getAvailableProducers(): any[];
-    registerProducersListener(listener: ProducersListener): boolean;
-    unregisterProducersListener(listener: ProducersListener): boolean;
-    unregisterAllProducersListeners(): void;
+    createProducerSessionForConsumer(stream: MediaStream, consumerId: string): ProducerSession;
+    getAvailableProducers(): Peer[];
+    getAvailableConsumers(): Peer[];
+    registerPeerListener(listener: PeerListener): boolean;
+    unregisterPeerListener(listener: PeerListener): boolean;
+    unregisterAllPeerListeners(): void;
     createConsumerSession(producerId: string): ConsumerSession;
     createConsumerSessionWithOfferOptions(producerId: string, offerOptions: RTCOfferOptions): ConsumerSession;
 }
@@ -20,15 +22,17 @@ import type ConsumerSession from "./consumer-session.js";
 import SessionState from "./session-state.js";
 
 /* Added manually */
-interface ConnectionListener {
+export interface ConnectionListener {
     connected(clientId: string): void;
     disconnected(): void;
 }
-interface ProducersListener {
-    producerAdded(producer: Producer): void;
-    producerRemoved(producer: Producer): void;
+export interface PeerListener {
+    producerAdded?(producer: Peer): void;
+    producerRemoved?(producer: Peer): void;
+    consumerAdded?(consumer: Peer): void;
+    consumerRemoved?(consumer: Peer): void;
 }
-type Producer = {
+export type Peer = {
     readonly id: string;
     readonly meta: Record<string, unknown>;
 };

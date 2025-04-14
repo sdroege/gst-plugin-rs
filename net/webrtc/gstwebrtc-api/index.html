@@ -1,11 +1,10 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GstWebRTC API</title>
-  <style>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GstWebRTC API</title>
+    <style>
     body {
       background-color: #3a3f44;
       color: #c8c8c8;
@@ -211,6 +210,19 @@
       text-shadow: 1px 1px 4px #272b30;
     }
 
+    #available-consumers .button {
+      background-color: #98d35e;
+      border: none;
+      padding: 0.5em 0.8em;
+      margin-left: 1em;
+      font-size: 0.8em;
+      cursor: pointer;
+    }
+
+    #available-consumers .button.hidden {
+      display: none;
+    }
+
     @keyframes blink {
       to {
         opacity: 0;
@@ -225,12 +237,89 @@
       width: 640px;
       height: 480px;
     }
-  </style>
-  <script>
+    </style>
+    <script>
+    function startCapture(api, consumerId) {
+      const captureSection = document.getElementById("capture");
+      const videoElement = captureSection.getElementsByTagName("video")[0];
+      const consumerButtons = document.querySelectorAll("#available-consumers .button");
+
+      consumerButtons.forEach(button => button.classList.add("hidden"));
+
+      if (captureSection._producerSession) {
+        captureSection._producerSession.close();
+      } else if (!captureSection.classList.contains("starting")) {
+        captureSection.classList.add("starting");
+
+        const constraints = {
+          video: { width: 1280, height: 720 }
+        };
+        navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
+          const session = consumerId ?
+            api.createProducerSessionForConsumer(stream, consumerId) :
+            api.createProducerSession(stream);
+
+          if (session) {
+            captureSection._producerSession = session;
+
+            session.addEventListener("error", (event) => {
+              if (captureSection._producerSession === session) {
+                console.error(event.message, event.error);
+              }
+            });
+
+            session.addEventListener("closed", () => {
+              if (captureSection._producerSession === session) {
+                videoElement.pause();
+                videoElement.srcObject = null;
+                captureSection.classList.remove("has-session", "starting");
+                delete captureSection._producerSession;
+
+                consumerButtons.forEach(button => button.classList.remove("hidden"));
+              }
+            });
+
+            session.addEventListener("stateChanged", (event) => {
+              if ((captureSection._producerSession === session) &&
+                (event.target.state === GstWebRTCAPI.SessionState.streaming)) {
+                videoElement.srcObject = stream;
+                videoElement.play().catch(() => {});
+                captureSection.classList.remove("starting");
+              }
+            });
+
+            session.addEventListener("clientConsumerAdded", (event) => {
+              if (captureSection._producerSession === session) {
+                console.info(`client consumer added: ${event.detail.peerId}`);
+              }
+            });
+
+            session.addEventListener("clientConsumerRemoved", (event) => {
+              if (captureSection._producerSession === session) {
+                console.info(`client consumer removed: ${event.detail.peerId}`);
+              }
+            });
+
+            captureSection.classList.add("has-session");
+            session.start();
+          } else {
+            for (const track of stream.getTracks()) {
+              track.stop();
+            }
+
+            captureSection.classList.remove("starting");
+          }
+        }).catch((error) => {
+          console.error("cannot have access to webcam and microphone", error);
+          captureSection.classList.remove("starting");
+        });
+      }
+    }
     function initCapture(api) {
       const captureSection = document.getElementById("capture");
       const clientIdElement = captureSection.querySelector(".client-id");
       const videoElement = captureSection.getElementsByTagName("video")[0];
+      const consumerListElement = document.getElementById("available-consumers");
 
       const listener = {
         connected: function(clientId) { clientIdElement.textContent = clientId; },
@@ -238,72 +327,31 @@
       };
       api.registerConnectionListener(listener);
 
+      api.registerPeerListener({
+        consumerAdded: function(consumer) {
+          const li = document.createElement("li");
+          li.id = `consumer-${consumer.id}`;
+          li.textContent = consumer.meta.name || consumer.id;
+
+          const btn = document.createElement("button");
+          btn.className = "button";
+          btn.textContent = "Start capture";
+          btn.addEventListener("click", () => {
+            startCapture(api, consumer.id);
+          });
+
+          li.appendChild(btn);
+          consumerListElement.appendChild(li);
+        },
+        consumerRemoved: function(consumer) {
+          const li = document.getElementById(`consumer-${consumer.id}`);
+          if (li) li.remove();
+        }
+      });
+
       document.getElementById("capture-button").addEventListener("click", (event) => {
         event.preventDefault();
-
-        if (captureSection._producerSession) {
-          captureSection._producerSession.close();
-        } else if (!captureSection.classList.contains("starting")) {
-          captureSection.classList.add("starting");
-
-          const constraints = {
-            video: { width: 1280, height: 720 }
-          };
-          navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
-            const session = api.createProducerSession(stream);
-            if (session) {
-              captureSection._producerSession = session;
-
-              session.addEventListener("error", (event) => {
-                if (captureSection._producerSession === session) {
-                  console.error(event.message, event.error);
-                }
-              });
-
-              session.addEventListener("closed", () => {
-                if (captureSection._producerSession === session) {
-                  videoElement.pause();
-                  videoElement.srcObject = null;
-                  captureSection.classList.remove("has-session", "starting");
-                  delete captureSection._producerSession;
-                }
-              });
-
-              session.addEventListener("stateChanged", (event) => {
-                if ((captureSection._producerSession === session) &&
-                  (event.target.state === GstWebRTCAPI.SessionState.streaming)) {
-                  videoElement.srcObject = stream;
-                  videoElement.play().catch(() => {});
-                  captureSection.classList.remove("starting");
-                }
-              });
-
-              session.addEventListener("clientConsumerAdded", (event) => {
-                if (captureSection._producerSession === session) {
-                  console.info(`client consumer added: ${event.detail.peerId}`);
-                }
-              });
-
-              session.addEventListener("clientConsumerRemoved", (event) => {
-                if (captureSection._producerSession === session) {
-                  console.info(`client consumer removed: ${event.detail.peerId}`);
-                }
-              });
-
-              captureSection.classList.add("has-session");
-              session.start();
-            } else {
-              for (const track of stream.getTracks()) {
-                track.stop();
-              }
-
-              captureSection.classList.remove("starting");
-            }
-          }).catch((error) => {
-            console.error("cannot have access to webcam and microphone", error);
-            captureSection.classList.remove("starting");
-          });
-        }
+        startCapture(api, null);
       });
     }
 
@@ -448,7 +496,7 @@
         }
       };
 
-      api.registerProducersListener(listener);
+      api.registerPeerListener(listener);
       for (const producer of api.getAvailableProducers()) {
         listener.producerAdded(producer);
       }
@@ -472,32 +520,37 @@
       initCapture(api);
       initRemoteStreams(api);
     });
-  </script>
-</head>
-
-<body>
-  <header>
-    <h1>GstWebRTC API</h1>
-  </header>
-  <main>
-    <section id="capture">
-      <span class="client-id">none</span>
-      <button class="button" id="capture-button"></button>
-      <div class="video">
-        <div class="spinner">
-          <div></div>
-          <div></div>
-          <div></div>
-          <div></div>
+    </script>
+  </head>
+  <body>
+    <header>
+      <h1>GstWebRTC API</h1>
+    </header>
+    <main>
+      <section id="capture">
+        <span class="client-id">none</span>
+        <button class="button" id="capture-button"></button>
+        <div class="video">
+          <div class="spinner">
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+          </div>
+          <video>
+          </video>
         </div>
-        <video></video>
-      </div>
-    </section>
-    <section>
-      <h1>Remote Streams</h1>
-      <ul id="remote-streams"></ul>
-    </section>
-  </main>
-</body>
-
+      </section>
+      <section>
+        <h1>Remote streams</h1>
+        <ul id="remote-streams">
+        </ul>
+      </section>
+      <section>
+        <h1>Available consumers</h1>
+        <ul id="available-consumers">
+        </ul>
+      </section>
+    </main>
+  </body>
 </html>

@@ -1,6 +1,6 @@
 {
   "name": "gstwebrtc-api",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Javascript API to integrate GStreamer WebRTC streams (webrtcsrc/webrtcsink) in a web browser",
   "keywords": [
     "webrtc",
@@ -26,8 +26,8 @@
     "directory": "net/webrtc/gstwebrtc-api"
   },
   "type": "module",
-  "main": "./dist/gstwebrtc-api-2.0.0.min.js",
-  "module": "./dist/gstwebrtc-api-2.0.0.esm.js",
+  "main": "./dist/gstwebrtc-api-3.0.0.min.js",
+  "module": "./dist/gstwebrtc-api-3.0.0.esm.js",
   "types": "./types/index.d.ts",
   "files": [
     "dist/",

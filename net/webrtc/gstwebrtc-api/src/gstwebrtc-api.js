@@ -29,8 +29,9 @@ class GstWebRTCAPI {
   constructor(userConfig) {
     this._channel = null;
     this._producers = {};
+    this._consumers = {};
     this._connectionListeners = [];
-    this._producersListeners = [];
+    this._peerListeners = [];
 
     const config = Object.assign({}, defaultConfig);
     if (userConfig && (typeof (userConfig) === "object")) {
@@ -127,12 +128,19 @@ class GstWebRTCAPI {
     return null;
   }
 
+  createProducerSessionForConsumer(stream, consumerId) {
+    if (this._channel) {
+      return this._channel.createProducerSession(stream, consumerId);
+    }
+    return null;
+  }
+
   /**
-   * Information about a remote producer registered by the signaling server.
-   * @typedef {object} Producer
+   * Information about a remote peer registered by the signaling server.
+   * @typedef {object} Peer
    * @readonly
-   * @property {string} id - The remote producer unique identifier set by the signaling server (always non-empty).
-   * @property {object} meta - Free-form object containing extra information about the remote producer (always non-null,
+   * @property {string} id - The unique peer identifier set by the signaling server (always non-empty).
+   * @property {object} meta - Free-form object containing extra information about the peer (always non-null,
    * but may be empty). Its content depends on your application.
    */
 
@@ -141,62 +149,90 @@ class GstWebRTCAPI {
    * <p>The remote producers list is only populated once you've connected to the signaling server. You can use the
    * {@link ConnectionListener} interface and {@link GstWebRTCAPI#registerConnectionListener} method to
    * listen to the connection state.</p>
-   * @returns {Producer[]} The list of remote WebRTC producers available.
+   * @returns {Peer[]} The list of remote WebRTC producers available.
    */
   getAvailableProducers() {
     return Object.values(this._producers);
   }
 
   /**
-   * @interface ProducersListener
+   * Gets the list of all remote WebRTC consumers available on the signaling server.
+   * <p>The remote consumer list is only populated once you've connected to the signaling server. You can use the
+   * {@link ConnectionListener} interface and {@link GstWebRTCAPI#registerConnectionListener} method to
+   * listen to the connection state.</p>
+   * @returns {Peer[]} The list of remote WebRTC consumers available.
+   */
+  getAvailableConsumers() {
+    return Object.values(this._consumers);
+  }
+
+  /**
+   * @interface PeerListener
    */
   /**
    * Callback method called when a remote producer is added on the signaling server.
    * The callback implementation should not throw any exception.
-   * @method ProducersListener#producerAdded
+   * @method PeerListener#producerAdded
    * @abstract
-   * @param {Producer} producer - The remote producer added on server-side.
+   * @param {Peer} producer - The remote producer added on server-side.
    */
   /**
    * Callback method called when a remote producer is removed from the signaling server.
    * The callback implementation should not throw any exception.
-   * @method ProducersListener#producerRemoved
+   * @method PeerListener#producerRemoved
    * @abstract
-   * @param {Producer} producer - The remote producer removed on server-side.
+   * @param {Peer} producer - The remote producer removed on server-side.
    */
+  /**
+   * Callback method called when a remote consumer is added on the signaling server.
+   * The callback implementation should not throw any exception.
+   * @method PeerListener#consumerAdded
+   * @abstract
+   * @param {Peer} consumer - The remote consumer added on server-side.
+   * */
+  /**
+   * Callback method called when a remote consumer is removed from the signaling server.
+   * The callback implementation should not throw any exception.
+   * @method PeerListener#consumerRemoved
+   * @abstract
+   * @param {Peer} consumer - The remote consumer removed on server-side.
+   * */
 
   /**
-   * Registers a producers listener that will be called each time a producer is added or removed on the signaling
-   * server.
-   * @param {ProducersListener} listener - The producer listener to register.
+   * Registers a listener that will be called each time a peer is added or removed on the signaling server.
+   * The listener can implement all or only some of the callback methods.
+   * @param {PeerListener} listener - The peer listener to register.
    * @returns {boolean} true in case of success (or if the listener was already registered), or false if the listener
-   * doesn't implement all callback functions and cannot be registered.
+   * doesn't implement any methods from PeerListener and cannot be registered.
    */
-  registerProducersListener(listener) {
+  registerPeerListener(listener) {
+    // refuse if no methods from PeerListener are implemented
     if (!listener || (typeof (listener) !== "object") ||
-      (typeof (listener.producerAdded) !== "function") ||
-      (typeof (listener.producerRemoved) !== "function")) {
+      ((typeof (listener.producerAdded) !== "function") &&
+       (typeof (listener.producerRemoved) !== "function") &&
+       (typeof (listener.consumerAdded) !== "function") &&
+       (typeof (listener.consumerRemoved) !== "function"))) {
       return false;
     }
 
-    if (!this._producersListeners.includes(listener)) {
-      this._producersListeners.push(listener);
+    if (!this._peerListeners.includes(listener)) {
+      this._peerListeners.push(listener);
     }
 
     return true;
   }
 
   /**
-   * Unregisters a producers listener.<br>
+   * Unregisters a peer listener.<br>
    * The removed listener will never be called again and can be garbage collected.
-   * @param {ProducersListener} listener - The producers listener to unregister.
+   * @param {PeerListener} listener - The peer listener to unregister.
    * @returns {boolean} true if the listener is found and unregistered, or false if the listener was not previously
    * registered.
    */
-  unregisterProducersListener(listener) {
-    const idx = this._producersListeners.indexOf(listener);
+  unregisterPeerListener(listener) {
+    const idx = this._peerListeners.indexOf(listener);
     if (idx >= 0) {
-      this._producersListeners.splice(idx, 1);
+      this._peerListeners.splice(idx, 1);
       return true;
     }
 
@@ -204,10 +240,10 @@ class GstWebRTCAPI {
   }
 
   /**
-   * Unregisters all previously registered producers listeners.
+   * Unregisters all previously registered peer listeners.
    */
-  unregisterAllProducersListeners() {
-    this._producersListeners = [];
+  unregisterAllPeerListeners() {
+    this._peerListeners = [];
   }
 
   /**
@@ -254,7 +290,11 @@ class GstWebRTCAPI {
       for (const key in this._producers) {
         this.triggerProducerRemoved(key);
       }
+      for (const key in this._consumers) {
+        this.triggerConsumerRemoved(key);
+      }
       this._producers = {};
+      this._consumers = {};
       this.triggerDisconnected();
     }
 
@@ -278,7 +318,11 @@ class GstWebRTCAPI {
       for (const key in this._producers) {
         this.triggerProducerRemoved(key);
       }
+      for (const key in this._consumers) {
+        this.triggerConsumerRemoved(key);
+      }
       this._producers = {};
+      this._consumers = {};
       this.triggerDisconnected();
       if (this._config.reconnectionTimeout > 0) {
         window.setTimeout(() => {
@@ -293,15 +337,27 @@ class GstWebRTCAPI {
       }
     });
 
-    this._channel.addEventListener("producerAdded", (event) => {
-      if (event.target === this._channel) {
-        this.triggerProducerAdded(event.detail);
+    this._channel.addEventListener("peerAdded", (event) => {
+      if (event.target !== this._channel) {
+        return;
+      }
+
+      if (event.detail.role === "producer") {
+        this.triggerProducerAdded(event.detail.peer);
+      } else {
+        this.triggerConsumerAdded(event.detail.peer);
       }
     });
 
-    this._channel.addEventListener("producerRemoved", (event) => {
-      if (event.target === this._channel) {
-        this.triggerProducerRemoved(event.detail.id);
+    this._channel.addEventListener("peerRemoved", (event) => {
+      if (event.target !== this._channel) {
+        return;
+      }
+
+      if (event.detail.role === "producer") {
+        this.triggerProducerRemoved(event.detail.peerId);
+      } else {
+        this.triggerConsumerRemoved(event.detail.peerId);
       }
     });
   }
@@ -332,7 +388,11 @@ class GstWebRTCAPI {
     }
 
     this._producers[producer.id] = producer;
-    for (const listener of this._producersListeners) {
+    for (const listener of this._peerListeners) {
+      if (!listener.producerAdded) {
+        continue;
+      }
+
       try {
         listener.producerAdded(producer);
       } catch (ex) {
@@ -342,16 +402,62 @@ class GstWebRTCAPI {
   }
 
   triggerProducerRemoved(producerId) {
-    if (producerId in this._producers) {
-      const producer = this._producers[producerId];
-      delete this._producers[producerId];
+    if (!(producerId in this._producers)) {
+      return;
+    }
 
-      for (const listener of this._producersListeners) {
-        try {
-          listener.producerRemoved(producer);
-        } catch (ex) {
-          console.error("a listener callback should not throw any exception", ex);
-        }
+    const producer = this._producers[producerId];
+    delete this._producers[producerId];
+
+    for (const listener of this._peerListeners) {
+      if (!listener.producerRemoved) {
+        continue;
+      }
+
+      try {
+        listener.producerRemoved(producer);
+      } catch (ex) {
+        console.error("a listener callback should not throw any exception", ex);
+      }
+    }
+  }
+
+  triggerConsumerAdded(consumer) {
+    if (consumer.id in this._consumers) {
+      return;
+    }
+
+    this._consumers[consumer.id] = consumer;
+    for (const listener of this._peerListeners) {
+      if (!listener.consumerAdded) {
+        continue;
+      }
+
+      try {
+        listener.consumerAdded(consumer);
+      } catch (ex) {
+        console.error("a listener callback should not throw any exception", ex);
+      }
+    }
+  }
+
+  triggerConsumerRemoved(consumerId) {
+    if (!(consumerId in this._consumers)) {
+      return;
+    }
+
+    const consumer = this._consumers[consumerId];
+    delete this._consumers[consumerId];
+
+    for (const listener of this._peerListeners) {
+      if (!listener.consumerRemoved) {
+        continue;
+      }
+
+      try {
+        listener.consumerRemoved(consumer);
+      } catch (ex) {
+        console.error("a listener callback should not throw any exception", ex);
       }
     }
   }
