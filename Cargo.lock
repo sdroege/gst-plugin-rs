@@ -2877,6 +2877,7 @@ dependencies = [
  "gstreamer-audio",
  "gstreamer-base",
  "gstreamer-pbutils",
+ "gstreamer-tag",
  "gstreamer-video",
  "num-integer",
  "tempfile",

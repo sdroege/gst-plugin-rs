@@ -267,6 +267,19 @@ impl Stream {
         };
         image_sequence
     }
+
+    fn parse_language_code(lang: &str) -> Option<[u8; 3]> {
+        let lang = gst_tag::language_codes::language_code_iso_639_2t(lang)?;
+        if lang.len() == 3 && lang.chars().all(|c| c.is_ascii_lowercase()) {
+            let mut language_code: [u8; 3] = [0; 3];
+            for (out, c) in Iterator::zip(language_code.iter_mut(), lang.chars()) {
+                *out = c as u8;
+            }
+            Some(language_code)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Default)]
@@ -1457,13 +1470,8 @@ impl AggregatorImpl for MP4Mux {
                     );
 
                     // Language as ISO-639-2/T
-                    if lang.len() == 3 && lang.chars().all(|c| c.is_ascii_lowercase()) {
+                    if let Some(language_code) = Stream::parse_language_code(lang) {
                         let mut state = self.state.lock().unwrap();
-
-                        let mut language_code: [u8; 3] = [0; 3];
-                        for (out, c) in Iterator::zip(language_code.iter_mut(), lang.chars()) {
-                            *out = c as u8;
-                        }
 
                         if tag.scope() == gst::TagScope::Global {
                             gst::info!(
