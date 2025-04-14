@@ -2646,6 +2646,7 @@ dependencies = [
  "gstreamer-audio",
  "gstreamer-base",
  "gstreamer-pbutils",
+ "gstreamer-tag",
  "gstreamer-video",
  "once_cell",
  "tempfile",
