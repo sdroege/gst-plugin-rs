@@ -203,6 +203,9 @@ pub(crate) struct Stream {
     // More data to be included in the fragmented stream header
     extra_header_data: Option<Vec<u8>>,
 
+    // Language code from tags
+    language_code: Option<[u8; 3]>,
+
     /// Orientation from tags
     orientation: Option<ImageOrientation>,
 
@@ -220,7 +223,6 @@ pub(crate) struct Header {
     /// Pre-defined movie timescale if not 0.
     movie_timescale: u32,
     streams: Vec<Stream>,
-    language_code: Option<[u8; 3]>,
 }
 
 #[allow(clippy::upper_case_acronyms)]
