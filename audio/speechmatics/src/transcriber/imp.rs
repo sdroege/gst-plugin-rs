@@ -878,11 +878,19 @@ impl TranscriberSrcPad {
     }
 
     fn start_task(&self) -> Result<(), gst::LoggableError> {
+        let mut state = self.state.lock().unwrap();
+
+        if state.sender.is_some() {
+            gst::debug!(CAT, imp = self, "Have task already");
+            return Ok(());
+        }
+
         let this_weak = self.downgrade();
         let pad_weak = self.obj().downgrade();
         let (sender, mut receiver) = mpsc::channel(1);
 
-        self.state.lock().unwrap().sender = Some(sender);
+        state.sender = Some(sender);
+        drop(state);
 
         let res = self.obj().start_task(move || {
             let Some(this) = this_weak.upgrade() else {
