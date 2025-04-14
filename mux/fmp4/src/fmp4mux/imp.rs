@@ -3454,7 +3454,8 @@ impl FMP4Mux {
                             );
                         }
                         language_code = Stream::parse_language_code(lang);
-                    } else if let Some(orientation) = tag.get::<gst::tags::ImageOrientation>() {
+                    }
+                    if let Some(orientation) = tag.get::<gst::tags::ImageOrientation>() {
                         gst::trace!(
                             CAT,
                             obj = pad,
@@ -3467,7 +3468,8 @@ impl FMP4Mux {
                         } else {
                             stream_orientation = Some(TransformMatrix::from_tag(self, ev));
                         }
-                    } else if let Some(bitrate) = tag
+                    }
+                    if let Some(bitrate) = tag
                         .get::<gst::tags::MaximumBitrate>()
                         .filter(|br| br.get() > 0 && br.get() < u32::MAX)
                     {
@@ -3487,7 +3489,8 @@ impl FMP4Mux {
                             );
                         }
                         max_bitrate = Some(bitrate);
-                    } else if let Some(bitrate) = tag
+                    }
+                    if let Some(bitrate) = tag
                         .get::<gst::tags::Bitrate>()
                         .filter(|br| br.get() > 0 && br.get() < u32::MAX)
                     {
@@ -4430,7 +4433,8 @@ impl AggregatorImpl for FMP4Mux {
                             stream.language_code = Some(language_code);
                         }
                     }
-                } else if let Some(tag_value) = tag.get::<gst::tags::ImageOrientation>() {
+                }
+                if let Some(tag_value) = tag.get::<gst::tags::ImageOrientation>() {
                     let orientation = tag_value.get();
                     gst::trace!(
                         CAT,
