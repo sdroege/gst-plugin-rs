@@ -1235,6 +1235,16 @@ impl AggregatorImpl for MP4Mux {
                 }
                 self.parent_sink_event_pre_queue(aggregator_pad, event)
             }
+            _ => self.parent_sink_event_pre_queue(aggregator_pad, event),
+        }
+    }
+
+    fn sink_event(&self, aggregator_pad: &gst_base::AggregatorPad, event: gst::Event) -> bool {
+        use gst::EventView;
+
+        gst::trace!(CAT, obj = aggregator_pad, "Handling event {event:?}");
+
+        match event.view() {
             EventView::Tag(ev) => {
                 let tag = ev.tag();
 
@@ -1300,21 +1310,6 @@ impl AggregatorImpl for MP4Mux {
                         }
                     }
                 }
-
-                self.parent_sink_event_pre_queue(aggregator_pad, event)
-            }
-            _ => self.parent_sink_event_pre_queue(aggregator_pad, event),
-        }
-    }
-
-    fn sink_event(&self, aggregator_pad: &gst_base::AggregatorPad, event: gst::Event) -> bool {
-        use gst::EventView;
-
-        gst::trace!(CAT, obj = aggregator_pad, "Handling event {event:?}");
-
-        match event.view() {
-            EventView::Tag(_ev) => {
-                // TODO: Maybe store for putting into the header at the end?
 
                 self.parent_sink_event(aggregator_pad, event)
             }
