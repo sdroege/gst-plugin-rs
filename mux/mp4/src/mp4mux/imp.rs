@@ -1254,7 +1254,8 @@ impl AggregatorImpl for MP4Mux {
                         }
                         state.language_code = Some(language_code);
                     }
-                } else if let Some(tag_value) = ev.tag().get::<gst::tags::ImageOrientation>() {
+                }
+                if let Some(tag_value) = ev.tag().get::<gst::tags::ImageOrientation>() {
                     let orientation = tag_value.get();
                     gst::trace!(
                         CAT,
