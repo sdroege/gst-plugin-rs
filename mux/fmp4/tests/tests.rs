@@ -3354,3 +3354,113 @@ fn test_cmaf_manual_split() {
     let ev = h.pull_event().unwrap();
     assert_eq!(ev.type_(), gst::EventType::Eos);
 }
+
+#[test]
+fn test_multi_stream_late_key_frame() {
+    init();
+
+    let mut h1 = gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"));
+    let mut h2 = gst_check::Harness::with_element(&h1.element().unwrap(), Some("sink_1"), None);
+
+    // 5s fragment duration
+    h1.element()
+        .unwrap()
+        .set_property("fragment-duration", 5.seconds());
+
+    h1.set_src_caps(
+        gst::Caps::builder("audio/mpeg")
+            .field("mpegversion", 4i32)
+            .field("channels", 1i32)
+            .field("rate", 44100i32)
+            .field("stream-format", "raw")
+            .field("base-profile", "lc")
+            .field("profile", "lc")
+            .field("level", "2")
+            .field(
+                "codec_data",
+                gst::Buffer::from_slice([0x12, 0x08, 0x56, 0xe5, 0x00]),
+            )
+            .build(),
+    );
+    h1.play();
+
+    h2.set_src_caps(
+        gst::Caps::builder("video/x-h264")
+            .field("width", 1920i32)
+            .field("height", 1080i32)
+            .field("framerate", gst::Fraction::new(30, 1))
+            .field("stream-format", "avc")
+            .field("alignment", "au")
+            .field("codec_data", gst::Buffer::with_size(1).unwrap())
+            .build(),
+    );
+    h2.play();
+
+    // 5 frames fit into the fragment, then next frame is key-frame
+    // outside first fragment
+    for i in 0..8 {
+        let mut buffer = gst::Buffer::with_size(1).unwrap();
+        {
+            let buffer = buffer.get_mut().unwrap();
+            buffer.set_pts(i.seconds());
+            buffer.set_dts(i.seconds());
+            buffer.set_duration(gst::ClockTime::SECOND);
+        }
+        assert_eq!(h1.push(buffer), Ok(gst::FlowSuccess::Ok));
+
+        let mut buffer = gst::Buffer::with_size(1).unwrap();
+        {
+            let buffer = buffer.get_mut().unwrap();
+            buffer.set_pts(i.seconds());
+            buffer.set_dts(i.seconds());
+            buffer.set_duration(gst::ClockTime::SECOND);
+            if i != 6 {
+                buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
+            }
+        }
+        assert_eq!(h2.push(buffer), Ok(gst::FlowSuccess::Ok));
+    }
+
+    // Crank the clock: this should bring us to the end of the 1st fragment
+    h1.crank_single_clock_wait().unwrap();
+
+    // global and fragment header and 5 from from the audio stream (no
+    // video) because of the missing key frame
+    for _ in 0..7 {
+        let _ = h1.pull().unwrap();
+    }
+    assert_eq!(h1.buffers_in_queue(), 0);
+
+    // 5 frames fit into the fragment, push 6 complete the fragment,
+    for i in 8..15 {
+        let mut buffer = gst::Buffer::with_size(1).unwrap();
+        {
+            let buffer = buffer.get_mut().unwrap();
+            buffer.set_pts(i.seconds());
+            buffer.set_dts(i.seconds());
+            buffer.set_duration(gst::ClockTime::SECOND);
+        }
+        assert_eq!(h1.push(buffer), Ok(gst::FlowSuccess::Ok));
+
+        let mut buffer = gst::Buffer::with_size(1).unwrap();
+        {
+            let buffer = buffer.get_mut().unwrap();
+            buffer.set_pts(i.seconds());
+            buffer.set_dts(i.seconds());
+            buffer.set_duration(gst::ClockTime::SECOND);
+            if i != 13 {
+                buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
+            }
+        }
+        assert_eq!(h2.push(buffer), Ok(gst::FlowSuccess::Ok));
+    }
+
+    // Crank the clock: this should bring us to the end of the 2nd fragment
+    h1.crank_single_clock_wait().unwrap();
+
+    // fragment header and 2x5 from both audio and video this time
+    for _ in 0..16 {
+        let _ = h1.pull().unwrap();
+    }
+    assert_eq!(h1.buffers_in_queue(), 0);
+}
