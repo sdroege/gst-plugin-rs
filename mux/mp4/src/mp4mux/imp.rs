@@ -21,7 +21,8 @@ use std::sync::Mutex;
 use crate::mp4mux::obu::read_seq_header_obu_bytes;
 use std::sync::LazyLock;
 
-use super::{boxes, ImageOrientation};
+use super::boxes;
+use super::TransformMatrix;
 
 /// Offset between NTP and UNIX epoch in seconds.
 /// NTP = UNIX + NTP_UNIX_OFFSET.
@@ -66,7 +67,7 @@ fn running_time_to_utc_time(
         .and_then(|res| res.positive())
 }
 
-static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
+pub(crate) static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "mp4mux",
         gst::DebugColorFlags::empty(),
@@ -151,8 +152,9 @@ struct Stream {
     /// Language code from tags
     language_code: Option<[u8; 3]>,
 
-    /// Orientation from tags
-    orientation: Option<ImageOrientation>,
+    /// Orientation from tags, stream orientation takes precedence over global orientation
+    global_orientation: &'static TransformMatrix,
+    stream_orientation: Option<&'static TransformMatrix>,
 }
 
 impl Stream {
@@ -266,6 +268,10 @@ impl Stream {
                 .image_sequence_mode
         };
         image_sequence
+    }
+
+    fn orientation(&self) -> &'static TransformMatrix {
+        self.stream_orientation.unwrap_or(self.global_orientation)
     }
 
     fn parse_language_code(lang: &str) -> Option<[u8; 3]> {
@@ -1234,7 +1240,8 @@ impl MP4Mux {
                 running_time_utc_time_mapping: None,
                 extra_header_data: None,
                 language_code: None,
-                orientation: None,
+                global_orientation: &super::IDENTITY_MATRIX,
+                stream_orientation: None,
             });
         }
 
@@ -1500,18 +1507,12 @@ impl AggregatorImpl for MP4Mux {
                     let mut state = self.state.lock().unwrap();
                     for stream in &mut state.streams {
                         if &stream.sinkpad == aggregator_pad {
-                            stream.orientation = match orientation {
-                                "rotate-0" => Some(ImageOrientation::Rotate0),
-                                "rotate-90" => Some(ImageOrientation::Rotate90),
-                                "rotate-180" => Some(ImageOrientation::Rotate180),
-                                "rotate-270" => Some(ImageOrientation::Rotate270),
-                                // TODO:
-                                // "flip-rotate-0" => Some(ImageOrientation::FlipRotate0),
-                                // "flip-rotate-90" => Some(ImageOrientation::FlipRotate90),
-                                // "flip-rotate-180" => Some(ImageOrientation::FlipRotate180),
-                                // "flip-rotate-270" => Some(ImageOrientation::FlipRotate270),
-                                _ => None,
-                            };
+                            let orientation = TransformMatrix::from_tag(self, ev);
+                            if tag.scope() == gst::TagScope::Stream {
+                                stream.stream_orientation = Some(orientation);
+                            } else {
+                                stream.global_orientation = orientation;
+                            }
                             break;
                         }
                     }
@@ -1754,10 +1755,10 @@ impl AggregatorImpl for MP4Mux {
                         Vec::new()
                     }),
                     image_sequence: stream.image_sequence_mode(),
-                    chunks: stream.chunks,
                     extra_header_data: stream.extra_header_data.clone(),
                     language_code: stream.language_code,
-                    orientation: stream.orientation,
+                    orientation: stream.orientation(),
+                    chunks: stream.chunks,
                 });
             }
 

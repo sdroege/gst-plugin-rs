@@ -14,8 +14,6 @@ use std::str::FromStr;
 use std::sync::LazyLock;
 use std::{collections::BTreeMap, convert::TryFrom};
 
-use super::{ImageOrientation, IDENTITY_MATRIX};
-
 fn write_box<T, F: FnOnce(&mut Vec<u8>) -> Result<T, Error>>(
     vec: &mut Vec<u8>,
     fourcc: impl std::borrow::Borrow<[u8; 4]>,
@@ -364,11 +362,8 @@ fn write_tkhd(
 
     // Matrix
     let matrix = match s.name().as_str() {
-        x if x.starts_with("video/") || x.starts_with("image/") => stream
-            .orientation
-            .unwrap_or(ImageOrientation::Rotate0)
-            .transform_matrix(),
-        _ => &IDENTITY_MATRIX,
+        x if x.starts_with("video/") || x.starts_with("image/") => stream.orientation,
+        _ => &super::IDENTITY_MATRIX,
     };
     v.extend(matrix.iter().flatten());
 
