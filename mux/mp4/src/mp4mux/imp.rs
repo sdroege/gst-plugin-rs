@@ -1181,7 +1181,8 @@ impl MP4Mux {
                             );
                         }
                         language_code = Stream::parse_language_code(lang);
-                    } else if let Some(orientation) = tag.get::<gst::tags::ImageOrientation>() {
+                    }
+                    if let Some(orientation) = tag.get::<gst::tags::ImageOrientation>() {
                         gst::trace!(
                             CAT,
                             obj = pad,
@@ -1194,7 +1195,8 @@ impl MP4Mux {
                         } else {
                             stream_orientation = Some(TransformMatrix::from_tag(self, ev));
                         }
-                    } else if let Some(bitrate) = tag
+                    }
+                    if let Some(bitrate) = tag
                         .get::<gst::tags::MaximumBitrate>()
                         .filter(|br| br.get() > 0 && br.get() < u32::MAX)
                     {
@@ -1214,7 +1216,8 @@ impl MP4Mux {
                             );
                         }
                         max_bitrate = Some(bitrate);
-                    } else if let Some(bitrate) = tag
+                    }
+                    if let Some(bitrate) = tag
                         .get::<gst::tags::Bitrate>()
                         .filter(|br| br.get() > 0 && br.get() < u32::MAX)
                     {
@@ -1584,7 +1587,8 @@ impl AggregatorImpl for MP4Mux {
                             }
                         }
                     }
-                } else if let Some(tag_value) = ev.tag().get::<gst::tags::ImageOrientation>() {
+                }
+                if let Some(tag_value) = ev.tag().get::<gst::tags::ImageOrientation>() {
                     let orientation = tag_value.get();
                     gst::trace!(
                         CAT,
@@ -1605,7 +1609,8 @@ impl AggregatorImpl for MP4Mux {
                             break;
                         }
                     }
-                } else if let Some(bitrate) = tag
+                }
+                if let Some(bitrate) = tag
                     .get::<gst::tags::MaximumBitrate>()
                     .filter(|br| br.get() > 0 && br.get() < u32::MAX)
                 {
@@ -1632,7 +1637,8 @@ impl AggregatorImpl for MP4Mux {
                             break;
                         }
                     }
-                } else if let Some(bitrate) = tag
+                }
+                if let Some(bitrate) = tag
                     .get::<gst::tags::Bitrate>()
                     .filter(|br| br.get() > 0 && br.get() < u32::MAX)
                 {
