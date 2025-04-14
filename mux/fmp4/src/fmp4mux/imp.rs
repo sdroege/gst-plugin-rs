@@ -2700,7 +2700,8 @@ impl FMP4Mux {
                             );
                         }
                         language_code = Stream::parse_language_code(l.get());
-                    } else if tag.get::<gst::tags::ImageOrientation>().is_some() {
+                    }
+                    if tag.get::<gst::tags::ImageOrientation>().is_some() {
                         if tag.scope() == gst::TagScope::Global {
                             global_orientation = TransformMatrix::from_tag(self, ev);
                         } else {
@@ -3340,7 +3341,8 @@ impl AggregatorImpl for FMP4Mux {
                             stream.language_code = Some(language_code);
                         }
                     }
-                } else if let Some(tag_value) = tag.get::<gst::tags::ImageOrientation>() {
+                }
+                if let Some(tag_value) = tag.get::<gst::tags::ImageOrientation>() {
                     let orientation = tag_value.get();
                     gst::trace!(
                         CAT,
