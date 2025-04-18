@@ -489,9 +489,7 @@ impl ElementImpl for LiveSync {
                 let notify = !state.silent;
                 drop(state);
                 if notify {
-                    self.obj().notify(PROP_IN);
                     self.obj().notify(PROP_DROP);
-                    self.obj().notify(PROP_OUT);
                     self.obj().notify(PROP_DUPLICATE);
                 }
             }
@@ -1211,14 +1209,12 @@ impl LiveSync {
         let mut caps = None;
         let mut segment = None;
 
-        let mut notify_in = false;
         let mut notify_dup = false;
         let mut notify_drop = false;
 
         match in_buffer {
             Some((mut buffer, timestamp, BufferLateness::OnTime)) => {
                 state.num_in += 1;
-                notify_in = !state.silent;
 
                 if state.out_buffer.is_none() || state.out_buffer_duplicate {
                     // We are just starting or done bridging a gap
@@ -1238,7 +1234,6 @@ impl LiveSync {
             {
                 gst::debug!(CAT, imp = self, "Accepting late {:?}", buffer);
                 state.num_in += 1;
-                notify_in = !state.silent;
 
                 self.patch_output_buffer(&mut state, Some(buffer))?;
                 notify_dup = !state.silent;
@@ -1317,13 +1312,7 @@ impl LiveSync {
         }
 
         state.num_out += 1;
-        let notify_out = !state.silent;
-
         drop(state);
-
-        if notify_in {
-            self.obj().notify(PROP_IN);
-        }
 
         if notify_dup {
             self.obj().notify(PROP_DUPLICATE);
@@ -1331,10 +1320,6 @@ impl LiveSync {
 
         if notify_drop {
             self.obj().notify(PROP_DROP);
-        }
-
-        if notify_out {
-            self.obj().notify(PROP_OUT);
         }
 
         gst::trace!(CAT, imp = self, "Pushing {buffer:?}");
