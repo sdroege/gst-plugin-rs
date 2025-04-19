@@ -164,6 +164,9 @@ fn cmaf_brands_from_caps(caps: &gst::CapsRef, compatible_brands: &mut Vec<&'stat
         "audio/mpeg" => {
             compatible_brands.push(b"caac");
         }
+        "audio/x-eac3" => {
+            compatible_brands.push(b"ceac");
+        }
         "audio/x-opus" => {
             compatible_brands.push(b"opus");
         }
@@ -671,7 +674,7 @@ fn write_tkhd(
     let s = stream.caps.structure(0).unwrap();
     match s.name().as_str() {
         "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
-        | "audio/x-adpcm" => v.extend((1u16 << 8).to_be_bytes()),
+        | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" => v.extend((1u16 << 8).to_be_bytes()),
         _ => v.extend(0u16.to_be_bytes()),
     }
 
@@ -798,7 +801,9 @@ fn write_hdlr(
         "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
         | "image/jpeg" => (b"vide", b"VideoHandler\0".as_slice()),
         "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
-        | "audio/x-adpcm" => (b"soun", b"SoundHandler\0".as_slice()),
+        | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" => {
+            (b"soun", b"SoundHandler\0".as_slice())
+        }
         "application/x-onvif-metadata" => (b"meta", b"MetadataHandler\0".as_slice()),
         _ => unreachable!(),
     };
@@ -829,7 +834,7 @@ fn write_minf(
             write_full_box(v, b"vmhd", FULL_BOX_VERSION_0, 1, |v| write_vmhd(v, cfg))?
         }
         "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
-        | "audio/x-adpcm" => {
+        | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" => {
             write_full_box(v, b"smhd", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
                 write_smhd(v, cfg)
             })?
@@ -939,7 +944,9 @@ fn write_stsd(
         "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
         | "image/jpeg" => write_visual_sample_entry(v, cfg, stream)?,
         "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
-        | "audio/x-adpcm" => write_audio_sample_entry(v, cfg, stream)?,
+        | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" => {
+            write_audio_sample_entry(v, cfg, stream)?
+        }
         "application/x-onvif-metadata" => write_xml_meta_data_sample_entry(v, cfg, stream)?,
         _ => unreachable!(),
     }
@@ -1382,6 +1389,8 @@ fn write_audio_sample_entry(
                 _ => unreachable!(),
             }
         }
+        "audio/x-ac3" => b"ac-3",
+        "audio/x-eac3" => b"ec-3",
         _ => unreachable!(),
     };
 
@@ -1441,6 +1450,16 @@ fn write_audio_sample_entry(
             }
             "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
                 // Nothing to do here
+            }
+            "audio/x-ac3" => {
+                assert!(!stream.codec_specific_boxes.is_empty());
+                assert!(&stream.codec_specific_boxes[4..8] == b"dac3");
+                v.extend_from_slice(&stream.codec_specific_boxes);
+            }
+            "audio/x-eac3" => {
+                assert!(!stream.codec_specific_boxes.is_empty());
+                assert!(&stream.codec_specific_boxes[4..8] == b"dec3");
+                v.extend_from_slice(&stream.codec_specific_boxes);
             }
             _ => unreachable!(),
         }
@@ -2387,4 +2406,533 @@ pub(crate) fn create_mfra(
     v[offset..][..4].copy_from_slice(&len.to_be_bytes());
 
     Ok(gst::Buffer::from_mut_slice(v))
+}
+
+/// Create AC-3 `dac3` box.
+pub(crate) fn create_dac3(buffer: &gst::BufferRef) -> Result<Vec<u8>, Error> {
+    use bitstream_io::{BitRead as _, BitWrite as _};
+
+    let map = buffer
+        .map_readable()
+        .context("Mapping AC-3 buffer readable")?;
+    let mut reader = bitstream_io::BitReader::endian(
+        std::io::Cursor::new(map.as_slice()),
+        bitstream_io::BigEndian,
+    );
+
+    let header = reader
+        .parse::<ac3::Header>()
+        .context("Parsing AC-3 header")?;
+
+    let mut dac3 = Vec::with_capacity(11);
+    let mut writer = bitstream_io::BitWriter::endian(&mut dac3, bitstream_io::BigEndian);
+    writer
+        .build(&ac3::Dac3 { header })
+        .context("Writing dac3 box")?;
+
+    Ok(dac3)
+}
+
+/// Create EAC-3 `dec3` box.
+pub(crate) fn create_dec3(buffer: &gst::BufferRef) -> Result<Vec<u8>, Error> {
+    use bitstream_io::{BitRead as _, BitWrite as _};
+
+    let map = buffer
+        .map_readable()
+        .context("Mapping EAC-3 buffer readable")?;
+
+    let mut slice = map.as_slice();
+    let mut headers = Vec::new();
+
+    while !slice.is_empty() {
+        let mut reader =
+            bitstream_io::BitReader::endian(std::io::Cursor::new(slice), bitstream_io::BigEndian);
+        let header = reader
+            .parse::<eac3::Header>()
+            .context("Parsing EAC-3 header")?;
+
+        let framesize = (header.bsi.frmsiz as usize + 1) * 2;
+        if slice.len() < framesize {
+            bail!("Incomplete EAC-3 frame");
+        }
+
+        headers.push(header);
+
+        slice = &slice[framesize..];
+    }
+
+    let mut dec3 = Vec::new();
+    let mut writer = bitstream_io::BitWriter::endian(&mut dec3, bitstream_io::BigEndian);
+    writer
+        .build(&eac3::Dec3 { headers })
+        .context("Writing dec3 box")?;
+
+    Ok(dec3)
+}
+
+mod ac3 {
+    use anyhow::{bail, Context, Error};
+    use bitstream_io::{FromBitStream, ToBitStream};
+
+    #[derive(Debug, Clone, Copy)]
+    pub struct Header {
+        syncinfo: SyncInfo,
+        bsi: Bsi,
+    }
+
+    impl FromBitStream for Header {
+        type Error = Error;
+
+        fn from_reader<R: bitstream_io::BitRead + ?Sized>(r: &mut R) -> Result<Self, Self::Error>
+        where
+            Self: Sized,
+        {
+            let syncinfo = r.parse::<SyncInfo>().context("syncinfo")?;
+            let bsi = r.parse::<Bsi>().context("bsi")?;
+
+            Ok(Header { syncinfo, bsi })
+        }
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    struct SyncInfo {
+        // skipping crc1
+        fscod: u8,
+        frmsizecod: u8,
+    }
+
+    impl FromBitStream for SyncInfo {
+        type Error = Error;
+
+        fn from_reader<R: bitstream_io::BitRead + ?Sized>(r: &mut R) -> Result<Self, Self::Error>
+        where
+            Self: Sized,
+        {
+            let _syncword = r.read_to::<u16>().context("syncword")?;
+            if _syncword != 0x0b77 {
+                bail!("Invalid syncword");
+            }
+
+            r.skip(16).context("crc1")?;
+
+            let fscod = r.read::<2, u8>().context("fscod")?;
+            let frmsizecod = r.read::<6, u8>().context("frmsizecod")?;
+
+            Ok(SyncInfo { fscod, frmsizecod })
+        }
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    struct Bsi {
+        bsid: u8,
+        bsmod: u8,
+        acmod: u8,
+        // skipping cmixlev, surmixlev, dsurmod
+        lfeon: bool,
+    }
+
+    impl FromBitStream for Bsi {
+        type Error = Error;
+
+        fn from_reader<R: bitstream_io::BitRead + ?Sized>(r: &mut R) -> Result<Self, Self::Error>
+        where
+            Self: Sized,
+        {
+            let bsid = r.read::<5, u8>().context("bsid")?;
+            let bsmod = r.read::<3, u8>().context("bsmod")?;
+            let acmod = r.read::<3, u8>().context("acmod")?;
+
+            if acmod & 0x01 != 0 && acmod != 0x01 {
+                r.skip(2).context("cmixlev")?;
+            }
+            if acmod & 0x04 != 0 {
+                r.skip(2).context("surmixlev")?;
+            }
+            if acmod == 0x02 {
+                r.skip(2).context("dsurmod")?;
+            }
+
+            let lfeon = r.read_bit().context("lfeon")?;
+
+            Ok(Bsi {
+                bsid,
+                bsmod,
+                acmod,
+                lfeon,
+            })
+        }
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    pub(crate) struct Dac3 {
+        pub header: Header,
+    }
+
+    impl ToBitStream for Dac3 {
+        type Error = Error;
+
+        fn to_writer<W: bitstream_io::BitWrite + ?Sized>(
+            &self,
+            w: &mut W,
+        ) -> Result<(), Self::Error>
+        where
+            Self: Sized,
+        {
+            w.write_from::<u32>(11).context("size")?;
+            w.write_bytes(b"dac3").context("type")?;
+
+            w.write::<2, u8>(self.header.syncinfo.fscod)
+                .context("fscod")?;
+            w.write::<5, u8>(self.header.bsi.bsid).context("bsid")?;
+            w.write::<3, u8>(self.header.bsi.bsmod).context("bsmod")?;
+            w.write::<3, u8>(self.header.bsi.acmod).context("acmod")?;
+            w.write_bit(self.header.bsi.lfeon).context("lfeon")?;
+            w.write::<5, u8>(self.header.syncinfo.frmsizecod >> 1)
+                .context("bit_rate_code")?;
+            w.write::<5, u8>(0).context("reserved")?;
+
+            assert!(w.byte_aligned());
+
+            Ok(())
+        }
+    }
+}
+
+mod eac3 {
+    use anyhow::{bail, Context, Error};
+    use bitstream_io::{FromBitStream, ToBitStream};
+
+    const NUM_BLOCKS: [u8; 4] = [1, 2, 3, 6];
+    const SAMPLE_RATES: [u16; 4] = [48000, 44100, 32000, 0];
+
+    #[derive(Debug, Clone, Copy)]
+    pub struct Header {
+        #[expect(unused)]
+        pub syncinfo: SyncInfo,
+        pub bsi: Bsi,
+    }
+
+    impl FromBitStream for Header {
+        type Error = Error;
+
+        fn from_reader<R: bitstream_io::BitRead + ?Sized>(r: &mut R) -> Result<Self, Self::Error>
+        where
+            Self: Sized,
+        {
+            let syncinfo = r.parse::<SyncInfo>().context("syncinfo")?;
+            let bsi = r.parse::<Bsi>().context("bsi")?;
+
+            Ok(Header { syncinfo, bsi })
+        }
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    pub struct SyncInfo {
+        // No fields for EAC-3
+    }
+
+    impl FromBitStream for SyncInfo {
+        type Error = Error;
+
+        fn from_reader<R: bitstream_io::BitRead + ?Sized>(r: &mut R) -> Result<Self, Self::Error>
+        where
+            Self: Sized,
+        {
+            let _syncword = r.read_to::<u16>().context("syncword")?;
+            if _syncword != 0x0b77 {
+                bail!("Invalid syncword");
+            }
+
+            Ok(SyncInfo {})
+        }
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    pub struct Bsi {
+        #[expect(unused)]
+        pub strmtyp: u8,
+        pub substreamid: u8,
+        pub frmsiz: u16,
+        pub fscod: u8,
+        pub fscod2: Option<u8>,
+        pub numblkscod: u8,
+        pub acmod: u8,
+        pub lfeon: bool,
+        pub bsid: u8,
+        // skipping dialnorm, compre, compr, dialnorm2, compr2e
+        pub chanmap: Option<u16>,
+        // skipping ...
+        pub bsmod: u8,
+    }
+
+    impl FromBitStream for Bsi {
+        type Error = Error;
+
+        fn from_reader<R: bitstream_io::BitRead + ?Sized>(r: &mut R) -> Result<Self, Self::Error>
+        where
+            Self: Sized,
+        {
+            let strmtyp = r.read::<2, u8>().context("strmtyp")?;
+            let substreamid = r.read::<3, u8>().context("substreamid")?;
+            let frmsiz = r.read::<11, u16>().context("frmsiz")?;
+            let fscod = r.read::<2, u8>().context("fscod")?;
+
+            let fscod2;
+            let numblkscod;
+            if fscod == 0x3 {
+                fscod2 = Some(r.read::<2, u8>().context("fscod2")?);
+
+                numblkscod = 6;
+            } else {
+                fscod2 = None;
+                numblkscod = r.read::<2, u8>().context("numblkscod")?;
+            }
+            let number_of_blocks_per_sync_frame = NUM_BLOCKS[numblkscod as usize];
+
+            let acmod = r.read::<3, u8>().context("acmod")?;
+            let lfeon = r.read_bit().context("lfeon")?;
+            let bsid = r.read::<5, u8>().context("bsid")?;
+
+            r.skip(5).context("dialnorm")?;
+            let compre = r.read_bit().context("compre")?;
+            if compre {
+                r.skip(8).context("compr")?;
+            }
+
+            if acmod == 0x00 {
+                r.skip(5).context("dialnorm2")?;
+                let compr2e = r.read_bit().context("compr2e")?;
+                if compr2e {
+                    r.skip(8).context("compr2")?;
+                }
+            }
+
+            let mut chanmap = None;
+            if strmtyp == 0x1 {
+                let chanmape = r.read_bit().context("chanmap2")?;
+                if chanmape {
+                    chanmap = Some(r.read::<16, u16>().context("chanmap")?);
+                }
+            }
+
+            let mixmdate = r.read_bit().context("mixmdate")?;
+            if mixmdate {
+                if acmod > 0x2 {
+                    r.skip(2).context("dmixmod")?;
+                }
+                if acmod & 0x1 != 0 && acmod > 0x2 {
+                    r.skip(3).context("ltrtcmixlev")?;
+                    r.skip(3).context("lorocmixlev")?;
+                }
+                if acmod & 0x4 != 0 {
+                    r.skip(3).context("ltrtsurmixlev")?;
+                    r.skip(3).context("lorosurmixlev")?;
+                }
+                if lfeon {
+                    let lfemixlevcode = r.read_bit().context("lfemixlevcode")?;
+                    if lfemixlevcode {
+                        r.skip(5).context("lfemixlevcod")?;
+                    }
+                }
+
+                if strmtyp == 0x0 {
+                    let pgmscle = r.read_bit().context("pgmscle")?;
+                    if pgmscle {
+                        r.skip(6).context("pgmscl")?;
+                    }
+                }
+
+                if acmod == 0x0 {
+                    let pgmscl2e = r.read_bit().context("pgmscl2e")?;
+                    if pgmscl2e {
+                        r.skip(6).context("pgmscl2")?;
+                    }
+                }
+
+                let extpgmscle = r.read_bit().context("extpgmscle")?;
+                if extpgmscle {
+                    r.skip(6).context("extpgmscl")?;
+                }
+
+                let mixdef = r.read::<2, u8>().context("mixdef")?;
+                match mixdef {
+                    0x0 => {}
+                    0x1 => {
+                        r.skip(1).context("premixcmpsel")?;
+                        r.skip(1).context("drcsrc")?;
+                        r.skip(3).context("premixcmpscl")?;
+                    }
+                    0x2 => {
+                        r.skip(12).context("mixdata")?;
+                    }
+                    0x3 => {
+                        let mixdeflen = r.read::<5, u8>().context("mixdeflen")?;
+                        r.skip((mixdeflen as u32 + 2) * 8).context("mixdata")?;
+                    }
+                    _ => unreachable!(),
+                }
+
+                if acmod < 0x2 {
+                    let paninfoe = r.read_bit().context("paninfoe")?;
+                    if paninfoe {
+                        r.skip(8).context("panmean")?;
+                        r.skip(6).context("paninfo")?;
+                    }
+
+                    if acmod == 0x00 {
+                        let paninfo2e = r.read_bit().context("paninfo2e")?;
+                        if paninfo2e {
+                            r.skip(8).context("panmean2")?;
+                            r.skip(6).context("paninfo2")?;
+                        }
+                    }
+                }
+
+                let frmmixcfginfoe = r.read_bit().context("frmmixcfginfoe")?;
+                if frmmixcfginfoe {
+                    if numblkscod == 0 {
+                        r.skip(5).context("blkmixcfginfo")?;
+                    } else {
+                        for _ in 0..number_of_blocks_per_sync_frame {
+                            let blkmixcfginfoe = r.read_bit().context("blkmixcfginfoe")?;
+                            if blkmixcfginfoe {
+                                r.skip(5).context("blkmixcfginfo")?;
+                            }
+                        }
+                    }
+                }
+            }
+
+            let infomdate = r.read_bit().context("infomdate")?;
+            let mut bsmod = 0;
+            if infomdate {
+                bsmod = r.read::<3, u8>().context("bsmod")?;
+            }
+
+            Ok(Bsi {
+                strmtyp,
+                substreamid,
+                frmsiz,
+                fscod,
+                fscod2,
+                numblkscod,
+                acmod,
+                lfeon,
+                bsid,
+                chanmap,
+                bsmod,
+            })
+        }
+    }
+
+    #[derive(Debug)]
+    pub(crate) struct Dec3 {
+        pub headers: Vec<Header>,
+    }
+
+    impl ToBitStream for Dec3 {
+        type Error = Error;
+
+        fn to_writer<W: bitstream_io::BitWrite + ?Sized>(
+            &self,
+            w: &mut W,
+        ) -> Result<(), Self::Error>
+        where
+            Self: Sized,
+        {
+            struct IndSub {
+                header: Header,
+                num_dep_sub: u8,
+                chan_loc: u16,
+            }
+
+            let mut num_ind_sub = 0;
+            let mut ind_subs = Vec::new();
+
+            // We assume the stream is well-formed and don't validate increasing
+            // substream ids and that each first substream of an id is an independent
+            // stream.
+            for substream in self
+                .headers
+                .chunk_by(|h1, h2| h1.bsi.substreamid == h2.bsi.substreamid)
+            {
+                num_ind_sub += 1;
+
+                let mut num_dep_sub = 0;
+
+                let independent_stream = substream[0];
+
+                let mut chan_loc = 0;
+                for dependent_stream in substream.iter().skip(1) {
+                    num_dep_sub += 1;
+                    chan_loc |= dependent_stream
+                        .bsi
+                        .chanmap
+                        .map(|chanmap| (chanmap >> 5) & 0x1f)
+                        .unwrap_or(independent_stream.bsi.acmod as u16);
+                }
+
+                ind_subs.push(IndSub {
+                    header: independent_stream,
+                    num_dep_sub,
+                    chan_loc,
+                });
+            }
+
+            let len = 4
+                + 4
+                + 2
+                + ind_subs
+                    .iter()
+                    .map(|s| 3 + if s.num_dep_sub > 0 { 1 } else { 0 })
+                    .sum::<u32>();
+
+            w.write_from::<u32>(len).context("size")?;
+            w.write_bytes(b"dec3").context("type")?;
+
+            let data_rate = self
+                .headers
+                .iter()
+                .map(|header| {
+                    ((header.bsi.frmsiz as u32 + 1)
+                        * if let Some(fscod2) = header.bsi.fscod2 {
+                            SAMPLE_RATES[fscod2 as usize] as u32 / 2
+                        } else {
+                            SAMPLE_RATES[header.bsi.fscod as usize] as u32
+                        })
+                        / NUM_BLOCKS[header.bsi.numblkscod as usize] as u32
+                })
+                .sum::<u32>();
+            w.write::<13, u16>((data_rate / 1000) as u16)
+                .context("data_rate")?;
+
+            w.write::<3, u8>(num_ind_sub).context("num_ind_sub")?;
+
+            for ind_sub in ind_subs {
+                w.write::<2, u8>(ind_sub.header.bsi.fscod)
+                    .context("fscod")?;
+                w.write::<5, u8>(ind_sub.header.bsi.bsid).context("bsid")?;
+                w.write::<1, u8>(0).context("reserved")?;
+                w.write::<1, u8>(0).context("asvc")?;
+                w.write::<3, u8>(ind_sub.header.bsi.bsmod)
+                    .context("bsmod")?;
+                w.write::<3, u8>(ind_sub.header.bsi.acmod)
+                    .context("acmod")?;
+                w.write_bit(ind_sub.header.bsi.lfeon).context("lfeon")?;
+                w.write::<3, u8>(0).context("reserved")?;
+
+                w.write::<4, u8>(ind_sub.num_dep_sub)
+                    .context("num_dep_sub")?;
+                if ind_sub.num_dep_sub > 0 {
+                    w.write::<9, u16>(ind_sub.chan_loc).context("chan_loc")?;
+                } else {
+                    w.write::<1, u8>(0).context("reserved")?;
+                }
+            }
+
+            w.byte_align().context("reserved")?;
+
+            Ok(())
+        }
+    }
 }

@@ -215,6 +215,9 @@ pub(crate) struct HeaderStream {
     // More data to be included in the fragmented stream header
     extra_header_data: Option<Vec<u8>>,
 
+    // Codec-specific boxes to be included in the sample entry
+    codec_specific_boxes: Vec<u8>,
+
     // Tags meta for audio language and video orientation
     language_code: Option<[u8; 3]>,
     orientation: &'static TransformMatrix,

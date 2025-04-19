@@ -273,7 +273,11 @@ struct Stream {
     /// Mapping between running time and UTC time in ONVIF mode.
     running_time_utc_time_mapping: Option<(gst::Signed<gst::ClockTime>, gst::ClockTime)>,
 
+    /// More data to be included in the fragmented stream header
     extra_header_data: Option<Vec<u8>>,
+
+    /// Codec-specific boxes to be included in the sample entry
+    codec_specific_boxes: Vec<u8>,
 
     /// Earliest PTS of the whole stream
     earliest_pts: Option<gst::ClockTime>,
@@ -969,7 +973,9 @@ impl FMP4Mux {
             ]
             .as_slice(),
             "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
-            | "audio/x-adpcm" => ["channels", "rate", "layout", "bitrate", "codec_data"].as_slice(),
+            | "audio/x-ac3" | "audio/x-eac3" | "audio/x-adpcm" => {
+                ["channels", "rate", "layout", "bitrate", "codec_data"].as_slice()
+            }
             "application/x-onvif-metadata" => [].as_slice(),
             _ => unreachable!(),
         };
@@ -3516,6 +3522,7 @@ impl FMP4Mux {
 
             let mut delta_frames = DeltaFrames::IntraOnly;
             let mut discard_header_buffers = false;
+            let mut codec_specific_boxes = Vec::new();
             match s.name().as_str() {
                 "video/x-h264" | "video/x-h265" => {
                     if !s.has_field_with_type("codec_data", gst::Buffer::static_type()) {
@@ -3571,6 +3578,46 @@ impl FMP4Mux {
                         return Err(gst::FlowError::NotNegotiated);
                     };
                 }
+                "audio/x-ac3" | "audio/x-eac3" => {
+                    let Some(first_buffer) = pad.peek_buffer() else {
+                        gst::error!(
+                            CAT,
+                            obj = pad,
+                            "Need first buffer for AC-3 / EAC-3 when creating header"
+                        );
+                        return Err(gst::FlowError::NotNegotiated);
+                    };
+
+                    match s.name().as_str() {
+                        "audio/x-ac3" => {
+                            codec_specific_boxes = match boxes::create_dac3(&first_buffer) {
+                                Ok(boxes) => boxes,
+                                Err(err) => {
+                                    gst::error!(
+                                        CAT,
+                                        obj = pad,
+                                        "Failed to create AC-3 codec specific box: {err}"
+                                    );
+                                    return Err(gst::FlowError::NotNegotiated);
+                                }
+                            };
+                        }
+                        "audio/x-eac3" => {
+                            codec_specific_boxes = match boxes::create_dec3(&first_buffer) {
+                                Ok(boxes) => boxes,
+                                Err(err) => {
+                                    gst::error!(
+                                        CAT,
+                                        obj = pad,
+                                        "Failed to create EAC-3 codec specific box: {err}"
+                                    );
+                                    return Err(gst::FlowError::NotNegotiated);
+                                }
+                            };
+                        }
+                        _ => unreachable!(),
+                    }
+                }
                 "audio/x-alaw" | "audio/x-mulaw" => (),
                 "audio/x-adpcm" => (),
                 "application/x-onvif-metadata" => (),
@@ -3593,6 +3640,7 @@ impl FMP4Mux {
                 current_position: gst::ClockTime::ZERO,
                 running_time_utc_time_mapping: None,
                 extra_header_data: None,
+                codec_specific_boxes,
                 earliest_pts: None,
                 end_pts: None,
                 language_code,
@@ -3685,6 +3733,7 @@ impl FMP4Mux {
                     delta_frames: s.delta_frames,
                     caps: s.caps.clone(),
                     extra_header_data: s.extra_header_data.clone(),
+                    codec_specific_boxes: s.codec_specific_boxes.clone(),
                     language_code: s.language_code,
                     orientation: s.orientation(),
                     max_bitrate: s.max_bitrate,
@@ -4900,6 +4949,18 @@ impl ElementImpl for ISOFMP4Mux {
                         .field("channels", gst::IntRange::<i32>::new(1, 8))
                         .field("rate", gst::IntRange::<i32>::new(1, 10 * u16::MAX as i32))
                         .build(),
+                    gst::Structure::builder("audio/x-ac3")
+                        .field("framed", true)
+                        .field("alignment", "frame")
+                        .field("channels", gst::IntRange::<i32>::new(1, u16::MAX as i32))
+                        .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
+                        .build(),
+                    gst::Structure::builder("audio/x-eac3")
+                        .field("framed", true)
+                        .field("alignment", "iec61937")
+                        .field("channels", gst::IntRange::<i32>::new(1, u16::MAX as i32))
+                        .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
+                        .build(),
                 ]
                 .into_iter()
                 .collect::<gst::Caps>(),
@@ -5000,6 +5061,12 @@ impl ElementImpl for CMAFMux {
                         .field("channel-mapping-family", gst::IntRange::new(0i32, 255))
                         .field("channels", gst::IntRange::new(1i32, 8))
                         .field("rate", gst::IntRange::new(1, i32::MAX))
+                        .build(),
+                    gst::Structure::builder("audio/x-eac3")
+                        .field("framed", true)
+                        .field("alignment", "iec61937")
+                        .field("channels", gst::IntRange::<i32>::new(1, u16::MAX as i32))
+                        .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
                         .build(),
                 ]
                 .into_iter()
@@ -5113,6 +5180,18 @@ impl ElementImpl for DASHMP4Mux {
                         .field("channel-mapping-family", gst::IntRange::new(0i32, 255))
                         .field("channels", gst::IntRange::new(1i32, 8))
                         .field("rate", gst::IntRange::new(1, i32::MAX))
+                        .build(),
+                    gst::Structure::builder("audio/x-ac3")
+                        .field("framed", true)
+                        .field("alignment", "frame")
+                        .field("channels", gst::IntRange::<i32>::new(1, u16::MAX as i32))
+                        .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
+                        .build(),
+                    gst::Structure::builder("audio/x-eac3")
+                        .field("framed", true)
+                        .field("alignment", "iec61937")
+                        .field("channels", gst::IntRange::<i32>::new(1, u16::MAX as i32))
+                        .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
                         .build(),
                 ]
                 .into_iter()
