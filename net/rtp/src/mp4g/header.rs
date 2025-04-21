@@ -3,7 +3,6 @@
 use bitstream_io::{BitRead, BitWrite, FromBitStreamWith, ToBitStreamWith};
 
 use crate::mp4g::{AccessUnitIndex, ModeConfig};
-use crate::utils::{mask_valid_2_comp, raw_2_comp_to_i32};
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum AuHeaderError {
@@ -21,18 +20,6 @@ pub enum AuHeaderError {
 
     #[error("Unexpected CTS flag set for the first AU header {}", .0)]
     CtsFlagSetInFirstAuHeader(AccessUnitIndex),
-
-    #[error("Out of range CTS-delta {cts_delta} for AU {index}")]
-    OutOfRangeSizeCtsDelta {
-        cts_delta: i32,
-        index: AccessUnitIndex,
-    },
-
-    #[error("Out of range DTS-delta {dts_delta} for AU {index}")]
-    OutOfRangeSizeDtsDelta {
-        dts_delta: i32,
-        index: AccessUnitIndex,
-    },
 }
 
 #[derive(Debug)]
@@ -76,7 +63,7 @@ impl<'a> FromBitStreamWith<'a> for AuHeader {
 
         if ctx.config.size_len > 0 {
             let val = r
-                .read::<u32>(ctx.config.size_len as u32)
+                .read_var::<u32>(ctx.config.size_len as u32)
                 .context("AU-size")?;
 
             // Will ensure the size is non-zero after we get the index
@@ -85,12 +72,12 @@ impl<'a> FromBitStreamWith<'a> for AuHeader {
 
         this.index = match ctx.prev_index {
             None => r
-                .read::<u32>(ctx.config.index_len as u32)
+                .read_var::<u32>(ctx.config.index_len as u32)
                 .context("AU-Index")?
                 .into(),
             Some(prev_index) => {
                 let delta = r
-                    .read::<u32>(ctx.config.index_delta_len as u32)
+                    .read_var::<u32>(ctx.config.index_delta_len as u32)
                     .context("AU-Index-delta")?;
                 if delta > 0 {
                     this.is_interleaved = true;
@@ -112,17 +99,15 @@ impl<'a> FromBitStreamWith<'a> for AuHeader {
             }
 
             let delta = r
-                .read::<u32>(ctx.config.cts_delta_len as u32)
+                .read_var::<i32>(ctx.config.cts_delta_len as u32)
                 .context("CTS-delta")?;
-            let delta = raw_2_comp_to_i32(delta, ctx.config.cts_delta_len);
             this.cts_delta = Some(delta);
         }
 
         if ctx.config.dts_delta_len > 0 && r.read_bit().context("DTS-flag")? {
             let delta = r
-                .read::<u32>(ctx.config.dts_delta_len as u32)
+                .read_var::<i32>(ctx.config.dts_delta_len as u32)
                 .context("DTS-delta")?;
-            let delta = raw_2_comp_to_i32(delta, ctx.config.dts_delta_len);
             this.dts_delta = Some(delta);
         }
 
@@ -161,13 +146,13 @@ impl<'a> ToBitStreamWith<'a> for AuHeader {
                 Err(ZeroSizedAu(self.index))?;
             }
 
-            w.write(ctx.config.size_len as u32, size)
+            w.write_var(ctx.config.size_len as u32, size)
                 .context("AU-size")?;
         }
 
         match ctx.prev_index {
             None => w
-                .write(ctx.config.index_len as u32, *self.index)
+                .write_var(ctx.config.index_len as u32, *self.index)
                 .context("AU-Index")?,
             Some(prev_index) => {
                 let index_delta = self
@@ -179,7 +164,7 @@ impl<'a> ToBitStreamWith<'a> for AuHeader {
                         prev_index,
                     })
                     .context("AU-Index-delta")?;
-                w.write(ctx.config.index_delta_len as u32, index_delta)
+                w.write_var(ctx.config.index_delta_len as u32, index_delta)
                     .context("AU-Index-delta")?;
             }
         }
@@ -191,16 +176,8 @@ impl<'a> ToBitStreamWith<'a> for AuHeader {
             if ctx.prev_index.is_none() {
                 w.write_bit(false).context("CTS-flag")?;
             } else if let Some(cts_delta) = self.cts_delta {
-                let Some(cts_delta) = mask_valid_2_comp(cts_delta, ctx.config.cts_delta_len) else {
-                    return Err(OutOfRangeSizeCtsDelta {
-                        cts_delta,
-                        index: self.index,
-                    }
-                    .into());
-                };
-
                 w.write_bit(true).context("CTS-flag")?;
-                w.write(ctx.config.cts_delta_len as u32, cts_delta)
+                w.write_var(ctx.config.cts_delta_len as u32, cts_delta)
                     .context("CTS-delta")?;
             } else {
                 w.write_bit(false).context("CTS-flag")?;
@@ -209,16 +186,8 @@ impl<'a> ToBitStreamWith<'a> for AuHeader {
 
         if ctx.config.dts_delta_len > 0 {
             if let Some(dts_delta) = self.dts_delta {
-                let Some(dts_delta) = mask_valid_2_comp(dts_delta, ctx.config.dts_delta_len) else {
-                    return Err(OutOfRangeSizeDtsDelta {
-                        dts_delta,
-                        index: self.index,
-                    }
-                    .into());
-                };
-
                 w.write_bit(true).context("DTS-flag")?;
-                w.write(ctx.config.dts_delta_len as u32, dts_delta)
+                w.write_var(ctx.config.dts_delta_len as u32, dts_delta)
                     .context("DTS-delta")?;
             } else {
                 w.write_bit(false).context("DTS-flag")?;

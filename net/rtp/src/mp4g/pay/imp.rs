@@ -722,7 +722,7 @@ impl RtpMpeg4GenericPay {
                     let mut res = w.build_with(&header, &ctx);
                     if res.is_ok() {
                         // add final padding
-                        res = w.write(7, 0).map_err(Into::into);
+                        res = w.write::<7, u8>(0).map_err(Into::into);
                     }
                     if let Err(err) = res {
                         gst::error!(
@@ -913,7 +913,7 @@ impl RtpMpeg4GenericPay {
             }
 
             // add final padding
-            if let Err(err) = w.write(7, 0) {
+            if let Err(err) = w.write::<7, u8>(0) {
                 gst::error!(
                     CAT,
                     imp = self,

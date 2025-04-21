@@ -20,7 +20,7 @@ where
     let mut num_bytes = 0;
 
     for i in 0..8 {
-        let byte = reader.read::<u32>(8)?;
+        let byte = reader.read::<8, u32>()?;
         value |= (byte & 0x7f) << (i * 7);
         num_bytes += 1;
         if byte & 0x80 == 0 {
@@ -91,7 +91,7 @@ impl SizedObu {
             ));
         }
 
-        let obu_type = reader.read::<u8>(4)?.into();
+        let obu_type = reader.read::<4, u8>()?.into();
         let has_extension = reader.read_bit()?;
 
         // require a size field
@@ -106,7 +106,7 @@ impl SizedObu {
         let _ = reader.read_bit()?;
 
         let (temporal_id, spatial_id) = if has_extension {
-            (reader.read::<u8>(3)?, reader.read::<u8>(2)?)
+            (reader.read::<3, u8>()?, reader.read::<2, u8>()?)
         } else {
             (0, 0)
         };

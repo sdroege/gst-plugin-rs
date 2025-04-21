@@ -7,8 +7,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use bitstream_io::{BigEndian, BitQueue, BitRead, Endianness};
-use std::io;
+use bitstream_io::{BigEndian, BitRead, Endianness, UnsignedInteger as _};
+use std::{io, mem};
 
 /// Implementation of the bool decoder from RFC 6386:
 /// https://datatracker.ietf.org/doc/html/rfc6386#section-7.3
@@ -112,66 +112,69 @@ impl<R: io::Read> BitRead for BoolDecoder<R> {
         self.next_bit()
     }
 
-    fn read<U>(&mut self, mut bits: u32) -> std::io::Result<U>
+    fn read_unsigned_counted<const MAX: u32, U>(
+        &mut self,
+        bits: bitstream_io::BitCount<MAX>,
+    ) -> io::Result<U>
     where
-        U: bitstream_io::Numeric,
+        U: bitstream_io::UnsignedInteger,
     {
-        if bits > U::BITS_SIZE {
+        let mut bits = u32::from(bits);
+        if bits > MAX || bits > mem::size_of::<U>() as u32 * 8 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "excessive bits for type read",
             ));
         }
 
-        let mut queue = BitQueue::<BigEndian, U>::new();
+        let mut v = U::ZERO;
+
         while bits > 0 {
-            queue.push(1, U::from_u8(self.next_bit()? as u8));
+            v = v << 1 | U::from_u8(self.next_bit()? as u8);
             bits -= 1;
         }
 
-        Ok(queue.value())
+        Ok(v)
     }
 
-    fn read_signed<S>(&mut self, bits: u32) -> std::io::Result<S>
+    fn read_signed_counted<const MAX: u32, S>(
+        &mut self,
+        bits: bitstream_io::BitCount<MAX>,
+    ) -> io::Result<S>
     where
-        S: bitstream_io::SignedNumeric,
+        S: bitstream_io::SignedInteger,
     {
-        BigEndian::read_signed(self, bits)
+        let sign = self.next_bit()?;
+        let v = self.read_unsigned_counted::<MAX, S::Unsigned>(
+            bits.checked_sub::<MAX>(1).ok_or(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "signed reads need at least 1 bit for sign",
+            ))?,
+        )?;
+        Ok(if sign {
+            v.as_negative(bits.into())
+        } else {
+            v.as_non_negative()
+        })
     }
 
-    fn read_signed_in<const BITS: u32, S>(&mut self) -> std::io::Result<S>
-    where
-        S: bitstream_io::SignedNumeric,
-    {
-        BigEndian::read_signed(self, BITS)
-    }
-
-    fn read_to<V>(&mut self) -> std::io::Result<V>
+    fn read_to<V>(&mut self) -> io::Result<V>
     where
         V: bitstream_io::Primitive,
     {
         BigEndian::read_primitive(self)
     }
 
-    fn read_as_to<F, V>(&mut self) -> std::io::Result<V>
+    fn read_as_to<F, V>(&mut self) -> io::Result<V>
     where
-        F: bitstream_io::Endianness,
+        F: Endianness,
         V: bitstream_io::Primitive,
     {
         F::read_primitive(self)
     }
 
-    fn skip(&mut self, mut bits: u32) -> std::io::Result<()> {
-        while bits > 0 {
-            self.next_bit()?;
-            bits -= 1;
-        }
-
-        Ok(())
-    }
-
     fn byte_aligned(&self) -> bool {
-        false
+        unimplemented!()
     }
 
     fn byte_align(&mut self) {

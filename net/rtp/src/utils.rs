@@ -10,54 +10,6 @@ pub fn seqnum_distance(seqnum1: u16, seqnum2: u16) -> i16 {
     seqnum1.wrapping_sub(seqnum2)
 }
 
-/// Converts a raw two's complement value of len `bit_len` into an i32.
-///
-/// # Panic
-///
-/// Panics if `bit_len` > 32.
-#[inline]
-pub fn raw_2_comp_to_i32(val: u32, bit_len: u8) -> i32 {
-    assert!(bit_len <= 32);
-
-    if val < 1u32 << (bit_len - 1) as u32 {
-        // val is positive
-        val as i32
-    } else {
-        ((0x1_0000_0000 - (1u64 << bit_len)) as u32 + val) as i32
-    }
-}
-
-/// Masks the provided `i32` value to be used as a two's complement of len `bit_len`,
-/// so the resulting value can be passed to APIs which check the bit range.
-///
-/// Returns `None` the `i32` value exceeds the range of a two's complement
-/// of len `bit_len`.
-///
-/// # Panic
-///
-/// Panics if `bit_len` > 32.
-#[inline]
-pub fn mask_valid_2_comp(val: i32, bit_len: u8) -> Option<i32> {
-    let bit_len = bit_len as u32;
-
-    if bit_len == i32::BITS {
-        return Some(val);
-    }
-
-    assert!(bit_len < i32::BITS);
-
-    let overhead = i32::BITS - bit_len;
-
-    let leading_zeros = val.leading_zeros();
-    if leading_zeros > 0 && leading_zeros < overhead
-        || leading_zeros == 0 && val.leading_ones() < overhead
-    {
-        return None;
-    }
-
-    Some(((1 << bit_len) - 1) & val)
-}
-
 /// Defines a comparable new type `$typ` on a `[std::num::Wrapping]::<u32>`.
 ///
 /// The new type will wrap-around on additions and substractions and it comparison
@@ -429,70 +381,6 @@ mod tests {
         // This is the limit of the algorithm:
         assert_eq!(seqnum_distance(0x8000, 0), -0x8000);
         assert_eq!(seqnum_distance(0, 0x8000), -0x8000);
-    }
-
-    #[test]
-    fn raw_2_comp_12bits_to_i32() {
-        const BITS: u8 = 12;
-        assert_eq!(raw_2_comp_to_i32(0, BITS), 0);
-        assert_eq!(raw_2_comp_to_i32(1, BITS), 1);
-        assert_eq!(raw_2_comp_to_i32(2, BITS), 2);
-        assert_eq!(raw_2_comp_to_i32(0xfff, BITS), -1i16 as i32);
-        assert_eq!(raw_2_comp_to_i32(0xffe, BITS), -2i16 as i32);
-        assert_eq!(raw_2_comp_to_i32(0x7ff, BITS), (1 << (BITS - 1)) - 1);
-        assert_eq!(raw_2_comp_to_i32(0x800, BITS), -(1 << (BITS - 1)));
-    }
-
-    #[test]
-    fn raw_2_comp_16bits_to_i32() {
-        const BITS: u8 = i16::BITS as u8;
-        assert_eq!(raw_2_comp_to_i32(0, BITS), 0);
-        assert_eq!(raw_2_comp_to_i32(1, BITS), 1);
-        assert_eq!(raw_2_comp_to_i32(2, BITS), 2);
-        assert_eq!(raw_2_comp_to_i32(0xffff, BITS), -1i16 as i32);
-        assert_eq!(raw_2_comp_to_i32(0xfffe, BITS), -2i16 as i32);
-        assert_eq!(raw_2_comp_to_i32(0x7fff, BITS), i16::MAX as i32);
-        assert_eq!(raw_2_comp_to_i32(0x8000, BITS), i16::MIN as i32);
-    }
-
-    #[test]
-    fn raw_2_comp_32bits_to_i32() {
-        const BITS: u8 = i32::BITS as u8;
-        assert_eq!(raw_2_comp_to_i32(0, BITS), 0);
-        assert_eq!(raw_2_comp_to_i32(1, BITS), 1);
-        assert_eq!(raw_2_comp_to_i32(2, BITS), 2);
-        assert_eq!(raw_2_comp_to_i32(0xffff_ffff, BITS), -1i16 as i32);
-        assert_eq!(raw_2_comp_to_i32(0xffff_fffe, BITS), -2i16 as i32);
-        assert_eq!(raw_2_comp_to_i32(0x7fff_ffff, BITS), i32::MAX);
-        assert_eq!(raw_2_comp_to_i32(0x8000_0000, BITS), i32::MIN);
-    }
-
-    #[test]
-    fn mask_valid_2_comp_ok() {
-        const BITS: u8 = i32::BITS as u8;
-        assert_eq!(mask_valid_2_comp(0, BITS), Some(0));
-        assert_eq!(mask_valid_2_comp(-1, BITS), Some(-1));
-        assert_eq!(mask_valid_2_comp(i32::MIN, BITS), Some(i32::MIN));
-        assert_eq!(mask_valid_2_comp(i32::MAX, BITS), Some(i32::MAX));
-
-        assert_eq!(mask_valid_2_comp(0, 6), Some(0));
-        assert_eq!(mask_valid_2_comp(0x2f, 6), Some(0x2f)); // -1i6
-        assert_eq!(mask_valid_2_comp(0x20, 6), Some(0x20)); // i6::MIN
-        assert_eq!(mask_valid_2_comp(0x1f, 6), Some(0x1f)); // i6::MAX
-        assert_eq!(mask_valid_2_comp(0x1f, 5), Some(0x1f)); // i6::MAX => -1i5
-    }
-
-    #[test]
-    fn mask_valid_2_comp_ko() {
-        const BITS: u8 = i32::BITS as u8;
-        assert_eq!(mask_valid_2_comp(0, BITS), Some(0));
-        assert_eq!(mask_valid_2_comp(-1, BITS), Some(-1));
-        assert_eq!(mask_valid_2_comp(i32::MIN, BITS), Some(i32::MIN));
-        assert_eq!(mask_valid_2_comp(i32::MAX, BITS), Some(i32::MAX));
-
-        assert_eq!(mask_valid_2_comp(0, 5), Some(0));
-        assert!(mask_valid_2_comp(0x2f, 5).is_none()); // -1i6
-        assert!(mask_valid_2_comp(0x20, 5).is_none()); // i6::MIN
     }
 
     #[test]

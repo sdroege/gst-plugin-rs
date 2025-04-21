@@ -252,7 +252,7 @@ impl FromBitStream for TableHeader {
         let table_id = r.read_to::<u8>().context("table_id")?;
         let section_syntax_indicator = r.read_bit().context("table_syntax_indicator")?;
         r.skip(5).context("reserved")?;
-        let section_length = r.read::<u16>(10).context("section_length")?;
+        let section_length = r.read::<10, u16>().context("section_length")?;
 
         Ok(TableHeader {
             table_id,
@@ -280,7 +280,7 @@ impl FromBitStream for TableSyntaxSection {
     {
         let table_id_extension = r.read_to::<u16>().context("table_id_extension")?;
         r.skip(2).context("reserved")?;
-        let version_number = r.read::<u8>(5).context("version_number")?;
+        let version_number = r.read::<5, u8>().context("version_number")?;
         let current_next_indicator = r.read_bit().context("current_next_indicator")?;
         let section_number = r.read_to::<u8>().context("section_number")?;
         let last_section_number = r.read_to::<u8>().context("last_section_number")?;
@@ -310,7 +310,7 @@ impl FromBitStream for ProgramAccessTable {
     {
         let program_num = r.read_to::<u16>().context("program_num")?;
         r.skip(3).context("reserved")?;
-        let program_map_pid = r.read::<u16>(13).context("program_map_pid")?;
+        let program_map_pid = r.read::<13, u16>().context("program_map_pid")?;
 
         Ok(ProgramAccessTable {
             program_num,
@@ -334,11 +334,11 @@ impl FromBitStream for ProgramMappingTable {
         Self: Sized,
     {
         r.skip(3).context("reserved")?;
-        let pcr_pid = r.read::<u16>(13).context("pcr_pid")?;
+        let pcr_pid = r.read::<13, u16>().context("pcr_pid")?;
         r.skip(4).context("reserved")?;
         r.skip(2).context("program_info_length_unused")?;
 
-        let program_info_length = r.read::<u16>(10).context("program_info_length")?;
+        let program_info_length = r.read::<10, u16>().context("program_info_length")?;
         r.skip(8 * program_info_length as u32)
             .context("program_descriptors")?;
 
@@ -364,7 +364,7 @@ impl FromBitStream for ProgramMappingTable {
             };
 
             let Some(elementary_pid) =
-                try_read(r, |r| r.read::<u16>(13)).context("elementary_pid")?
+                try_read(r, |r| r.read::<13, u16>()).context("elementary_pid")?
             else {
                 break;
             };
@@ -378,7 +378,7 @@ impl FromBitStream for ProgramMappingTable {
             };
 
             let Some(es_info_length) =
-                try_read(r, |r| r.read::<u16>(10)).context("es_info_length")?
+                try_read(r, |r| r.read::<10, u16>()).context("es_info_length")?
             else {
                 break;
             };
@@ -632,11 +632,11 @@ impl FromBitStream for PacketHeader {
         let tei = r.read_bit().context("tei")?;
         let pusi = r.read_bit().context("pusi")?;
         let tp = r.read_bit().context("tp")?;
-        let pid = r.read::<u16>(13).context("pid")?;
+        let pid = r.read::<13, u16>().context("pid")?;
 
-        let tsc = r.read::<u8>(2).context("tsc")?;
-        let afc = r.read::<u8>(2).context("afc")?;
-        let cc = r.read::<u8>(4).context("cc")?;
+        let tsc = r.read::<2, u8>().context("tsc")?;
+        let afc = r.read::<2, u8>().context("afc")?;
+        let cc = r.read::<4, u8>().context("cc")?;
 
         Ok(PacketHeader {
             tei,
@@ -671,9 +671,9 @@ impl FromBitStream for AdaptionField {
 
         // PCR present
         let pcr = if pcr_present {
-            let pcr = r.read::<u64>(33).context("pcr_base")? * 300;
+            let pcr = r.read::<33, u64>().context("pcr_base")? * 300;
             r.skip(6).context("pcr_reserved")?;
-            let pcr = pcr + r.read::<u64>(9).context("pcr_extension")? % 300;
+            let pcr = pcr + r.read::<9, u64>().context("pcr_extension")? % 300;
             Some(pcr)
         } else {
             None

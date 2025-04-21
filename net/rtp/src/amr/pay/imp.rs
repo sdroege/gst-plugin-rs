@@ -681,7 +681,7 @@ impl RtpAmrPay {
                     }
 
                     if num_bits > 0 {
-                        if let Err(err) = w.write(num_bits as u32, data[0] >> (8 - num_bits)) {
+                        if let Err(err) = w.write_var(num_bits as u32, data[0] >> (8 - num_bits)) {
                             gst::error!(CAT, imp = self, "Failed writing payload: {err}");
                             return Err(gst::FlowError::Error);
                         }

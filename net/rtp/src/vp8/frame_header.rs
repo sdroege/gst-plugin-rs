@@ -104,7 +104,7 @@ trait BitReadExt: BitRead {
     // `as_negative()` that works with absolute value + sign instead of two's complement.
     fn read_with_sign(&mut self, bits: u32) -> Result<i8, io::Error> {
         assert!(bits > 0 && bits <= 7);
-        let value = self.read::<u8>(bits)?;
+        let value = self.read_var::<u8>(bits)?;
         let sign = self.read_bit()?;
 
         if sign {
@@ -133,8 +133,8 @@ impl FromBitStreamWith<'_> for FrameHeader {
         // that is read here is 50:50 so it's equivalent to no encoding at all.
         let (color_space, clamping_type) = if *keyframe {
             (
-                Some(r.read::<u8>(1).context("color_space")?),
-                Some(r.read::<u8>(1).context("clamping_type")?),
+                Some(r.read::<1, u8>().context("color_space")?),
+                Some(r.read::<1, u8>().context("clamping_type")?),
             )
         } else {
             (None, None)
@@ -150,9 +150,9 @@ impl FromBitStreamWith<'_> for FrameHeader {
             None
         };
 
-        let filter_type = r.read::<u8>(1).context("filter_type")?;
-        let loop_filter_level = r.read::<u8>(6).context("loop_filter_level")?;
-        let sharpness_level = r.read::<u8>(3).context("sharpness_level")?;
+        let filter_type = r.read::<1, u8>().context("filter_type")?;
+        let loop_filter_level = r.read::<6, u8>().context("loop_filter_level")?;
+        let sharpness_level = r.read::<3, u8>().context("sharpness_level")?;
 
         let loop_filter_adj_enable = r.read_bit().context("loop_filter_adj_enable")?;
 
@@ -162,7 +162,7 @@ impl FromBitStreamWith<'_> for FrameHeader {
             None
         };
 
-        let nbr_of_dct_partitions = 1 << r.read::<u8>(2).context("nbr_of_dct_partitions")?;
+        let nbr_of_dct_partitions = 1 << r.read::<2, u8>().context("nbr_of_dct_partitions")?;
 
         Ok(FrameHeader {
             color_space,
@@ -234,7 +234,7 @@ impl FromBitStream for SegmentFeatureData {
     where
         Self: Sized,
     {
-        let segment_feature_mode = r.read::<u8>(1).context("segment_feature_mode")?;
+        let segment_feature_mode = r.read::<1, u8>().context("segment_feature_mode")?;
 
         let mut quantizer_update = SmallVec::new();
         let mut loop_filter_update = SmallVec::new();
@@ -283,7 +283,7 @@ impl FromBitStream for MbSegmentationMap {
             let segment_prob_update = r.read_bit().context("segment_prob_update")?;
 
             if segment_prob_update {
-                let segment_prob = r.read::<u8>(8).context("segment_prob")?;
+                let segment_prob = r.read::<8, u8>().context("segment_prob")?;
 
                 segment_probs.push(Some(segment_prob));
             } else {

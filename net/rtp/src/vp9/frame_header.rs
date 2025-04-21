@@ -31,13 +31,13 @@ impl FromBitStream for FrameHeader {
     where
         Self: Sized,
     {
-        let marker = r.read::<u8>(2).context("frame_marker")?;
+        let marker = r.read::<2, u8>().context("frame_marker")?;
         if marker != 2 {
             bail!("Wrong frame marker");
         }
 
-        let profile_low_bit = r.read::<u8>(1).context("profile_low_bit")?;
-        let profile_high_bit = r.read::<u8>(1).context("profile_high_bit")?;
+        let profile_low_bit = r.read::<1, u8>().context("profile_low_bit")?;
+        let profile_high_bit = r.read::<1, u8>().context("profile_high_bit")?;
 
         let profile = (profile_high_bit << 1) | profile_low_bit;
         if profile == 3 {
@@ -131,8 +131,10 @@ impl FromBitStreamWith<'_> for KeyframeInfo {
             frame_height_minus_1 as u32 + 1,
         );
 
-        let render_and_frame_size_different =
-            r.read::<u8>(1).context("render_and_frame_size_different")? == 1;
+        let render_and_frame_size_different = r
+            .read::<1, u8>()
+            .context("render_and_frame_size_different")?
+            == 1;
 
         let render_size = if render_and_frame_size_different {
             let render_width_minus_1 = r.read_to::<u16>().context("render_width_minus_1")?;
@@ -199,13 +201,13 @@ impl FromBitStreamWith<'_> for ColorConfig {
             8
         };
 
-        let color_space = r.read::<u8>(3).context("color_space")?;
+        let color_space = r.read::<3, u8>().context("color_space")?;
         let (color_range, sub_sampling_x, sub_sampling_y) = if color_space != CS_RGB {
-            let color_range = r.read::<u8>(1).context("color_range")?;
+            let color_range = r.read::<1, u8>().context("color_range")?;
 
             let (sub_sampling_x, sub_sampling_y) = if *profile == 1 || *profile == 3 {
-                let sub_sampling_x = r.read::<u8>(1).context("sub_sampling_x")?;
-                let sub_sampling_y = r.read::<u8>(1).context("sub_sampling_y")?;
+                let sub_sampling_x = r.read::<1, u8>().context("sub_sampling_x")?;
+                let sub_sampling_y = r.read::<1, u8>().context("sub_sampling_y")?;
                 r.skip(1).context("reserved_zero")?;
 
                 (sub_sampling_x, sub_sampling_y)

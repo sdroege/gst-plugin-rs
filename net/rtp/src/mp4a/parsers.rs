@@ -77,15 +77,15 @@ impl FromBitStream for StreamMuxConfig {
         // numProgram                == 0 means 1 program (4 bits)
         // numLayer                  == 0 means 1 layer (3 bits)
 
-        if r.read::<u8>(1).context("audioMuxVersion")? != 0 {
+        if r.read::<1, u8>().context("audioMuxVersion")? != 0 {
             Err(UnknownVersion)?;
         }
 
         let _ = r.read_bit().context("allStreamsSameTimeFraming")?;
-        let num_sub_frames = r.read::<u8>(6).context("numSubFrames")? + 1;
+        let num_sub_frames = r.read::<6, u8>().context("numSubFrames")? + 1;
 
-        let num_progs = r.read::<u8>(4).context("numProgram")? + 1;
-        let num_layers = r.read::<u8>(3).context("numLayer")? + 1;
+        let num_progs = r.read::<4, u8>().context("numProgram")? + 1;
+        let num_layers = r.read::<3, u8>().context("numLayer")? + 1;
         if !(num_progs == 1 && num_layers == 1) {
             // Same as for rtpmp4adepay
             Err(UnsupportedProgsLayer {
@@ -127,24 +127,24 @@ impl FromBitStream for AudioSpecificConfig {
     fn from_reader<R: BitRead + ?Sized>(r: &mut R) -> anyhow::Result<Self> {
         use MPEG4AudioParserError::*;
 
-        let audio_object_type = r.read(5).context("audioObjectType")?;
+        let audio_object_type = r.read::<5, _>().context("audioObjectType")?;
         if audio_object_type == 0 {
             Err(InvalidAudioObjectType0)?;
         }
 
-        let sampling_freq_idx = r.read::<u8>(4).context("samplingFrequencyIndex")?;
+        let sampling_freq_idx = r.read::<4, u8>().context("samplingFrequencyIndex")?;
         if sampling_freq_idx as usize >= ACC_SAMPLING_FREQS.len() && sampling_freq_idx != 0xf {
             Err(InvalidSamplingFreqIdx(sampling_freq_idx))?;
         }
 
         // RTP rate depends on sampling freq of the audio
         let sampling_freq = if sampling_freq_idx == 0xf {
-            r.read(24).context("samplingFrequency")?
+            r.read::<24, _>().context("samplingFrequency")?
         } else {
             ACC_SAMPLING_FREQS[sampling_freq_idx as usize]
         };
 
-        let channel_conf = r.read(4).context("channelConfiguration")?;
+        let channel_conf = r.read::<4, _>().context("channelConfiguration")?;
         if channel_conf > 7 {
             Err(InvalidChannels(channel_conf))?;
         }

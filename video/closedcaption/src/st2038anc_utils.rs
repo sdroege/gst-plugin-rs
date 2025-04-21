@@ -29,24 +29,24 @@ impl AncDataHeader {
 
         let mut r = BitReader::endian(Cursor::new(slice), BigEndian);
 
-        let zeroes = r.read::<u8>(6).context("zero bits")?;
+        let zeroes = r.read::<6, u8>().context("zero bits")?;
         if zeroes != 0 {
             anyhow::bail!("Zero bits not zero!");
         }
         let c_not_y_channel_flag = r.read_bit().context("c_not_y_channel_flag")?;
-        let line_number = r.read::<u16>(11).context("line number")?;
-        let horizontal_offset = r.read::<u16>(12).context("horizontal offset")?;
+        let line_number = r.read::<11, u16>().context("line number")?;
+        let horizontal_offset = r.read::<12, u16>().context("horizontal offset")?;
         // Top two bits are parity bits and can be stripped off
-        let did = (r.read::<u16>(10).context("DID")? & 0xff) as u8;
-        let sdid = (r.read::<u16>(10).context("SDID")? & 0xff) as u8;
-        let data_count = (r.read::<u16>(10).context("data count")? & 0xff) as u8;
+        let did = (r.read::<10, u16>().context("DID")? & 0xff) as u8;
+        let sdid = (r.read::<10, u16>().context("SDID")? & 0xff) as u8;
+        let data_count = (r.read::<10, u16>().context("data count")? & 0xff) as u8;
 
         r.skip(data_count as u32 * 10).context("data")?;
 
-        let checksum = r.read::<u16>(10).context("checksum")?;
+        let checksum = r.read::<10, u16>().context("checksum")?;
 
         while !r.byte_aligned() {
-            let one = r.read::<u8>(1).context("alignment")?;
+            let one = r.read::<1, u8>().context("alignment")?;
             if one != 1 {
                 anyhow::bail!("Alignment bits are not ones!");
             }
@@ -104,33 +104,33 @@ pub(crate) fn convert_to_st2038_buffer(
 
     let mut w = BitWriter::endian(&mut output, BigEndian);
 
-    w.write::<u8>(6, 0b00_0000).context("zero bits")?;
+    w.write::<6, u8>(0b00_0000).context("zero bits")?;
     w.write_bit(c_not_y_channel).context("c_not_y_channel")?;
-    w.write::<u16>(11, line_number).context("line number")?;
-    w.write::<u16>(12, horizontal_offset)
+    w.write::<11, u16>(line_number).context("line number")?;
+    w.write::<12, u16>(horizontal_offset)
         .context("horizontal offset")?;
 
     let mut checksum = 0u16;
 
-    w.write::<u16>(10, extend_with_even_odd_parity(did, &mut checksum))
+    w.write::<10, u16>(extend_with_even_odd_parity(did, &mut checksum))
         .context("DID")?;
-    w.write::<u16>(10, extend_with_even_odd_parity(sdid, &mut checksum))
+    w.write::<10, u16>(extend_with_even_odd_parity(sdid, &mut checksum))
         .context("SDID")?;
-    w.write::<u16>(
-        10,
-        extend_with_even_odd_parity(payload.len() as u8, &mut checksum),
-    )
+    w.write::<10, u16>(extend_with_even_odd_parity(
+        payload.len() as u8,
+        &mut checksum,
+    ))
     .context("data count")?;
 
     for &b in payload {
-        w.write::<u16>(10, extend_with_even_odd_parity(b, &mut checksum))
+        w.write::<10, u16>(extend_with_even_odd_parity(b, &mut checksum))
             .context("payload")?;
     }
 
     checksum &= 0x1_ff;
     checksum |= ((!(checksum >> 8)) & 0x0_01) << 9;
 
-    w.write::<u16>(10, checksum).context("checksum")?;
+    w.write::<10, u16>(checksum).context("checksum")?;
 
     while !w.byte_aligned() {
         w.write_bit(true).context("padding")?;

@@ -102,7 +102,7 @@ impl FromBitStreamWith<'_> for PayloadHeader {
             bail!("CRC not allowed in bandwidth-efficient mode");
         }
 
-        let cmr = r.read::<u8>(4).context("cmr")?;
+        let cmr = r.read::<4, u8>().context("cmr")?;
 
         let mut toc_entries = SmallVec::<[TocEntry; 16]>::new();
         loop {
@@ -184,7 +184,7 @@ impl ToBitStreamWith<'_> for PayloadHeader {
             bail!("No TOC entries");
         }
 
-        w.write::<u8>(4, self.cmr).context("cmr")?;
+        w.write::<4, u8>(self.cmr).context("cmr")?;
 
         for (i, entry) in self.toc_entries.iter().enumerate() {
             let mut entry = entry.clone();
@@ -256,7 +256,7 @@ impl FromBitStreamWith<'_> for TocEntry {
         Self: Sized,
     {
         let last = !r.read_bit().context("last")?;
-        let frame_type = r.read::<u8>(4).context("frame_type")?;
+        let frame_type = r.read::<4, u8>().context("frame_type")?;
         let frame_quality_indicator = r.read_bit().context("q")?;
 
         if !cfg.wide_band && (9..=14).contains(&frame_type) {
@@ -331,7 +331,7 @@ impl ToBitStreamWith<'_> for TocEntry {
         }
 
         w.write_bit(!self.last).context("last")?;
-        w.write::<u8>(4, self.frame_type).context("frame_type")?;
+        w.write::<4, u8>(self.frame_type).context("frame_type")?;
         w.write_bit(self.frame_quality_indicator)
             .context("frame_quality_indicator")?;
 

@@ -1016,6 +1016,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6099cdc01846bc367c4e7dd630dc5966dccf36b652fae7a74e17b640411a91b2"
 
 [[package]]
+name = "bitstream-io"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "680575de65ce8b916b82a447458b94a48776707d9c2681a9d8da351c06886a1f"
+dependencies = [
+ "core2",
+]
+
+[[package]]
 name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1427,6 +1436,15 @@ name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
+
+[[package]]
+name = "core2"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b49ba7ef1ad6107f8824dbe97de947cbaac53c44e7f9756a1fba0d37c1eec505"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "cpufeatures"
@@ -2668,7 +2686,7 @@ version = "0.14.0-alpha.1"
 dependencies = [
  "anyhow",
  "atomic_refcell",
- "bitstream-io",
+ "bitstream-io 3.2.0",
  "byteorder",
  "cairo-rs",
  "cdp-types",
@@ -2779,7 +2797,7 @@ name = "gst-plugin-fmp4"
 version = "0.14.0-alpha.1"
 dependencies = [
  "anyhow",
- "bitstream-io",
+ "bitstream-io 3.2.0",
  "chrono",
  "dash-mpd",
  "gst-plugin-version-helper",
@@ -2959,7 +2977,7 @@ name = "gst-plugin-mp4"
 version = "0.14.0-alpha.1"
 dependencies = [
  "anyhow",
- "bitstream-io",
+ "bitstream-io 3.2.0",
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-audio",
@@ -2977,7 +2995,7 @@ name = "gst-plugin-mpegtslive"
 version = "0.14.0-alpha.1"
 dependencies = [
  "anyhow",
- "bitstream-io",
+ "bitstream-io 3.2.0",
  "gst-plugin-version-helper",
  "gstreamer",
  "smallvec",
@@ -3148,7 +3166,7 @@ version = "0.14.0-alpha.1"
 dependencies = [
  "anyhow",
  "atomic_refcell",
- "bitstream-io",
+ "bitstream-io 3.2.0",
  "byte-slice-cast",
  "chrono",
  "futures",
@@ -6402,7 +6420,7 @@ dependencies = [
  "arg_enum_proc_macro",
  "arrayvec",
  "av1-grain",
- "bitstream-io",
+ "bitstream-io 2.6.0",
  "built",
  "cc",
  "cfg-if",

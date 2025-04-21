@@ -21,7 +21,7 @@ where
     let mut num_bytes = 0;
 
     for i in 0..8 {
-        let byte = reader.read::<u32>(8)?;
+        let byte = reader.read::<8, u32>()?;
         value |= (byte & 0x7f) << (i * 7);
         num_bytes += 1;
         if byte & 0x80 == 0 {
@@ -40,7 +40,7 @@ where
 {
     loop {
         writer.write_bit(value > 0x7f)?;
-        writer.write(7, value & 0x7f)?;
+        writer.write::<7, u32>(value & 0x7f)?;
         value >>= 7;
         if value == 0 {
             writer.byte_align()?;

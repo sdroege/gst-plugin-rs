@@ -179,7 +179,7 @@ impl St2038AncToCc {
 
                         // Convert data from 10 bits to 8 bits
                         for _ in 0..header.data_count {
-                            let b = (r.read::<u16>(10).unwrap() & 0xff) as u8;
+                            let b = (r.read::<10, u16>().unwrap() & 0xff) as u8;
                             sub_slice[0] = b;
                             sub_slice = &mut sub_slice[1..];
                         }

@@ -146,18 +146,18 @@ impl ConfigWithCodecData {
         // numProgram                == 0 means 1 program (4 bits)
         // numLayer                  == 0 means 1 layer (3 bits)
 
-        w.write(1, 0).unwrap();
+        w.write::<1, _>(0).unwrap();
         w.write_bit(true).unwrap();
-        w.write(13, 0).unwrap();
+        w.write::<13, _>(0).unwrap();
         // 1 bit missing for byte alignment
 
         // Append AudioSpecificConfig for prog 1 layer 1 (from codec_data)
         for byte in codec_data_ref.as_slice() {
-            w.write(8, *byte).context("appending codec_data")?
+            w.write::<8, _>(*byte).context("appending codec_data")?
         }
 
         // Padding
-        w.write(7, 0).unwrap();
+        w.write::<7, _>(0).unwrap();
 
         Ok(ConfigWithCodecData {
             audio_config,

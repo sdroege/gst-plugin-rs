@@ -279,7 +279,7 @@ impl RtpBaseDepay2Impl for RtpAmrDepay {
                     }
 
                     if frame_size > 0 {
-                        match r.read::<u8>(frame_size) {
+                        match r.read_var::<u8>(frame_size) {
                             Ok(b) => {
                                 out_data.push(b << (8 - frame_size));
                             }
