@@ -1048,6 +1048,7 @@ fn write_visual_sample_entry(
                 let map = codec_data
                     .map_readable()
                     .context("codec_data not mappable")?;
+                // TODO: create codec_specific_boxes when receiving caps
                 write_box(v, b"avcC", move |v| {
                     v.extend_from_slice(&map);
                     Ok(())
@@ -1060,12 +1061,14 @@ fn write_visual_sample_entry(
                 let map = codec_data
                     .map_readable()
                     .context("codec_data not mappable")?;
+                // TODO: create codec_specific_boxes when receiving caps
                 write_box(v, b"hvcC", move |v| {
                     v.extend_from_slice(&map);
                     Ok(())
                 })?;
             }
             "video/x-vp9" => {
+                // TODO: create codec_specific_boxes when receiving caps
                 let profile: u8 = match s.get::<&str>("profile").expect("no vp9 profile") {
                     "0" => Some(0),
                     "1" => Some(1),
@@ -1129,6 +1132,7 @@ fn write_visual_sample_entry(
                 })?;
             }
             "video/x-av1" => {
+                // TODO: create codec_specific_boxes when receiving caps
                 write_box(v, b"av1C", move |v| {
                     if let Ok(codec_data) = s.get::<&gst::BufferRef>("codec_data") {
                         let map = codec_data
@@ -1441,6 +1445,7 @@ fn write_audio_sample_entry(
                 if map.len() < 2 {
                     bail!("too small codec_data");
                 }
+                // TODO: create codec_specific_boxes when receiving caps
                 write_esds_aac(v, cfg, stream, &map)?;
             }
             "audio/x-opus" => {

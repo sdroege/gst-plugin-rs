@@ -1195,6 +1195,8 @@ impl FMP4Mux {
                 stream.dts_offset.display(),
             );
 
+            // TODO: Move this to the stream creation
+
             // If the stream is AV1, we need  to parse the SequenceHeader OBU to include in the
             // extra data of the 'av1C' box. It makes the stream playable in some browsers.
             let s = stream.caps.structure(0).unwrap();
