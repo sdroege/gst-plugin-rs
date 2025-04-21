@@ -3568,14 +3568,17 @@ impl FMP4Mux {
                 }
                 "audio/x-flac" => {
                     discard_header_buffers = true;
-                    if let Err(e) = s.get::<gst::ArrayRef>("streamheader") {
-                        gst::error!(
-                            CAT,
-                            obj = pad,
-                            "Muxing FLAC into MP4 needs streamheader: {}",
-                            e
-                        );
-                        return Err(gst::FlowError::NotNegotiated);
+
+                    codec_specific_boxes = match boxes::write_dfla(&caps) {
+                        Ok(boxes) => boxes,
+                        Err(err) => {
+                            gst::error!(
+                                CAT,
+                                obj = pad,
+                                "Failed to create FLAC codec specific box: {err}"
+                            );
+                            return Err(gst::FlowError::NotNegotiated);
+                        }
                     };
                 }
                 "audio/x-ac3" | "audio/x-eac3" => {
