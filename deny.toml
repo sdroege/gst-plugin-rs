@@ -107,6 +107,12 @@ version = "0.1"
 name = "itertools"
 version = "0.12"
 
+# rav1e still hasn't updated to bitstream-io v3
+# https://github.com/xiph/rav1e/pull/3420
+[[bans.skip]]
+name = "bitstream-io"
+version = "2.6.0"
+
 # bindgen depends on old itertools
 [[bans.skip]]
 name = "itertools"
