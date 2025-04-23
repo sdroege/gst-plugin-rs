@@ -17,7 +17,7 @@ gst = { workspace = true, features = ["v1_20"] }
 gst-app = { workspace = true, features = ["v1_20"] }
 gst-net = { workspace = true, features = ["v1_20"] }
 gst-pbutils = { workspace = true, features = ["v1_20"] }
-lru = "0.13"
+lru = "0.14"
 rtsp-types = "0.1"
 sdp-types = "0.1"
 socket2 = "0.5"
