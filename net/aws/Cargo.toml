@@ -14,7 +14,9 @@ rust-version.workspace = true
 async-stream = "0.3.4"
 base32 = "0.5"
 aws-config = "~1.5.18"
-aws-sdk-s3 = "~1.78.0"
+# needs this constraint to prevent adding aws-smithy-http 0.62 too
+aws-smithy-runtime = "~1.7.8"
+aws-sdk-s3 = "~1.76.0"
 aws-sdk-transcribestreaming = "~1.63.0"
 aws-sdk-translate = "~1.61.0"
 aws-types = "1.0"

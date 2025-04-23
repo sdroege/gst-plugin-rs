@@ -442,9 +442,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-s3"
-version = "1.78.0"
+version = "1.76.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3038614b6cf7dd68d9a7b5b39563d04337eb3678d1d4173e356e927b0356158a"
+checksum = "66e83401ad7287ad15244d557e35502c2a94105ca5b41d656c391f1a4fc04ca2"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -452,7 +452,7 @@ dependencies = [
  "aws-smithy-async",
  "aws-smithy-checksums",
  "aws-smithy-eventstream",
- "aws-smithy-http 0.61.1",
+ "aws-smithy-http 0.60.12",
  "aws-smithy-json",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
@@ -631,9 +631,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-checksums"
-version = "0.63.0"
+version = "0.62.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db2dc8d842d872529355c72632de49ef8c5a2949a4472f10e802f28cf925770c"
+checksum = "f2f45a1c384d7a393026bc5f5c177105aa9fa68e4749653b985707ac27d77295"
 dependencies = [
  "aws-smithy-http 0.60.12",
  "aws-smithy-types",
@@ -668,6 +668,7 @@ version = "0.60.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7809c27ad8da6a6a68c454e651d4962479e81472aa19ae99e59f9aba1f9713cc"
 dependencies = [
+ "aws-smithy-eventstream",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "bytes",
@@ -2574,6 +2575,7 @@ dependencies = [
  "aws-sdk-s3",
  "aws-sdk-transcribestreaming",
  "aws-sdk-translate",
+ "aws-smithy-runtime",
  "aws-types",
  "base32",
  "bytes",
@@ -3407,6 +3409,7 @@ dependencies = [
  "aws-sdk-kinesisvideosignaling",
  "aws-sigv4",
  "aws-smithy-http 0.60.12",
+ "aws-smithy-runtime",
  "aws-smithy-types",
  "aws-types",
  "chrono",
@@ -7933,9 +7936,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.14"
+version = "0.7.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b9590b93e6fcc1739458317cccd391ad3955e2bde8913edf6f95f9e65a8f034"
+checksum = "66a539a9ad6d5d281510d5bd368c973d636c02dbf8a67300bfb6b950696ad7df"
 dependencies = [
  "bytes",
  "futures-core",
