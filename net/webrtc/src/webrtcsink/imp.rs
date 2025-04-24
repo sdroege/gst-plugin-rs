@@ -3783,13 +3783,14 @@ impl BaseWebRTCSink {
             let codecs = if !state.codecs.is_empty() {
                 Codecs::from_map(&state.codecs)
             } else {
+                drop(state);
                 let settings = self.settings.lock().unwrap();
                 let codecs = Codecs::list_encoders(
                     settings.video_caps.iter().chain(settings.audio_caps.iter()),
                 );
 
+                state = self.state.lock().unwrap();
                 state.codecs = codecs.to_map();
-
                 codecs
             };
 
