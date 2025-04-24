@@ -3251,15 +3251,13 @@ impl BaseWebRTCSink {
         };
 
         if let Some(session) = state.sessions.get(session_id) {
-            let session = session.0.lock().unwrap();
+            let webrtcbin = session.0.lock().unwrap().webrtcbin.clone();
             gst::trace!(
                 CAT,
                 imp = self,
                 "adding ice candidate for session {session_id}"
             );
-            session
-                .webrtcbin
-                .emit_by_name::<()>("add-ice-candidate", &[&sdp_m_line_index, &candidate]);
+            webrtcbin.emit_by_name::<()>("add-ice-candidate", &[&sdp_m_line_index, &candidate]);
         } else {
             gst::warning!(CAT, imp = self, "No consumer with ID {session_id}");
         }
