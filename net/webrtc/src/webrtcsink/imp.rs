@@ -2798,6 +2798,10 @@ impl BaseWebRTCSink {
         let session = session.0.lock().unwrap();
 
         if let Some(ref handler) = session.control_events_handler {
+            if handler.0 .1.ready_state() != gst_webrtc::WebRTCDataChannelState::Open {
+                return;
+            }
+
             for meta in utils::serialize_meta(buffer, &settings.forward_metas) {
                 match serde_json::to_string(&utils::InfoMessage {
                     mid: mid.to_owned(),
