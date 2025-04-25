@@ -88,43 +88,43 @@ detach_current_thread() {
     (*java_vm)->DetachCurrentThread(java_vm);
 }
 
-static GstElement *
+void
 handle_media_stream(GstPad *pad, GstElement *pipe, const char *convert_name,
-                    const char *sink_name) {
-    GstPad *queue_pad;
-    GstElement *queue, *conv, *sink;
+                    GstElement *sink) {
+    GstPad *conv_pad;
+    GstElement *conv, *queue;
     GstPadLinkReturn ret;
 
-    queue = gst_element_factory_make("queue", NULL);
-    g_assert(queue);
     conv = gst_element_factory_make(convert_name, NULL);
-    g_assert(conv);
-    sink = gst_element_factory_make(sink_name, NULL);
-    g_assert(sink);
+    g_assert_nonnull(conv);
+    queue = gst_element_factory_make("queue", NULL);
+    g_assert_nonnull(queue);
+
     if (g_strcmp0(convert_name, "audioconvert") == 0) {
         GstElement *resample = gst_element_factory_make("audioresample", NULL);
         g_assert_nonnull(resample);
-        gst_bin_add_many(GST_BIN(pipe), queue, conv, resample, sink, NULL);
-        gst_element_sync_state_with_parent(queue);
+        gst_bin_add_many(GST_BIN(pipe), conv, resample, queue, sink, NULL);
+        gst_element_link_many(conv, resample, queue, sink, NULL);
+        conv_pad = gst_element_get_static_pad(conv, "sink");
+        ret = gst_pad_link(pad, conv_pad);
+
         gst_element_sync_state_with_parent(conv);
+        gst_element_sync_state_with_parent(queue);
         gst_element_sync_state_with_parent(resample);
         gst_element_sync_state_with_parent(sink);
-        gst_element_link_many(queue, conv, resample, sink, NULL);
     } else {
-        gst_bin_add_many(GST_BIN(pipe), queue, conv, sink, NULL);
-        gst_element_sync_state_with_parent(queue);
+        gst_bin_add_many(GST_BIN(pipe), conv, queue, sink, NULL);
+        gst_element_link_many(conv, queue, sink, NULL);
+        conv_pad = gst_element_get_static_pad(conv, "sink");
+        ret = gst_pad_link(pad, conv_pad);
+
         gst_element_sync_state_with_parent(conv);
+        gst_element_sync_state_with_parent(queue);
         gst_element_sync_state_with_parent(sink);
-        gst_element_link_many(queue, conv, sink, NULL);
     }
 
-    queue_pad = gst_element_get_static_pad(queue, "sink");
-
-    ret = gst_pad_link(pad, queue_pad);
     g_assert(ret == GST_PAD_LINK_OK);
-    gst_object_unref(queue_pad);
-
-    return sink;
+    gst_object_unref(conv_pad);
 }
 
 static void
@@ -136,12 +136,15 @@ on_incoming_stream(__attribute__((unused)) GstElement *webrtcsrc, GstPad *pad, W
 
         if (ctx->video_sink == NULL) {
             GST_DEBUG("Handling video pad %s", name);
-            ctx->video_sink =
-                    handle_media_stream(pad, ctx->pipe, "videoconvert",
-                                        "glimagesink");
+
+            ctx->video_sink = gst_element_factory_make("glimagesink", NULL);
+            g_assert(ctx->video_sink);
             if (ctx->native_window)
                 gst_video_overlay_set_window_handle(GST_VIDEO_OVERLAY(ctx->video_sink),
                                                     (guintptr) ctx->native_window);
+
+            handle_media_stream(pad, ctx->pipe, "videoconvert",
+                                ctx->video_sink);
         } else {
             GstElement *sink;
             GstPad *sinkpad;
@@ -149,21 +152,27 @@ on_incoming_stream(__attribute__((unused)) GstElement *webrtcsrc, GstPad *pad, W
 
             GST_INFO("Ignoring additional video pad %s", name);
             sink = gst_element_factory_make("fakesink", NULL);
-            g_assert(sink);
+            g_assert_nonnull(sink);
 
             gst_bin_add(GST_BIN(ctx->pipe), sink);
-            gst_element_sync_state_with_parent(sink);
 
             sinkpad = gst_element_get_static_pad(sink, "sink");
             ret = gst_pad_link(pad, sinkpad);
             g_assert(ret == GST_PAD_LINK_OK);
             gst_object_unref(sinkpad);
+
+            gst_element_sync_state_with_parent(sink);
         }
 
         g_mutex_unlock(&ctx->video_pad_mutex);
     } else if (g_str_has_prefix(name, "audio")) {
+        GstElement *sink;
+
         GST_DEBUG("Handling audio stream %s", name);
-        handle_media_stream(pad, ctx->pipe, "audioconvert", "autoaudiosink");
+        sink = gst_element_factory_make("autoaudiosink", NULL);
+        g_assert_nonnull(sink);
+
+        handle_media_stream(pad, ctx->pipe, "audioconvert", sink);
     } else {
         GST_ERROR("Ignoring unknown pad %s", name);
     }
