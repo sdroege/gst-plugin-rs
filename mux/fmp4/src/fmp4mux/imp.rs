@@ -3183,6 +3183,8 @@ impl FMP4Mux {
 
                 buffer.set_pts(min_earliest_pts_position);
                 buffer.set_dts(min_start_dts_position);
+                buffer.set_offset(u64::MAX);
+                buffer.set_offset_end(u64::MAX);
 
                 // Header is DISCONT|HEADER
                 buffer.set_flags(gst::BufferFlags::DISCONT | gst::BufferFlags::HEADER);
@@ -3225,6 +3227,8 @@ impl FMP4Mux {
             buffer.set_pts(min_earliest_pts_position);
             buffer.set_dts(min_start_dts_position);
             buffer.set_duration(chunk_end_pts.checked_sub(min_earliest_pts));
+            buffer.set_offset(sequence_number as u64);
+            buffer.set_offset_end(u64::MAX);
 
             // Fragment and chunk header is HEADER
             buffer.set_flags(gst::BufferFlags::HEADER);
