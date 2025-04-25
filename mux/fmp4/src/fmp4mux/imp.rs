@@ -3194,7 +3194,6 @@ impl FMP4Mux {
             state.sent_headers = true;
         }
 
-        // TODO: Write prft boxes before moof
         // TODO: Write sidx boxes before moof and rewrite once offsets are known
 
         let sequence_number = state.sequence_number;
