@@ -147,7 +147,11 @@ impl Dav1dDec {
         }
     }
 
-    fn gst_video_format_from_dav1d_picture(&self, pic: &dav1d::Picture) -> gst_video::VideoFormat {
+    fn video_format_from_dav1d_picture(
+        &self,
+        pic: &dav1d::Picture,
+        input_state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
+    ) -> gst_video::VideoFormat {
         let bpc = pic.bits_per_component();
         let format_desc = match (pic.pixel_layout(), bpc) {
             (dav1d::PixelLayout::I400, Some(dav1d::BitsPerComponent(8))) => "GRAY8",
@@ -190,153 +194,20 @@ impl Dav1dDec {
                 None => format_desc.into(),
             }
         };
-        f.parse::<gst_video::VideoFormat>().unwrap_or_else(|_| {
+
+        let mut format = f.parse::<gst_video::VideoFormat>().unwrap_or_else(|_| {
             gst::warning!(CAT, imp = self, "Unsupported dav1d format: {}", f);
             gst_video::VideoFormat::Unknown
-        })
-    }
-
-    fn colorimetry_from_dav1d_picture(
-        &self,
-        pic: &dav1d::Picture,
-    ) -> Option<gst_video::VideoColorimetry> {
-        use dav1d::pixel;
-
-        let range = match pic.color_range() {
-            pixel::YUVRange::Limited => gst_video::VideoColorRange::Range16_235,
-            pixel::YUVRange::Full => gst_video::VideoColorRange::Range0_255,
-        };
-
-        let matrix = match pic.matrix_coefficients() {
-            pixel::MatrixCoefficients::Identity => gst_video::VideoColorMatrix::Rgb,
-            pixel::MatrixCoefficients::BT709 => gst_video::VideoColorMatrix::Bt709,
-            pixel::MatrixCoefficients::Unspecified => gst_video::VideoColorMatrix::Bt709,
-            pixel::MatrixCoefficients::BT470M => gst_video::VideoColorMatrix::Fcc,
-            pixel::MatrixCoefficients::BT470BG => gst_video::VideoColorMatrix::Bt601,
-            pixel::MatrixCoefficients::ST240M => gst_video::VideoColorMatrix::Smpte240m,
-            pixel::MatrixCoefficients::BT2020NonConstantLuminance => {
-                gst_video::VideoColorMatrix::Bt2020
-            }
-            _ => {
-                gst::warning!(
-                    CAT,
-                    imp = self,
-                    "Unsupported dav1d colorimetry matrix coefficients"
-                );
-                gst_video::VideoColorMatrix::Unknown
-            }
-        };
-
-        let transfer = match pic.transfer_characteristic() {
-            pixel::TransferCharacteristic::BT1886 => gst_video::VideoTransferFunction::Bt709,
-            pixel::TransferCharacteristic::Unspecified => gst_video::VideoTransferFunction::Bt709,
-            pixel::TransferCharacteristic::BT470M => gst_video::VideoTransferFunction::Bt709,
-            pixel::TransferCharacteristic::BT470BG => gst_video::VideoTransferFunction::Gamma28,
-            pixel::TransferCharacteristic::ST170M => gst_video::VideoTransferFunction::Bt601,
-            pixel::TransferCharacteristic::ST240M => gst_video::VideoTransferFunction::Smpte240m,
-            pixel::TransferCharacteristic::Linear => gst_video::VideoTransferFunction::Gamma10,
-            pixel::TransferCharacteristic::Logarithmic100 => {
-                gst_video::VideoTransferFunction::Log100
-            }
-            pixel::TransferCharacteristic::Logarithmic316 => {
-                gst_video::VideoTransferFunction::Log316
-            }
-            pixel::TransferCharacteristic::SRGB => gst_video::VideoTransferFunction::Srgb,
-            pixel::TransferCharacteristic::BT2020Ten => gst_video::VideoTransferFunction::Bt202010,
-            pixel::TransferCharacteristic::BT2020Twelve => {
-                gst_video::VideoTransferFunction::Bt202012
-            }
-            pixel::TransferCharacteristic::PerceptualQuantizer => {
-                gst_video::VideoTransferFunction::Smpte2084
-            }
-            pixel::TransferCharacteristic::HybridLogGamma => {
-                gst_video::VideoTransferFunction::AribStdB67
-            }
-            _ => {
-                gst::warning!(
-                    CAT,
-                    imp = self,
-                    "Unsupported dav1d colorimetry transfer function"
-                );
-                gst_video::VideoTransferFunction::Unknown
-            }
-        };
-
-        let primaries = match pic.color_primaries() {
-            pixel::ColorPrimaries::BT709 => gst_video::VideoColorPrimaries::Bt709,
-            pixel::ColorPrimaries::Unspecified => gst_video::VideoColorPrimaries::Bt709,
-            pixel::ColorPrimaries::BT470M => gst_video::VideoColorPrimaries::Bt470m,
-            pixel::ColorPrimaries::BT470BG => gst_video::VideoColorPrimaries::Bt470bg,
-            pixel::ColorPrimaries::ST240M => gst_video::VideoColorPrimaries::Smpte240m,
-            pixel::ColorPrimaries::Film => gst_video::VideoColorPrimaries::Film,
-            pixel::ColorPrimaries::BT2020 => gst_video::VideoColorPrimaries::Bt2020,
-            pixel::ColorPrimaries::ST428 => gst_video::VideoColorPrimaries::Smptest428,
-            pixel::ColorPrimaries::P3DCI => gst_video::VideoColorPrimaries::Smpterp431,
-            pixel::ColorPrimaries::P3Display => gst_video::VideoColorPrimaries::Smpteeg432,
-            pixel::ColorPrimaries::Tech3213 => gst_video::VideoColorPrimaries::Ebu3213,
-            _ => {
-                gst::warning!(CAT, imp = self, "Unsupported dav1d color primaries");
-                gst_video::VideoColorPrimaries::Unknown
-            }
-        };
-
-        if matrix == gst_video::VideoColorMatrix::Unknown
-            && transfer == gst_video::VideoTransferFunction::Unknown
-            && primaries == gst_video::VideoColorPrimaries::Unknown
-        {
-            None
-        } else {
-            Some(gst_video::VideoColorimetry::new(
-                range, matrix, transfer, primaries,
-            ))
-        }
-    }
-
-    fn chroma_site_from_dav1d_picture(
-        &self,
-        pic: &dav1d::Picture,
-    ) -> Option<gst_video::VideoChromaSite> {
-        use dav1d::pixel;
-        match pic.pixel_layout() {
-            dav1d::PixelLayout::I420 | dav1d::PixelLayout::I422 => match pic.chroma_location() {
-                pixel::ChromaLocation::Center => Some(gst_video::VideoChromaSite::JPEG),
-                pixel::ChromaLocation::Left => Some(gst_video::VideoChromaSite::MPEG2),
-                _ => None,
-            },
-            _ => None,
-        }
-    }
-
-    fn handle_resolution_change<'s>(
-        &'s self,
-        mut state_guard: MutexGuard<'s, Option<State>>,
-        pic: &dav1d::Picture,
-    ) -> Result<MutexGuard<'s, Option<State>>, gst::FlowError> {
-        let state = state_guard.as_ref().unwrap();
-
-        let mut format = self.gst_video_format_from_dav1d_picture(pic);
-        if format == gst_video::VideoFormat::Unknown {
-            return Err(gst::FlowError::NotNegotiated);
-        }
-
-        let need_negotiate = state.output_state.as_ref().is_none_or(|state| {
-            let info = state.info();
-            (info.width() != pic.width())
-                || (info.height() != pic.height() || (info.format() != format))
         });
-        if !need_negotiate {
-            return Ok(state_guard);
-        }
 
-        let input_state = state.input_state.clone();
-        let input_caps = input_state.caps().ok_or(gst::FlowError::NotNegotiated)?;
-        let input_structure = input_caps
-            .structure(0)
-            .ok_or(gst::FlowError::NotNegotiated)?;
+        if format == gst_video::VideoFormat::Unknown {
+            return format;
+        }
 
         // Special handling of RGB
-        if input_state.info().colorimetry().matrix() == gst_video::VideoColorMatrix::Rgb
-            || (input_state.info().colorimetry().matrix() == gst_video::VideoColorMatrix::Unknown
+        let input_info = input_state.info();
+        if input_info.colorimetry().matrix() == gst_video::VideoColorMatrix::Rgb
+            || (input_info.colorimetry().matrix() == gst_video::VideoColorMatrix::Unknown
                 && pic.matrix_coefficients() == dav1d::pixel::MatrixCoefficients::Identity)
         {
             gst::debug!(
@@ -351,7 +222,7 @@ impl Dav1dDec {
                     imp = self,
                     "Unsupported non-4:4:4 YUV format {format:?} for RGB"
                 );
-                return Err(gst::FlowError::NotNegotiated);
+                return gst_video::VideoFormat::Unknown;
             }
 
             let rgb_format = format.to_str().replace("Y444", "GBR");
@@ -359,7 +230,7 @@ impl Dav1dDec {
                 Ok(format) => format,
                 Err(_) => {
                     gst::error!(CAT, imp = self, "Unsupported YUV format {format:?} for RGB");
-                    return Err(gst::FlowError::NotNegotiated);
+                    return gst_video::VideoFormat::Unknown;
                 }
             };
 
@@ -384,6 +255,184 @@ impl Dav1dDec {
             }
         }
 
+        format
+    }
+
+    fn colorimetry_from_dav1d_picture(
+        &self,
+        pic: &dav1d::Picture,
+        input_state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
+    ) -> gst_video::VideoColorimetry {
+        use dav1d::pixel;
+
+        let input_caps = input_state.caps().unwrap();
+        let input_structure = input_caps.structure(0).unwrap();
+        let input_info = input_state.info();
+        let input_colorimetry = input_info.colorimetry();
+
+        let range = if !input_structure.has_field("colorimetry")
+            || input_colorimetry.range() == gst_video::VideoColorRange::Unknown
+        {
+            match pic.color_range() {
+                pixel::YUVRange::Limited => gst_video::VideoColorRange::Range16_235,
+                pixel::YUVRange::Full => gst_video::VideoColorRange::Range0_255,
+            }
+        } else {
+            input_colorimetry.range()
+        };
+
+        let matrix = if !input_structure.has_field("colorimetry")
+            || input_colorimetry.matrix() == gst_video::VideoColorMatrix::Unknown
+        {
+            match pic.matrix_coefficients() {
+                pixel::MatrixCoefficients::Identity => gst_video::VideoColorMatrix::Rgb,
+                pixel::MatrixCoefficients::BT709 => gst_video::VideoColorMatrix::Bt709,
+                pixel::MatrixCoefficients::Unspecified => gst_video::VideoColorMatrix::Bt709,
+                pixel::MatrixCoefficients::BT470M => gst_video::VideoColorMatrix::Fcc,
+                pixel::MatrixCoefficients::BT470BG => gst_video::VideoColorMatrix::Bt601,
+                pixel::MatrixCoefficients::ST240M => gst_video::VideoColorMatrix::Smpte240m,
+                pixel::MatrixCoefficients::BT2020NonConstantLuminance => {
+                    gst_video::VideoColorMatrix::Bt2020
+                }
+                _ => {
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Unsupported dav1d colorimetry matrix coefficients"
+                    );
+                    gst_video::VideoColorMatrix::Unknown
+                }
+            }
+        } else {
+            input_colorimetry.matrix()
+        };
+
+        let transfer = if !input_structure.has_field("colorimetry")
+            || input_colorimetry.transfer() == gst_video::VideoTransferFunction::Unknown
+        {
+            match pic.transfer_characteristic() {
+                pixel::TransferCharacteristic::BT1886 => gst_video::VideoTransferFunction::Bt709,
+                pixel::TransferCharacteristic::Unspecified => {
+                    gst_video::VideoTransferFunction::Bt709
+                }
+                pixel::TransferCharacteristic::BT470M => gst_video::VideoTransferFunction::Bt709,
+                pixel::TransferCharacteristic::BT470BG => gst_video::VideoTransferFunction::Gamma28,
+                pixel::TransferCharacteristic::ST170M => gst_video::VideoTransferFunction::Bt601,
+                pixel::TransferCharacteristic::ST240M => {
+                    gst_video::VideoTransferFunction::Smpte240m
+                }
+                pixel::TransferCharacteristic::Linear => gst_video::VideoTransferFunction::Gamma10,
+                pixel::TransferCharacteristic::Logarithmic100 => {
+                    gst_video::VideoTransferFunction::Log100
+                }
+                pixel::TransferCharacteristic::Logarithmic316 => {
+                    gst_video::VideoTransferFunction::Log316
+                }
+                pixel::TransferCharacteristic::SRGB => gst_video::VideoTransferFunction::Srgb,
+                pixel::TransferCharacteristic::BT2020Ten => {
+                    gst_video::VideoTransferFunction::Bt202010
+                }
+                pixel::TransferCharacteristic::BT2020Twelve => {
+                    gst_video::VideoTransferFunction::Bt202012
+                }
+                pixel::TransferCharacteristic::PerceptualQuantizer => {
+                    gst_video::VideoTransferFunction::Smpte2084
+                }
+                pixel::TransferCharacteristic::HybridLogGamma => {
+                    gst_video::VideoTransferFunction::AribStdB67
+                }
+                _ => {
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Unsupported dav1d colorimetry transfer function"
+                    );
+                    gst_video::VideoTransferFunction::Unknown
+                }
+            }
+        } else {
+            input_colorimetry.transfer()
+        };
+
+        let primaries = if !input_structure.has_field("colorimetry")
+            || input_colorimetry.primaries() == gst_video::VideoColorPrimaries::Unknown
+        {
+            match pic.color_primaries() {
+                pixel::ColorPrimaries::BT709 => gst_video::VideoColorPrimaries::Bt709,
+                pixel::ColorPrimaries::Unspecified => gst_video::VideoColorPrimaries::Bt709,
+                pixel::ColorPrimaries::BT470M => gst_video::VideoColorPrimaries::Bt470m,
+                pixel::ColorPrimaries::BT470BG => gst_video::VideoColorPrimaries::Bt470bg,
+                pixel::ColorPrimaries::ST240M => gst_video::VideoColorPrimaries::Smpte240m,
+                pixel::ColorPrimaries::Film => gst_video::VideoColorPrimaries::Film,
+                pixel::ColorPrimaries::BT2020 => gst_video::VideoColorPrimaries::Bt2020,
+                pixel::ColorPrimaries::ST428 => gst_video::VideoColorPrimaries::Smptest428,
+                pixel::ColorPrimaries::P3DCI => gst_video::VideoColorPrimaries::Smpterp431,
+                pixel::ColorPrimaries::P3Display => gst_video::VideoColorPrimaries::Smpteeg432,
+                pixel::ColorPrimaries::Tech3213 => gst_video::VideoColorPrimaries::Ebu3213,
+                _ => {
+                    gst::warning!(CAT, imp = self, "Unsupported dav1d color primaries");
+                    gst_video::VideoColorPrimaries::Unknown
+                }
+            }
+        } else {
+            input_colorimetry.primaries()
+        };
+
+        gst_video::VideoColorimetry::new(range, matrix, transfer, primaries)
+    }
+
+    fn chroma_site_from_dav1d_picture(
+        &self,
+        pic: &dav1d::Picture,
+        input_state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
+    ) -> gst_video::VideoChromaSite {
+        use dav1d::pixel;
+
+        let input_caps = input_state.caps().unwrap();
+        let input_structure = input_caps.structure(0).unwrap();
+
+        let chroma_site = if !input_structure.has_field("chroma-site") {
+            match pic.pixel_layout() {
+                dav1d::PixelLayout::I420 | dav1d::PixelLayout::I422 => {
+                    match pic.chroma_location() {
+                        pixel::ChromaLocation::Center => Some(gst_video::VideoChromaSite::JPEG),
+                        pixel::ChromaLocation::Left => Some(gst_video::VideoChromaSite::MPEG2),
+                        _ => None,
+                    }
+                }
+                _ => None,
+            }
+        } else {
+            Some(input_state.info().chroma_site())
+        };
+
+        chroma_site.unwrap_or(input_state.info().chroma_site())
+    }
+
+    fn handle_resolution_change<'s>(
+        &'s self,
+        mut state_guard: MutexGuard<'s, Option<State>>,
+        pic: &dav1d::Picture,
+    ) -> Result<MutexGuard<'s, Option<State>>, gst::FlowError> {
+        let state = state_guard.as_ref().unwrap();
+
+        let format = self.video_format_from_dav1d_picture(&pic, &state.input_state);
+        if format == gst_video::VideoFormat::Unknown {
+            return Err(gst::FlowError::NotNegotiated);
+        }
+
+        let need_negotiate = state.output_state.as_ref().is_none_or(|state| {
+            let info = state.info();
+            (info.width() != pic.width())
+                || (info.height() != pic.height() || (info.format() != format))
+        });
+        if !need_negotiate {
+            return Ok(state_guard);
+        }
+
+        let input_state = state.input_state.clone();
+        input_state.caps().ok_or(gst::FlowError::NotNegotiated)?;
+
         gst::info!(
             CAT,
             imp = self,
@@ -399,60 +448,13 @@ impl Dav1dDec {
         let mut output_state =
             instance.set_output_state(format, pic.width(), pic.height(), Some(&input_state))?;
         let info = output_state.info();
-        let mut info_builder = gst_video::VideoInfo::builder_from_info(info);
-        let mut update_output_state = false;
+        let info = gst_video::VideoInfo::builder_from_info(info)
+            .colorimetry(&self.colorimetry_from_dav1d_picture(pic, &input_state))
+            .chroma_site(self.chroma_site_from_dav1d_picture(pic, &input_state))
+            .build()
+            .map_err(|_| gst::FlowError::NotNegotiated)?;
 
-        let input_colorimetry = info.colorimetry();
-        let dec_colorimetry = self.colorimetry_from_dav1d_picture(pic);
-        if let Some(ref dec_colorimetry) = dec_colorimetry {
-            let mut range = input_colorimetry.range();
-            let mut matrix = input_colorimetry.matrix();
-            let mut transfer = input_colorimetry.transfer();
-            let mut primaries = input_colorimetry.primaries();
-
-            if !input_structure.has_field("colorimetry")
-                || range == gst_video::VideoColorRange::Unknown
-            {
-                range = dec_colorimetry.range();
-            }
-
-            if !input_structure.has_field("colorimetry")
-                || matrix == gst_video::VideoColorMatrix::Unknown
-            {
-                matrix = dec_colorimetry.matrix();
-            }
-
-            if !input_structure.has_field("colorimetry")
-                || transfer == gst_video::VideoTransferFunction::Unknown
-            {
-                transfer = dec_colorimetry.transfer();
-            }
-
-            if !input_structure.has_field("colorimetry")
-                || primaries == gst_video::VideoColorPrimaries::Unknown
-            {
-                primaries = dec_colorimetry.primaries();
-            }
-
-            info_builder = info_builder.colorimetry(&gst_video::VideoColorimetry::new(
-                range, matrix, transfer, primaries,
-            ));
-            update_output_state = true;
-        }
-
-        if !input_structure.has_field("chroma-site") {
-            if let Some(chroma_site) = self.chroma_site_from_dav1d_picture(pic) {
-                info_builder = info_builder.chroma_site(chroma_site);
-                update_output_state = true;
-            }
-        }
-
-        if update_output_state {
-            let info = info_builder
-                .build()
-                .map_err(|_| gst::FlowError::NotNegotiated)?;
-            output_state.set_info(info);
-        }
+        output_state.set_info(info);
 
         instance.negotiate(output_state)?;
         let out_state = instance.output_state().unwrap();
