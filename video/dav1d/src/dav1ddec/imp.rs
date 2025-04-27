@@ -63,7 +63,7 @@ struct State {
     input_state: gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     output_state:
         Option<gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>>,
-    output_pool: Option<(gst::BufferPool, gst_video::VideoInfo)>,
+    output_pool: Option<gst::BufferPool>,
     video_meta_supported: bool,
     n_cpus: usize,
 }
@@ -259,120 +259,9 @@ impl Dav1dDec {
         format
     }
 
-    fn video_format_from_dav1d_picture(
+    fn colorimetry_from_picture_parameters(
         &self,
-        pic: &dav1d::Picture<super::Dav1dDec>,
-        input_state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
-    ) -> gst_video::VideoFormat {
-        let bpc = pic.bits_per_component();
-        let format_desc = match (pic.pixel_layout(), bpc) {
-            (dav1d::PixelLayout::I400, Some(dav1d::BitsPerComponent(8))) => "GRAY8",
-            #[cfg(target_endian = "little")]
-            (dav1d::PixelLayout::I400, Some(dav1d::BitsPerComponent(16))) => "GRAY16_LE",
-            #[cfg(target_endian = "big")]
-            (dav1d::PixelLayout::I400, Some(dav1d::BitsPerComponent(16))) => "GRAY16_BE",
-            // (dav1d::PixelLayout::I400, Some(dav1d::BitsPerComponent(10))) => "GRAY10_LE32",
-            (dav1d::PixelLayout::I420, _) => "I420",
-            (dav1d::PixelLayout::I422, Some(dav1d::BitsPerComponent(8))) => "Y42B",
-            (dav1d::PixelLayout::I422, _) => "I422",
-            (dav1d::PixelLayout::I444, _) => "Y444",
-            (layout, bpc) => {
-                gst::warning!(
-                    CAT,
-                    imp = self,
-                    "Unsupported dav1d format {:?}/{:?}",
-                    layout,
-                    bpc
-                );
-                return gst_video::VideoFormat::Unknown;
-            }
-        };
-
-        let f = if format_desc.starts_with("GRAY") {
-            format_desc.into()
-        } else {
-            match bpc {
-                Some(b) => match b.0 {
-                    8 => format_desc.into(),
-                    _ => {
-                        let endianness = if cfg!(target_endian = "little") {
-                            "LE"
-                        } else {
-                            "BE"
-                        };
-                        format!("{f}_{b}{e}", f = format_desc, b = b.0, e = endianness)
-                    }
-                },
-                None => format_desc.into(),
-            }
-        };
-
-        let mut format = f.parse::<gst_video::VideoFormat>().unwrap_or_else(|_| {
-            gst::warning!(CAT, imp = self, "Unsupported dav1d format: {}", f);
-            gst_video::VideoFormat::Unknown
-        });
-
-        if format == gst_video::VideoFormat::Unknown {
-            return format;
-        }
-
-        // Special handling of RGB
-        let input_info = input_state.info();
-        if input_info.colorimetry().matrix() == gst_video::VideoColorMatrix::Rgb
-            || (input_info.colorimetry().matrix() == gst_video::VideoColorMatrix::Unknown
-                && pic.matrix_coefficients() == dav1d::pixel::MatrixCoefficients::Identity)
-        {
-            gst::debug!(
-                CAT,
-                imp = self,
-                "Input is actually RGB, switching format {format:?} to RGB"
-            );
-
-            if pic.pixel_layout() != dav1d::PixelLayout::I444 {
-                gst::error!(
-                    CAT,
-                    imp = self,
-                    "Unsupported non-4:4:4 YUV format {format:?} for RGB"
-                );
-                return gst_video::VideoFormat::Unknown;
-            }
-
-            let rgb_format = format.to_str().replace("Y444", "GBR");
-            format = match rgb_format.parse::<gst_video::VideoFormat>() {
-                Ok(format) => format,
-                Err(_) => {
-                    gst::error!(CAT, imp = self, "Unsupported YUV format {format:?} for RGB");
-                    return gst_video::VideoFormat::Unknown;
-                }
-            };
-
-            if input_state.info().colorimetry().transfer()
-                != gst_video::VideoTransferFunction::Unknown
-                && input_state.info().colorimetry().transfer()
-                    != gst_video::VideoTransferFunction::Srgb
-                || (input_state.info().colorimetry().transfer()
-                    == gst_video::VideoTransferFunction::Unknown
-                    && pic.transfer_characteristic() != dav1d::pixel::TransferCharacteristic::SRGB)
-            {
-                gst::warning!(CAT, imp = self, "Unexpected non-sRGB transfer function");
-            }
-
-            if input_state.info().colorimetry().range() != gst_video::VideoColorRange::Unknown
-                && input_state.info().colorimetry().range()
-                    != gst_video::VideoColorRange::Range0_255
-                || (input_state.info().colorimetry().range() == gst_video::VideoColorRange::Unknown
-                    && pic.color_range() != dav1d::pixel::YUVRange::Full)
-            {
-                gst::warning!(CAT, imp = self, "Unexpected non-full-range RGB");
-            }
-        }
-
-        format
-    }
-
-    fn colorimetry_from_dav1d_picture(
-        &self,
-        pic: &dav1d::Picture<super::Dav1dDec>,
+        params: &dav1d::PictureParameters,
         input_state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> gst_video::VideoColorimetry {
         use dav1d::pixel;
@@ -385,7 +274,7 @@ impl Dav1dDec {
         let range = if !input_structure.has_field("colorimetry")
             || input_colorimetry.range() == gst_video::VideoColorRange::Unknown
         {
-            match pic.color_range() {
+            match params.color_range() {
                 pixel::YUVRange::Limited => gst_video::VideoColorRange::Range16_235,
                 pixel::YUVRange::Full => gst_video::VideoColorRange::Range0_255,
             }
@@ -396,7 +285,7 @@ impl Dav1dDec {
         let matrix = if !input_structure.has_field("colorimetry")
             || input_colorimetry.matrix() == gst_video::VideoColorMatrix::Unknown
         {
-            match pic.matrix_coefficients() {
+            match params.matrix_coefficients() {
                 pixel::MatrixCoefficients::Identity => gst_video::VideoColorMatrix::Rgb,
                 pixel::MatrixCoefficients::BT709 => gst_video::VideoColorMatrix::Bt709,
                 pixel::MatrixCoefficients::Unspecified => gst_video::VideoColorMatrix::Bt709,
@@ -422,7 +311,7 @@ impl Dav1dDec {
         let transfer = if !input_structure.has_field("colorimetry")
             || input_colorimetry.transfer() == gst_video::VideoTransferFunction::Unknown
         {
-            match pic.transfer_characteristic() {
+            match params.transfer_characteristic() {
                 pixel::TransferCharacteristic::BT1886 => gst_video::VideoTransferFunction::Bt709,
                 pixel::TransferCharacteristic::Unspecified => {
                     gst_video::VideoTransferFunction::Bt709
@@ -469,7 +358,7 @@ impl Dav1dDec {
         let primaries = if !input_structure.has_field("colorimetry")
             || input_colorimetry.primaries() == gst_video::VideoColorPrimaries::Unknown
         {
-            match pic.color_primaries() {
+            match params.color_primaries() {
                 pixel::ColorPrimaries::BT709 => gst_video::VideoColorPrimaries::Bt709,
                 pixel::ColorPrimaries::Unspecified => gst_video::VideoColorPrimaries::Bt709,
                 pixel::ColorPrimaries::BT470M => gst_video::VideoColorPrimaries::Bt470m,
@@ -493,9 +382,9 @@ impl Dav1dDec {
         gst_video::VideoColorimetry::new(range, matrix, transfer, primaries)
     }
 
-    fn chroma_site_from_dav1d_picture(
+    fn chroma_site_from_picture_parameters(
         &self,
-        pic: &dav1d::Picture<super::Dav1dDec>,
+        params: &dav1d::PictureParameters,
         input_state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> gst_video::VideoChromaSite {
         use dav1d::pixel;
@@ -504,9 +393,9 @@ impl Dav1dDec {
         let input_structure = input_caps.structure(0).unwrap();
 
         let chroma_site = if !input_structure.has_field("chroma-site") {
-            match pic.pixel_layout() {
+            match params.pixel_layout() {
                 dav1d::PixelLayout::I420 | dav1d::PixelLayout::I422 => {
-                    match pic.chroma_location() {
+                    match params.chroma_location() {
                         pixel::ChromaLocation::Center => Some(gst_video::VideoChromaSite::JPEG),
                         pixel::ChromaLocation::Left => Some(gst_video::VideoChromaSite::MPEG2),
                         _ => None,
@@ -519,63 +408,6 @@ impl Dav1dDec {
         };
 
         chroma_site.unwrap_or(input_state.info().chroma_site())
-    }
-
-    fn handle_resolution_change<'s>(
-        &'s self,
-        mut state_guard: MutexGuard<'s, Option<State>>,
-        pic: &dav1d::Picture<super::Dav1dDec>,
-    ) -> Result<MutexGuard<'s, Option<State>>, gst::FlowError> {
-        let state = state_guard.as_ref().unwrap();
-
-        let format = self.video_format_from_dav1d_picture(pic, &state.input_state);
-        if format == gst_video::VideoFormat::Unknown {
-            return Err(gst::FlowError::NotNegotiated);
-        }
-
-        let need_negotiate = state.output_state.as_ref().is_none_or(|state| {
-            let info = state.info();
-            (info.width() != pic.width())
-                || (info.height() != pic.height() || (info.format() != format))
-        });
-        if !need_negotiate {
-            return Ok(state_guard);
-        }
-
-        let input_state = state.input_state.clone();
-        input_state.caps().ok_or(gst::FlowError::NotNegotiated)?;
-
-        gst::info!(
-            CAT,
-            imp = self,
-            "Negotiating format {:?} picture dimensions {}x{}",
-            format,
-            pic.width(),
-            pic.height()
-        );
-
-        drop(state_guard);
-
-        let instance = self.obj();
-        let mut output_state =
-            instance.set_output_state(format, pic.width(), pic.height(), Some(&input_state))?;
-        let info = output_state.info();
-        let info = gst_video::VideoInfo::builder_from_info(info)
-            .colorimetry(&self.colorimetry_from_dav1d_picture(pic, &input_state))
-            .chroma_site(self.chroma_site_from_dav1d_picture(pic, &input_state))
-            .build()
-            .map_err(|_| gst::FlowError::NotNegotiated)?;
-
-        output_state.set_info(info);
-
-        instance.negotiate(output_state)?;
-        let out_state = instance.output_state().unwrap();
-
-        state_guard = self.state.lock().unwrap();
-        let state = state_guard.as_mut().ok_or(gst::FlowError::Flushing)?;
-        state.output_state = Some(out_state.clone());
-
-        Ok(state_guard)
     }
 
     fn flush_decoder(&self, state: &mut State) {
@@ -699,7 +531,8 @@ impl Dav1dDec {
         let state = state_guard.as_mut().ok_or(gst::FlowError::Flushing)?;
         let video_meta_supported = state.video_meta_supported;
 
-        let info = state.output_state.as_ref().unwrap().info().clone();
+        let output_state = state.output_state.as_ref().unwrap().clone();
+        let info = output_state.info();
         let in_vframe = pic.allocator_data().unwrap();
 
         let strides_matching =
@@ -750,7 +583,7 @@ impl Dav1dDec {
             assert!(mut_buffer.size() > 0);
 
             let mut out_vframe =
-                gst_video::VideoFrameRef::from_buffer_ref_writable(mut_buffer, &info)
+                gst_video::VideoFrameRef::from_buffer_ref_writable(mut_buffer, output_state.info())
                     .expect("can map writable frame");
 
             if in_vframe
@@ -768,14 +601,32 @@ impl Dav1dDec {
 
     fn handle_picture<'s>(
         &'s self,
-        mut state_guard: MutexGuard<'s, Option<State>>,
+        state_guard: MutexGuard<'s, Option<State>>,
         pic: &dav1d::Picture<super::Dav1dDec>,
     ) -> Result<MutexGuard<'s, Option<State>>, gst::FlowError> {
         gst::trace!(CAT, imp = self, "Handling picture {}", pic.offset());
 
-        state_guard = self.handle_resolution_change(state_guard, pic)?;
-
         let instance = self.obj();
+
+        let output_state = instance
+            .output_state()
+            .expect("Output state not set. Shouldn't happen!");
+
+        let video_frame = pic.allocator_data().unwrap();
+
+        let info = output_state.info();
+        if info.format() != video_frame.format()
+            || info.width() != video_frame.width()
+            || info.height() != video_frame.height()
+        {
+            gst::error!(
+                CAT,
+                imp = self,
+                "Received picture format does not match output state",
+            );
+            return Err(gst::FlowError::NotNegotiated);
+        }
+
         let offset = pic.offset() as i32;
 
         let frame = instance.frame(offset);
@@ -886,7 +737,7 @@ unsafe impl dav1d::PictureAllocator for super::Dav1dDec {
 
         let mut state_guard = imp.state.lock().unwrap();
 
-        let Some(state) = state_guard.as_mut() else {
+        let Some(mut state) = state_guard.as_mut() else {
             gst::trace!(CAT, obj = self, "Flushing");
             return Err(dav1d::Error::InvalidArgument);
         };
@@ -906,21 +757,76 @@ unsafe impl dav1d::PictureAllocator for super::Dav1dDec {
             params.height()
         );
 
-        if state.output_pool.as_ref().is_none_or(|(_pool, info)| {
+        let colorimetry = imp.colorimetry_from_picture_parameters(params, &state.input_state);
+        let chroma_site = imp.chroma_site_from_picture_parameters(params, &state.input_state);
+
+        if state.output_state.as_ref().is_none_or(|state| {
+            let info = state.info();
             info.format() != format
                 || info.width() != params.width()
                 || info.height() != params.height()
+                || info.chroma_site() != chroma_site
+                || info.colorimetry() != colorimetry
         }) {
+            state.output_state = None;
             state.output_pool = None;
 
-            gst::debug!(CAT, obj = self, "Need to create a new buffer pool");
+            gst::debug!(CAT, obj = self, "Need to renegotiate");
 
-            let Ok(mut info) =
-                gst_video::VideoInfo::builder(format, params.width(), params.height()).build()
-            else {
-                gst::error!(CAT, obj = self, "Failed to build pool video info");
+            let Ok(mut output_state) = self.set_output_state(
+                format,
+                params.width(),
+                params.height(),
+                Some(&state.input_state),
+            ) else {
+                gst::error!(CAT, obj = self, "Failed to set output state");
                 return Err(dav1d::Error::InvalidArgument);
             };
+
+            let Ok(info) = gst_video::VideoInfo::builder_from_info(output_state.info())
+                .colorimetry(&colorimetry)
+                .chroma_site(chroma_site)
+                .build()
+            else {
+                gst::error!(CAT, obj = self, "Failed to build output video info");
+                return Err(dav1d::Error::InvalidArgument);
+            };
+            output_state.set_info(info);
+            drop(state_guard);
+
+            if self.negotiate(output_state).is_err() {
+                gst::error!(CAT, obj = self, "Failed to negotiate");
+                return Err(dav1d::Error::InvalidArgument);
+            }
+
+            state_guard = imp.state.lock().unwrap();
+            let Some(s) = state_guard.as_mut() else {
+                gst::trace!(CAT, obj = self, "Flushing");
+                return Err(dav1d::Error::InvalidArgument);
+            };
+            state = s;
+
+            let Some(output_state) = self.output_state() else {
+                gst::error!(CAT, obj = self, "Have no output state");
+                return Err(dav1d::Error::InvalidArgument);
+            };
+            state.output_state = Some(output_state.clone());
+
+            // At this point either a pool is available and we can directly pass pool buffers to
+            // downstream, or we create our own internal pool now from which we allocate and then
+            // copy over to a downstream allocation.
+            if state.output_pool.is_some() {
+                gst::debug!(CAT, obj = self, "Using negotiated buffer pool");
+            }
+        }
+
+        // Must be set now
+        let output_state = state.output_state.as_ref().unwrap();
+
+        if state.output_pool.is_none() {
+            gst::debug!(CAT, obj = self, "Creating fallback buffer pool");
+
+            let mut info = output_state.info().clone();
 
             let pool = gst_video::VideoBufferPool::new();
 
@@ -950,26 +856,29 @@ unsafe impl dav1d::PictureAllocator for super::Dav1dDec {
 
             if info.align(&mut align).is_err() {
                 gst::error!(CAT, obj = self, "Failed to align video info");
+                state.output_state = None;
                 return Err(dav1d::Error::InvalidArgument);
             }
             config.set_video_alignment(&align);
-            config.set_params(Some(&info.to_caps().unwrap()), info.size() as u32, 0, 0);
+            config.set_params(output_state.caps_owned().as_ref(), info.size() as u32, 0, 0);
 
             pool.set_config(config).unwrap();
             pool.set_active(true).unwrap();
 
-            state.output_pool = Some((pool.upcast(), info));
+            state.output_pool = Some(pool.upcast());
         }
 
         // Must be set now
-        let (pool, info) = state.output_pool.as_ref().unwrap();
+        let pool = state.output_pool.as_ref().unwrap();
 
         let Ok(buffer) = pool.acquire_buffer(None) else {
             gst::error!(CAT, obj = self, "Failed to acquire buffer");
             return Err(dav1d::Error::NotEnoughMemory);
         };
 
-        let Ok(mut frame) = gst_video::VideoFrame::from_buffer_writable(buffer, info) else {
+        let Ok(mut frame) =
+            gst_video::VideoFrame::from_buffer_writable(buffer, output_state.info())
+        else {
             gst::error!(CAT, obj = self, "Failed to map buffer");
             return Err(dav1d::Error::InvalidArgument);
         };
@@ -1392,15 +1301,124 @@ impl VideoDecoderImpl for Dav1dDec {
         &self,
         query: &mut gst::query::Allocation,
     ) -> Result<(), gst::LoggableError> {
+        gst::debug!(CAT, imp = self, "Renegotiating allocation");
+
         {
             let mut state_guard = self.state.lock().unwrap();
             if let Some(state) = &mut *state_guard {
-                state.video_meta_supported = query
-                    .find_allocation_meta::<gst_video::VideoMeta>()
-                    .is_some();
+                state.video_meta_supported = false;
+                state.output_pool = None;
             }
         }
 
-        self.parent_decide_allocation(query)
+        self.parent_decide_allocation(query)?;
+
+        let video_meta_supported = query
+            .find_allocation_meta::<gst_video::VideoMeta>()
+            .is_some();
+
+        let mut state_guard = self.state.lock().unwrap();
+        let Some(state) = &mut *state_guard else {
+            gst::trace!(CAT, imp = self, "Flushing");
+            return Ok(());
+        };
+
+        state.video_meta_supported = video_meta_supported;
+
+        let Some(output_state) = self.obj().output_state() else {
+            gst::warning!(CAT, imp = self, "No output state set");
+            return Ok(());
+        };
+
+        // Base class is adding one allocation param and pool at least
+        let (allocator, mut params) = query.allocation_params().next().unwrap();
+        params.set_align(cmp::max(params.align(), dav1d::PICTURE_ALIGNMENT - 1));
+        params.set_padding(cmp::max(params.padding(), dav1d::PICTURE_ALIGNMENT));
+
+        let (pool, size, min, max) = query.allocation_pools().next().unwrap();
+        // Base class always sets one
+        let pool = pool.unwrap();
+
+        // FIXME: What's the minimum dav1d needs?
+        if max != 0 && max < 32 {
+            // Need to use a default pool
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Negotiated pool limit too low ({max} < 32)"
+            );
+            return Ok(());
+        }
+
+        let mut config = pool.config();
+        config.set_allocator(allocator.as_ref(), Some(&params));
+        if video_meta_supported {
+            config.add_option(gst_video::BUFFER_POOL_OPTION_VIDEO_META);
+        }
+
+        let video_alignment_supported =
+            pool.has_option(gst_video::BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
+
+        if !video_meta_supported || !video_alignment_supported {
+            // Need to use a default pool
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Video meta or alignment not supported by negotiated pool"
+            );
+            return Ok(());
+        }
+
+        let mut info = output_state.info().clone();
+        let aligned_width = info.width().next_multiple_of(128);
+        let aligned_height = info.height().next_multiple_of(128);
+
+        let stride_align = [params.align() as u32; gst_video::VIDEO_MAX_PLANES];
+
+        let mut align = gst_video::VideoAlignment::new(
+            0,
+            aligned_height - info.height(),
+            aligned_width - info.width(),
+            0,
+            &stride_align,
+        );
+
+        config.add_option(gst_video::BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
+
+        if info.align(&mut align).is_err() {
+            // Need to use a default pool
+            gst::debug!(CAT, imp = self, "Failed to align video info");
+            return Ok(());
+        }
+
+        config.set_video_alignment(&align);
+
+        config.set_params(
+            output_state.caps_owned().as_ref(),
+            cmp::max(size, info.size() as u32),
+            min,
+            max,
+        );
+
+        if pool.set_config(config.clone()).is_err() {
+            let updated_config = pool.config();
+            if updated_config
+                .validate_params(output_state.caps_owned().as_ref(), size, min, max)
+                .is_ok()
+                && pool.set_config(updated_config).is_err()
+            {
+                // Need to use a default pool
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "Configuration not accepted by negotiated pool"
+                );
+                return Ok(());
+            }
+        }
+
+        state.output_pool = Some(pool);
+
+        Ok(())
     }
 }
