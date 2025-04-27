@@ -14,6 +14,8 @@ use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 
+use std::cmp;
+use std::ptr;
 use std::sync::LazyLock;
 
 use std::sync::{Mutex, MutexGuard};
@@ -57,10 +59,11 @@ struct State {
     // Decoder always exists when the state does but is temporarily removed
     // while passing frames to it to allow unlocking the state as the decoder
     // will call back into the element for allocations.
-    decoder: Option<dav1d::Decoder>,
+    decoder: Option<dav1d::Decoder<super::Dav1dDec>>,
     input_state: gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     output_state:
         Option<gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>>,
+    output_pool: Option<(gst::BufferPool, gst_video::VideoInfo)>,
     video_meta_supported: bool,
     n_cpus: usize,
 }
@@ -99,7 +102,7 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 });
 
 impl Dav1dDec {
-    fn with_decoder_unlocked<'a, T, F: FnOnce(&mut dav1d::Decoder) -> T>(
+    fn with_decoder_unlocked<'a, T, F: FnOnce(&mut dav1d::Decoder<super::Dav1dDec>) -> T>(
         &'a self,
         mut state_guard: MutexGuard<'a, Option<State>>,
         func: F,
@@ -124,7 +127,7 @@ impl Dav1dDec {
         (state_guard, Some(res))
     }
 
-    fn with_decoder_mut<T, F: FnOnce(&mut dav1d::Decoder) -> T>(
+    fn with_decoder_mut<T, F: FnOnce(&mut dav1d::Decoder<super::Dav1dDec>) -> T>(
         &self,
         state: &mut State,
         func: F,
@@ -147,9 +150,118 @@ impl Dav1dDec {
         }
     }
 
+    fn video_format_from_picture_parameters(
+        &self,
+        params: &dav1d::PictureParameters,
+        input_state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
+    ) -> gst_video::VideoFormat {
+        let bpc = params.bits_per_component();
+        let format_desc = match (params.pixel_layout(), bpc) {
+            (dav1d::PixelLayout::I400, Some(dav1d::BitsPerComponent(8))) => "GRAY8",
+            #[cfg(target_endian = "little")]
+            (dav1d::PixelLayout::I400, Some(dav1d::BitsPerComponent(16))) => "GRAY16_LE",
+            #[cfg(target_endian = "big")]
+            (dav1d::PixelLayout::I400, Some(dav1d::BitsPerComponent(16))) => "GRAY16_BE",
+            // (dav1d::PixelLayout::I400, Some(dav1d::BitsPerComponent(10))) => "GRAY10_LE32",
+            (dav1d::PixelLayout::I420, _) => "I420",
+            (dav1d::PixelLayout::I422, Some(dav1d::BitsPerComponent(8))) => "Y42B",
+            (dav1d::PixelLayout::I422, _) => "I422",
+            (dav1d::PixelLayout::I444, _) => "Y444",
+            (layout, bpc) => {
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Unsupported dav1d format {:?}/{:?}",
+                    layout,
+                    bpc
+                );
+                return gst_video::VideoFormat::Unknown;
+            }
+        };
+
+        let f = if format_desc.starts_with("GRAY") {
+            format_desc.into()
+        } else {
+            match bpc {
+                Some(b) => match b.0 {
+                    8 => format_desc.into(),
+                    _ => {
+                        let endianness = if cfg!(target_endian = "little") {
+                            "LE"
+                        } else {
+                            "BE"
+                        };
+                        format!("{f}_{b}{e}", f = format_desc, b = b.0, e = endianness)
+                    }
+                },
+                None => format_desc.into(),
+            }
+        };
+
+        let mut format = f.parse::<gst_video::VideoFormat>().unwrap_or_else(|_| {
+            gst::warning!(CAT, imp = self, "Unsupported dav1d format: {}", f);
+            gst_video::VideoFormat::Unknown
+        });
+
+        if format == gst_video::VideoFormat::Unknown {
+            return format;
+        }
+
+        // Special handling of RGB
+        let input_info = input_state.info();
+        if input_info.colorimetry().matrix() == gst_video::VideoColorMatrix::Rgb
+            || (input_info.colorimetry().matrix() == gst_video::VideoColorMatrix::Unknown
+                && params.matrix_coefficients() == dav1d::pixel::MatrixCoefficients::Identity)
+        {
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Input is actually RGB, switching format {format:?} to RGB"
+            );
+
+            if params.pixel_layout() != dav1d::PixelLayout::I444 {
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Unsupported non-4:4:4 YUV format {format:?} for RGB"
+                );
+                return gst_video::VideoFormat::Unknown;
+            }
+
+            let rgb_format = format.to_str().replace("Y444", "GBR");
+            format = match rgb_format.parse::<gst_video::VideoFormat>() {
+                Ok(format) => format,
+                Err(_) => {
+                    gst::error!(CAT, imp = self, "Unsupported YUV format {format:?} for RGB");
+                    return gst_video::VideoFormat::Unknown;
+                }
+            };
+
+            if input_info.colorimetry().transfer() != gst_video::VideoTransferFunction::Unknown
+                && input_info.colorimetry().transfer() != gst_video::VideoTransferFunction::Srgb
+                || (input_info.colorimetry().transfer()
+                    == gst_video::VideoTransferFunction::Unknown
+                    && params.transfer_characteristic()
+                        != dav1d::pixel::TransferCharacteristic::SRGB)
+            {
+                gst::warning!(CAT, imp = self, "Unexpected non-sRGB transfer function");
+            }
+
+            if input_info.colorimetry().range() != gst_video::VideoColorRange::Unknown
+                && input_info.colorimetry().range() != gst_video::VideoColorRange::Range0_255
+                || (input_info.colorimetry().range() == gst_video::VideoColorRange::Unknown
+                    && params.color_range() != dav1d::pixel::YUVRange::Full)
+            {
+                gst::warning!(CAT, imp = self, "Unexpected non-full-range RGB");
+            }
+        }
+
+        format
+    }
+
     fn video_format_from_dav1d_picture(
         &self,
-        pic: &dav1d::Picture,
+        pic: &dav1d::Picture<super::Dav1dDec>,
         input_state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> gst_video::VideoFormat {
         let bpc = pic.bits_per_component();
@@ -260,7 +372,7 @@ impl Dav1dDec {
 
     fn colorimetry_from_dav1d_picture(
         &self,
-        pic: &dav1d::Picture,
+        pic: &dav1d::Picture<super::Dav1dDec>,
         input_state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> gst_video::VideoColorimetry {
         use dav1d::pixel;
@@ -383,7 +495,7 @@ impl Dav1dDec {
 
     fn chroma_site_from_dav1d_picture(
         &self,
-        pic: &dav1d::Picture,
+        pic: &dav1d::Picture<super::Dav1dDec>,
         input_state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> gst_video::VideoChromaSite {
         use dav1d::pixel;
@@ -412,11 +524,11 @@ impl Dav1dDec {
     fn handle_resolution_change<'s>(
         &'s self,
         mut state_guard: MutexGuard<'s, Option<State>>,
-        pic: &dav1d::Picture,
+        pic: &dav1d::Picture<super::Dav1dDec>,
     ) -> Result<MutexGuard<'s, Option<State>>, gst::FlowError> {
         let state = state_guard.as_ref().unwrap();
 
-        let format = self.video_format_from_dav1d_picture(&pic, &state.input_state);
+        let format = self.video_format_from_dav1d_picture(pic, &state.input_state);
         if format == gst_video::VideoFormat::Unknown {
             return Err(gst::FlowError::NotNegotiated);
         }
@@ -581,97 +693,54 @@ impl Dav1dDec {
     fn decoded_picture_as_buffer(
         &self,
         mut state_guard: MutexGuard<Option<State>>,
-        pic: &dav1d::Picture,
-        output_state: &gst_video::VideoCodecState<gst_video::video_codec_state::Readable>,
+        pic: &dav1d::Picture<super::Dav1dDec>,
         codec_frame: &mut gst_video::VideoCodecFrame,
     ) -> Result<(), gst::FlowError> {
         let state = state_guard.as_mut().ok_or(gst::FlowError::Flushing)?;
         let video_meta_supported = state.video_meta_supported;
 
-        let info = output_state.info();
+        let info = state.output_state.as_ref().unwrap().info().clone();
+        let in_vframe = pic.allocator_data().unwrap();
 
-        let components = if info.is_yuv() || info.is_rgb() {
-            const YUV_COMPONENTS: [dav1d::PlanarImageComponent; 3] = [
-                dav1d::PlanarImageComponent::Y,
-                dav1d::PlanarImageComponent::U,
-                dav1d::PlanarImageComponent::V,
-            ];
-            &YUV_COMPONENTS[..]
-        } else if info.is_gray() {
-            const GRAY_COMPONENTS: [dav1d::PlanarImageComponent; 1] =
-                [dav1d::PlanarImageComponent::Y];
+        let strides_matching =
+            info.offset() == in_vframe.plane_offset() && info.stride() == in_vframe.plane_stride();
 
-            &GRAY_COMPONENTS[..]
-        } else {
-            unreachable!();
-        };
-
-        let mut offsets = [0; 4];
-        let mut strides = [0; 4];
-        let mut acc_offset = 0usize;
-
-        for (idx, &component) in components.iter().enumerate() {
-            let plane = pic.plane(component);
-            let src_stride = pic.stride(component);
-
-            let mem_size = plane.len();
-
-            strides[idx] = src_stride as i32;
-            offsets[idx] = acc_offset;
-            acc_offset += mem_size;
-        }
-
-        let strides = &strides[..components.len()];
-        let offsets = &offsets[..components.len()];
-
-        let strides_matching = info.offset() == offsets && info.stride() == strides;
-
-        // We can forward decoded memory as-is if downstream supports the video meta
-        // or the strides/offsets are matching with the default ones.
-        let forward_memory = video_meta_supported || strides_matching;
+        // We can forward the decoded buffer as-is if downstream supports the video meta or the
+        // strides/offsets are matching with the default ones.
+        let forward_buffer = video_meta_supported || strides_matching;
 
         drop(state_guard);
 
-        let mut out_buffer = forward_memory.then(gst::Buffer::new);
-        let mut_buffer = if forward_memory {
-            out_buffer.as_mut().unwrap().get_mut().unwrap()
+        if forward_buffer {
+            // SAFETY: The frame is still write-mapped in dav1d but won't be modified
+            // anymore. We don't have a way to atomically re-map it read-only.
+            unsafe {
+                use glib::translate::*;
+
+                let in_vframe_ptr = in_vframe.as_ptr();
+                let buffer_ptr = (*in_vframe_ptr).buffer;
+
+                let duration = pic.duration() as u64;
+                if duration > 0 {
+                    (*buffer_ptr).duration = duration;
+                }
+
+                let codec_frame_ptr = codec_frame.to_glib_none().0;
+                gst::ffi::gst_mini_object_ref(buffer_ptr as *mut _);
+                (*codec_frame_ptr).output_buffer = buffer_ptr;
+            };
         } else {
             self.obj().allocate_output_frame(codec_frame, None)?;
-            codec_frame
+
+            let mut_buffer = codec_frame
                 .output_buffer_mut()
-                .expect("output_buffer is set")
-        };
+                .expect("output_buffer is set");
 
-        let duration = pic.duration() as u64;
-        if duration > 0 {
-            mut_buffer.set_duration(duration.nseconds());
-        }
-
-        if forward_memory {
-            assert!(mut_buffer.size() == 0);
-
-            for &component in components {
-                let plane = pic.plane(component);
-                let mem = gst::Memory::from_slice(plane);
-                mut_buffer.append_memory(mem);
+            let duration = pic.duration() as u64;
+            if duration > 0 {
+                mut_buffer.set_duration(duration.nseconds());
             }
 
-            if video_meta_supported {
-                gst_video::VideoMeta::add_full(
-                    mut_buffer,
-                    gst_video::VideoFrameFlags::empty(),
-                    info.format(),
-                    info.width(),
-                    info.height(),
-                    offsets,
-                    strides,
-                )
-                .unwrap();
-            }
-
-            assert!(codec_frame.output_buffer().is_none());
-            codec_frame.set_output_buffer(out_buffer.expect("out_buffer is set"));
-        } else {
             gst::trace!(
                 gst::CAT_PERFORMANCE,
                 imp = self,
@@ -680,31 +749,17 @@ impl Dav1dDec {
 
             assert!(mut_buffer.size() > 0);
 
-            let mut vframe = gst_video::VideoFrameRef::from_buffer_ref_writable(mut_buffer, info)
-                .expect("can map writable frame");
+            let mut out_vframe =
+                gst_video::VideoFrameRef::from_buffer_ref_writable(mut_buffer, &info)
+                    .expect("can map writable frame");
 
-            for (idx, &component) in components.iter().enumerate() {
-                let plane = pic.plane(component);
-                let (src_stride, src_height) = pic.plane_data_geometry(component);
-                let src_slice = plane.as_ref();
-                let dest_stride = vframe.plane_stride()[idx] as u32;
-                let dest_height = vframe.plane_height(idx as u32);
-                let dest_plane_data = vframe
-                    .plane_data_mut(idx as u32)
-                    .expect("can get plane data");
-
-                let chunk_len = std::cmp::min(src_stride, dest_stride) as usize;
-
-                if src_stride == dest_stride && src_height == dest_height {
-                    dest_plane_data.copy_from_slice(src_slice);
-                } else {
-                    for (out_line, in_line) in dest_plane_data
-                        .chunks_exact_mut(dest_stride as usize)
-                        .zip(src_slice.chunks_exact(src_stride as usize))
-                    {
-                        out_line.copy_from_slice(&in_line[..chunk_len]);
-                    }
-                }
+            if in_vframe
+                .as_video_frame_ref()
+                .copy(&mut out_vframe)
+                .is_err()
+            {
+                gst::error!(CAT, imp = self, "Failed to copy video frame to output");
+                return Err(gst::FlowError::Error);
             }
         }
 
@@ -714,21 +769,18 @@ impl Dav1dDec {
     fn handle_picture<'s>(
         &'s self,
         mut state_guard: MutexGuard<'s, Option<State>>,
-        pic: &dav1d::Picture,
+        pic: &dav1d::Picture<super::Dav1dDec>,
     ) -> Result<MutexGuard<'s, Option<State>>, gst::FlowError> {
         gst::trace!(CAT, imp = self, "Handling picture {}", pic.offset());
 
         state_guard = self.handle_resolution_change(state_guard, pic)?;
 
         let instance = self.obj();
-        let output_state = instance
-            .output_state()
-            .expect("Output state not set. Shouldn't happen!");
         let offset = pic.offset() as i32;
 
         let frame = instance.frame(offset);
         if let Some(mut frame) = frame {
-            self.decoded_picture_as_buffer(state_guard, pic, &output_state, &mut frame)?;
+            self.decoded_picture_as_buffer(state_guard, pic, &mut frame)?;
             instance.finish_frame(frame)?;
             Ok(self.state.lock().unwrap())
         } else {
@@ -741,7 +793,13 @@ impl Dav1dDec {
     fn pending_picture<'a>(
         &'a self,
         mut state_guard: MutexGuard<'a, Option<State>>,
-    ) -> Result<(MutexGuard<'a, Option<State>>, Option<dav1d::Picture>), gst::FlowError> {
+    ) -> Result<
+        (
+            MutexGuard<'a, Option<State>>,
+            Option<dav1d::Picture<super::Dav1dDec>>,
+        ),
+        gst::FlowError,
+    > {
         gst::trace!(CAT, imp = self, "Retrieving pending picture");
 
         let _state = state_guard.as_mut().ok_or(gst::FlowError::Flushing)?;
@@ -814,6 +872,149 @@ impl Dav1dDec {
         }
 
         Ok(state_guard)
+    }
+}
+
+unsafe impl dav1d::PictureAllocator for super::Dav1dDec {
+    type AllocatorData = gst_video::VideoFrame<gst_video::video_frame::Writable>;
+
+    unsafe fn alloc_picture(
+        &self,
+        params: &dav1d::PictureParameters,
+    ) -> Result<dav1d::PictureAllocation<Self::AllocatorData>, dav1d::Error> {
+        let imp = self.imp();
+
+        let mut state_guard = imp.state.lock().unwrap();
+
+        let Some(state) = state_guard.as_mut() else {
+            gst::trace!(CAT, obj = self, "Flushing");
+            return Err(dav1d::Error::InvalidArgument);
+        };
+
+        let format = imp.video_format_from_picture_parameters(params, &state.input_state);
+        if format == gst_video::VideoFormat::Unknown {
+            state.output_state = None;
+            return Err(dav1d::Error::InvalidArgument);
+        }
+
+        gst::trace!(
+            CAT,
+            obj = self,
+            "Allocating for format {:?} with picture dimensions {}x{}",
+            format,
+            params.width(),
+            params.height()
+        );
+
+        if state.output_pool.as_ref().is_none_or(|(_pool, info)| {
+            info.format() != format
+                || info.width() != params.width()
+                || info.height() != params.height()
+        }) {
+            state.output_pool = None;
+
+            gst::debug!(CAT, obj = self, "Need to create a new buffer pool");
+
+            let Ok(mut info) =
+                gst_video::VideoInfo::builder(format, params.width(), params.height()).build()
+            else {
+                gst::error!(CAT, obj = self, "Failed to build pool video info");
+                return Err(dav1d::Error::InvalidArgument);
+            };
+
+            let pool = gst_video::VideoBufferPool::new();
+
+            let mut config = pool.config();
+
+            let mut params = gst::AllocationParams::default();
+            params.set_align(cmp::max(params.align(), dav1d::PICTURE_ALIGNMENT - 1));
+            params.set_padding(cmp::max(params.padding(), dav1d::PICTURE_ALIGNMENT));
+
+            config.set_allocator(None, Some(&params));
+            config.add_option(gst_video::BUFFER_POOL_OPTION_VIDEO_META);
+
+            let aligned_width = info.width().next_multiple_of(128);
+            let aligned_height = info.height().next_multiple_of(128);
+
+            let stride_align = [params.align() as u32; gst_video::VIDEO_MAX_PLANES];
+
+            let mut align = gst_video::VideoAlignment::new(
+                0,
+                aligned_height - info.height(),
+                aligned_width - info.width(),
+                0,
+                &stride_align,
+            );
+
+            config.add_option(gst_video::BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
+
+            if info.align(&mut align).is_err() {
+                gst::error!(CAT, obj = self, "Failed to align video info");
+                return Err(dav1d::Error::InvalidArgument);
+            }
+            config.set_video_alignment(&align);
+            config.set_params(Some(&info.to_caps().unwrap()), info.size() as u32, 0, 0);
+
+            pool.set_config(config).unwrap();
+            pool.set_active(true).unwrap();
+
+            state.output_pool = Some((pool.upcast(), info));
+        }
+
+        // Must be set now
+        let (pool, info) = state.output_pool.as_ref().unwrap();
+
+        let Ok(buffer) = pool.acquire_buffer(None) else {
+            gst::error!(CAT, obj = self, "Failed to acquire buffer");
+            return Err(dav1d::Error::NotEnoughMemory);
+        };
+
+        let Ok(mut frame) = gst_video::VideoFrame::from_buffer_writable(buffer, info) else {
+            gst::error!(CAT, obj = self, "Failed to map buffer");
+            return Err(dav1d::Error::InvalidArgument);
+        };
+
+        let is_gray = frame.info().is_gray();
+
+        let planes = frame.planes_data_mut();
+        let data = [
+            planes[0].as_mut_ptr(),
+            if !is_gray {
+                planes[1].as_mut_ptr()
+            } else {
+                ptr::null_mut()
+            },
+            if !is_gray {
+                planes[2].as_mut_ptr()
+            } else {
+                ptr::null_mut()
+            },
+        ];
+        let plane_strides = frame.plane_stride();
+        let stride = [
+            plane_strides[0] as isize,
+            if !is_gray {
+                assert_eq!(plane_strides[1], plane_strides[2]);
+                plane_strides[1] as isize
+            } else {
+                0
+            },
+        ];
+
+        Ok(dav1d::PictureAllocation {
+            data,
+            stride,
+            allocator_data: frame,
+        })
+    }
+
+    unsafe fn release_picture(&self, allocation: dav1d::PictureAllocation<Self::AllocatorData>) {
+        gst::trace!(
+            CAT,
+            obj = self,
+            "Releasing video frame with buffer {:?}",
+            allocation.allocator_data.buffer()
+        );
     }
 }
 
@@ -1105,14 +1306,17 @@ impl VideoDecoderImpl for Dav1dDec {
         decoder_settings.set_apply_grain(settings.apply_grain);
         decoder_settings.set_inloop_filters(dav1d::InloopFilterType::from(settings.inloop_filters));
 
-        let decoder = dav1d::Decoder::with_settings(&decoder_settings).map_err(|err| {
-            gst::loggable_error!(CAT, "Failed to create decoder instance: {}", err)
-        })?;
+        let decoder =
+            dav1d::Decoder::with_settings_and_allocator(&decoder_settings, self.obj().clone())
+                .map_err(|err| {
+                    gst::loggable_error!(CAT, "Failed to create decoder instance: {}", err)
+                })?;
 
         *state_guard = Some(State {
             decoder: Some(decoder),
             input_state: input_state.clone(),
             output_state: None,
+            output_pool: None,
             video_meta_supported: false,
             n_cpus,
         });
