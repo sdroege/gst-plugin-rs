@@ -1196,49 +1196,48 @@ impl VideoDecoderImpl for Dav1dDec {
                     settings.max_frame_delay
                 };
 
-                match *state_guard {
-                    Some(ref state) => match state.output_state.as_ref().map(|s| s.info()) {
-                        Some(info) => {
-                            let mut upstream_latency = gst::query::Latency::new();
+                let n_cpus_and_fps = match *state_guard {
+                    Some(ref state) => {
+                        let fps = state.output_state.as_ref().map(|s| s.info().fps());
 
-                            if self.obj().sink_pad().peer_query(&mut upstream_latency) {
-                                let (live, mut min, mut max) = upstream_latency.result();
-                                // For autodetection: 1 if live, else whatever dav1d gives us
-                                let frame_latency: u64 = if max_frame_delay < 0 && live {
-                                    1
-                                } else {
-                                    self.estimate_frame_delay(
-                                        max_frame_delay as u32,
-                                        state.n_cpus as u32,
-                                    )
-                                    .into()
-                                };
+                        fps.map(|fps| (state.n_cpus, fps))
+                    }
+                    None => None,
+                };
+                drop(state_guard);
 
-                                let fps_n = match info.fps().numer() {
-                                    0 => 30, // Pretend we're at 30fps if we don't know latency,
-                                    n => n,
-                                };
+                if let Some((n_cpus, fps)) = n_cpus_and_fps {
+                    let mut upstream_latency = gst::query::Latency::new();
 
-                                let latency = frame_latency * (info.fps().denom() as u64).seconds()
-                                    / (fps_n as u64);
+                    if self.obj().sink_pad().peer_query(&mut upstream_latency) {
+                        let (live, mut min, mut max) = upstream_latency.result();
+                        // For autodetection: 1 if live, else whatever dav1d gives us
+                        let frame_latency = if max_frame_delay < 0 && live {
+                            1
+                        } else {
+                            self.estimate_frame_delay(max_frame_delay as u32, n_cpus as u32)
+                                .into()
+                        };
 
-                                gst::debug!(CAT, imp = self, "Reporting latency of {}", latency);
+                        let (fps_n, fps_d) = match (fps.numer(), fps.denom()) {
+                            (0, _) => (30, 1), // Pretend we're at 30fps if we don't know latency
+                            n => n,
+                        };
 
-                                min += latency;
-                                max = max.opt_add(latency);
-                                q.set(live, min, max);
+                        let latency = frame_latency * (fps_d as u64).seconds() / (fps_n as u64);
 
-                                true
-                            } else {
-                                // peer latency query failed
-                                false
-                            }
-                        }
-                        // output info not available => fps unknown
-                        None => false,
-                    },
-                    // no state yet
-                    None => false,
+                        gst::debug!(CAT, imp = self, "Reporting latency of {}", latency);
+
+                        min += latency;
+                        max = max.opt_add(latency);
+                        q.set(live, min, max);
+
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
                 }
             }
             _ => VideoDecoderImplExt::parent_src_query(self, query),
