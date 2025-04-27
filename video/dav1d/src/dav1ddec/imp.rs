@@ -56,7 +56,8 @@ const DEFAULT_INLOOP_FILTERS: InloopFilterType = InloopFilterType::empty();
 struct State {
     decoder: dav1d::Decoder,
     input_state: gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
-    output_info: Option<gst_video::VideoInfo>,
+    output_state:
+        Option<gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>>,
     video_meta_supported: bool,
     n_cpus: usize,
 }
@@ -278,15 +279,11 @@ impl Dav1dDec {
             return Err(gst::FlowError::NotNegotiated);
         }
 
-        let need_negotiate = {
-            match state.output_info {
-                Some(ref i) => {
-                    (i.width() != pic.width())
-                        || (i.height() != pic.height() || (i.format() != format))
-                }
-                None => true,
-            }
-        };
+        let need_negotiate = state.output_state.as_ref().is_none_or(|state| {
+            let info = state.info();
+            (info.width() != pic.width())
+                || (info.height() != pic.height() || (info.format() != format))
+        });
         if !need_negotiate {
             return Ok(state_guard);
         }
@@ -422,7 +419,7 @@ impl Dav1dDec {
 
         state_guard = self.state.lock().unwrap();
         let state = state_guard.as_mut().ok_or(gst::FlowError::Flushing)?;
-        state.output_info = Some(out_state.info().clone());
+        state.output_state = Some(out_state.clone());
 
         Ok(state_guard)
     }
@@ -520,14 +517,18 @@ impl Dav1dDec {
                 )
                 .map(|_| std::ops::ControlFlow::Break(()))
             }
-        }
+        };
+
+        let res = res?;
+
+        Ok((state_guard, res))
     }
 
     fn decoded_picture_as_buffer(
         &self,
         mut state_guard: MutexGuard<Option<State>>,
         pic: &dav1d::Picture,
-        output_state: gst_video::VideoCodecState<gst_video::video_codec_state::Readable>,
+        output_state: &gst_video::VideoCodecState<gst_video::video_codec_state::Readable>,
         codec_frame: &mut gst_video::VideoCodecFrame,
     ) -> Result<(), gst::FlowError> {
         let state = state_guard.as_mut().ok_or(gst::FlowError::Flushing)?;
@@ -673,7 +674,7 @@ impl Dav1dDec {
 
         let frame = instance.frame(offset);
         if let Some(mut frame) = frame {
-            self.decoded_picture_as_buffer(state_guard, pic, output_state, &mut frame)?;
+            self.decoded_picture_as_buffer(state_guard, pic, &output_state, &mut frame)?;
             instance.finish_frame(frame)?;
             Ok(self.state.lock().unwrap())
         } else {
@@ -925,7 +926,7 @@ impl VideoDecoderImpl for Dav1dDec {
                 };
 
                 match *state_guard {
-                    Some(ref state) => match state.output_info {
+                    Some(ref state) => match state.output_state.as_ref().map(|s| s.info()) {
                         Some(ref info) => {
                             let mut upstream_latency = gst::query::Latency::new();
 
@@ -1041,7 +1042,7 @@ impl VideoDecoderImpl for Dav1dDec {
         *state_guard = Some(State {
             decoder,
             input_state: input_state.clone(),
-            output_info: None,
+            output_state: None,
             video_meta_supported: false,
             n_cpus,
         });
