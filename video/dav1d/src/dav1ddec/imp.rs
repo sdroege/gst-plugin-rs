@@ -544,6 +544,11 @@ impl Dav1dDec {
 
         drop(state_guard);
 
+        let duration = pic.duration() as u64;
+        if duration > 0 {
+            codec_frame.set_duration(gst::ClockTime::from_nseconds(duration));
+        }
+
         if forward_buffer {
             // SAFETY: The frame is still write-mapped in dav1d but won't be modified
             // anymore. We don't have a way to atomically re-map it read-only.
@@ -552,11 +557,6 @@ impl Dav1dDec {
 
                 let in_vframe_ptr = in_vframe.as_ptr();
                 let buffer_ptr = (*in_vframe_ptr).buffer;
-
-                let duration = pic.duration() as u64;
-                if duration > 0 {
-                    (*buffer_ptr).duration = duration;
-                }
 
                 let codec_frame_ptr = codec_frame.to_glib_none().0;
                 gst::ffi::gst_mini_object_ref(buffer_ptr as *mut _);
@@ -568,11 +568,6 @@ impl Dav1dDec {
             let mut_buffer = codec_frame
                 .output_buffer_mut()
                 .expect("output_buffer is set");
-
-            let duration = pic.duration() as u64;
-            if duration > 0 {
-                mut_buffer.set_duration(duration.nseconds());
-            }
 
             gst::trace!(
                 gst::CAT_PERFORMANCE,
