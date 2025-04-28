@@ -386,7 +386,7 @@ impl MP4Mux {
         let end = generic_to_gstclocktime(cmeta.end())?;
 
         if end.is_none() && start.is_none() {
-            bail!("No start or end time in `default` format in the AudioClipingMeta");
+            bail!("No start or end time in `default` format in the AudioClippingMeta");
         }
 
         let start = if let Some(start) = generic_to_gstclocktime(cmeta.start())? {
