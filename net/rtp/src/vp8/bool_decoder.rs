@@ -7,7 +7,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use bitstream_io::{BigEndian, BitRead, Endianness, UnsignedInteger as _};
+use bitstream_io::{BitRead, Endianness, UnsignedInteger as _};
 use std::{io, mem};
 
 /// Implementation of the bool decoder from RFC 6386:
@@ -139,11 +139,21 @@ impl<R: io::Read> BitRead for BoolDecoder<R> {
 
     fn read_signed_counted<const MAX: u32, S>(
         &mut self,
-        bits: bitstream_io::BitCount<MAX>,
+        bits: impl TryInto<bitstream_io::SignedBitCount<MAX>>,
     ) -> io::Result<S>
     where
         S: bitstream_io::SignedInteger,
     {
+        let bits = bits
+            .try_into()
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "signed writes need at least 1 bit for sign",
+                )
+            })?
+            .count();
+
         let sign = self.next_bit()?;
         let v = self.read_unsigned_counted::<MAX, S::Unsigned>(
             bits.checked_sub::<MAX>(1).ok_or(io::Error::new(
@@ -162,7 +172,9 @@ impl<R: io::Read> BitRead for BoolDecoder<R> {
     where
         V: bitstream_io::Primitive,
     {
-        BigEndian::read_primitive(self)
+        let mut buffer = V::buffer();
+        self.read_bytes(buffer.as_mut())?;
+        Ok(V::from_be_bytes(buffer))
     }
 
     fn read_as_to<F, V>(&mut self) -> io::Result<V>
@@ -170,7 +182,9 @@ impl<R: io::Read> BitRead for BoolDecoder<R> {
         F: Endianness,
         V: bitstream_io::Primitive,
     {
-        F::read_primitive(self)
+        let mut buffer = V::buffer();
+        self.read_bytes(buffer.as_mut())?;
+        Ok(F::bytes_to_primitive(buffer))
     }
 
     fn byte_aligned(&self) -> bool {

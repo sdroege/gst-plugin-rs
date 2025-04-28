@@ -39,7 +39,7 @@
  * Since: plugins-rs-0.13.0
  */
 use atomic_refcell::AtomicRefCell;
-use bitstream_io::{BigEndian, BitCounter, BitRead, BitReader, BitWrite, BitWriter};
+use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter, BitsWritten};
 use std::sync::LazyLock;
 
 use gst::{glib, prelude::*, subclass::prelude::*};
@@ -736,7 +736,7 @@ impl RtpMpeg4GenericPay {
                     }
 
                     // Unfortunately BitWriter doesn't return the size written.
-                    let mut c = BitCounter::<u32, BigEndian>::new();
+                    let mut c = BitsWritten::<u32>::new();
                     c.build_with(&header, &ctx).unwrap();
                     let header_bit_len = c.written() as u16;
 
@@ -880,7 +880,7 @@ impl RtpMpeg4GenericPay {
                 })?;
 
                 // Unfortunately BitWriter doesn't return the size written.
-                let mut c = BitCounter::<u32, BigEndian>::new();
+                let mut c = BitsWritten::<u32>::new();
                 c.build_with(&header, &ctx).unwrap();
                 let header_bit_len = c.written() as u16;
 
