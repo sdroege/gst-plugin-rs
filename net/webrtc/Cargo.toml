@@ -42,6 +42,7 @@ url = "2"
 aws-config = { version = "~1.5.18", optional = true }
 # needs this constraint to prevent adding aws-smithy-http 0.62 too
 aws-smithy-runtime = { version = "~1.7.8", optional = true }
+aws-smithy-runtime-api = { version = "~1.7.4", optional = true }
 aws-types = { version = "1.0", optional = true }
 aws-credential-types = { version = "1.0", optional = true }
 aws-sigv4 = { version = "~1.2.9", optional = true }
@@ -87,8 +88,8 @@ capi = []
 v1_22 = ["gst/v1_22", "gst-app/v1_22", "gst-video/v1_22", "gst-webrtc/v1_22", "gst-sdp/v1_22", "gst-rtp/v1_22"]
 doc = []
 
-aws = ["dep:aws-config", "dep:aws-smithy-runtime", "dep:aws-types", "dep:aws-credential-types", "dep:aws-sigv4",
-       "dep:aws-smithy-http", "dep:aws-smithy-types", "dep:aws-sdk-kinesisvideo",
+aws = ["dep:aws-config", "dep:aws-smithy-runtime", "dep:aws-smithy-runtime-api", "dep:aws-types", "dep:aws-credential-types",
+       "dep:aws-sigv4", "dep:aws-smithy-http", "dep:aws-smithy-types", "dep:aws-sdk-kinesisvideo",
        "dep:aws-sdk-kinesisvideosignaling", "dep:data-encoding", "dep:http", "dep:url-escape"]
 janus = ["dep:http"]
 livekit = ["dep:livekit-protocol", "dep:livekit-api"]

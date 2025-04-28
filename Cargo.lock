@@ -2576,6 +2576,7 @@ dependencies = [
  "aws-sdk-transcribestreaming",
  "aws-sdk-translate",
  "aws-smithy-runtime",
+ "aws-smithy-runtime-api",
  "aws-types",
  "base32",
  "bytes",
@@ -3410,6 +3411,7 @@ dependencies = [
  "aws-sigv4",
  "aws-smithy-http 0.60.12",
  "aws-smithy-runtime",
+ "aws-smithy-runtime-api",
  "aws-smithy-types",
  "aws-types",
  "chrono",
@@ -4896,7 +4898,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
