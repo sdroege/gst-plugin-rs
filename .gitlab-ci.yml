@@ -319,14 +319,6 @@ rustfmt:
     - cargo fmt --version
     - cargo fmt -- --color=always --check
 
-typos:
-  extends: '.debian:12-stable'
-  stage: "lint"
-  tags: [ 'placeholder-job' ]
-  needs: []
-  script:
-    - typos
-
 gstwebrtc-api lint:
   image: node:lts
   stage: "lint"
