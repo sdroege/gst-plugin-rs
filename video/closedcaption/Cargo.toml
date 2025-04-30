@@ -28,7 +28,7 @@ gst-base = { workspace = true, features = ["v1_22"]}
 gst-video = { workspace = true, features = ["v1_16"]}
 winnow = "0.7"
 smallvec = "1"
-bitstream-io = "3"
+bitstream-io = "4"
 itertools = "0.14"
 
 [dev-dependencies]

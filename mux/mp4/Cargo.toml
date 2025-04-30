@@ -16,7 +16,7 @@ gst-audio = { workspace = true, features = ["v1_18"] }
 gst-video = { workspace = true, features = ["v1_20"] }
 gst-pbutils = { workspace = true, features = ["v1_18"] }
 gst-tag = { workspace = true, features = ["v1_18"] }
-bitstream-io = "3"
+bitstream-io = "4"
 num-integer = { version = "0.1", default-features = false, features = [] }
 
 [lib]

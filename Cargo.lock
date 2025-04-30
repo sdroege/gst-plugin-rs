@@ -964,15 +964,6 @@ checksum = "6099cdc01846bc367c4e7dd630dc5966dccf36b652fae7a74e17b640411a91b2"
 
 [[package]]
 name = "bitstream-io"
-version = "3.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a5b5a2b75d152e75add7773b5806f86fdea1731126d05dc8491b89dbede8cf5"
-dependencies = [
- "core2",
-]
-
-[[package]]
-name = "bitstream-io"
 version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4dc7691a79ba3cf60484e3fb6c53003b2a609921b6578aec7726a655939266d6"
@@ -2656,7 +2647,7 @@ version = "0.14.0-alpha.1"
 dependencies = [
  "anyhow",
  "atomic_refcell",
- "bitstream-io 3.3.0",
+ "bitstream-io 4.0.0",
  "byteorder",
  "cairo-rs",
  "cdp-types",
@@ -2767,7 +2758,7 @@ name = "gst-plugin-fmp4"
 version = "0.14.0-alpha.1"
 dependencies = [
  "anyhow",
- "bitstream-io 3.3.0",
+ "bitstream-io 4.0.0",
  "chrono",
  "dash-mpd",
  "gst-plugin-version-helper",
@@ -2947,7 +2938,7 @@ name = "gst-plugin-mp4"
 version = "0.14.0-alpha.1"
 dependencies = [
  "anyhow",
- "bitstream-io 3.3.0",
+ "bitstream-io 4.0.0",
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-audio",
@@ -2965,7 +2956,7 @@ name = "gst-plugin-mpegtslive"
 version = "0.14.0-alpha.1"
 dependencies = [
  "anyhow",
- "bitstream-io 3.3.0",
+ "bitstream-io 4.0.0",
  "gst-plugin-version-helper",
  "gstreamer",
  "smallvec",
