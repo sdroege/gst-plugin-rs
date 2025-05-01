@@ -957,7 +957,7 @@ impl ObjectImpl for Translate {
             vec![
                 glib::ParamSpecUInt::builder("latency")
                     .nick("Latency")
-                    .blurb("Amount of milliseconds to allow AWS Polly")
+                    .blurb("Amount of milliseconds to allow AWS translate")
                     .default_value(DEFAULT_LATENCY.mseconds() as u32)
                     .mutable_ready()
                     .deprecated()
