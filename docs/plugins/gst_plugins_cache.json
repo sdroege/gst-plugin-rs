@@ -1579,6 +1579,20 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "accumulator-lateness": {
+                        "blurb": "By how much to shift input timestamps forward for accumulating",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
                     "input-language-code": {
                         "blurb": "The Language of the input stream",
                         "conditionally-available": false,
@@ -1592,7 +1606,7 @@
                         "writable": true
                     },
                     "latency": {
-                        "blurb": "Amount of milliseconds to allow AWS Polly",
+                        "blurb": "Amount of milliseconds to allow AWS translate",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
