@@ -2156,12 +2156,6 @@ impl FMP4Mux {
                 stream.dts_offset.display(),
             );
 
-            let start_time = if !stream.delta_frames.requires_dts() {
-                earliest_pts
-            } else {
-                start_dts.unwrap()
-            };
-
             if min_earliest_pts.opt_gt(earliest_pts).unwrap_or(true) {
                 min_earliest_pts = Some(earliest_pts);
             }
@@ -2183,7 +2177,7 @@ impl FMP4Mux {
             drained_streams.push((
                 super::FragmentHeaderStream {
                     caps: stream.caps.clone(),
-                    start_time: Some(start_time),
+                    start_time: Some(earliest_pts),
                     delta_frames: stream.delta_frames,
                     trak_timescale: stream_settings.trak_timescale,
                 },
