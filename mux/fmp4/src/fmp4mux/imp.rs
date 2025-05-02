@@ -3211,6 +3211,7 @@ impl FMP4Mux {
                 chunk: !fragment_start,
                 streams: streams.as_slice(),
                 buffers: interleaved_buffers.as_slice(),
+                last_fragment: at_eos,
             })
             .map_err(|err| {
                 gst::error!(
