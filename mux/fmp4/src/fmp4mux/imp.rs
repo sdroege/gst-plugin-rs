@@ -2505,11 +2505,9 @@ impl FMP4Mux {
             }
             if stream.delta_frames.requires_dts() && start_dts.is_none() {
                 start_dts = Some(buffer.dts.unwrap());
-                if stream.delta_frames.requires_dts() {
-                    let utc_time = get_utc_time_from_buffer(&buffer.buffer)
-                        .and_then(|t| t.checked_add(NTP_UNIX_OFFSET.seconds()));
-                    start_ntp_time = utc_time;
-                }
+                let utc_time = get_utc_time_from_buffer(&buffer.buffer)
+                    .and_then(|t| t.checked_add(NTP_UNIX_OFFSET.seconds()));
+                start_ntp_time = utc_time;
             }
             if stream.delta_frames.requires_dts() && start_dts_position.is_none() {
                 start_dts_position = Some(buffer.buffer.dts().unwrap());
