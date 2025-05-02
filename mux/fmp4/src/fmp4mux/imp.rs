@@ -2452,8 +2452,6 @@ impl FMP4Mux {
             Option<gst::ClockTime>,
             // End DTS
             Option<gst::ClockTime>,
-            // Start time (either matches start_dts if required or earliest-pts)
-            gst::ClockTime,
             // Start NTP time (either matches start_dts if required or earliest_pts)
             Option<gst::ClockTime>,
         )>,
@@ -2585,12 +2583,6 @@ impl FMP4Mux {
         let start_dts = start_dts;
         let start_dts_position = start_dts_position;
 
-        let start_time = if !stream.delta_frames.requires_dts() {
-            earliest_pts
-        } else {
-            start_dts.unwrap()
-        };
-
         Ok(Some((
             buffers,
             earliest_pts,
@@ -2599,7 +2591,6 @@ impl FMP4Mux {
             start_dts,
             start_dts_position,
             end_dts,
-            start_time,
             start_ntp_time,
         )))
     }
@@ -2839,7 +2830,6 @@ impl FMP4Mux {
                 start_dts,
                 start_dts_position,
                 _end_dts,
-                start_time,
                 start_ntp_time,
             ) = match buffers {
                 Some(res) => res,
@@ -2892,7 +2882,7 @@ impl FMP4Mux {
             drained_streams.push((
                 super::FragmentHeaderStream {
                     caps: stream.caps.clone(),
-                    start_time: Some(start_time),
+                    start_time: Some(earliest_pts),
                     start_ntp_time,
                     delta_frames: stream.delta_frames,
                     trak_timescale,
