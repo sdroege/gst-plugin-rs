@@ -1711,10 +1711,14 @@ pub(super) fn create_fmp4_fragment_header(
 ) -> Result<(gst::Buffer, u64), Error> {
     let mut v = vec![];
 
-    // Don't write a `styp` if this is only a chunk.
-    if !cfg.chunk {
-        let (brand, compatible_brands) =
+    // Don't write a `styp` if this is only a chunk unless it's the last.
+    if !cfg.chunk || cfg.last_fragment {
+        let (brand, mut compatible_brands) =
             brands_from_variant_and_caps(cfg.variant, cfg.streams.iter().map(|s| &s.caps));
+
+        if cfg.last_fragment {
+            compatible_brands.push(b"lmsg");
+        }
 
         write_box(&mut v, b"styp", |v| {
             // major brand

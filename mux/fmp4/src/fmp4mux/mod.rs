@@ -222,6 +222,9 @@ pub(crate) struct FragmentHeaderConfiguration<'a> {
 
     streams: &'a [FragmentHeaderStream],
     buffers: &'a [Buffer],
+
+    /// If this is for the last fragment.
+    last_fragment: bool,
 }
 
 #[derive(Debug)]
