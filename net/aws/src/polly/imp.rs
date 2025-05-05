@@ -159,22 +159,12 @@ impl Polly {
         }
     }
 
-    async fn send(&self, inbuf: gst::Buffer) -> Result<gst::Buffer, Error> {
-        let mut pts = inbuf
-            .pts()
-            .ok_or_else(|| anyhow!("Stream with timestamped buffers required"))?;
-
-        let input_duration = inbuf
-            .duration()
-            .ok_or_else(|| anyhow!("Buffers of stream need to have a duration"))?;
-
-        let data = inbuf
-            .map_readable()
-            .map_err(|_| anyhow!("Can't map buffer readable"))?;
-
-        let data =
-            std::str::from_utf8(&data).map_err(|err| anyhow!("Can't decode utf8: {}", err))?;
-
+    async fn send(
+        &self,
+        content: String,
+        mut pts: gst::ClockTime,
+        input_duration: gst::ClockTime,
+    ) -> Result<gst::Buffer, Error> {
         let (client, in_format) = {
             let state = self.state.lock().unwrap();
 
@@ -183,6 +173,8 @@ impl Polly {
                 state.in_format.as_ref().expect("received caps").clone(),
             )
         };
+
+        gst::debug!(CAT, imp = self, "synthesizing speech from text {content}");
 
         let job = {
             let settings = self.settings.lock().unwrap();
@@ -197,11 +189,11 @@ impl Polly {
                 })
                 .text(if settings.ssml_set_max_duration {
                     format!(
-                        "<speak><prosody amazon:max-duration=\"{}ms\">{data}</prosody></speak>",
+                        "<speak><prosody amazon:max-duration=\"{}ms\">{content}</prosody></speak>",
                         input_duration.mseconds()
                     )
                 } else {
-                    data.to_owned()
+                    content
                 })
                 .voice_id(settings.voice_id.into())
                 .set_lexicon_names(Some(
@@ -292,16 +284,6 @@ impl Polly {
                 gst::debug!(CAT, imp = self, "Marking buffer discont");
                 buf_mut.set_flags(gst::BufferFlags::DISCONT);
             }
-            inbuf.foreach_meta(|meta| {
-                if meta.tags().is_empty() {
-                    if let Err(err) =
-                        meta.transform(buf_mut, &gst::meta::MetaTransformCopy::new(false, ..))
-                    {
-                        gst::trace!(CAT, imp = self, "Could not copy meta {}: {err}", meta.api());
-                    }
-                }
-                std::ops::ControlFlow::Continue(())
-            });
         }
 
         state.out_segment.set_position(pts + duration);
@@ -309,19 +291,18 @@ impl Polly {
         Ok(buf)
     }
 
-    fn sink_chain(
+    fn do_send(
         &self,
-        pad: &gst::Pad,
-        buffer: gst::Buffer,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj = pad, "Handling {buffer:?}");
-
+        content: String,
+        pts: gst::ClockTime,
+        duration: gst::ClockTime,
+    ) -> Result<gst::Buffer, gst::FlowError> {
         self.ensure_connection().map_err(|err| {
             gst::element_imp_error!(self, gst::StreamError::Failed, ["Streaming failed: {err}"]);
             gst::FlowError::Error
         })?;
 
-        let (future, abort_handle) = abortable(self.send(buffer));
+        let (future, abort_handle) = abortable(self.send(content, pts, duration));
 
         self.state.lock().unwrap().send_abort_handle = Some(abort_handle);
 
@@ -339,8 +320,127 @@ impl Polly {
                     );
                     Err(gst::FlowError::Error)
                 }
-                Ok(buf) => self.srcpad.push(buf),
+                Ok(buf) => Ok(buf),
             },
+        }
+    }
+
+    fn read_buffer(
+        &self,
+        buffer: &gst::Buffer,
+    ) -> Result<(gst::ClockTime, gst::ClockTime, String), Error> {
+        let pts = buffer
+            .pts()
+            .ok_or_else(|| anyhow!("Stream with timestamped buffers required"))?;
+
+        let duration = buffer
+            .duration()
+            .ok_or_else(|| anyhow!("Buffers of stream need to have a duration"))?;
+
+        let data = buffer
+            .map_readable()
+            .map_err(|_| anyhow!("Can't map buffer readable"))?;
+
+        let data =
+            std::str::from_utf8(&data).map_err(|err| anyhow!("Can't decode utf8: {}", err))?;
+
+        Ok((pts, duration, data.to_owned()))
+    }
+
+    fn sink_chain(
+        &self,
+        pad: &gst::Pad,
+        buffer: gst::Buffer,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        gst::log!(CAT, obj = pad, "Handling {buffer:?}");
+
+        let (pts, duration, data) = self.read_buffer(&buffer).map_err(|err| {
+            gst::element_imp_error!(self, gst::StreamError::Failed, ["{}", err]);
+            gst::FlowError::Error
+        })?;
+
+        let mut outbuf = self.do_send(data, pts, duration)?;
+
+        {
+            let outbuf_mut = outbuf.get_mut().unwrap();
+            buffer.foreach_meta(|meta| {
+                if meta.tags().is_empty() {
+                    if let Err(err) =
+                        meta.transform(outbuf_mut, &gst::meta::MetaTransformCopy::new(false, ..))
+                    {
+                        gst::trace!(CAT, imp = self, "Could not copy meta {}: {err}", meta.api());
+                    }
+                }
+                std::ops::ControlFlow::Continue(())
+            });
+        }
+
+        self.srcpad.push(outbuf)
+    }
+
+    fn sink_chain_list(
+        &self,
+        _pad: &gst::Pad,
+        list: gst::BufferList,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        gst::debug!(
+            CAT,
+            imp = self,
+            "Handling buffer list with size {}",
+            list.len()
+        );
+
+        let mut list_pts: Option<gst::ClockTime> = None;
+        let mut list_end_pts: Option<gst::ClockTime> = None;
+        let mut list_content: Vec<String> = vec![];
+
+        for buffer in list.iter_owned() {
+            let (pts, duration, data) = self.read_buffer(&buffer).map_err(|err| {
+                gst::element_imp_error!(self, gst::StreamError::Failed, ["{}", err]);
+                gst::FlowError::Error
+            })?;
+
+            if list_pts.is_none() {
+                list_pts = Some(pts);
+            }
+
+            list_end_pts = Some(pts + duration);
+
+            list_content.push(data);
+        }
+
+        if let Some((pts, end_pts)) = list_pts.zip(list_end_pts) {
+            let duration = end_pts.saturating_sub(pts);
+
+            let content = list_content.join(" ");
+
+            let mut outbuf = self.do_send(content, pts, duration)?;
+
+            {
+                let outbuf_mut = outbuf.get_mut().unwrap();
+                for buffer in list.iter() {
+                    buffer.foreach_meta(|meta| {
+                        if meta.tags().is_empty() {
+                            if let Err(err) = meta.transform(
+                                outbuf_mut,
+                                &gst::meta::MetaTransformCopy::new(false, ..),
+                            ) {
+                                gst::trace!(
+                                    CAT,
+                                    imp = self,
+                                    "Could not copy meta {}: {err}",
+                                    meta.api()
+                                );
+                            }
+                        }
+                        std::ops::ControlFlow::Continue(())
+                    });
+                }
+            }
+
+            self.srcpad.push(outbuf)
+        } else {
+            Ok(gst::FlowSuccess::Ok)
         }
     }
 
@@ -471,6 +571,13 @@ impl ObjectSubclass for Polly {
                     parent,
                     || Err(gst::FlowError::Error),
                     |polly| polly.sink_chain(pad, buffer),
+                )
+            })
+            .chain_list_function(|pad, parent, list| {
+                Polly::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |polly| polly.sink_chain_list(pad, list),
                 )
             })
             .event_function(|pad, parent, event| {

@@ -349,12 +349,10 @@ impl TranscriberBin {
     fn construct_synthesis_channel(
         &self,
         lang: &str,
-        accumulate_time: gst::ClockTime,
         bin_description: &str,
     ) -> Result<CustomOutputChannel, Error> {
         let bin = gst::Bin::new();
         let queue = gst::ElementFactory::make("queue").build()?;
-        let textwrap = gst::ElementFactory::make("textwrap").build()?;
         let synthesizer = gst::parse::bin_from_description_full(
             bin_description,
             true,
@@ -364,15 +362,11 @@ impl TranscriberBin {
 
         let latency = query_latency(&synthesizer)?;
 
-        bin.add_many([&queue, &textwrap, &synthesizer])?;
-        gst::Element::link_many([&queue, &textwrap, &synthesizer])?;
+        bin.add_many([&queue, &synthesizer])?;
+        gst::Element::link_many([&queue, &synthesizer])?;
 
         queue.set_property("max-size-buffers", 0u32);
         queue.set_property("max-size-time", 0u64);
-
-        textwrap.set_property("lines", 1u32);
-        textwrap.set_property("columns", u32::MAX);
-        textwrap.set_property("accumulate-time", accumulate_time);
 
         let sinkpad = gst::GhostPad::with_target(&queue.static_pad("sink").unwrap()).unwrap();
         bin.add_pad(&sinkpad)?;
@@ -1163,7 +1157,6 @@ impl TranscriberBin {
 
     fn construct_channels(
         &self,
-        accumulate_time: gst::ClockTime,
         mux_method: MuxMethod,
         pad_state: &mut TranscriberSinkPadState,
         pad_settings: &TranscriberSinkPadSettings,
@@ -1171,7 +1164,7 @@ impl TranscriberBin {
         self.construct_caption_channels(pad_settings, mux_method, pad_state)
             .unwrap();
 
-        self.construct_synthesis_channels(accumulate_time, pad_settings, pad_state)
+        self.construct_synthesis_channels(pad_settings, pad_state)
             .unwrap();
 
         self.construct_subtitle_channels(pad_settings, pad_state)
@@ -1391,7 +1384,6 @@ impl TranscriberBin {
 
     fn construct_synthesis_channels(
         &self,
-        accumulate_time: gst::ClockTime,
         pad_settings: &TranscriberSinkPadSettings,
         pad_state: &mut TranscriberSinkPadState,
     ) -> Result<(), Error> {
@@ -1400,7 +1392,7 @@ impl TranscriberBin {
                 let bin_description = value.get::<String>()?;
                 pad_state.synthesis_channels.insert(
                     language.to_string(),
-                    self.construct_synthesis_channel(language, accumulate_time, &bin_description)?,
+                    self.construct_synthesis_channel(language, &bin_description)?,
                 );
             }
 
@@ -1573,7 +1565,6 @@ impl TranscriberBin {
 
     fn prepare_custom_output_channel_updates(
         &self,
-        settings: &Settings,
         languages: &Option<gst::Structure>,
         channels_map: &mut HashMap<String, CustomOutputChannel>,
         channel_type_logname: &str,
@@ -1629,11 +1620,8 @@ impl TranscriberBin {
                         );
                     }
 
-                    let synthesis_channel = self.construct_synthesis_channel(
-                        &language_code,
-                        settings.accumulate_time,
-                        &bin_description,
-                    )?;
+                    let synthesis_channel =
+                        self.construct_synthesis_channel(&language_code, &bin_description)?;
                     channels_to_add.push(synthesis_channel.clone());
                     channels_map.insert(language_code.clone(), synthesis_channel);
 
@@ -1945,7 +1933,6 @@ impl TranscriberBin {
 
     fn reconfigure_transcription_bin_dynamic(&self, pad: &TranscriberSinkPad) -> Result<(), Error> {
         let mut s = self.state.lock().unwrap();
-        let settings = self.settings.lock().unwrap();
 
         gst::info!(CAT, imp = self, "Reconfiguring transcription bin");
 
@@ -1969,7 +1956,6 @@ impl TranscriberBin {
 
             let (synthesis_channels_to_remove, synthesis_channels_to_add) = self
                 .prepare_custom_output_channel_updates(
-                    &settings,
                     &pad_settings.synthesis_languages,
                     &mut pad_state.synthesis_channels,
                     "synthesis",
@@ -1977,7 +1963,6 @@ impl TranscriberBin {
 
             let (subtitle_channels_to_remove, subtitle_channels_to_add) = self
                 .prepare_custom_output_channel_updates(
-                    &settings,
                     &pad_settings.subtitle_languages,
                     &mut pad_state.subtitle_channels,
                     "subtitle",
@@ -1996,7 +1981,6 @@ impl TranscriberBin {
             let internal_bin = state.internal_bin.clone();
 
             drop(s);
-            drop(settings);
             drop(pad_settings);
             drop(ps);
 
@@ -2113,12 +2097,7 @@ impl TranscriberBin {
 
             self.tear_down_channels(state, pad_state)?;
 
-            self.construct_channels(
-                settings.accumulate_time,
-                state.mux_method,
-                pad_state,
-                &pad_settings,
-            )?;
+            self.construct_channels(state.mux_method, pad_state, &pad_settings)?;
 
             self.link_transcriber_to_channels(state, pad_state)?;
 
@@ -2269,7 +2248,7 @@ impl TranscriberBin {
     fn our_latency(&self, state: &State, settings: &Settings) -> gst::ClockTime {
         [
             settings.latency + self.subtitle_latency(state),
-            settings.latency + settings.accumulate_time + self.synthesis_latency(state),
+            settings.latency + self.synthesis_latency(state),
             settings.latency
                 + settings.accumulate_time
                 + CEAX08MUX_LATENCY
@@ -2363,12 +2342,7 @@ impl TranscriberBin {
             .as_mut()
             .map_err(|err| anyhow!("Sink pad state creation failed: {err}"))?;
         let pad_settings = pad.imp().settings.lock().unwrap();
-        self.construct_channels(
-            settings.accumulate_time,
-            settings.mux_method,
-            pad_state,
-            &pad_settings,
-        )?;
+        self.construct_channels(settings.mux_method, pad_state, &pad_settings)?;
 
         Ok(State {
             mux_method,
@@ -3012,13 +2986,8 @@ impl ElementImpl for TranscriberBin {
                     }
                 };
                 let pad_settings = sink_pad.imp().settings.lock().unwrap();
-                self.construct_channels(
-                    settings.accumulate_time,
-                    settings.mux_method,
-                    pad_state,
-                    &pad_settings,
-                )
-                .unwrap();
+                self.construct_channels(settings.mux_method, pad_state, &pad_settings)
+                    .unwrap();
 
                 pad_state.serial = Some(state.audio_serial);
 

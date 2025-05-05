@@ -446,16 +446,18 @@ impl Translate {
                     Err(gst::FlowError::Error)
                 }
                 Ok(mut output) => {
+                    let mut bufferlist = gst::BufferList::new();
+                    let bufferlist_mut = bufferlist.get_mut().unwrap();
                     for item in output.drain(..) {
                         match item {
                             TranslateOutput::Item(buffer) => {
                                 gst::debug!(CAT, imp = self, "pushing {buffer:?}");
-                                self.srcpad.push(buffer)?;
+                                bufferlist_mut.add(buffer);
                             }
                         }
                     }
 
-                    Ok(gst::FlowSuccess::Ok)
+                    self.srcpad.push_list(bufferlist)
                 }
             },
         }
