@@ -298,8 +298,8 @@ pub(crate) struct Buffer {
     /// Actual buffer
     buffer: gst::Buffer,
 
-    /// Timestamp
-    timestamp: gst::ClockTime,
+    /// Timestamp (PTS or DTS)
+    timestamp: gst::Signed<gst::ClockTime>,
 
     /// Sample duration
     duration: gst::ClockTime,
