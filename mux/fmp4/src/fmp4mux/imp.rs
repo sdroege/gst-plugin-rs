@@ -2882,6 +2882,12 @@ impl FMP4Mux {
             drained_streams.push((
                 super::FragmentHeaderStream {
                     caps: stream.caps.clone(),
+                    // We're setting the tfdt to the earliest PTS of the fragment as it is supposed
+                    // to be the sum of all sample durations of all previous fragments.
+                    //
+                    // In case of negative DTS this is not the same as the start DTS of the
+                    // fragment (actually negative or negative but the whole PTS/DTS timeline is
+                    // shifted above zero) so instead we work with the earliest PTS.
                     start_time: Some(earliest_pts),
                     start_ntp_time,
                     delta_frames: stream.delta_frames,
