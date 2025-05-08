@@ -6001,8 +6001,8 @@ pub(super) mod janus {
          */
         #[property(
         name = "janus-state",
-        // FIXME: can't use `member =` with enums: https://github.com/gtk-rs/gtk-rs-core/issues/1338
-        get = |self_: &Self| self_.state.lock().unwrap().janus_state,
+        get,
+        member = janus_state,
         type = JanusVRSignallerState,
         blurb = "The current state of the signaller",
         builder(JanusVRSignallerState::Initialized)
