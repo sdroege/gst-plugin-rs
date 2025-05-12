@@ -1504,6 +1504,18 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "show-speaker-label": {
+                        "blurb": "Defines whether to partition speakers in the transcription output",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "vocabulary-filter-method": {
                         "blurb": "Defines how filtered words will be edited, has no effect when vocabulary-filter-name isn't set",
                         "conditionally-available": false,
