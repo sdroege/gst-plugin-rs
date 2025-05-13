@@ -5,6 +5,44 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.13.6] - 2025-05-13
+### Fixed
+- buffer-lateness: Avoid integer overflows when logging.
+- cdg: Fix division by zero in the typefinder.
+- cea708mux: Improve support for overflowing input captions.
+- dav1ddec: Use downstream buffer pool to copy into if videometa is not
+  supported by downstream.
+- dav1ddec: Fix handling of incomplete colorimetry information.
+- dav1ddec: Drain decoder on caps changes.
+- fmp4mux: Fix latency configuration for properties set during construction.
+- fmp4mux: Write v0 tfdt box if decode time is small enough for improved
+  compatibility.
+- fmp4mux: Fix handling of multiple tags per taglist.
+- fmp4mux: Parse language tags correctly as ISO 639-2T.
+- fmp4mux: Fix tfdt value to be actually according to the spec.
+- fmp4mux: Fix handling of negative DTS in composition time offset.
+- gtk4paintablesink: Consider surface scale factor when proposing window
+  dimensions to improve rendering quality with scale factors > 1.
+- mp4mux: Don't write composition time offsets if they're all zero.
+- mp4mux: Fix handling of multiple tags per taglist.
+- mp4mux: Store language tags per stream and not globally.
+- mp4mux: Parse language tags correctly as ISO 639-2T.
+- mpegtslivesrc: Fix deadlock caused by pushing buffers downstream while
+  keeping the state locked.
+- mpegtslivesrc: Increase threshold for PCR / PTS discont detection.
+- tttocea708: Fix origin-row handling for roll-up modes.
+- webrtc/signalling: Don't error out on messages from unknown sessions.
+- webrtcsink: Emit signals without holding mutexes, fix locking order and
+  various deadlocks.
+
+### Added
+- dav1ddec: Add support for RGB encoded AV1.
+- fmp4mux: Write lmsg compatibility brand into the last fragment.
+
+### Changed
+- Various updated dependencies.
+- colordetect: Move to videofilter base class and allow working in passthrough mode.
+
 ## [0.13.5] - 2025-03-04
 ### Fixed
 - cdg: Fix typefind errors on specific file sizes.
@@ -562,7 +600,7 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 ### Fixed
 - hlssink3: Allow signal handlers to return `None`
 - gtk4: Make GL context sharing more reliable in pipelines with multiple
-  `gtk4paintablesinks`
+  `gtk4paintablesink`s
 - gtk4: Attach channel receiver to the main context from the correct thread to
   make it possible to start the sink from a different thread than the main
   thread without having retrieved the paintable from the main thread before.
@@ -632,7 +670,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.5...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.6...HEAD
+[0.13.6]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.5...0.13.6
 [0.13.5]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.4...0.13.5
 [0.13.4]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.3...0.13.4
 [0.13.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.2...0.13.3
