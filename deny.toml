@@ -415,6 +415,11 @@ version = "0.38"
 name = "linux-raw-sys"
 version = "0.4"
 
+# quinn-proto / rustls-platform-verifier depends on an old version
+[[bans.skip]]
+name = "webpki-root-certs"
+version = "0.26"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
