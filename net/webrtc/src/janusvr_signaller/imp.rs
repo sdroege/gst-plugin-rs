@@ -77,71 +77,19 @@ impl std::fmt::Display for JanusId {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-struct KeepAliveMsg {
-    janus: String,
-    transaction: String,
-    session_id: u64,
-    apisecret: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-struct CreateSessionMsg {
-    janus: String,
-    transaction: String,
-    apisecret: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-struct AttachPluginMsg {
-    janus: String,
-    transaction: String,
-    plugin: String,
-    session_id: u64,
-    apisecret: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-struct RoomRequestBody {
-    request: String,
-    ptype: String,
-    room: JanusId,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    id: Option<JanusId>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    display: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-struct RoomRequestMsg {
-    janus: String,
-    transaction: String,
-    session_id: u64,
-    handle_id: u64,
-    apisecret: Option<String>,
-    body: RoomRequestBody,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-struct PublishBody {
-    request: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-struct Jsep {
-    sdp: String,
-    trickle: Option<bool>,
-    r#type: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-struct PublishMsg {
-    janus: String,
-    transaction: String,
-    session_id: u64,
-    handle_id: u64,
-    apisecret: Option<String>,
-    body: PublishBody,
-    jsep: Jsep,
+#[serde(tag = "type")]
+#[serde(rename_all = "lowercase")]
+enum Jsep {
+    Offer {
+        sdp: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        trickle: Option<bool>,
+    },
+    Answer {
+        sdp: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        trickle: Option<bool>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -152,24 +100,62 @@ struct Candidate {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-struct TrickleMsg {
-    janus: String,
-    transaction: String,
-    session_id: u64,
-    handle_id: u64,
-    apisecret: Option<String>,
-    candidate: Candidate,
+#[serde(tag = "janus")]
+#[serde(rename_all = "lowercase")]
+enum OutgoingMessage {
+    KeepAlive {
+        transaction: String,
+        session_id: u64,
+        apisecret: Option<String>,
+    },
+    Create {
+        transaction: String,
+        apisecret: Option<String>,
+    },
+    Attach {
+        transaction: String,
+        plugin: String,
+        session_id: u64,
+        apisecret: Option<String>,
+    },
+    Message {
+        transaction: String,
+        session_id: u64,
+        handle_id: u64,
+        apisecret: Option<String>,
+        body: MessageBody,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        jsep: Option<Jsep>,
+    },
+    Trickle {
+        transaction: String,
+        session_id: u64,
+        handle_id: u64,
+        apisecret: Option<String>,
+        candidate: Candidate,
+    },
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(untagged)]
-enum OutgoingMessage {
-    KeepAlive(KeepAliveMsg),
-    CreateSession(CreateSessionMsg),
-    AttachPlugin(AttachPluginMsg),
-    RoomRequest(RoomRequestMsg),
-    Publish(PublishMsg),
-    Trickle(TrickleMsg),
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(tag = "request")]
+#[serde(rename_all = "snake_case")]
+enum MessageBody {
+    Join(Join),
+    Publish,
+    Leave,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(tag = "ptype")]
+#[serde(rename_all = "lowercase")]
+enum Join {
+    Publisher {
+        room: JanusId,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        id: Option<JanusId>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        display: Option<String>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -384,12 +370,11 @@ impl Signaller {
                                         settings.secret_key.clone(),
                                     )
                                 };
-                                let msg = OutgoingMessage::KeepAlive(KeepAliveMsg {
-                                    janus: "keepalive".to_string(),
+                                let msg = OutgoingMessage::KeepAlive{
                                     transaction,
                                     session_id,
                                     apisecret,
-                                });
+                                };
                                 res = ws_sink
                                     .send(WsMessage::text(serde_json::to_string(&msg).unwrap()))
                                     .await;
@@ -536,11 +521,9 @@ impl Signaller {
                                 return;
                             }
 
-                            if let Some(jsep) = event.jsep {
-                                if jsep.r#type == "answer" {
-                                    gst::trace!(CAT, imp = self, "Session requested successfully");
-                                    self.handle_answer(jsep.sdp);
-                                }
+                            if let Some(Jsep::Answer { sdp, .. }) = event.jsep {
+                                gst::trace!(CAT, imp = self, "Session requested successfully");
+                                self.handle_answer(sdp);
                             }
                         }
                         VideoRoomData::Destroyed(room_destroyed) => {
@@ -601,11 +584,10 @@ impl Signaller {
         self.set_transaction_id(transaction.clone());
         let settings = self.settings.lock().unwrap();
         let apisecret = settings.secret_key.clone();
-        self.send(OutgoingMessage::CreateSession(CreateSessionMsg {
-            janus: "create".to_string(),
+        self.send(OutgoingMessage::Create {
             transaction,
             apisecret,
-        }));
+        });
     }
 
     fn set_session_id(&self, session_id: u64) {
@@ -639,13 +621,12 @@ impl Signaller {
                 settings.secret_key.clone(),
             )
         };
-        self.send(OutgoingMessage::AttachPlugin(AttachPluginMsg {
-            janus: "attach".to_string(),
+        self.send(OutgoingMessage::Attach {
             transaction,
             plugin: "janus.plugin.videoroom".to_string(),
             session_id,
             apisecret,
-        }));
+        });
     }
 
     fn join_room(&self) {
@@ -670,25 +651,23 @@ impl Signaller {
                 settings.secret_key.clone(),
             )
         };
-        self.send(OutgoingMessage::RoomRequest(RoomRequestMsg {
-            janus: "message".to_string(),
+        self.send(OutgoingMessage::Message {
             transaction,
             session_id,
             handle_id,
             apisecret,
-            body: RoomRequestBody {
-                request: "join".to_string(),
-                ptype: "publisher".to_string(),
+            body: MessageBody::Join(Join::Publisher {
                 room,
                 id: feed_id,
                 display,
-            },
-        }));
+            }),
+            jsep: None,
+        });
     }
 
     fn leave_room(&self) {
         let mut state = self.state.lock().unwrap();
-        let (transaction, session_id, handle_id, room, feed_id, display, apisecret) = {
+        let (transaction, session_id, handle_id, apisecret) = {
             let settings = self.settings.lock().unwrap();
 
             if settings.room_id.is_none() {
@@ -700,29 +679,20 @@ impl Signaller {
                 state.transaction_id.clone().unwrap(),
                 state.session_id.unwrap(),
                 state.handle_id.unwrap(),
-                state.room_id.clone().unwrap(),
-                state.feed_id.clone().unwrap(),
-                settings.display_name.clone(),
                 settings.secret_key.clone(),
             )
         };
         if let Some(mut sender) = state.ws_sender.clone() {
             let (tx, rx) = tokio::sync::oneshot::channel::<()>();
             state.leave_room_rx = Some(rx);
-            let msg = OutgoingMessage::RoomRequest(RoomRequestMsg {
-                janus: "message".to_string(),
+            let msg = OutgoingMessage::Message {
                 transaction,
                 session_id,
                 handle_id,
                 apisecret,
-                body: RoomRequestBody {
-                    request: "leave".to_string(),
-                    ptype: "publisher".to_string(),
-                    room,
-                    id: Some(feed_id),
-                    display,
-                },
-            });
+                jsep: None,
+                body: MessageBody::Leave,
+            };
             RUNTIME.spawn(glib::clone!(
                 #[to_owned(rename_to = this)]
                 self,
@@ -756,22 +726,18 @@ impl Signaller {
                 settings.secret_key.clone(),
             )
         };
-        let sdp_data = offer.sdp().as_text().unwrap();
-        self.send(OutgoingMessage::Publish(PublishMsg {
-            janus: "message".to_string(),
+        let sdp = offer.sdp().as_text().unwrap();
+        self.send(OutgoingMessage::Message {
             transaction,
             session_id,
             handle_id,
             apisecret,
-            body: PublishBody {
-                request: "publish".to_string(),
-            },
-            jsep: Jsep {
-                sdp: sdp_data,
+            body: MessageBody::Publish,
+            jsep: Some(Jsep::Offer {
+                sdp,
                 trickle: Some(true),
-                r#type: "offer".to_string(),
-            },
-        }));
+            }),
+        });
     }
 
     fn trickle(&self, candidate: &str, sdp_m_line_index: u32) {
@@ -791,8 +757,7 @@ impl Signaller {
                 settings.secret_key.clone(),
             )
         };
-        self.send(OutgoingMessage::Trickle(TrickleMsg {
-            janus: "trickle".to_string(),
+        self.send(OutgoingMessage::Trickle {
             transaction,
             session_id,
             handle_id,
@@ -801,7 +766,7 @@ impl Signaller {
                 candidate: candidate.to_string(),
                 sdp_m_line_index,
             },
-        }));
+        });
     }
 
     fn session_requested(&self) {
