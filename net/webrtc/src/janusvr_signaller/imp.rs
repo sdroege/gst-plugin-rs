@@ -367,7 +367,7 @@ impl Signaller {
                     tokio::select! {
                         opt = ws_receiver.next() => match opt {
                             Some(msg) => {
-                                gst::log!(CAT, "Sending websocket message {:?}", msg);
+                                gst::trace!(CAT, "Sending websocket message {:?}", msg);
                                 res = ws_sink
                                     .send(WsMessage::text(serde_json::to_string(&msg).unwrap()))
                                     .await;
