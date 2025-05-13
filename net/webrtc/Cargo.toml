@@ -123,3 +123,6 @@ name = "webrtc-precise-sync-recv"
 [[example]]
 name = "whipserver"
 required-features = [ "whip" ]
+
+[package.metadata.gstreamer]
+release_date = "2025-05-13"
