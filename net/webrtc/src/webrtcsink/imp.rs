@@ -63,11 +63,8 @@ const DEFAULT_MIN_BITRATE: u32 = 1000;
  * my local network, possibly related to chrome's pretty low UDP
  * buffer sizes */
 const DEFAULT_MAX_BITRATE: u32 = 8192000;
-const DEFAULT_CONGESTION_CONTROL: WebRTCSinkCongestionControl = if cfg!(feature = "v1_22") {
-    WebRTCSinkCongestionControl::GoogleCongestionControl
-} else {
-    WebRTCSinkCongestionControl::Disabled
-};
+const DEFAULT_CONGESTION_CONTROL: WebRTCSinkCongestionControl =
+    WebRTCSinkCongestionControl::GoogleCongestionControl;
 const DEFAULT_DO_FEC: bool = true;
 const DEFAULT_DO_RETRANSMISSION: bool = true;
 const DEFAULT_DO_CLOCK_SIGNALLING: bool = false;
@@ -90,7 +87,6 @@ const DEFAULT_WEB_SERVER_HOST_ADDR: &str = "http://127.0.0.1:8080";
 const DEFAULT_FORWARD_METAS: &str = "";
 /* Start adding some FEC when the bitrate > 2Mbps as we found experimentally
  * that it is not worth it below that threshold */
-#[cfg(feature = "v1_22")]
 const DO_FEC_THRESHOLD: u32 = 2000000;
 
 #[derive(Debug, Clone, Copy)]
@@ -302,7 +298,6 @@ struct SessionInner {
 
     pipeline: gst::Pipeline,
     webrtcbin: gst::Element,
-    #[cfg(feature = "v1_22")]
     rtprtxsend: Option<gst::Element>,
     webrtc_pads: HashMap<u32, WebRTCPad>,
     peer_id: String,
@@ -1292,7 +1287,6 @@ impl SessionInner {
             webrtcbin,
             peer_id,
             cc_info,
-            #[cfg(feature = "v1_22")]
             rtprtxsend: None,
             congestion_controller,
             rtpgccbwe,
@@ -1596,7 +1590,13 @@ impl ControlRequestHandler {
                             }
                             Ok(msg) => match serde_json::to_string(&msg).ok() {
                                 Some(s) => {
-                                    channel.send_string(Some(s.as_str()));
+                                    if let Err(err) = channel.send_string_full(Some(s.as_str())) {
+                                        gst::error!(
+                                            CAT,
+                                            obj = element,
+                                            "Failed sending control request to peer: {err}",
+                                        );
+                                    }
                                 }
                                 None => {
                                     gst::error!(
@@ -2740,7 +2740,9 @@ impl BaseWebRTCSink {
                     info: utils::Info::Meta(meta),
                 }) {
                     Ok(msg) => {
-                        handler.0 .1.send_string(Some(msg.as_str()));
+                        if let Err(err) = handler.0 .1.send_string_full(Some(msg.as_str())) {
+                            gst::error!(CAT, imp = self, "Failed sending meta to peer: {err}",);
+                        }
                     }
                     Err(err) => {
                         gst::warning!(CAT, imp = self, "Failed to serialize info message: {err:?}",);
@@ -2801,7 +2803,6 @@ impl BaseWebRTCSink {
         }
 
         let rtpgccbwe = match settings.cc_info.heuristic {
-            #[cfg(feature = "v1_22")]
             WebRTCSinkCongestionControl::GoogleCongestionControl => {
                 let rtpgccbwe = match gst::ElementFactory::make("rtpgccbwe").build() {
                     Err(err) => {
@@ -3459,7 +3460,6 @@ impl BaseWebRTCSink {
         webrtcbin.emit_by_name::<()>("get-stats", &[&None::<gst::Pad>, &promise]);
     }
 
-    #[cfg(feature = "v1_22")]
     fn set_rtptrxsend(&self, session_id: &str, rtprtxsend: gst::Element) {
         let mut state = self.state.lock().unwrap();
 
@@ -3468,7 +3468,6 @@ impl BaseWebRTCSink {
         }
     }
 
-    #[cfg(feature = "v1_22")]
     fn set_bitrate(&self, session_id: &str, bitrate: u32) {
         let settings = self.settings.lock().unwrap();
         let mut state = self.state.lock().unwrap();

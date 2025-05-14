@@ -426,7 +426,14 @@ impl Session {
                         "Sending navigation event to peer for session {}",
                         self.id
                     );
-                    data_channel.send_string(Some(str.as_str()));
+                    if let Err(err) = data_channel.send_string_full(Some(str.as_str())) {
+                        gst::error!(
+                            CAT,
+                            obj = element,
+                            "Failed sending navigation event to peer for session {}: {err}",
+                            self.id,
+                        );
+                    }
                 }
                 None => {
                     gst::error!(
@@ -460,7 +467,14 @@ impl Session {
                         "Sending control request to peer for session {}",
                         self.id
                     );
-                    data_channel.send_string(Some(str.as_str()));
+                    if let Err(err) = data_channel.send_string_full(Some(str.as_str())) {
+                        gst::error!(
+                            CAT,
+                            obj = element,
+                            "Failed sending control request to peer for session {}: {err}",
+                            self.id,
+                        );
+                    }
                 }
                 None => {
                     gst::error!(
