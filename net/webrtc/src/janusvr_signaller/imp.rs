@@ -408,7 +408,7 @@ impl Signaller {
                 }
 
                 let msg = "Stopped websocket receiving";
-                gst::info!(CAT, imp = this, "{msg}");
+                gst::debug!(CAT, imp = this, "{msg}");
             }
         ));
 
@@ -811,7 +811,7 @@ impl SignallableImpl for Signaller {
     }
 
     fn send_sdp(&self, _session_id: &str, offer: &gst_webrtc::WebRTCSessionDescription) {
-        gst::info!(
+        gst::log!(
             CAT,
             imp = self,
             "sending SDP offer to peer: {:?}",
