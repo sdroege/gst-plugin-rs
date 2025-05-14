@@ -279,6 +279,10 @@ struct State {
     leave_room_rx: Option<tokio::sync::oneshot::Receiver<()>>,
 }
 
+// Mutex order:
+// - self.state
+// - self.settings
+
 #[derive(Clone)]
 struct Settings {
     janus_endpoint: String,
@@ -479,13 +483,15 @@ impl Signaller {
                         VideoRoomData::Joined(joined) => {
                             let feed_id_changed = {
                                 let mut feed_id_changed = false;
-                                let mut settings = self.settings.lock().unwrap();
-                                if settings.feed_id.as_ref() != Some(&joined.id) {
-                                    settings.feed_id = Some(joined.id.clone());
-                                    feed_id_changed = true;
+                                let mut state = self.state.lock().unwrap();
+                                {
+                                    let mut settings = self.settings.lock().unwrap();
+                                    if settings.feed_id.as_ref() != Some(&joined.id) {
+                                        settings.feed_id = Some(joined.id.clone());
+                                        feed_id_changed = true;
+                                    }
                                 }
 
-                                let mut state = self.state.lock().unwrap();
                                 state.feed_id = Some(joined.id);
 
                                 feed_id_changed
@@ -575,8 +581,10 @@ impl Signaller {
 
     fn create_session(&self) {
         let transaction = transaction_id();
-        let settings = self.settings.lock().unwrap();
-        let apisecret = settings.secret_key.clone();
+        let apisecret = {
+            let settings = self.settings.lock().unwrap();
+            settings.secret_key.clone()
+        };
         self.send(OutgoingMessage::Create {
             transaction,
             apisecret,
