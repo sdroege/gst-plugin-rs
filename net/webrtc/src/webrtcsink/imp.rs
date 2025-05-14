@@ -4800,6 +4800,14 @@ pub(super) mod janus {
         webrtcsink::JanusVRSignallerState,
     };
 
+    static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+        gst::DebugCategory::new(
+            "janusvrwebrtcsink",
+            gst::DebugColorFlags::empty(),
+            Some("WebRTC Janus Video Room sink"),
+        )
+    });
+
     #[derive(Debug, Clone, Default)]
     struct JanusSettings {
         use_string_ids: bool,
@@ -4868,6 +4876,13 @@ pub(super) mod janus {
                     let mut state = self_.state.lock().unwrap();
                     state.janus_state = janus_state;
                 }
+
+                gst::debug!(
+                    CAT,
+                    imp = self_,
+                    "signaller state updated: {:?}",
+                    janus_state
+                );
 
                 self_.obj().notify("janus-state");
 
