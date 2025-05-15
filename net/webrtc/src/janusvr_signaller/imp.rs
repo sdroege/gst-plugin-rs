@@ -183,47 +183,37 @@ struct InnerSlowLink {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct RoomJoined {
-    room: JanusId,
-    id: JanusId,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct RoomEvent {
-    room: Option<JanusId>,
-    error_code: Option<i32>,
-    error: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct RoomDestroyed {
-    room: JanusId,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct RoomTalking {
-    room: JanusId,
-    id: JanusId,
-    #[serde(rename = "audio-level-dBov-avg")]
-    audio_level: f32,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct SlowLink {
-    #[serde(rename = "current-bitrate")]
-    current_bitrate: u32,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "videoroom", rename_all = "kebab-case")]
 enum VideoRoomData {
-    Joined(RoomJoined),
-    Event(RoomEvent),
-    Destroyed(RoomDestroyed),
-    Talking(RoomTalking),
-    StoppedTalking(RoomTalking),
+    Joined {
+        room: JanusId,
+        id: JanusId,
+    },
+    Event {
+        room: Option<JanusId>,
+        error_code: Option<i32>,
+        error: Option<String>,
+    },
+    Destroyed {
+        room: JanusId,
+    },
+    Talking {
+        room: JanusId,
+        id: JanusId,
+        #[serde(rename = "audio-level-dBov-avg")]
+        audio_level: f32,
+    },
+    StoppedTalking {
+        room: JanusId,
+        id: JanusId,
+        #[serde(rename = "audio-level-dBov-avg")]
+        audio_level: f32,
+    },
     #[serde(rename = "slow_link")]
-    SlowLink(SlowLink),
+    SlowLink {
+        #[serde(rename = "current-bitrate")]
+        current_bitrate: u32,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -480,19 +470,19 @@ impl Signaller {
             JsonReply::Event(event) => {
                 if let Some(PluginData::VideoRoom { data: plugindata }) = event.plugindata {
                     match plugindata {
-                        VideoRoomData::Joined(joined) => {
+                        VideoRoomData::Joined { room, id } => {
                             let feed_id_changed = {
                                 let mut feed_id_changed = false;
                                 let mut state = self.state.lock().unwrap();
                                 {
                                     let mut settings = self.settings.lock().unwrap();
-                                    if settings.feed_id.as_ref() != Some(&joined.id) {
-                                        settings.feed_id = Some(joined.id.clone());
+                                    if settings.feed_id.as_ref() != Some(&id) {
+                                        settings.feed_id = Some(id.clone());
                                         feed_id_changed = true;
                                     }
                                 }
 
-                                state.feed_id = Some(joined.id);
+                                state.feed_id = Some(id);
 
                                 feed_id_changed
                             };
@@ -501,12 +491,7 @@ impl Signaller {
                                 self.obj().notify("feed-id");
                             }
 
-                            gst::trace!(
-                                CAT,
-                                imp = self,
-                                "Joined room {:?} successfully",
-                                joined.room
-                            );
+                            gst::trace!(CAT, imp = self, "Joined room {room:?} successfully",);
 
                             self.obj().emit_by_name::<()>(
                                 "state-updated",
@@ -515,12 +500,14 @@ impl Signaller {
 
                             self.session_requested();
                         }
-                        VideoRoomData::Event(room_event) => {
-                            if room_event.error_code.is_some() && room_event.error.is_some() {
+                        VideoRoomData::Event {
+                            error, error_code, ..
+                        } => {
+                            if error_code.is_some() && error.is_some() {
                                 self.raise_error(format!(
                                     "code: {}, reason: {}",
-                                    room_event.error_code.unwrap(),
-                                    room_event.error.unwrap(),
+                                    error_code.unwrap(),
+                                    error.unwrap(),
                                 ));
                                 return;
                             }
@@ -530,26 +517,22 @@ impl Signaller {
                                 self.handle_answer(sdp);
                             }
                         }
-                        VideoRoomData::Destroyed(room_destroyed) => {
-                            gst::trace!(
-                                CAT,
-                                imp = self,
-                                "Room {} has been destroyed",
-                                room_destroyed.room
-                            );
+                        VideoRoomData::Destroyed { room } => {
+                            gst::trace!(CAT, imp = self, "Room {room} has been destroyed",);
 
-                            self.raise_error(format!(
-                                "room {} has been destroyed",
-                                room_destroyed.room
-                            ));
+                            self.raise_error(format!("room {room} has been destroyed",));
                         }
-                        VideoRoomData::Talking(talking) => {
-                            self.emit_talking(true, talking.id, talking.audio_level);
+                        VideoRoomData::Talking {
+                            id, audio_level, ..
+                        } => {
+                            self.emit_talking(true, id, audio_level);
                         }
-                        VideoRoomData::StoppedTalking(talking) => {
-                            self.emit_talking(false, talking.id, talking.audio_level);
+                        VideoRoomData::StoppedTalking {
+                            id, audio_level, ..
+                        } => {
+                            self.emit_talking(false, id, audio_level);
                         }
-                        VideoRoomData::SlowLink(_slow_link) => {
+                        VideoRoomData::SlowLink { .. } => {
                             // TODO: use to reduce the bitrate?
                         }
                     }
