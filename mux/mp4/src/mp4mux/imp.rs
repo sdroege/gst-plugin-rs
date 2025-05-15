@@ -83,6 +83,7 @@ struct Settings {
     interleave_bytes: Option<u64>,
     interleave_time: Option<gst::ClockTime>,
     movie_timescale: u32,
+    extra_brands: Vec<[u8; 4]>,
 }
 
 impl Default for Settings {
@@ -91,6 +92,7 @@ impl Default for Settings {
             interleave_bytes: DEFAULT_INTERLEAVE_BYTES,
             interleave_time: DEFAULT_INTERLEAVE_TIME,
             movie_timescale: 0,
+            extra_brands: Vec::new(),
         }
     }
 }
@@ -1405,6 +1407,11 @@ impl ObjectImpl for MP4Mux {
                     .blurb("Timescale to use for the movie (units per second, 0 is automatic)")
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecString::builder("extra-brands")
+                    .nick("Extra Brands")
+                    .blurb("Comma-separated list of 4-character brand codes (e.g. duke,sook)")
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -1434,6 +1441,32 @@ impl ObjectImpl for MP4Mux {
                 settings.movie_timescale = value.get().expect("type checked upstream");
             }
 
+            "extra-brands" => {
+                let mut settings = self.settings.lock().unwrap();
+
+                if let Some(input) = value.get::<Option<String>>().ok().flatten() {
+                    settings.extra_brands.clear();
+
+                    for token in input.split(',') {
+                        let trimmed = token.trim();
+
+                        if trimmed.len() != 4 {
+                            gst::error!(
+                                CAT,
+                                imp = self,
+                                "Skipping invalid brand (must be 4 chars): {trimmed}"
+                            );
+                            continue;
+                        }
+
+                        // Convert to 4-byte array
+                        let bytes = trimmed.as_bytes();
+                        let brand = [bytes[0], bytes[1], bytes[2], bytes[3]];
+                        settings.extra_brands.push(brand);
+                    }
+                }
+            }
+
             _ => unimplemented!(),
         }
     }
@@ -1453,6 +1486,18 @@ impl ObjectImpl for MP4Mux {
             "movie-timescale" => {
                 let settings = self.settings.lock().unwrap();
                 settings.movie_timescale.to_value()
+            }
+
+            "extra-brands" => {
+                let settings = self.settings.lock().unwrap();
+                let brands_str = settings
+                    .extra_brands
+                    .iter()
+                    .map(|fourcc| std::str::from_utf8(fourcc).unwrap().to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+
+                Some(brands_str).to_value()
             }
 
             _ => unimplemented!(),
@@ -1790,7 +1835,7 @@ impl AggregatorImpl for MP4Mux {
 
             let mut major_brand = b"iso4";
             let mut minor_version = 0u32;
-            let mut compatible_brands: HashSet<&[u8; 4]> = HashSet::new();
+            let mut compatible_brands: HashSet<[u8; 4]> = HashSet::new();
             let mut have_image_sequence = false; // we'll mark true if an image sequence
             let mut have_only_image_sequence = true; // we'll mark false if video found
             let variant = self.obj().class().as_ref().variant;
@@ -1800,13 +1845,13 @@ impl AggregatorImpl for MP4Mux {
                     (variant, caps_structure.name().as_str())
                 {
                     minor_version = 1;
-                    compatible_brands.insert(b"iso4");
-                    compatible_brands.insert(b"av01");
+                    compatible_brands.insert(*b"iso4");
+                    compatible_brands.insert(*b"av01");
                 }
                 if stream.image_sequence_mode() {
-                    compatible_brands.insert(b"iso8");
-                    compatible_brands.insert(b"unif");
-                    compatible_brands.insert(b"msf1");
+                    compatible_brands.insert(*b"iso8");
+                    compatible_brands.insert(*b"unif");
+                    compatible_brands.insert(*b"msf1");
                     have_image_sequence = true;
                 } else {
                     match caps_structure.name().as_str() {
@@ -1820,9 +1865,9 @@ impl AggregatorImpl for MP4Mux {
                         "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9"
                         | "image/jpeg" | "video/x-raw" | "audio/mpeg" | "audio/x-opus"
                         | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
-                            compatible_brands.insert(b"mp41");
-                            compatible_brands.insert(b"mp42");
-                            compatible_brands.insert(b"isom");
+                            compatible_brands.insert(*b"mp41");
+                            compatible_brands.insert(*b"mp42");
+                            compatible_brands.insert(*b"isom");
                         }
                         _ => {}
                     }
@@ -1831,15 +1876,17 @@ impl AggregatorImpl for MP4Mux {
             if have_image_sequence && have_only_image_sequence {
                 major_brand = b"msf1";
             }
-            let ftyp = boxes::create_ftyp(
-                major_brand,
-                minor_version,
-                Vec::from_iter(compatible_brands),
-            )
-            .map_err(|err| {
-                gst::error!(CAT, imp = self, "Failed to create ftyp box: {err}");
-                gst::FlowError::Error
-            })?;
+            let settings = self.settings.lock().unwrap();
+            for brand in &settings.extra_brands {
+                compatible_brands.insert(*brand);
+            }
+            // Convert HashSet to Vector
+            let compatible_brands_vec: Vec<&[u8; 4]> = compatible_brands.iter().collect();
+            let ftyp = boxes::create_ftyp(major_brand, minor_version, compatible_brands_vec)
+                .map_err(|err| {
+                    gst::error!(CAT, imp = self, "Failed to create ftyp box: {err}");
+                    gst::FlowError::Error
+                })?;
             state.current_offset += ftyp.size() as u64;
             buffers.get_mut().unwrap().add(ftyp);
 

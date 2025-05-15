@@ -5315,6 +5315,18 @@
                 ],
                 "kind": "object",
                 "properties": {
+                    "extra-brands": {
+                        "blurb": "Comma-separated list of 4-character brand codes (e.g. duke,sook)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "interleave-bytes": {
                         "blurb": "Interleave between streams in bytes",
                         "conditionally-available": false,
