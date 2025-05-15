@@ -159,30 +159,6 @@ enum Join {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct InnerError {
-    code: i32,
-    reason: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct InnerHangup {
-    session_id: JanusId,
-    sender: JanusId,
-    reason: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct InnerSlowLink {
-    session_id: u64,
-    sender: u64,
-    opaque_id: Option<String>,
-    mid: String,
-    media: String,
-    uplink: bool,
-    lost: u64,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "videoroom", rename_all = "kebab-case")]
 enum VideoRoomData {
     Joined {
@@ -228,33 +204,42 @@ struct DataHolder {
     id: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct SuccessMsg {
-    transaction: Option<String>,
-    session_id: Option<u64>,
-    data: Option<DataHolder>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct EventMsg {
-    transaction: Option<String>,
-    session_id: Option<u64>,
-    plugindata: Option<PluginData>,
-    jsep: Option<Jsep>,
-}
-
 // IncomingMessage
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "janus", rename_all = "lowercase")]
 enum JsonReply {
     Ack,
-    Success(SuccessMsg),
-    Event(EventMsg),
+    Success {
+        transaction: Option<String>,
+        session_id: Option<u64>,
+        data: Option<DataHolder>,
+    },
+    Event {
+        transaction: Option<String>,
+        session_id: Option<u64>,
+        plugindata: Option<PluginData>,
+        jsep: Option<Jsep>,
+    },
     WebRTCUp,
     Media,
-    Error(InnerError),
-    HangUp(InnerHangup),
-    SlowLink(InnerSlowLink),
+    Error {
+        code: i32,
+        reason: String,
+    },
+    HangUp {
+        session_id: JanusId,
+        sender: JanusId,
+        reason: String,
+    },
+    SlowLink {
+        session_id: u64,
+        sender: u64,
+        opaque_id: Option<String>,
+        mid: String,
+        media: String,
+        uplink: bool,
+        lost: u64,
+    },
 }
 
 #[derive(Default)]
@@ -444,9 +429,11 @@ impl Signaller {
                 self.obj()
                     .emit_by_name::<()>("state-updated", &[&JanusVRSignallerState::WebrtcUp]);
             }
-            JsonReply::Success(success) => {
-                if let Some(data) = success.data {
-                    if success.session_id.is_none() {
+            JsonReply::Success {
+                data, session_id, ..
+            } => {
+                if let Some(data) = data {
+                    if session_id.is_none() {
                         gst::trace!(
                             CAT,
                             imp = self,
@@ -467,8 +454,10 @@ impl Signaller {
                     }
                 }
             }
-            JsonReply::Event(event) => {
-                if let Some(PluginData::VideoRoom { data: plugindata }) = event.plugindata {
+            JsonReply::Event {
+                plugindata, jsep, ..
+            } => {
+                if let Some(PluginData::VideoRoom { data: plugindata }) = plugindata {
                     match plugindata {
                         VideoRoomData::Joined { room, id } => {
                             let feed_id_changed = {
@@ -512,7 +501,7 @@ impl Signaller {
                                 return;
                             }
 
-                            if let Some(Jsep::Answer { sdp, .. }) = event.jsep {
+                            if let Some(Jsep::Answer { sdp, .. }) = jsep {
                                 gst::trace!(CAT, imp = self, "Session requested successfully");
                                 self.handle_answer(sdp);
                             }
@@ -538,12 +527,12 @@ impl Signaller {
                     }
                 }
             }
-            JsonReply::Error(error) => {
-                self.raise_error(format!("code: {}, reason: {}", error.code, error.reason))
+            JsonReply::Error { code, reason } => {
+                self.raise_error(format!("code: {code}, reason: {reason}"))
             }
-            JsonReply::HangUp(hangup) => self.raise_error(format!("hangup: {}", hangup.reason)),
+            JsonReply::HangUp { reason, .. } => self.raise_error(format!("hangup: {reason}")),
             // ignore for now
-            JsonReply::Ack | JsonReply::Media | JsonReply::SlowLink(_) => {}
+            JsonReply::Ack | JsonReply::Media | JsonReply::SlowLink { .. } => {}
         }
     }
 
