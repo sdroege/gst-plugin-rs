@@ -402,17 +402,20 @@ fn video_frame_to_dmabuf_texture(
         return Ok((texture.clone(), pixel_aspect_ratio));
     }
 
-    let builder = gdk::DmabufTextureBuilder::new();
-    builder.set_display(&gdk::Display::default().unwrap());
-    builder.set_fourcc(info.fourcc());
-    builder.set_modifier(info.modifier());
-    builder.set_width(width);
-    builder.set_height(height);
-    builder.set_n_planes(n_planes);
+    let mut builder = gdk::DmabufTextureBuilder::new()
+        .set_display(&gdk::Display::default().unwrap())
+        .set_fourcc(info.fourcc())
+        .set_modifier(info.modifier())
+        .set_width(width)
+        .set_height(height)
+        .set_n_planes(n_planes);
     for plane in 0..(n_planes as usize) {
-        builder.set_fd(plane as u32, fds[plane]);
-        builder.set_offset(plane as u32, offsets[plane] as u32);
-        builder.set_stride(plane as u32, strides[plane] as u32);
+        unsafe {
+            builder = builder.set_fd(plane as u32, fds[plane]);
+        }
+        builder = builder
+            .set_offset(plane as u32, offsets[plane] as u32)
+            .set_stride(plane as u32, strides[plane] as u32);
     }
 
     let texture = unsafe {

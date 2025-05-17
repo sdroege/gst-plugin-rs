@@ -2242,7 +2242,7 @@ dependencies = [
 [[package]]
 name = "gdk4"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#496ea9f1d483d448898d2a3f16eb31fb477518cf"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#7525aa6764377ce394cb2838c600571d0bed1aa5"
 dependencies = [
  "cairo-rs",
  "gdk-pixbuf",
@@ -2256,7 +2256,7 @@ dependencies = [
 [[package]]
 name = "gdk4-sys"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#496ea9f1d483d448898d2a3f16eb31fb477518cf"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#7525aa6764377ce394cb2838c600571d0bed1aa5"
 dependencies = [
  "cairo-sys-rs",
  "gdk-pixbuf-sys",
@@ -2272,7 +2272,7 @@ dependencies = [
 [[package]]
 name = "gdk4-wayland"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#496ea9f1d483d448898d2a3f16eb31fb477518cf"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#7525aa6764377ce394cb2838c600571d0bed1aa5"
 dependencies = [
  "gdk4",
  "gdk4-wayland-sys",
@@ -2284,7 +2284,7 @@ dependencies = [
 [[package]]
 name = "gdk4-wayland-sys"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#496ea9f1d483d448898d2a3f16eb31fb477518cf"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#7525aa6764377ce394cb2838c600571d0bed1aa5"
 dependencies = [
  "glib-sys",
  "libc",
@@ -2294,7 +2294,7 @@ dependencies = [
 [[package]]
 name = "gdk4-win32"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#496ea9f1d483d448898d2a3f16eb31fb477518cf"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#7525aa6764377ce394cb2838c600571d0bed1aa5"
 dependencies = [
  "gdk4",
  "gdk4-win32-sys",
@@ -2307,7 +2307,7 @@ dependencies = [
 [[package]]
 name = "gdk4-win32-sys"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#496ea9f1d483d448898d2a3f16eb31fb477518cf"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#7525aa6764377ce394cb2838c600571d0bed1aa5"
 dependencies = [
  "gdk4-sys",
  "glib-sys",
@@ -2318,7 +2318,7 @@ dependencies = [
 [[package]]
 name = "gdk4-x11"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#496ea9f1d483d448898d2a3f16eb31fb477518cf"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#7525aa6764377ce394cb2838c600571d0bed1aa5"
 dependencies = [
  "gdk4",
  "gdk4-x11-sys",
@@ -2330,7 +2330,7 @@ dependencies = [
 [[package]]
 name = "gdk4-x11-sys"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#496ea9f1d483d448898d2a3f16eb31fb477518cf"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#7525aa6764377ce394cb2838c600571d0bed1aa5"
 dependencies = [
  "gdk4-sys",
  "glib-sys",
@@ -2540,7 +2540,7 @@ dependencies = [
 [[package]]
 name = "gsk4"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#496ea9f1d483d448898d2a3f16eb31fb477518cf"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#7525aa6764377ce394cb2838c600571d0bed1aa5"
 dependencies = [
  "cairo-rs",
  "gdk4",
@@ -2554,7 +2554,7 @@ dependencies = [
 [[package]]
 name = "gsk4-sys"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#496ea9f1d483d448898d2a3f16eb31fb477518cf"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#7525aa6764377ce394cb2838c600571d0bed1aa5"
 dependencies = [
  "cairo-sys-rs",
  "gdk4-sys",
@@ -4005,7 +4005,7 @@ dependencies = [
 [[package]]
 name = "gtk4"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#496ea9f1d483d448898d2a3f16eb31fb477518cf"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#7525aa6764377ce394cb2838c600571d0bed1aa5"
 dependencies = [
  "cairo-rs",
  "field-offset",
@@ -4025,7 +4025,7 @@ dependencies = [
 [[package]]
 name = "gtk4-macros"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#496ea9f1d483d448898d2a3f16eb31fb477518cf"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#7525aa6764377ce394cb2838c600571d0bed1aa5"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -4036,7 +4036,7 @@ dependencies = [
 [[package]]
 name = "gtk4-sys"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#496ea9f1d483d448898d2a3f16eb31fb477518cf"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#7525aa6764377ce394cb2838c600571d0bed1aa5"
 dependencies = [
  "cairo-sys-rs",
  "gdk-pixbuf-sys",
