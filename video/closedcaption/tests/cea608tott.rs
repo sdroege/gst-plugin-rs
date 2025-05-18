@@ -33,8 +33,8 @@ fn test_parse() {
     let buf = gst::Buffer::from_mut_slice(Vec::from(data));
     assert_eq!(h.push(buf), Ok(gst::FlowSuccess::Ok));
 
-    // Check the first 4 output buffers
-    let expected: [(ClockTime, ClockTime, &'static str); 4] = [
+    // Check the first 10 output buffers
+    let expected: [(ClockTime, ClockTime, &'static str); 10] = [
         (
             15_048_366_666.nseconds(),
             3_236_566_667.nseconds(),
@@ -54,6 +54,36 @@ fn test_parse() {
             22_389_033_333.nseconds(),
             2_235_566_667.nseconds(),
             "even the fact I think\r\nhe’s a terrible human being.",
+        ),
+        (
+            24_624_600_000.nseconds(),
+            2_102_100_000.nseconds(),
+            "But the choice on the other side\r\nis just as bad.",
+        ),
+        (
+            26_726_700_000.nseconds(),
+            2_268_933_333.nseconds(),
+            "Trump is a\r\n\"terrible human being.\"",
+        ),
+        (
+            29_696_333_333.nseconds(),
+            2_202_200_000.nseconds(),
+            "Those are the words\r\nof Mick Mulvaney,",
+        ),
+        (
+            32_432_400_000.nseconds(),
+            3_236_566_666.nseconds(),
+            "the man Trump has chosen\r\nto be his new chief of staff.",
+        ),
+        (
+            36_302_933_333.nseconds(),
+            2_635_966_667.nseconds(),
+            "We’ll speak with former\r\npresidential candidate",
+        ),
+        (
+            38_938_900_000.nseconds(),
+            2_369_033_333.nseconds(),
+            "Ralph Nader\r\nabout Mulvaney,",
         ),
     ];
 
