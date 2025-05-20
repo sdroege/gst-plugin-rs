@@ -41,7 +41,7 @@ path = "src/lib.rs"
 gst-plugin-version-helper.workspace = true
 
 [features]
-default = []
+default = ["gtk_v4_10"]
 static = []
 # Deprecated
 wayland = ["waylandegl"]
