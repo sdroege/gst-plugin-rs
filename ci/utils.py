@@ -1,4 +1,5 @@
 import os
+from warnings import warn
 
 DIRS = [
     'audio',
@@ -37,6 +38,9 @@ OVERRIDE = {
 def iterate_plugins():
     for d in DIRS:
         for name in os.listdir(d):
+            if 'skia' in name:
+                warn('Skipping skia, see https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/692')
+                continue
             if name in RS_PREFIXED:
                 name = "rs{}".format(name)
             else:

@@ -117,7 +117,6 @@ default-members = [
     "video/hsv",
     "video/png",
     "video/rav1e",
-    "video/skia",
 ]
 
 [profile.release]

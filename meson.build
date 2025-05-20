@@ -222,7 +222,6 @@ plugins = {
       'quic_roq',
     ],
   },
-  'skia': {'library': 'libgstskia'},
   'speechmatics': {'library': 'libgstspeechmatics'},
   'vvdec': {
     'library': 'libgstvvdec',
@@ -348,6 +347,12 @@ else
     'fallbackswitch': { 'library': 'libgstfallbackswitch'},
     'livesync': { 'library': 'libgstlivesync'},
     'togglerecord': { 'library': 'libgsttogglerecord'},
+  }
+endif
+
+if get_option('skia').allowed()
+  plugins += {
+    'skia': {'library': 'libgstskia'},
   }
 endif
 
