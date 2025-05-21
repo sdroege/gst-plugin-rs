@@ -261,6 +261,8 @@ struct Stream {
     fragment_filled: bool,
     /// Whether a whole chunk is queued.
     chunk_filled: bool,
+    // First GOP starts after the end of chunk/fragment.
+    late_gop: bool,
 
     /// Current position (DTS, or PTS for intra-only) to prevent
     /// timestamps from going backwards when queueing new buffers
@@ -536,7 +538,7 @@ impl FMP4Mux {
     }
 
     /// Checks if a buffer is valid according to the stream configuration.
-    fn check_buffer(buffer: &gst::BufferRef, stream: &Stream) -> Result<(), gst::FlowError> {
+    fn check_buffer(buffer: &mut gst::Buffer, stream: &Stream) -> Result<(), gst::FlowError> {
         let Stream {
             sinkpad,
             delta_frames,
@@ -547,9 +549,19 @@ impl FMP4Mux {
             return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
         }
 
-        if delta_frames.requires_dts() && buffer.dts().is_none() {
-            gst::error!(CAT, obj = sinkpad, "Require DTS for video streams");
-            return Err(gst::FlowError::Error);
+        if buffer.dts().is_none() && delta_frames.requires_dts() {
+            // For gap buffer simply set the missing DTS to PTS.
+            if buffer.flags().contains(gst::BufferFlags::GAP)
+                && buffer.flags().contains(gst::BufferFlags::DROPPABLE)
+                && buffer.size() == 0
+            {
+                let pts = buffer.pts();
+                buffer.make_mut().set_dts(pts);
+                return Ok(());
+            } else {
+                gst::error!(CAT, obj = sinkpad, "Require DTS for video streams");
+                return Err(gst::FlowError::Error);
+            }
         }
 
         if buffer.pts().is_none() {
@@ -592,7 +604,7 @@ impl FMP4Mux {
         let Some(mut buffer) = stream.sinkpad.pop_buffer() else {
             return Ok(None);
         };
-        Self::check_buffer(&buffer, stream)?;
+        Self::check_buffer(&mut buffer, stream)?;
 
         let segment = match stream.sinkpad.segment().downcast::<gst::ClockTime>().ok() {
             Some(segment) => segment,
@@ -1618,6 +1630,7 @@ impl FMP4Mux {
                             "Stream's first GOP starting after this fragment"
                         );
                         stream.fragment_filled = true;
+                        stream.late_gop = true;
                         return;
                     }
                 }
@@ -1668,6 +1681,7 @@ impl FMP4Mux {
                             "Stream's first GOP starting after this chunk"
                         );
                         stream.chunk_filled = true;
+                        stream.late_gop = true;
                         return;
                     }
                 }
@@ -1743,6 +1757,7 @@ impl FMP4Mux {
                         "Stream's first GOP starting after this fragment"
                     );
                     stream.fragment_filled = true;
+                    stream.late_gop = true;
                     return;
                 }
             }
@@ -1956,6 +1971,7 @@ impl FMP4Mux {
             timeout
                 || need_new_header
                 || stream.sinkpad.is_eos()
+                || stream.late_gop
                 || stream
                     .queued_gops
                     .get(1)
@@ -1965,7 +1981,8 @@ impl FMP4Mux {
         );
 
         let mut gops = Vec::with_capacity(stream.queued_gops.len());
-        if stream.queued_gops.is_empty() {
+        if stream.queued_gops.is_empty() || stream.late_gop {
+            stream.late_gop = false;
             return Ok(gops);
         }
 
@@ -3119,7 +3136,7 @@ impl FMP4Mux {
         }
 
         if interleaved_buffers.is_empty() {
-            assert!(at_eos);
+            // Either at EOS or only gap buffers drained.
             return Ok((caps, None));
         }
 
@@ -3612,6 +3629,7 @@ impl FMP4Mux {
                 queued_gops: VecDeque::new(),
                 fragment_filled: false,
                 chunk_filled: false,
+                late_gop: false,
                 current_position: gst::ClockTime::MIN_SIGNED,
                 running_time_utc_time_mapping: None,
                 extra_header_data: None,
