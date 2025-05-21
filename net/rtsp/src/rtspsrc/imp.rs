@@ -130,6 +130,7 @@ pub struct RtspSrc {
 }
 
 #[derive(thiserror::Error, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum RtspError {
     #[error("Generic I/O error")]
     IOGeneric(#[from] std::io::Error),
@@ -1245,6 +1246,7 @@ impl RtspTaskState {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     fn check_response(
         rsp: &Response<Body>,
         cseq: u32,
@@ -1391,6 +1393,7 @@ impl RtspTaskState {
         Ok(())
     }
 
+    #[allow(clippy::result_large_err)]
     fn parse_setup_transports(
         transports: &Transports,
         s: &mut gst::Structure,

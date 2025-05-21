@@ -15,7 +15,7 @@ use gst_base::subclass::prelude::*;
 
 use hrtf::{HrirSphere, HrtfContext, HrtfProcessor, Vec3};
 
-use std::io::{Error, ErrorKind};
+use std::io::Error;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, Weak};
 
@@ -161,7 +161,7 @@ impl Settings {
             return HrirSphere::from_file(PathBuf::from(path), rate);
         }
 
-        Err(Error::new(ErrorKind::Other, "Impulse response not set").into())
+        Err(Error::other("Impulse response not set").into())
     }
 }
 

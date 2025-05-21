@@ -106,6 +106,7 @@ impl PartialEq for GapPacket {
     }
 }
 
+#[derive(Default)]
 struct SinkHandlerInner {
     packet_rate_ctx: RTPPacketRateCtx,
     ips_rtptime: Option<u32>,
@@ -117,20 +118,6 @@ struct SinkHandlerInner {
 
     last_in_seqnum: Option<u16>,
     last_rtptime: Option<u32>,
-}
-
-impl Default for SinkHandlerInner {
-    fn default() -> Self {
-        SinkHandlerInner {
-            packet_rate_ctx: RTPPacketRateCtx::new(),
-            ips_rtptime: None,
-            ips_pts: None,
-            gap_packets: BTreeSet::new(),
-            last_pt: None,
-            last_in_seqnum: None,
-            last_rtptime: None,
-        }
-    }
 }
 
 #[derive(Clone, Default)]

@@ -526,7 +526,7 @@ impl Detector {
                     "Packet group done: {:?}",
                     gst::ClockTime::from_nseconds(group.departure.whole_nanoseconds() as u64)
                 );
-                if let Some(prev_group) = mem::replace(&mut self.prev_group, Some(group.clone())) {
+                if let Some(prev_group) = self.prev_group.replace(group.clone()) {
                     // 5.3 Arrival-time filter
                     self.estimator_impl.update(&prev_group, &group);
                     // 5.4 Over-use detector

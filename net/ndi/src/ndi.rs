@@ -463,6 +463,7 @@ impl Tally {
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum Frame {
     Video(VideoFrame),
     Audio(AudioFrame),
@@ -473,6 +474,7 @@ pub enum Frame {
 pub struct VideoFrame(VideoFrameInner);
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 enum VideoFrameInner {
     //Owned(NDIlib_video_frame_v2_t, Option<ffi::CString>, Option<Vec<u8>>),
     BorrowedRecv(NDIlib_video_frame_v2_t, Arc<RecvInstancePtr>),

@@ -188,6 +188,7 @@ pub fn parse_control_path(path: &str, base: &Url) -> Option<Url> {
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn parse_rtpmap(
     rtpmap: &str,
     pt: u8,
@@ -243,6 +244,7 @@ fn parse_rtpmap(
     Ok(())
 }
 
+#[allow(clippy::result_large_err)]
 fn guess_rtpmap_from_encoding_name(
     encoding_name: &str,
     media: &str,
@@ -268,6 +270,7 @@ fn guess_rtpmap_from_encoding_name(
     )))
 }
 
+#[allow(clippy::result_large_err)]
 fn guess_rtpmap_from_pt(
     pt: u8,
     media: &str,
@@ -355,6 +358,7 @@ fn parse_framesize(framesize: &str, s: &mut gst::structure::Structure) {
     s.set("a-framesize", dim);
 }
 
+#[allow(clippy::result_large_err)]
 pub fn parse_media_attributes(
     attrs: &Vec<Attribute>,
     pt: u8,

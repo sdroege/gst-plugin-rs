@@ -471,11 +471,7 @@ impl FlvDemux {
                         }
                     };
 
-                    let skip = if header.offset < 9 {
-                        0
-                    } else {
-                        header.offset - 9
-                    };
+                    let skip = header.offset.saturating_sub(9);
 
                     *state = State::Skipping {
                         audio: header.audio,

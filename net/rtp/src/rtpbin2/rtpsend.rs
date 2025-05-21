@@ -341,7 +341,7 @@ impl RtpSend {
         loop {
             match session_inner.session.handle_send(&rtp, now) {
                 SendReply::SsrcCollision(ssrc) => {
-                    if !ssrc_collision.iter().any(|&needle| needle == ssrc) {
+                    if !ssrc_collision.contains(&ssrc) {
                         ssrc_collision.push(ssrc);
                     }
                 }
