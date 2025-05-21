@@ -4080,6 +4080,7 @@ impl BaseWebRTCSink {
         codecs: &Codecs,
     ) -> Result<(), Error> {
         let futs = if has_raw_caps(&discovery_info.caps) {
+            let codecs = codecs.list_encoders();
             if codecs.is_empty() {
                 return Err(anyhow!(
                     "No codec available for encoding stream {}, \
@@ -4331,7 +4332,7 @@ impl BaseWebRTCSink {
             } else {
                 drop(state);
                 let settings = self.settings.lock().unwrap();
-                let codecs = Codecs::list_encoders(
+                let codecs = Codecs::list_encoders_and_payloaders(
                     settings.video_caps.iter().chain(settings.audio_caps.iter()),
                 );
 

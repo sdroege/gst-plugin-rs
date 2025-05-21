@@ -464,9 +464,9 @@ impl Codec {
         let encoder = Self::get_encoder_for_caps(caps, encoders);
         let payloader = Self::get_payloader_for_codec(name, payloaders);
 
-        let encoding_info = if let (Some(encoder), Some(payloader)) = (encoder, payloader) {
+        let encoding_info = if let (encoder, Some(payloader)) = (encoder, payloader) {
             Some(EncodingInfo {
-                encoder: Some(encoder),
+                encoder,
                 payloader,
                 output_filter: None,
             })
@@ -828,6 +828,20 @@ impl Codecs {
         Self(codecs.values().cloned().collect())
     }
 
+    pub fn list_encoders(&self) -> Codecs {
+        Codecs(
+            self.iter()
+                .filter(|codec| {
+                    codec
+                        .encoding_info
+                        .as_ref()
+                        .is_some_and(|info| info.encoder.is_some())
+                })
+                .cloned()
+                .collect(),
+        )
+    }
+
     pub fn find_for_payloadable_caps(&self, caps: &gst::Caps) -> Option<Codec> {
         self.iter()
             .find(|codec| codec.caps.can_intersect(caps) && codec.encoding_info.is_some())
@@ -938,9 +952,12 @@ impl Codecs {
             .filter(|codec| codec.stream_type == gst::StreamType::AUDIO)
     }
 
-    /// List all codecs that can be used for encoding the given caps and assign
-    /// a payload type to each of them. This is useful to initiate SDP negotiation.
-    pub fn list_encoders<'a>(caps: impl IntoIterator<Item = &'a gst::StructureRef>) -> Codecs {
+    /// List all codecs that can be used for encoding and/or payloading the given
+    /// caps and assign a payload type to each of them. This is useful to initiate
+    /// SDP negotiation.
+    pub fn list_encoders_and_payloaders<'a>(
+        caps: impl IntoIterator<Item = &'a gst::StructureRef>,
+    ) -> Codecs {
         let mut payload = 96..128;
 
         Codecs(
