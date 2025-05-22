@@ -210,7 +210,7 @@ fn create_ui(app: &gtk::Application) {
     vbox.append(&hbox);
 
     window.set_child(Some(&vbox));
-    window.show();
+    window.present();
 
     app.add_window(&window);
 

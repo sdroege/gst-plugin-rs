@@ -99,7 +99,7 @@ fn create_ui(app: &gtk::Application) {
     vbox.append(&drop_button);
 
     window.set_child(Some(&vbox));
-    window.show();
+    window.present();
 
     app.add_window(&window);
 

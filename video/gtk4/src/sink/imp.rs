@@ -826,10 +826,7 @@ impl PaintableSink {
                 }
             });
 
-            #[cfg(feature = "gtk_v4_10")]
-            window.set_visible(true);
-            #[cfg(not(feature = "gtk_v4_10"))]
-            window.show();
+            window.present();
 
             *window_guard = Some(ThreadGuard::new(window));
         });
