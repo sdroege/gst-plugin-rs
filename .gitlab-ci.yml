@@ -88,19 +88,19 @@ trigger:
   extends: .debian:12
   variables:
     RUST_VERSION: '$GST_RS_STABLE'
-  image: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bookworm-slim:$GST_RS_STABLE-$GST_RS_IMG_TAG"
+  image: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/trixie-slim:$GST_RS_STABLE-$GST_RS_IMG_TAG"
 
 .debian:12-msrv:
   extends: .debian:12
   variables:
     RUST_VERSION: '$GST_RS_MSRV'
-  image: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bookworm-slim:$GST_RS_MSRV-$GST_RS_IMG_TAG"
+  image: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/trixie-slim:$GST_RS_MSRV-$GST_RS_IMG_TAG"
 
 .debian:12-nightly:
   extends: .debian:12
   variables:
     RUST_VERSION: 'nightly'
-  image: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bookworm-slim:nightly-$GST_RS_IMG_TAG"
+  image: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/trixie-slim:nightly-$GST_RS_IMG_TAG"
 
 .cargo test:
   stage: "test"
