@@ -8,12 +8,13 @@
 //
 
 use std::{
-    fs,
+    fs::{self},
     io::{Cursor, Read},
     path::Path,
 };
 
 use gst_pbutils::prelude::*;
+use tempfile::tempdir;
 
 fn init() {
     use std::sync::Once;
@@ -236,7 +237,7 @@ fn test_uncompressed_with(format: &str, width: u32, height: u32, cb: impl FnOnce
     };
     let pipeline = Pipeline(pipeline.downcast::<gst::Pipeline>().unwrap());
 
-    let dir = tempfile::TempDir::new().unwrap();
+    let dir = tempdir().unwrap();
     let mut location = dir.path().to_owned();
     location.push("test.mp4");
 
@@ -266,7 +267,10 @@ fn test_roundtrip_uncompressed(video_format: &str, width: u32, height: u32) {
 
 fn test_encode_uncompressed(video_format: &str, width: u32, height: u32) {
     let filename = format!("{video_format}_{width}x{height}.mp4");
-    let pipeline_text = format!("videotestsrc num-buffers=34 ! video/x-raw,format={video_format},width={width},height={height} ! isomp4mux ! filesink location={filename}");
+    let temp_dir = tempdir().unwrap();
+    let temp_file_path = temp_dir.path().join(filename);
+    let location = temp_file_path.as_path();
+    let pipeline_text = format!("videotestsrc num-buffers=34 ! video/x-raw,format={video_format},width={width},height={height} ! isomp4mux ! filesink location={:?}", location);
 
     let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
         panic!("could not build encoding pipeline")
@@ -294,11 +298,11 @@ fn test_encode_uncompressed(video_format: &str, width: u32, height: u32) {
         .set_state(gst::State::Null)
         .expect("Unable to set the pipeline to the `Null` state");
 
-    test_expected_uncompressed_output(filename);
+    test_expected_uncompressed_output(location);
 }
 
-fn test_expected_uncompressed_output(filename: String) {
-    let check_data: Vec<u8> = fs::read(filename).unwrap();
+fn test_expected_uncompressed_output(location: &Path) {
+    let check_data: Vec<u8> = fs::read(location).unwrap();
     let cursor = Cursor::new(check_data.as_ref());
     test_default_mpeg_file_type_box(cursor);
 }
@@ -540,7 +544,10 @@ fn encode_uncompressed_bgrp() {
 
 fn test_encode_uncompressed_image_sequence(video_format: &str, width: u32, height: u32) {
     let filename = format!("{video_format}_{width}x{height}.heifs");
-    let pipeline_text = format!("videotestsrc num-buffers=10 ! video/x-raw,format={video_format},width={width},height={height} ! isomp4mux name=mux ! filesink location={filename}");
+    let temp_dir = tempdir().unwrap();
+    let temp_file_path = temp_dir.path().join(filename);
+    let location = temp_file_path.as_path();
+    let pipeline_text = format!("videotestsrc num-buffers=10 ! video/x-raw,format={video_format},width={width},height={height} ! isomp4mux name=mux ! filesink location={:?}", location);
 
     let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
         panic!("could not build encoding pipeline")
@@ -572,10 +579,10 @@ fn test_encode_uncompressed_image_sequence(video_format: &str, width: u32, heigh
         .set_state(gst::State::Null)
         .expect("Unable to set the pipeline to the `Null` state");
 
-    test_expected_image_sequence_output(filename);
+    test_expected_image_sequence_output(location);
 }
 
-fn test_expected_image_sequence_output(filename: String) {
+fn test_expected_image_sequence_output(filename: &Path) {
     let check_data: Vec<u8> = fs::read(filename).unwrap();
     let cursor = Cursor::new(check_data.as_ref());
     test_expected_image_sequence_file_type_box_content(cursor);
@@ -608,8 +615,11 @@ fn encode_uncompressed_image_sequence_nv12() {
 #[test]
 fn test_encode_audio_trak() {
     init();
-    let filename = "audio_only.mp4".to_string();
-    let pipeline_text = format!("audiotestsrc num-buffers=100 ! audioconvert ! opusenc ! isomp4mux ! filesink location={filename}");
+    let filename = "audio_only.mp4";
+    let temp_dir = tempdir().unwrap();
+    let temp_file_path = temp_dir.path().join(filename);
+    let location = temp_file_path.as_path();
+    let pipeline_text = format!("audiotestsrc num-buffers=100 ! audioconvert ! opusenc ! isomp4mux ! filesink location={:?}", location);
 
     let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
         panic!("could not build encoding pipeline")
@@ -637,10 +647,10 @@ fn test_encode_audio_trak() {
         .set_state(gst::State::Null)
         .expect("Unable to set the pipeline to the `Null` state");
 
-    test_audio_only_output(filename);
+    test_audio_only_output(location);
 }
 
-fn test_audio_only_output(filename: String) {
+fn test_audio_only_output(filename: &Path) {
     let check_data: Vec<u8> = fs::read(filename).unwrap();
     let cursor = Cursor::new(check_data.as_ref());
     test_default_mpeg_file_type_box(cursor);
