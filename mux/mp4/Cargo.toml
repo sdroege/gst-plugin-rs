@@ -25,6 +25,7 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [dev-dependencies]
+mp4-atom = "0.8.1"
 tempfile = "3"
 url = "2"
 
