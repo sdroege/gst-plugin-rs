@@ -35,12 +35,12 @@ pub enum OutgoingMessage {
     EndSession(EndSessionMessage),
     /// Messages directly forwarded from one peer to another
     Peer(PeerMessage),
-    /// Provides the current list of producers and passive consumers (awaiting session initiation)
+    /// Provides the current list of producers
     #[serde(rename_all = "camelCase")]
-    List {
-        producers: Vec<Peer>,
-        consumers: Vec<Peer>,
-    },
+    List { producers: Vec<Peer> },
+    /// Provides the current list of consumers (awaiting a session request)
+    #[serde(rename_all = "camelCase")]
+    ListConsumers { consumers: Vec<Peer> },
     /// Notifies that an error occurred with the peer's current session
     #[serde(rename_all = "camelCase")]
     Error { details: String },
@@ -160,4 +160,6 @@ pub enum IncomingMessage {
     Peer(PeerMessage),
     /// Retrieve the current list of producers
     List,
+    /// Retrieve the current list of consumers
+    ListConsumers,
 }

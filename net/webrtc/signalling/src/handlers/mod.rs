@@ -86,7 +86,8 @@ impl Handler {
                 self.start_session(peer_id, &message.peer_id, message.offer.as_deref())
             }
             p::IncomingMessage::Peer(peermsg) => self.handle_peer_message(peer_id, peermsg),
-            p::IncomingMessage::List => self.list_producers_and_consumers(peer_id),
+            p::IncomingMessage::List => self.list_producers(peer_id),
+            p::IncomingMessage::ListConsumers => self.list_consumers(peer_id),
             p::IncomingMessage::EndSession(msg) => self.end_session(peer_id, &msg.session_id),
         }
     }
@@ -203,26 +204,41 @@ impl Handler {
         Ok(())
     }
 
-    /// List producer and consumer peers
-    #[instrument(level = "debug", skip(self))]
-    fn list_producers_and_consumers(&mut self, peer_id: &str) -> Result<(), Error> {
-        let filter_peers = |f: fn(&PeerStatus) -> bool| {
-            self.peers
-                .iter()
-                .filter_map(|(peer_id, peer)| {
-                    f(peer).then_some(p::Peer {
-                        id: peer_id.clone(),
-                        meta: peer.meta.clone(),
-                    })
+    fn filter_peers<F>(&self, filter: F) -> Vec<p::Peer>
+    where
+        F: Fn(&PeerStatus) -> bool,
+    {
+        self.peers
+            .iter()
+            .filter_map(move |(peer_id, peer)| {
+                filter(peer).then_some(p::Peer {
+                    id: peer_id.clone(),
+                    meta: peer.meta.clone(),
                 })
-                .collect()
-        };
+            })
+            .collect()
+    }
 
+    /// List producer peers
+    #[instrument(level = "debug", skip(self))]
+    fn list_producers(&mut self, peer_id: &str) -> Result<(), Error> {
         self.items.push_back((
             peer_id.to_string(),
             p::OutgoingMessage::List {
-                producers: filter_peers(PeerStatus::producing),
-                consumers: filter_peers(PeerStatus::consuming),
+                producers: self.filter_peers(PeerStatus::producing),
+            },
+        ));
+
+        Ok(())
+    }
+
+    /// List consumer peers
+    #[instrument(level = "debug", skip(self))]
+    fn list_consumers(&mut self, peer_id: &str) -> Result<(), Error> {
+        self.items.push_back((
+            peer_id.to_string(),
+            p::OutgoingMessage::ListConsumers {
+                consumers: self.filter_peers(PeerStatus::consuming),
             },
         ));
 
@@ -463,7 +479,6 @@ mod tests {
                         {"display-name": "foobar".to_string()
                     })),
                 }],
-                consumers: vec!()
             }
         );
     }

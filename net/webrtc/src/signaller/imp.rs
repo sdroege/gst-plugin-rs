@@ -276,7 +276,11 @@ impl Signaller {
             super::WebRTCSignallerRole::Consumer => p::PeerStatus {
                 meta: meta.clone(),
                 peer_id: Some(peer_id.to_string()),
-                roles: vec![p::PeerRole::Consumer],
+                roles: if self.connect_to_first_producer() || self.producer_peer_id().is_some() {
+                    vec![]
+                } else {
+                    vec![p::PeerRole::Consumer]
+                },
             },
             super::WebRTCSignallerRole::Producer => p::PeerStatus {
                 meta: meta.clone(),
@@ -513,7 +517,7 @@ impl Signaller {
                                 );
                             }
                         },
-                        p::OutgoingMessage::List { producers, .. } => {
+                        p::OutgoingMessage::List { producers } => {
                             let mut settings = self.settings.lock().unwrap();
                             let role = settings.role;
                             if matches!(role, super::WebRTCSignallerRole::Consumer)
@@ -557,6 +561,7 @@ impl Signaller {
                                 }
                             }
                         }
+                        p::OutgoingMessage::ListConsumers { .. } => todo!(),
                         p::OutgoingMessage::Error { details } => {
                             self.obj().emit_by_name::<()>(
                                 "error",

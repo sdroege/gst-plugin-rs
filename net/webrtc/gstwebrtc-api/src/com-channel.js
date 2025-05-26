@@ -16,6 +16,7 @@ const SignallingServerMessageType = Object.freeze({
   welcome: "welcome",
   peerStatusChanged: "peerStatusChanged",
   list: "list",
+  listConsumers: "listConsumers",
   sessionStarted: "sessionStarted",
   peer: "peer",
   startSession: "startSession",
@@ -119,6 +120,7 @@ class ComChannel extends EventTarget {
                 this._ready = true;
                 this.dispatchEvent(new Event("ready"));
                 this.send({ type: "list" });
+                this.send({ type: "listConsumers"});
               }
 
               if (this._producerSession && msg.roles.includes("producer")) {
@@ -146,20 +148,14 @@ class ComChannel extends EventTarget {
           }
 
           case SignallingServerMessageType.list: {
-            const addPeers = (items, role) => {
-              items.forEach(item => {
-                const peer = normalizePeer(item, this._channelId);
-                if (peer) {
-                  this._peers[peer.id] = [role];
-                  this.dispatchEvent(new CustomEvent("peerAdded", { detail: { peer, role } }));
-                }
-              });
-            };
+            this.clearPeers("producer");
+            this.addPeers(msg.producers, "producer");
+            break;
+          }
 
-            this._peers = {};
-            addPeers(msg.producers, "producer");
-            addPeers(msg.consumers, "consumer");
-
+          case SignallingServerMessageType.listConsumers: {
+            this.clearPeers("consumer");
+            this.addPeers(msg.consumers, "consumer");
             break;
           }
 
@@ -354,6 +350,25 @@ class ComChannel extends EventTarget {
       }
     }
   }
+
+  clearPeers(role) {
+    for (const peerId in this._peers) {
+      if (this._peers[peerId].includes(role)) {
+        delete this._peers[peerId];
+        this.dispatchEvent(new CustomEvent("peerRemoved", { detail: { peerId, role } }));
+      }
+    }
+  }
+
+  addPeers(items, role) {
+    items.forEach(item => {
+      const peer = normalizePeer(item, this._channelId);
+      if (peer) {
+        this._peers[peer.id] = [role];
+        this.dispatchEvent(new CustomEvent("peerAdded", { detail: { peer, role } }));
+      }
+    });
+  };
 }
 
 export default ComChannel;

@@ -666,7 +666,7 @@ async fn listen(
             .unwrap_or_else(|| Err(anyhow!("Signaller ended session")))
             .context("List response")?
         {
-            FromSignaller::List { producers, .. } => {
+            FromSignaller::List { producers } => {
                 for peer in producers {
                     spawn_consumer(&signaller_url, &pipeline, args.clone(), peer.id, peer.meta)
                         .context("Spawning consumer")?;
