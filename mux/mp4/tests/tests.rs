@@ -10,7 +10,7 @@
 use std::{fs::File, path::Path};
 
 use gst_pbutils::prelude::*;
-use mp4_atom::{Atom as _, ReadAtom as _, ReadFrom as _};
+use mp4_atom::{Atom, ReadAtom as _, ReadFrom as _};
 use tempfile::tempdir;
 
 fn init() {
@@ -265,19 +265,62 @@ fn test_encode_uncompressed(video_format: &str, width: u32, height: u32) {
 }
 
 fn test_expected_uncompressed_output(location: &Path) {
-    let required_top_level_boxes: Vec<mp4_atom::FourCC> = vec![
+    check_generic_single_trak_file_structure(
+        location,
+        b"iso4".into(),
+        0,
+        vec![b"isom".into(), b"mp41".into(), b"mp42".into()],
+    );
+}
+
+fn check_generic_single_trak_file_structure(
+    location: &Path,
+    expected_major_brand: mp4_atom::FourCC,
+    expected_minor_version: u32,
+    expected_compatible_brands: Vec<mp4_atom::FourCC>,
+) {
+    let mut required_top_level_boxes: Vec<mp4_atom::FourCC> = vec![
         b"ftyp".into(),
         b"free".into(),
         b"mdat".into(),
         b"moov".into(),
     ];
 
-    check_file_boxes(
-        location,
-        required_top_level_boxes,
-        b"iso4".into(),
-        0,
-        vec![b"isom".into(), b"mp41".into(), b"mp42".into()],
+    let mut input = File::open(location).unwrap();
+    while let Ok(header) = mp4_atom::Header::read_from(&mut input) {
+        assert!(required_top_level_boxes.contains(&header.kind));
+        let pos = required_top_level_boxes
+            .iter()
+            .position(|&fourcc| fourcc == header.kind)
+            .unwrap_or_else(|| panic!("expected to find a matching fourcc {:?}", header.kind));
+        required_top_level_boxes.remove(pos);
+        match header.kind {
+            mp4_atom::Ftyp::KIND => {
+                let ftyp = mp4_atom::Ftyp::read_atom(&header, &mut input).unwrap();
+                check_ftyp_output(
+                    expected_major_brand,
+                    expected_minor_version,
+                    &expected_compatible_brands,
+                    ftyp,
+                );
+            }
+            mp4_atom::Moov::KIND => {
+                let moov = mp4_atom::Moov::read_atom(&header, &mut input).unwrap();
+                assert!(moov.meta.is_none());
+                assert!(moov.mvex.is_none());
+                assert!(moov.udta.is_none());
+                check_mvhd_sanity(&moov.mvhd);
+                check_trak_sanity(&moov.trak);
+            }
+            _ => {
+                let _ = mp4_atom::Any::read_atom(&header, &mut input).unwrap();
+            }
+        }
+    }
+    assert!(
+        required_top_level_boxes.is_empty(),
+        "expected all top level boxes to be found, but these were missed: {:?}",
+        required_top_level_boxes
     );
 }
 
@@ -540,16 +583,8 @@ fn test_encode_uncompressed_image_sequence(video_format: &str, width: u32, heigh
 }
 
 fn test_expected_image_sequence_output(location: &Path) {
-    let required_top_level_boxes: Vec<mp4_atom::FourCC> = vec![
-        b"ftyp".into(),
-        b"free".into(),
-        b"mdat".into(),
-        b"moov".into(),
-    ];
-
-    check_file_boxes(
+    check_generic_single_trak_file_structure(
         location,
-        required_top_level_boxes,
         b"msf1".into(),
         0,
         vec![b"iso8".into(), b"msf1".into(), b"unif".into()],
@@ -607,58 +642,259 @@ fn test_encode_audio_trak() {
 }
 
 fn test_audio_only_output(location: &Path) {
-    let required_top_level_boxes: Vec<mp4_atom::FourCC> = vec![
-        b"ftyp".into(),
-        b"free".into(),
-        b"mdat".into(),
-        b"moov".into(),
-    ];
-
-    check_file_boxes(
+    check_generic_single_trak_file_structure(
         location,
-        required_top_level_boxes,
         b"iso4".into(),
         0,
         vec![b"isom".into(), b"mp41".into(), b"mp42".into()],
     );
 }
 
-fn check_file_boxes(
-    location: &Path,
-    mut required_top_level_boxes: Vec<mp4_atom::FourCC>,
+fn check_ftyp_output(
     expected_major_brand: mp4_atom::FourCC,
     expected_minor_version: u32,
-    expected_compatible_brands: Vec<mp4_atom::FourCC>,
+    expected_compatible_brands: &Vec<mp4_atom::FourCC>,
+    ftyp: mp4_atom::Ftyp,
 ) {
-    let mut input = File::open(location).unwrap();
-    while let Ok(header) = mp4_atom::Header::read_from(&mut input) {
-        assert!(required_top_level_boxes.contains(&header.kind));
-        let pos = required_top_level_boxes
-            .iter()
-            .position(|&fourcc| fourcc == header.kind)
-            .unwrap_or_else(|| panic!("expected to find a matching fourcc {:?}", header.kind));
-        required_top_level_boxes.remove(pos);
-        match header.kind {
-            mp4_atom::Ftyp::KIND => {
-                let ftyp = mp4_atom::Ftyp::read_atom(&header, &mut input).unwrap();
-                assert_eq!(ftyp.major_brand, expected_major_brand);
-                assert_eq!(ftyp.minor_version, expected_minor_version);
-                assert_eq!(
-                    ftyp.compatible_brands.len(),
-                    expected_compatible_brands.len()
-                );
-                for fourcc in &expected_compatible_brands {
-                    assert!(ftyp.compatible_brands.contains(fourcc));
-                }
-            }
-            _ => {
-                let _ = mp4_atom::Any::read_atom(&header, &mut input).unwrap();
-            }
+    assert_eq!(ftyp.major_brand, expected_major_brand);
+    assert_eq!(ftyp.minor_version, expected_minor_version);
+    assert_eq!(
+        ftyp.compatible_brands.len(),
+        expected_compatible_brands.len()
+    );
+    for fourcc in expected_compatible_brands {
+        assert!(ftyp.compatible_brands.contains(fourcc));
+    }
+}
+
+fn check_mvhd_sanity(mvhd: &mp4_atom::Mvhd) {
+    assert!(mvhd.creation_time > 0);
+    assert!(mvhd.modification_time > 0);
+    assert!(mvhd.next_track_id > 1);
+    assert!(mvhd.duration > 0);
+    // tkhd.volume might or might not be valid depending on track type
+    // TODO: assess remaining values for potential invariant
+}
+
+fn check_trak_sanity(trak: &[mp4_atom::Trak]) {
+    assert_eq!(trak.len(), 1);
+    assert!(trak[0].meta.is_none());
+    check_tkhd_sanity(&trak[0].tkhd);
+    check_edts_sanity(&trak[0].edts);
+    check_mdia_sanity(&trak[0].mdia);
+}
+
+fn check_edts_sanity(maybe_edts: &Option<mp4_atom::Edts>) {
+    assert!(maybe_edts.is_some());
+    let edts = maybe_edts.as_ref().unwrap();
+    assert!(edts.elst.is_some());
+    let elst = edts.elst.as_ref().unwrap();
+    assert!(!elst.entries.is_empty());
+}
+
+fn check_tkhd_sanity(tkhd: &mp4_atom::Tkhd) {
+    assert!(tkhd.creation_time > 0);
+    assert!(tkhd.modification_time > 0);
+    assert!(tkhd.enabled);
+    // tkhd.height might or might not be valid depending on track type
+    // tkhd.width might or might not be valid depending on track type
+    // tkhd.volume might or might not be valid depending on track type
+    // TODO: assess remaining values for potential invariant
+}
+
+fn check_mdia_sanity(mdia: &mp4_atom::Mdia) {
+    check_hdlr_sanity(&mdia.hdlr);
+    check_mdhd_sanity(&mdia.mdhd);
+    check_minf_sanity(&mdia.minf);
+}
+
+fn check_hdlr_sanity(hdlr: &mp4_atom::Hdlr) {
+    assert!(
+        (hdlr.handler == b"soun".into())
+            || (hdlr.handler == b"vide".into())
+            || (hdlr.handler == b"pict".into())
+    );
+    assert!(!hdlr.name.is_empty());
+}
+
+fn check_mdhd_sanity(mdhd: &mp4_atom::Mdhd) {
+    assert!(mdhd.creation_time > 0);
+    assert!(mdhd.modification_time > 0);
+    assert!(mdhd.timescale > 0);
+    assert!(mdhd.language.len() == 3);
+}
+
+fn check_minf_sanity(minf: &mp4_atom::Minf) {
+    check_dinf_sanity(&minf.dinf);
+    assert!(
+        (minf.smhd.is_some() && (minf.vmhd.is_none())
+            || (minf.smhd.is_none() || minf.vmhd.is_some()))
+    );
+    check_stbl_sanity(&minf.stbl);
+}
+
+fn check_dinf_sanity(dinf: &mp4_atom::Dinf) {
+    let dref = &dinf.dref;
+    assert_eq!(dref.urls.len(), 1);
+    let url = &dref.urls[0];
+    assert!(url.location.is_empty());
+}
+
+fn check_stbl_sanity(stbl: &mp4_atom::Stbl) {
+    assert!(stbl.co64.is_none());
+    assert!(stbl.ctts.is_none());
+    assert!(stbl.saio.is_none());
+    assert!(stbl.saiz.is_none());
+    check_stco_sanity(&stbl.stco);
+    check_stsc_sanity(&stbl.stsc);
+    check_stsd_sanity(&stbl.stsd);
+    assert!(stbl.stss.is_none());
+    check_stsz_sanity(&stbl.stsz);
+    check_stts_sanity(&stbl.stts);
+    // TODO: check consistency between sample sizes and chunk / sample offsets
+}
+
+fn check_stco_sanity(maybe_stco: &Option<mp4_atom::Stco>) {
+    assert!(maybe_stco.is_some());
+    let stco = maybe_stco.as_ref().unwrap();
+    assert!(!stco.entries.is_empty());
+    // TODO: see if there is anything generic about the stco entries we could check
+}
+
+fn check_stsc_sanity(stsc: &mp4_atom::Stsc) {
+    assert!(!stsc.entries.is_empty());
+    // TODO: see if there is anything generic about the stsc entries we could check
+}
+
+fn check_stsd_sanity(stsd: &mp4_atom::Stsd) {
+    assert_eq!(stsd.codecs.len(), 1);
+    let codec = &stsd.codecs[0];
+    match codec {
+        mp4_atom::Codec::Avc1(_avc1) => {
+            // TODO: check H.264 codec
+        }
+        mp4_atom::Codec::Hev1(_hev1) => {
+            // TODO: check HEVC codec (maybe shared?)
+        }
+        mp4_atom::Codec::Hvc1(_hvc1) => {
+            // TODO: check HEVC codec (maybe shared?)
+        }
+        mp4_atom::Codec::Vp08(_vp08) => {
+            // TODO: check VP8 codec
+        }
+        mp4_atom::Codec::Vp09(_vp09) => {
+            // TODO: check VP9 codec
+        }
+        mp4_atom::Codec::Av01(_av01) => {
+            // TODO: check AV1 codec
+        }
+        mp4_atom::Codec::Mp4a(_mp4a) => {
+            // TODO: check MPEG Audio codec
+        }
+        mp4_atom::Codec::Tx3g(_tx3g) => {
+            // TODO: check subtitles / text codec
+        }
+        mp4_atom::Codec::Opus(_opus) => {
+            // TODO: check OPUS codec
+        }
+        mp4_atom::Codec::Uncv(uncv) => {
+            check_uncv_codec_sanity(uncv);
+        }
+        mp4_atom::Codec::Unknown(four_cc) => {
+            todo!("Unsupported codec type: {:?}", four_cc);
         }
     }
-    assert!(
-        required_top_level_boxes.is_empty(),
-        "expected all top level boxes to be found, but these were missed: {:?}",
-        required_top_level_boxes
-    );
+}
+
+fn check_uncv_codec_sanity(uncv: &mp4_atom::Uncv) {
+    check_visual_sample_entry_sanity(&uncv.visual);
+    // See ISO/IEC 23001-17 Table 5 for the profiles
+    let valid_v0_profiles: Vec<mp4_atom::FourCC> = vec![
+        b"2vuy".into(),
+        b"yuv2".into(),
+        b"yvyu".into(),
+        b"vyuy".into(),
+        b"yuv1".into(),
+        b"v308".into(),
+        b"v408".into(),
+        b"y210".into(),
+        b"v410".into(),
+        b"v210".into(),
+        b"rgb3".into(),
+        b"i420".into(),
+        b"nv12".into(),
+        b"nv21".into(),
+        b"rgba".into(),
+        b"abgr".into(),
+        b"yu22".into(),
+        b"yv22".into(),
+        b"yv20".into(),
+        b"\0\0\0\0".into(),
+    ];
+    let valid_v1_profiles: Vec<mp4_atom::FourCC> =
+        vec![b"rgb3".into(), b"rgba".into(), b"abgr".into()];
+    let uncc = &uncv.uncc;
+    match uncc {
+        mp4_atom::UncC::V1 { profile } => {
+            assert!(uncv.cmpd.is_none());
+            assert!(valid_v1_profiles.contains(profile));
+        }
+        mp4_atom::UncC::V0 {
+            profile,
+            components,
+            sampling_type,
+            interleave_type,
+            block_size: _,
+            components_little_endian: _,
+            block_pad_lsb: _,
+            block_little_endian: _,
+            block_reversed: _,
+            pad_unknown: _,
+            pixel_size: _,
+            row_align_size: _,
+            tile_align_size: _,
+            num_tile_cols_minus_one: _,
+            num_tile_rows_minus_one: _,
+        } => {
+            assert!(uncv.cmpd.is_some());
+            let cmpd = uncv.cmpd.as_ref().unwrap();
+            println!("profile: {:?}", profile);
+            assert!(valid_v0_profiles.contains(profile));
+            assert!(!components.is_empty());
+            for component in components {
+                // Not clear if component.component_align_size could be tested
+                // Not clear if component.component_bit_depth_minus_one coudl be tested
+                assert!(component.component_index < (cmpd.components.len() as u16));
+                assert!(component.component_format < 4); // 3 for signed int is in Amd 2.
+            }
+            assert!(*sampling_type < 4);
+            assert!(*interleave_type < 6);
+            // TODO: there are some special cases we could cross check here.
+        }
+    }
+}
+
+fn check_visual_sample_entry_sanity(visual: &mp4_atom::Visual) {
+    assert!(visual.depth > 0);
+    assert!(visual.height > 0);
+    assert!(visual.width > 0);
+    // TODO: assess remaining values for potential invariant
+}
+
+fn check_stsz_sanity(stsz: &mp4_atom::Stsz) {
+    let samples = &stsz.samples;
+    match samples {
+        mp4_atom::StszSamples::Identical { count, size } => {
+            assert!(*count > 0);
+            assert!(*size > 0);
+        }
+        mp4_atom::StszSamples::Different { sizes } => {
+            assert!(!sizes.is_empty())
+        }
+    }
+}
+
+fn check_stts_sanity(stts: &mp4_atom::Stts) {
+    assert!(!stts.entries.is_empty());
+    // TODO: see if there is anything generic about the stts entries we could check
 }
