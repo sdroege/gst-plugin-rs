@@ -21,7 +21,7 @@ android {
         versionName = "0.1.0"
 
         externalNativeBuild {
-            ndkBuild {
+            cmake {
                 var gstRoot: String?
                 if (project.hasProperty("gstAndroidRoot"))
                     gstRoot = project.property("gstAndroidRoot").toString()
@@ -30,14 +30,12 @@ android {
                 if (gstRoot == null)
                     throw GradleException("GSTREAMER_ROOT_ANDROID must be set, or 'gstAndroidRoot' must be defined in your gradle.properties in the top level directory of the unpacked universal GStreamer Android binaries")
 
-                arguments("NDK_APPLICATION_MK=src/main/cpp/Application.mk", "GSTREAMER_JAVA_SRC_DIR=src/main/java", "GSTREAMER_ROOT_ANDROID=$gstRoot", "V=1")
+                arguments ("-DANDROID_STL=c++_shared", "-DGSTREAMER_ROOT_ANDROID=$gstRoot", "-GNinja")
 
                 targets("gstreamer_webrtcsrc")
 
                 // All archs except MIPS and MIPS64 are supported
-                //abiFilters("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-                // FIXME for some reasons x86 generation fails (observed with gstreamer-1.0-android-universal-1.24.3)
-                abiFilters("armeabi-v7a", "arm64-v8a", "x86_64")
+                abiFilters("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
             }
         }
     }
@@ -71,9 +69,9 @@ android {
         viewBinding = true
     }
     externalNativeBuild {
-        ndkBuild {
-            path = file("src/main/cpp/Android.mk")
-       }
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
     }
 }
 
