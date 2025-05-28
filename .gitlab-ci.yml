@@ -380,7 +380,8 @@ outdated:
     # aws-smithy-http 0.62 requires Rust 1.85 or newer
     # aws-config, aws-sigv4, aws-sdk-s3 and aws-smithy-runtime need the above crate
     # remaining aws crates need fix for https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/merge_requests/2199#note_2870463 (unpin all aws related version ranges)
-    - cargo outdated --color=always --root-deps-only --ignore libwebp-sys2 --ignore aws-smithy-http,aws-config,aws-sdk-polly,aws-sdk-s3,aws-sdk-transcribestreaming,aws-sdk-translate,aws-sigv4,aws-sdk-kinesisvideo,aws-sdk-kinesisvideosignaling,aws-smithy-runtime  --exit-code 1 -v
+    # aws-credential-types 1.2.3+ requires aws-smithy-runtime-api 1.8.0
+    - cargo outdated --color=always --root-deps-only --ignore libwebp-sys2 --ignore aws-smithy-http,aws-config,aws-sdk-polly,aws-sdk-s3,aws-sdk-transcribestreaming,aws-sdk-translate,aws-sigv4,aws-sdk-kinesisvideo,aws-sdk-kinesisvideosignaling,aws-smithy-runtime,aws-credential-types,aws-smithy-runtime-api,aws-types  --exit-code 1 -v
 
 coverage:
   allow_failure: true
