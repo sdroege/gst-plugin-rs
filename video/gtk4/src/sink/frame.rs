@@ -217,12 +217,60 @@ pub(crate) struct Texture {
 struct FrameWrapper(gst_video::VideoFrame<gst_video::video_frame::Readable>);
 impl AsRef<[u8]> for FrameWrapper {
     fn as_ref(&self) -> &[u8] {
-        self.0.plane_data(0).unwrap()
+        let raw = self.0.as_ptr();
+        let data = unsafe {
+            std::slice::from_raw_parts((*raw).map[0].data as *const u8, (*raw).map[0].size)
+        };
+        data
     }
 }
 
 fn video_format_to_memory_format(f: gst_video::VideoFormat) -> gdk::MemoryFormat {
     match f {
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::Yuy2 => gdk::MemoryFormat::G8b8g8r8422,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::Yvyu => gdk::MemoryFormat::G8r8g8b8422,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::Uyvy => gdk::MemoryFormat::B8g8r8g8422,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::Vyuy => gdk::MemoryFormat::R8g8b8g8422,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::Nv12 => gdk::MemoryFormat::G8B8r8420,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::Nv21 => gdk::MemoryFormat::G8R8b8420,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::Nv16 => gdk::MemoryFormat::G8B8r8422,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::Nv61 => gdk::MemoryFormat::G8R8b8422,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::Nv24 => gdk::MemoryFormat::G8B8r8444,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::P01010le => gdk::MemoryFormat::G10x6B10x6r10x6420,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::P01010be => gdk::MemoryFormat::G10x6B10x6r10x6420,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::P012Le => gdk::MemoryFormat::G12x4B12x4r12x4420,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::P012Be => gdk::MemoryFormat::G12x4B12x4r12x4420,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::P016Le => gdk::MemoryFormat::G16B16r16420,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::P016Be => gdk::MemoryFormat::G16B16r16420,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::Yuv9 => gdk::MemoryFormat::G8B8R8410,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::Yvu9 => gdk::MemoryFormat::G8R8B8410,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::Y41b => gdk::MemoryFormat::G8B8R8411,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::I420 => gdk::MemoryFormat::G8B8R8420,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::Yv12 => gdk::MemoryFormat::G8R8B8420,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::Y42b => gdk::MemoryFormat::G8B8R8422,
+        #[cfg(feature = "gtk_v4_20")]
+        gst_video::VideoFormat::Y444 => gdk::MemoryFormat::G8B8R8444,
         #[cfg(feature = "gtk_v4_14")]
         gst_video::VideoFormat::Bgrx => gdk::MemoryFormat::B8g8r8x8,
         #[cfg(feature = "gtk_v4_14")]
@@ -312,34 +360,39 @@ fn video_frame_to_memory_texture(
     let format = video_format_to_memory_format(frame.format());
     let width = frame.width();
     let height = frame.height();
-    let rowstride = frame.plane_stride()[0] as usize;
 
     let texture = {
         #[cfg(feature = "gtk_v4_20")]
         {
-            let info = frame.info().clone();
-
             let mut builder = gdk::MemoryTextureBuilder::new()
                 .set_width(width as i32)
                 .set_height(height as i32)
-                .set_format(format)
-                .set_bytes(Some(&glib::Bytes::from_owned(FrameWrapper(frame))))
-                .set_stride(rowstride);
+                .set_format(format);
 
-            if let Some(color_state) = videoinfo_to_color_state(&info) {
+            if let Some(color_state) = videoinfo_to_color_state(frame.info()) {
                 builder = builder.set_color_state(&color_state);
             }
+
+            for plane in 0..(frame.n_planes() as usize) {
+                builder = builder
+                    .set_offset(plane as u32, frame.plane_offset()[plane] as usize)
+                    .set_stride_for_plane(plane as u32, frame.plane_stride()[plane] as usize);
+            }
+
+            builder = builder.set_bytes(Some(&glib::Bytes::from_owned(FrameWrapper(frame))));
 
             builder.build()
         }
         #[cfg(not(feature = "gtk_v4_20"))]
         {
+            let stride = frame.plane_stride()[0] as usize;
+
             gdk::MemoryTexture::new(
                 width as i32,
                 height as i32,
                 format,
                 &glib::Bytes::from_owned(FrameWrapper(frame)),
-                rowstride,
+                stride,
             )
         }
         .upcast::<gdk::Texture>()
