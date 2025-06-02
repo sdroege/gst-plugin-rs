@@ -452,6 +452,13 @@ impl Cea708Overlay {
                 state
                     .cea708_renderer
                     .set_safe_title_area(settings.safe_width, settings.safe_height);
+                if let Some((width, height)) = state
+                    .video_info
+                    .as_ref()
+                    .map(|vinfo| (vinfo.width(), vinfo.height()))
+                {
+                    state.cea708_renderer.set_video_size(width, height);
+                }
                 drop(state);
 
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
