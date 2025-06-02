@@ -440,6 +440,13 @@ impl Cea708Overlay {
                 let mut state = self.state.lock().unwrap();
                 state.cea708_renderer = Cea708Renderer::new();
                 //state.cea608_renderer.set_black_background(settings.black_background);
+                if let Some((width, height)) = state
+                    .video_info
+                    .as_ref()
+                    .map(|vinfo| (vinfo.width(), vinfo.height()))
+                {
+                    state.cea708_renderer.set_video_size(width, height);
+                }
                 drop(state);
 
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
