@@ -337,6 +337,13 @@ impl Cea608Overlay {
                     .renderer
                     .set_black_background(settings.black_background);
                 state.composition = None;
+                if let Some((width, height)) = state
+                    .video_info
+                    .as_ref()
+                    .map(|vinfo| (vinfo.width(), vinfo.height()))
+                {
+                    state.renderer.set_video_size(width, height);
+                }
                 drop(state);
                 drop(settings);
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
