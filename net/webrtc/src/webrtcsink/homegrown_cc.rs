@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MPL-2.0
 
+use super::imp::VideoEncoder;
+use crate::webrtcsink::WebRTCSinkMitigationMode;
 use gst::{
     glib::{self, value::FromValue},
     prelude::*,
 };
 use std::sync::LazyLock;
-
-use super::imp::VideoEncoder;
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -413,7 +413,10 @@ impl CongestionController {
         let fec_percentage = (fec_ratio * 50f64) as u32;
 
         for encoder in encoders.iter_mut() {
-            if encoder.set_bitrate(element, target_bitrate).is_ok() {
+            if encoder
+                .set_bitrate(element, target_bitrate, WebRTCSinkMitigationMode::all())
+                .is_ok()
+            {
                 encoder
                     .transceiver
                     .set_property("fec-percentage", fec_percentage);

@@ -13886,6 +13886,18 @@
                         "type": "gboolean",
                         "writable": true
                     },
+                    "enable-mitigation-modes": {
+                        "blurb": "Flags for whether the element should dynamically scale the source resolution and framerate based on the bitrate",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "downsampled+downscaled",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "GstWebRTCSinkMitigationMode",
+                        "writable": true
+                    },
                     "forward-metas": {
                         "blurb": "Comma-separated list of buffer meta names to forward over the control data channel. Currently supported names are: timecode",
                         "conditionally-available": false,
@@ -14095,6 +14107,28 @@
                     }
                 },
                 "signals": {
+                    "configure-mitigation-caps": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "GstVideoInfo"
+                            },
+                            {
+                                "name": "arg2",
+                                "type": "gint"
+                            },
+                            {
+                                "name": "arg3",
+                                "type": "GstWebRTCSinkMitigationMode"
+                            }
+                        ],
+                        "return-type": "GstCaps",
+                        "when": "last"
+                    },
                     "consumer-added": {
                         "args": [
                             {
@@ -14739,6 +14773,26 @@
                         "desc": "Google Congestion Control algorithm",
                         "name": "gcc",
                         "value": "2"
+                    }
+                ]
+            },
+            "GstWebRTCSinkMitigationMode": {
+                "kind": "flags",
+                "values": [
+                    {
+                        "desc": "No mitigation applied",
+                        "name": "none",
+                        "value": "0x00000000"
+                    },
+                    {
+                        "desc": "Lowered resolution",
+                        "name": "downscaled",
+                        "value": "0x00000001"
+                    },
+                    {
+                        "desc": "Lowered framerate",
+                        "name": "downsampled",
+                        "value": "0x00000002"
                     }
                 ]
             },

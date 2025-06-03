@@ -123,7 +123,7 @@ pub enum WebRTCSinkCongestionControl {
 }
 
 #[glib::flags(name = "GstWebRTCSinkMitigationMode")]
-enum WebRTCSinkMitigationMode {
+pub enum WebRTCSinkMitigationMode {
     #[flags_value(name = "No mitigation applied", nick = "none")]
     NONE = 0b00000000,
     #[flags_value(name = "Lowered resolution", nick = "downscaled")]
@@ -156,6 +156,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     WebRTCSinkPad::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     BaseWebRTCSink::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     WebRTCSinkCongestionControl::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    WebRTCSinkMitigationMode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     gst::Element::register(
         Some(plugin),
         "webrtcsink",

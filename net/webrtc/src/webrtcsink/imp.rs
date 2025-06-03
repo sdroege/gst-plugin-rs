@@ -12,7 +12,7 @@ use gst_plugin_webrtc_signalling::server::{Server, ServerError};
 use gst_rtp::prelude::*;
 use gst_utils::StreamProducer;
 use gst_video::subclass::prelude::*;
-use gst_video::VideoMultiviewMode;
+use gst_video::{VideoInfo, VideoMultiviewMode};
 use gst_webrtc::{WebRTCDataChannel, WebRTCICETransportPolicy};
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpListener;
@@ -85,6 +85,7 @@ const DEFAULT_WEB_SERVER_DIRECTORY: &str = "gstwebrtc-api/dist";
 #[cfg(feature = "web_server")]
 const DEFAULT_WEB_SERVER_HOST_ADDR: &str = "http://127.0.0.1:8080";
 const DEFAULT_FORWARD_METAS: &str = "";
+const DEFAULT_ENABLE_MITIGATION_MODES: WebRTCSinkMitigationMode = WebRTCSinkMitigationMode::all();
 /* Start adding some FEC when the bitrate > 2Mbps as we found experimentally
  * that it is not worth it below that threshold */
 const DO_FEC_THRESHOLD: u32 = 2000000;
@@ -126,9 +127,11 @@ struct Settings {
     #[cfg(feature = "web_server")]
     web_server_host_addr: url::Url,
     forward_metas: HashSet<String>,
+    enabled_mitigation_modes: WebRTCSinkMitigationMode,
 }
 
 use std::sync::atomic::{AtomicU32, Ordering};
+
 static BD_SEQ: AtomicU32 = AtomicU32::new(0);
 fn get_bdseq() -> u32 {
     BD_SEQ.fetch_and(1, Ordering::SeqCst) + 1
@@ -329,6 +332,7 @@ struct SessionInner {
 
     navigation_handler: Option<NavigationEventHandler>,
     control_events_handler: Option<ControlRequestHandler>,
+    enabled_mitigation_modes: WebRTCSinkMitigationMode,
 }
 
 #[derive(Clone)]
@@ -552,6 +556,7 @@ impl Default for Settings {
             #[cfg(feature = "web_server")]
             web_server_host_addr: url::Url::parse(DEFAULT_WEB_SERVER_HOST_ADDR).unwrap(),
             forward_metas: HashSet::new(),
+            enabled_mitigation_modes: DEFAULT_ENABLE_MITIGATION_MODES,
         }
     }
 }
@@ -1007,6 +1012,43 @@ impl PayloadChainBuilder {
     }
 }
 
+fn default_configure_mitigation_mode(
+    video_info: &VideoInfo,
+    bitrate: i32,
+    enabled_mitigation_modes: WebRTCSinkMitigationMode,
+) -> gst::Caps {
+    let mut s = gst::Structure::new_empty("video/x-raw");
+    if enabled_mitigation_modes.is_empty() {
+        return gst::Caps::builder_full_with_any_features()
+            .structure(s)
+            .build();
+    }
+
+    if bitrate < 500000 && enabled_mitigation_modes.contains(WebRTCSinkMitigationMode::DOWNSAMPLED)
+    {
+        let scaled_framerate = video_info.fps().mul(gst::Fraction::new(1, 2));
+        if scaled_framerate.numer() != 0 {
+            s.set("framerate", scaled_framerate);
+        }
+    }
+
+    if enabled_mitigation_modes.contains(WebRTCSinkMitigationMode::DOWNSCALED) {
+        let height = match bitrate {
+            b if b < 1_000_000 => 360,
+            b if b < 2_000_000 => 720,
+            _ => video_info.height() as i32,
+        };
+        let width = VideoEncoder::scale_height_round_2(video_info, height);
+
+        s.set("height", height);
+        s.set("width", width);
+    }
+
+    gst::Caps::builder_full_with_any_features()
+        .structure(s)
+        .build()
+}
+
 impl VideoEncoder {
     fn new(
         encoding_elements: &EncodingChain,
@@ -1070,11 +1112,11 @@ impl VideoEncoder {
         Ok(bitrate)
     }
 
-    fn scale_height_round_2(&self, height: i32) -> i32 {
+    fn scale_height_round_2(video_info: &VideoInfo, height: i32) -> i32 {
         let ratio = gst_video::calculate_display_ratio(
-            self.video_info.width(),
-            self.video_info.height(),
-            self.video_info.par(),
+            video_info.width(),
+            video_info.height(),
+            video_info.par(),
             gst::Fraction::new(1, 1),
         )
         .unwrap();
@@ -1088,6 +1130,7 @@ impl VideoEncoder {
         &mut self,
         element: &super::BaseWebRTCSink,
         bitrate: i32,
+        enabled_mitigation_modes: WebRTCSinkMitigationMode,
     ) -> Result<(), WebRTCSinkError> {
         match self.factory_name.as_str() {
             "vp8enc" | "vp9enc" => self.element.set_property("target-bitrate", bitrate),
@@ -1107,65 +1150,43 @@ impl VideoEncoder {
         }
 
         let current_caps = self.filter.property::<gst::Caps>("caps");
-        let mut s = current_caps.structure(0).unwrap().to_owned();
 
-        // Hardcoded thresholds, may be tuned further in the future, and
-        // adapted according to the codec in use
-        if bitrate < 500000 {
-            let height = 360i32.min(self.video_info.height() as i32);
-            let width = self.scale_height_round_2(height);
+        let mitigation_mode_caps = element.emit_by_name::<gst::Caps>(
+            "configure-mitigation-caps",
+            &[
+                &self.stream_name,
+                &self.video_info,
+                &bitrate,
+                &enabled_mitigation_modes,
+            ],
+        );
+        let mitigation_mode_caps_structure = mitigation_mode_caps.structure(0).unwrap().to_owned();
 
-            s.set("height", height);
-            s.set("width", width);
+        self.mitigation_mode = WebRTCSinkMitigationMode::NONE;
 
-            if self.halved_framerate.numer() != 0 {
-                s.set("framerate", self.halved_framerate);
-            }
-
-            self.mitigation_mode =
-                WebRTCSinkMitigationMode::DOWNSAMPLED | WebRTCSinkMitigationMode::DOWNSCALED;
-        } else if bitrate < 1000000 {
-            let height = 360i32.min(self.video_info.height() as i32);
-            let width = self.scale_height_round_2(height);
-
-            s.set("height", height);
-            s.set("width", width);
-            s.remove_field("framerate");
-
+        if mitigation_mode_caps_structure.get::<i32>("height").is_ok() {
             self.mitigation_mode = WebRTCSinkMitigationMode::DOWNSCALED;
-        } else if bitrate < 2000000 {
-            let height = 720i32.min(self.video_info.height() as i32);
-            let width = self.scale_height_round_2(height);
-
-            s.set("height", height);
-            s.set("width", width);
-            s.remove_field("framerate");
-
-            self.mitigation_mode = WebRTCSinkMitigationMode::DOWNSCALED;
-        } else {
-            s.remove_field("height");
-            s.remove_field("width");
-            s.remove_field("framerate");
-
-            self.mitigation_mode = WebRTCSinkMitigationMode::NONE;
         }
 
-        let caps = gst::Caps::builder_full_with_any_features()
-            .structure(s)
-            .build();
+        if mitigation_mode_caps_structure
+            .get::<gst::Fraction>("framerate")
+            .is_ok()
+        {
+            self.mitigation_mode |= WebRTCSinkMitigationMode::DOWNSAMPLED;
+        }
 
-        if !caps.is_strictly_equal(&current_caps) {
+        if !mitigation_mode_caps.is_strictly_equal(&current_caps) {
             gst::log!(
                 CAT,
                 obj = element,
                 "session {}: setting bitrate {} and caps {} on encoder {:?}",
                 self.session_id,
                 bitrate,
-                caps,
+                mitigation_mode_caps,
                 self.element
             );
 
-            self.filter.set_property("caps", caps);
+            self.filter.set_property("caps", mitigation_mode_caps);
         }
 
         Ok(())
@@ -1278,6 +1299,7 @@ impl State {
 }
 
 impl SessionInner {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         id: String,
         pipeline: gst::Pipeline,
@@ -1286,6 +1308,7 @@ impl SessionInner {
         congestion_controller: Option<CongestionController>,
         rtpgccbwe: Option<gst::Element>,
         cc_info: CCInfo,
+        enabled_mitigation_modes: WebRTCSinkMitigationMode,
     ) -> Self {
         Self {
             id,
@@ -1306,6 +1329,7 @@ impl SessionInner {
             stats_collection_handle: None,
             navigation_handler: None,
             control_events_handler: None,
+            enabled_mitigation_modes,
         }
     }
 
@@ -1406,7 +1430,11 @@ impl SessionInner {
                     WebRTCSinkCongestionControl::Disabled => {
                         // If congestion control is disabled, we simply use the highest
                         // known "safe" value for the bitrate.
-                        let _ = enc.set_bitrate(element, self.cc_info.max_bitrate as i32);
+                        let _ = enc.set_bitrate(
+                            element,
+                            self.cc_info.max_bitrate as i32,
+                            self.enabled_mitigation_modes,
+                        );
                         enc.transceiver.set_property("fec-percentage", 50u32);
                     }
                     WebRTCSinkCongestionControl::Homegrown => {
@@ -1420,7 +1448,11 @@ impl SessionInner {
                         } else {
                             /* If congestion control is disabled, we simply use the highest
                              * known "safe" value for the bitrate. */
-                            let _ = enc.set_bitrate(element, self.cc_info.max_bitrate as i32);
+                            let _ = enc.set_bitrate(
+                                element,
+                                self.cc_info.max_bitrate as i32,
+                                self.enabled_mitigation_modes,
+                            );
                             enc.transceiver.set_property("fec-percentage", 50u32);
                         }
                     }
@@ -3113,6 +3145,7 @@ impl BaseWebRTCSink {
             },
             rtpgccbwe,
             settings.cc_info,
+            settings.enabled_mitigation_modes,
         );
 
         let rtpbin = webrtcbin
@@ -3538,7 +3571,11 @@ impl BaseWebRTCSink {
                     };
 
                 if encoder
-                    .set_bitrate(&self.obj(), defined_encoder_bitrate)
+                    .set_bitrate(
+                        &self.obj(),
+                        defined_encoder_bitrate,
+                        settings.enabled_mitigation_modes,
+                    )
                     .is_ok()
                 {
                     encoder
@@ -4714,6 +4751,21 @@ impl ObjectImpl for BaseWebRTCSink {
                     .default_value(DEFAULT_FORWARD_METAS)
                     .mutable_playing()
                     .build(),
+                /**
+                 * GstBaseWebRTCSink:enable-mitigation-modes:
+                 *
+                 * Whether the element should dynamically scale the source resolution
+                 * based on the bitrate.
+                 *
+                 * Since: plugins-rs-0.14.0
+                 */
+                glib::ParamSpecFlags::builder("enable-mitigation-modes")
+                    .nick("Enable dynamic scaling / sampling of the source resolution")
+                    .blurb("Flags for whether the element should dynamically scale the source resolution and framerate based on the bitrate")
+                    .default_value(DEFAULT_ENABLE_MITIGATION_MODES)
+                    .mutable_playing()
+                    .build(),
+
             ]
         });
 
@@ -4855,6 +4907,12 @@ impl ObjectImpl for BaseWebRTCSink {
                     .map(String::from)
                     .collect();
             }
+            "enable-mitigation-modes" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.enabled_mitigation_modes = value
+                    .get::<WebRTCSinkMitigationMode>()
+                    .expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -4956,6 +5014,10 @@ impl ObjectImpl for BaseWebRTCSink {
             "forward-metas" => {
                 let settings = self.settings.lock().unwrap();
                 settings.forward_metas.iter().join(",").to_value()
+            }
+            "enable-mitigation-modes" => {
+                let settings = self.settings.lock().unwrap();
+                settings.enabled_mitigation_modes.to_value()
             }
             _ => unimplemented!(),
         }
@@ -5166,6 +5228,35 @@ impl ObjectImpl for BaseWebRTCSink {
                     })
                     .accumulator(move |_hint, _acc, value| {
                         // First signal handler wins
+                        std::ops::ControlFlow::Break(value.clone())
+                    })
+                    .build(),
+                /**
+                 * GstBaseWebRTCSink::configure-mitigation-caps:
+                 * @stream_name: name of the sink pad feeding the encoder
+                 * @current_bitrate: The current bitrate being applied to the encoder
+                 *
+                 *
+                 * Returns: the mitigation mode to apply.
+                 * Since: plugins-rs-0.14.0
+                 */
+                glib::subclass::Signal::builder("configure-mitigation-caps")
+                    .param_types([
+                        String::static_type(),
+                        VideoInfo::static_type(),
+                        i32::static_type(),
+                        WebRTCSinkMitigationMode::static_type(),
+                    ])
+                    .return_type::<gst::Caps>()
+                    .run_last()
+                    .class_handler(|args| {
+                        let video_info = args[2].get::<VideoInfo>().expect("No video info");
+                        let current_bitrate = args[3].get::<i32>().expect("No bitrate");
+                        let enabled_mitigation_modes = args[4].get::<WebRTCSinkMitigationMode>().expect("No enabled mitigation modes");
+
+                        Some(default_configure_mitigation_mode(&video_info, current_bitrate, enabled_mitigation_modes).to_value())
+                    })
+                    .accumulator(move |_hint, _acc, value| {
                         std::ops::ControlFlow::Break(value.clone())
                     })
                     .build(),
