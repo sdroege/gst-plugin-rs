@@ -369,7 +369,7 @@ impl TaskImpl for AudioTestSrcTask {
         }
 
         if self.do_timestamp {
-            buffer_mut.set_dts(start);
+            buffer_mut.set_pts(start);
             buffer_mut.set_duration(self.buffer_duration);
         }
 

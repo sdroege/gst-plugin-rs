@@ -28,7 +28,7 @@ use super::super::{Settings, Stats, CAT};
 struct PadSinkHandlerInner {
     is_flushing: bool,
     is_main_elem: bool,
-    last_dts: Option<gst::ClockTime>,
+    last_ts: Option<gst::ClockTime>,
     segment_start: Option<gst::ClockTime>,
     stats: Option<Box<Stats>>,
 }
@@ -52,16 +52,17 @@ impl PadSinkHandlerInner {
 
         debug_or_trace!(CAT, self.is_main_elem, obj = elem, "Received {buffer:?}");
 
-        let dts = buffer
-            .dts()
-            .expect("Buffer without dts")
+        let ts = buffer
+            .dts_or_pts()
+            .expect("Buffer without ts")
+            // FIXME do proper segment to running time
             .checked_sub(self.segment_start.expect("Buffer without Time Segment"))
-            .expect("dts before Segment start");
+            .expect("ts before Segment start");
 
-        if let Some(last_dts) = self.last_dts {
+        if let Some(last_ts) = self.last_ts {
             let cur_ts = elem.current_running_time().unwrap();
-            let latency: Duration = (cur_ts - dts).into();
-            let interval: Duration = (dts - last_dts).into();
+            let latency: Duration = (cur_ts - ts).into();
+            let interval: Duration = (ts - last_ts).into();
 
             if let Some(stats) = self.stats.as_mut() {
                 stats.add_buffer(latency, interval);
@@ -81,7 +82,7 @@ impl PadSinkHandlerInner {
             );
         }
 
-        self.last_dts = Some(dts);
+        self.last_ts = Some(ts);
 
         log_or_trace!(CAT, self.is_main_elem, obj = elem, "Buffer processed");
 
@@ -175,7 +176,7 @@ impl AsyncPadSinkHandler {
             let mut inner = self.0.lock().await;
 
             inner.is_flushing = false;
-            inner.last_dts = None;
+            inner.last_ts = None;
 
             if let Some(stats) = inner.stats.as_mut() {
                 stats.start();

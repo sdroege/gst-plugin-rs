@@ -190,7 +190,7 @@ impl TaskImpl for SrcTask {
                     {
                         let buffer = buffer.get_mut().unwrap();
                         let rtime = self.elem.current_running_time().unwrap();
-                        buffer.set_dts(rtime);
+                        buffer.set_pts(rtime);
                     }
                     buffer
                 })
