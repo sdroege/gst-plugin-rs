@@ -118,8 +118,7 @@ fn event_to_event_full_serialized(
 /// [`PadSrc`]: struct.PadSrc.html
 /// [`pad` module]: index.html
 pub trait PadSrcHandler: Clone + Send + Sync + 'static {
-    // FIXME we should use a GAT here: ObjectSubclass<Type: IsA<gst::Element> + Send>
-    type ElementImpl: ElementImpl + ObjectSubclass;
+    type ElementImpl: ElementImpl<Type: Send>;
 
     fn src_activate(
         self,
@@ -159,15 +158,7 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
 
     fn src_event(self, pad: &gst::Pad, imp: &Self::ElementImpl, event: gst::Event) -> bool {
         gst::log!(RUNTIME_CAT, obj = pad, "Handling {:?}", event);
-
-        let elem = imp.obj();
-        // FIXME with GAT on `Self::ElementImpl`, we should be able to
-        // use `.upcast::<gst::Element>()`
-        //
-        // Safety: `Self::ElementImpl` is bound to `gst::subclass::ElementImpl`.
-        let element = unsafe { elem.unsafe_cast_ref::<gst::Element>() };
-
-        gst::Pad::event_default(pad, Some(element), event)
+        gst::Pad::event_default(pad, Some(imp.obj().as_ref()), event)
     }
 
     fn src_event_full(
@@ -190,15 +181,7 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
             false
         } else {
             gst::log!(RUNTIME_CAT, obj = pad, "Handling {:?}", query);
-
-            let elem = imp.obj();
-            // FIXME with GAT on `Self::ElementImpl`, we should be able to
-            // use `.upcast::<gst::Element>()`
-            //
-            // Safety: `Self::ElementImpl` is bound to `gst::subclass::ElementImpl`.
-            let element = unsafe { elem.unsafe_cast_ref::<gst::Element>() };
-
-            gst::Pad::query_default(pad, Some(element), query)
+            gst::Pad::query_default(pad, Some(imp.obj().as_ref()), query)
         }
     }
 }
@@ -512,8 +495,7 @@ impl Deref for PadSrc {
 /// [`PadSink`]: struct.PadSink.html
 /// [`pad` module]: index.html
 pub trait PadSinkHandler: Clone + Send + Sync + 'static {
-    // FIXME we should use a GAT here: ObjectSubclass<Type: IsA<gst::Element> + Send>
-    type ElementImpl: ElementImpl + ObjectSubclass;
+    type ElementImpl: ElementImpl<Type: Send>;
 
     fn sink_activate(
         self,
@@ -572,15 +554,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
     fn sink_event(self, pad: &gst::Pad, imp: &Self::ElementImpl, event: gst::Event) -> bool {
         assert!(!event.is_serialized());
         gst::log!(RUNTIME_CAT, obj = pad, "Handling {:?}", event);
-
-        let elem = imp.obj();
-        // FIXME with GAT on `Self::ElementImpl`, we should be able to
-        // use `.upcast::<gst::Element>()`
-        //
-        // Safety: `Self::ElementImpl` is bound to `gst::subclass::ElementImpl`.
-        let element = unsafe { elem.unsafe_cast_ref::<gst::Element>() };
-
-        gst::Pad::event_default(pad, Some(element), event)
+        gst::Pad::event_default(pad, Some(imp.obj().as_ref()), event)
     }
 
     fn sink_event_serialized(
@@ -590,16 +564,10 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         event: gst::Event,
     ) -> BoxFuture<'static, bool> {
         assert!(event.is_serialized());
-        // FIXME with GAT on `Self::ElementImpl`, we should be able to
-        // use `.upcast::<gst::Element>()`
-        //
-        // Safety: `Self::ElementImpl` is bound to `gst::subclass::ElementImpl`.
-        let element = unsafe { elem.unsafe_cast::<gst::Element>() };
 
         async move {
             gst::log!(RUNTIME_CAT, obj = pad, "Handling {:?}", event);
-
-            gst::Pad::event_default(&pad, Some(&element), event)
+            gst::Pad::event_default(&pad, Some(&elem), event)
         }
         .boxed()
     }
@@ -646,15 +614,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
             false
         } else {
             gst::log!(RUNTIME_CAT, obj = pad, "Handling {:?}", query);
-
-            let elem = imp.obj();
-            // FIXME with GAT on `Self::ElementImpl`, we should be able to
-            // use `.upcast::<gst::Element>()`
-            //
-            // Safety: `Self::ElementImpl` is bound to `gst::subclass::ElementImpl`.
-            let element = unsafe { elem.unsafe_cast_ref::<gst::Element>() };
-
-            gst::Pad::query_default(pad, Some(element), query)
+            gst::Pad::query_default(pad, Some(imp.obj().as_ref()), query)
         }
     }
 }
