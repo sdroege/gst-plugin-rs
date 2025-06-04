@@ -451,11 +451,12 @@ impl Session {
         &mut self,
         request: utils::ControlRequest,
         element: &super::BaseWebRTCSrc,
+        mid: Option<String>,
     ) {
         if let Some(data_channel) = &self.data_channel.borrow_mut() {
             let msg = utils::ControlRequestMessage {
                 id: self.request_counter,
-                mid: None,
+                mid,
                 request: utils::StringOrRequest::Request(request),
             };
             self.request_counter += 1;
@@ -627,30 +628,63 @@ impl Session {
                     self.id,
                     #[upgrade_or]
                     gst::PadProbeReturn::Remove,
-                    move |_pad, info| {
+                    move |pad, info| {
                         let Some(ev) = info.event() else {
                             return gst::PadProbeReturn::Ok;
                         };
-                        if ev.type_() != gst::EventType::Navigation {
-                            return gst::PadProbeReturn::Ok;
-                        };
 
-                        let mut state = element.imp().state.lock().unwrap();
-                        if let Some(session) = state.sessions.get_mut(&sess_id) {
-                            if enable_data_channel_navigation {
-                                session.send_navigation_event(
-                                    gst_video::NavigationEvent::parse(ev).unwrap(),
-                                    &element,
-                                );
+                        match ev.view() {
+                            gst::EventView::Navigation(nav) => {
+                                let mut state = element.imp().state.lock().unwrap();
+                                if let Some(session) = state.sessions.get_mut(&sess_id) {
+                                    if enable_data_channel_navigation {
+                                        session.send_navigation_event(
+                                            gst_video::NavigationEvent::parse(nav).unwrap(),
+                                            &element,
+                                        );
+                                    }
+                                    if enable_control_data_channel {
+                                        let transceiver = pad
+                                            .property::<gst_webrtc::WebRTCRTPTransceiver>(
+                                                "transceiver",
+                                            );
+                                        let request = utils::ControlRequest::NavigationEvent {
+                                            event: gst_video::NavigationEvent::parse(nav).unwrap(),
+                                        };
+                                        session.send_control_request(
+                                            request,
+                                            &element,
+                                            transceiver.mid().map(|s| s.to_string()),
+                                        );
+                                    }
+                                }
                             }
-                            if enable_control_data_channel {
-                                let request = utils::ControlRequest::NavigationEvent {
-                                    event: gst_video::NavigationEvent::parse(ev).unwrap(),
-                                };
-                                session.send_control_request(request, &element);
+                            gst::EventView::CustomUpstream(cup) => {
+                                let transceiver =
+                                    pad.property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
+                                let mut state = element.imp().state.lock().unwrap();
+                                if let Some(session) = state.sessions.get_mut(&sess_id) {
+                                    if enable_control_data_channel {
+                                        if let Some(s) = cup.structure() {
+                                            if let Some(structure) =
+                                                utils::gvalue_to_json(&s.to_value())
+                                            {
+                                                let request =
+                                                    utils::ControlRequest::CustomUpstreamEvent {
+                                                        structure_name: s.name().to_string(),
+                                                        structure,
+                                                    };
+                                                session.send_control_request(
+                                                    request,
+                                                    &element,
+                                                    transceiver.mid().map(|s| s.to_string()),
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                        } else {
-                            gst::error!(CAT, obj = element, "session {sess_id:?} does not exist");
+                            _ => (),
                         }
 
                         gst::PadProbeReturn::Ok
@@ -1628,7 +1662,7 @@ impl ElementImpl for BaseWebRTCSrc {
                             .values_mut()
                             .next()
                             .unwrap()
-                            .send_control_request(request, &self.obj());
+                            .send_control_request(request, &self.obj(), None);
                     }
                     true
                 }
