@@ -134,3 +134,9 @@ name = "webrtcsink-define-encoder-bitrates"
 [[example]]
 name = "whipclient"
 required-features = [ "whip" ]
+
+[[example]]
+name = "stream-selector-server"
+
+[[example]]
+name = "stream-selector-client"
