@@ -37,6 +37,7 @@ fn gen_cc_data(seq: u8, service: u8, codes: &[Code]) -> gst::Buffer {
     writer.push_packet(packet);
     let mut data = vec![];
     writer.write(fps, &mut data).unwrap();
+    println!("generated {data:x?}");
     let data = data.split_off(2);
     let mut buf = gst::Buffer::from_mut_slice(data);
     {
@@ -134,7 +135,7 @@ fn test_cea708mux_2pads_cc_data() {
 fn test_cea708mux_inputs_overflow_output() {
     init();
 
-    static CODES: [Code; 36] = [
+    static CODES: [Code; 40] = [
         Code::LatinLowerA,
         Code::LatinLowerB,
         Code::LatinLowerC,
@@ -171,35 +172,32 @@ fn test_cea708mux_inputs_overflow_output() {
         Code::LatinCapitalH,
         Code::LatinCapitalI,
         Code::LatinCapitalJ,
+        Code::LatinCapitalK,
+        Code::LatinCapitalL,
+        Code::LatinCapitalM,
+        Code::LatinCapitalN,
     ];
 
     let mut h = gst_check::Harness::with_padnames("cea708mux", None, Some("src"));
-    let mut sink_0 = gst_check::Harness::with_element(&h.element().unwrap(), Some("sink_0"), None);
-    sink_0.set_src_caps_str("closedcaption/x-cea-708,format=cc_data,framerate=60/1");
-    let mut sink_1 = gst_check::Harness::with_element(&h.element().unwrap(), Some("sink_1"), None);
-    sink_1.set_src_caps_str("closedcaption/x-cea-708,format=cc_data,framerate=60/1");
-    let mut sink_2 = gst_check::Harness::with_element(&h.element().unwrap(), Some("sink_2"), None);
-    sink_2.set_src_caps_str("closedcaption/x-cea-708,format=cc_data,framerate=60/1");
-    let mut sink_3 = gst_check::Harness::with_element(&h.element().unwrap(), Some("sink_3"), None);
-    sink_3.set_src_caps_str("closedcaption/x-cea-708,format=cc_data,framerate=60/1");
+    let mut sinks = (0..10)
+        .map(|idx| {
+            let mut sink = gst_check::Harness::with_element(
+                &h.element().unwrap(),
+                Some(&format!("sink_{idx}")),
+                None,
+            );
+            sink.set_src_caps_str("closedcaption/x-cea-708,format=cc_data,framerate=60/1");
+            sink
+        })
+        .collect::<Vec<_>>();
 
     let eos = gst::event::Eos::new();
 
-    let buf = gen_cc_data(0, 1, &CODES[1..32]);
-    sink_0.push(buf).unwrap();
-    sink_0.push_event(eos.clone());
-
-    let buf = gen_cc_data(0, 2, &CODES[2..33]);
-    sink_1.push(buf).unwrap();
-    sink_1.push_event(eos.clone());
-
-    let buf = gen_cc_data(0, 3, &CODES[3..34]);
-    sink_2.push(buf).unwrap();
-    sink_2.push_event(eos.clone());
-
-    let buf = gen_cc_data(0, 4, &CODES[4..35]);
-    sink_3.push(buf).unwrap();
-    sink_3.push_event(eos.clone());
+    for (i, sink) in sinks.iter_mut().enumerate() {
+        let buf = gen_cc_data(0, i as u8 + 1, &CODES[i..i + 31]);
+        sink.push(buf).unwrap();
+        sink.push_event(eos.clone());
+    }
 
     let mut parser = CCDataParser::new();
     let mut parsed_packet = None;
@@ -223,8 +221,9 @@ fn test_cea708mux_inputs_overflow_output() {
     // TODO: deterministic service ordering?
     for service in services {
         let codes = service.codes();
-        assert!((1..=4).contains(&service.number()));
-        let no = service.number();
+        println!("service {}: {:?}", service.number(), codes);
+        assert!((1..=10).contains(&service.number()));
+        let no = service.number() - 1;
         // one of the services will have a length that is 1 byte shorter than others due to size
         // limits of the packet.
         assert!((30..=31).contains(&codes.len()));
