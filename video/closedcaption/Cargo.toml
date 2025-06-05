@@ -21,7 +21,7 @@ byteorder = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 cdp-types = "0.3"
-cea708-types = "0.4.0"
+cea708-types = "0.4.1"
 cea608-types = "0.1.1"
 gst = { workspace = true, features = ["v1_20"]}
 gst-base = { workspace = true, features = ["v1_22"]}
