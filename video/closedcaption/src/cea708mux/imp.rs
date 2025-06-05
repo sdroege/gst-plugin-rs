@@ -394,6 +394,7 @@ impl AggregatorImpl for Cea708Mux {
                                 ) => unreachable!(),
                             }
                         }
+                        free_space -= new_service.len() - prev_service_len;
                     }
                 }
                 _ => (),
@@ -405,9 +406,10 @@ impl AggregatorImpl for Cea708Mux {
             gst::trace!(
                 CAT,
                 imp = self,
-                "Adding service {} to packet with sequence {}",
+                "Adding service {} to packet with sequence {}, {:?}",
                 service.number(),
                 packet.sequence_no(),
+                service.codes(),
             );
             packet.push_service(service).unwrap();
             if packet.sequence_no() == state.dtvcc_seq_no & 0x3 {
