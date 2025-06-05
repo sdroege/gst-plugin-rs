@@ -47,6 +47,7 @@ fn main() {
     use std::time::Instant;
 
     gst::init().unwrap();
+    gstthreadshare::plugin_register_static().unwrap();
     self::plugin_register_static().unwrap();
 
     #[cfg(debug_assertions)]
@@ -65,6 +66,16 @@ fn main() {
             .property("context-wait", args.wait)
             .property("push-period", args.push_period)
             .property("num-buffers", args.num_buffers)
+            .build()
+            .unwrap();
+
+        let queue = gst::ElementFactory::make("ts-queue")
+            .name(format!("queue-{i}").as_str())
+            .property("context", &ctx_name)
+            .property("context-wait", args.wait)
+            .property("max-size-buffers", 1u32)
+            .property("max-size-bytes", 0u32)
+            .property("max-size-time", 0u64)
             .build()
             .unwrap();
 
@@ -97,7 +108,7 @@ fn main() {
             }
         }
 
-        let elements = &[&src, &sink];
+        let elements = &[&src, &queue, &sink];
         pipeline.add_many(elements).unwrap();
         gst::Element::link_many(elements).unwrap();
     }
